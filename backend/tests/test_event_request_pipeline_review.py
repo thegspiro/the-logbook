@@ -1192,7 +1192,7 @@ class TestNotificationReportsDelivery:
         org = _org()
         exploding = MagicMock()
         exploding.send_email = AsyncMock(side_effect=RuntimeError("smtp down"))
-        exploding._render_with_fallback = AsyncMock(return_value=("s", "h", "t"))
+        exploding._render_unless_switched_off = AsyncMock(return_value=("s", "h", "t"))
 
         with patch(
             "app.services.email_service.EmailService",
@@ -1206,6 +1206,29 @@ class TestNotificationReportsDelivery:
             )
 
         assert delivered is False
+
+    @pytest.mark.asyncio
+    async def test_a_switched_off_status_template_sends_nothing(self):
+        """The department switched Event Request Status off: the requester
+        is not emailed, and that is a completed decision, not a failure."""
+        org = _org()
+        service = MagicMock()
+        service.send_email = AsyncMock(return_value=(1, 0))
+        service._render_unless_switched_off = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.email_service.EmailService",
+            MagicMock(return_value=service),
+        ):
+            delivered = await send_request_notification(
+                AsyncMock(),
+                _request_row(event_date=datetime.now(timezone.utc)),
+                "on_scheduled",
+                org,
+            )
+
+        assert delivered is True
+        service.send_email.assert_not_awaited()
 
 
 class TestReminderTemplateRendering:

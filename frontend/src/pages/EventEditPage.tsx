@@ -17,10 +17,12 @@ import type { ConflictEvent, InitialRecurrence } from '../components/EventForm';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getErrorDetail } from '../utils/errorHandling';
 import { withoutAttendanceLockedFields } from '../utils/eventAttendanceLock';
+import { useAuthStore } from '../stores/authStore';
 
 export const EventEditPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const canManage = useAuthStore((state) => state.checkPermission('events.manage'));
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -138,6 +140,22 @@ export const EventEditPage: React.FC = () => {
 
   if (!event) return null;
 
+  // The route also admits training.manage, which may edit only a Training
+  // event; the server says whether this one is theirs (can_edit_event).
+  if (!canManage && !event.can_edit_event) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
+        <div className="alert-warning rounded-lg p-4" role="alert">
+          <p>Only an event manager can edit this event. A training manager can edit training events.</p>
+          <button onClick={() => void navigate(`/events/${eventId ?? ''}`)} className="mt-2 text-sm underline">
+            Back to the event
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Convert Event to EventCreate format for the form
   const initialData: EventCreate = {
     title: event.title,
@@ -168,13 +186,20 @@ export const EventEditPage: React.FC = () => {
     reminder_target: event.reminder_target,
     reminder_schedule: event.reminder_schedule,
     check_in_window_type: event.check_in_window_type ?? 'flexible',
-    check_in_minutes_before: event.check_in_minutes_before ?? 60,
+    // A missing lead time means what the backend reads it as: 15 minutes on a
+    // window-type event, 60 otherwise (event_service._validate_check_in_window).
+    // Showing 60 for every event saved that 60 on the first edit and moved an
+    // open window event's check-in start without anyone touching the field.
+    check_in_minutes_before: event.check_in_minutes_before ?? (event.check_in_window_type === 'window' ? 15 : 60),
     check_in_minutes_after: event.check_in_minutes_after ?? 15,
     require_checkout: event.require_checkout ?? false,
     allow_guest_check_in: event.allow_guest_check_in ?? false,
     guest_check_in_creates_prospect: event.guest_check_in_creates_prospect ?? false,
     custom_fields: event.custom_fields ?? undefined,
     attachments: event.attachments ?? undefined,
+    // The form defaults is_draft to false, so leaving it out made every save
+    // of a draft publish it.
+    is_draft: event.is_draft ?? false,
   };
 
   // Build initial recurrence state when editing a recurring event
@@ -261,6 +286,7 @@ export const EventEditPage: React.FC = () => {
             userEvents={userEvents}
             editingEventId={eventId}
             attendanceLocked={Boolean(event.attendance_finalized_at)}
+            eventTypeLocked={!canManage}
           />
         </div>
       </div>

@@ -2395,3 +2395,171 @@ The diff this pass contributes is this findings file, `docs/security-review/PROG
 and the header line's PR-link backfill for pass 8 (`#3456`, found via
 `search_pull_requests` and not previously linked in this file) — no code
 change.
+
+## Pass 10 (2026-10-27) — watchdog pickup, 0 fixed by this pass, MM-19/MM-20 both found already resolved by other work; 0 new findings
+
+Watchdog pickup for `/loop 30m /security-review`: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. `list_pull_requests`
+(state=open) and a fresh `search_pull_requests` for
+`head:claude/security-review-` both returned no match before starting, so no
+other rotation PR was in flight. PR #3766 (Feature 23, Medical supplies, pass 17) had already merged on `main`; row 24 (Meetings & minutes) was confirmed
+the next `⬜` row in the rotation table read directly off a freshly fetched
+`main`. **Branch name avoids reuse** (CLAUDE.md Pitfall #24): the bare
+`claude/security-review-meetings-minutes` name was used and merged twice
+before (passes 1/2 and pass 6), so this pass's branch carries a `-p10` suffix,
+confirmed unused for this feature by `search_pull_requests` and by
+`git ls-remote origin` returning nothing for any `*security-review-meetings*`
+ref.
+
+**Baseline:** pass 9's merge, `53779a30` (PR #3636). `git log 53779a30..origin/main`
+against every file this feature declares (both endpoint files, `minutes_records.py`,
+`api/public/minutes.py`, all nine `meetings`/`minutes`/`quorum`/`attendance`
+service files, the models, the schemas, `app/mcp/tools/meetings.py`, and
+`frontend/src/modules/minutes`) over 376 non-merge commits on `main` in that
+window surfaced exactly **2** commits with a real diff in scope, both read in
+full:
+
+- `2cb6c029` ("Serialize the two minutes find-or-creates on the minutes row")
+  — lands **outside this rotation**, from a different session
+  (`session_01V3sx5bNDnFJ6AMSSb6sBDh`, 2026-10-25), but fixes exactly the two
+  findings pass 8/9 left flagged OPEN:
+  - **MM-19** (`MinuteService.ensure_section_motions`'s find-or-create for a
+    section's prepared motion had no lock): now takes a locking read on the
+    `MeetingMinutes` row (`select(MeetingMinutes.id)...with_for_update()`)
+    before a locking read of the section's `Motion` rows
+    (`minute_service.py`, current `ensure_section_motions`). Verified this is
+    pitfall #27's full two-part shape, not just a row lock: the motion read
+    itself also carries `.with_for_update()`, so a transaction that waited on
+    the minutes-row lock sees the motion the other transaction committed
+    while it waited, rather than the plain-SELECT snapshot it opened with.
+  - **MM-20** (`MinutesPublishingService._post_public`'s find-or-create for
+    the one public copy had no lock, so the loser of two concurrent publishes
+    failed its commit on `MinutesPublicCopy.minutes_id`'s unique constraint —
+    a 500): now locks the minutes row first, then re-reads the copy via
+    `_copy_for(..., for_update=True)`, which adds `.with_for_update()` +
+    `execution_options(populate_existing=True)` — the `populate_existing`
+    half matters: without it, a copy already in the session's identity map
+    from the plain read earlier in the same request would be returned
+    unchanged even though the locking read re-fetched a possibly-different
+    committed row. Confirmed by reading `_copy_for`'s diff directly, not
+    inferred from the commit message.
+  - Both fixes are backed by a new `tests/test_minutes_find_or_create_race.py`
+    (243 lines, real `database_manager.engine` connections rather than the
+    `db_session` fixture — a lock-contention test needs two actual
+    transactions, which an auto-rolled-back single-connection fixture cannot
+    produce). Ran it directly rather than trusting the commit message: **2
+    passed** (`pytest tests/test_minutes_find_or_create_race.py -q`, 1.1s;
+    marked `integration`, consistent with Pitfall #30b). The commit message
+    states the race tests were seen to fail against the pre-fix code
+    (Pitfall #37); not independently re-verified against a reverted tree this
+    pass, since the fix is already merged on `main` and reverting it to
+    reproduce the red state would itself be a destructive, unrequested
+    change — the test's own docstring and the lock-then-locking-read shape
+    are enough to re-derive why the old code could race.
+  - The same commit also updated `docs/KNOWN_LIMITATIONS.md`'s MM-19/MM-20
+    entries to "Resolved" stubs (kept only because tests/code still cite the
+    ids by name) and this findings file's own `docs/security-review/MM-24-meetings-minutes.md`
+    note — both re-read directly against current content and confirmed
+    accurate; no further edit needed from this pass beyond recording the
+    disposition change here.
+- `ce9520e8` ("Show status words, not stored codes, on nine more screens") —
+  a cross-feature cosmetic sweep (also touches Training, Applicants, Skills
+  testing); this feature's slice is `MyActionItemsPanel.tsx` and
+  `MinutesDetailPage.tsx`, which now call a new
+  `frontend/src/modules/minutes/utils/actionItemStatus.ts` instead of
+  `item.status.replace('_', ' ')` so `in_progress`/`overdue` read as "In
+  progress"/"Overdue" instead of "in progress"/"overdue" with the rest of the
+  underscore left in for anything with two. Display-only — no new network
+  call, no changed permission or org-scoping path, no user-controlled string
+  reaches `dangerouslySetInnerHTML` or similar (the label is drawn from a
+  fixed `Record<string, string>` with a safe fallback for an unknown status).
+  Not a security finding.
+
+No route was added, removed or re-gated by either commit — confirmed by
+re-running the same AST walk pass 7–9 used (`ast.walk` over each endpoint
+file's decorators) from scratch rather than trusting the prior count: **81**
+routes total (17 `meetings.py` + 32 `minutes.py` + 30 `minutes_records.py` + 2
+`api/public/minutes.py`), identical in count and gate to pass 9 — every route
+still carries `require_permission(...)`, or, for the two already-audited
+self-scoped exceptions (`PUT /minutes/{id}/action-items/{item_id}`'s
+`as_assignee` path and `GET /minutes/action-items/mine`),
+`get_current_active_user` with the narrower check made in the handler body.
+`app/api/v1/endpoints/meetings.py` (682 L), `minutes.py` (1,574 L) and
+`minutes_records.py` (1,250 L) are byte-identical to pass 9 (line counts
+match exactly; `git log` confirms no commit in the window touches any of the
+three). `backend/alembic/versions/` has no new revision touching
+`meetings`/`meeting_minutes`/`meeting_action_items`/`minutes_*`/
+`minutes_election_results`/`minutes_public_copies` since pass 9; the chain
+re-validated clean at a single head.
+
+Also re-checked against the two still-open, pre-existing docs this feature
+carries: `docs/module-audit/meetings-minutes.md` (MM-1/2/3 fixed, MM-4's
+XC-1 gap on `event_id`/`assignee_id`/`user_id`/`assigned_to` — confirmed
+still closed: `assert_in_org`/`assert_all_in_org` calls present at
+`meetings_service.py:155,174,512,549`, `minute_service.py:515,841,1169,1458`
+and `minutes_record_service.py:410`, all read at their current lines) and
+`docs/app-review/meetings-minutes.md` (MM5-4's missing precondition on
+`PUT /minutes/{minutes_id}` and the deferred `minutes.view_executive` tier —
+both still open, neither touched by this delta, re-confirmed below).
+
+### New findings
+
+**None.** Both commits in scope either fix a standing finding in a way that
+matches this codebase's established locking pattern (pitfall #27, verified at
+the diff level rather than the commit-message level) or are display-only with
+no auth, tenancy, injection or exposure surface.
+
+### Confirmed still open / still flagged, unchanged
+
+- **MM-19** and **MM-20** — see above. **RESOLVED** (fixed by `2cb6c029`,
+  outside this rotation; re-verified here). No longer carried forward as
+  open.
+- **MM5-4** (app-review; no `ETag`/`updated_at` precondition on
+  `PUT /minutes/{minutes_id}`, two editors silently overwrite each other's
+  sections) — `minutes.py`'s `update_minutes` byte-identical to pass 9;
+  unchanged. A correctness/lost-update concern, not a cross-tenant or
+  privilege gap under this checklist's seven dimensions. **FLAGGED**, same
+  disposition as every prior pass.
+- **`minutes.view_executive` tier** (module-audit MM-3's deferred half; a
+  role that attends but doesn't edit closed-session minutes currently has no
+  way to read them without also holding `minutes.manage`) — a product/role
+  decision, not touched. **FLAGGED**, unchanged.
+- Carried-forward "looked at, not a finding" items from passes 5–9 (`get_stats`'s
+  UTC-clock "this month" count, `list_waivers`'s per-waiver N+1,
+  `grant_waiver`'s unlocked find-or-create) — none of the involved files
+  changed this delta; not re-investigated beyond confirming no commit touched
+  them.
+
+`docs/KNOWN_LIMITATIONS.md`'s MM-9, MM-17, MM-19 and MM-20 entries re-read
+against current code: all four still accurate (MM-9/MM-17/MM-19/MM-20 all now
+resolved stubs). No edit needed from this pass.
+
+### Guard tests added
+
+None by this pass. `tests/test_minutes_find_or_create_race.py` (added by
+`2cb6c029`, outside this rotation) already covers MM-19/MM-20's reintroduction
+risk and was run directly above rather than only cited.
+
+### Completion gate (pass 10)
+
+| Check                                                                                                                                                                                       | Result                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1 + flake8-pytest-style 2.2.0, CI's pin)                                                                                                                 | clean (0 violations)                                |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                    | clean (2,695 files unchanged)                       |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                 | clean                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                           | PASSED — 663 revisions, single head `c616fa1bd492`  |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                           | 279 routes checked, 0 errors, 0 warnings            |
+| backend tests, scope (`-k "meeting or minutes"`)                                                                                                                                            | 1,073 passed, 1 skipped (pre-existing, `pywebpush`) |
+| backend tests, cross-cutting guards (`test_org_scoping_ratchet`, `test_endpoint_auth_coverage`, `test_account_status_gates`, `test_storage_operations`, `test_minutes_find_or_create_race`) | 37 passed                                           |
+| `cd frontend && npm run typecheck`                                                                                                                                                          | 0 errors                                            |
+| `cd frontend && npm run lint`                                                                                                                                                               | 0 errors, 0 warnings (`--max-warnings 10`)          |
+
+No source file under this feature's scope was changed by this pass — the only
+behavioral delta since pass 9 (the two find-or-create locks) was landed by
+other work and independently re-verified here at the diff level against all
+seven `CHECKLIST.md` dimensions. The diff this pass contributes is this
+findings file and `docs/security-review/PROGRESS.md` — no code change. (The
+frontend `node_modules` tree in this sandbox was effectively empty before
+`npm ci` was run from the repo root to restore it per the project's own
+single-lockfile convention — an environment-setup step, not a dependency
+change; no manifest or lockfile file was touched.)

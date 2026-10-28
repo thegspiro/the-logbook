@@ -87,6 +87,20 @@ export interface Event {
   /** Server-decided: may this caller decide the event's attendance requests
    * and hand it over. Detail endpoint only; false elsewhere. */
   can_manage_organizers?: boolean;
+  /** Server-decided: how this caller may use the attendance tools — the
+   * roster, adding, checking in and removing members — or null. An
+   * `organizer` may not write their own row. Detail endpoint only. */
+  attendance_access?: 'events_manager' | 'training_manager' | 'organizer' | null;
+  /** Server-decided: may this caller correct check-in times and credited
+   * hours. False for an organizer on a Training event. */
+  can_correct_attendance_times?: boolean;
+  /** Server-decided: may this caller edit the event and close its attendance
+   * (End Event, Finalize, Record Times) — events.manage, or training.manage
+   * on a Training event. Detail endpoint only. */
+  can_edit_event?: boolean;
+  /** Server-decided: may this caller reopen finalized attendance —
+   * events.reopen_attendance, or training.manage on a Training event. */
+  can_reopen_attendance?: boolean;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -459,7 +473,9 @@ export interface RSVP {
   override_check_out_at?: string | undefined;
   override_duration_minutes?: number | undefined;
   user_name?: string | undefined;
-  user_email?: string | undefined;
+  /** Null when the member's contact settings hide it from this viewer (an
+   * organizer reading the roster without events.manage). */
+  user_email?: string | null | undefined;
   // Non-blocking message returned on an early self-check-in: tells the member
   // when the official check-in window the event creator configured opens.
   notice?: string | null | undefined;

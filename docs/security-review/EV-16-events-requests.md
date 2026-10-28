@@ -2,7 +2,7 @@
 
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
-(pass 9), 2026-10-23 (pass 10) · **PR:**
+(pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11) · **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
 [#2972](https://github.com/thegspiro/the-logbook/pull/2972) (pass 7, 0
@@ -11,22 +11,36 @@ fixed, EV-26 confirmed fixed),
 fixed),
 [#3438](https://github.com/thegspiro/the-logbook/pull/3438) (pass 9, 0
 fixed),
-pass 10 PR (0 fixes needed this pass — see below)
+[#3625](https://github.com/thegspiro/the-logbook/pull/3625) (pass 10, 0
+fixed),
+[#3748](https://github.com/thegspiro/the-logbook/pull/3748) (pass 11, 0
+fixed, 0 flagged — new public guest-link surface reviewed clean)
 
-**Backend:** `api/v1/endpoints/events.py` (58 routes, unchanged),
+**Backend:** `api/v1/endpoints/events.py` (61 routes, up from 58 — the new
+guest-check-in-link issue/get/rotate trio),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
 public outreach event-request intake pipeline),
+`api/v1/endpoints/event_attendance_petitions.py` (7 routes, unchanged),
+`api/public/event_guest.py` (4 routes, **new this pass** — the event's own
+public guest-link sign-in surface; added to declared scope),
 `services/event_service.py`,
 `services/event_request_service.py`,
-`api/v1/endpoints/event_attendance_petitions.py` (7 routes, up from 5),
 `services/event_attendance_petition_service.py`,
 `services/event_organizer_service.py`,
-`models/event.py`, `models/event_request.py` (model files read this pass
-for the `Mapped[]`/`mapped_column()` rewrite — see Pass 8 below)
-**Frontend:** `modules/events`, plus `pages/AttendanceRequestsPage.tsx`
-(reachable from `modules/events/routes.tsx`, reviewed this pass)
-**Migrations:** none introduced by this pass's review; one real migration
-(`a0b34c886658`) landed in the window and is reviewed below
+`services/guest_check_in_service.py` (read in full this pass; **added to
+declared scope** — shared with the Locations/kiosk guest path but now also
+the direct callee of `event_guest.py`),
+`services/qr_check_in_analytics.py` (read this pass; added to declared
+scope),
+`models/event.py`, `models/event_request.py`
+**Frontend:** `modules/events`, `pages/AttendanceRequestsPage.tsx`,
+`pages/GuestCheckInPage.tsx` + `.test.tsx`, `components/GuestEmailSignIn.tsx`
+(new this pass, added to declared scope)
+**Migrations:** `b7e4c2a91d35` (adds `events.guest_check_in_token`) and
+`5510d5ff49eb` (repo-wide phone/address encryption at rest, touching
+`event_requests.contact_phone`/`venue_address` and
+`event_external_attendees.phone`) both reviewed this pass — see Pass 11
+below
 
 ---
 
@@ -40,6 +54,327 @@ into 409 `phase_gate` with an `occurrences` list. `useRSVPForm`'s series
 branch confirms against the list and retries with `override=true`. Tests:
 `test_event_rsvp_waitlist.py::TestRsvpToSeries`,
 `test_series_rsvp_phase_gate_endpoint.py`, `hooks/useRSVPForm.test.ts`.
+
+---
+
+## Pass 11 (2026-10-26) — real delta (9 real commits of 202 in scope), new public surface reviewed clean, 0 fixes needed, 0 flagged
+
+**Watchdog pickup.** The dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. Step 0 re-check: no
+PR's head branch starts with `claude/security-review-`
+(`search_pull_requests`, `is:pr is:open head:claude/security-review-`, 0
+results) — re-checked immediately before starting and again immediately
+before pushing. PR #3744 (Feature 15, Scheduling, pass 11) had already
+merged (`1157a464`, the fetched `origin/main` tip). Row 16 (Events &
+requests) was confirmed the next `⬜` by reading the rotation table
+directly on that freshly fetched `main`.
+
+### Scope
+
+Baseline `31f24bf7` (pass 10's own commit, merged via PR #3625 — confirmed
+`git merge-base --is-ancestor 31f24bf7 HEAD`; PR #3625 landed without a
+distinct merge commit, so `31f24bf7` itself is the ancestor to diff from).
+**202 non-merge commits** landed repo-wide in the window; diffing every
+declared file individually:
+
+- **Real diff:** `events.py` (+196/-4), `models/event.py` (+12/-1),
+  `models/event_request.py` (+5/-2), `schemas/event.py` (+81/-6),
+  `frontend/src/modules/events/routes.tsx` (+12).
+- **Zero diff** (confirmed by `git diff --stat` returning nothing):
+  `event_requests.py`, `event_attendance_petitions.py`,
+  `event_service.py`, `event_request_service.py`,
+  `event_attendance_petition_service.py`, `event_organizer_service.py`,
+  `pages/AttendanceRequestsPage.tsx`.
+
+**Scope gap found and closed, same shape as pass 7's.** `git diff
+--stat` on the declared file list alone would have missed an entirely new
+public, unauthenticated endpoint file this window added:
+`backend/app/api/public/event_guest.py` (417 lines, 4 routes) plus its
+backing service additions in `guest_check_in_service.py` (+364/-? — a file
+that was read in earlier passes as a _callee_ but never added to this
+file's declared scope) and two new frontend files,
+`components/GuestEmailSignIn.tsx` (241 lines, new) and
+`pages/GuestCheckInPage.tsx` (+94/-? — extended, not new). Also found:
+`services/qr_check_in_analytics.py` (143 lines, new), reached from
+`events.py`'s `qr-check-in-data`/`self-check-in` routes. All four are now
+added to this feature's declared scope header above, so a future pass
+diffs them rather than silently skipping them the way pass 6/7's
+near-miss on the petition files warned against repeating.
+
+### Real commits reviewed (9 of the 202, by declared-file + scope-gap diff)
+
+- **`b5a6fbf1` ("Give public events their own guest check-in QR code") —
+  the main feature of this window.** Adds `Event.guest_check_in_token`
+  (256-bit, `secrets.token_urlsafe(32)`, unique+indexed+nullable — matches
+  this feature's existing token-scoped-route pattern exactly), three
+  `events.manage`-gated endpoints to issue/get/rotate it
+  (`events.py:2777-2863`), and the new public router
+  `api/public/event_guest.py` with four routes
+  (`GET /{token}/guest`, `POST /{token}/guest-check-in`,
+  `POST /{token}/guest-lookup`, `POST /{token}/guest-confirm`) that reuse —
+  not reimplement — the kiosk guest path's own rate limiters
+  (`_rate_limit_display`/`_rate_limit_guest_check_in`/
+  `_rate_limit_guest_lookup`, all per-IP with a 10-minute lockout on the
+  write paths), window/email-first gates
+  (`_assert_guest_sign_in_open`/`_require_email_first`), and per-event
+  daily ceiling (`daily_cap_exceeded`, keyed `guest_checkin:{event.id}` /
+  `guest_lookup:{event.id}` — the **same** key the room-kiosk path spends,
+  so alternating between a room code and an event's own link buys no
+  extra allowance). Checked against every checklist dimension:
+  - **Auth (§1):** every route in the new file carries only `get_db` — no
+    `current_user` — by design: the path token is the sole credential and
+    is checked first in `_resolve_link_event`, which is read in full
+    (`guest_check_in_service.py:758`) and confirmed to answer the
+    identical 404 for a malformed token (regex-checked before the query
+    runs), an unknown one, a cancelled/draft event, and one whose
+    `allow_guest_check_in` has since been switched off — no oracle for
+    which case applies. The three manager-side issue/get/rotate routes in
+    `events.py` are gated `require_permission("events.manage")`, not the
+    broader `events.view` the member-facing QR page uses — correct per
+    checklist §2 (the token is a credential for an unauthenticated
+    _write_, so it warrants the stricter gate), and confirmed by test
+    (`test_event_guest_link.py::TestManagerEndpointsArePermissionGated`).
+  - **Tenancy (§3, XC-3):** `_event_for_guest_link` (the issue/get/rotate
+    helper) and `issue_link_token` both filter
+    `Event.id == event_id AND Event.organization_id == organization_id`
+    — org-scoped by-id, not merely gated by `require_permission`. The
+    public side has no `organization_id` in the request at all; the
+    token alone resolves the event and, through it, the org — the
+    correct shape for an anonymous credential-scoped route, matching
+    `check_request_status`'s existing 256-bit-token pattern this file has
+    reviewed every pass since pass 1. Confirmed by test
+    (`test_event_guest_link.py::TestManagerEndpoints::
+test_another_departments_event_is_a_404`): issuing/reading/rotating
+    another org's event's link 404s, not 403 (no existence oracle).
+  - **Data exposure (§5):** `guest_check_in_token` is never on
+    `EventResponse` — confirmed both by direct read of `schemas/event.py`
+    and by a dedicated test
+    (`test_event_guest_link.py::TestManagerEndpoints::
+test_event_detail_never_carries_the_token`) asserting the field is absent
+    from `EventResponse.model_fields`, so no member below `events.manage`
+    can read the credential off the ordinary event-detail endpoint.
+  - **Abuse resistance (§6):** per-IP rate limits (10/min + 10-min lockout
+    on every write route, 60/min on the read-only info route) plus the
+    per-event daily cap, in that order — honeypot first (a bot gets a
+    plausible-success response with no daily-cap spend), then every
+    rejection gate, then the cap increment, then the write — the same
+    "refuse before spending the cap" ordering EV-18/EV-19 established for
+    the public event-request intake path. `daily_cap_exceeded` fails
+    _open_ on a Redis outage (per-IP limiting still applies), matching
+    this repo's documented Attack Protection fail-open/closed split for an
+    availability-tier gate, not an auth one.
+  - **Injection/output (§4):** no raw SQL, no `.like()`/`.ilike()`. The
+    confirm-token mechanism (`issue_confirm_token`/`read_confirm_token`,
+    `guest_check_in_service.py:539`) is a signed, 10-minute JWT scoped to
+    `{type, prospect_id, event_id, location_id, organization_id}` —
+    `location_id=""` for the event-link channel specifically so a token
+    issued at a room kiosk cannot be replayed through an event's own link
+    and vice versa (tested:
+    `TestConfirmTokenChannels::test_kiosk_token_is_refused_through_the_link`/
+    `test_link_token_is_refused_at_a_kiosk`). The frontend
+    (`GuestCheckInPage.tsx`, `GuestEmailSignIn.tsx`) renders every
+    server-supplied string (event name, message, display name) through
+    plain JSX interpolation — no `dangerouslySetInnerHTML` anywhere in
+    either file, confirmed by grep.
+  - **Logging (Pitfall #33):** audit events
+    (`event_guest_checkin`/`event_guest_lookup`) carry `event_id`,
+    `attendee_id`/`prospect_id`, `location_id`, `source` — never the
+    guest's email or name. A dedicated test class,
+    `TestTokenRedaction`, asserts the guest-link token itself is redacted
+    wherever it could appear in a log line (page path, API path, route
+    parameter).
+  - **Schema/migration (§7):** `b7e4c2a91d35` is additive and nullable,
+    guards `_has_table`/`_has_column`/`_has_index` for the
+    `create_all`-built-table case (Pitfall #26), and its own docstring
+    confirms the unique index holds on a populated table because every
+    pre-upgrade row is NULL (MySQL unique indexes admit any number of
+    NULLs). No FK, so no `ondelete`/`nullable` pairing question applies.
+  - **Idempotency (Pitfall #36):** a repeat sign-in through the same
+    link token is a no-op attendance-wise —
+    `_find_existing_attendee` matches on `(event_id, organization_id,
+email-or-name)` before deciding whether to insert, and
+    `test_repeat_sign_in_is_one_attendee` proves it against a real
+    database (two POSTs, one row). Not a webhook/scheduled-task shape, so
+    the rest of Pitfall #36 doesn't apply.
+  - **Tests:** `test_event_guest_link.py` (new, 20+ cases spanning unit —
+    token shape, cross-channel confirm-token refusal, log redaction,
+    permission-gate enumeration — and integration — manager endpoints
+    including the cross-org 404, and public sign-in including the
+    unavailable-event 404-oracle check, the repeat-sign-in idempotency
+    check, and the rotated-code-is-a-404 revocation check), all read in
+    full rather than trusted from their names.
+- **`dd034161` ("Sign in recruitment-event guests by email, recognising
+  active applicants")** — the companion email-first flow for an event
+  that also opts into the pipeline (`guest_check_in_creates_prospect`).
+  Adds `guest-lookup`/`guest-confirm` to **both** the kiosk path
+  (`display.py`, Locations' own rotation slot) and this feature's new
+  event-link path, sharing one implementation
+  (`GuestCheckInService.lookup_guest`/`issue_confirm_token`/
+  `read_confirm_token`/`check_in_known_prospect`, all read in full —
+  see above). `lookup_guest` checks an **active** applicant first, then
+  an active member account, else not-found — matching `_link_prospect`'s
+  own reuse rule, so a withdrawn/rejected applicant cannot be reopened
+  from an anonymous tablet or link. The lookup is audited by outcome and
+  prospect id, never the typed email (checklist §5/Pitfall #33).
+  `check_in_known_prospect` re-verifies the prospect is still
+  `ProspectStatus.ACTIVE` and in the caller's org at confirm time rather
+  than trusting the lookup's answer from a minute earlier — closes the
+  TOCTOU window where staff could withdraw an applicant between lookup
+  and confirm. `GuestLookupResponse`/`GuestConfirmRequest` in
+  `schemas/event.py` carry no extra PII (status + first-name-and-last-
+  initial `display_name` + a token only).
+- **`890c31aa` ("Let staff sign walk-in guests in from the event page")**
+  — reuses the existing, already-gated `events.manage` external-attendee
+  endpoints (`check_in_external_attendee`, confirmed via
+  `git diff ... | grep '^[+-]@router'` showing zero route-decorator
+  lines changed by this commit — no new route). Adds
+  `open_prospect_for_staff_entry` (`guest_check_in_service.py:650`),
+  which follows the same active-applicant-or-member-or-open lookup rule
+  as the kiosk/link paths, org-scoped throughout (`organization_id`
+  passed from the already-authenticated `current_user`, never
+  client-supplied). `ExternalAttendeeCheckInResponse` gained an optional
+  `prospect_id` field — additive, no existing consumer broken.
+- **`952c3a56` ("QR check-in analytics: record scans and outcomes on the
+  server")** — new `qr_check_in_analytics.py`, read in full. Both writers
+  (`record_qr_scan`/`record_check_in_outcome`) take
+  `organization_id`/`event_id`/`user_id` from already-org-verified
+  request state (the event was already fetched org-scoped by
+  `get_qr_check_in_data`/`self_check_in` before either writer is called;
+  `user_id` is always `current_user.id`, never client-supplied) — no new
+  IDOR surface. Failure reasons are mapped through a fixed allowlist
+  (`FAILURE_REASONS`, 4 values) rather than storing the service's raw
+  error string, so an unrecognised message is dropped rather than leaking
+  free text into the analytics dashboard (checklist §5). No PII (name,
+  email) is ever written to `AnalyticsEvent.event_metadata`.
+- **`0b18dc3f`/`dd4ba98a`** ("fix(api): limit reminder lead times to 30
+  days" / "bound request fields whose range their meaning fixes") — pure
+  input-validation hardening via the new shared
+  `schemas/reminder_limits.py` (`ReminderLeadDays`/`ReminderLeadHours`,
+  `ge=0`) and `le=INT32_MAX` added to `min_lead_time_days`/
+  `public_daily_limit`/`check_in_minutes_before`/`_after`. Closes an
+  unbounded-integer-into-date-arithmetic `OverflowError` path (a 500,
+  not a security boundary) with a 422. No tenancy/auth surface.
+- **`fde3d647` ("Encrypt personal phone numbers and addresses at rest")**
+  — this feature's slice of a repo-wide hardening migration
+  (`5510d5ff49eb`): `EventRequest.contact_phone`/`venue_address` and
+  `EventExternalAttendee.phone` move from plain `String`/`Text` to
+  `EncryptedText` (AES-256-GCM). Migration reviewed in full: guards
+  `_present_columns` for the `create_all`-only-table case (`event_requests`
+  is one of the four tables named in its own docstring as exactly this
+  case), requires `ENCRYPTION_KEY` before writing ciphertext
+  (`_require_key`), is idempotent both ways (`_is_ciphertext` prefix
+  check — a value already encrypted is not re-encrypted, a value not
+  ciphertext is not "decrypted" on downgrade), and is itself the join
+  point for two Alembic heads that branched from the same parent as
+  `b7e4c2a91d35` (confirmed `validate_migrations.py --strict` finds a
+  single head afterward — see completion gate). Confirmed no
+  `.like()`/`.ilike()` anywhere in this feature's files touches either
+  newly-encrypted column (grep), so the encryption introduces no broken
+  search path (the migration's own docstring independently confirms this
+  for the two columns elsewhere in the repo that _are_ searched and were
+  deliberately left plain).
+- **`91204bfc`/`afff97c4`** — pure Alembic-chain housekeeping
+  (re-parenting then joining `b7e4c2a91d35` and a same-day, unrelated
+  forms commit's `0a8d11fcada1` onto one head). No application-code
+  change; reviewed only to confirm the join is sound (see completion
+  gate's single-head result).
+
+### Re-verified standing items
+
+- **EV-23 — still resolved**, zero diff on `rsvp_to_series`/
+  `_evaluate_session_phase_warning` this window.
+- **EV-26 — still fixed, unregressed.** Zero diff on
+  `location_service.py::check_overlapping_events` or its three call
+  sites this window.
+- **`check_request_status`'s 256-bit token, still unrate-limited by
+  design** — unchanged; the new guest-link token follows the identical
+  reasoning (possession of a 256-bit token is the credential; a
+  per-token rate limit would not improve on brute-force infeasibility,
+  and the _write_ routes behind it do carry per-IP limits regardless).
+- **`ondelete="SET NULL"` nullability** — the one model change this
+  window (`guest_check_in_token`) is not a FK, so no new pairing to
+  check; the 8 existing `SET NULL` FKs across both model files are
+  unchanged (zero diff beyond the new column).
+- **No new `.like()`/`.ilike()`, no new CSV export** (`import_events_csv`
+  remains an import, unchanged this window).
+
+### Route inventory
+
+**`events.py`: 61 routes, up from 58** — the three new
+`guest-check-in-link` routes (issue/get/rotate), confirmed via
+`git diff 31f24bf7..HEAD -- events.py | grep '^\+@router'` showing
+exactly these three, and independently via `grep -c '^@router\.'` (58 →
+61). **`event_requests.py`: 23, unchanged. `event_attendance_petitions.py`:
+7, unchanged** — zero `@router` decorator diff lines in either file.
+**`api/public/event_guest.py`: 4 routes, new file** — `grep -c
+'^@router\.'` confirms. Full-repo route count (`check_route_permissions.py
+--strict`, see completion gate): 279, up from 273 at pass 10 (the +6 here
+plus unrelated routes from other features' concurrent work in the same
+202-commit window).
+
+**All three frontend route registries updated for the new public page**
+(`APPLICATION_PAGES.md:21` and `:324`, `testingRegistry.ts:156`,
+`mobile-route-inventory.ts:334` — `/event-guest/:token` →
+`GuestCheckInPage`), confirmed present by direct grep before this pass
+touched anything; `check_route_permissions.py --strict` (below) confirms
+0 errors against the current 279-route count, so Pitfall #30a's three
+registries agree.
+
+### Verified good ✅ (pass 11)
+
+- The new public guest-link surface (`event_guest.py`, 4 routes) is clean
+  on every one of the seven checklist dimensions, detailed above: no
+  auth gap (the token is the credential, checked first, fails closed and
+  404-only), no cross-tenant read/write (XC-3; the token alone resolves
+  org, confirmed by a dedicated cross-org test), no data exposure (the
+  token itself is never serialized to a member below `events.manage`,
+  tested), no injection/XSS (no raw SQL, no `dangerouslySetInnerHTML`),
+  sound abuse resistance (reused per-IP + per-event-daily-cap gates,
+  correct honeypot/rejection/cap-spend ordering), clean schema/migration
+  (additive, nullable, `create_all`-guarded), and idempotent on repeat
+  sign-in (tested against a real database).
+- The companion email-first lookup/confirm flow re-verifies an applicant's
+  **active** status at confirm time, not just at lookup time (TOCTOU
+  closed), and never logs or displays more than a first name + last
+  initial to the anonymous caller.
+- The repo-wide phone/address encryption migration's touch on this
+  feature's two tables (`event_requests`, `event_external_attendees`) is
+  reviewed in full: guarded for the `create_all`-only-table case, requires
+  the encryption key before writing ciphertext, idempotent in both
+  directions, and introduces no broken `LIKE` search (none existed on
+  either newly-encrypted column).
+- No new unbounded query, no new CSV export, no new seeded-grant change,
+  no JSON-column shallow-copy mutation, no new client-supplied FK
+  accepted without an in-org check.
+- Four files genuinely in this feature's dependency graph
+  (`api/public/event_guest.py`, `services/guest_check_in_service.py`,
+  `services/qr_check_in_analytics.py`,
+  `components/GuestEmailSignIn.tsx`) were outside the declared scope
+  header before this pass; all four are now read in full and added to it.
+
+### Completion gate (pass 11)
+
+| Check                                                     | Result                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                     | ✅ 0 violations                                                     |
+| `black --check app/ tests/ alembic/` (26.10.1)            | ✅ clean, 2676 files unchanged                                      |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)         | ✅ clean                                                            |
+| `python3 scripts/validate_migrations.py --strict`         | ✅ single head `1ad0b594f3fb`, 658 revisions                        |
+| `python3 scripts/check_route_permissions.py --strict`     | ✅ 279 routes, 0 errors, 0 warnings                                 |
+| `python3.13 -m pytest tests/ -k "event or guest or rsvp"` | ✅ 1829 passed, 1 pre-existing skip (`pywebpush`), 23811 deselected |
+| `npm run typecheck`                                       | ✅ 0 errors                                                         |
+| `npm run lint` (`eslint --max-warnings 10`)               | ✅ see note below                                                   |
+
+**Environment note:** this sandbox's `python3` resolves to 3.11 with no
+project dependencies installed; `python3.13` (the interpreter `pip` here
+actually installs into) has them and is what the test row above used —
+flagged explicitly per the skill's rule rather than silently using
+whichever binary happened to work. `npm ci` was run fresh from the repo
+root (no `node_modules` pre-existed in this sandbox) and completed clean
+against the committed lockfile.
+
+Rotation row 16 → ✅ (pending this PR's merge). Next: Feature 17 (Training
+core).
 
 ---
 

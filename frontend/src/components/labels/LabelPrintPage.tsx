@@ -33,6 +33,10 @@ import {
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
+import { BARCODE_SVG_PRINT_CSS } from './barcodePrintCss';
+import { LABEL_FONT_FAMILY, labelNameStyle } from './labelText';
+import { PrintSetupChecklist } from './PrintSetupChecklist';
+import { isPrintChecklistSkipped } from './printChecklist';
 import { SheetStartPicker } from './SheetStartPicker';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../services/labelService';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -118,11 +122,10 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbolo
         overflow: 'hidden',
         boxSizing: 'border-box',
         pageBreakInside: 'avoid',
+        fontFamily: LABEL_FONT_FAMILY,
       }}
     >
-      <div style={{ fontSize: preset.nameFontSize, fontWeight: 600, textAlign: 'center', color: '#000' }}>
-        {item.name}
-      </div>
+      <div style={labelNameStyle(preset.nameFontSize)}>{item.name}</div>
       {item.subtitle ? (
         <div style={{ fontSize: preset.subtitleFontSize, textAlign: 'center', color: '#000' }}>{item.subtitle}</div>
       ) : null}
@@ -167,6 +170,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   const [symbology, setSymbology] = useState<Symbology>(Symbology.CODE128);
   // Where the first label lands on an Avery sheet; see SheetStartPicker.
   const [startPosition, setStartPosition] = useState(1);
+  const [showPrintChecklist, setShowPrintChecklist] = useState(false);
 
   const lastSavedKeyRef = useRef<string | null>(null);
 
@@ -186,6 +190,8 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     : (LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset);
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
   const isThermal = preset.columns === 1;
+  // A custom size is its own stock, so "don't show again" is per dimension.
+  const printSizeKey = isCustom ? `custom:${customW}x${customH}` : preset.id;
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
 
   const load = useCallback(async () => {
@@ -422,9 +428,19 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
       void downloadPdf(false);
       return;
     }
+    if (isPrintChecklistSkipped(printSizeKey)) {
+      printViaBrowser();
+    } else {
+      setShowPrintChecklist(true);
+    }
+  };
+
+  const printViaBrowser = () => {
+    setShowPrintChecklist(false);
     const container = document.getElementById(`label-print-container-${module}`);
     if (!container) return;
     const iframe = document.createElement('iframe');
+    iframe.title = 'Label print job';
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
     iframe.style.bottom = '0';
@@ -446,7 +462,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
       body { background: white; }
       .barcode-label { break-inside: avoid; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       .barcode-label svg { display: block !important; max-width: 100% !important; height: auto !important; }
-      .barcode-label svg rect { fill: #000 !important; }
+      ${BARCODE_SVG_PRINT_CSS}
       ${isThermalFmt ? '.barcode-label { page-break-after: always; } .barcode-label:last-child { page-break-after: auto; }' : ''}
     </style></head><body><div style="${(container.getAttribute('style') || '').replace(/"/g, '&quot;')}">${container.innerHTML}</div></body></html>`);
     doc.close();
@@ -608,6 +624,17 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
           </div>
 
           {!isThermal && <SheetStartPicker value={startPosition} onChange={setStartPosition} />}
+
+          <PrintSetupChecklist
+            isOpen={showPrintChecklist}
+            onClose={() => setShowPrintChecklist(false)}
+            onContinue={printViaBrowser}
+            sizeKey={printSizeKey}
+            widthIn={preset.width.replace(/in$/, '')}
+            heightIn={preset.height.replace(/in$/, '')}
+            isThermal={isThermal}
+            offerNetworkPrinter={printers.length === 0}
+          />
 
           {printResult ? (
             <div

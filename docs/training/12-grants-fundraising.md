@@ -137,6 +137,24 @@ parts:
 The form has no place for a required-documents list, tags or a recurring
 schedule.
 
+### Editing or Retiring an Opportunity
+
+**Required Permission:** Manage fundraising
+
+To correct a program, such as a mistyped deadline, select the pencil (**Edit**)
+on its card. The same form opens as **Edit Grant Opportunity**. Change what you
+need and select **Save changes**. A field you clear is saved empty.
+
+When a program closes, select **Retire** on its card and confirm. A retired
+program:
+
+- leaves the library, so nobody can start a new application from it;
+- keeps its record, so applications already started from it still name it.
+
+To see retired programs, tick **Show retired**. They are marked **Retired** and
+have no **Start Application** button. Select **Reinstate** on one to bring it
+back.
+
 ![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
 
 ---

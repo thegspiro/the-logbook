@@ -20,13 +20,55 @@ import type {
   ComplianceMatrixRequirement,
 } from '@/services/communicationsServices';
 import { COMPLIANCE_EXPIRING_SOON_DAYS } from '@/constants/config';
-import { CellTone, Standing } from '@/constants/enums';
+import { CellTone, MemberClass, Standing } from '@/constants/enums';
 import { calendarDaysBetween, formatCalendarDate, getTodayLocalDate } from '@/utils/dateFormatting';
 
 // CellTone and Standing live in constants/enums.ts with every other `as const`
 // enum in the app. Re-exported here so the matrix's consumers can keep taking
 // their whole vocabulary from one import.
 export { CellTone, Standing } from '@/constants/enums';
+
+/** The matrix's member-class filter: one class, or the whole roster. */
+export type ClassFilter = 'all' | MemberClass;
+
+export const MEMBER_CLASS_ORDER: readonly MemberClass[] = [
+  MemberClass.OPERATIONAL,
+  MemberClass.ADMINISTRATIVE,
+  MemberClass.SOCIAL,
+];
+
+export const MEMBER_CLASS_LABELS: Record<MemberClass, string> = {
+  [MemberClass.OPERATIONAL]: 'Operational',
+  [MemberClass.ADMINISTRATIVE]: 'Administrative',
+  [MemberClass.SOCIAL]: 'Social',
+};
+
+/**
+ * `?class=` as the matrix and its printout read it. Shared so the Print button
+ * hands the printout a value it understands; anything unrecognised falls back
+ * to the whole roster.
+ */
+export const parseClassFilter = (value: string | null): ClassFilter =>
+  MEMBER_CLASS_ORDER.find((c) => c === value) ?? 'all';
+
+/**
+ * The members of one class. A member with no class (a custom tier nobody has
+ * classified) belongs to no class: guessing one would list them among members
+ * they are not graded with.
+ */
+export const membersOfClass = (members: ComplianceMatrixMember[], filter: ClassFilter): ComplianceMatrixMember[] =>
+  filter === 'all' ? members : members.filter((m) => m.member_class === filter);
+
+/**
+ * The requirements that grade at least one of `members`. Whether a requirement
+ * applies is the backend's call, made per member: it applies precisely when it
+ * appears in that member's row.
+ */
+export const requirementsApplyingTo = (
+  members: ComplianceMatrixMember[],
+  requirements: ComplianceMatrixRequirement[]
+): ComplianceMatrixRequirement[] =>
+  requirements.filter((r) => members.some((m) => (m.requirements ?? []).some((c) => c.requirement_id === r.id)));
 
 export interface EvaluatedCell {
   cell: ComplianceMatrixCell;

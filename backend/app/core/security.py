@@ -8,6 +8,7 @@ aligned with HIPAA requirements.
 
 import base64
 import hashlib
+import hmac
 import re
 import secrets
 import string
@@ -21,6 +22,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
@@ -531,6 +533,7 @@ def reset_encryption_ciphers() -> None:
     _aesgcms_by_iterations.clear()
     _legacy_aesgcms.clear()
     _legacy_fernets.clear()
+    _fingerprint_keys.clear()
     # The file-encryption keys derive from the same settings.
     from app.core.file_encryption import reset_file_keys
 
@@ -651,6 +654,69 @@ def decrypts_with_current_key(encrypted_data: str) -> bool:
         return True
     except (InvalidTag, InvalidToken, ValueError):
         return False
+
+
+# ============================================
+# Email fingerprints (blind index)
+# ============================================
+#
+# An encrypted email column cannot be matched in SQL: AES-GCM uses a fresh
+# nonce per write, so the same address never encrypts the same way twice. A
+# keyed HMAC of the normalized address is stored beside it and matched instead.
+#
+# Keyed, never a plain hash: email addresses are guessable, so an unkeyed
+# SHA-256 in a stolen dump could be reversed by hashing a list of candidates.
+# The key comes from ENCRYPTION_KEY through HKDF with its own label, so it is
+# never the AES key itself and needs no setting of its own.
+_FINGERPRINT_INFO = b"logbook:email-fingerprint:v1"
+_fingerprint_keys: dict[str, bytes] = {}
+
+
+def _fingerprint_key(key: str) -> bytes:
+    if key not in _fingerprint_keys:
+        _fingerprint_keys[key] = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=None,
+            info=_FINGERPRINT_INFO,
+        ).derive(_derive_key_bytes(key))
+    return _fingerprint_keys[key]
+
+
+def normalize_email(value: str) -> str:
+    """The form two addresses must share to count as the same address.
+
+    Matches what the plaintext column did: MySQL's case-insensitive collation
+    compared case-blind and ignored trailing spaces.
+    """
+    return value.strip().lower()
+
+
+def _fingerprint_with(key: str, value: str) -> str:
+    return hmac.new(
+        _fingerprint_key(key), normalize_email(value).encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def email_fingerprint(value: str | None) -> str | None:
+    """Fingerprint to store for ``value``, under the current key."""
+    if value is None or not value.strip():
+        return None
+    return _fingerprint_with(settings.ENCRYPTION_KEY, value)
+
+
+def email_fingerprints(value: str | None) -> list[str]:
+    """Every fingerprint a stored row for ``value`` may carry.
+
+    Lookups match against this list rather than the current fingerprint alone:
+    after a key rotation, rows keep their old-key fingerprint until
+    rotate_encryption_key.py rewrites them, and sign-in by email must keep
+    working in between.
+    """
+    if value is None or not value.strip():
+        return []
+    keys = [settings.ENCRYPTION_KEY, *_get_legacy_keys()]
+    return list(dict.fromkeys(_fingerprint_with(key, value) for key in keys))
 
 
 # ============================================

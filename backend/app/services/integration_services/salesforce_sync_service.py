@@ -16,9 +16,10 @@ from datetime import date, datetime
 from typing import Any, Optional
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import email_fingerprints
 from app.core.utils import sanitize_connector_error
 from app.models.integration import Integration
 from app.models.user import User
@@ -481,7 +482,7 @@ class SalesforceSyncService:
         if email:
             result = await self.db.execute(
                 select(User).where(
-                    func.lower(User.email) == email.lower(),
+                    User.email_hash.in_(email_fingerprints(email)),
                     User.organization_id == org_id,
                     User.deleted_at.is_(None),
                 )

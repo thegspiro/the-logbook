@@ -134,6 +134,55 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Email addresses are encrypted at rest (2026-10-26)
+
+A migration (`b8236e29ec44`) runs on the next start and **encrypts every stored
+email address in place**: members', applicants', guests', donors', storefront
+customers', outside contacts', and the copies in email and notification logs
+and in report, alert and form recipient lists. On a large installation, most of
+the time goes to the message history, so the first start takes noticeably
+longer. A department's own published addresses (the organization, facilities,
+vendor companies, the org chart, PayPal) are unchanged.
+
+**Two things stop the upgrade before it changes anything:**
+
+- **`ENCRYPTION_KEY` not set** while addresses are on file. It is already
+  required for the backend to start.
+- **Two members of one department, or two active applications, share an
+  address once spaces are trimmed and case is ignored.** The old index ignored
+  case and trailing spaces but not leading ones, so `" chief@x.org"` and
+  `"chief@x.org"` could both exist. The error names the row ids; correct one
+  address in each pair (in SQL, while the backend is stopped) and start again.
+
+What changes for people using the system:
+
+- **Searching by part of an email address no longer matches** in the member
+  form picker, applicant list, storefront orders, donors and message history. A
+  complete address still finds the record; names and the other fields search as
+  before.
+- **Message history:** messages sent before the upgrade to a large batch are
+  found by the addresses shown in their summary only. New messages are found by
+  any recipient.
+- **Audit log:** new OAuth sign-in and onboarding entries no longer record the
+  address; they already carry the user id. Older entries keep it: rewriting them
+  would break the log's tamper-evident hash chain.
+
+Operational notes:
+
+- **Take the database backup first.** The downgrade decrypts and restores the
+  original columns, but only with the same `ENCRYPTION_KEY` and
+  `ENCRYPTION_SALT`. **Losing them loses every email address.**
+- **Older backups still hold plain addresses** for as long as you keep them, as
+  with the phone and address change below.
+- **Key rotation:** lookups by email now depend on fingerprints derived from
+  `ENCRYPTION_KEY`. Run `scripts/rotate_encryption_key.py --commit` before
+  removing an old key from `ENCRYPTION_KEYS_LEGACY`, or sign-in by email stops
+  working (see [KEY_ROTATION.md](./KEY_ROTATION.md)).
+- **Your own SQL** that reads, compares or exports these columns directly will
+  see ciphertext. A user row inserted by raw SQL gets no fingerprint and cannot
+  sign in by email; create users through the application or
+  `scripts/seed_test_users.py`.
+
 ### The frontend's nginx config needs the `auth_request` module (2026-10-25)
 
 `frontend/nginx.conf` now uses `auth_request` for the embedded-form page,
@@ -154,6 +203,34 @@ nginx -V 2>&1 | grep -o with-http_auth_request_module
 
 No output means the module is missing: install a distribution nginx package,
 or rebuild with that flag.
+
+### The backend needs the `webauthn` package for passkeys (2026-10-25)
+
+Members can now use a passkey on their phone or computer as their second
+factor (see `docs/MFA.md`). The server verifies passkeys with `webauthn`
+(py_webauthn), now pinned in `backend/requirements.txt` and imported when the
+authentication code loads, so a backend started without it fails at import
+and never serves a request.
+
+- **Docker (including Unraid Compose Manager):** rebuild the backend image
+  (`docker compose build backend` or `--build`); the Dockerfile installs
+  `requirements.txt`.
+- **Running from source:** run `pip install -r backend/requirements.txt`
+  before restarting.
+
+The migration only creates two new tables (`user_passkeys`,
+`webauthn_challenges`); no existing row changes, and nobody's sign-in changes
+until they add a passkey.
+
+**Passkeys need `FRONTEND_URL` to be the site's HTTPS address on a domain
+name**, which is what members' browsers will check. On a deployment reached
+over plain HTTP or at an IP address the option is hidden and members keep
+using the authenticator app. **Changing `FRONTEND_URL` to a different host
+later retires every passkey**: they stop counting as a second factor, members
+add new ones, and where MFA is required members whose only factor was a
+passkey are sent to set one up at their next sign-in. Recovery codes keep
+working throughout. An administrator can turn new passkeys off under
+**Settings > Authentication**.
 
 ### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
 
@@ -524,6 +601,83 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### A template switched Off now stops its email (2026-10-27)
+
+**Before upgrading, open Communications → Email Templates and choose the
+"Off" filter.** Until this release, switching a template off only made the
+email fall back to the built-in wording: it kept going out. From this release
+a switched-off template is **not sent at all**, so every template that list
+shows as Off stops reaching its recipients the moment you upgrade. Switch back
+on any you still want sent.
+
+Three other changes go with it:
+
+- **Five emails can no longer be switched off:** Password Reset, IT Password
+  Notification, Welcome, Ballot Notification and Application Status Link.
+  Each carries something its recipient cannot get any other way. Migration
+  `0d9897752425` switches any of them that were off back on, so a
+  department's edits to them are now what is sent (before, "off" sent the
+  default wording).
+- **Five templates that were stored but never used are now sent:** Cert
+  Expiration (the reminder before a certificate expires), Post-Event
+  Validation, Post-Shift Validation, Member Archived and Prospect Inactivity
+  Warning. Their emails used to be built in code, so their wording changes to
+  what the template says, or to your department's edited copy if you edited
+  one. Migration `8079ea63f119` moves untouched stored copies of Cert
+  Expiration onto a default that says "expires today" rather than "0 days
+  left".
+- **The prospective-member pipeline's inactivity "Notify" boxes now send
+  email.** "Notify coordinator", which pipelines show ticked unless someone
+  unticked it, emails the membership coordinators once a week about each
+  applicant nearing the inactivity timeout. "Notify applicant" emails the
+  applicant a new **Application Going Inactive** notice. Untick either box in
+  Prospective Members → Settings, or switch its template off, if you do not
+  want it.
+
+### A screening record with no expiration date now falls due by its frequency (2026-10-25)
+
+Medical screening used to count a Passed, Completed or Waived record saved
+**without** an expiration date as met for good. It now falls due that many
+months after its **Completed Date**, using the frequency of the requirement
+the record is linked to (or, when it is linked to none, of the requirement it
+is graded against). Nothing in the database changes, but **members can change
+standing the moment you upgrade**: an annual physical recorded two years ago
+with no expiration date now reads as overdue, and one due soon appears on the
+**Compliance** tab's expiring list as "Due … (by frequency)".
+
+- A record with its own expiration date is unaffected; that date still wins.
+- A one-time requirement (no frequency) and a record with no completed date
+  are still met for good.
+- To see who is affected before members notice, open **Medical Screening →
+  Compliance** after upgrading: filter the roster to **Not compliant**, and
+  check **Screenings Expiring Within 60 Days**.
+  Adding the real expiration date to a record overrides the calculated one.
+
+See [Medical Screening](training/13-medical-screening.md) for how the date is
+worked out.
+
+### Gmail can send through a Google Workspace service account (2026-10-25)
+
+Gmail departments can now send through the Gmail API with a domain-wide
+delegated service account instead of an App Password, so email no longer stops
+when someone changes the sending account's password. **Nothing changes on
+upgrade**: every existing Gmail configuration has no method saved, which means
+App Password, and keeps signing in to `smtp.gmail.com` exactly as before.
+
+- Choosing it needs `admin.access`, not only `settings.manage`, because the key
+  can send as any user in the Workspace domain
+  (`docs/KNOWN_LIMITATIONS.md`, "Gmail — Sending Through a Service Account").
+- The service account's client ID must be authorized in the Google Admin
+  console under **Security > API controls > Domain-wide delegation** for
+  `https://www.googleapis.com/auth/gmail.send`, and the Gmail API must be
+  enabled in its Google Cloud project.
+- The server needs outbound HTTPS to `gmail.googleapis.com` and
+  `oauth2.googleapis.com`.
+- **Before downgrading** to a release from before this change, switch any
+  department on the service account back to an App Password. An older release
+  does not know the method, reads the row as App Password, finds none, and
+  that department's email stops.
 
 ### The command that moves files to a remote store is `migrate_uploads_to_remote.py` (2026-10-25)
 

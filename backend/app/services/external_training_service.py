@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import install_httpx_url_redaction, redact_url_secrets
-from app.core.security import decrypt_data
+from app.core.security import decrypt_data, email_fingerprints
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalProviderType,
@@ -1857,7 +1857,7 @@ class ExternalTrainingSyncService:
         result = await self.db.execute(
             select(User.id)
             .where(User.organization_id == organization_id)
-            .where(func.lower(func.trim(User.email)) == email)
+            .where(User.email_hash.in_(email_fingerprints(email)))
             .where(User.deleted_at.is_(None))
             .limit(2)
         )

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedText
+from app.core.encrypted_types import EncryptedText, keep_email_fingerprint
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -651,7 +651,8 @@ class EventExternalAttendee(Base):
 
     # Attendee info
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    email_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     organization_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -698,7 +699,7 @@ class EventExternalAttendee(Base):
     __table_args__ = (
         Index("ix_ext_attendees_event_id", "event_id"),
         Index("ix_ext_attendees_org_id", "organization_id"),
-        Index("ix_ext_attendees_email", "email"),
+        Index("ix_ext_attendees_email_hash", "email_hash"),
         Index("ix_ext_attendees_prospect_id", "prospect_id"),
     )
 
@@ -831,3 +832,6 @@ class EventAttendancePetition(Base):
         Index("ix_event_attendance_petitions_organization_id", "organization_id"),
         Index("ix_event_attendance_petitions_user_id", "user_id"),
     )
+
+
+keep_email_fingerprint(EventExternalAttendee.email, "email_hash")

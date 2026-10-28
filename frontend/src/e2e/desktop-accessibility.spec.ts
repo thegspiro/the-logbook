@@ -20,6 +20,14 @@ const AXE_PATH = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
 const AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 const runAxe = async (page: Page): Promise<string[]> => {
+  // Reduced motion (see `open`) shortens transitions but does not finish them:
+  // WebKit advances a running transition only when it renders a frame, so on a
+  // slow headless runner the planning page's Refresh button could still report
+  // the 0.5 opacity it had while disabled — 3.41:1, every retry, on Mobile Safari
+  // alone. Removing the transitions outright cancels any still running, so every
+  // property reports its settled value, which is what the audit is meant to
+  // measure.
+  await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
   await page.addScriptTag({ path: AXE_PATH });
   return page.evaluate(async (tags) => {
     type Result = { id: string; help: string; nodes: { target: string[] }[] };
@@ -33,6 +41,13 @@ const runAxe = async (page: Page): Promise<string[]> => {
 const open = async (page: Page, path: string, viewport: { width: number; height: number }) => {
   const route = ROUTES.find((r) => r.path === path);
   if (!route) throw new Error(`${path} is not in the mobile route list`);
+  // Contrast is measured on the settled page, not mid-transition. The planning
+  // page's Refresh button is disabled at half opacity while it loads, and
+  // `btn-secondary` fades it back over 150ms; an audit landing inside that
+  // fade read the enabled button at 3.41:1 and failed, on slower runners only.
+  // As in mobile-accessibility.spec.ts, reduced motion collapses every
+  // transition in index.css to 0.01ms.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize(viewport);
   await signInForRoute(page, route, null);
   await page.goto(path);

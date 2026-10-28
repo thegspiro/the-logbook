@@ -26,6 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import false, func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -136,7 +137,7 @@ class Form(Base):
     )
     notify_on_submission: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     notification_emails: Mapped[Optional[list[str]]] = mapped_column(
-        JSON
+        EncryptedJSON
     )  # List of emails to notify
 
     # Public access
@@ -257,6 +258,13 @@ class FormField(Base):
         String(20), default="full"
     )  # "full", "half", "third"
 
+    # Answers to a sensitive field are stored encrypted in
+    # FormSubmission.sensitive_data, never in the plain `data` JSON, and are
+    # served only to holders of `sensitive_answers.view`.
+    is_sensitive: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -308,13 +316,20 @@ class FormSubmission(Base):
     data: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False
     )  # {field_id: value} mapping
+    # {field_id: value} for fields marked is_sensitive, encrypted at rest.
+    # NULL when the submission holds none. Integrations, notifications and the
+    # applicant record read `data` only, so nothing here leaves this column
+    # except through the permission-gated submission endpoints.
+    sensitive_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        EncryptedJSON, nullable=True
+    )
 
     # Public submission metadata
     submitter_name: Mapped[Optional[str]] = mapped_column(
         String(255)
     )  # For anonymous/public submissions
     submitter_email: Mapped[Optional[str]] = mapped_column(
-        String(255)
+        EncryptedText
     )  # For anonymous/public submissions
     is_public_submission: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 

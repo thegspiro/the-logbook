@@ -1499,7 +1499,7 @@ class FacilityEmergencyContact(Base):
     contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     alt_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
-    email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     service_contract_number: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )
@@ -1645,7 +1645,9 @@ class FacilityCapitalProject(Base):
     contractor_phone: Mapped[Optional[str]] = mapped_column(
         EncryptedText, nullable=True
     )
-    contractor_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    contractor_email: Mapped[Optional[str]] = mapped_column(
+        EncryptedText, nullable=True
+    )
     project_manager: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Administrative
@@ -1712,7 +1714,7 @@ class FacilityInsurancePolicy(Base):
 
     agent_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     agent_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
-    agent_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    agent_email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     coverage_amount: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(14, 2), nullable=True

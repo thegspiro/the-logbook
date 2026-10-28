@@ -184,7 +184,9 @@ class InventoryNotificationService:
 
                 # A member who turned these emails off is treated like one with
                 # no address: the queued rows are consumed, so the digest does
-                # not wait for them to change their mind.
+                # not wait for them to change their mind. A department that
+                # switched the template off is treated the same way, so
+                # switching it back on does not mail a backlog of old changes.
                 wants_email = (
                     user is not None
                     and bool(user.email)
@@ -192,6 +194,9 @@ class InventoryNotificationService:
                         user.notification_preferences,
                         EmailKind.INVENTORY_UPDATES,
                         department_required_kinds(org),
+                    )
+                    and not await EmailTemplateService(self.db).is_switched_off(
+                        org_id, EmailTemplateType.INVENTORY_CHANGE
                     )
                 )
                 if user is None or not wants_email:

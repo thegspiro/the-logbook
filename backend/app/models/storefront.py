@@ -45,7 +45,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedText
+from app.core.encrypted_types import EncryptedText, keep_email_fingerprint
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -732,7 +732,10 @@ class StoreOrder(Base):
     # Snapshot of who ordered, so a departed member's order stays readable
     # after the user row is anonymized or the FK is nulled.
     customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    customer_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    customer_email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    customer_email_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
     customer_phone: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     status: Mapped[StoreOrderStatus] = mapped_column(
@@ -850,6 +853,11 @@ class StoreOrder(Base):
         ),
         Index("ix_store_orders_org_status", "organization_id", "status"),
         Index("ix_store_orders_org_payment", "organization_id", "payment_status"),
+        Index(
+            "ix_store_orders_org_customer_email_hash",
+            "organization_id",
+            "customer_email_hash",
+        ),
         Index("ix_store_orders_org_window", "organization_id", "window_id"),
     )
 
@@ -892,7 +900,7 @@ class StorePaymentEvent(Base):
     )
 
     payer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    payer_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    payer_email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     # Whatever reference the payer or the department attached — an invoice id,
     # a custom id, or a free-text note. This is what matching reads.
     reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -1078,3 +1086,6 @@ class StoreOrderEvent(Base):
 
     order: Mapped["StoreOrder"] = relationship("StoreOrder", back_populates="events")
     author: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by])
+
+
+keep_email_fingerprint(StoreOrder.customer_email, "customer_email_hash")

@@ -15,6 +15,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.security import email_fingerprints
 from app.models.training import (
     CompetencyMatrix,
     ExternalTrainingProvider,
@@ -959,7 +960,7 @@ class XAPIService:
         if actor_email:
             user_result = await self.db.execute(
                 select(User.id).where(
-                    User.email == actor_email,
+                    User.email_hash.in_(email_fingerprints(actor_email)),
                     User.organization_id == organization_id,
                 )
             )

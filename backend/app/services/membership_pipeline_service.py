@@ -31,6 +31,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG, office_label
+from app.core.security import email_fingerprints
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.event import Event, EventExternalAttendee
@@ -303,6 +304,26 @@ def status_page_stage_enables(step: MembershipPipelineStep) -> bool:
     ``false`` disables — config is unvalidated JSON (pitfall #19).
     """
     return (step.config or {}).get("enable_public_status", True) is not False
+
+
+def _applicant_name(prospect: ProspectiveMember) -> str:
+    return " ".join(p for p in (prospect.first_name, prospect.last_name) if p)
+
+
+def _inactivity_notify_flags(prospect: ProspectiveMember) -> Dict[str, bool]:
+    """The pipeline's two inactivity "Notify" boxes, as the settings show them.
+
+    A pipeline with no stored inactivity settings shows the defaults
+    (coordinator on, applicant off), so that is what it gets here; a stored
+    value is free-form JSON and only a real boolean True switches a box on.
+    """
+    config = (prospect.pipeline.inactivity_config if prospect.pipeline else None) or {}
+    if not isinstance(config, dict):
+        config = {}
+    return {
+        "notify_coordinator": config.get("notify_coordinator", True) is True,
+        "notify_applicant": config.get("notify_applicant", False) is True,
+    }
 
 
 def public_status_enabled_for(prospect: ProspectiveMember) -> bool:
@@ -1451,7 +1472,8 @@ class MembershipPipelineService:
                         pattern, escape=LIKE_ESCAPE_CHAR
                     ),
                     ProspectiveMember.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
-                    ProspectiveMember.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    # Encrypted at rest: only a complete address matches.
+                    ProspectiveMember.email_hash.in_(email_fingerprints(term)),
                 )
             )
         return and_(*clauses)
@@ -1726,7 +1748,9 @@ class MembershipPipelineService:
         ]
 
         # Match by email or by first+last name
-        match_conditions = [func.lower(User.email) == email.lower()]
+        match_conditions: List[ColumnElement[bool]] = [
+            User.email_hash.in_(email_fingerprints(email))
+        ]
         if first_name and last_name:
             match_conditions.append(
                 and_(
@@ -3426,7 +3450,9 @@ class MembershipPipelineService:
             .where(
                 ProspectiveMember.organization_id == organization_id,
                 ProspectiveMember.status == ProspectStatus.ACTIVE,
-                func.lower(ProspectiveMember.email).in_(normalized),
+                ProspectiveMember.email_hash.in_(
+                    [fp for address in normalized for fp in email_fingerprints(address)]
+                ),
             )
             .options(
                 selectinload(ProspectiveMember.current_step),
@@ -4433,7 +4459,7 @@ class MembershipPipelineService:
                 select(User.deleted_at)
                 .where(
                     User.organization_id == prospect.organization_id,
-                    User.email == primary_email,
+                    User.email_hash.in_(email_fingerprints(primary_email)),
                 )
                 .limit(1)
             )
@@ -5241,9 +5267,7 @@ class MembershipPipelineService:
                 context = {
                     "first_name": prospect.first_name or "",
                     "last_name": prospect.last_name or "",
-                    "prospect_name": " ".join(
-                        p for p in (prospect.first_name, prospect.last_name) if p
-                    ),
+                    "prospect_name": _applicant_name(prospect),
                     "stage_name": step.name or "",
                     "status_url": status_url,
                 }
@@ -5306,10 +5330,7 @@ class MembershipPipelineService:
     ) -> bool:
         """Send a notification email when a pipeline step is completed."""
         try:
-            import html as _html
-
-            from app.services.email_service import EmailService, wrap_email_body
-            from app.services.email_theme import ACCENT_BLUE
+            from app.services.email_service import EmailService
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == prospect.organization_id)
@@ -5318,50 +5339,26 @@ class MembershipPipelineService:
             if not org:
                 return False
 
-            first_name = _html.escape(prospect.first_name or "")
-            step_name = _html.escape(step.name or "")
-            subject = f"Application Update — {step.name} Complete"
-
-            html_body = wrap_email_body(
-                org,
-                subject,
-                f"<p>Hi {first_name},</p>"
-                f"<p>We're writing to let you know that the "
-                f"<strong>{step_name}</strong> step of your "
-                f"membership application has been completed.</p>"
-                f"<p>We'll be in touch with next steps soon.</p>",
-                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
-                header_color=ACCENT_BLUE,
-                chip=_APPLICATION_UPDATE_CHIP,
-            )
-            text_body = (
-                f"Hi {prospect.first_name},\n\n"
-                f"The {step.name} step of your membership "
-                f"application has been completed.\n\n"
-                f"We'll be in touch with next steps soon.\n\n"
-                f"This email was sent by "
-                f"{org.name or 'The Logbook'}."
-            )
-
-            email_svc = EmailService(org)
-            success, _ = await email_svc.send_email(
-                to_emails=[prospect.email],
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
+            sent = await EmailService(org).send_application_step_completed_email(
+                to_email=prospect.email,
+                first_name=prospect.first_name or "",
+                applicant_name=_applicant_name(prospect),
+                step_name=step.name or "",
                 db=self.db,
-                template_type="pipeline_stage",
+                organization_id=str(org.id),
             )
-            if success:
+            if sent:
                 logger.info(
-                    "Step-completion notification sent to "
-                    f"{prospect.email} for step '{step.name}'"
+                    "Step-completion notification sent to prospect {} for step {}",
+                    prospect.id,
+                    step.id,
                 )
-            return success > 0
+            return sent
         except Exception as e:
             logger.error(
-                "Failed to send step-completion notification "
-                f"to {prospect.email}: {e}"
+                "Failed to send step-completion notification to prospect {}: {}",
+                prospect.id,
+                e,
             )
             return False
 
@@ -5397,11 +5394,8 @@ class MembershipPipelineService:
     ) -> bool:
         """Email the applicant the link to their public status page."""
         try:
-            import html as _html
-
             from app.core.config import settings as app_settings
-            from app.services.email_service import EmailService, wrap_email_body
-            from app.services.email_theme import ACCENT_BLUE, action
+            from app.services.email_service import EmailService
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == prospect.organization_id)
@@ -5412,52 +5406,27 @@ class MembershipPipelineService:
                 return False
 
             frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
-            status_url = f"{frontend_url}/application-status/{prospect.status_token}"
-            custom_message = ((step.config or {}).get("custom_message") or "").strip()
-
-            first_name = _html.escape(prospect.first_name or "")
-            custom_html = (
-                f"<p>{_html.escape(custom_message)}</p>" if custom_message else ""
-            )
-            html_body = wrap_email_body(
-                org,
-                "Track Your Membership Application",
-                f"<p>Hi {first_name},</p>"
-                f"{custom_html}"
-                f"<p>You can now follow the progress of your membership "
-                f"application online.</p>"
-                + action(_html.escape(status_url), "Track Your Application"),
-                footer_text=f"This email was sent by {org.name or 'The Logbook'}.",
-                header_color=ACCENT_BLUE,
-                chip=_APPLICATION_UPDATE_CHIP,
-            )
-            text_parts = [f"Hi {prospect.first_name},"]
-            if custom_message:
-                text_parts.append(custom_message)
-            text_parts += [
-                "You can now follow the progress of your membership application "
-                f"online: {status_url}",
-                f"This email was sent by {org.name or 'The Logbook'}.",
-            ]
-
-            email_svc = EmailService(org)
-            success, _ = await email_svc.send_email(
-                to_emails=[prospect.email],
-                subject="Track Your Membership Application",
-                html_body=html_body,
-                text_body="\n\n".join(text_parts),
+            sent = await EmailService(org).send_application_status_link_email(
+                to_email=prospect.email,
+                first_name=prospect.first_name or "",
+                applicant_name=_applicant_name(prospect),
+                status_url=(
+                    f"{frontend_url}/application-status/{prospect.status_token}"
+                ),
+                custom_message=(step.config or {}).get("custom_message") or "",
                 db=self.db,
-                template_type="pipeline_stage",
+                organization_id=str(org.id),
             )
-            if success:
+            if sent:
                 logger.info(
-                    f"Status page link sent to prospect {prospect.id} "
-                    f"for step '{step.name}'"
+                    "Status page link sent to prospect {} for step {}",
+                    prospect.id,
+                    step.id,
                 )
-            return success > 0
+            return sent
         except Exception as e:
             logger.error(
-                f"Failed to send status page link to prospect {prospect.id}: {e}"
+                "Failed to send status page link to prospect {}: {}", prospect.id, e
             )
             return False
 
@@ -5512,14 +5481,19 @@ class MembershipPipelineService:
                 temp_password=temp_password,
                 organization_name=org_name,
                 login_url=login_url,
+                # Without the session the department's own Welcome template
+                # (its wording and attachments) was never loaded, and every
+                # converted applicant got the built-in default.
+                db=self.db,
                 organization_id=organization_id,
                 appended_html=appended_html,
                 appended_text=appended_text,
             )
             return bool(sent)
         except Exception as e:
-            target = recipient_email or prospect.email
-            logger.error(f"Failed to send welcome email to {target}: {e}")
+            logger.error(
+                "Failed to send welcome email to prospect {}: {}", prospect.id, e
+            )
             return False
 
     @staticmethod
@@ -6130,7 +6104,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     ProspectiveMember.organization_id == organization_id,
-                    func.lower(ProspectiveMember.email) == email.lower(),
+                    ProspectiveMember.email_hash.in_(email_fingerprints(email)),
                     ProspectiveMember.status.in_(
                         [
                             ProspectStatus.ACTIVE,
@@ -8616,7 +8590,9 @@ class MembershipPipelineService:
                 {
                     "prospect_id": str(prospect.id),
                     "prospect_name": prospect.full_name,
+                    "prospect_first_name": prospect.first_name or "",
                     "prospect_email": prospect.email,
+                    **_inactivity_notify_flags(prospect),
                     "current_stage": (
                         prospect.current_step.name if prospect.current_step else None
                     ),
@@ -8635,8 +8611,10 @@ class MembershipPipelineService:
         self, organization_id: str, processed_by: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Process inactivity warnings: mark critical prospects as inactive,
-        send coordinator emails for warnings.
+        Process inactivity warnings: mark critical prospects as inactive and
+        record an ``inactivity_warning_sent`` activity entry for the rest,
+        emailing the membership coordinators and/or the applicant as the
+        pipeline's ``notify_coordinator`` / ``notify_applicant`` boxes say.
         Returns count of warnings and actions taken.
 
         Prior-activity lookups are batched rather than run per prospect: this
@@ -8695,11 +8673,13 @@ class MembershipPipelineService:
                 )
             inactive_count = len(to_mark)
 
+        to_email: List[Dict[str, Any]] = []
         for w in warned:
             previous = last_warned_at.get(w["prospect_id"])
             # Warn at most once per 7-day period.
             if previous is not None and (now - previous).days < 7:
                 continue
+            to_email.append(w)
             await self._log_activity(
                 prospect_id=w["prospect_id"],
                 action="inactivity_warning_sent",
@@ -8712,6 +8692,13 @@ class MembershipPipelineService:
             )
             warning_count += 1
 
+        # Sent before the commit that records them: a reminder, so if the
+        # commit fails the next run warning again is a nuisance, where a
+        # warning that never went out is the thing the coordinator asked for
+        # and did not get.
+        if to_email:
+            await self._email_inactivity_warnings(organization_id, to_email, now)
+
         if warning_count > 0 or inactive_count > 0:
             await self.db.commit()
 
@@ -8720,6 +8707,74 @@ class MembershipPipelineService:
             "marked_inactive": inactive_count,
             "total_checked": len(warnings),
         }
+
+    async def _email_inactivity_warnings(
+        self, organization_id: str, warnings: List[Dict[str, Any]], now: datetime
+    ) -> None:
+        """Email this run's inactivity warnings, as each pipeline is set to.
+
+        Best-effort: a mail failure is logged and the sweep carries on, since
+        the activity entry and the inactive marking are the record.
+        """
+        from zoneinfo import ZoneInfo
+
+        from app.core.config import settings as app_settings
+        from app.services.email_service import EmailService
+
+        try:
+            org = (
+                await self.db.execute(
+                    select(Organization).where(Organization.id == organization_id)
+                )
+            ).scalar_one_or_none()
+            if not org:
+                return
+            email_svc = EmailService(org)
+            org_zone = ZoneInfo(org.timezone or "America/New_York")
+            pipeline_url = (
+                f"{getattr(app_settings, 'FRONTEND_URL', '') or ''}"
+                "/prospective-members"
+            )
+
+            coordinators: Optional[List[User]] = None
+            for w in warnings:
+                if w.get("notify_coordinator"):
+                    if coordinators is None:
+                        coordinators = recipients_for(
+                            await self._withdrawal_notice_recipients(organization_id),
+                            EmailKind.MEMBERSHIP_ADMIN,
+                            department_required_kinds(org),
+                        )
+                    for coordinator in coordinators:
+                        await email_svc.send_inactivity_warning_email(
+                            to_email=coordinator.email,
+                            coordinator_name=coordinator.preferred_name
+                            or coordinator.first_name
+                            or "",
+                            prospect_name=w.get("prospect_name") or "",
+                            days_inactive=w["days_inactive"],
+                            timeout_days=w["timeout_days"],
+                            pipeline_stage=w.get("current_stage") or "",
+                            prospect_url=pipeline_url,
+                            db=self.db,
+                            organization_id=organization_id,
+                        )
+                if w.get("notify_applicant") and w.get("prospect_email"):
+                    remaining = max(w["timeout_days"] - w["days_inactive"], 0)
+                    inactive_on = (now + timedelta(days=remaining)).astimezone(org_zone)
+                    await email_svc.send_application_going_inactive_email(
+                        to_email=w["prospect_email"],
+                        first_name=w.get("prospect_first_name") or "",
+                        applicant_name=w.get("prospect_name") or "",
+                        days_inactive=w["days_inactive"],
+                        inactive_date=inactive_on.strftime("%B %d, %Y"),
+                        db=self.db,
+                        organization_id=organization_id,
+                    )
+        except Exception as e:
+            logger.error(
+                "Inactivity warning emails failed for org {}: {}", organization_id, e
+            )
 
     async def _prospects_with_action(self, prospect_ids: List[str], action: str) -> set:
         """Which of ``prospect_ids`` already have an activity entry for ``action``."""

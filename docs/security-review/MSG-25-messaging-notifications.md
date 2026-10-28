@@ -2345,3 +2345,274 @@ by this pass's scoped test run below and confirmed passing.
 No source file was changed by this pass — every behavioral delta since
 pass 8 was landed by other, non-rotation work and independently
 re-verified here against all seven `CHECKLIST.md` dimensions.
+
+## Pass 10 (2026-10-27) — watchdog pickup, real delta (Gmail delegated sending + SMTP batch hardening), 1 new finding fixed
+
+Scheduled watchdog check-in (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable via `ListAgents`). PR #3767
+(Feature 24, Meetings & minutes, pass 10) was found open, `mergeable_state:
+clean`, every one of its 24 checks `success` — the one non-green comment on
+the thread was this same watchdog's own, explaining a `Backend Integration
+Tests (MySQL 8.0)` cancellation at the 30-minute job timeout as margin, not
+a real failure, and recording the one standing re-run, which came back
+green. Merged. `search_pull_requests` (`head:claude/security-review-`)
+returned 0 immediately after. Row 25 (Messaging & notifications) confirmed
+the next `⬜` row in `docs/security-review/PROGRESS.md`'s rotation table on
+`main` at `d975bc61`.
+
+Baseline: pass 9's merge, `5fc3f60c` (PR #3638). `git log
+5fc3f60c..HEAD` against every file this feature's pass 1 scope declares
+surfaced five non-merge commits, all outside this rotation, all read in
+full:
+
+- **SMTP batch sender: resend-once on a transient reply, stop on quota,
+  never log a recipient address** (`14a8d447`, `680d6c4d`,
+  `email_service.py`) — a 421/451/452 reply now resends the same message
+  once after reconnecting instead of recording it failed outright; a
+  sending-quota reply (Gmail's `5.4.5`, Exchange Online's
+  `SubmissionQuotaExceededException`, and its `432` concurrent-connections
+  throttle) stops the batch and reports the untried remainder failed rather
+  than retrying every later message into the same refusal; a failed
+  reconnect now ends the batch keeping the results already collected,
+  instead of raising past messages already delivered as failed.
+  `SMTPRecipientsRefused`'s per-recipient replies are now read for the
+  quota/rate-limit check too, with the recipient addresses themselves
+  dropped before anything is logged (`_smtp_replies` strips them) — matches
+  Pitfall #33's "an id rather than user-supplied text" and the pre-existing
+  `_redact_email` convention elsewhere in this file. At most one resend per
+  message (`for attempt in range(2)`), so this cannot turn into a retry
+  storm; a message already accepted by the server before a drop is a risk
+  inherent to SMTP itself, not something this change could introduce or
+  fix. `test_smtp_batch_send.py` (161 + 42 new lines) exercises all three
+  fixes plus the pre-existing reconnect/pacing behavior.
+- **Gmail delegated service-account sending** (`097883d8`,
+  `google_oauth.py` new, `gmail_api_sender.py` new, `email_providers.py`,
+  `email_service.py`, `email_test_helper.py`, plus
+  `organizations.py`/`organization_service.py`/`schemas/organization.py`,
+  which are Feature 07's files, read here only to verify this feature's own
+  trust boundary) — a Workspace department can now send as a domain-wide
+  delegated service account instead of an App Password, through the Gmail
+  API (`gmail.send` scope only — the docstring explains why SMTP's
+  `https://mail.google.com/` scope was rejected: full mailbox read/delete,
+  which delegation cannot narrow to one mailbox) rather than SMTP.
+  Reviewed end to end against this feature's trust boundary:
+  - `google_oauth.py`'s credential cache is capped at 32 entries with LRU
+    eviction (Pitfall #9), keyed on a SHA-256 of the key material and
+    subject, not the raw key; the google-auth transport is wrapped with an
+    explicit 10 s timeout (`_TimedRequest`) rather than the library's
+    120 s default, so an unreachable token endpoint cannot hold a worker
+    thread that long per message; a key that fails to parse raises through
+    a message that never echoes key material.
+  - **MSG-17 — MEDIUM — FIXED, found in this same pass's own re-reading of
+    this bullet's file.** `parse_service_account_key` validated that
+    `token_uri` was present and non-empty, but never that it was Google's
+    own token endpoint. `google.oauth2.service_account.Credentials
+.refresh()` POSTs the signed JWT assertion to exactly the URL the parsed
+    key names — so an org admin (the only caller who can reach this, via
+    the `settings.manage`/`admin.access`-gated email-settings save/test
+    endpoints described in the next two bullets) could submit a key with
+    `token_uri` pointed at an internal address (cloud metadata, an
+    internal admin API) and the backend would POST to it on every send or
+    "Test connection" click. This is a different URL than the "Fixed
+    Google endpoint URL (no SSRF surface)" the `gmail_api_sender.py` bullet
+    below correctly describes — that one is the fixed send endpoint; this
+    one is the _token_ endpoint, read from the submitted key itself, and it
+    had no equivalent fixed-value check. It is the same SSRF shape
+    `microsoft_oauth.py`'s sibling module already guards against for its
+    own interpolated `tenant_id` (`validate_tenant_id`'s GUID/domain regex,
+    with the comment "a value carrying a slash or an @ would redirect the
+    token request to a host the department never named") — this module
+    simply never added the equivalent check for its own admin-controlled
+    URL field. Every real Google Cloud service-account key has `token_uri`
+    fixed at `https://oauth2.googleapis.com/token`, so there is no
+    legitimate value to allow other than that one — unlike `smtp_host`
+    (F4, below), where a department may legitimately want an internal
+    relay. **Fixed** by rejecting any `token_uri` other than Google's own
+    endpoint in `parse_service_account_key` — the single choke point every
+    caller (write-time validation, the client-id shown on every settings
+    read, and send/test-time token acquisition) already goes through, so
+    one change closes it everywhere with no other call site to update, and
+    no behavior change for any legitimate key. Guard test added:
+    `tests/test_google_oauth.py::TestParseKey::
+test_rejects_a_token_uri_pointed_elsewhere` (submits a key with `token_uri`
+    pointed at `169.254.169.254`, the common cloud-metadata address, and
+    asserts `GoogleOAuthError`) — verified to fail against the pre-fix code
+    (reproduced by reverting just this check and re-running the test: `DID
+NOT RAISE GoogleOAuthError`) and to pass with the fix restored,
+    alongside the rest of `test_google_oauth.py` (19/19, up from 18) and
+    `test_gmail_api_sender.py` (unaffected, still 23/23).
+  - The new `google_service_account_key` settings field was added to the
+    pre-existing `EMAIL_SECRET_FIELDS` tuple in `email_providers.py`
+    (alongside `smtp_password`/`google_app_password`, which already rode
+    `organization_service.py`'s `encrypt_settings_secrets`/
+    `decrypt_settings_secrets` and `_redact` round trip) — it is encrypted
+    at rest and redacted on read by the existing generic mechanism, not a
+    new one. Confirmed by reading `update_organization_settings`
+    (`organization_service.py:440-585`) in full rather than trusting the
+    docstring: identity-change clearing, the `REDACTED_SECRET` marker
+    round-trip, and the deep-merge-before-encrypt ordering all apply to it
+    exactly as they do to the fields that predate it.
+  - **Permission level matches sensitivity (CHECKLIST §2, the XC-2
+    pattern this rotation watches for):** because a delegated key can send
+    as any user in the domain, choosing it, changing the From address
+    while using it, or replacing the key is gated on `admin.access` — read
+    server-side via `user_has_permission(current_user, "admin.access")` at
+    the endpoint and passed into the service as `may_configure_delegated_
+email`, never trusted from the client — while every other
+    settings change (toggling email off, a new display name, switching
+    away from the service account) stays open to the pre-existing
+    `settings.manage`. The test-connection endpoint
+    (`POST /settings/email/test`) itself stays gated at `settings.manage`
+    (unchanged — it predates this commit): it acquires a token for a
+    caller-supplied key without saving anything, so it is not a privilege
+    bypass of the admin-only save path — the caller already holds whatever
+    key they're testing, redacted-marker resolution against the stored key
+    included, and that round-trip already existed for every other
+    provider's secret before this commit.
+  - `gmail_api_sender.py`: recipients not already in `To`/`Cc` are added as
+    a `Bcc` header (the Gmail API has no SMTP envelope); each address has
+    `\r`/`\n` stripped before being placed in that header — a header-
+    injection guard, not merely a formatting one. Fixed Google endpoint URL
+    (no SSRF surface — not caller-configurable). A `429` or Gmail's
+    rate-limit `reason` codes retry once with a bounded wait
+    (`GMAIL_MAX_RETRY_WAIT_SECONDS = 60`); anything larger stops the batch,
+    mirroring the SMTP sender's own quota-stop logic above.
+  - `email_test_helper.py`'s new `_test_google_service_account_connection`
+    sends nothing — acquiring the token is the whole test — matching the
+    settings screen's existing "test doesn't send mail" contract for every
+    other provider.
+  - Migration `08e6220f2dce`: widens `EmailTemplateType` by two new values
+    only (no row writes), guarded by `_has_table` and an idempotent
+    re-entry check per Pitfall #26/#35; re-read in full. (This migration
+    was one of three parallel heads at the time it was written; a
+    different pass's own completion gate already resolved that fork with
+    merge revision `f5426e40b955` — confirmed by `alembic heads` showing a
+    single head, `c616fa1bd492`, with `08e6220f2dce` on the path to it.)
+- **Pipeline stage email now sends its linked custom template**
+  (`c91b309d`, `04af8b97`) — an automated-email pipeline stage's optional
+  linked template is now actually read at send time and rendered with
+  `first_name`/`last_name`/`prospect_name`/`stage_name`/`status_url`,
+  falling back to the old section-built email when the link is off,
+  missing, or not a custom template. The stage's own enabled sections
+  (welcome message, FAQ link, next-meeting block, status-tracker link,
+  custom sections) are appended after the template body via `render()`'s
+  new `appendix_html`/`appendix_text` parameters. Traced every value that
+  reaches `appendix_html` (`membership_pipeline_service.py:5120-5257`):
+  `welcome_message`, `faq_url`, `meeting_lines`, `status_url`, and each
+  custom section's `title`/`content` are individually `html.escape()`d
+  before being concatenated into the appendix string, and `render()`
+  substitutes that pre-escaped string as a single `{{_appendix_html}}`
+  variable value rather than splicing it into the template source — so
+  `{{...}}` typed inside an admin's own custom-section content can never
+  be re-expanded against the render context (no second-order template
+  injection). `first_name`/`last_name`/`prospect_name`/`stage_name` travel
+  through the template's own `context` dict and get the template engine's
+  normal variable-substitution escaping, same as every other template
+  variable. New template types' default wording carries the exact text
+  the hardcoded emails had, so no applicant-facing copy changed under this
+  rewrite. Two full new test files
+  (`test_pipeline_stage_email_template.py`, 313 lines;
+  `test_prospect_email_templates.py`, 196 lines) exercise the fallback
+  paths and the escaping.
+
+**One new finding (MSG-17, above), fixed.** None of the five commits add a
+route, change a permission string on this feature's own four endpoint
+files, or touch SMS/CSV/LIKE-pattern code in this feature's scope.
+
+### Frontend — two commits since pass 9, both reviewed
+
+Missed by this pass's first pushed revision (caught and added before merge,
+since the backend-only `git log` restricted to this feature's pass-1-scoped
+_backend_ files does not surface a frontend-only commit): `git log
+5fc3f60c..HEAD` against `modules/communications`, `modules/notifications`,
+`pages/NotificationsPage.tsx`, `hooks/usePushNotifications.ts`,
+`components/NotificationCard.tsx`, and `services/communicationsServices.ts`
+surfaces two real commits, both read in full.
+
+- **`NotificationsPage.tsx` gained Edit and Delete on the Rules screen**
+  (`bd15c709`) — PATCH and DELETE already existed; the screen could only
+  create and toggle. Both actions are gated on `canManage` =
+  `checkPermission('notifications.manage')`, matching the backend's
+  `update_rule`/`delete_rule` permission exactly (re-confirmed at
+  `notifications.py:111-134`, unchanged). Delete goes through `useConfirm()`
+  — no `window.confirm` (Pitfall #16) — with a warning naming the concrete
+  effect (a trigger's notifications switching on or off department-wide)
+  when the rule being removed or re-pointed is the one keeping a trigger's
+  default behavior from applying; that effect is computed client-side
+  (`effectOfRemoving`/`triggerSends`) purely for the confirmation copy, not
+  trusted for anything the backend decides. The edit payload sends a
+  cleared description as an explicit `null` via `blankToNull` (Pitfall #1,
+  update side — every field the dialog owns is sent, matching the backend's
+  `exclude_unset`/`apply_updates` contract already re-verified at MSG-5).
+- **`TemplateList.tsx` gained a "Prospective Members" category**
+  (`e004da9a`) — three existing template-type ids moved from the "Members &
+  Accounts" group into a new group label. Pure UI regrouping of an existing,
+  already-permission-gated list; no new data reaches the screen and no
+  security surface.
+
+### Re-swept, unchanged since pass 9
+
+- `grep -rn "SMSService("` across `backend/app`: still exactly the two
+  gated call sites from Pitfall #18; no direct call added by the Gmail or
+  SMTP-batch work.
+- `.ilike(`/`.like(` sites in this feature's scope
+  (`message_history.py:83-84`, `messaging_service.py:245-246`,
+  `notifications_service.py:91-92`): unchanged, still pass
+  `escape=LIKE_ESCAPE_CHAR` with a `like_pattern()`-built pattern.
+- CSV export: still none in this feature's scope.
+
+### Standing findings — re-confirmed open/unchanged
+
+- **MSG-3** — `POST /message-history/test-email` sends to an admin-typed
+  `to_email`, by design. Unchanged.
+- **MAIL-4** — `POST /email-templates/schedule`'s `to/cc/bcc_emails` accept
+  arbitrary addresses, by design, same trust boundary as MSG-3. Unchanged.
+- **`email_service.py`'s F4** — no SSRF-style validation on an
+  org-configured SMTP host, a deliberate policy decision. Unchanged.
+- **`NotificationRuleCreate`/`Update.config` unbounded-JSON note** —
+  informational, low severity, unchanged.
+
+### Route inventory — re-enumerated by AST, 51 routes (unchanged since pass 5)
+
+Walked all four endpoint files' decorators by AST rather than trusting the
+prior count: 13 (`messages.py`) + 2 (`message_history.py`) + 20
+(`notifications.py`) + 16 (`email_templates.py`) = **51**, matching pass 9
+exactly. No new route in this feature's four declared endpoint files.
+
+### Schema & migration notes
+
+`validate_migrations.py --strict`: 663 revisions, single head
+`c616fa1bd492`, up from pass 9's 649 — growth is other features' work,
+including the three-way fork-and-merge noted above.
+
+## Guard tests added (pass 10)
+
+- `tests/test_google_oauth.py::TestParseKey::test_rejects_a_token_uri_pointed_elsewhere`
+  (MSG-17) — the one test this pass added itself. Verified to fail against
+  the pre-fix code and pass with it.
+
+The five reviewed commits' own new test files (`test_smtp_batch_send.py`'s
+additions, `test_pipeline_stage_email_template.py`,
+`test_prospect_email_templates.py`) and the pre-existing
+`test_gmail_api_sender.py`, `test_gmail_service_account_settings.py` were
+exercised by this pass's scoped test run below and confirmed passing.
+
+## Completion gate (pass 10)
+
+| Check                                                                                                                                                   | Result                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                           | clean (0 violations)                                     |
+| `black --check app/ tests/ alembic/`                                                                                                                    | clean — 2,695 files unchanged                            |
+| `isort --check-only app/ tests/ alembic/`                                                                                                               | clean                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                       | PASSED — 663 revisions, single head `c616fa1bd492`       |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                   | 279 routes, 0 errors, 0 warnings                         |
+| Backend tests, scope (`-k "message or notification or email_template or smtp_batch or gmail or google_oauth or pipeline_stage_email"`)                  | 1,240 passed, 1 skipped (environment-only — `pywebpush`) |
+| `cd frontend && npm run typecheck` (after `npm ci` from the repo root — sandbox predated `@simplewebauthn/browser`; environment gap, not a code defect) | 0 errors                                                 |
+| `cd frontend && npm run lint` (`eslint --max-warnings 10`)                                                                                              | clean, exit 0                                            |
+| Scoped frontend suite (`src/modules/prospective-members`, 35 files)                                                                                     | 316 passed                                               |
+| Scoped frontend suite (`src/modules/communications`, 37 files)                                                                                          | 271 passed                                               |
+
+One source file was changed by this pass: `app/utils/google_oauth.py`
+(MSG-17's fix, 10 lines). Every other behavioral delta since pass 9 was
+landed by other, non-rotation work and is reviewed/recorded, not authored,
+here.

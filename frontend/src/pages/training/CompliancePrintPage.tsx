@@ -5,12 +5,28 @@
  * members' training status against requirements. Designed for
  * annual reviews, audits, and regulatory compliance filing.
  *
- * URL: /training/print/compliance
+ * URL: /training/print/compliance[?class=operational|administrative|social]
+ *
+ * With `?class=` (the matrix's Print button passes its class filter) only that
+ * class prints, against the requirements that grade someone in it. Without it
+ * the whole roster prints, listed under one heading per member class.
  */
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router';
 import { trainingService } from '../../services/api';
-import type { ComplianceMatrix, ComplianceMatrixMember } from '../../services/communicationsServices';
+import type {
+  ComplianceMatrix,
+  ComplianceMatrixMember,
+  ComplianceMatrixRequirement,
+} from '../../services/communicationsServices';
+import {
+  MEMBER_CLASS_LABELS,
+  MEMBER_CLASS_ORDER,
+  membersOfClass,
+  parseClassFilter,
+  requirementsApplyingTo,
+} from './complianceMatrixModel';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import PrintPageStyles from '@/components/print/PrintPageStyles';
@@ -29,8 +45,46 @@ const cellMark = (status: string | undefined): string => {
   return '✗';
 };
 
+/** One printed table: a heading (when the roster is split) and its own columns. */
+interface PrintSection {
+  key: string;
+  title: string | null;
+  members: ComplianceMatrixMember[];
+  requirements: ComplianceMatrixRequirement[];
+}
+
+/**
+ * The whole roster, one section per member class, each with only the
+ * requirements that grade someone in it, so an administrative member's row is
+ * not printed beside a column of operational requirements. Members with no
+ * class get a section of their own rather than a guessed class. A roster
+ * holding a single group prints as one unheaded table against every
+ * requirement, exactly as it did before classes existed.
+ */
+const sectionsByClass = (
+  members: ComplianceMatrixMember[],
+  requirements: ComplianceMatrixRequirement[]
+): PrintSection[] => {
+  const groups = [
+    ...MEMBER_CLASS_ORDER.map((c) => ({
+      key: c,
+      title: `${MEMBER_CLASS_LABELS[c]} Members`,
+      members: members.filter((m) => m.member_class === c),
+    })),
+    {
+      key: 'unclassified',
+      title: 'Unclassified Members',
+      members: members.filter((m) => !MEMBER_CLASS_ORDER.some((c) => c === m.member_class)),
+    },
+  ].filter((g) => g.members.length > 0);
+  if (groups.length <= 1) return [{ key: 'all', title: null, members, requirements }];
+  return groups.map((g) => ({ ...g, requirements: requirementsApplyingTo(g.members, requirements) }));
+};
+
 const CompliancePrintPage: React.FC = () => {
   const tz = useTimezone();
+  const [searchParams] = useSearchParams();
+  const classFilter = parseClassFilter(searchParams.get('class'));
   const [matrix, setMatrix] = useState<ComplianceMatrix | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,8 +118,13 @@ const CompliancePrintPage: React.FC = () => {
     );
   }
 
-  const members: ComplianceMatrixMember[] = matrix.members || [];
-  const requirements = matrix.requirements || [];
+  const allRequirements = matrix.requirements || [];
+  const members = membersOfClass(matrix.members || [], classFilter);
+  const sections: PrintSection[] =
+    classFilter === 'all'
+      ? sectionsByClass(members, allRequirements)
+      : [{ key: classFilter, title: null, members, requirements: requirementsApplyingTo(members, allRequirements) }];
+  const requirementCount = classFilter === 'all' ? allRequirements.length : (sections[0]?.requirements.length ?? 0);
   // Counted from the standing the backend decided, as the on-screen matrix is.
   // Bucketing on completion_pct called a member with 4 of 6 hours "not
   // started", and ignored the department's thresholds entirely.
@@ -109,7 +168,11 @@ const CompliancePrintPage: React.FC = () => {
                 <h1 style={{ fontSize: '16pt', fontWeight: 'bold', margin: '0 0 2pt 0' }}>
                   Training Compliance Report
                 </h1>
-                <p style={{ fontSize: '10pt', color: '#555', margin: 0 }}>Department-Wide Compliance Matrix</p>
+                <p style={{ fontSize: '10pt', color: '#555', margin: 0 }}>
+                  {classFilter === 'all'
+                    ? 'Department-Wide Compliance Matrix'
+                    : `${MEMBER_CLASS_LABELS[classFilter]} Members — Compliance Matrix`}
+                </p>
               </div>
               <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
                 <p style={{ margin: 0 }}>Generated: {formatDate(new Date(), tz)}</p>
@@ -142,7 +205,7 @@ const CompliancePrintPage: React.FC = () => {
                   </div>
                 </td>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 10pt', width: '25%', textAlign: 'center' }}>
-                  <div style={{ fontSize: '18pt', fontWeight: 'bold' }}>{requirements.length}</div>
+                  <div style={{ fontSize: '18pt', fontWeight: 'bold' }}>{requirementCount}</div>
                   <div style={{ fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555' }}>
                     Requirements
                   </div>
@@ -151,76 +214,85 @@ const CompliancePrintPage: React.FC = () => {
             </tbody>
           </table>
 
-          {/* Member Matrix. Scrolls sideways on a screen narrower than the matrix;
-              on paper it prints at full width. */}
-          <div
-            className="overflow-x-auto print:overflow-visible"
-            tabIndex={0}
-            role="region"
-            aria-label="Member compliance matrix"
-          >
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={headerCell}>Member</th>
-                  <th style={{ ...headerCell, textAlign: 'center' }}>Completion</th>
-                  {requirements.map((r) => (
-                    <th
-                      key={r.id}
-                      style={{
-                        ...headerCell,
-                        textAlign: 'center',
-                        fontSize: '6.5pt',
-                        maxWidth: '60pt',
-                        // Wrapped, not truncated: paper has no tooltip to recover
-                        // "ANNUAL HAZMA…".
-                        whiteSpace: 'normal',
-                        overflowWrap: 'anywhere',
-                      }}
-                      title={r.name}
-                    >
-                      {r.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {members
-                  // Not-applicable members (no percentage) print last.
-                  .sort((a, b) => (a.completion_pct ?? 101) - (b.completion_pct ?? 101))
-                  .map((m) => (
-                    <tr key={m.user_id}>
-                      <td style={cellStyle}>{m.member_name}</td>
-                      <td
-                        style={{
-                          ...cellStyle,
-                          textAlign: 'center',
-                          fontWeight: 600,
-                          color:
-                            m.completion_pct === null
-                              ? '#555'
-                              : m.completion_pct >= 100
-                                ? '#166534'
-                                : m.completion_pct > 0
-                                  ? '#92400e'
-                                  : '#991b1b',
-                        }}
-                      >
-                        {m.completion_pct === null ? 'N/A' : `${Math.round(m.completion_pct)}%`}
-                      </td>
-                      {requirements.map((req) => {
-                        const memberReq = m.requirements.find((r) => r.requirement_id === req.id);
-                        return (
-                          <td key={req.id} style={{ ...cellStyle, textAlign: 'center', fontSize: '8pt' }}>
-                            {cellMark(memberReq?.status)}
-                          </td>
-                        );
-                      })}
+          {/* Member Matrix, one table per section. Scrolls sideways on a screen
+              narrower than the matrix; on paper it prints at full width. */}
+          {sections.map((section) => (
+            <div key={section.key} style={{ marginTop: section.title ? '10pt' : 0 }}>
+              {section.title && (
+                <h2 style={{ fontSize: '11pt', fontWeight: 'bold', margin: '0 0 4pt 0', breakAfter: 'avoid' }}>
+                  {section.title} ({section.members.length})
+                </h2>
+              )}
+              <div
+                className="overflow-x-auto print:overflow-visible"
+                tabIndex={0}
+                role="region"
+                aria-label={section.title ? `${section.title} compliance matrix` : 'Member compliance matrix'}
+              >
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={headerCell}>Member</th>
+                      <th style={{ ...headerCell, textAlign: 'center' }}>Completion</th>
+                      {section.requirements.map((r) => (
+                        <th
+                          key={r.id}
+                          style={{
+                            ...headerCell,
+                            textAlign: 'center',
+                            fontSize: '6.5pt',
+                            maxWidth: '60pt',
+                            // Wrapped, not truncated: paper has no tooltip to recover
+                            // "ANNUAL HAZMA…".
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                          }}
+                          title={r.name}
+                        >
+                          {r.name}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {[...section.members]
+                      // Not-applicable members (no percentage) print last.
+                      .sort((a, b) => (a.completion_pct ?? 101) - (b.completion_pct ?? 101))
+                      .map((m) => (
+                        <tr key={m.user_id}>
+                          <td style={cellStyle}>{m.member_name}</td>
+                          <td
+                            style={{
+                              ...cellStyle,
+                              textAlign: 'center',
+                              fontWeight: 600,
+                              color:
+                                m.completion_pct === null
+                                  ? '#555'
+                                  : m.completion_pct >= 100
+                                    ? '#166534'
+                                    : m.completion_pct > 0
+                                      ? '#92400e'
+                                      : '#991b1b',
+                            }}
+                          >
+                            {m.completion_pct === null ? 'N/A' : `${Math.round(m.completion_pct)}%`}
+                          </td>
+                          {section.requirements.map((req) => {
+                            const memberReq = m.requirements.find((r) => r.requirement_id === req.id);
+                            return (
+                              <td key={req.id} style={{ ...cellStyle, textAlign: 'center', fontSize: '8pt' }}>
+                                {cellMark(memberReq?.status)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
           <p style={{ margin: '4pt 0 0', fontSize: '7.5pt', color: '#555' }}>
             ✓ met · ◐ in progress · ✗ not started · Exp expired · Due existing member, before their catch-up deadline ·
             — does not apply to this member

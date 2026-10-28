@@ -237,6 +237,20 @@ async def _send_property_return_email(
                     select(Organization).where(Organization.id == organization_id)
                 )
             ).scalar_one_or_none()
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import EmailTemplateService
+
+            # The officer asked for this email when changing the status, but a
+            # department that switched the Member Dropped template off has
+            # said it does not send it. The report is still in Documents.
+            if await EmailTemplateService(session).is_switched_off(
+                organization_id, EmailTemplateType.MEMBER_DROPPED
+            ):
+                logger.info(
+                    "Member dropped email not sent: switched off in org {}",
+                    organization_id,
+                )
+                return
             email_svc = EmailService(org)
             org_name = org.name if org else "Department"
 
@@ -265,9 +279,6 @@ async def _send_property_return_email(
 
             # Try loading the admin-configured template (same session).
             try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
                 tmpl_svc = EmailTemplateService(session)
                 template = await tmpl_svc.get_template(
                     organization_id,
@@ -287,9 +298,6 @@ async def _send_property_return_email(
             # only there — escaping the plain-text body would corrupt names
             # like "O'Brien"). It also fills the shell's colourway and footer.
             if rendered is None or not rendered[0]:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
                 rendered = EmailTemplateService.render_default(
                     EmailTemplateType.MEMBER_DROPPED, context, organization=org
                 )

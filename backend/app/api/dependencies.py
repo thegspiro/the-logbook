@@ -28,6 +28,7 @@ from app.core.permissions import (
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
 from app.services.mfa_policy import grace_ends_at, grace_expired, is_privileged
+from app.services.passkey_service import has_passkey
 from app.utils.db_retry import is_transient_db_error
 from app.utils.password_expiry import is_password_expired, is_past_grace
 
@@ -126,6 +127,9 @@ _MFA_ENROLL_ALLOWED_SUFFIXES = (
     "/auth/mfa/setup",
     "/auth/mfa/verify-setup",
     "/auth/mfa/status",
+    "/auth/passkeys",
+    "/auth/passkeys/register-options",
+    "/auth/passkeys/register",
     "/auth/change-password",
     "/auth/me",
     "/auth/logout",
@@ -326,8 +330,11 @@ async def get_current_user(
     # Enforce MFA: an un-enrolled user who must use it may only reach the
     # enrollment/session paths until they set it up. "Must" is the org-wide
     # switch, or holding a privileged permission once the grace period has run
-    # out. The org lookup is skipped entirely for already-enrolled users.
-    if not getattr(user, "mfa_enabled", False):
+    # out. The org lookup is skipped entirely for already-enrolled users, and a
+    # working passkey counts as enrolled.
+    if not getattr(user, "mfa_enabled", False) and not await has_passkey(
+        db, str(user.id)
+    ):
         org_row = await db.execute(
             select(Organization.settings).where(Organization.id == user.organization_id)
         )
@@ -477,8 +484,18 @@ async def require_stepup(
     if not token and authorization:
         scheme, _, bearer = authorization.partition(" ")
         token = bearer if scheme.lower() == "bearer" and bearer else None
+    await ensure_stepup(db, token)
+    return current_user
+
+
+async def ensure_stepup(db: AsyncSession, token: str | None) -> None:
+    """Raise the step-up challenge unless ``token``'s session re-verified recently.
+
+    For a handler that needs step-up only in some cases, where the
+    ``require_stepup`` dependency would demand it every time.
+    """
     if await _stepup_is_fresh(db, token):
-        return current_user
+        return
     raise CodedHTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Please confirm your identity to continue.",

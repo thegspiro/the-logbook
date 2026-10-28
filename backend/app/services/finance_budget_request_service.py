@@ -692,6 +692,19 @@ class FinanceBudgetRequestService:
         self._require_requests_stage(fy)
         if request.status not in (BudgetRequestStatus.SUBMITTED, *_DECIDED):
             raise ValueError("Only a submitted request can be decided.")
+        # FIN8-05-1: the same separation of duties review_request applies one
+        # stage later. A finance.manage holder may create a request for any
+        # line, so without this they could raise a request for a line they own
+        # and approve it into the budget with no second person involved. Owner
+        # decision: no exception for a one-person department, as with money
+        # approvals; it grants finance.manage to a second member.
+        if str(request.submitted_by or "") == str(decided_by) or (
+            await self._acts_as_owner(request, org_id, decided_by)
+        ):
+            raise BudgetRequestForbiddenError(
+                "You cannot decide a request for a line you own or a request "
+                "you submitted. Another finance manager has to decide it."
+            )
         if (
             request.status == BudgetRequestStatus.DECLINED
             and new_status != BudgetRequestStatus.DECLINED

@@ -40,6 +40,7 @@ import {
   PenTool,
   GitBranch,
   Copy,
+  Lock,
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -181,6 +182,12 @@ const SortableFieldRow = ({
           {field.width !== 'full' && (
             <span className="bg-theme-surface text-theme-text-muted rounded-sm px-1.5 py-0.5 text-[10px]">
               {field.width}
+            </span>
+          )}
+          {field.is_sensitive && (
+            <span className="bg-theme-surface text-theme-text-secondary flex items-center gap-0.5 rounded-sm px-1.5 py-0.5 text-[10px] font-medium">
+              <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+              Sensitive
             </span>
           )}
           {field.condition_field_id && (
@@ -388,6 +395,9 @@ const FormBuilder = ({
       condition_value: field.condition_value ?? undefined,
       sort_order: field.sort_order,
       width: field.width,
+      // Without this the editor opens unticked and its save un-marks the
+      // field — or, once answers are sealed, every edit is refused.
+      is_sensitive: field.is_sensitive ?? false,
     });
     setEditingFieldId(field.id);
     setEditorOpen(true);
@@ -413,6 +423,7 @@ const FormBuilder = ({
       condition_operator: field.condition_operator ?? undefined,
       condition_value: field.condition_value ?? undefined,
       width: field.width,
+      is_sensitive: field.is_sensitive ?? false,
       sort_order: field.sort_order + 1,
     };
 

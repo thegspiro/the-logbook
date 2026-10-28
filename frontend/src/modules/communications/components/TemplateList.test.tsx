@@ -81,6 +81,9 @@ describe('TemplateList', () => {
       makeTemplate({ id: '1', name: 'Prospect Inactivity Warning', template_type: 'inactivity_warning' }),
       makeTemplate({ id: '2', name: 'Duplicate Application', template_type: 'duplicate_application' }),
       makeTemplate({ id: '3', name: 'Application Withdrawn', template_type: 'application_withdrawn' }),
+      makeTemplate({ id: '4', name: 'Application Step Completed', template_type: 'application_step_completed' }),
+      makeTemplate({ id: '5', name: 'Application Status Link', template_type: 'application_status_link' }),
+      makeTemplate({ id: '6', name: 'Application Going Inactive', template_type: 'application_going_inactive' }),
     ];
 
     render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);

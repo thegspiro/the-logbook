@@ -65,7 +65,11 @@ current recommendation, which auditors do check.
    registered again. Key rotation never needs the salt to change.
 4. Restart the stack. Verify sign-in with an MFA-enabled account (proves the
    ring reads old ciphertext).
-5. Drain: re-encrypt everything under the new key.
+5. Drain: re-encrypt everything under the new key. The same run recomputes
+   the email fingerprints (`users.email_hash` and the others) under the new
+   key. Until it has, members are found by email only through the old key in
+   `ENCRYPTION_KEYS_LEGACY`, so removing that key early stops sign-in by
+   email, password reset and every duplicate-address check.
    ```bash
    # Report only:
    docker exec -it intranet-backend python scripts/rotate_encryption_key.py
@@ -101,6 +105,14 @@ current recommendation, which auditors do check.
   written under a key not present in the ring. Add the missing old key to
   `ENCRYPTION_KEYS_LEGACY` and re-run. The script never deletes or overwrites
   values it cannot read.
+- **Sign-in by email stops working after step 7** — the drained key was
+  removed before a `--commit` run recomputed the fingerprints. Put it back in
+  `ENCRYPTION_KEYS_LEGACY`, restart, run step 5 with `--commit`, then remove
+  it again.
+- **Message-history search finds an old batch by fewer addresses after a
+  rotation** — expected. Only the addresses kept in a batch's `to_email`
+  summary can be fingerprinted again; the rest of its recipients are no
+  longer searchable once the old key is removed.
 - **MFA login fails after step 4** — the legacy list is missing or has a typo
   in the old key. Restore the previous `.env` values; nothing was rewritten
   yet.

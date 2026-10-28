@@ -385,7 +385,7 @@ class InventoryVendorContact(Base):
     title: Mapped[Optional[str]] = mapped_column(
         String(150)
     )  # e.g. "Account Manager", "Service Coordinator"
-    email: Mapped[Optional[str]] = mapped_column(String(255))
+    email: Mapped[Optional[str]] = mapped_column(EncryptedText)
     phone: Mapped[Optional[str]] = mapped_column(EncryptedText)
     phone_extension: Mapped[Optional[str]] = mapped_column(String(20))
     notes: Mapped[Optional[str]] = mapped_column(Text)

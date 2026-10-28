@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { InventoryItem } from '../types';
@@ -466,6 +466,17 @@ describe('InventoryBarcodePrintPage', () => {
 
     await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
     expect(mockGenerateLabels.mock.calls[0]?.[0]).toEqual(['it-1']);
+  });
+
+  it('prints a long name on up to two lines in a sans-serif font', async () => {
+    const longName = 'Golf Shirt — XXL — Unisex Short Sleeve Polo';
+    mockGetItem.mockResolvedValue(makeItem({ name: longName }));
+    renderPage('?ids=it-1');
+
+    const name = await screen.findByText(longName, { selector: '.barcode-label > div' });
+    expect(name.style.webkitLineClamp).toBe('2');
+    expect(name.style.whiteSpace).not.toBe('nowrap');
+    expect(name.parentElement?.style.fontFamily).toMatch(/^Arial/);
   });
 
   describe('QR codes', () => {
@@ -958,6 +969,95 @@ describe('InventoryBarcodePrintPage', () => {
 
       expect(await screen.findByText(/download the PDF once to assign them/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Print to Station Zebra' })).toBeDisabled();
+    });
+  });
+
+  describe('printing from the browser', () => {
+    const PRINT_FRAME_TITLE = 'Label print job';
+
+    beforeEach(() => {
+      // The page refuses to print a barcode SVG that drew nothing, so the
+      // stand-in draws something the way JsBarcode would.
+      vi.mocked(JsBarcode).mockReset();
+      vi.mocked(JsBarcode).mockImplementation((el: SVGSVGElement) => {
+        el.innerHTML = '<rect width="100" height="40" fill="#ffffff"></rect><g><rect width="2" height="40"></rect></g>';
+      });
+    });
+
+    afterEach(() => {
+      screen.queryAllByTitle(PRINT_FRAME_TITLE).forEach((frame) => frame.remove());
+    });
+
+    const clickPrint = async (user: ReturnType<typeof userEvent.setup>) => {
+      await screen.findAllByText('Thermal Camera');
+      const button = screen.getByRole('button', { name: /Labels$/ });
+      await waitFor(() => expect(button).toBeEnabled());
+      await user.click(button);
+    };
+
+    it('names the paper size to pick before the print dialog opens', async () => {
+      localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await clickPrint(user);
+
+      const dialog = await screen.findByRole('dialog', { name: 'Before you print' });
+      expect(within(dialog).getByText(/^: 2" x 1"/)).toBeInTheDocument();
+      expect(within(dialog).getByRole('link', { name: /Label Printers/ })).toHaveAttribute(
+        'href',
+        '/settings?tab=labelPrinters'
+      );
+      expect(screen.queryByTitle(PRINT_FRAME_TITLE)).not.toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Open print dialog' }));
+
+      const frame = screen.getByTitle<HTMLIFrameElement>(PRINT_FRAME_TITLE);
+      const printCss = frame.contentDocument?.head.innerHTML ?? '';
+      expect(printCss).toContain('size: 2in 1in');
+      // The background rect stays white: forcing it black printed every
+      // Code 128 label as a solid black box.
+      expect(printCss).toContain('.barcode-label svg > rect');
+      expect(await screen.findByText(/Did the labels print correctly/)).toBeInTheDocument();
+    });
+
+    it('goes straight to the print dialog once told not to ask again for that size', async () => {
+      localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await clickPrint(user);
+      const dialog = await screen.findByRole('dialog', { name: 'Before you print' });
+      await user.click(within(dialog).getByRole('checkbox'));
+      await user.click(within(dialog).getByRole('button', { name: 'Open print dialog' }));
+      screen.queryAllByTitle(PRINT_FRAME_TITLE).forEach((frame) => frame.remove());
+
+      await clickPrint(user);
+
+      expect(screen.queryByRole('dialog', { name: 'Before you print' })).not.toBeInTheDocument();
+      expect(screen.getByTitle(PRINT_FRAME_TITLE)).toBeInTheDocument();
+    });
+
+    it('still asks for a different label size', async () => {
+      localStorage.setItem('inventory:labelPrintChecklistSkip', JSON.stringify(['rollo_2x1']));
+      localStorage.setItem('inventory:labelPreset', 'dymo_30252');
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await clickPrint(user);
+
+      expect(await screen.findByRole('dialog', { name: 'Before you print' })).toBeInTheDocument();
+    });
+
+    it('does not point at network printing when a printer is already registered', async () => {
+      mockListPrinters.mockResolvedValue([
+        { id: 'p-1', name: 'Station Zebra', language: 'zpl', label_format: 'rollo_2x1', is_default: true },
+      ]);
+      localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findByRole('button', { name: 'Print to Station Zebra' });
+      await clickPrint(user);
+
+      const dialog = await screen.findByRole('dialog', { name: 'Before you print' });
+      expect(within(dialog).queryByRole('link', { name: /Label Printers/ })).not.toBeInTheDocument();
     });
   });
 });

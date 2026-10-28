@@ -48,4 +48,27 @@ describe('MfaPolicyCard', () => {
     await waitFor(() => expect(mockSetPolicy).toHaveBeenCalledWith(true));
     await waitFor(() => expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true'));
   });
+
+  it('turns new passkeys off without touching the MFA requirement', async () => {
+    const user = userEvent.setup();
+    mockGetPolicy.mockResolvedValue({ mfa_required: true, passkeys_enabled: true });
+    mockSetPolicy.mockResolvedValue({ mfa_required: true, passkeys_enabled: false });
+
+    render(<MfaPolicyCard />);
+    const passkeys = await screen.findByRole('switch', { name: /allow passkeys/i });
+    expect(passkeys).toHaveAttribute('aria-checked', 'true');
+    await user.click(passkeys);
+
+    await waitFor(() => expect(mockSetPolicy).toHaveBeenCalledWith(true, false));
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: /allow passkeys/i })).toHaveAttribute('aria-checked', 'false')
+    );
+    expect(screen.getByRole('switch', { name: /require two-factor/i })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('hides the passkey switch from a server that does not report it', async () => {
+    render(<MfaPolicyCard />);
+    await screen.findByRole('switch', { name: /require two-factor/i });
+    expect(screen.queryByRole('switch', { name: /allow passkeys/i })).not.toBeInTheDocument();
+  });
 });

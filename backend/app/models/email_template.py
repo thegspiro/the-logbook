@@ -16,6 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -72,6 +73,9 @@ class EmailTemplateType(str, enum.Enum):
     TRAINING_RECORD_VOIDED = "training_record_voided"
     TRAINING_RECORD_CHANGED = "training_record_changed"
     EVENT_WAITLIST_PROMOTION = "event_waitlist_promotion"
+    APPLICATION_STEP_COMPLETED = "application_step_completed"
+    APPLICATION_STATUS_LINK = "application_status_link"
+    APPLICATION_GOING_INACTIVE = "application_going_inactive"
     CUSTOM = "custom"
 
 
@@ -317,13 +321,11 @@ class ScheduledEmail(Base):
     )
 
     # Recipients
-    to_emails: Mapped[list[str]] = mapped_column(JSON, nullable=False)  # List[str]
-    cc_emails: Mapped[Optional[list[str]]] = mapped_column(
-        JSON, nullable=True
-    )  # Optional List[str]
+    to_emails: Mapped[list[str]] = mapped_column(EncryptedJSON, nullable=False)
+    cc_emails: Mapped[Optional[list[str]]] = mapped_column(EncryptedJSON, nullable=True)
     bcc_emails: Mapped[Optional[list[str]]] = mapped_column(
-        JSON, nullable=True
-    )  # Optional List[str]
+        EncryptedJSON, nullable=True
+    )
 
     # Template variables to render with
     context: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -400,9 +402,16 @@ class MessageHistory(Base):
     )
 
     # Recipient info
-    to_email: Mapped[str] = mapped_column(String(320), nullable=False)
-    cc_emails: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
-    bcc_emails: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    to_email: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    # One fingerprint per To address, so the history search can find a
+    # message by a full address. to_email is only a summary of a batch.
+    recipient_fingerprints: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
+    cc_emails: Mapped[Optional[list[str]]] = mapped_column(EncryptedJSON, nullable=True)
+    bcc_emails: Mapped[Optional[list[str]]] = mapped_column(
+        EncryptedJSON, nullable=True
+    )
 
     # Content snapshot
     subject: Mapped[str] = mapped_column(String(500), nullable=False)

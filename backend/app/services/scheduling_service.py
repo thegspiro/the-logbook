@@ -622,12 +622,12 @@ class SchedulingService:
                     ]
                     if to_emails:
                         email_svc = EmailService(organization=org)
+                        rendered: Optional[Tuple[str, str, Optional[str]]]
                         if email_template and email_defaults:
-                            (
-                                send_subject,
-                                html,
-                                text,
-                            ) = await email_svc._render_with_fallback(
+                            # None when the department switched this
+                            # template off: the in-app entry above stands
+                            # and no email goes out.
+                            rendered = await email_svc._render_unless_switched_off(
                                 template_type=email_template,
                                 context=dict(email_context or {}),
                                 db=self.db,
@@ -644,17 +644,22 @@ class SchedulingService:
                                 email_html_body or f"<p>{_html.escape(message)}</p>"
                             )
                             send_subject = email_subject or subject
-                            html = wrap_email_body(org, send_subject, content)
-                            text = None
-                        await email_svc.send_email(
-                            to_emails=to_emails,
-                            subject=send_subject,
-                            html_body=html,
-                            text_body=text,
-                            cc_emails=email_cc or None,
-                            db=self.db,
-                            template_type=email_template_type or category,
-                        )
+                            rendered = (
+                                send_subject,
+                                wrap_email_body(org, send_subject, content),
+                                None,
+                            )
+                        if rendered is not None:
+                            send_subject, html, text = rendered
+                            await email_svc.send_email(
+                                to_emails=to_emails,
+                                subject=send_subject,
+                                html_body=html,
+                                text_body=text,
+                                cc_emails=email_cc or None,
+                                db=self.db,
+                                template_type=email_template_type or category,
+                            )
                 except Exception as email_err:
                     logger.warning(
                         "Notification email failed (category={}): {}",

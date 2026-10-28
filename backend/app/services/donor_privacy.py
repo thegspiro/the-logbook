@@ -30,9 +30,10 @@ MANAGE_PERMISSION = "fundraising.manage"
 # Cleared on an anonymous donation for a view-only caller.
 DONATION_IDENTITY_FIELDS = ("donor_name", "donor_email", "donor_id")
 
-# Cleared on an anonymous donor's record for a view-only caller. The name
-# fields are required strings on the response, so they read as a placeholder
-# rather than going missing; ``is_anonymous`` stays true beside them so a
+# Cleared on an anonymous donor's record for a view-only caller. first_name/
+# last_name are Optional on the response (W69-6: an organization donor may
+# carry neither), so masking overwrites them with a placeholder string rather
+# than leaving them blank; ``is_anonymous`` stays true beside them so a
 # client can tell the placeholder from a real name.
 DONOR_IDENTITY_FIELDS = (
     "email",

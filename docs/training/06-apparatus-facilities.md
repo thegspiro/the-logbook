@@ -854,6 +854,11 @@ when it is due, in words as well as an icon:
 You can filter by **All**, **Pending**, **Completed** or **Overdue**. Officers
 who can log maintenance can mark an open record done with **Mark completed**.
 
+The search box looks through the description, vendor, work order number and
+**Performed By** of every record, not just the ones on screen. The list shows
+50 records at a time. When more match, page controls appear under it. Changing
+the filter or the search starts again at page 1.
+
 The maintenance types offered are your department's own list, set up in
 [Facility Settings](#facility-settings).
 
@@ -883,6 +888,10 @@ The **Inspections** section of a facility, and the department-wide
 **Inspections** page, track inspections. The types are **Fire**, **Building
 Code**, **Health**, **ADA**, **Environmental**, **Insurance**, **Routine** and
 **Other**. You can filter by **All**, **Passed**, **Failed** or **Pending**.
+
+The search box looks through the title, inspector name and inspector
+organization of every inspection. Like maintenance, the list shows 50 at a
+time, with page controls under it when more match.
 
 ### Recording an Inspection
 

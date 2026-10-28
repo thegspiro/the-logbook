@@ -545,6 +545,11 @@ export interface EmailTemplate {
   is_customized?: boolean;
   /** Messages sent with this template type. List endpoint only, as above. */
   sent_count?: number;
+  /**
+   * The backend's ALWAYS_SENT_TYPES: an email whose recipient has no other way
+   * to get what it carries. It cannot be switched off.
+   */
+  always_sent?: boolean;
   created_at: string;
   updated_at: string;
   attachments: EmailAttachment[];

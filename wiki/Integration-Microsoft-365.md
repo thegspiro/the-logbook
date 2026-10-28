@@ -19,7 +19,7 @@ either is refused while the other is connected.
 > are covered by automated tests against recorded Graph responses, not yet
 > against a live tenant. Before relying on it, work through
 > [Verifying Against a Real Tenant](#verifying-against-a-real-tenant). See
-> [Known Limitations](../docs/KNOWN_LIMITATIONS.md).
+> [Known Limitations](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md).
 
 ---
 

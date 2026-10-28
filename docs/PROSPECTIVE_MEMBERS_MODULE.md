@@ -952,17 +952,19 @@ When a prospect advances to an `automated_email` stage, the system automatically
 
 Each `automated_email` stage supports the following configuration in the stage config:
 
-| Setting                  | Type      | Default                                 | Description                                              |
-| ------------------------ | --------- | --------------------------------------- | -------------------------------------------------------- |
-| `email_subject`          | `string`  | "Update on Your Membership Application" | Email subject line                                       |
-| `include_welcome`        | `boolean` | `false`                                 | Include a welcome/introduction section                   |
-| `welcome_message`        | `string`  | —                                       | Custom welcome text (shown when include_welcome is true) |
-| `include_faq_link`       | `boolean` | `false`                                 | Include a link to the department FAQ                     |
-| `faq_url`                | `string`  | —                                       | URL to the FAQ page                                      |
-| `include_next_meeting`   | `boolean` | `false`                                 | Include next meeting details                             |
-| `next_meeting_details`   | `string`  | —                                       | Meeting date, time, and location text                    |
-| `custom_sections`        | `array`   | `[]`                                    | Array of `{title, content, enabled}` sections            |
-| `include_status_tracker` | `boolean` | `false`                                 | Include a link to the application status page            |
+| Setting                   | Type      | Default                                 | Description                                              |
+| ------------------------- | --------- | --------------------------------------- | -------------------------------------------------------- |
+| `email_subject`           | `string`  | "Update on Your Membership Application" | Email subject line                                       |
+| `include_welcome`         | `boolean` | `false`                                 | Include a welcome/introduction section                   |
+| `welcome_message`         | `string`  | —                                       | Custom welcome text (shown when include_welcome is true) |
+| `include_faq_link`        | `boolean` | `false`                                 | Include a link to the department FAQ                     |
+| `faq_url`                 | `string`  | —                                       | URL to the FAQ page                                      |
+| `include_next_meeting`    | `boolean` | `false`                                 | Include next meeting details                             |
+| `next_meeting_details`    | `string`  | —                                       | Meeting date, time, and location text                    |
+| `next_meeting_event_type` | `string`  | —                                       | **Pull from upcoming event**: the event type to name     |
+| `next_meeting_event_id`   | `string`  | —                                       | The event that was next when the stage was configured    |
+| `custom_sections`         | `array`   | `[]`                                    | Array of `{title, content, enabled}` sections            |
+| `include_status_tracker`  | `boolean` | `false`                                 | Include a link to the application status page            |
 
 ### How It Works
 
@@ -991,6 +993,27 @@ files' backend environment block is a whitelist with no `env_file`, and
 `FRONTEND_URL` was not on it, so every emailed link — the status tracker
 included — was built from `http://localhost:3000`. It is passed through now;
 see `docs/UPGRADING.md` → "`FRONTEND_URL` must be a public address".
+
+**The Next Meeting section falls back when its saved event has passed**
+_(2026-10-25, #3692)_. `_fetch_meeting_details` uses `next_meeting_event_id`
+while that event is upcoming, and otherwise the next upcoming event of
+`next_meeting_event_type`. Cancelled and draft events are skipped. Before this,
+only the saved event was looked up, so once it passed every later applicant got
+the email with the section silently dropped.
+
+- **Location.** The named location's name and street address are printed
+  (events created against the locations directory leave the free-text
+  `location` empty), and only a location in the same organization.
+- **One resolution per send**, so the HTML and plain-text bodies name the same
+  event.
+- **Nothing found.** The email carries only `next_meeting_details` (the
+  **Additional details** box), a warning is logged, and a
+  `stage_email_meeting_missing` activity entry is recorded on the prospect.
+- **Preview.** Under the dropdown, the stage editor shows the saved event
+  ("Saved event (included in the email while it is upcoming)"), or, once it has
+  passed or been cancelled, the fallback ("The saved event has passed or was
+  cancelled. The email will include the next one instead"). It never shows a
+  draft.
 
 ### Email Pipeline Architecture
 
@@ -1144,6 +1167,14 @@ the three ways out in order: record the attendance, un-tick **Required** and
 Skip, or clear the stage's Auto-Link Event Type. With a check-in at an event
 that is not yet settled, it names the event and asks for the finalize — the
 applicant did everything asked of them and the organizer did not.
+
+**Both refusals are kept under 300 characters** _(2026-10-25, #3704)_. A single
+Advance passes the service's `ValueError` through `safe_error_detail`, which
+replaces any longer message with "An unexpected error occurred", so the
+coordinator saw no reason and no remedy (bulk advance was unaffected). The
+wording was shortened, keeping the stage name and every remedy, and the event
+title and stage name spliced in are clipped to 50 characters
+(`_name_for_message`).
 
 Two adjacent defects fixed in the same change:
 `complete_current_step_for_integration_event` compared the raw `step_type`, so a

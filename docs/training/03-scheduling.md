@@ -138,8 +138,9 @@ filter dims the days that don't match. It does not hide them, so the month
 keeps its shape. Past days are dimmed too.
 
 **Opening a shift.** Select a day to see its shifts in the panel beside the
-calendar. Select **Shift details** on a shift to open the full **Shift
-Details** window.
+calendar. On a screen narrower than 1280 pixels, such as a tablet, the panel is
+below the calendar so the days stay large enough to tap. Select **Shift
+details** on a shift to open the full **Shift Details** window.
 
 ![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
 

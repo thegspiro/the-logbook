@@ -292,11 +292,11 @@ A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens 
 
 ### Per-Event Admin Pages
 
-| URL                      | Page                | Permission       |
-| ------------------------ | ------------------- | ---------------- |
-| `/events/:id/edit`       | Edit Event          | `events.manage`  |
-| `/events/:id/monitoring` | Check-In Monitoring | `events.manage`  |
-| `/events/:id/analytics`  | Event Analytics     | `analytics.view` |
+| URL                      | Page                | Permission                                                  |
+| ------------------------ | ------------------- | ----------------------------------------------------------- |
+| `/events/:id/edit`       | Edit Event          | `events.manage` or `training.manage` (Training events only) |
+| `/events/:id/monitoring` | Check-In Monitoring | `events.manage`                                             |
+| `/events/:id/analytics`  | Event Analytics     | `analytics.view`                                            |
 
 > _(2026-08-23)_ **Check-In Monitoring** also lists members whose check-in landed before the event's scheduled start, with how early each one was. Their attendance is already credited from the scheduled start rather than from the tap, so the list is not a correction queue — it exists so an organizer can spot the member who really was working beforehand and set their check-in time by hand, which is credited verbatim. Members already given an explicit check-in time drop off the list.
 
