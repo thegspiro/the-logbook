@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3805](https://github.com/thegspiro/the-logbook/pull/3805)** (branch `claude/security-review-storefront-payments`) —
+Feature 04 (Storefront & payments), pass 13. Watchdog pickup (dedicated
+`/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
+remains unreachable, confirmed via `ListAgents`). PR #3804 (Feature 03,
+Public surface & webhooks, pass 13) had already merged with no open
+rotation PR behind it — confirmed via `search_pull_requests`, 0 results.
+Row 04 confirmed the next `⬜` row on a freshly fast-forwarded `main`.
+
+**2 standing findings confirmed fixed (by the owner, between passes), 0
+new findings.** SF8-04-2 (MED, stale-read settlement race on
+`update_order_status`) and SF8-04-3 (LOW, `waive_order_payment` not
+checking for an already-settled order) — both already resolved in
+`KNOWN_LIMITATIONS.md` as of 2026-10-25, both re-verified fixed and
+covered by their guard tests this pass. Also verified the app-wide
+email/PII-at-rest encryption (reviewed under its own Core infrastructure
+rotation slot) was applied correctly to this feature's
+`customer_email`/`customer_phone`/`shipping_address`/`payer_email`
+columns, including the fingerprint-column registry
+(`_FINGERPRINT_COLUMNS`) and search-path migration from `ilike` to
+hash-match. Full writeup: `docs/security-review/SF-04-storefront-payments.md`'s
+**Pass 13** section.
+
+Rotation row 04 → ✅ (pending this PR's merge); next is Feature 05
+(Finance & approvals) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 13, PR #3804, merged), preserved for history</summary>
+
 **PR [#3804](https://github.com/thegspiro/the-logbook/pull/3804)** (branch
 `claude/security-review-public-surface-webhooks`) — Feature 03 (Public
 surface & webhooks), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed
@@ -52,6 +81,8 @@ writeup: `docs/security-review/PUB-03-public-surface-webhooks.md`'s
 Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
 (Storefront & payments) — re-check `search_pull_requests` fresh rather
 than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 13, PR #3803, merged), preserved for history</summary>
@@ -22762,7 +22793,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
