@@ -16,6 +16,47 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#TBD]** (branch `claude/security-review-core-infrastructure-p10`) —
+Feature 33 (Core infrastructure), pass 10. Watchdog pickup — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was reported unreachable by the operator starting this run, confirmed via
+`ListAgents`. No open security-review PR — confirmed via
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) and
+`list_pull_requests` (state=open), 0 results / only two unrelated docs PRs
+(#3774/#3772), both checked immediately before starting. PR #3787 (Feature
+32, Locations & kiosk, pass 10) had already merged (`6c27ea21`) with row 32
+already ✅ in that merge commit, so there was nothing left to record from
+Step 0 beyond clearing the prior Open PR note. Row 33 was confirmed the next
+`⬜` row by reading the rotation table on a freshly-fetched `main`.
+
+**1 fixed, 0 new application findings.** Real delta since pass 9's merge
+(`8ae42b51`, PR #3681): `security_middleware.py` gained one new rate
+limiter, `rate_limit_passkey()` (20/60s, its own bucket, verified wired to
+all five passkey-related routes in `auth.py` and pinned by an existing
+dedicated test) — `config.py`/`database.py` are byte-identical. Adjacent to
+this feature's own crypto primitives, `security.py` and `encrypted_types.py`
+gained a keyed-HMAC email blind-index (`email_fingerprint`/
+`email_fingerprints`, HKDF-derived key, legacy-key fallback for lookups
+across a rotation) and a new `EncryptedDate` column type, both introduced by
+the email-at-rest-encryption migration (`b8236e29ec44`) landed in this
+window. The real finding: the rotation script's hand-written
+`_FINGERPRINT_COLUMNS` list (which `EncryptedDate`'s ciphertext-column
+counterpart already gets for free via a type scan over live metadata) had no
+equivalent automated check against the five real `keep_email_fingerprint`
+call sites — a future sixth column added to one list without the other
+would silently stop matching by email after a future key rotation retires
+the old key. Fixed by adding two AST-based guard tests to
+`test_encryption_registry_coverage.py` that cross-check both lists in both
+directions; both pass today, confirming no live gap. Full writeup:
+`docs/security-review/CI10-33-core-infra.md`.
+
+Rotation row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
+shared) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 10, PR #3787, merged), preserved for history</summary>
+
 **PR [#3787](https://github.com/thegspiro/the-logbook/pull/3787)** (branch
 `claude/security-review-locations-kiosk-p10`) — Feature 32 (Locations &
 kiosk), pass 10. Review-only: no application code changed. One real defect
@@ -33,6 +74,8 @@ tables) re-confirmed OPEN/FLAGGED, unchanged. Full writeup:
 Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
 infrastructure) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 10, PR #3786, merged), preserved for history</summary>
@@ -22542,7 +22585,7 @@ PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -22551,6 +22594,80 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 33 (Core infrastructure, pass 10) — watchdog pickup, 1 fix (guard test for a new crypto primitive), 0 new application findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`).
+No open security-review PR — confirmed via `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`), 0 results, and via
+`list_pull_requests` (state=open), only two unrelated docs PRs
+(#3774/#3772), both checked immediately before starting. PR #3787 (Feature
+32, Locations & kiosk, pass 10) had already merged (`6c27ea21`) with row 32
+already ✅ in that merge commit. Row 33 (Core infrastructure) was confirmed
+the next `⬜` row by reading the rotation table on a freshly fetched `main`.
+
+Real delta since pass 9's merge (`8ae42b51`, PR #3681): `security_middleware.py`
+gained one new rate limiter, `rate_limit_passkey()` (20/60s, its own bucket,
+kept off the `login` bucket deliberately — issuing a passkey challenge
+proves nothing and the sign-in screen re-fetches one after every cancelled
+prompt). Verified wired to all five passkey-related routes in `auth.py`
+and pinned by an existing dedicated test (`test_passkeys.py`). `config.py`
+and `database.py` are byte-identical since pass 9. Adjacent to this
+feature's own crypto primitives (tracked by location in every prior pass,
+not by the principal-code table), `security.py` and `encrypted_types.py`
+gained a keyed-HMAC email blind-index (`email_fingerprint`/
+`email_fingerprints`, HKDF-derived key under its own info label, legacy-key
+fallback so lookups keep working across a key rotation) and a new
+`EncryptedDate` column type — both introduced by the email-at-rest-encryption
+migration (`b8236e29ec44`) that landed in this window.
+
+**The one real finding:** `rotate_encryption_key.py`'s hand-written
+`_FINGERPRINT_COLUMNS` list — which tells the rotation script which email
+fingerprint columns to rewrite under the current key — had no automated
+check against the real set of `keep_email_fingerprint(...)` call sites
+across `app/models/`. Its ciphertext-column counterpart
+(`_PLAIN_COLUMNS`) already gets exactly this check for free, built from a
+type scan over live model metadata, which is what let the new
+`EncryptedDate` type slot into that coverage automatically with zero
+companion edit. The fingerprint list had no analogous test, so a future
+model wired for email lookup without a matching list entry would keep
+working today (`email_fingerprints()` checks every legacy key) and silently
+stop matching by email the day that legacy key is finally retired — a false
+negative on a real member/applicant/customer's own address, not a leak.
+Today the two lists already agree (5 call sites, 5 entries, same tables and
+columns) — confirmed by hand and by this pass's own new test. Fixed by
+adding two AST-based tests to `test_encryption_registry_coverage.py`
+(`test_every_keep_email_fingerprint_call_is_in_the_rotation_script` and its
+reverse-direction twin) that resolve each `keep_email_fingerprint` call's
+target model through the live SQLAlchemy declarative registry rather than
+trusting the call site's spelling, so a renamed model or attribute is still
+caught.
+
+Also verified: the email-at-rest migration itself settles existing rows
+correctly (duplicate-address pre-check before altering anything, idempotent
+re-encryption, refuses to run with rows to encrypt but no `ENCRYPTION_KEY`
+configured — Pitfall #35); no bulk `.update()` bypasses any of the five
+`keep_email_fingerprint` listeners; `BaseHTTPMiddleware` still has zero real
+usages in the three in-scope files; Backend Lint's pinned linters still
+match `requirements.txt` (CI9-33-1 has not drifted again); the three
+historical open items from CI8-33/CI-10 (DB/Redis TLS WARN-only, `optimize_image`
+fail-open, Redis `CERT_NONE`, cache tenant namespacing, WS `accept()` before
+auth, MFA recovery-code hashing) all re-confirmed unchanged, their files
+untouched this window.
+
+Full write-up: `docs/security-review/CI10-33-core-infra.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; feature-scoped tests (16 files
+including the new `test_passkeys.py`/`test_rotate_email_fingerprints.py`/
+`test_email_fingerprint.py`/`test_encrypt_email_migration.py` coverage) —
+605 passed, 1 pre-existing skip; cross-cutting guard tests — 242 passed;
+frontend typecheck/lint — n/a, no frontend file touched this pass.
+
+Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared)
+— re-check `search_pull_requests` fresh rather than trusting this note.
 
 ### 2026-10-27 — Feature 32 (Locations & kiosk, pass 10) — watchdog pickup, 0 fixes needed (1 near-miss already fixed by another commit, re-verified), 3 flagged
 
