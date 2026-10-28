@@ -22637,7 +22637,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -22678,6 +22678,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 01 (Auth & session lifecycle, pass 13) — 0 fixes, 0 new findings
+
+Step 0 re-verified immediately before branching: `search_pull_requests`
+`head:claude/security-review-` `is:open` → 0 results. PR #3800 (Feature 00,
+Cross-cutting baseline, pass 13, watchdog pickup) had already merged
+(`9c2a5bff`), closing out rotation lap "pass 11" and resetting the table to
+`⬜` for pass 12. Rotation row 01 was the next `⬜`.
+
+Real delta since pass 12's own merge (`d5f44cc4`, PR #3684): a new passkey
+(WebAuthn) second factor — `app/services/passkey_service.py` and
+`app/models/passkey.py` (both new), seven new routes under `/auth/passkeys/*`
+plus `/auth/mfa/challenge` and `/auth/step-up/passkey-options`, every
+`user.mfa_enabled`-only gate across `auth.py`/`auth_service.py`/
+`dependencies.py` widened to `has_second_factor()` so a passkey-only member
+is treated as enrolled, and the frontend half
+(`utils/passkeys.ts`, `components/settings/PasskeySettingsCard.tsx`) — plus a
+small dotted-username sign-in fix and the email-blind-index lookups already
+reviewed from the Core infrastructure side. Reviewed in full against all
+seven checklist dimensions: **verified good** throughout — org/self scoping
+confirmed by reading the query (not the route name), the registration-cap
+race locked two levels deep (Pitfall #27), the member-chosen passkey name
+confirmed to reach only React-escaped or `html_escape()`-wrapped sinks, both
+new tables migration-guarded for `create_all` installs (Pitfall #26), and
+`webauthn==3.0.1`/`@simplewebauthn/browser@14.0.0` confirmed (not recalled)
+against the real PyPI/npm registry entries (Pitfall #34). Routes
+re-enumerated by AST: **38** (up from 31), public/private split 17/21 (up
+from 16/15) — `mfa/challenge` is the one new public route, already
+allowlisted with a named compensating control.
+
+**AUTH-23 (MED, OPEN/FLAGGED)** re-verified still accurate: `step_up`'s
+password/TOTP branches still have no account-tied lockout; the new passkey
+branch in the same handler doesn't widen this (a passkey can't be guessed).
+No change to `docs/KNOWN_LIMITATIONS.md`'s existing entry. AUTH-15/17/21/22
+remain closed; AUTH-4 remains accepted, unchanged.
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md`'s **Pass 13**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean (CI's pinned versions); `validate_migrations.py
+--strict` — 666 revisions, single head; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests — 1494
+passed, 2 skipped (environment-only); standing guards (11 files) — 205
+passed; frontend `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
+roles) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-28 — Feature 00 (Cross-cutting baseline, pass 13) — watchdog pickup, merged PR #3791, 1 fix (SEC13-1), opens rotation lap "pass 12"
 
