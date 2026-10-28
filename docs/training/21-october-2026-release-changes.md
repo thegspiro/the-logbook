@@ -1,3 +1,24 @@
+# October 26–27, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                | Now in                                                                                                          |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Passkeys as a second sign-in step; the Allow passkeys policy         | [00 — Getting Started](./00-getting-started.md), [08 — Administration & Reports](./08-admin-reports.md)         |
+| Searching by email needs the complete address                        | [12 — Grants](./12-grants-fundraising.md), [15 — Prospective Members](./15-prospective-members.md)              |
+| Sensitive form fields                                                | [07 — Documents & Forms](./07-documents-forms.md)                                                               |
+| Who runs an event's attendance; training managers on Training events | [04 — Events & Meetings](./04-events-meetings.md), [02 — Training](./02-training.md)                            |
+| Compliance matrix by member class; Operational members shortcut      | [02 — Training](./02-training.md)                                                                               |
+| Applicant emails as editable templates                               | [15 — Prospective Members](./15-prospective-members.md), [08 — Administration & Reports](./08-admin-reports.md) |
+| Label printing: Before you print checklist, two-line names           | [05 — Inventory](./05-inventory.md)                                                                             |
+| Gmail service account                                                | [08 — Administration & Reports](./08-admin-reports.md) (written with the change)                                |
+| Email encryption, passkey dependency, switched-off templates         | Operator-facing: [`UPGRADING.md`](../UPGRADING.md)                                                              |
+
+---
+
 # October 25–26, 2026 workflow updates
 
 Index for the latest window. Audit:

@@ -1,5 +1,20 @@
 # Script currency
 
+## Flagged by the 2026-10-26 → 10-27 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                          | Beat               | Was                          | Now                                                                                        |
+| ------------------------------- | ------------------ | ---------------------------- | ------------------------------------------------------------------------------------------ |
+| **Any sign-in or account beat** | Two-step sign-in   | A 6-digit authenticator code | A passkey works too: **Use your passkey**, added from the Passkeys card                    |
+| **07** (secretary)              | Building a form    | Fields are plain             | A field can be marked **Sensitive**; its answers are encrypted and left out of CSV exports |
+| **Any events beat**             | Running attendance | Only event managers          | The event's organizer runs check-in; training managers run Training events                 |
+| **Any training beat**           | Compliance matrix  | Whole roster only            | Pick a member class; the printout splits by class                                          |
+| **Any inventory beat**          | Printing labels    | Straight to the print dialog | **Before you print** checklist names the paper size first                                  |
+| **Any recruitment beat**        | Applicant emails   | Fixed wording                | Editable templates under Prospective Members; switching one off stops it                   |
+| **Any search beat**             | Searching by email | Part of an address matched   | Type the complete address                                                                  |
+
 ## Flagged by the 2026-10-25 → 10-26 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).

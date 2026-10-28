@@ -5,6 +5,44 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 26 – 27, 2026
+
+Merged to `main` since `14f1e4b2` (2026-10-26 13:24 UTC) through `4a4eb2fd`
+(2026-10-27 22:10 UTC), 46 merges. Security-review passes (scheduling,
+events-requests, training-core, training-extended, skills-testing, compliance,
+admin-hours, grants-fundraising, medical-supplies, meetings-minutes,
+messaging-notifications with MSG-17 fixed, forms, integrations,
+security-audit-ip, reports-analytics, onboarding, scheduled-tasks,
+locations-kiosk with LOC10-1 to LOC10-3, core-infrastructure) are in
+`docs/security-review/PROGRESS.md`; the compliance and skills app review (B22)
+is in `docs/app-review/PROGRESS.md`. Two documentation passes (#3730, #3746)
+merged in this window. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                          | Guide                             | Disposition                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Passkeys** as a second factor: add up to three, **Use your passkey** at sign-in and step-up, **Allow passkeys** policy switch, remove one from **Reset MFA** (#3726; backend needs `webauthn`)                                                                                | 00, 08, glossary                  | Added; SSO, step-up and glossary sentences that named only a 6-digit code corrected; `UPGRADING` written with the change                      |
+| **Email addresses encrypted at rest** (migration `b8236e29ec44`): searching by part of an address no longer matches in the applicant list, donors, store orders, form picker or message history (#3743)                                                                         | 12, 15                            | Donor and applicant search sentences corrected; the member list filters in the browser and still matches; `UPGRADING` written with the change |
+| Forms: **Sensitive** fields, encrypted answers readable with `forms.manage` plus `sensitive_answers.view`, never in **Export CSV** or integrations (#3733)                                                                                                                      | 07                                | Added; Export CSV sentence corrected; `KNOWN_LIMITATIONS` written with the change                                                             |
+| Gmail **Service account** sending method on Settings → Email (#3731, #3755)                                                                                                                                                                                                     | 08                                | Written with the change; `UPGRADING`, `KNOWN_LIMITATIONS`                                                                                     |
+| Pipeline applicant emails are editable templates in a **Prospective Members** group; stage switch **Notify prospect when this stage is completed** (#3756)                                                                                                                      | 15, 08                            | Added; 08's Email Templates category list was out of date and the Application Withdrawn template's category in 15 was wrong, both corrected   |
+| A template switched **Off** now stops its email (#3781)                                                                                                                                                                                                                         | 15                                | Written with the change; `UPGRADING`                                                                                                          |
+| An event's organizer and alternate run its attendance; `training.manage` holders run Training events (edit, end, finalize, record times, reopen) (#3773)                                                                                                                        | 04, 02                            | Added; 04's Training Credit step named an **Add Attendee** button that does not exist, now **Check In**                                       |
+| Compliance matrix and its printout filtered by **member class**; one table per class when printing **All** (#3771)                                                                                                                                                              | 02                                | Added; "every active requirement as a column" corrected                                                                                       |
+| **Operational members** shortcut on the requirement form (#3779)                                                                                                                                                                                                                | 02                                | Added                                                                                                                                         |
+| Labels: **Before you print** checklist naming the paper size, two-line names, sans-serif text; barcodes no longer print as black boxes (#3770, #3762)                                                                                                                           | 05                                | Added; barcode fix needs no guide change                                                                                                      |
+| `KNOWN_LIMITATIONS`: event edit gaps, organization donors, two separation-of-duties guards (#3757)                                                                                                                                                                              | `KNOWN_LIMITATIONS`, `COMPLIANCE` | Written with the change                                                                                                                       |
+| Wiki: 11 module and operator pages, dead repo links fixed; `status_token` rotated with the encryption key (#3758)                                                                                                                                                               | wiki                              | Written with the change                                                                                                                       |
+| Backend only: a Gmail service-account key whose `token_uri` is not Google's own token endpoint is refused (MSG-17, #3768), a skill template refuses a null visibility or **require_all_critical** (B22, #3747), donor-privacy comment (#3765), encryption-registry test (#3790) | none                              | No screen change                                                                                                                              |
+| Housekeeping: dependency bumps including `@hookform/resolvers` 6.0.0 (#3749, #3750, #3751, #3753, #3776, #3777); WebKit install timeout, reduced-motion dialog audit, 45-minute integration budget (#3763, #3769, #3778)                                                        | none                              | No guide change                                                                                                                               |
+
+**Screenshots to create:** the Passkeys card and **Use your passkey** at sign-in,
+**Allow passkeys** in MFA Policy, a **Sensitive** field and the Restricted note,
+the compliance matrix class switch and a per-class printout, **Operational
+members** on the requirement form, the **Before you print** checklist, the
+stage's **Notify prospect** switch, and Settings → Email with **Service
+account**. **Re-check:** the Email Templates sidebar (new **Prospective
+Members** group). See `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 25 – 26, 2026
 
 Merged to `main` since `a083c82a` (2026-10-25 13:18 UTC) through `14f1e4b2`

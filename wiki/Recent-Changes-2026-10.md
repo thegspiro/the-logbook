@@ -5,6 +5,29 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 26 – 27, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
+
+- **Passkeys** can be your second sign-in step, instead of or as well as an
+  authenticator code. Administrators can switch them off under MFA Policy.
+- **Email addresses are encrypted at rest.** Search boxes now find an address
+  only when you type all of it. Operators: see `docs/UPGRADING.md`.
+- **Forms can have sensitive fields.** Their answers are encrypted and need a
+  separate permission to read; they never appear in a CSV export.
+- **Event organizers run their own event's attendance**, and training managers
+  run Training events from start to finish.
+- **The compliance matrix** can show and print one member class, and the
+  requirement form has an **Operational members** shortcut.
+- **Applicant emails** in the prospective members pipeline are now templates
+  you can edit or switch off.
+- **Label printing** shows a checklist of printer settings first, and long
+  names wrap to two lines.
+- **Gmail** can send through a Google Workspace service account.
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 25 – 26, 2026
 
 The engineering audit is
