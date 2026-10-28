@@ -16,18 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None yet for this iteration's own Feature 00 pass — this edit rides along
-in that PR, per Step 0's "PR merged since last iteration" rule: PR #3791
-(Feature 34, Frontend shared, pass 12) merged (`579501ee`) — confirmed via
-`pull_request_read` (`state: closed`, `merged: true`) immediately before
-this edit, CI green on the head SHA (`CI`/`Supply Chain`/`Secret Scan` all
-`success`), `mergeable_state: clean`, no unresolved review threads (the
-Codex bot's own review attempt failed with "usage limits", not a finding).
-That merge was the last `⬜` row — row 00 (Cross-cutting baseline) is now
-also `✅` from this same iteration's own pass-13 review
-(`SEC-00-cross-cutting-baseline.md`), continuing in the same run per the
-"rides along in the first feature PR of the next pass" rule. Next is
-Feature 01 (Auth & session lifecycle).
+**PR [#3800](https://github.com/thegspiro/the-logbook/pull/3800)** (branch
+`claude/security-review-cross-cutting-baseline-p13`) — Feature 00
+(Cross-cutting baseline), pass 13. **1 fixed (SEC13-1, LOW), 0 new
+application findings.** This PR also records, rather than opens a
+separate PR for, the merge of PR #3791 (Feature 34, Frontend shared, pass
+12, merged `579501ee`) that preceded it — confirmed via `pull_request_read`
+(`state: closed`, `merged: true`), CI green on its head SHA, no unresolved
+review threads (the Codex bot's own review attempt had failed with "usage
+limits", not a finding). That merge was the last `⬜` row, closing out
+rotation lap "pass 11" (PRs #3683–#3791); the table is reset to `⬜` for
+pass 12 in this same commit, with row 00 → ✅ from this pass's own review.
+
+`ExternalTrainingSyncService`'s import-failure handlers
+(`external_training.py:1544,1733`) stored a raw exception message in
+`ExternalTrainingImport.import_error`, served back to the client via
+`ExternalTrainingImportResponse` — fixed with the same `safe_error_detail()`
+pattern already used one `except` block away in the same file. Full
+writeup: `docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass
+13** section.
+
+Rotation row 00 → ✅ (pending this PR's merge); next is Feature 01 (Auth &
+session lifecycle) — re-check `search_pull_requests` fresh rather than
+trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 12, PR #3791, merged), preserved for history</summary>
