@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3807](https://github.com/thegspiro/the-logbook/pull/3807)** (branch
+`claude/security-review-finance-approvals`) — Feature 05 (Finance &
+approvals), pass 13. Watchdog pickup (dedicated
+`/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
+remains unreachable, confirmed via `ListAgents`). PR #3805 (Feature 04,
+Storefront & payments, pass 13) had already merged with no open rotation
+PR behind it — confirmed via `search_pull_requests`, 0 results. Row 05
+confirmed the next `⬜` row on a freshly fast-forwarded `main`.
+
+**0 fixes this pass, 0 new findings.** Real delta since this feature's own
+pass 12 (merge `0a21b5c5`) was near-zero: FIN8-05-1 (MED)'s fix — already
+recorded as shipped in pass 12's note — is now confirmed present in code
+(`decide_request`'s separation-of-duties guard); a `waive_dues` race/
+repeat-waiver fix (row lock + refuse-if-already-waived) shipped alongside
+it; and the app-wide email/PII-at-rest encryption reached
+`CheckRequest.payee_address` and `ApprovalChainStep.notification_emails`,
+verified not to break any search path (neither column is read via
+`ilike`/`LIKE` anywhere in this feature). FIN-30 (LOW, `list_dues_payments`
+has no pagination) remains an accepted owner decision, not a live gap.
+Full writeup: `docs/security-review/FIN-05-finance-approvals.md`'s
+**Pass 13** section.
+
+Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
+(Elections & ballots) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 13, PR #3805, merged), preserved for history</summary>
+
 **PR [#3805](https://github.com/thegspiro/the-logbook/pull/3805)** (branch `claude/security-review-storefront-payments`) —
 Feature 04 (Storefront & payments), pass 13. Watchdog pickup (dedicated
 `/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
@@ -41,6 +70,8 @@ hash-match. Full writeup: `docs/security-review/SF-04-storefront-payments.md`'s
 Rotation row 04 → ✅ (pending this PR's merge); next is Feature 05
 (Finance & approvals) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 13, PR #3804, merged), preserved for history</summary>
@@ -22794,7 +22825,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -22831,6 +22862,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 05 (Finance & approvals, pass 13) — watchdog pickup, real delta (FIN8-05-1's fix confirmed in code, a dues-waiver race/repeat-waiver fix, PII encryption reaching `payee_address`/`notification_emails`), 0 fixed this pass, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via
+`ListAgents`). No open security-review PR — confirmed via
+`search_pull_requests`, 0 `is:open` results against `claude/security-
+review-*` head branches, after Feature 04 (Storefront & payments)'s own
+PR (#3805) merged (`7c0162c0`). Row 05 confirmed the next `⬜` row by
+reading the rotation table on a freshly fetched `main`.
+
+Real delta since pass 12's own merge (`0a21b5c5`) was near-zero across
+this feature's full established scope — 3 files touched (`models/finance.py`
++3/-2, `finance_budget_request_service.py` +13/-0, `finance_service.py`
++11/-1) plus a 5-line frontend test fixture fix; every other in-scope file
+(`finance.py`, `public/finance_approvals.py`, `finance_report_service.py`,
+`finance_reimbursement.py`, `finance_settings.py`,
+`finance_budget_access.py`, `schemas/finance.py`) is byte-identical to
+pass 12. Route count re-enumerated by AST: 136, unchanged. Both real
+changes read in full: `decide_request` now carries the same
+separation-of-duties guard `review_request` already had — FIN8-05-1 (MED),
+which pass 12 had only recorded as owner-fixed between passes, is
+confirmed present in the actual code this pass; and `waive_dues` now
+takes a locking read and refuses a second waiver against an
+already-`WAIVED` record, closing a race pass 12 did not flag (the fix
+shipped independently of this rotation, between passes). Also verified
+the app-wide email/PII-at-rest encryption migration correctly reached
+`CheckRequest.payee_address` (`EncryptedText`) and
+`ApprovalChainStep.notification_emails` (`EncryptedJSON`) with no
+`ilike`/`LIKE` read site on either column to break. FIN-30 (LOW,
+`list_dues_payments` unpaginated) remains the owner's 2026-10-05 "leave as
+is" decision, re-verified unchanged. Full writeup:
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 13** section.
+
+Completion gate: flake8/black/isort (app/tests/alembic, CI's pins) clean;
+`validate_migrations.py --strict` passed (666 revisions, single head);
+`check_route_permissions.py --strict` 279 routes, 0 errors/warnings;
+targeted pytest 670 passed/1 skipped (environment-only); standing guard
+suites 186 passed; frontend typecheck/lint both clean.
+
+Next: Feature 06 (Elections & ballots), once this PR merges.
 
 ### 2026-10-28 — Feature 03 (Public surface & webhooks, pass 13) — watchdog pickup, real delta (event-QR guest sign-in, kiosk lookup/confirm mirror, forms embed-policy, applicant calendar download), route-count correction, 0 new findings
 
