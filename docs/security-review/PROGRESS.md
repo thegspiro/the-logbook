@@ -30,25 +30,41 @@ the same feature 7 minutes after the kept PR #3695 — had already been
 closed by the repo owner as a duplicate before this pass started; no
 action needed here.)
 
-**0 fixed, 1 new finding (USR-12, MED, flagged).** Real delta since this
-feature's own pass 12 (merge `223b4ae7`): 456 insertions/54 deletions
-across 7 of the twelve declared files, from 11 directly-touching commits,
-all reviewed end to end — phone/address/email/leave-reason encryption at
-rest (3 migrations, all idempotent and `ENCRYPTION_KEY`-gated), two new
-passkey admin routes (`GET`/`DELETE /{user_id}/passkeys`, both org-scoped
-and the delete correctly step-up-gated), a `RefusesNull` fix closing a
-silent-no-op gap on 7 fields, 2 numeric-bounds additions, a new
-forms-embed-origin settings route (sound header-injection defense), and a
-Gmail domain-wide-delegated-service-account option. USR-12 flags that the
-last one raises the stakes of an existing gap: `update_email_settings`
-(gated to `admin.access` server-side for the dangerous branch, but not
+**1 fixed (USR-13, HIGH), 2 new findings (USR-12 MED flagged, USR-13 HIGH
+fixed).** Real delta since this feature's own pass 12 (merge `223b4ae7`):
+456 insertions/54 deletions across 7 of the twelve declared files, from 11
+directly-touching commits, all reviewed end to end — phone/address/email/
+leave-reason encryption at rest (3 migrations, all idempotent and
+`ENCRYPTION_KEY`-gated), two new passkey admin routes (`GET`/`DELETE
+/{user_id}/passkeys`, both org-scoped and the delete correctly
+step-up-gated), a `RefusesNull` fix closing a silent-no-op gap on 7
+fields, 2 numeric-bounds additions, a new forms-embed-origin settings
+route (sound header-injection defense), and a Gmail
+domain-wide-delegated-service-account option. USR-12 flags that the last
+one raises the stakes of an existing gap: `update_email_settings` (gated
+to `admin.access` server-side for the dangerous branch, but not
 `require_stepup`) can now configure a capability — send-as-anyone in the
 Workspace domain — at least as dangerous as its two step-up-gated
-siblings (`update_auth_settings`, `update_file_storage_settings`). USR-5,
-USR-8 and USR-11 all re-confirmed unchanged (owner-accepted/open). All 87
-routes across the four principal files re-enumerated by AST (34/30/16/7 —
-`users.py` up from 32 for the two passkey routes, `organizations.py` up
-from 29 for the new forms-embed route). See
+siblings (`update_auth_settings`, `update_file_storage_settings`); a
+GitHub Copilot review comment on this PR caught that the write-up had
+overstated USR-12's blast radius (a stolen session alone is not
+sufficient — the attacker also needs a Gmail service-account key the
+org's own Google Admin console has already authorized), corrected in a
+second commit. A second Copilot comment, read literally rather than as a
+wording nit, surfaced **USR-13 (HIGH)**: the generic `PATCH
+/organizations/settings` schema also accepts `auth`/`file_storage` and
+reaches the identical write the dedicated, `require_stepup`-gated
+`/settings/auth`/`/settings/file-storage` routes use, with no step-up
+check of its own — a complete, unconditional bypass of an already-shipped
+control, confirmed exploitable with nothing beyond a stolen
+`settings.manage` session. Fixed in a third commit using `ensure_stepup`
+(an existing conditional-step-up helper already used in `auth.py`'s
+passkey routes), guarded by 4 new tests in `test_mfa_policy.py`; full
+completion gate re-run and green. USR-5, USR-8 and USR-11 all
+re-confirmed unchanged (owner-accepted/open). All 87 routes across the
+four principal files re-enumerated by AST (34/30/16/7 — `users.py` up
+from 32 for the two passkey routes, `organizations.py` up from 29 for the
+new forms-embed route). See
 `docs/security-review/USR-07-users-organizations.md`'s **Pass 13** section
 for the full review.
 
