@@ -4,7 +4,11 @@
 
 import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
-import { MedicalScreeningPage } from './pages/MedicalScreeningPage';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
+
+const MedicalScreeningPage = lazyWithRetry(() =>
+  import('./pages/MedicalScreeningPage').then((m) => ({ default: m.MedicalScreeningPage }))
+);
 
 export function getMedicalScreeningRoutes() {
   return (
