@@ -1145,18 +1145,22 @@ class TestUniqueConstraints:
     """Validate important uniqueness guarantees are in place."""
 
     def test_user_email_unique_per_org(self):
-        """User email should be unique within an organization."""
+        """User email should be unique within an organization.
+
+        The address is encrypted at rest, so the index is over its fingerprint.
+        """
         users = _tables.get("users")
         if users is None:
             pytest.skip("users table not found")
-        # Check for a unique index on (organization_id, email)
         found = False
         for idx in users.indexes:
             idx_cols = {c.name for c in idx.columns}
-            if "organization_id" in idx_cols and "email" in idx_cols and idx.unique:
+            if idx_cols == {"organization_id", "email_hash"} and idx.unique:
                 found = True
                 break
-        assert found, "users table must have a unique index on (organization_id, email)"
+        assert (
+            found
+        ), "users table must have a unique index on (organization_id, email_hash)"
 
     def test_user_username_unique_per_org(self):
         """Username should be unique within an organization."""

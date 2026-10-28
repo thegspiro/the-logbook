@@ -7685,9 +7685,15 @@ class ElectionService:
         # Loaded once rather than per recipient: every leadership member gets
         # the same template, and _render_with_fallback would otherwise query
         # for it on every iteration.
-        template = await EmailTemplateService(self.db).get_template(
-            str(organization_id), template_type
-        )
+        template_svc = EmailTemplateService(self.db)
+        if await template_svc.is_switched_off(str(organization_id), template_type):
+            logger.info(
+                "{} not sent: switched off in org {}",
+                template_type.value,
+                organization_id,
+            )
+            return 0
+        template = await template_svc.get_template(str(organization_id), template_type)
 
         sent_count = 0
         for user in leadership_users:

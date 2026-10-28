@@ -66,6 +66,13 @@ test.describe('mobile dialogs', () => {
     // the matrix split, when this shared a runner with the whole suite.
     test.setTimeout(900_000);
 
+    // A dialog still fading in when axe runs is measured through a partial
+    // opacity: on a slow runner the Create Shift dialog reported 38 contrast
+    // failures, every element in it, and passed on the same commit's previous
+    // run. index.css collapses every animation and transition to 0.01ms under
+    // reduced motion, as mobile-accessibility.spec.ts already relies on.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+
     let granted: SignInState | null = null;
 
     const unnamed: string[] = [];

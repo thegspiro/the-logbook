@@ -32,6 +32,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
+from app.core.security import email_fingerprints
 from app.models.membership_pipeline import ProspectInterview, ProspectiveMember
 from app.models.user import User
 
@@ -44,9 +45,14 @@ def _link_predicate(user: User) -> Optional[ColumnElement[bool]]:
     if user.id:
         clauses.append(ProspectiveMember.transferred_user_id == str(user.id))
 
-    emails = sorted({e.lower() for e in (user.email, user.personal_email) if e})
-    if emails:
-        clauses.append(func.lower(ProspectiveMember.email).in_(emails))
+    fingerprints = [
+        fp
+        for address in (user.email, user.personal_email)
+        if address
+        for fp in email_fingerprints(address)
+    ]
+    if fingerprints:
+        clauses.append(ProspectiveMember.email_hash.in_(fingerprints))
 
     return or_(*clauses) if clauses else None
 

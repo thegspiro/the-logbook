@@ -1,13 +1,15 @@
-# Security Review — Feature 30: Onboarding (passes 7–9)
+# Security Review — Feature 30: Onboarding (passes 7–10)
 
-**Prefix:** `ONB5` · **Rotation pass:** 9 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 10 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
 #2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996,
 pass 7 — PR #3381, pass 8 — PR #3517 (both `docs/security-review/ONB4-30-onboarding.md`
-and this file)) · **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8),
-2026-10-24 (pass 9, watchdog pickup, this PR)
+and this file), pass 9 — PR #3658 + recovery PR #3686 (ONB6-30-1/2/3, both this
+file)) · **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8),
+2026-10-24 (pass 9, watchdog pickup), 2026-10-25 (pass 9 recovery),
+2026-10-27 (pass 10, watchdog pickup, this PR)
 
 **Backend:** `backend/app/api/v1/onboarding.py` (now 3,200 L, 26
 unauthenticated bootstrap routes — unchanged count from pass 7/8, re-enumerated
@@ -40,6 +42,217 @@ diffs in `pages/ApparatusSetup.tsx`, `pages/OnboardingCheck.tsx`,
 `pages/RoleSetup.tsx`, `pages/SetupComplete.tsx`.
 **Migrations:** none in this pass's window (last onboarding-owned migration
 remains `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7).
+
+---
+
+## Pass 10 (2026-10-27) — watchdog pickup, 0 fixed, 0 new findings; two pass-9 OPEN items re-confirmed FIXED
+
+**Step 0.** The dedicated loop session for this rotation
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable, so this is a watchdog
+pickup. `list_pull_requests` (`state=open`) returned only two unrelated docs
+PRs (#3774, #3772); no PR with a `claude/security-review-` head branch is
+open. PR #3784 (Feature 29, Reports & analytics, pass 12) had already merged.
+Row 30 (Onboarding) was the first `⬜` in the rotation table on a
+freshly-pulled `main` (`65b566ee`).
+
+**Scope check.** Pass 9's own review landed as `6636cee6` (PR #3658), and a
+separate recovery PR (#3686, `e6da6486`) applied three fixes
+(ONB6-30-1/2/3, see the **Pass 9 addendum** section above) immediately after.
+`e6da6486` is this pass's baseline. `git log e6da6486..HEAD`, restricted to
+this feature's full file list (as pass 7–9 defined it) plus the new
+`backend/app/utils/google_oauth.py` (new this pass's window, pulled in the
+same way Core Infrastructure's `system_notices.py`/`key_custody_service.py`
+were in pass 7 — reviewed now because it sits in `email_test_helper.py`'s own
+call graph, not because this feature owns Gmail sending generally), found
+real changes in:
+
+- `backend/app/api/v1/email_test_helper.py` — Gmail service-account
+  connection testing added alongside the existing App Password path.
+- `backend/app/utils/email_providers.py` — `google_auth_method`/
+  `uses_google_service_account` helpers, wired into `missing_for_enabled`/
+  `invalid_for_enabled`/`resolve_smtp_settings`/`connection_identity`.
+- `backend/app/utils/google_oauth.py` — new file, delegated Gmail API token
+  acquisition.
+- `backend/app/api/v1/onboarding.py` — one line, `NotificationsConfig.smtp_port`
+  gained `Field(None, ge=1, le=65535)`.
+- `backend/app/models/onboarding.py` / `backend/app/services/onboarding.py` —
+  `OnboardingStatus.admin_email` moved to `EncryptedText`; the IT-team-member
+  existence check now matches by `User.email_hash` fingerprint instead of
+  plaintext `User.email`; the `user_created` audit event no longer carries
+  the raw email in `event_data`.
+- `frontend/src/modules/onboarding/pages/EmailConfiguration.tsx` — a Gmail
+  sending-guidance note block (shared copy, `GMAIL_SENDING_NOTES`).
+- `frontend/src/modules/onboarding/pages/OrganizationSetup.tsx` — a WCAG
+  contrast token rename (`border-theme-surface-border` →
+  `border-theme-input-border`), no behavior change.
+
+Everything else in the window belongs to other, already-reviewed rotation
+features (the app-wide email-at-rest encryption migration, Gmail API sending
+for the authenticated Settings screen, the numeric-bounds hardening sweep)
+and only passes through a file this feature owns, or through a shared helper
+this feature's own pre-auth test endpoint calls.
+
+**Gmail service-account testing is correctly unreachable from the onboarding
+wizard, by design — verified good, no finding.** `_email_settings_from_onboarding`
+(`onboarding.py:219-254`), the one function that maps the onboarding wizard's
+submitted config into org settings for both `/session/email`'s save-time
+validation and `_persist_session_data_to_org`'s completion-time persist, maps
+only `googleAppPassword` for `platform == "gmail"` — it has no
+`googleAuthMethod`/`googleServiceAccountKey` mapping. Read `KNOWN_LIMITATIONS.md`
+before treating this as a gap: "**Onboarding offers App Password only.** A
+department chooses the service account after setup, in **Settings → Email**,
+where the `admin.access` check applies" (the "Gmail — Sending Through a
+Service Account" entry, owner decision 2026-10-25) states this is deliberate,
+and `tests/test_gmail_service_account_settings.py::TestOnlyAnAdministratorConfiguresTheServiceAccount`
+confirms the authenticated save path itself refuses the switch to
+non-administrators with a `PermissionError`. Onboarding runs before any user
+or permission exists, so it cannot evaluate `admin.access` at all; omitting
+the mapping is the only way the onboarding save/completion path could enforce
+that gate, and it does — a hand-built API call that submits
+`googleServiceAccountKey` during onboarding falls through to the ordinary
+App Password check in `missing_for_enabled` (`email_providers.py:246-264`:
+`uses_google_service_account` reads `google_auth_method`, which is absent
+from the mapped dict and defaults to `"app_password"`) and is refused with
+"a Google App Password is required," not silently accepted. Confirmed the
+frontend wizard (`EmailConfiguration.tsx`) never renders or submits a service-
+account field (`grep` for `googleServiceAccountKey`/`googleAuthMethod`/
+`serviceAccount` in that file: no hits) — only the App Password input exists,
+matching the documented decision exactly.
+
+**The pre-auth `/test/email` connection test _can_ exercise the service-
+account path directly (`email_test_helper.py:426-462`'s new
+`_test_google_service_account_connection`, reachable from `verify_email_configuration`
+since `test_gmail_connection` → `_test_provider_connection` checks
+`uses_google_service_account` against the raw, unmapped request config) — but
+this grants no new capability.** The function only calls
+`acquire_gmail_send_token` (`google_oauth.py:203-233`) to obtain an OAuth
+token for the caller-supplied key; it never calls anything that sends mail
+(confirmed: `gmail_api_sender.py`'s send functions are not imported by
+`email_test_helper.py`). A caller already needs the private key to reach this
+path at all, and anyone holding that key can already ask Google's own token
+endpoint the same question directly (`google_oauth.py:40`'s
+`_GOOGLE_TOKEN_URI` is Google's fixed endpoint, and `parse_service_account_key`
+refuses any `token_uri` that isn't it — closing the SSRF/credential-redirect
+shape the module's own docstring names). So the pre-auth route is an oracle
+for a secret the caller must already possess, gated the same way the existing,
+owner-accepted SMTP connection-test oracle is (ONB-30-3/`_rate_limit_onboarding_test_email`
+still applies, unchanged) — not a new abuse surface. Error messages
+(`_refresh_error_message`, `google_oauth.py:176-200`) name only Google's OAuth
+error _code_, never the exception text or key material, so a probing caller
+learns "delegation not authorized" / "key or sending account rejected," the
+same tier of information the owner already accepted for the SMTP equivalent.
+The process-wide credential cache (`google_oauth.py:48-50,70-71`) is capped
+at 32 entries with LRU eviction (Pitfall #9 compliant) and keyed by a SHA-256
+hash of the key material plus sending address, not by organization — a bogus
+submission cannot poison another caller's entry.
+
+**Email-at-rest encryption reaching `onboarding_status.admin_email` and the
+IT-team user lookup — verified good, no finding (reviewed as this feature's
+piece of a cross-cutting change; the migration and `User.email_hash` design
+belong to a different rotation feature and are not re-derived here).**
+`OnboardingStatus.admin_email` is now `EncryptedText`
+(`models/onboarding.py:75`); the generic, table-driven migration
+(`20261026_1211_b8236e29ec44_encrypt_email_addresses_at_rest.py:87`) lists
+`onboarding_status`/`admin_email` with `nullable=True` preserved, and the
+migration refuses outright (leaving the database untouched) if
+`ENCRYPTION_KEY` is unset while rows exist — satisfying Pitfall #35 for a
+tightened/retyped column without a bespoke per-table test, since the
+backfill logic itself is generic and already exercised by
+`tests/test_encrypt_email_migration.py` against other tables in the same
+dict. Confirmed `admin_email` is write-only in code (`services/onboarding.py:1468`,
+`status.admin_email = email`; no other read-by-value site exists anywhere in
+`backend/app/` — `grep -rn "admin_email" backend/app/` returns only this write
+and unrelated Google-Workspace-integration fields of the same name on a
+different model), so no fingerprint/hash column is needed for it, unlike
+`users.email_hash`. The IT-team-member existence check
+(`services/onboarding.py:1246-1250`) now matches
+`User.email_hash.in_(email_fingerprints(email))` scoped to
+`organization_id` rather than a plaintext `User.email ==` comparison — this
+is the identical fingerprint-lookup pattern already used by `keep_email_fingerprint`
+elsewhere (confirmed no residual `User.email ==` comparison remains anywhere
+in `onboarding.py`/`services/onboarding.py`: `grep -n "User\.email\b"` on
+both files returns nothing), and `email_fingerprints` checks every live and
+legacy `ENCRYPTION_KEY` so a lookup keeps working across a key rotation
+(`core/security.py:707-719`). The `user_created` audit event
+(`services/onboarding.py:1479` area) dropped the raw `"email": email` key
+from `event_data` — tightens checklist dimension 5 (PII absent from audit
+payloads) for a feature this review has not previously flagged on this exact
+point.
+
+**`smtp_port` bound — verified good, no finding.**
+`NotificationsConfig.smtp_port` (`onboarding.py:358`) gained
+`Field(None, ge=1, le=65535)`, part of a wider, already-engineered and
+already-tested numeric-bounds sweep (`dd4ba98a`) that is a correctness/input-
+validation hardening with no security dimension specific to this feature.
+
+**Two pass-9 "OPEN" standing findings are now FIXED, by the recovery PR that
+merged after pass 9's own analysis was written — re-confirmed against current
+code:**
+
+- **Duplicate `role.id`/position id within one payload (previously: unhandled
+  `IntegrityError` → 500).** `RolesSetupRequest`/`PositionsSetupRequest`
+  (`onboarding.py:636-684`) now run `_reject_duplicate_ids`
+  (`onboarding.py:622-633`) as a Pydantic `field_validator`, so a payload
+  with a repeated id is refused with 422 before `save_session_roles`'s body
+  ever runs. This is `ONB6-30-3`, landed in PR #3686 (addendum above) after
+  pass 9's text was written; pass 9 correctly reported it OPEN against the
+  code as it stood at the time. **FIXED, re-confirmed.**
+- **`POST /organization` missing `except Exception` (previously: an uncaught
+  non-`ValueError` failure fell through to Starlette's default 500 instead of
+  the service's own message).** `create_organization`
+  (`onboarding.py:1504-1511`) now has `except HTTPException: raise` (so the
+  logo-scan's own 400 is not buried) followed by a generic `except Exception`
+  that logs and returns a 500 with a safe, fixed message — the same shape
+  `/session/organization` already had. This is `ONB6-30-2`, same PR.
+  **FIXED, re-confirmed.**
+
+**Still OPEN (by design), unchanged:** `ITTeamMemberRequest.email`
+(`onboarding.py:509`) is still `str`, not `EmailStr` — confirmed unchanged,
+intentionally loose to match `create_it_team_users`'s skip-if-invalid
+behavior.
+
+**Route inventory re-enumerated by AST this pass** (walked every
+`@router.{get,post,put,patch,delete}` decorator in `onboarding.py`, not
+carried forward from pass 9's count): **26 routes**, identical method/path/
+function set to pass 7–9. No route gained, lost, or changed its auth
+posture. The three that call no `validate_session` directly
+(`get_onboarding_status`, `start_onboarding`, `save_session_positions`) are
+unchanged from every prior pass's review: the first two are the public
+bootstrap entry points (ONB-8's established reasoning), and the third
+delegates to `save_session_roles`, which validates the session on its behalf.
+
+**Schema & migration:** no onboarding-owned migration in this pass's window
+(the email-encryption migration above belongs to a different feature's file
+set; onboarding's own last migration remains
+`20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7).
+`validate_migrations.py --strict`: 666 revisions, single head `0d9897752425`,
+clean.
+
+**Guard tests:** none added by this pass — nothing here is a new defect to
+close. `tests/test_onboarding_organization_error_handling.py`,
+`tests/test_onboarding_request_caps.py` (ONB6-30-2/3's guards) and
+`tests/test_gmail_service_account_settings.py` (the cross-feature work's own
+guard) re-run and still passing in the scoped run below.
+
+### Completion gate (pass 10)
+
+| Check                                                                                                                                                            | Result                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (7.4.1, CI-pinned, installed this pass)                                                                              | ✅ 0 violations                                |
+| `python3.13 -m black --check app/ tests/ alembic/` (26.10.1, CI-pinned, installed this pass)                                                                     | ✅ clean, 2,706 files unchanged                |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.2, CI-pinned, installed this pass)                                                                  | ✅ clean                                       |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                             | ✅ 666 revisions, single head `0d9897752425`   |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices or gmail_service_account or email_provider or encrypt_email"` | ✅ 603 passed, 1 skipped (pywebpush, env-only) |
+| `npm run typecheck` (frontend)                                                                                                                                   | ✅ 0 errors                                    |
+| `npm run lint` (frontend, `--max-warnings 10`)                                                                                                                   | ✅ 0 errors, 0 warnings                        |
+
+Findings doc for this pass is this section; no `KNOWN_LIMITATIONS.md` change
+needed — the one entry a reader might expect to update ("Gmail — Sending
+Through a Service Account") is already accurate against current code, as
+verified above. Rotation row 30 → ✅ (pending this PR's merge). Next: Feature
+31 (Scheduled tasks) — unless a later watchdog pass already advanced further;
+check `search_pull_requests`/`list_pull_requests` fresh rather than trusting
+this note.
 
 ---
 

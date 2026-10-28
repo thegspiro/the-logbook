@@ -100,3 +100,46 @@ if __name__ == "__main__":  # pragma: no cover
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestASwitchedOffTemplate:
+    """Inventory Change switched off: the queued rows are consumed without an
+    email, so switching it back on does not mail a backlog of old changes."""
+
+    async def _process(self, switched_off):
+        from unittest.mock import patch
+
+        from app.services.email_template_service import EmailTemplateService
+
+        rec = _record("org-1", "user-a")
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_query_result([rec]))
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        svc = InventoryNotificationService(db)
+        svc._get_user = AsyncMock(
+            return_value=MagicMock(
+                email="a@example.test", notification_preferences=None
+            )
+        )
+        svc._get_organization = AsyncMock(return_value=None)
+        svc._send_notification_email = AsyncMock(return_value=True)
+        with patch.object(
+            EmailTemplateService,
+            "is_switched_off",
+            AsyncMock(return_value=switched_off),
+        ):
+            await svc.process_pending_notifications()
+        return rec, svc._send_notification_email
+
+    async def test_switched_off_consumes_the_rows_without_sending(self):
+        rec, send = await self._process(switched_off=True)
+
+        send.assert_not_awaited()
+        assert rec.processed is True
+
+    async def test_switched_on_sends(self):
+        rec, send = await self._process(switched_off=False)
+
+        send.assert_awaited_once()
+        assert rec.processed is True

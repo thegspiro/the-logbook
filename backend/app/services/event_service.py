@@ -1195,8 +1195,15 @@ class EventService:
         organization_id: UUID | str,
         event_data: EventUpdate,
         updated_by: UUID | str | None = None,
+        only_event_type: Optional[EventType] = None,
     ) -> int:
         """Update this event and all future events in the same recurring series.
+
+        With *only_event_type*, refuse (``PermissionError``) when any occurrence
+        the update would reach is of another type. A training manager may edit
+        a Training series, and an occurrence an events manager re-typed is no
+        longer theirs to change. Checked here, on the rows this method locks,
+        so the check and the write select the same occurrences.
 
         Returns the count of updated events.
         """
@@ -1233,6 +1240,13 @@ class EventService:
             .execution_options(populate_existing=True)
         )
         future_events = result.scalars().all()
+        if only_event_type is not None and any(
+            e.event_type != only_event_type for e in future_events
+        ):
+            raise PermissionError(
+                "This series includes events that are not training events, "
+                "so it can only be edited by an event manager."
+            )
 
         update_data = event_data.model_dump(exclude_unset=True)
 

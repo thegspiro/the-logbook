@@ -53,10 +53,6 @@ CALLER = {"current_user", "user"}
 #: alone has no business on the route and is rightly refused. Each entry is a
 #: judgement made by reading the handler, not a permission to skip the rule.
 ALLOWED = {
-    # `members.manage` selects the contact-visibility policy, deciding whether
-    # member emails are redacted. Reading an event's eligible members is what
-    # `events.manage` is for.
-    ("events.py", "GET", "/{event_id}/eligible-members", "members.manage"),
     # The documents grants decide whether folder *counts* are shown, not
     # whether the facility's folders may be listed. A related narrowness for
     # `facilities.view`-only callers is tracked as FAC-13 in
@@ -71,13 +67,6 @@ ALLOWED = {
         "/{training_session_id}/finalize",
         "training.manage",
     ),
-    # Same authority, reached from the event: finalizing a Training event's
-    # attendance writes its training credit, and `training.manage` only decides
-    # whether that credit may also move program progress. Finalizing, ending
-    # and recording an event's times are `events.manage`.
-    ("events.py", "POST", "/{event_id}/finalize-attendance", "training.manage"),
-    ("events.py", "POST", "/{event_id}/end-event", "training.manage"),
-    ("events.py", "POST", "/{event_id}/record-times", "training.manage"),
     # `inventory.check_view` lifts a submitter's restriction to their assigned
     # templates, exactly as GET /equipment-checks/templates/{id} does. Tapping
     # a tag during a check is part of performing one, which view alone cannot.

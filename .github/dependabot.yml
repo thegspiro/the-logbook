@@ -13,9 +13,15 @@ updates:
     # sentinel, and aiomysql 0.3.2 (its latest release) still calls it for every
     # bytes parameter, so any BLOB write raises TypeError. Lift this once an
     # aiomysql release supports PyMySQL >= 1.2.1 — see docs/KNOWN_LIMITATIONS.md.
+    #
+    # python-dateutil 3.x cannot be installed: every botocore (boto3's S3
+    # backend) caps it at <3.0.0, so pip fails with ResolutionImpossible (#3752).
+    # Lift this once a botocore release accepts python-dateutil 3.
     ignore:
       - dependency-name: "pymysql"
         versions: [">=1.2.1"]
+      - dependency-name: "python-dateutil"
+        update-types: ["version-update:semver-major"]
     groups:
       python-minor-patch:
         update-types: ["minor", "patch"]

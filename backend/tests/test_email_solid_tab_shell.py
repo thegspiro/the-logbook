@@ -73,6 +73,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.EVENT_WAITLIST_PROMOTION.value: "32a58e65eb63",
     EmailTemplateType.APPLICATION_STEP_COMPLETED.value: "08e6220f2dce",
     EmailTemplateType.APPLICATION_STATUS_LINK.value: "08e6220f2dce",
+    EmailTemplateType.APPLICATION_GOING_INACTIVE.value: "0d9897752425",
 }
 
 
@@ -473,6 +474,15 @@ class TestTheMigrationsFrozenDefaults:
                 for template_type, pair in w50_wording.CARRIED.items()
             },
         }
+        # 8079ea63f119 carried the certification reminder's body and text
+        # when it began saying "today" instead of "0 days left".
+        cert_wording = _load("*_8079ea63f119_*.py")
+        carried[cert_wording.TEMPLATE_TYPE] = (
+            cert_wording.PREVIOUS_HTML,
+            cert_wording.CURRENT_HTML,
+            cert_wording.PREVIOUS_TEXT,
+            cert_wording.CURRENT_TEXT,
+        )
         ballot = carried[proxy_notice.TEMPLATE_TYPE]
         assert ballot[1] == proxy_notice.BODIES["previous"]["html"]
         assert ballot[3] == proxy_notice.BODIES["previous"]["text"]

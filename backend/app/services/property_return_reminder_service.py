@@ -433,9 +433,15 @@ class PropertyReturnReminderService:
                 EmailTemplateType.PROPERTY_RETURN_REMINDER, context, organization=org
             )
 
-        # Send email to member
+        # Send email to member, unless the department switched the template
+        # off. The quartermaster's summary below still goes out and says the
+        # member was not emailed, and the reminder is still recorded so the
+        # next run does not try again.
         member_sent = False
-        if member.email:
+        member_email_off = await EmailTemplateService(self.db).is_switched_off(
+            organization_id, EmailTemplateType.PROPERTY_RETURN_REMINDER
+        )
+        if member.email and not member_email_off:
             try:
                 from app.services.email_service import EmailService
 

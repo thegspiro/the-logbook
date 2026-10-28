@@ -88,6 +88,10 @@ _DELIBERATELY_KEPT: dict[str, frozenset[str]] = {
     ),
     # Identifies the member who made the referral, not this one.
     "a pointer to somebody else": frozenset({"referred_by_user_id"}),
+    # Not kept at all: keep_email_fingerprint recomputes it whenever `email` is
+    # assigned, so the service's write of the placeholder address replaces it.
+    # test_the_email_fingerprint_follows_the_placeholder proves it.
+    "recomputed from a field the service rewrites": frozenset({"email_hash"}),
 }
 
 
@@ -162,3 +166,18 @@ class TestEveryUserColumnIsClassified:
                 f"the docstring claims credentials/MFA/OAuth are scrubbed, but "
                 f"{attr} is never assigned"
             )
+
+
+def test_the_email_fingerprint_follows_the_placeholder():
+    """Erasure assigns a placeholder to ``email``; the fingerprint that could
+    still match the member's real address must change with it."""
+    from app.core.security import email_fingerprint
+
+    user = User(email="dana.reyes@example.org")
+    real = user.email_hash
+
+    user.email = "anon-0123456789@anonymized.invalid"
+
+    assert real == email_fingerprint("dana.reyes@example.org")
+    assert user.email_hash == email_fingerprint("anon-0123456789@anonymized.invalid")
+    assert user.email_hash != real

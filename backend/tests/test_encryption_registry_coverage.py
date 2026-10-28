@@ -85,6 +85,82 @@ def test_the_script_names_no_column_that_is_not_encrypted(script):
     assert all(entry in columns for entry in _registry(script))
 
 
+def _fingerprint_registry() -> set[tuple[str, str]]:
+    """(table, fingerprint_column) pairs ``rotate_encryption_key.py`` rotates."""
+    tree = ast.parse((SCRIPTS / "rotate_encryption_key.py").read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "_FINGERPRINT_COLUMNS"
+            for t in node.targets
+        ):
+            return {
+                (table, fingerprint)
+                for table, _address, fingerprint in ast.literal_eval(node.value)
+            }
+    raise AssertionError("_FINGERPRINT_COLUMNS not found in rotate_encryption_key.py")
+
+
+def _keep_email_fingerprint_calls() -> set[tuple[str, str]]:
+    """(table, fingerprint_column) pairs wired up by ``keep_email_fingerprint``.
+
+    Scans every module-level ``keep_email_fingerprint(Model.attr, "name")`` call
+    under ``app/models/`` by AST, then resolves ``Model`` through the live
+    declarative registry (so a renamed model or attribute is still caught) to
+    find the table ``name`` actually lives on.
+    """
+    classes = {
+        mapper.class_.__name__: mapper.class_ for mapper in Base.registry.mappers
+    }
+    found: set[tuple[str, str]] = set()
+    models_dir = Path(__file__).resolve().parents[1] / "app" / "models"
+    for path in models_dir.glob("*.py"):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "keep_email_fingerprint"
+            ):
+                continue
+            target, name_arg = node.args
+            assert isinstance(target, ast.Attribute), (
+                f"{path.name}: keep_email_fingerprint's first argument must be "
+                "a Model.attribute reference"
+            )
+            cls = classes[target.value.id]
+            found.add((cls.__tablename__, name_arg.value))
+    return found
+
+
+def test_every_keep_email_fingerprint_call_is_in_the_rotation_script():
+    """A model wired for blind-index lookup must have its fingerprint rotated.
+
+    ``keep_email_fingerprint`` keeps the column correct going forward; only
+    ``rotate_encryption_key.py``'s hand-written ``_FINGERPRINT_COLUMNS`` list
+    rewrites the rows that already exist, under the current key — which is
+    what lets an old ``ENCRYPTION_KEY`` be retired from
+    ``ENCRYPTION_KEYS_LEGACY`` without losing every row that was never
+    re-saved since the last rotation. ``email_fingerprints()`` checking every
+    legacy key hides exactly this gap today; it reappears, silently, the day
+    the legacy key a forgotten column still needs is finally removed.
+    """
+    missing = _keep_email_fingerprint_calls() - _fingerprint_registry()
+    assert not missing, (
+        f"rotate_encryption_key.py's _FINGERPRINT_COLUMNS is missing "
+        f"{sorted(missing)}; add them so a key rotation can rewrite their "
+        "fingerprints"
+    )
+
+
+def test_fingerprint_registry_names_no_column_that_is_not_wired():
+    """A stale ``_FINGERPRINT_COLUMNS`` entry is harmless but misleading."""
+    stale = _fingerprint_registry() - _keep_email_fingerprint_calls()
+    assert not stale, (
+        f"rotate_encryption_key.py's _FINGERPRINT_COLUMNS lists {sorted(stale)}, "
+        "which no keep_email_fingerprint() call wires up any more"
+    )
+
+
 def test_status_token_is_rotated_because_it_is_ciphertext_not_a_hash():
     """The hash lives in ``status_token_hash``; ``status_token`` is decrypted.
 

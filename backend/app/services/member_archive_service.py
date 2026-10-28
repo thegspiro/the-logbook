@@ -12,7 +12,6 @@ Workflow:
   5. Archived members can be reactivated by leadership if they return
 """
 
-import html
 from datetime import date, datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -173,11 +172,20 @@ async def check_and_auto_archive(
             select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
-        org_name = org.name if org else "Department"
 
-        from app.services.email_service import EmailService, wrap_email_body
-        from app.services.email_theme import ACCENT_RED
+        from app.models.email_template import EmailTemplateType
+        from app.services.email_service import EmailService
+        from app.services.email_template_service import EmailTemplateService
 
+        template_svc = EmailTemplateService(db)
+        archived_email_off = await template_svc.is_switched_off(
+            str(organization_id), EmailTemplateType.MEMBER_ARCHIVED
+        )
+        if archived_email_off:
+            logger.info(
+                "Member archived email not sent: switched off in org {}",
+                organization_id,
+            )
         email_svc = EmailService(org)
 
         # Find admin/quartermaster/chief users to notify
@@ -204,35 +212,25 @@ async def check_and_auto_archive(
                 ):
                     admin_emails.append(u.email)
 
-        if admin_emails:
-            # Names are user-entered; escape them before HTML interpolation.
-            safe_name = html.escape(member.display_name or "")
-            subject = f"Member Archived: {member.display_name} — {org_name}"
-            html_body = wrap_email_body(
+        if admin_emails and not archived_email_off:
+            subject, html_body, text_body = await template_svc.render_stored_or_default(
                 org,
-                "Member Archived",
-                f"<p><strong>{safe_name}</strong> has been automatically archived.</p>"
-                f"<p>All department property has been returned. "
-                f"Previous status: {previous_status.replace('_', ' ').title()}.</p>"
-                f"<p>The member's profile remains accessible for legal requests or future reactivation.</p>",
-                header_color=ACCENT_RED,
-                chip="Member archived",
-            )
-            text_body = (
-                f"Member Archived: {member.display_name}\n\n"
-                f"All department property has been returned. "
-                f"Previous status: {previous_status.replace('_', ' ').title()}.\n\n"
-                f"The member's profile remains accessible for legal requests "
-                f"or future reactivation."
+                EmailTemplateType.MEMBER_ARCHIVED,
+                {
+                    "member_name": member.display_name or "",
+                    "previous_status": previous_status.replace("_", " ").title(),
+                },
             )
             await email_svc.send_email(
                 to_emails=admin_emails,
                 subject=subject,
                 html_body=html_body,
                 text_body=text_body,
+                db=db,
+                template_type=EmailTemplateType.MEMBER_ARCHIVED.value,
             )
     except Exception as e:
-        logger.error(f"Failed to send archive notification: {e}")
+        logger.error("Failed to send archive notification for {}: {}", user_id, e)
 
     archive_info = {
         "user_id": user_id,

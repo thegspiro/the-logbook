@@ -423,3 +423,56 @@ async def test_send_reminder_requires_a_drop_date():
             days_since_drop=30,
             items_info={},
         )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("switched_off", [False, True])
+async def test_a_switched_off_template_stops_only_the_members_email(switched_off):
+    """The member's reminder is the template; the quartermaster's summary is
+    not, so it still goes out and says whether the member was emailed."""
+    from unittest.mock import patch
+
+    from app.services.email_service import EmailService
+    from app.services.email_template_service import EmailTemplateService
+
+    admin_rows = MagicMock()
+    admin_rows.scalars.return_value.all.return_value = [
+        SimpleNamespace(
+            email="qm@x.org",
+            roles=[SimpleNamespace(slug="quartermaster")],
+            notification_preferences=None,
+        )
+    ]
+    svc = PropertyReturnReminderService(_db([admin_rows]))
+    send = AsyncMock(return_value=(1, 0))
+
+    with (
+        patch.object(EmailService, "send_email", send),
+        patch.object(
+            EmailTemplateService, "get_template", AsyncMock(return_value=None)
+        ),
+        patch.object(
+            EmailTemplateService,
+            "is_switched_off",
+            AsyncMock(return_value=switched_off),
+        ),
+    ):
+        result = await svc._send_reminder(
+            member=_member(),
+            org=None,
+            org_name="Org",
+            org_tz="UTC",
+            organization_id="org-1",
+            threshold={"label": "30-day", "type": "30_day"},
+            days_since_drop=30,
+            items_info={"count": 1, "total_value": 10.0, "items": []},
+            dropped_on=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+    recipients = [call.kwargs["to_emails"] for call in send.await_args_list]
+    if switched_off:
+        assert recipients == [["qm@x.org"]]
+        assert "Member email sent: No" in send.await_args.kwargs["html_body"]
+    else:
+        assert recipients == [["jane@x.org"], ["qm@x.org"]]
+    assert result["member_email_sent"] is (not switched_off)

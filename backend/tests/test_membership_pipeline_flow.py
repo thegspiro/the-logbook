@@ -17,6 +17,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import database_manager
+from app.core.encrypted_types import EncryptedText
 from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
 from app.models.user import Organization
 from app.services.membership_pipeline_service import MembershipPipelineService
@@ -1103,8 +1104,9 @@ class TestTransferToMembership:
         )
         email_row = user_emails.fetchone()
         assert email_row is not None
-        prospect_email = prospect.email
-        assert prospect_email in (email_row[0], email_row[1])
+        # Raw SQL bypasses the column type, so it reads ciphertext.
+        stored = [EncryptedText().process_result_value(v, None) for v in email_row]
+        assert prospect.email in stored
 
 
 # =========================================================================

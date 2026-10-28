@@ -27,11 +27,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.constants import (
     CHIEF_POSITION_SLUGS,
     DEFAULT_COMPLIANCE_OFFICER_ROLES,
     DEFAULT_TRAINING_OFFICER_ROLES,
 )
+from app.models.email_template import EmailTemplateType
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
@@ -42,7 +44,8 @@ from app.services.email_policy import (
     member_receives_email,
 )
 from app.services.email_service import EmailService, wrap_email_body
-from app.services.email_theme import ACCENT_AMBER, ACCENT_RED
+from app.services.email_template_service import EmailTemplateService
+from app.services.email_theme import ACCENT_RED
 from app.services.notifications_service import NotificationsService
 from app.utils.org_timezone import org_today, resolve_org_today
 
@@ -313,6 +316,10 @@ class CertAlertService:
             }
 
         email_service = EmailService(org)
+        template_service = EmailTemplateService(self.db)
+        expiry_email_off = await template_service.is_switched_off(
+            str(organization_id), EmailTemplateType.CERT_EXPIRATION
+        )
 
         training_roles = config.get(
             "training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES
@@ -402,9 +409,13 @@ class CertAlertService:
                                 action_url=f"/members/{member.id}/training",
                             )
 
-                    # Send email only if member has email enabled
+                    # Send email only if member has email enabled, and only
+                    # while the department has not switched the Cert
+                    # Expiration template off. The tier is stamped below
+                    # either way, so a switched-off reminder is not retried.
                     if (
-                        self._member_has_email_enabled(
+                        not expiry_email_off
+                        and self._member_has_email_enabled(
                             member, department_required_kinds(org)
                         )
                         and member.email
@@ -423,46 +434,51 @@ class CertAlertService:
                                     )
                                 )
 
-                        e_first = _html.escape(
-                            member.preferred_name or member.first_name or ""
-                        )
-                        e_course = _html.escape(record.course_name or "")
-                        e_cert_num = (
-                            _html.escape(record.certification_number or "")
-                            if record.certification_number
-                            else ""
-                        )
-                        e_agency = (
-                            _html.escape(record.issuing_agency or "")
-                            if record.issuing_agency
-                            else ""
-                        )
+                        # The record's number and agency are not template
+                        # variables; they follow the template's own body.
+                        extra_html = ""
+                        extra_lines = []
+                        if record.certification_number:
+                            extra_html += (
+                                "<p><strong>Certification #:</strong> "
+                                f"{_html.escape(record.certification_number)}</p>"
+                            )
+                            extra_lines.append(
+                                f"Certification #: {record.certification_number}"
+                            )
+                        if record.issuing_agency:
+                            extra_html += (
+                                "<p><strong>Issuing Agency:</strong> "
+                                f"{_html.escape(record.issuing_agency)}</p>"
+                            )
+                            extra_lines.append(
+                                f"Issuing Agency: {record.issuing_agency}"
+                            )
 
-                        html_body = wrap_email_body(
+                        (
+                            subject,
+                            html_body,
+                            text_body,
+                        ) = await template_service.render_stored_or_default(
                             org,
-                            "Certification Expiration "
-                            + ("Warning" if days_until <= 30 else "Notice"),
-                            f"""<p>Hello {e_first},</p>
-        <p>Your <strong>{e_course}</strong> certification expires on
-        <strong>{expiration_date.strftime('%B %d, %Y')}</strong>
-        ({_expires_when(days_until)}).</p>
-        {f'<p><strong>Certification #:</strong> {e_cert_num}</p>' if record.certification_number else ''}
-        {f'<p><strong>Issuing Agency:</strong> {e_agency}</p>' if record.issuing_agency else ''}
-        <p>Please renew your certification before it expires. Contact your training officer if you need assistance.</p>""",
-                            # Red inside the last week, amber before it — the
-                            # same split the old banner made.
-                            header_color=(
-                                ACCENT_RED if days_until <= 7 else ACCENT_AMBER
-                            ),
-                            chip="Action required",
-                        )
-                        text_body = (
-                            f"Certification Expiration Notice\n\n"
-                            f"Hello {member.preferred_name or member.first_name},\n\n"
-                            f"Your {record.course_name} certification expires on "
-                            f"{expiration_date.strftime('%B %d, %Y')} "
-                            f"({_expires_when(days_until)}).\n\n"
-                            f"Please renew before it expires."
+                            EmailTemplateType.CERT_EXPIRATION,
+                            {
+                                "recipient_name": member.preferred_name
+                                or member.first_name
+                                or "",
+                                "cert_name": record.course_name or "",
+                                "expiration_date": expiration_date.strftime(
+                                    "%B %d, %Y"
+                                ),
+                                "days_remaining": str(days_until),
+                                "days_unit": "day" if days_until == 1 else "days",
+                                "expires_when": _expires_when(days_until),
+                                "renewal_url": (
+                                    f"{settings.FRONTEND_URL}/training/records"
+                                ),
+                            },
+                            appendix_html=extra_html or None,
+                            appendix_text="\n".join(extra_lines) or None,
                         )
 
                         success, _ = await email_service.send_email(
@@ -471,6 +487,8 @@ class CertAlertService:
                             html_body=html_body,
                             text_body=text_body,
                             cc_emails=cc_emails if cc_emails else None,
+                            db=self.db,
+                            template_type=EmailTemplateType.CERT_EXPIRATION.value,
                         )
 
                         if success > 0:

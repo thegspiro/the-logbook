@@ -61,6 +61,11 @@ requests, templates, analytics, and the public outreach request pipeline.
   record is written. Reopening needs `events.reopen_attendance`, deliberately
   kept out of `events.manage` so the organizer who closed an event cannot
   quietly reopen it and change numbers already fed into hours and compliance.
+  On a **Training** event a `training.manage` holder may also edit the event,
+  close it (Finalize, End Event, Record Times) and reopen it — including one
+  they closed themselves, which the department chose over a second-person
+  check; the audit row records who reopened it. See
+  [Training managers on Training events](#training-managers-on-training-events)
   See [Attendance Finalization and the Lock](#attendance-finalization-and-the-lock)
 - **Past events** — every member can switch the Events list to past events;
   managers also get a **Past Events** tab in the Events admin hub
@@ -311,7 +316,20 @@ Values are `managers` and `members`. NULL is a real third state meaning
 "inherit". With `members`, `GET /events/{id}/attendees` returns a going-only
 list of **names and status — nothing else**. Contact details, RSVP notes,
 dietary restrictions, accessibility needs, guest counts and check-in times stay
-in the organizer view (`GET /events/{id}/rsvps`, `events.manage`).
+in the organizer view (`GET /events/{id}/rsvps` — `events.manage`, the
+event's organizer pair, or `training.manage` on a Training event).
+
+### Training managers on Training events
+
+A `training.manage` holder without `events.manage` gets, on **Training** events
+only: **Edit** (the type is locked to Training, and a "this and all future
+events" edit is refused if any occurrence it reaches is another type),
+**End Event**, **Finalize Attendance**, **Record Times** and **Reopen
+Attendance**, as well as the attendance tools above. The More menu (duplicate,
+cancel, delete, templates, meetings) and reminders stay with `events.manage`.
+The page reads `can_edit_event` and `can_reopen_attendance` from
+`GET /events/{id}`; `/events/:id/edit` admits `training.manage` and then asks
+the event.
 
 ### Manager tools on the detail page
 
@@ -326,6 +344,19 @@ Attendance, Monitoring, Create Meeting, Cancel, Delete). The roster supports:
 - **Check In**, **Edit Times** (manager override,
   `PATCH /events/{id}/rsvps/{user_id}/override`) and **Remove**
   (`DELETE /events/{id}/rsvps/{user_id}`).
+
+**The organizer runs their own event's attendance.** The roster, the
+statistics card and the **Check In** window (add, bulk add, check in, Edit
+Times, Remove) are also shown to the event's organizer and alternate without
+`events.manage`, and to `training.manage` holders on any Training event. Two
+limits apply to the organizer pair: they cannot record their own attendance
+(they check in like any member, or ask the alternate or a manager — the same
+"someone else vouches for you" rule as attendance requests), and on a Training
+event they do not get **Edit Times**, because those minutes become training
+credit. The other manager controls — Edit, Finalize, Record Times, the More
+menu — stay with `events.manage`. See
+[Module-Events-Developer](Module-Events-Developer) for the access table.
+
 - **Export CSV** of the attendee list and **Print roster**.
 - **Non-respondent reminders** (`POST /events/{id}/send-reminders`) — exclude
   members who already responded (going, not going or maybe).
@@ -676,7 +707,8 @@ Recording the actual end time (Record Times, End Event) triggers duration
 finalization automatically.
 
 **Reopening** (`POST /events/{id}/reopen-attendance`) requires
-`events.reopen_attendance`. Re-finalizing after a correction restates the
+`events.reopen_attendance`, or `training.manage` on a Training event.
+Re-finalizing after a correction restates the
 credit: `apply_requirement_credit` takes a `restate` flag, and the enrollment
 lookups include `COMPLETED` enrollments, so certification and phase totals move
 with the corrected hours.
@@ -822,6 +854,8 @@ responsible for an event (the organizer defaults to the creator).
 - **Decision rights:** organizer, alternate, or `events.manage`. The creator
   does not decide once the event is handed over. The page gates on the
   server's `can_manage_organizers` rather than comparing ids.
+- **Attendance:** the organizer pair also run their own event's attendance —
+  see [Manager tools on the detail page](#manager-tools-on-the-detail-page).
 - **`POST /events/{id}/transfer`**, scope `this` or `future` (upcoming
   occurrences plus the series parent; past occurrences keep their organizer).
   Open requests are re-addressed, the new and relieved members are told, and

@@ -88,6 +88,10 @@ class EmailTemplateResponse(UTCResponseBase):
     # figure nobody computed.
     is_customized: bool = False
     sent_count: int = 0
+    # True for the types a department cannot switch off (ALWAYS_SENT_TYPES),
+    # so the editor disables the switch rather than offering one the API
+    # refuses.
+    always_sent: bool = False
     created_at: datetime
     updated_at: datetime
     created_by: Optional[str] = None

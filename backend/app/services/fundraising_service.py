@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
+from app.core.security import email_fingerprints
 from app.models.event import Event
 from app.models.grant import (
     CampaignStatus,
@@ -217,7 +218,8 @@ class FundraisingService:
                 | (Donor.company_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
             if search_contact:
-                matches = matches | Donor.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR)
+                # Encrypted at rest: only a complete address matches.
+                matches = matches | Donor.email_hash.in_(email_fingerprints(search))
             query = query.where(matches)
             if not search_anonymous:
                 query = query.where(Donor.is_anonymous.is_(False))

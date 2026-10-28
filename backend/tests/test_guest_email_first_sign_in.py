@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import app.api.public.display as display
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_access_token
+from app.core.security import create_access_token, email_fingerprint
 from app.models.event import (
     CheckInWindowType,
     Event,
@@ -382,14 +382,15 @@ async def _member(db_session, org_id, email, status="active"):
     await db_session.execute(
         text(
             "INSERT INTO users (id, organization_id, username, first_name, "
-            "last_name, email, password_hash, status) "
-            "VALUES (:id, :org, :un, 'Mo', 'Member', :em, 'hashed', :st)"
+            "last_name, email, email_hash, password_hash, status) "
+            "VALUES (:id, :org, :un, 'Mo', 'Member', :em, :fp, 'hashed', :st)"
         ),
         {
             "id": user_id,
             "org": org_id,
             "un": f"m-{user_id[:8]}",
             "em": email,
+            "fp": email_fingerprint(email),
             "st": status,
         },
     )
@@ -592,7 +593,7 @@ class TestConfirm:
         applicants = await db_session.scalar(
             select(func.count())
             .select_from(ProspectiveMember)
-            .where(func.lower(ProspectiveMember.email) == email)
+            .where(ProspectiveMember.email_hash == email_fingerprint(email))
         )
         assert applicants == 1
 
@@ -678,6 +679,6 @@ class TestConfirm:
         applicants = await db_session.scalar(
             select(func.count())
             .select_from(ProspectiveMember)
-            .where(func.lower(ProspectiveMember.email) == email)
+            .where(ProspectiveMember.email_hash == email_fingerprint(email))
         )
         assert applicants == 0

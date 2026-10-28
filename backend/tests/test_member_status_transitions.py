@@ -133,6 +133,10 @@ async def test_property_return_email_releases_session_before_delivery(monkeypatc
         def __init__(self, _session):
             pass
 
+        async def is_switched_off(self, *_args):
+            # The department has not switched Member Dropped off.
+            return False
+
         async def get_template(self, *_args):
             return None
 
@@ -203,6 +207,10 @@ async def test_default_property_return_email_escapes_html_but_not_text(monkeypat
         def __init__(self, _session):
             pass
 
+        async def is_switched_off(self, *_args):
+            # The department has not switched Member Dropped off.
+            return False
+
         async def get_template(self, *_args):
             # No admin-customized template on file — forces the fallback path.
             return None
@@ -261,3 +269,66 @@ async def test_default_property_return_email_escapes_html_but_not_text(monkeypat
     # escaped "<b>" would just be visual noise there, not a mitigation.
     assert "<b>Evil</b>" in text_body
     assert "<img src=x onerror=" in text_body
+
+
+async def test_a_switched_off_member_dropped_template_sends_nothing(monkeypatch):
+    """The officer ticked "email the property report", but the department
+    switched the Member Dropped template off, so nothing is mailed."""
+    sends: list = []
+
+    class Result:
+        def scalar_one_or_none(self):
+            return SimpleNamespace(name="Test Department")
+
+    class Session:
+        async def execute(self, _query):
+            return Result()
+
+    async def get_session():
+        yield Session()
+
+    class TemplateService:
+        def __init__(self, _session):
+            pass
+
+        async def is_switched_off(self, *_args):
+            return True
+
+        async def get_template(self, *_args):
+            raise AssertionError("a switched-off email is never rendered")
+
+    class EmailService:
+        def __init__(self, _organization):
+            pass
+
+        async def send_email(self, **kwargs):
+            sends.append(kwargs)
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.member_status.database_manager.get_session",
+        get_session,
+    )
+    monkeypatch.setattr("app.services.email_service.EmailService", EmailService)
+    monkeypatch.setattr(
+        "app.services.email_template_service.EmailTemplateService", TemplateService
+    )
+
+    await _send_property_return_email(
+        organization_id="org-1",
+        to_emails=["member@example.com"],
+        cc_emails=[],
+        report_data={
+            "member_name": "Test Member",
+            "drop_type_display": "Voluntary",
+            "effective_date": "2026-08-12",
+            "return_deadline": "2026-08-26",
+            "item_count": 0,
+            "items": [],
+            "total_value": 0,
+            "performed_by_name": "Test Admin",
+            "performed_by_title": "Chief",
+        },
+        member_email="member@example.com",
+    )
+
+    assert sends == []
