@@ -16,6 +16,49 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pulls)** (branch
+`claude/security-review-users-organizations-p13`) — Feature 07 (Users &
+organizations), pass 13. Watchdog pickup (dedicated `/loop 30m
+/security-review` session `session_011T1ZyyLrD5HagusgK9uDw2` remains
+unreachable). PR #3809 (Feature 06, Elections & ballots, pass 13) had
+already merged (`3f1d5b94`) with no open rotation PR behind it —
+confirmed via `search_pull_requests`, 0 `is:open` results against
+`claude/security-review-*` head branches. Row 07 confirmed the next `⬜`
+row on a freshly fast-forwarded `main`. (A duplicate-rotation artifact
+from pass 12 — PR #3696, a second concurrent watchdog session reviewing
+the same feature 7 minutes after the kept PR #3695 — had already been
+closed by the repo owner as a duplicate before this pass started; no
+action needed here.)
+
+**0 fixed, 1 new finding (USR-12, MED, flagged).** Real delta since this
+feature's own pass 12 (merge `223b4ae7`): 456 insertions/54 deletions
+across 7 of the twelve declared files, from 11 directly-touching commits,
+all reviewed end to end — phone/address/email/leave-reason encryption at
+rest (3 migrations, all idempotent and `ENCRYPTION_KEY`-gated), two new
+passkey admin routes (`GET`/`DELETE /{user_id}/passkeys`, both org-scoped
+and the delete correctly step-up-gated), a `RefusesNull` fix closing a
+silent-no-op gap on 7 fields, 2 numeric-bounds additions, a new
+forms-embed-origin settings route (sound header-injection defense), and a
+Gmail domain-wide-delegated-service-account option. USR-12 flags that the
+last one raises the stakes of an existing gap: `update_email_settings`
+(gated to `admin.access` server-side for the dangerous branch, but not
+`require_stepup`) can now configure a capability — send-as-anyone in the
+Workspace domain — at least as dangerous as its two step-up-gated
+siblings (`update_auth_settings`, `update_file_storage_settings`). USR-5,
+USR-8 and USR-11 all re-confirmed unchanged (owner-accepted/open). All 87
+routes across the four principal files re-enumerated by AST (34/30/16/7 —
+`users.py` up from 32 for the two passkey routes, `organizations.py` up
+from 29 for the new forms-embed route). See
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 13** section
+for the full review.
+
+Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 13, PR #3809, merged), preserved for history</summary>
+
 **PR [#3809](https://github.com/thegspiro/the-logbook/pull/3809)** (branch
 `claude/security-review-elections-ballots-p13`) — Feature 06 (Elections &
 ballots), pass 13. Watchdog pickup (dedicated `/loop 30m
@@ -39,6 +82,8 @@ switched-off flag. Full writeup:
 Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users
 & organizations) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 13, PR #3807, merged), preserved for history</summary>
@@ -22856,7 +22901,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -22891,6 +22936,70 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 07 (Users & organizations, pass 13) — watchdog pickup, real delta (phone/address/email/leave-reason encryption at rest, passkey admin routes, null-refusal fix, forms-embed origin settings, Gmail delegated service account), 0 fixed, 1 new finding (USR-12, MED, flagged)
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable). No open security-review
+PR — confirmed via `search_pull_requests`, 0 `is:open` results against
+`claude/security-review-*` head branches, after Feature 06 (Elections &
+ballots)'s own PR (#3809) merged (`3f1d5b94`). Row 07 confirmed the next
+`⬜` row by reading the rotation table on a freshly fetched `main`. A
+duplicate-rotation artifact from pass 12 (PR #3696, a second concurrent
+watchdog session reviewing the same feature 7 minutes after the kept PR
+#3695) had already been closed by the repo owner as a duplicate before
+this pass started, with #3695 (merge `223b4ae7`) the one that landed and
+this pass's baseline — noted, not re-litigated.
+
+Real delta since pass 12's own merge was substantial: 456 insertions/54
+deletions across 7 of the twelve declared files, from 11 directly-
+touching commits, every one read in full via `git show`. Phone, address,
+email and leave/training-waiver-reason columns on `User`/`Prospect`/
+`MemberLeaveOfAbsence` moved to `EncryptedText`/`EncryptedJSON`
+(AES-256-GCM), with `email` gaining a companion `email_hash` fingerprint
+column since ciphertext can no longer be compared in SQL — verified
+every `User.email ==`-shaped comparison repo-wide was migrated to
+fingerprint matching (0 remaining hits), including the two in this
+feature's own `users.py`. Three new migrations, each idempotent,
+`ENCRYPTION_KEY`-gated only when rows exist, and `create_all`-table-aware
+(Pitfall #26). Two new passkey admin routes landed in `users.py`
+(`GET`/`DELETE /{user_id}/passkeys`), both org-scoped via `User.id` +
+`User.organization_id`, and the delete correctly carries
+`require_stepup` (confirmed present in `STEPUP_HANDLERS`,
+`backend/tests/test_mfa_policy.py`). A `RefusesNull` fix closed a
+silent-no-op gap on 7 fields across role/contact-info/profile PATCH
+routes. A new `PATCH /organizations/settings/forms` route (sound
+header-injection defense: an exact-https-origin regex feeding a
+`frame-ancestors` CSP header, bounded at 10 entries) and a Gmail
+domain-wide-delegated-service-account email option (gated to
+`admin.access` server-side, fails closed) both landed in
+`organizations.py`/`schemas/organization.py`.
+
+**USR-12 (new, MED, flagged):** the Gmail service-account option raises
+the stakes of an existing gap rather than opening a new one — it makes
+`update_email_settings` able to configure a capability (send-as-anyone
+in the department's Workspace domain) at least as dangerous as its two
+step-up-gated siblings (`update_auth_settings`,
+`update_file_storage_settings`), yet the route itself carries no
+`require_stepup`. Same mechanism and precondition as `AUTH-23`/
+`PERM-10`/`PERM-11`/`USR-11` (a stolen live session, not a privilege
+escalation); not fixed because gating the whole route would catch
+routine settings saves too, and the route has no narrower hook — a
+product decision for the step-up mechanism's owner. `USR-5`, `USR-8` and
+`USR-11` all re-confirmed unchanged against live source (owner-accepted
+or open). All 87 routes across the four principal files re-enumerated by
+AST (34/30/16/7 — `users.py` up from 32, `organizations.py` up from 29).
+Full writeup: `docs/security-review/USR-07-users-organizations.md`'s
+**Pass 13** section.
+
+Completion gate: flake8/black/isort (app/tests/alembic) clean;
+`validate_migrations.py --strict` passed (667 revisions, single head);
+`check_route_permissions.py --strict` 279 routes, 0 errors/warnings;
+targeted pytest 273 passed (member leave/status, MFA, passkeys, org
+settings, user PII encryption, deletion, consents); migration-chain
+tests 80 passed; frontend typecheck clean; frontend lint clean.
+
+Next: Feature 08 (Membership pipeline), once this PR merges.
 
 ### 2026-10-28 — Feature 06 (Elections & ballots, pass 13) — watchdog pickup, real delta (dangling write-in merges on candidate delete closed, quorum-percentage bound reaches the org-defaults endpoint, leadership-notification email now honors its switched-off flag), 0 fixed this pass, 0 new findings
 
