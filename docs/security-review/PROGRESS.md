@@ -16,10 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-finance-approvals`** (PR not yet opened —
-this row is updated with the PR number as a second commit on the same
-branch, per this file's own rule against a PR number nobody can click yet)
-— Feature 05 (Finance & approvals), pass 13. Watchdog pickup (dedicated
+**PR [#3807](https://github.com/thegspiro/the-logbook/pull/3807)** (branch
+`claude/security-review-finance-approvals`) — Feature 05 (Finance &
+approvals), pass 13. Watchdog pickup (dedicated
 `/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
 remains unreachable, confirmed via `ListAgents`). PR #3805 (Feature 04,
 Storefront & payments, pass 13) had already merged with no open rotation
