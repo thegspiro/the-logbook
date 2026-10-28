@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3802](https://github.com/thegspiro/the-logbook/pull/3802)** (branch
+`claude/security-review-auth-session-p12`) — Feature 01 (Auth & session
+lifecycle), pass 13 (this feature's own count; pass 12 of the whole
+rotation). **0 fixes, 0 new findings.** Step 0 confirmed via
+`search_pull_requests` (`head:claude/security-review-` `is:open` → 0
+results) that PR #3800 (Feature 00, Cross-cutting baseline, pass 13,
+watchdog pickup) had already merged (`9c2a5bff`), closing out rotation lap
+"pass 11" and resetting the table to `⬜` for pass 12; row 01 was the next
+`⬜`.
+
+Real delta since this feature's own pass 12 (PR #3684, merged `d5f44cc4`):
+a new passkey (WebAuthn) second factor —
+`app/services/passkey_service.py` and `app/models/passkey.py` (both new),
+seven new routes (`/auth/passkeys/*`, `/auth/mfa/challenge`,
+`/auth/step-up/passkey-options`), every `user.mfa_enabled`-only gate
+widened to `has_second_factor()`, and the frontend half
+(`utils/passkeys.ts`, `components/settings/PasskeySettingsCard.tsx`).
+Routes re-enumerated by AST: 38 (up from 31), public/private 17/21 (up from
+16/15). Reviewed in full against all seven checklist dimensions —
+**verified good** throughout (org/self scoping confirmed by reading the
+query, the registration-cap race locked two levels deep per Pitfall #27,
+the member-chosen passkey name confirmed to reach only escaped sinks, both
+new tables migration-guarded for `create_all` installs per Pitfall #26/#2,
+and `webauthn==3.0.1`/`@simplewebauthn/browser@14.0.0` confirmed against
+the real PyPI/npm registry entries per Pitfall #34). AUTH-23 (MED, no
+account-tied lockout on `/auth/step-up`'s password/TOTP branches)
+re-verified still accurate and still the only open finding — the new
+passkey step-up branch doesn't widen it, since a passkey can't be guessed.
+AUTH-15/17/21/22 remain closed; AUTH-4 remains accepted, unchanged. Full
+writeup: `docs/security-review/AUTH-01-auth-session.md`'s **Pass 13**
+section.
+
+Rotation row 01 → ✅ (pending this PR's merge); next is Feature 02
+(Permissions & roles) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 13, PR #3800, merged), preserved for history</summary>
+
 **PR [#3800](https://github.com/thegspiro/the-logbook/pull/3800)** (branch
 `claude/security-review-cross-cutting-baseline-p13`) — Feature 00
 (Cross-cutting baseline), pass 13. **1 fixed (SEC13-1, LOW), 0 new
@@ -39,6 +78,8 @@ writeup: `docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass
 Rotation row 00 → ✅ (pending this PR's merge); next is Feature 01 (Auth &
 session lifecycle) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 12, PR #3791, merged), preserved for history</summary>
