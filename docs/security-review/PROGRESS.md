@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3803](https://github.com/thegspiro/the-logbook/pull/3803)** (branch
+`claude/security-review-permissions-roles`) — Feature 02 (Permissions &
+roles), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed via
+`search_pull_requests` (`is:pr is:open` against the full open-PR list,
+none with a `claude/security-review-*` head) that PR #3802 (Feature 01,
+Auth & session lifecycle, pass 13) had already merged (`4f21727a`); row 02
+was confirmed the next `⬜` by reading the rotation table on a freshly
+pulled `main`.
+
+Real delta since this feature's own pass 12 (PR #3685, merged `b16cfcca`),
+323 commits: `require_stepup` split into a reusable `ensure_stepup(db,
+token)` helper, used by four new conditional step-up call sites in
+`auth.py` (traced all four — none in this feature's own handlers, so
+PERM-10/PERM-11 below are untouched); a passkey now also satisfies
+`get_current_user`'s MFA-enrollment gate; a new Forms permission
+`sensitive_answers.view` added to the shared `core/permissions.py`
+registry (verified not seeded to any `DEFAULT_POSITIONS` entry, and
+verified immune to a `forms.*` module-wildcard match by reading
+`permission_matches`); and two new passkey-admin routes in `users.py`
+(`GET`/`DELETE /{user_id}/passkeys[/{id}]`), both org-scoped through
+`_resolve_passkey_admin_target`, the delete route carrying both a fresh
+`require_stepup` and the existing `_enforce_account_reset_ceiling`,
+confirmed against `test_mfa_policy.py`'s pinned `STEPUP_HANDLERS` set.
+Routes re-enumerated by AST: 28, unchanged from pass 12 (the four endpoint
+files this count covers — `roles.py`, `operational_ranks.py`,
+`officers.py`, `org_chart.py` — are byte-identical to pass 12). PERM-10
+and PERM-11 (both MED, flagged) re-verified still open and unchanged. Full
+writeup: `docs/security-review/PERM-02-permissions-roles.md`'s **Pass 13**
+section.
+
+Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
+surface & webhooks) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 13, PR #3802, merged), preserved for history</summary>
+
 **PR [#3802](https://github.com/thegspiro/the-logbook/pull/3802)** (branch
 `claude/security-review-auth-session-p12`) — Feature 01 (Auth & session
 lifecycle), pass 13 (this feature's own count; pass 12 of the whole
@@ -51,6 +88,8 @@ section.
 Rotation row 01 → ✅ (pending this PR's merge); next is Feature 02
 (Permissions & roles) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 13, PR #3800, merged), preserved for history</summary>
