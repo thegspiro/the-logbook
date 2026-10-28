@@ -16,8 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(none — the rotation reads this from GitHub at Step 0 of each iteration,
-never from this row; see the superseded notes below for history.)_
+**PR [#3789](https://github.com/thegspiro/the-logbook/pull/3789)** (branch
+`claude/security-review-core-infra-p10`) — Feature 33 (Core infrastructure),
+pass 10. Review-only: no application code changed. `config.py`/`database.py`
+byte-identical to pass 9; `security_middleware.py`'s only change is a new
+`rate_limit_passkey()` dependency, verified good. Also reviewed, as
+genuinely infrastructure-level encryption-key-handling code: a new keyed
+email blind-index primitive (`security.py`) and a new `EncryptedDate`
+column type plus attribute-event fingerprint helper (`encrypted_types.py`)
+— both support an email-encryption-at-rest rollout already reviewed at the
+application layer by this same week's Feature 32 pass; this pass reviewed
+only the primitive itself and verified it good. **0 new findings.**
+CI9-33-1 (lint pin drift) re-confirmed still fixed; the CI-9/CI-10 residual
+ops/design items re-confirmed unchanged and owner-accepted. Full writeup:
+`docs/security-review/CI10-33-core-infra.md`.
+
+Rotation row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
+shared) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 10, PR #3787, merged), preserved for history</summary>
