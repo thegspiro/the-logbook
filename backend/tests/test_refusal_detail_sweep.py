@@ -20,9 +20,13 @@ What the sweep can and cannot see:
 
 * An f-string placeholder, and any non-text part of a concatenation, is read
   as a single character. A message checked here is therefore known only to
-  fit with short values spliced in. A list joined into a message grows with
-  the data; build it with ``list_within_detail_limit``, which keeps it under
-  the cap however long the list gets.
+  fit with short values spliced in.
+* A list joined into a message grows with the data, so the second check fails
+  on any ``.join`` in a refusal whose list the source does not show is fixed
+  in size: a constant, an enum, a slice with a fixed end, or a local built only
+  from those. Build such a message with ``list_within_detail_limit``, which
+  keeps it under the cap however long the list gets. A join assembled into a
+  variable before the ``raise`` is not followed.
 * A message produced by a call (a helper, ``str(exc)``) is not text the sweep
   can read, and is skipped.
 * A raise that never reaches ``safe_error_detail`` is still checked. That is
@@ -135,36 +139,215 @@ def _is_super_init(call):
     )
 
 
-def _refusals(tree, nodes, refusal_classes):
-    """Yield ``(lineno, text)`` for each refusal message written out as text.
+class _MessageSites(ast.NodeVisitor):
+    """Collect each refusal message expression with its enclosing function.
 
-    ``nodes`` is ``list(ast.walk(tree))``, walked once by the caller and shared
-    with the subclass search.
+    A site is a ``raise`` of a refusal class, or a ``super().__init__`` call
+    inside a refusal class: a subclass that composes its own message hands it
+    there, so its raise sites pass data rather than the text.
     """
-    constants = _module_constants(tree)
-    for node in nodes:
-        if (
-            isinstance(node, ast.Raise)
-            and isinstance(node.exc, ast.Call)
-            and _base_name(node.exc.func) in refusal_classes
-        ):
-            call = node.exc
-        elif isinstance(node, ast.ClassDef) and node.name in refusal_classes:
-            # A subclass that composes its own message hands it to
-            # super().__init__, so its raise sites pass data, not the text.
-            for inner in ast.walk(node):
-                if isinstance(inner, ast.Call) and _is_super_init(inner):
-                    argument = _message_argument(inner)
-                    text = argument and _message_text(argument, constants)
-                    if text is not None:
-                        yield inner.lineno, text
-            continue
-        else:
-            continue
+
+    def __init__(self, refusal_classes):
+        self.refusal_classes = refusal_classes
+        self.functions = [None]
+        self.classes = [None]
+        self.sites = []
+
+    def _visit_function(self, node):
+        self.functions.append(node)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    visit_FunctionDef = _visit_function
+    visit_AsyncFunctionDef = _visit_function
+
+    def visit_ClassDef(self, node):
+        self.classes.append(node.name)
+        self.generic_visit(node)
+        self.classes.pop()
+
+    def _record(self, lineno, call):
         argument = _message_argument(call)
-        text = argument and _message_text(argument, constants)
+        if argument is not None:
+            self.sites.append((lineno, argument, self.functions[-1]))
+
+    def visit_Raise(self, node):
+        if (
+            isinstance(node.exc, ast.Call)
+            and _base_name(node.exc.func) in self.refusal_classes
+        ):
+            self._record(node.lineno, node.exc)
+        self.generic_visit(node)
+
+    def visit_Call(self, node):
+        if self.classes[-1] in self.refusal_classes and _is_super_init(node):
+            self._record(node.lineno, node)
+        self.generic_visit(node)
+
+
+def _message_sites(tree, refusal_classes):
+    """``(lineno, message expression, enclosing function)`` for each refusal."""
+    visitor = _MessageSites(refusal_classes)
+    visitor.visit(tree)
+    return visitor.sites
+
+
+def _refusals(tree, sites):
+    """Yield ``(lineno, text)`` for each refusal message written out as text."""
+    constants = _module_constants(tree)
+    for lineno, argument, _ in sites:
+        text = _message_text(argument, constants)
         if text is not None:
-            yield node.lineno, text
+            yield lineno, text
+
+
+#: Calls that hand back a collection no larger than the one they were given.
+_SIZE_PRESERVING = frozenset(
+    {"sorted", "list", "tuple", "set", "frozenset", "reversed"}
+)
+_DICT_VIEWS = frozenset({"keys", "values", "items"})
+_GROWING_METHODS = frozenset({"append", "add", "extend", "update", "insert"})
+
+
+def _is_constant_name(name):
+    """``CONSTANT``, ``_CONSTANT`` or a class such as an enum: fixed in size."""
+    bare = name.lstrip("_")
+    return bool(bare) and bare[0].isupper()
+
+
+def _assignments(scope):
+    """Each name bound in ``scope``, with every value it is bound to.
+
+    A value of None means the name is bound in a way whose size cannot be read:
+    a parameter, a loop or unpacking target, an augmented assignment, or a
+    collection grown by ``.append`` and its kin.
+    """
+    bound = {}
+    if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        arguments = scope.args
+        for arg in [
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+            arguments.vararg,
+            arguments.kwarg,
+        ]:
+            if arg is not None:
+                bound.setdefault(arg.arg, []).append(None)
+    for node in ast.walk(scope):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    bound.setdefault(target.id, []).append(node.value)
+                else:
+                    for name in ast.walk(target):
+                        if isinstance(name, ast.Name):
+                            bound.setdefault(name.id, []).append(None)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            bound.setdefault(node.target.id, []).append(node.value)
+        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            bound.setdefault(node.target.id, []).append(None)
+        elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+            for name in ast.walk(node.target):
+                if isinstance(name, ast.Name):
+                    bound.setdefault(name.id, []).append(None)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _GROWING_METHODS
+            and isinstance(node.func.value, ast.Name)
+        ):
+            bound.setdefault(node.func.value.id, []).append(None)
+    return bound
+
+
+def _is_bounded(node, scopes, seen=frozenset()):
+    """Whether ``node`` is a collection of fixed size, as far as the source says.
+
+    Fixed means it comes from the code rather than from data: a literal, a
+    constant or enum, a slice with a fixed end, a comprehension over one of
+    those, or a name every one of whose bindings is one of those. ``scopes``
+    is the enclosing function's bindings, then the module's.
+    """
+    if isinstance(node, ast.Constant):
+        return True
+    if isinstance(node, ast.Name):
+        if _is_constant_name(node.id):
+            return True
+        if node.id in seen:
+            return False
+        for scope in scopes:
+            if node.id in scope:
+                values = scope[node.id]
+                return all(
+                    value is not None and _is_bounded(value, scopes, seen | {node.id})
+                    for value in values
+                )
+        return False
+    if isinstance(node, ast.Attribute):
+        # Status.ALL, or self._FIELDS: a constant reached through its owner.
+        return _is_constant_name(node.attr) or (
+            isinstance(node.value, ast.Name) and _is_constant_name(node.value.id)
+        )
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Name) and func.id in _SIZE_PRESERVING:
+            return bool(node.args) and _is_bounded(node.args[0], scopes, seen)
+        if isinstance(func, ast.Attribute) and func.attr in _DICT_VIEWS:
+            return _is_bounded(func.value, scopes, seen)
+        return False
+    if isinstance(node, ast.Subscript):
+        index = node.slice
+        return (
+            isinstance(index, ast.Slice)
+            and isinstance(index.upper, ast.Constant)
+            and isinstance(index.upper.value, int)
+        )
+    if isinstance(node, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
+        return all(_is_bounded(gen.iter, scopes, seen) for gen in node.generators)
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return all(
+            _is_bounded(elt.value, scopes, seen)
+            for elt in node.elts
+            if isinstance(elt, ast.Starred)
+        )
+    if isinstance(node, ast.BinOp):
+        if isinstance(node.op, ast.Sub):
+            return _is_bounded(node.left, scopes, seen)
+        if isinstance(node.op, ast.BitAnd):
+            return _is_bounded(node.left, scopes, seen) or _is_bounded(
+                node.right, scopes, seen
+            )
+        if isinstance(node.op, (ast.BitOr, ast.Add)):
+            return _is_bounded(node.left, scopes, seen) and _is_bounded(
+                node.right, scopes, seen
+            )
+    return False
+
+
+def _unbounded_joins(tree, sites):
+    """Yield ``(lineno, joined source)`` for each join of data into a refusal."""
+    top_level = [
+        node for node in tree.body if isinstance(node, (ast.Assign, ast.AnnAssign))
+    ]
+    module_scope = _assignments(ast.Module(body=top_level, type_ignores=[]))
+    function_scopes = {}
+    for lineno, argument, function in sites:
+        if function is None:
+            scopes = (module_scope,)
+        else:
+            if function not in function_scopes:
+                function_scopes[function] = _assignments(function)
+            scopes = (function_scopes[function], module_scope)
+        for node in ast.walk(argument):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "join"
+                and node.args
+                and not _is_bounded(node.args[0], scopes)
+            ):
+                yield lineno, ast.unparse(node.args[0])
 
 
 def _sent_to_client(text):
@@ -174,27 +357,37 @@ def _sent_to_client(text):
 
 
 @functools.cache
-def _app_refusals():
-    """Every written-out refusal in ``app/`` as ``(path, lineno, text)``.
+def _app_sweep():
+    """Every refusal in ``app/``, read once.
 
-    Cached because parsing the whole of ``app/`` takes several seconds and two
-    tests read the result; the per-test timeout is 30.
+    Returns ``(refusals, joins)``: written-out messages as
+    ``(path, lineno, text)``, and joins of data into a message as
+    ``(path, lineno, joined source)``. Cached because parsing the whole of
+    ``app/`` takes several seconds and several tests read the result; the
+    per-test timeout is 30.
     """
-    parsed = []
-    for path in _python_sources():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        parsed.append((path, tree, list(ast.walk(tree))))
+    parsed = [
+        (path, ast.parse(path.read_text(encoding="utf-8")))
+        for path in _python_sources()
+    ]
     refusal_classes = _refusal_classes(
         node
-        for _, _, nodes in parsed
-        for node in nodes
+        for _, tree in parsed
+        for node in ast.walk(tree)
         if isinstance(node, ast.ClassDef)
     )
-    return tuple(
-        (path, lineno, text)
-        for path, tree, nodes in parsed
-        for lineno, text in _refusals(tree, nodes, refusal_classes)
-    )
+    refusals, joins = [], []
+    for path, tree in parsed:
+        sites = _message_sites(tree, refusal_classes)
+        refusals.extend((path, lineno, text) for lineno, text in _refusals(tree, sites))
+        joins.extend(
+            (path, lineno, joined) for lineno, joined in _unbounded_joins(tree, sites)
+        )
+    return tuple(refusals), tuple(joins)
+
+
+def _app_refusals():
+    return _app_sweep()[0]
 
 
 def test_every_refusal_reaches_the_client_as_written():
@@ -219,11 +412,86 @@ def test_every_refusal_reaches_the_client_as_written():
     )
 
 
-def _found(source, extra_classes=()):
+def _sites(source, extra_classes=()):
     tree = ast.parse(source)
-    nodes = list(ast.walk(tree))
-    classes = _refusal_classes(n for n in nodes if isinstance(n, ast.ClassDef))
-    return [text for _, text in _refusals(tree, nodes, classes | set(extra_classes))]
+    classes = _refusal_classes(
+        node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+    )
+    return tree, _message_sites(tree, classes | set(extra_classes))
+
+
+#: A ValueError raised in a Pydantic validator becomes a 422 that Pydantic
+#: builds itself; it never passes through safe_error_detail, so the cap that
+#: makes a joined list dangerous does not apply. Their lists are enum values
+#: and field names.
+JOINS_NOT_SENT_THROUGH_SAFE_ERROR_DETAIL = ("app/schemas/",)
+
+#: Joins whose size the source cannot show is bounded, but which are, each
+#: with the reason. Keyed by file and the joined expression as written, so a
+#: moved line does not stale the entry and a changed expression does.
+BOUNDED_JOINS = {
+    ("app/models/grant.py", "allowed"): (
+        "allowed_next_statuses(): a subset of the ApplicationStatus enum"
+    ),
+    ("app/services/inventory_service.py", "parts"): (
+        "StorageAreaNotEmptyError builds at most two parts: items and nested areas"
+    ),
+    ("app/services/event_service.py", "sorted(changed)"): (
+        "an attendance-lock refusal: attendance_lock_http_error sends it without "
+        "the length cap, and it lists field names"
+    ),
+    ("app/services/event_service.py", "sorted(sensitive)"): (
+        "an attendance-lock refusal: attendance_lock_http_error sends it without "
+        "the length cap, and it lists field names"
+    ),
+    ("app/services/minutes_record_service.py", "failed"): (
+        "SuggestionApplyConflict has its own 409 handler, which sends the message "
+        "and the failed ids without safe_error_detail"
+    ),
+}
+
+
+def _app_unbounded_joins():
+    return [
+        (path, lineno, joined)
+        for path, lineno, joined in _app_sweep()[1]
+        if not str(path.relative_to(BACKEND)).startswith(
+            JOINS_NOT_SENT_THROUGH_SAFE_ERROR_DETAIL
+        )
+    ]
+
+
+def test_no_refusal_joins_a_list_that_grows_with_the_data():
+    offenders = [
+        f"{path.relative_to(BACKEND)}:{lineno}: ', '.join({joined})"
+        for path, lineno, joined in _app_unbounded_joins()
+        if (str(path.relative_to(BACKEND)), joined) not in BOUNDED_JOINS
+    ]
+
+    assert not offenders, (
+        "These refusals join a list whose length comes from data -- ids the "
+        "client sent, names an organization chose, rows that matched -- so "
+        f"enough of them push the message past {utils.MAX_ERROR_DETAIL_LENGTH} "
+        "characters and safe_error_detail sends 'An unexpected error occurred' "
+        "instead. Build the message with list_within_detail_limit, which keeps "
+        "what fits and counts the rest. If the list really is fixed in size, add "
+        "it to BOUNDED_JOINS with the reason:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_every_bounded_join_entry_still_matches_a_join():
+    """An entry for a join that has gone would excuse the next one written."""
+    present = {
+        (str(path.relative_to(BACKEND)), joined)
+        for path, _, joined in _app_unbounded_joins()
+    }
+    stale = sorted(set(BOUNDED_JOINS) - present)
+    assert not stale, f"BOUNDED_JOINS entries that match nothing: {stale}"
+
+
+def _found(source, extra_classes=()):
+    tree, sites = _sites(source, extra_classes)
+    return [text for _, text in _refusals(tree, sites)]
 
 
 def test_the_sweep_reads_each_shape_of_message():
@@ -255,6 +523,62 @@ def test_the_sweep_skips_what_it_cannot_read():
     assert _found("raise ValueError(build_message(x))") == []
     assert _found("raise ValueError()") == []
     assert _found('raise RuntimeError("not a refusal")') == []
+
+
+def _joins(source):
+    tree, sites = _sites(source)
+    return [joined for _, joined in _unbounded_joins(tree, sites)]
+
+
+def test_the_join_check_flags_lists_that_come_from_data():
+    assert _joins('def f(ids):\n    raise ValueError(", ".join(ids))') == ["ids"]
+    assert _joins(
+        "def f(rows):\n"
+        "    names = [r.name for r in rows]\n"
+        "    raise ValueError(f\"Blocked: {', '.join(names)}\")"
+    ) == ["names"]
+    assert _joins(
+        "def f(rows):\n"
+        "    names = []\n"
+        "    for r in rows:\n"
+        "        names.append(r.name)\n"
+        '    raise ValueError(", ".join(sorted(names)))'
+    ) == ["sorted(names)"]
+    assert _joins(
+        "class Taken(ValueError):\n"
+        "    def __init__(self, ids):\n"
+        '        super().__init__("Taken: " + ", ".join(ids))'
+    ) == ["ids"]
+
+
+def test_the_join_check_leaves_fixed_lists_alone():
+    assert _joins('raise ValueError(", ".join(STATUSES))') == []
+    assert _joins('raise ValueError(", ".join(s.value for s in Status))') == []
+    assert _joins('raise ValueError(", ".join(sorted(Mode.ALL)))') == []
+    assert (
+        _joins(
+            "def f(self, updates):\n"
+            "    bad = sorted(k for k in self._FORBIDDEN & updates.keys())\n"
+            '    raise ValueError(", ".join(bad))'
+        )
+        == []
+    )
+    assert _joins("def f(ids):\n" '    raise ValueError(", ".join(ids[:3]))') == []
+    assert (
+        _joins(
+            "def f():\n"
+            "    valid = {e.value for e in Kind}\n"
+            '    raise ValueError(", ".join(sorted(valid)))'
+        )
+        == []
+    )
+    # Already capped: no join left to measure.
+    assert (
+        _joins(
+            'def f(ids):\n    raise ValueError(list_within_detail_limit("X: ", ids))'
+        )
+        == []
+    )
 
 
 def test_the_check_refuses_what_safe_error_detail_hides():
