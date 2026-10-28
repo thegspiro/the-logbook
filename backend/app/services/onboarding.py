@@ -21,7 +21,11 @@ from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.permissions import default_positions_for
 from app.core.security import email_fingerprints
 from app.core.seed_admin_hours import seed_admin_hours_data
-from app.core.utils import generate_display_code, generate_uuid
+from app.core.utils import (
+    generate_display_code,
+    generate_uuid,
+    list_within_detail_limit,
+)
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.location import Location
 from app.models.onboarding import OnboardingStatus
@@ -1506,7 +1510,9 @@ class OnboardingService:
         # Validate modules
         invalid_modules = [m for m in enabled_modules if m not in available_modules]
         if invalid_modules:
-            raise ValueError(f"Invalid modules: {', '.join(invalid_modules)}")
+            raise ValueError(
+                list_within_detail_limit("Invalid modules: ", invalid_modules)
+            )
 
         # Ensure core modules are always included
         final_modules = list(set(enabled_modules) | set(core_modules))

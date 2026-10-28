@@ -20,6 +20,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import list_within_detail_limit
 from app.models.event_request import EventRequest, EventRequestActivity
 from app.models.user import Organization, User
 from app.schemas.event import MAX_EVENT_DURATION_MINUTES
@@ -821,7 +822,9 @@ def validate_staffing_roles(
     known = {entry["value"] for entry in get_outreach_roles(org) if entry.get("value")}
     unknown = sorted({entry["role"] for entry in normalized} - known)
     if unknown:
-        raise ValueError(f"Unknown outreach role(s): {', '.join(unknown)}")
+        raise ValueError(
+            list_within_detail_limit("Unknown outreach role(s): ", unknown)
+        )
 
     seats = sum(entry["count"] for entry in normalized)
     if seats > MAX_TOTAL_SEATS:

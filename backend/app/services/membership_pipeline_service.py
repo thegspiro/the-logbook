@@ -32,6 +32,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG, office_label
 from app.core.security import email_fingerprints
+from app.core.utils import list_within_detail_limit
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.event import Event, EventExternalAttendee
@@ -2248,8 +2249,11 @@ class MembershipPipelineService:
                 ]
                 if missing:
                     raise ValueError(
-                        "Approval still needed from: "
-                        f"{', '.join(office_label(r) for r in missing)}."
+                        list_within_detail_limit(
+                            "Approval still needed from: ",
+                            [office_label(r) for r in missing],
+                            ".",
+                        )
                     )
 
         elif step_type == PipelineStepType.REFERENCE_CHECK:
@@ -2294,7 +2298,9 @@ class MembershipPipelineService:
                 ]
                 if missing:
                     raise ValueError(
-                        f"Missing required documents: {', '.join(missing)}."
+                        list_within_detail_limit(
+                            "Missing required documents: ", missing, "."
+                        )
                     )
 
         elif step_type == PipelineStepType.MEDICAL_SCREENING:
@@ -2327,7 +2333,9 @@ class MembershipPipelineService:
                 missing = [s for s in required_screenings if s not in passed_types]
                 if missing:
                     raise ValueError(
-                        f"Medical screenings not yet passed: " f"{', '.join(missing)}."
+                        list_within_detail_limit(
+                            "Medical screenings not yet passed: ", missing, "."
+                        )
                     )
 
         elif step_type == PipelineStepType.ELECTION_VOTE:
