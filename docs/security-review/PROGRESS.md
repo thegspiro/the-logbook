@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3809](https://github.com/thegspiro/the-logbook/pull/3809)** (branch
+`claude/security-review-elections-ballots-p13`) — Feature 06 (Elections &
+ballots), pass 13. Watchdog pickup (dedicated `/loop 30m
+/security-review` session `session_011T1ZyyLrD5HagusgK9uDw2` remains
+unreachable, confirmed via `ListAgents`). PR #3807 (Feature 05, Finance &
+approvals, pass 13) had already merged with no open rotation PR behind it
+— confirmed via `search_pull_requests`, 0 results. Row 06 confirmed the
+next `⬜` row on a freshly fast-forwarded `main`.
+
+**0 fixes this pass, 0 new findings.** Unlike pass 12's true-zero delta,
+real but small change since this feature's own pass 12 (merge `e660a9c3`):
+three already-shipped integrity fixes reviewed and verified correct —
+dangling write-in merges on candidate delete now released before every
+deletion path (`ElectionService.release_merged_write_ins`), quorum-
+percentage validation extended to the org-defaults endpoint
+(`PATCH /elections/settings`, matching the per-election path's existing
+bound), and a leadership-notification email now honoring its template's
+switched-off flag. Full writeup:
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 13** section.
+
+Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users
+& organizations) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 13, PR #3807, merged), preserved for history</summary>
+
 **PR [#3807](https://github.com/thegspiro/the-logbook/pull/3807)** (branch
 `claude/security-review-finance-approvals`) — Feature 05 (Finance &
 approvals), pass 13. Watchdog pickup (dedicated
@@ -41,6 +68,8 @@ Full writeup: `docs/security-review/FIN-05-finance-approvals.md`'s
 Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
 (Elections & ballots) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 13, PR #3805, merged), preserved for history</summary>
@@ -22826,7 +22855,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
@@ -22862,6 +22891,22 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 06 (Elections & ballots, pass 13) — watchdog pickup, real delta (dangling write-in merges on candidate delete closed, quorum-percentage bound reaches the org-defaults endpoint, leadership-notification email now honors its switched-off flag), 0 fixed this pass, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via
+`ListAgents`). No open security-review PR — confirmed via
+`search_pull_requests`, 0 `is:open` results against `claude/security-
+review-*` head branches, after Feature 05 (Finance & approvals)'s own PR
+(#3807) merged. Row 06 confirmed the next `⬜` row on a freshly
+fast-forwarded `main`. Baseline was pass 12's merge (`e660a9c3`); unlike
+that pass's true-zero delta, this pass found a real but small diff — three
+fixes already shipped by other work, verified correct rather than
+reimplemented, with no new findings and no source file touched by this
+review itself. See PR #3809 and
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 13** section
+for detail. Next: Feature 07 (Users & organizations).
 
 ### 2026-10-28 — Feature 05 (Finance & approvals, pass 13) — watchdog pickup, real delta (FIN8-05-1's fix confirmed in code, a dues-waiver race/repeat-waiver fix, PII encryption reaching `payee_address`/`notification_emails`), 0 fixed this pass, 0 new findings
 
