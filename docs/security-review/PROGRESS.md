@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #TBD** (branch `claude/security-review-frontend-shared-p12`) — Feature
+34 (Frontend shared), pass 12. **0 fixes, 0 new findings.** Real delta since
+pass 11's merge (`e007f1f5`, PR #3682): passkeys offered at sign-in and for
+step-up re-verification (`utils/passkeys.ts`, `contexts/StepUpContext.tsx`),
+a new password-change gate that pre-empts ~15 requests a member must change
+their password would otherwise send and have refused
+(`services/passwordChangeGate.ts`, W08-6), a public-form embed feature
+(`utils/embedOrigins.ts`, `utils/formEmbedSnippet.ts`), and a new per-event
+guest check-in QR code (`services/eventServices.ts`). Every one of these
+traces to a server-side decision already enforced and already reviewed under
+another feature's rotation slot (Auth #01, Core infrastructure #33, Forms
+#26, Events & requests #16, Public surface #03, all `✅`) — the client-side
+code is correctly scoped as UI/UX only, never a trust boundary of its own.
+Full writeup: `docs/security-review/FE12-34-frontend-shared.md`.
+
+Rotation row 34 → ✅ (pending this PR's merge). All 35 rows are now `✅` —
+this pass completes the rotation; re-check the Rotation table fresh for the
+next reset rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 11, PR #3790, merged), preserved for history</summary>
+
 **PR [#3790](https://github.com/thegspiro/the-logbook/pull/3790)** (branch
 `claude/security-review-core-infrastructure-p10`) — Feature 33 (Core
 infrastructure), pass 11. **Rotation fork, resolved rather than discarded:**
@@ -51,6 +73,8 @@ live gap. Full writeup: `docs/security-review/CI11-33-core-infra.md`.
 Rotation row 33 → ✅ (already recorded by PR #3789's merge; unchanged by this
 PR); next is Feature 34 (Frontend shared) — re-check `search_pull_requests`
 fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 10, PR #3789, merged), preserved for history</summary>
@@ -22608,7 +22632,7 @@ PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -22616,6 +22640,54 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 34 (Frontend shared, pass 12) — watchdog pickup, 0 fixes, 0 new findings — rotation complete
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`).
+No open security-review PR — confirmed via `list_pull_requests`/
+`search_pull_requests`, 0 results, immediately after PR #3790 (Feature 33,
+pass 11) merged (`4a4eb2fd`). Row 34 confirmed the only `⬜` row by reading
+the rotation table on a freshly fetched `main`.
+
+Real delta since pass 11's own merge (`e007f1f5`, PR #3682): passkeys
+offered at sign-in and for step-up re-verification (`utils/passkeys.ts`,
+`contexts/StepUpContext.tsx`); a new password-change gate that pre-empts
+~15 requests a member who must change their password would otherwise send
+and have refused, each then re-reported to the also-refused error endpoint
+(`services/passwordChangeGate.ts`, W08-6); a public-form embed feature
+(`utils/embedOrigins.ts`, `utils/formEmbedSnippet.ts`); and a new per-event
+guest check-in QR code (`services/eventServices.ts`). Every one of these
+traces to a server-side decision already enforced and already reviewed
+under another feature's rotation slot — the passkey step-up to
+`POST /auth/step-up`'s purpose-scoped, server-verified proof (Auth #01 /
+Core infrastructure #33); the embed origin to the CSP `frame-ancestors`
+header `GET /{slug}/embed-policy` assembles server-side, failing closed to
+`NO_EMBED` (Forms #26); the guest check-in link to permission-gated,
+org-scoped management endpoints and a separate unauthenticated consumption
+path (Events & requests #16, Public surface #03) — all already `✅` in this
+rotation. The password-change gate itself fails toward the server's own
+enforcement, not toward access: a stale or unset client-side flag only
+means a doomed request is sent and refused as before, never that one is
+let through. 13 module `services/api.ts` files and the 4 second-client
+files re-enumerated fresh (unchanged count/pattern from pass 11); the one
+new `axios.create()` hit from the repo-wide sweep is inside a test file's
+own recorder helper. Full write-up:
+`docs/security-review/FE12-34-frontend-shared.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (no backend file touched this pass, run in
+full regardless per CLAUDE.md); `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; frontend `npm run typecheck`/
+`npm run lint` — 0 errors, 0 warnings; scoped frontend suite (9 files
+covering the reviewed delta) — 180 passed.
+
+Row 34 → ✅ (pending this PR's merge). **All 35 rows are now `✅` — this
+pass completes the current rotation.** Per the 2026-09-15 precedent (above),
+the reset to all-`⬜` for the next pass rides along with the first feature
+PR of that next pass rather than being opened on its own; the next watchdog
+or loop iteration should re-check the Rotation table fresh and, finding
+every row `✅`, reset it per Step 1 before picking Feature 00.
 
 ### 2026-10-28 — Feature 33 (Core infrastructure, pass 11) — rotation fork resolved, 1 fix (guard test for a new crypto primitive), 0 new application findings
 
