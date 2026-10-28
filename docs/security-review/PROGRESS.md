@@ -16,6 +16,211 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3805](https://github.com/thegspiro/the-logbook/pull/3805)** (branch `claude/security-review-storefront-payments`) —
+Feature 04 (Storefront & payments), pass 13. Watchdog pickup (dedicated
+`/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
+remains unreachable, confirmed via `ListAgents`). PR #3804 (Feature 03,
+Public surface & webhooks, pass 13) had already merged with no open
+rotation PR behind it — confirmed via `search_pull_requests`, 0 results.
+Row 04 confirmed the next `⬜` row on a freshly fast-forwarded `main`.
+
+**2 standing findings confirmed fixed (by the owner, between passes), 0
+new findings.** SF8-04-2 (MED, stale-read settlement race on
+`update_order_status`) and SF8-04-3 (LOW, `waive_order_payment` not
+checking for an already-settled order) — both already resolved in
+`KNOWN_LIMITATIONS.md` as of 2026-10-25, both re-verified fixed and
+covered by their guard tests this pass. Also verified the app-wide
+email/PII-at-rest encryption (reviewed under its own Core infrastructure
+rotation slot) was applied correctly to this feature's
+`customer_email`/`customer_phone`/`shipping_address`/`payer_email`
+columns, including the fingerprint-column registry
+(`_FINGERPRINT_COLUMNS`) and search-path migration from `ilike` to
+hash-match. Full writeup: `docs/security-review/SF-04-storefront-payments.md`'s
+**Pass 13** section.
+
+Rotation row 04 → ✅ (pending this PR's merge); next is Feature 05
+(Finance & approvals) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 13, PR #3804, merged), preserved for history</summary>
+
+**PR [#3804](https://github.com/thegspiro/the-logbook/pull/3804)** (branch
+`claude/security-review-public-surface-webhooks`) — Feature 03 (Public
+surface & webhooks), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed
+via `search_pull_requests` (`is:pr is:open` against the full open-PR list,
+none with a `claude/security-review-*` head) that PR #3803 (Feature 02,
+Permissions & roles, pass 13) had already merged (`d2cd227f`); row 03 was
+confirmed the next `⬜` by reading the rotation table on a freshly pulled
+`main`.
+
+Real delta since this feature's own pass 12 (merge `e6da6486`): a new
+`app/api/public/event_guest.py` (4 routes) lets an event with no room
+kiosk offer guest sign-in through the event's own QR code, reusing
+`display.py`'s rate limits, honeypot and JWT confirm-token gates rather
+than restating them; `display.py` gained the kiosk-side
+`guest-lookup`/`guest-confirm` mirror (+2 routes); `forms.py` gained a
+`GET /{slug}/embed-policy` endpoint answering nginx's `auth_request` with
+a regex-validated, injection-safe `Content-Security-Policy:
+frame-ancestors` value (+1 route); `portal.py` gained a token-gated
+`.ics` calendar download for an applicant's next meeting, built through
+the already-reviewed CRLF-escaping `generate_ical_feed` (+1 route). Also
+verified: `EventExternalAttendee.email`/`.phone` moving to `EncryptedText`
+under the app-wide email-encryption migration doesn't break this
+feature's guest-recognition lookup, which was already hash-based.
+
+**Route count corrected by re-derivation:** an AST walk of the baseline
+commit (cross-checked against a plain grep) finds 37 routes, not the 40
+pass 12 claimed — a prior pass's arithmetic error, not a missing or
+hidden route. New total after this pass's 8 added routes: 45.
+(`check_route_permissions.py --strict`'s 279 is a separate, frontend-route
+figure, unrelated to and unaffected by this backend-only change.) Full
+writeup: `docs/security-review/PUB-03-public-surface-webhooks.md`'s
+**Pass 13** section.
+
+Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments) — re-check `search_pull_requests` fresh rather
+than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 13, PR #3803, merged), preserved for history</summary>
+
+**PR [#3803](https://github.com/thegspiro/the-logbook/pull/3803)** (branch
+`claude/security-review-permissions-roles`) — Feature 02 (Permissions &
+roles), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed via
+`search_pull_requests` (`is:pr is:open` against the full open-PR list,
+none with a `claude/security-review-*` head) that PR #3802 (Feature 01,
+Auth & session lifecycle, pass 13) had already merged (`4f21727a`); row 02
+was confirmed the next `⬜` by reading the rotation table on a freshly
+pulled `main`.
+
+Real delta since this feature's own pass 12 (PR #3685, merged `b16cfcca`),
+323 commits: `require_stepup` split into a reusable `ensure_stepup(db,
+token)` helper, used by four new conditional step-up call sites in
+`auth.py` (traced all four — none in this feature's own handlers, so
+PERM-10/PERM-11 below are untouched); a passkey now also satisfies
+`get_current_user`'s MFA-enrollment gate; a new Forms permission
+`sensitive_answers.view` added to the shared `core/permissions.py`
+registry (verified not seeded to any `DEFAULT_POSITIONS` entry, and
+verified immune to a `forms.*` module-wildcard match by reading
+`permission_matches`); and two new passkey-admin routes in `users.py`
+(`GET`/`DELETE /{user_id}/passkeys[/{id}]`), both org-scoped through
+`_resolve_passkey_admin_target`, the delete route carrying both a fresh
+`require_stepup` and the existing `_enforce_account_reset_ceiling`,
+confirmed against `test_mfa_policy.py`'s pinned `STEPUP_HANDLERS` set.
+Routes re-enumerated by AST: 28, unchanged from pass 12 (the four endpoint
+files this count covers — `roles.py`, `operational_ranks.py`,
+`officers.py`, `org_chart.py` — are byte-identical to pass 12). PERM-10
+and PERM-11 (both MED, flagged) re-verified still open and unchanged. Full
+writeup: `docs/security-review/PERM-02-permissions-roles.md`'s **Pass 13**
+section.
+
+Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
+surface & webhooks) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 13, PR #3802, merged), preserved for history</summary>
+
+**PR [#3802](https://github.com/thegspiro/the-logbook/pull/3802)** (branch
+`claude/security-review-auth-session-p12`) — Feature 01 (Auth & session
+lifecycle), pass 13 (this feature's own count; pass 12 of the whole
+rotation). **0 fixes, 0 new findings.** Step 0 confirmed via
+`search_pull_requests` (`head:claude/security-review-` `is:open` → 0
+results) that PR #3800 (Feature 00, Cross-cutting baseline, pass 13,
+watchdog pickup) had already merged (`9c2a5bff`), closing out rotation lap
+"pass 11" and resetting the table to `⬜` for pass 12; row 01 was the next
+`⬜`.
+
+Real delta since this feature's own pass 12 (PR #3684, merged `d5f44cc4`):
+a new passkey (WebAuthn) second factor —
+`app/services/passkey_service.py` and `app/models/passkey.py` (both new),
+seven new routes (`/auth/passkeys/*`, `/auth/mfa/challenge`,
+`/auth/step-up/passkey-options`), every `user.mfa_enabled`-only gate
+widened to `has_second_factor()`, and the frontend half
+(`utils/passkeys.ts`, `components/settings/PasskeySettingsCard.tsx`).
+Routes re-enumerated by AST: 38 (up from 31), public/private 17/21 (up from
+16/15). Reviewed in full against all seven checklist dimensions —
+**verified good** throughout (org/self scoping confirmed by reading the
+query, the registration-cap race locked two levels deep per Pitfall #27,
+the member-chosen passkey name confirmed to reach only escaped sinks, both
+new tables migration-guarded for `create_all` installs per Pitfall #26/#2,
+and `webauthn==3.0.1`/`@simplewebauthn/browser@14.0.0` confirmed against
+the real PyPI/npm registry entries per Pitfall #34). AUTH-23 (MED, no
+account-tied lockout on `/auth/step-up`'s password/TOTP branches)
+re-verified still accurate and still the only open finding — the new
+passkey step-up branch doesn't widen it, since a passkey can't be guessed.
+AUTH-15/17/21/22 remain closed; AUTH-4 remains accepted, unchanged. Full
+writeup: `docs/security-review/AUTH-01-auth-session.md`'s **Pass 13**
+section.
+
+Rotation row 01 → ✅ (pending this PR's merge); next is Feature 02
+(Permissions & roles) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 13, PR #3800, merged), preserved for history</summary>
+
+**PR [#3800](https://github.com/thegspiro/the-logbook/pull/3800)** (branch
+`claude/security-review-cross-cutting-baseline-p13`) — Feature 00
+(Cross-cutting baseline), pass 13. **1 fixed (SEC13-1, LOW), 0 new
+application findings.** This PR also records, rather than opens a
+separate PR for, the merge of PR #3791 (Feature 34, Frontend shared, pass
+12, merged `579501ee`) that preceded it — confirmed via `pull_request_read`
+(`state: closed`, `merged: true`), CI green on its head SHA, no unresolved
+review threads (the Codex bot's own review attempt had failed with "usage
+limits", not a finding). That merge was the last `⬜` row, closing out
+rotation lap "pass 11" (PRs #3683–#3791); the table is reset to `⬜` for
+pass 12 in this same commit, with row 00 → ✅ from this pass's own review.
+
+`ExternalTrainingSyncService`'s import-failure handlers
+(`external_training.py:1544,1733`) stored a raw exception message in
+`ExternalTrainingImport.import_error`, served back to the client via
+`ExternalTrainingImportResponse` — fixed with the same `safe_error_detail()`
+pattern already used one `except` block away in the same file. Full
+writeup: `docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass
+13** section.
+
+Rotation row 00 → ✅ (pending this PR's merge); next is Feature 01 (Auth &
+session lifecycle) — re-check `search_pull_requests` fresh rather than
+trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 12, PR #3791, merged), preserved for history</summary>
+
+**PR [#3791](https://github.com/thegspiro/the-logbook/pull/3791)** (branch
+`claude/security-review-frontend-shared-p12`) — Feature 34 (Frontend
+shared), pass 12. **0 fixes, 0 new findings.** Real delta since
+pass 11's merge (`e007f1f5`, PR #3682): passkeys offered at sign-in and for
+step-up re-verification (`utils/passkeys.ts`, `contexts/StepUpContext.tsx`),
+a new password-change gate that pre-empts ~15 requests a member must change
+their password would otherwise send and have refused
+(`services/passwordChangeGate.ts`, W08-6), a public-form embed feature
+(`utils/embedOrigins.ts`, `utils/formEmbedSnippet.ts`), and a new per-event
+guest check-in QR code (`services/eventServices.ts`). Every one of these
+traces to a server-side decision already enforced and already reviewed under
+another feature's rotation slot (Auth #01, Core infrastructure #33, Forms
+#26, Events & requests #16, Public surface #03, all `✅`) — the client-side
+code is correctly scoped as UI/UX only, never a trust boundary of its own.
+Full writeup: `docs/security-review/FE12-34-frontend-shared.md`.
+
+Rotation row 34 → ✅ (pending this PR's merge). All 35 rows are now `✅` —
+this pass completes the rotation; re-check the Rotation table fresh for the
+next reset rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 11, PR #3790, merged), preserved for history</summary>
+
 **PR [#3790](https://github.com/thegspiro/the-logbook/pull/3790)** (branch
 `claude/security-review-core-infrastructure-p10`) — Feature 33 (Core
 infrastructure), pass 11. **Rotation fork, resolved rather than discarded:**
@@ -51,6 +256,8 @@ live gap. Full writeup: `docs/security-review/CI11-33-core-infra.md`.
 Rotation row 33 → ✅ (already recorded by PR #3789's merge; unchanged by this
 PR); next is Feature 34 (Frontend shared) — re-check `search_pull_requests`
 fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 10, PR #3789, merged), preserved for history</summary>
@@ -22572,6 +22779,14 @@ shared) was the last to close out this lap, with this PR
 (`FE11-34-frontend-shared.md`). Reset to ⬜ for pass 11 — each row's prior
 PR is recorded in the Log, not repeated here.
 
+**Pass 11 complete (2026-10-25 → 2026-10-28, PRs #3683–#3791):** every row
+below went ✅ again, see the Log for detail on each — row 34 (Frontend
+shared) was the last to close out this lap, with PR #3791
+(`FE12-34-frontend-shared.md`). Reset to ⬜ for pass 12 — each row's prior
+PR is recorded in the Log, not repeated here. Row 00's own pass-13 review
+(`SEC-00-cross-cutting-baseline.md`'s **Pass 13** section) rides along in
+this same reset, per the "folded into this iteration's commit" rule.
+
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
@@ -22579,35 +22794,35 @@ PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -22616,6 +22831,265 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 03 (Public surface & webhooks, pass 13) — watchdog pickup, real delta (event-QR guest sign-in, kiosk lookup/confirm mirror, forms embed-policy, applicant calendar download), route-count correction, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via
+`ListAgents`). No open security-review PR — confirmed via
+`search_pull_requests`, 0 `is:open` results against `claude/security-
+review-*` head branches, after Feature 02 (Permissions & roles)'s own PR
+(#3803) merged (`d2cd227f`). Row 03 confirmed the next `⬜` row by reading
+the rotation table on a freshly fetched `main`.
+
+Real delta since pass 12's own merge (`e6da6486`, PR not recorded under a
+distinct number in this file — folded into the same-day Feature 02/00
+merges): a brand-new `app/api/public/event_guest.py` (4 routes) lets an
+event held with no room kiosk offer the same guest sign-in through the
+event's own QR code, reusing `display.py`'s gates and token-confirm
+pattern rather than restating them; `display.py` gained the kiosk-side
+`guest-lookup`/`guest-confirm` mirror of that pair (+2 routes);
+`forms.py` gained a `GET /{slug}/embed-policy` endpoint answering nginx's
+`auth_request` for embeddable public forms with a strict,
+regex-validated `Content-Security-Policy: frame-ancestors` value (+1
+route); `portal.py` gained a `.ics` calendar download for the applicant
+status page's next meeting, gated by the same bearer token as that page
+and built through the already-reviewed, CRLF-escaping `generate_ical_feed`
+(+1 route). Also reviewed: `EventExternalAttendee.email`/`.phone` moving
+to `EncryptedText` under the app-wide email-encryption migration
+(`b8236e29ec44`) does not break this feature's guest-recognition lookup,
+which was already hash-based (`User.email_hash.in_(email_fingerprints(...))`)
+and never reads that column directly.
+
+**Route count correction, found by re-deriving rather than trusting
+pass 12's stated figure forward:** pass 12 claimed 40 routes; an AST walk
+of the baseline commit (cross-checked against a plain grep) finds **37**.
+The prior pass's own addition arithmetic (28+9+1+2=40) did not match a
+direct count of the files it named. No route was missing from either
+count — the discrepancy is in a prior pass's bookkeeping, not the
+application. New total after this pass's 8 added routes: **45**.
+(`check_route_permissions.py --strict`'s 279 is a separate,
+frontend-route figure against `APPLICATION_PAGES.md`, unrelated to this
+backend count — confirmed unchanged because none of this pass's additions
+are new frontend pages.)
+
+Full write-up: `docs/security-review/PUB-03-public-surface-webhooks.md`'s
+**Pass 13** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"public or webhook or paypal or salesforce or integrations or minutes or
+mcp_oauth or calendar or finance_approval or branding or kiosk or guest or
+event_guest or embed or legal or display or security_txt or portal or
+next_meeting"`) — 1509 passed, 1 pre-existing skip (`pywebpush`); standing
+guard suites — 208 passed; frontend `npm run typecheck`/`npm run lint` —
+0 errors, 0 warnings.
+
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-10-28 — Feature 02 (Permissions & roles, pass 13) — watchdog pickup, real delta (passkey/step-up refactor, new Forms permission, passkey-admin routes), 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via
+`ListAgents`). No open security-review PR — confirmed via
+`search_pull_requests`, 0 `is:open` results against `claude/security-
+review-*` head branches, after Feature 01 (Auth & session lifecycle)'s
+own PR (#3802) merged (`4f21727a`). Row 02 confirmed the next `⬜` row by
+reading the rotation table on a freshly fetched `main`.
+
+Real delta since pass 12's own merge (`b16cfcca`, PR #3685), 323 commits:
+`require_stepup` was split into a reusable `ensure_stepup(db, token)`
+helper, used by four new conditional step-up call sites in `auth.py` (none
+in this feature's own files, so PERM-10/PERM-11 are untouched); `get_
+current_user`'s MFA-enrollment gate now also accepts a passkey; a new
+Forms permission `sensitive_answers.view` was added to the shared registry
+(verified not seeded to any `DEFAULT_POSITIONS` entry and verified immune
+to a `forms.*` module-wildcard match, by reading `permission_matches`);
+and `users.py` gained two passkey-admin routes (`GET`/`DELETE
+/{user_id}/passkeys[/{id}]`), both org-scoped, the delete route step-up-
+and ceiling-gated and confirmed against `test_mfa_policy.py`'s pinned
+`STEPUP_HANDLERS` set. Routes re-enumerated by AST: 28, unchanged from
+pass 12 (the four endpoint files this feature's "28 routes" count covers
+are byte-identical to pass 12). PERM-10 and PERM-11 (both MED, flagged)
+re-verified still open and unchanged — unaffected by this pass's `ensure_
+stepup` refactor.
+
+Full write-up: `docs/security-review/PERM-02-permissions-roles.md`'s
+**Pass 13** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests (`-k
+"permission or role or rank or officer or org_chart or passkey"`) — 1631
+passed, 1 pre-existing skip (`pywebpush`); frontend `npm run
+typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface
+& webhooks) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-10-28 — Feature 01 (Auth & session lifecycle, pass 13) — 0 fixes, 0 new findings
+
+Step 0 re-verified immediately before branching: `search_pull_requests`
+`head:claude/security-review-` `is:open` → 0 results. PR #3800 (Feature 00,
+Cross-cutting baseline, pass 13, watchdog pickup) had already merged
+(`9c2a5bff`), closing out rotation lap "pass 11" and resetting the table to
+`⬜` for pass 12. Rotation row 01 was the next `⬜`.
+
+Real delta since pass 12's own merge (`d5f44cc4`, PR #3684): a new passkey
+(WebAuthn) second factor — `app/services/passkey_service.py` and
+`app/models/passkey.py` (both new), seven new routes under `/auth/passkeys/*`
+plus `/auth/mfa/challenge` and `/auth/step-up/passkey-options`, every
+`user.mfa_enabled`-only gate across `auth.py`/`auth_service.py`/
+`dependencies.py` widened to `has_second_factor()` so a passkey-only member
+is treated as enrolled, and the frontend half
+(`utils/passkeys.ts`, `components/settings/PasskeySettingsCard.tsx`) — plus a
+small dotted-username sign-in fix and the email-blind-index lookups already
+reviewed from the Core infrastructure side. Reviewed in full against all
+seven checklist dimensions: **verified good** throughout — org/self scoping
+confirmed by reading the query (not the route name), the registration-cap
+race locked two levels deep (Pitfall #27), the member-chosen passkey name
+confirmed to reach only React-escaped or `html_escape()`-wrapped sinks, both
+new tables migration-guarded for `create_all` installs (Pitfall #26), and
+`webauthn==3.0.1`/`@simplewebauthn/browser@14.0.0` confirmed (not recalled)
+against the real PyPI/npm registry entries (Pitfall #34). Routes
+re-enumerated by AST: **38** (up from 31), public/private split 17/21 (up
+from 16/15) — `mfa/challenge` is the one new public route, already
+allowlisted with a named compensating control.
+
+**AUTH-23 (MED, OPEN/FLAGGED)** re-verified still accurate: `step_up`'s
+password/TOTP branches still have no account-tied lockout; the new passkey
+branch in the same handler doesn't widen this (a passkey can't be guessed).
+No change to `docs/KNOWN_LIMITATIONS.md`'s existing entry. AUTH-15/17/21/22
+remain closed; AUTH-4 remains accepted, unchanged.
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md`'s **Pass 13**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean (CI's pinned versions); `validate_migrations.py
+--strict` — 666 revisions, single head; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests — 1494
+passed, 2 skipped (environment-only); standing guards (11 files) — 205
+passed; frontend `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
+roles) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-10-28 — Feature 00 (Cross-cutting baseline, pass 13) — watchdog pickup, merged PR #3791, 1 fix (SEC13-1), opens rotation lap "pass 12"
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`
+— no reachable agents at all). Step 0 found exactly one open
+security-review PR, **#3791** (Feature 34, Frontend shared, pass 12):
+`pull_request_read` showed `mergeable_state: clean`, base already at the
+current `main` tip (no conflict); `actions_list` showed `CI`/`Supply
+Chain`/`Secret Scan` all `completed`/`success` on the current head SHA;
+`get_comments`/`get_review_comments` showed only the
+`chatgpt-codex-connector[bot]`'s own review attempt failing with "usage
+limits" (not a finding) and 0 open review threads. Nothing left to tend —
+merged via `merge_pull_request` (squash, `579501ee`).
+
+That merge was the last `⬜` row (Feature 34 was the only one not yet ✅),
+closing out rotation lap "pass 11" (PRs #3683–#3791). Per the skill's Step
+1 rule, the table was reset to `⬜` for pass 12, and — since no
+security-review PR was open afterward — this same iteration continued into
+Feature 00's own pass-13 review rather than stopping, per the "rides along
+in the first feature PR of the next pass" rule.
+
+**Feature 00 (Cross-cutting baseline), pass 13:** delta re-sweep of all 13
+established sweep classes against 330 commits (210 non-merge) since pass
+12's own baseline (`e007f1f5`, PR #3682's merge). **1 new finding
+(SEC13-1, LOW, fixed), 0 tooling findings.** `ExternalTrainingSyncService`'s
+import-failure handlers (`external_training.py:1544,1733`) stored the raw
+exception text (`str(e)`) in `ExternalTrainingImport.import_error`, a
+column served back to the client via `ExternalTrainingImportResponse` —
+the same class of leak `safe_error_detail()` exists to prevent, just via a
+persisted field rather than an immediate response, and inconsistent with
+the same file's own established pattern one `except` block away
+(`provider.connection_error = safe_error_detail(e)`, line 506). Fixed at
+both sites; new guard test
+`test_import_failure_does_not_persist_the_raw_exception_text` seen to fail
+against the unfixed code first (Pitfall #37), then green after the fix.
+Also reviewed fresh: a new Gmail domain-wide-delegation sending method
+(`gmail_api_sender.py`, `google_oauth.py`) — verified good, both its
+target URL and OAuth token endpoint are hardcoded constants, never
+admin-configurable, so no SSRF/DNS-rebinding surface the way the
+already-flagged, still-open S3/MinIO connector (SEC12-1) has. Two new
+bounded, non-attacker-controlled in-memory caches reviewed (email
+blind-index keys, Gmail credential cache) — both clean. Routes
+re-enumerated by AST: 279 (up from 276). Alembic: 666 revisions, single
+head `0d9897752425`.
+
+Full write-up: `docs/security-review/SEC-00-cross-cutting-baseline.md`'s
+**Pass 13** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean (CI's pinned versions); `validate_migrations.py
+--strict` — 666 revisions, single head; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; cross-cutting guard suite (10
+files) — 215 passed; `test_external_training_course_mapping.py`/
+`test_external_training_credit_hours.py`/`test_external_training_report_upload.py`
+— 74 passed; frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
+warnings.
+
+Row 00 → ✅ (pending this PR's merge); next is Feature 01 (Auth & session
+lifecycle) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-10-28 — Feature 34 (Frontend shared, pass 12) — watchdog pickup, 0 fixes, 0 new findings — rotation complete
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`).
+No open security-review PR — confirmed via `list_pull_requests`/
+`search_pull_requests`, 0 results, immediately after PR #3790 (Feature 33,
+pass 11) merged (`4a4eb2fd`). Row 34 confirmed the only `⬜` row by reading
+the rotation table on a freshly fetched `main`.
+
+Real delta since pass 11's own merge (`e007f1f5`, PR #3682): passkeys
+offered at sign-in and for step-up re-verification (`utils/passkeys.ts`,
+`contexts/StepUpContext.tsx`); a new password-change gate that pre-empts
+~15 requests a member who must change their password would otherwise send
+and have refused, each then re-reported to the also-refused error endpoint
+(`services/passwordChangeGate.ts`, W08-6); a public-form embed feature
+(`utils/embedOrigins.ts`, `utils/formEmbedSnippet.ts`); and a new per-event
+guest check-in QR code (`services/eventServices.ts`). Every one of these
+traces to a server-side decision already enforced and already reviewed
+under another feature's rotation slot — the passkey step-up to
+`POST /auth/step-up`'s purpose-scoped, server-verified proof (Auth #01 /
+Core infrastructure #33); the embed origin to the CSP `frame-ancestors`
+header `GET /{slug}/embed-policy` assembles server-side, failing closed to
+`NO_EMBED` (Forms #26); the guest check-in link to permission-gated,
+org-scoped management endpoints and a separate unauthenticated consumption
+path (Events & requests #16, Public surface #03) — all already `✅` in this
+rotation. The password-change gate itself fails toward the server's own
+enforcement, not toward access: a stale or unset client-side flag only
+means a doomed request is sent and refused as before, never that one is
+let through. 13 module `services/api.ts` files and the 4 second-client
+files re-enumerated fresh (unchanged count/pattern from pass 11); the one
+new `axios.create()` hit from the repo-wide sweep is inside a test file's
+own recorder helper. Full write-up:
+`docs/security-review/FE12-34-frontend-shared.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (no backend file touched this pass, run in
+full regardless per CLAUDE.md); `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; frontend `npm run typecheck`/
+`npm run lint` — 0 errors, 0 warnings; scoped frontend suite (9 files
+covering the reviewed delta) — 180 passed.
+
+Row 34 → ✅ (pending this PR's merge). **All 35 rows are now `✅` — this
+pass completes the current rotation.** Per the 2026-09-15 precedent (above),
+the reset to all-`⬜` for the next pass rides along with the first feature
+PR of that next pass rather than being opened on its own; the next watchdog
+or loop iteration should re-check the Rotation table fresh and, finding
+every row `✅`, reset it per Step 1 before picking Feature 00.
 
 ### 2026-10-28 — Feature 33 (Core infrastructure, pass 11) — rotation fork resolved, 1 fix (guard test for a new crypto primitive), 0 new application findings
 

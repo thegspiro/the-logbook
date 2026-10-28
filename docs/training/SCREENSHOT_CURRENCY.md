@@ -9,13 +9,16 @@ Nothing was captured by this pass.
 | --- | --- | --- |
 | 00 | My Account → **Security** → **Passkeys** card with a passkey listed; sign-in page with **Use your passkey** | Create |
 | 08 | Settings → Authentication → **MFA Policy** with **Allow passkeys**; the **Reset MFA** dialog listing a member's passkeys | Create |
-| 07 | Field editor with **Sensitive** ticked; the form builder's **Sensitive** badge; a submission showing the Restricted note | Create |
+| 07 | Field editor with **Sensitive** ticked; the form builder's **Sensitive** badge; a submission with the lock-icon sensitive answers, and one showing the Restricted note | Create |
 | 02 | Compliance Matrix with the member-class switch; a printout with one table per class; requirement form with **Operational members** | Create |
 | 05 | The **Before you print** checklist for a 2" x 1" roll | Create |
 | 15 | Stage settings with **Notify prospect when this stage is completed** | Create |
 | 08 | Email Templates sidebar with the **Prospective Members** group (`08-36-template-search` if it shows the category list) | Re-check |
 | 08 | Settings → Email with Gmail and **Service account** chosen, showing the client ID | Create |
 | 04 | An event page seen by its organizer, with **Check In** but no **Edit** | Create |
+| 00 | `00-23-login-two-factor`: second-factor step now offers the passkey beside the code | Replace |
+| 12 | Add Donor with type Business: **Organization Name** and optional contact | Create |
+| 15 | Email Templates list with **Application Step Completed** and **Application Status Link** | Create |
 
 ## Queued by the October 25 – 26 documentation pass
 

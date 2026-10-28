@@ -380,47 +380,61 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false, // Disabled in production to prevent source code exposure
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            // Check specific sub-framework chunks first (before the
-            // broad 'react' match below catches them)
-            if (id.includes('react-router')) {
-              return 'vendor-router';
-            }
-            if (id.includes('lucide-react')) {
-              return 'vendor-ui';
-            }
+        // Rolldown's own grouping rather than the Rollup-compatible
+        // `manualChunks`, which it runs as one group with no priorities. A
+        // group also takes the dependencies of what it captures, so under
+        // `manualChunks` the first group to reach a shared package kept it:
+        // react-dom's portal entry landed in vendor-dnd, which every dialog
+        // then had to download, and a single catch-all 'vendor' took the rich
+        // text editor, zod and react-hook-form into the first page load of
+        // every route, the sign-in page included. Priorities settle the
+        // shared packages, and the catch-all now takes only what the entry
+        // imports statically (`$initial`); a library only lazy pages use is
+        // left to automatic splitting and arrives with those pages.
+        codeSplitting: {
+          groups: [
+            // React core + react-dom + scheduler ONLY, by path segment, so a
+            // package whose name merely contains "react" (react-hot-toast,
+            // qrcode.react) is not swept in. Those depend on non-React
+            // vendor libs (goober, csstype), and taking them here once made
+            // vendor-react and vendor import each other, failing at runtime
+            // with "Cannot read properties of undefined (reading
+            // 'useLayoutEffect')". Highest priority, so every other group
+            // imports this one rather than taking a copy of react-dom.
+            {
+              name: 'vendor-react',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+              priority: 40,
+            },
+            { name: 'vendor-router', test: /[\\/]node_modules[\\/]react-router[\\/]/, priority: 30 },
+            { name: 'vendor-ui', test: /[\\/]node_modules[\\/]lucide-react[\\/]/, priority: 30 },
+            { name: 'vendor-state', test: /[\\/]node_modules[\\/]zustand[\\/]/, priority: 30 },
             // Scanner/barcode/QR libraries are large (html5-qrcode alone is
             // several hundred KB) and only used by lazy scanner/label/print
-            // pages. Keep them out of the shared 'vendor' chunk — which is
-            // reachable from the eager login graph via axios — so they are
-            // downloaded only when a page that renders them actually loads.
-            if (id.includes('html5-qrcode') || id.includes('jsbarcode') || id.includes('qrcode.react')) {
-              return 'vendor-scanner';
-            }
+            // pages.
+            {
+              name: 'vendor-scanner',
+              test: /[\\/]node_modules[\\/](html5-qrcode|jsbarcode|qrcode\.react)[\\/]/,
+              priority: 20,
+            },
             // Drag-and-drop is only used by kanban/builder pages.
-            if (id.includes('@dnd-kit')) {
-              return 'vendor-dnd';
-            }
-            if (id.includes('zustand')) {
-              return 'vendor-state';
-            }
-            // React core + react-dom + scheduler ONLY. Use path-segment
-            // matching ('/react/') instead of substring matching ('react')
-            // to avoid pulling in third-party packages whose names happen
-            // to contain "react" (e.g. react-hot-toast, qrcode.react).
-            // Those packages may depend on non-React vendor libs (goober,
-            // csstype) which creates a circular chunk dependency:
-            //   vendor-react → vendor → vendor-react
-            // causing "Cannot read properties of undefined (reading
-            // 'useLayoutEffect')" at runtime.
-            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('scheduler')) {
-              return 'vendor-react';
-            }
-            return 'vendor';
-          }
+            { name: 'vendor-dnd', test: /[\\/]node_modules[\\/]@dnd-kit[\\/]/, priority: 20 },
+            // The rich text editor and its ProseMirror core: one chunk, for the
+            // few pages with an editor.
+            {
+              name: 'vendor-editor',
+              test: /[\\/]node_modules[\\/](@tiptap|prosemirror-[^\\/]+|linkifyjs|orderedmap|rope-sequence|w3c-keyname)[\\/]/,
+              priority: 20,
+            },
+            {
+              name: 'vendor',
+              test: /[\\/]node_modules[\\/]/,
+              tags: ['$initial'],
+              priority: 10,
+            },
+          ],
         },
       },
     },

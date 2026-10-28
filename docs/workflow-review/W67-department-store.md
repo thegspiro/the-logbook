@@ -138,7 +138,11 @@ Both now count down. Re-driven: "Ordering closes in 16 days".
 
 **Re-driven:** 44×44 per order checkbox, and they still toggle.
 
-### W67-6 — LOW — The cart is lost on a reload — 🚩 FLAGGED
+### W67-6 — LOW — The cart is lost on a reload — ✅ FIXED (2026-10-27)
+
+> **Fixed (owner decision: keep it in this browser).** The cart is saved per
+> member and per order window and restored on reload; see
+> `docs/KNOWN_LIMITATIONS.md`.
 
 **Saw:** two shirts in the cart, a reload, and "Nothing in your cart yet".
 The cart is held only in memory, so a phone member who switches away and

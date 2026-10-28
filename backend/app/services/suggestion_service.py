@@ -52,6 +52,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
 from app.core.config import settings
+from app.core.utils import list_within_detail_limit
 from app.models.suggestion import (
     Suggestion,
     SuggestionAnonymityMode,
@@ -246,9 +247,11 @@ async def assert_position_not_sole_box_reviewer(
     )
     if names:
         raise ValueError(
-            "This is the only reviewer of these open suggestion boxes: "
-            f"{', '.join(names)}. Add another reviewer or close the box "
-            "before deleting it"
+            list_within_detail_limit(
+                "This is the only reviewer of these open suggestion boxes: ",
+                names,
+                ". Add another reviewer or close the box before deleting it",
+            )
         )
 
 
@@ -493,9 +496,11 @@ class SuggestionService:
             ]
             if refusing:
                 raise ValueError(
-                    f"This box requires anonymity, so it cannot route to "
-                    f"{', '.join(sorted(refusing))}, which does not accept "
-                    "anonymous submissions."
+                    list_within_detail_limit(
+                        "This box requires anonymity, so it cannot route to ",
+                        sorted(refusing),
+                        ", which does not accept anonymous submissions.",
+                    )
                 )
         return stored
 

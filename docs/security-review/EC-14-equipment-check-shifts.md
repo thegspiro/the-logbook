@@ -92,6 +92,12 @@ review, not by its filing officer"`) — closing a real hole: before this,
 
 ### EC-17 — MED — FLAGGED — a non-draft report's substantive fields stay editable by its filing officer indefinitely; pre-existing, not introduced by this delta
 
+> **FIXED 2026-10-27 (owner decision: an edit sends the report back to review).**
+> `update_report` returns a changed submitted report to `pending_review` (an
+> approved one only where review is required), clearing its reviewer and review
+> date. See `docs/KNOWN_LIMITATIONS.md` EC-17 and
+> `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`.
+
 `update_report`'s hardening above only restricts the **`review_status`**
 field itself. The `UPDATABLE_FIELDS` loop that writes `performance_rating`,
 `officer_narrative`, `areas_of_strength`, `areas_for_improvement`,

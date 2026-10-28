@@ -21222,8 +21222,8 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 871,
     anchor:
-      "Quartermaster (inventory.manage) at /inventory/admin: the Needs attention queue",
-    alt: "The top of Inventory Administration: Needs attention with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one",
+      "Quartermaster (inventory.manage) at /inventory/admin: the Waiting for action queue",
+    alt: "The top of Inventory Administration: Waiting for action with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one",
     route: "/inventory/admin",
     expect: "Pending return",
     // Tall enough to reach Requests & Approvals, where the Return Requests
@@ -22595,12 +22595,12 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 2346,
     anchor:
-      "Quartermaster at /inventory/admin: crop to the Needs attention card",
-    alt: "The Needs attention card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button",
+      "Quartermaster at /inventory/admin: crop to the Waiting for action card",
+    alt: "The Waiting for action card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button",
     route: "/inventory/admin",
     expect: "Unresolved departure clearance",
     viewport: { width: 1280, height: 1000 },
-    selector: "section[aria-labelledby='inventory-needs-attention']",
+    selector: "section[aria-labelledby='inventory-waiting-for-action']",
   },
   {
     id: "05-133-medical-supplies-on-trucks",

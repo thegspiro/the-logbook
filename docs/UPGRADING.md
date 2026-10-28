@@ -134,6 +134,29 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Leave and training-waiver reasons are encrypted at rest (2026-10-28)
+
+A migration (`b74bcce55c11`) runs on the next start and **encrypts every existing
+value in place** in `member_leaves_of_absence.reason` and
+`training_waivers.reason` — what a member told an officer about a leave or a
+medical waiver, often a diagnosis or a family illness. The columns were already
+`TEXT`, so only the contents change. Same rules as the date-of-birth change
+above:
+
+- `ENCRYPTION_KEY` must be set when members have reasons on file; with it
+  missing the migration stops with a clear error and changes nothing.
+- **Take the database backup first.** The downgrade decrypts, but only the same
+  `ENCRYPTION_KEY` / `ENCRYPTION_SALT` can read the ciphertext, so losing them
+  loses these reasons.
+- The screens, member data export and anonymisation behave as before. Nothing
+  in the application searches or sorts on either column; a report or query of
+  your own that reads them directly will see ciphertext.
+- `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
+  both columns.
+- **Not part of this change:** shift time-off and shift-swap reasons
+  (`shift_time_off.reason`, `shift_swap_requests.reason`) and the meeting
+  attendance waiver reason (`meeting_attendees.waiver_reason`) remain plaintext.
+
 ### Email addresses are encrypted at rest (2026-10-26)
 
 A migration (`b8236e29ec44`) runs on the next start and **encrypts every stored

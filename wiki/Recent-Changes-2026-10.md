@@ -11,7 +11,9 @@ The engineering audit is
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
 
 - **Passkeys** can be your second sign-in step, instead of or as well as an
-  authenticator code. Administrators can switch them off under MFA Policy.
+  authenticator code: Face ID, a fingerprint or the device PIN. Add up to three
+  under My Account → Security. Administrators can switch them off under MFA
+  Policy. Operators: the backend image needs rebuilding (`docs/UPGRADING.md`).
 - **Email addresses are encrypted at rest.** Search boxes now find an address
   only when you type all of it. Operators: see `docs/UPGRADING.md`.
 - **Forms can have sensitive fields.** Their answers are encrypted and need a
@@ -22,9 +24,13 @@ The engineering audit is
   requirement form has an **Operational members** shortcut.
 - **Applicant emails** in the prospective members pipeline are now templates
   you can edit or switch off.
-- **Label printing** shows a checklist of printer settings first, and long
-  names wrap to two lines.
+- **Label printing** shows a checklist of printer settings first, long names
+  wrap to two lines, and barcodes no longer print as black boxes.
 - **Gmail** can send through a Google Workspace service account.
+- **Donors** that are businesses or agencies need only an organization name.
+- **Editing a draft event** keeps it a draft.
+- **Two-person rule** now also covers budget request decisions and IP-security
+  exception approvals.
 - Screenshots to create or re-check are in
   `docs/training/SCREENSHOT_CURRENCY.md`.
 

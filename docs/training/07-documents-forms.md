@@ -554,6 +554,9 @@ who can manage events. See
    with the time, the sender and every answer except answers to
    [sensitive fields](#sensitive-fields-2026-10-26), which are never exported.
 4. **Delete** removes a single submission.
+5. Answers to [sensitive fields](#sensitive-fields-2026-10-26) appear under a
+   lock icon for members who may read them; anyone else sees the _Restricted_
+   note instead.
 
 ![Form submissions table listing responses with their timestamps](./images/07-07-form-submissions.png)
 

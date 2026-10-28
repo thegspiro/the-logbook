@@ -1940,12 +1940,16 @@ class EquipmentCheckService:
         unknown = supplied_ids - expected_ids
         if unknown:
             raise ValueError(
-                f"Items do not belong to template: {', '.join(sorted(unknown))}"
+                list_within_detail_limit(
+                    "Items do not belong to template: ", sorted(unknown)
+                )
             )
         omitted = expected_ids - supplied_ids
         if require_all and omitted:
             raise ValueError(
-                f"Submission is missing template items: {', '.join(sorted(omitted))}"
+                list_within_detail_limit(
+                    "Submission is missing template items: ", sorted(omitted)
+                )
             )
 
         for item, template_item_id in zip(items_data, submitted_ids):

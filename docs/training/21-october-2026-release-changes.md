@@ -16,6 +16,10 @@ Screenshots to create or replace are in
 | Label printing: Before you print checklist, two-line names           | [05 — Inventory](./05-inventory.md)                                                                             |
 | Gmail service account                                                | [08 — Administration & Reports](./08-admin-reports.md) (written with the change)                                |
 | Email encryption, passkey dependency, switched-off templates         | Operator-facing: [`UPGRADING.md`](../UPGRADING.md)                                                              |
+| Draft events stay drafts when edited                                 | [04 — Events & Meetings](./04-events-meetings.md)                                                               |
+| IP exception needs a second approver                                 | [08 — Administration & Reports](./08-admin-reports.md)                                                          |
+| Budget request cannot be decided by its submitter or owner           | [11 — Finance](./11-finance.md)                                                                                 |
+| Organization donors by name alone                                    | [12 — Grants](./12-grants-fundraising.md)                                                                       |
 
 ---
 

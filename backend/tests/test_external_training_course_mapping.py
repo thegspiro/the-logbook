@@ -52,6 +52,7 @@ from app.services.external_course_mapping import (
     _course_lines,
     normalize_course_title,
 )
+from app.services.external_training_service import ExternalTrainingSyncService
 from app.services.training_compliance import evaluate_member_requirement
 
 PREAMBLE = "Completions (via API),,,,,,,,,,,,,,,,,,\n"
@@ -626,6 +627,71 @@ class TestImportButtonsShareTheImport:
                 ctx.officer,
             )
         assert exc.value.status_code == 400
+
+    async def test_import_failure_does_not_persist_the_raw_exception_text(
+        self, db_session
+    ):
+        """A DB/driver failure during import must not leak into import_error.
+
+        ``import_error`` is served back to the client on
+        ``ExternalTrainingImportResponse`` (app/schemas/training.py), so the
+        text stored there is as client-facing as an HTTPException detail —
+        it just arrives on the next GET instead of on this response.
+        """
+        ctx = await _setup(db_session)
+        await _upload_report(db_session, ctx, _row("x@y.test", *SEPSIS, "T-1"))
+        staged = await _staged(db_session, ctx, "T-1")
+
+        # Captured before the call: the production code's own except branch
+        # rolls back the session, which expires every attribute (including
+        # the id) on every object still attached to it — ctx.provider and
+        # ctx.member included. Reading them afterward would need a lazy
+        # reload that SQLAlchemy's async ORM cannot do outside an awaited
+        # call, the same way the production code never touches them again
+        # after the rollback either.
+        provider_id = uuid.UUID(ctx.provider.id)
+        member_id = uuid.UUID(ctx.member.id)
+        staged_id = uuid.UUID(staged.id)
+        officer = ctx.officer
+
+        unsafe = (
+            "sqlalchemy.exc.IntegrityError: (pymysql.err.IntegrityError) "
+            "(1062, \"Duplicate entry 'abc' for key "
+            "'external_training_imports.ix_external_record_id'\") "
+            "[SQL: INSERT INTO external_training_imports ...] "
+            'File "/app/app/services/external_training_service.py", line 42'
+        )
+
+        with patch.object(
+            ExternalTrainingSyncService,
+            "import_single_record",
+            AsyncMock(side_effect=RuntimeError(unsafe)),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await import_single_record(
+                    provider_id,
+                    staged_id,
+                    ImportRecordRequest(
+                        external_import_id=staged_id,
+                        user_id=member_id,
+                    ),
+                    db_session,
+                    officer,
+                )
+        assert exc.value.status_code == 500
+
+        failed = (
+            await db_session.execute(
+                select(ExternalTrainingImport).where(
+                    ExternalTrainingImport.id == str(staged_id)
+                )
+            )
+        ).scalar_one()
+        assert failed.import_status == "failed"
+        assert failed.import_error is not None
+        assert "sqlalchemy" not in failed.import_error.lower()
+        assert "INSERT INTO" not in failed.import_error
+        assert ".py" not in failed.import_error
 
     async def test_bulk_import_uses_its_default_category(self, db_session):
         ctx = await _setup(db_session)

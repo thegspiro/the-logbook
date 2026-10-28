@@ -16,6 +16,8 @@
  *     without signal. Logout asks before getting here when scorecards are
  *     unsent (AppLayout); sign-in as someone else and an expired session do
  *     not ask.
+ *   - saved department-store carts (localStorage): what a member meant to
+ *     order, including any name they asked to have embroidered
  *
  * Neither was cleared by logout, which cleared only the session flag, the
  * temporary access token, and the in-memory API cache.
@@ -32,6 +34,7 @@ import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
 import { clearAllEquipmentCheckDrafts } from './equipmentCheckDrafts';
 import { clearAllSkillsOffline } from './skillsTestOffline';
+import { clearAllSavedCarts } from '../modules/storefront/utils/savedCart';
 
 export interface PurgeResult {
   /** Shift-report and equipment-check drafts removed from device storage. */
@@ -125,6 +128,10 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
   } catch {
     // As above.
   }
+
+  // Not counted in the result: an unplaced cart is not work the member would
+  // be warned about losing, and the store says nothing of it at sign-in.
+  clearAllSavedCarts();
 
   // A mounted form can have an API request in flight when termination starts.
   // Sweep again after the asynchronous IndexedDB work so a late state update

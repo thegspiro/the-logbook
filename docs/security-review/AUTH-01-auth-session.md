@@ -1,9 +1,235 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), pass 12 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), pass 13 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 13 (2026-10-28) — 0 fixed, 0 new findings; new passkey (WebAuthn) feature reviewed in full and verified good
+
+Step 0 re-verified immediately before branching: `search_pull_requests`
+`head:claude/security-review-` `is:open` → 0 results. PR #3800 (Feature 00,
+Cross-cutting baseline, pass 13, watchdog pickup) had already merged
+(`9c2a5bff`), closing out rotation lap "pass 11" and resetting the table to
+`⬜` for pass 12. Rotation row 01 was the next `⬜`.
+
+**Baseline:** `d5f44cc4` (PR #3684's merge, pass 12). **Head:** `9c2a5bff`
+(current `main`). Repository was shallow and was unshallowed
+(`git fetch --unshallow`) before trusting any commit count, per the standing
+Pitfall #24 risk note. 325 commits between baseline and head (207 non-merge).
+`git diff --stat` across the twelve files pass 12 scoped plus three new
+principal files this pass's own feature adds (`passkey_service.py`,
+`models/passkey.py`, `utils/passkeys.ts`) is non-empty in nine: `auth.py`
+(+479/-4), `schemas/auth.py` (+119/-0), `authService.ts` (+87/-6),
+`dependencies.py` (+23/-4), `security.py` (+66/-0), `authStore.ts` (+14/-2),
+`oauth_service.py` (+3/-1), `apiClient.ts` (+4/-1), plus the three brand-new
+files (`passkey_service.py` 498 lines, `models/passkey.py` 94 lines,
+`utils/passkeys.ts` 74 lines; also new and read in full:
+`components/settings/PasskeySettingsCard.tsx`, 326 lines). `mfa_service.py`,
+`oauth_service.py`'s sibling `consent_service.py`, and `suspicious_ip.py` are
+byte-identical to pass 12 (confirmed with `git diff --quiet`, not assumed from
+the stat output's silence).
+
+### Route inventory — re-enumerated by AST, not diffed
+
+**38 routes, up from 31 at pass 12** — seven new: `POST /auth/mfa/challenge`,
+`GET /auth/passkeys`,
+`POST /auth/passkeys/register-options`,
+`POST /auth/passkeys/register`,
+`DELETE /auth/passkeys/{passkey_id}`,
+`POST /auth/passkeys/recovery-codes`, and
+`POST /auth/step-up/passkey-options`.
+Enumerated with a Python AST walk over every `@router.*` decorator and every
+`Depends(...)` default on the function immediately below it (not grepped from
+the diff, per this skill's repeat-pass instruction), then diffed against the
+same walk run on the pass-12 blob (`git show d5f44cc4:...auth.py`) to get the
+added/removed sets directly rather than by eye. Nothing was removed. Public
+route count moves from 16 to **17** (`mfa_challenge` joins
+`ALLOWLISTED_PUBLIC`, already present in the file with its own justifying
+comment — "Offers the second-factor choices (and a passkey challenge) for
+that same pending sign-in; gated by the same `mfa_pending` token and rate
+limit" — confirmed, not assumed); private moves 15 → **21**. All 31 routes
+pass 12 classified were re-walked and are unchanged (same dependency, same
+permission string) except the four already noted as changed at pass 12 itself
+(`step-up`, `session/kiosk` ×2, `mfa/policy` PUT), which are re-confirmed
+unchanged since.
+
+New routes:
+
+| Route                                  | Auth dependency           | Permission / scoping                                                                                     | Notes                                                                                                                                                                              |
+| -------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/mfa/challenge`             | none (public, pre-login)  | gated by the short-lived `mfa_pending` token + `rate_limit_passkey()` + `enforce_suspicious_ip`          | issuing a challenge proves nothing about the caller, so it is not counted toward account lockout; a bad/expired token **is** counted toward the per-IP tally, same as `/mfa/login` |
+| `GET /auth/passkeys`                   | `get_current_active_user` | self only — lists the caller's own passkeys                                                              | n/a                                                                                                                                                                                |
+| `POST /auth/passkeys/register-options` | `get_current_active_user` | self only; 403 if the org disabled passkeys; `ensure_stepup` once the member already has a second factor | first-factor enrollment is intentionally not step-up-gated (nothing stronger than the password just used exists yet)                                                               |
+| `POST /auth/passkeys/register`         | `get_current_active_user` | self only; same org-toggle check; `ensure_stepup` once already enrolled                                  | issues one-time recovery codes only when this is the member's first second factor                                                                                                  |
+| `DELETE /auth/passkeys/{passkey_id}`   | `get_current_active_user` | self **and** org, via `get_passkey(..., user_id=, organization_id=)`; `ensure_stepup` unconditionally    | 404s a passkey id that exists but belongs to someone else, rather than 403ing — does not confirm the id's existence to another member                                              |
+| `POST /auth/passkeys/recovery-codes`   | `get_current_active_user` | self only; requires a second factor to exist and a fresh passkey step-up                                 | n/a                                                                                                                                                                                |
+| `POST /auth/step-up/passkey-options`   | `get_current_active_user` | self only                                                                                                | 400s with no leak when the caller has no usable passkey on this site                                                                                                               |
+
+### The new feature, reviewed in full against all seven checklist dimensions: passkeys (WebAuthn) as a second factor
+
+`backend/app/services/passkey_service.py` (new, 498 lines),
+`backend/app/models/passkey.py` (new, 94 lines),
+`backend/alembic/versions/20261025_1943_c616fa1bd492_add_user_passkeys.py`
+(new), the seven routes above, every call site `has_second_factor`/
+`has_passkey` replaces a bare `user.mfa_enabled` check at (`login`,
+`_finish_oauth_login`, `mfa_disable`, `step_up`, `_build_current_user_dict`,
+`AuthService.authenticate_user`'s lockout-clear), and the frontend half
+(`utils/passkeys.ts`, `components/settings/PasskeySettingsCard.tsx`,
+`authService.ts`, `authStore.ts`). Read in full, not spot-checked.
+
+- **Dimension 1 (auth coverage) — correct.** Every management route requires
+  `get_current_active_user`; the one pre-auth route (`mfa_challenge`) is
+  allowlisted with a named compensating control and was already added to
+  `tests/test_endpoint_auth_coverage.py`'s `ALLOWLISTED_PUBLIC` — re-ran the
+  test, passes.
+- **Dimension 2/3 (self-scoping, tenant isolation) — correct, verified by
+  reading the query, not by trusting the route name.** Every passkey query in
+  `passkey_service.py` filters `UserPasskey.user_id == str(user.id)`; the
+  delete path additionally filters `organization_id` even though `user_id`
+  alone already excludes every other tenant (belt-and-suspenders, matching
+  XC-3's letter). No endpoint takes another member's id as a path or body
+  parameter. `has_passkey`/`has_second_factor`/`usable_passkey_count` are
+  called with `str(user.id)` sourced from the authenticated dependency, never
+  from client input, at every call site (`auth.py`, `auth_service.py`,
+  `dependencies.py`) — confirmed by reading each call site, not inferred from
+  the function names.
+- **Dimension 2 (separation / step-up as defense-in-depth) — correct.**
+  Changing a member's own second factors with only a live session (no
+  step-up) would let a stolen session plant a passkey of the attacker's
+  choosing or delete the owner's real one; `_require_stepup_once_enrolled` /
+  `ensure_stepup` gate every mutating passkey route **once the member already
+  has a second factor**, and deliberately do not gate the _first_ enrollment
+  (nothing stronger than the sign-in they just completed exists yet to step
+  up with) — matching the exact reasoning already applied to authenticator
+  setup. `test_step_up_is_on_exactly_the_documented_handlers`'s `STEPUP_HANDLERS`
+  set and `test_step_up_always_follows_the_permission_check` were re-run;
+  both pass (these specific routes use `ensure_stepup` as a direct call
+  rather than the `require_stepup` dependency the AST sweep walks, which is
+  why they are not newly added to that pinned set — the sweep's own docstring
+  scopes it to the `Depends(require_stepup)` shape, and `set_mfa_policy` is
+  still the one route using that shape in this feature).
+- **Dimension 3 (capacity-check locking, Pitfall #27) — correct, mechanism
+  confirmed by reading the lock, not merely by the docstring's claim.**
+  `registration_options` does an unlocked read for an early, friendly error
+  message; `verify_registration` repeats the check under
+  `select(User.id)....with_for_update()` **then**
+  `select(UserPasskey.id)...with_for_update()` before inserting — locking the
+  parent row first and then the counted rows, exactly the two-step shape
+  Pitfall #27 requires. Two concurrent registrations finishing together
+  cannot both slip in under `MAX_PASSKEYS_PER_MEMBER`.
+- **Dimension 4 (injection/untrusted output) — correct.** No raw SQL, no
+  `.like()`. `PasskeyRegisterRequest.credential` and `StepUpRequest`/
+  `MFALogin.passkey_credential` are bounded to 64 KB
+  (`_bounded_credential`/`_MAX_CREDENTIAL_BYTES`) before `py_webauthn` ever
+  sees them — an abuse-resistance control (dimension 6) as much as an
+  injection one, since the WebAuthn JSON is otherwise attacker-shaped. The
+  member-chosen passkey `name` (free text, ≤100 chars) reaches three sinks:
+  the audit log (structured JSON, not HTML), the in-app `NotificationLog`
+  (rendered by `NotificationCard.tsx` as a plain JSX text child — React
+  escapes it — confirmed by reading the component, not assumed), and the
+  security-notification email, which runs the **whole** message through
+  `html_escape()` before `wrap_email_body` (`security_notifications.py:80,148`,
+  AUTH-22's fix, re-confirmed unchanged). No stored-XSS path.
+- **Dimension 5 (data exposure) — correct, and improved.** The OAuth-login
+  audit events (`oauth_mfa_challenge`, `oauth_login`) dropped the member's
+  `email` from `event_data` as part of this same feature's diff — PII that
+  used to reach the audit-log payload and no longer does (checklist §5's
+  "PII/PHI absent from audit logs", now true here where it previously was
+  not; not a regression to fix, an improvement already present on `main`).
+  `PasskeyResponse` exposes only `id`, `name`, `created_at`, `last_used_at`,
+  `backed_up` — never the public key, the credential id, or the sign
+  counter. Errors from the WebAuthn library (`WebAuthnException`/`KeyError`/
+  `TypeError`/`ValueError`) are caught and replaced with a fixed, generic
+  message at both verify sites (`passkey_service.py:376-380, 488-492`) —
+  never `str(exc)` — so a library internal (which can include base64 of the
+  attestation object) cannot reach the client.
+- **Dimension 6 (abuse resistance) — correct.** `rate_limit_passkey()` (20/60s,
+  its own bucket, documented reasoning for why challenge-issuing stays off the
+  stricter login bucket) covers every passkey management route and
+  `mfa_challenge`; the three routes that check a credential
+  (`passkeys/register`, implicitly `mfa_login` and `step_up` which already
+  carried it) stay on `rate_limit_login()`. `_MAX_OPEN_CHALLENGES = 5` per
+  member caps `webauthn_challenges` row growth per user, with best-effort
+  expiry cleanup on every new challenge issue — considered and not raised as
+  a Pitfall #9-shaped finding: unlike an in-memory dict, this is a durable
+  table with a **per-user** cap of 5, so worst case is 5 rows × the
+  department's membership (tens to a few hundred, per this codebase's own
+  stated scale assumption, same reasoning AUTH-4 already applied to an
+  unbounded roster query) — not an attacker-scalable unbounded sink.
+  `MAX_PASSKEYS_PER_MEMBER = 3` is an explicit, deliberate business cap
+  ("Agreed with the department: a phone, a laptop and one spare").
+- **Dimension 7 (schema/migration integrity) — correct.** Both new tables use
+  `ondelete="CASCADE"` (not `SET NULL`, so Pitfall #2 is n/a) and are
+  `nullable=False` on every FK/required column.
+  `20261025_1943_c616fa1bd492_add_user_passkeys.py` guards both
+  `op.create_table` calls with `_has_table()` — Pitfall #26's `create_all`
+  tolerance — and the uniqueness constraint lives on `credential_id_hash` (a
+  fixed-width SHA-256 hex digest) rather than on `credential_id` itself, with
+  the model's own comment explaining why (the WebAuthn spec allows credential
+  ids up to 1023 bytes, which base64url-encodes past what a MySQL utf8mb4
+  unique index can cover). `validate_migrations.py --strict` re-run: single
+  head, re-confirmed.
+- **The library choice itself, checked rather than assumed (Pitfall #34):**
+  `webauthn==3.0.1` (PyPI, homepage `github.com/duo-labs/py_webauthn`) and
+  `@simplewebauthn/browser@14.0.0` (npm, repository
+  `github.com/MasterKale/SimpleWebAuthn`) both resolve to the real,
+  well-known WebAuthn libraries their names claim — checked against the
+  registries directly, not recalled — and both are pinned exactly (no `^`/`~`)
+  in `requirements.txt`/`package.json`, matching their neighbours.
+- **Considered, not raised:** `passkey.sign_count` is updated unconditionally
+  on every successful authentication rather than rejecting a counter that
+  moved backward (the classic cloned-authenticator signal). Not a finding:
+  the model's own comment states the reason — platform/synced passkeys
+  (iCloud Keychain, Google Password Manager, the dominant real-world passkey
+  shape) report a sign count of 0 on every use, so treating "the counter
+  didn't increase" as a clone signal would make every synced passkey look
+  cloned on its second use. The actual second-factor property here is "the
+  device checked a biometric or PIN" (`UserVerificationRequirement.REQUIRED`,
+  enforced on both registration and authentication, confirmed by reading both
+  call sites), not the counter.
+
+### Standing items — reconfirmed unchanged from pass 12
+
+**AUTH-23 (MED, OPEN/FLAGGED)** re-verified still accurate and still the only
+open finding: `step_up` (`auth.py:1570-1666`) still has no account-tied
+lockout on its password/TOTP branches. The new passkey branch inside the same
+handler does not change this finding's reasoning — a passkey cannot be
+guessed (there is no secret small enough to brute-force; the private key
+never leaves the authenticator), so adding it does not widen the gap AUTH-23
+describes, and the password/TOTP branches it describes are byte-identical in
+behavior to pass 12's read of them. No change to `docs/KNOWN_LIMITATIONS.md`'s
+existing entry needed.
+
+AUTH-15, AUTH-17, AUTH-21 and AUTH-22 remain closed (pass 8's and pass 10's
+fixes); AUTH-4 (informational, unbounded roster query, accepted as an
+app-wide pattern out of scope for a single-endpoint fix) remains accepted
+and unchanged. Reconfirmed by grep against `docs/KNOWN_LIMITATIONS.md` — no
+entry beyond AUTH-23 exists for this feature.
+
+### Completion gate (pass 13)
+
+| Check                                                                                                                                                                                                                                                              | Result                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                                                                                                                    | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                                                                                           | ✅ clean, 2706 files unchanged                                              |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                                                                                        | ✅ clean                                                                    |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                  | ✅ single head `0d9897752425`, 666 revisions                                |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                              | ✅ 279 routes, 0 errors/0 warnings                                          |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification or stepup or kiosk or passkey or webauthn"`)                                                           | ✅ 1494 passed, 2 skipped (environment-only — `pywebpush`, Docker registry) |
+| standing guards (`account_status_gates`, `auth_lockout_race`, `auth_refresh_rotation`, `capacity_locking`, `endpoint_auth_coverage`, `like_escaping`, `mfa_policy`, `org_scoping_ratchet`, `password_expiry_gate`, `session_limits`, `sign_in_audit`) run directly | ✅ 205 passed                                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                 | ✅ 0 errors                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                               |
+
+No guard test added this pass: nothing was fixed, and the feature's own new
+behavior is already covered by its own test file (`tests/test_passkeys.py`,
+58 tests, re-run directly: 58 passed — included in, not separate from, the
+scoped-test count above) rather than by a cross-cutting sweep this review
+would add to.
+
+Rotation row 01 moves to `✅`.
 
 ---
 

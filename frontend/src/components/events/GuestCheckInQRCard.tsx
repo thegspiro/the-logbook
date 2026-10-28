@@ -9,12 +9,19 @@
  * the code's token is a credential for an unauthenticated write, and the QR
  * page is open to every member. The token is fetched only while this card is
  * shown and is never cached (see `getGuestCheckInLink`).
+ *
+ * Like the member code, the guest code is withheld until check-in opens and
+ * again once it closes. A code on screen is a code someone photographs: shown
+ * early, visitors scan it before the event and meet a sign-in that refuses
+ * them. Whether it is open is the backend's call (`is_open`, the same rule the
+ * public sign-in enforces), refreshed on the member page's 30-second cadence so
+ * the code appears when the window opens without a reload.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
-import { Check, Copy, Loader2, Printer, RefreshCw, UserPlus } from 'lucide-react';
+import { Check, Copy, Loader2, Printer, QrCode, RefreshCw, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
@@ -22,6 +29,11 @@ import { useConfirm } from '../../contexts/ConfirmContext';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { copyToClipboard } from '../../utils/clipboard';
 import { buildGuestCheckInUrl } from '../../constants/nfc';
+import { useTimezone } from '../../hooks/useTimezone';
+import { formatShortDateTime } from '../../utils/dateFormatting';
+import type { GuestCheckInLink } from '../../types/event';
+
+const REFRESH_INTERVAL_MS = 30000;
 
 interface GuestCheckInQRCardProps {
   eventId: string;
@@ -36,6 +48,8 @@ interface GuestCheckInQRCardProps {
   showFullPageLink?: boolean;
   /** Offer a Print button; the caller decides what the printout holds. */
   onPrint?: () => void;
+  /** The department's timezone, when the caller has it; else the viewer's. */
+  timezone?: string | null | undefined;
 }
 
 export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
@@ -46,10 +60,13 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
   showOffHint = false,
   showFullPageLink = false,
   onPrint,
+  timezone,
 }) => {
   const canManage = useAuthStore((s) => s.checkPermission)('events.manage');
   const { confirm } = useConfirm();
-  const [token, setToken] = useState<string | null>(null);
+  const userTz = useTimezone();
+  const tz = timezone || userTz;
+  const [link, setLink] = useState<GuestCheckInLink | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
@@ -66,13 +83,12 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
     // a code a manager printed yesterday is the one shown today.
     const load = async () => {
       const current = await eventService.getGuestCheckInLink(eventId);
-      if (current.guest_token) return current.guest_token;
-      const issued = await eventService.issueGuestCheckInLink(eventId);
-      return issued.guest_token;
+      if (current.guest_token) return current;
+      return eventService.issueGuestCheckInLink(eventId);
     };
     load()
       .then((value) => {
-        if (!cancelled) setToken(value);
+        if (!cancelled) setLink(value);
       })
       .catch((err: unknown) => {
         if (!cancelled) setFailed(getErrorMessage(err, 'The guest QR code could not be loaded.'));
@@ -80,8 +96,18 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    // A failed refresh keeps what is on screen: the next one, 30s on, corrects it.
+    const interval = setInterval(() => {
+      eventService
+        .getGuestCheckInLink(eventId)
+        .then((value) => {
+          if (!cancelled && value.guest_token) setLink(value);
+        })
+        .catch(() => undefined);
+    }, REFRESH_INTERVAL_MS);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [eventId, shouldLoad]);
 
@@ -110,7 +136,11 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
     );
   }
 
-  const url = token ? buildGuestCheckInUrl(token) : '';
+  const url = link?.guest_token ? buildGuestCheckInUrl(link.guest_token) : '';
+  const isOpen = Boolean(link?.is_open);
+  // Before the window rather than after it (or locked by a finalized roster):
+  // only then is "it will appear" true.
+  const notYetOpen = Boolean(link?.check_in_opens_at && new Date(link.check_in_opens_at) > new Date());
 
   const handleCopy = async () => {
     if (!url) return;
@@ -136,7 +166,7 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
     setRotating(true);
     try {
       const rotated = await eventService.rotateGuestCheckInLink(eventId);
-      setToken(rotated.guest_token);
+      setLink(rotated);
       toast.success('Guest QR code reset. The old code no longer works.');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'The guest QR code could not be reset.'));
@@ -144,6 +174,30 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
       setRotating(false);
     }
   };
+
+  const fullPageLink = showFullPageLink ? (
+    <Link to={`/events/${eventId}/qr-code`} className="btn-secondary inline-flex items-center gap-2">
+      Show full size
+    </Link>
+  ) : null;
+
+  // Offered while the code is hidden too: revoking a code that leaked before
+  // the event is exactly when a reset is wanted.
+  const resetButton = (
+    <button
+      type="button"
+      onClick={() => void handleRotate()}
+      disabled={rotating}
+      className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1.5 text-sm disabled:opacity-50"
+    >
+      {rotating ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      ) : (
+        <RefreshCw className="h-4 w-4" aria-hidden="true" />
+      )}
+      Reset code
+    </button>
+  );
 
   return (
     <section className="card p-6 text-center" aria-labelledby="guest-qr-heading" data-testid="guest-qr-card">
@@ -174,7 +228,7 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
         <div className="alert-danger text-left" role="alert">
           <p className="text-sm">{failed}</p>
         </div>
-      ) : url ? (
+      ) : url && isOpen ? (
         <>
           <div className="mb-4 flex justify-center">
             <div className="qr-container">
@@ -213,24 +267,36 @@ export const GuestCheckInQRCard: React.FC<GuestCheckInQRCardProps> = ({
                 Print Guest QR Code
               </button>
             )}
-            {showFullPageLink && (
-              <Link to={`/events/${eventId}/qr-code`} className="btn-secondary inline-flex items-center gap-2">
-                Show full size
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleRotate()}
-              disabled={rotating}
-              className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1.5 text-sm disabled:opacity-50"
+            {fullPageLink}
+            {resetButton}
+          </div>
+        </>
+      ) : link ? (
+        <>
+          {/* The same placeholder the member code shows, and for the same
+              reason: a greyed-out code is still a scannable one. */}
+          <div className="mb-4 flex justify-center">
+            <div
+              className="border-theme-surface-border text-theme-text-muted flex h-[250px] w-[250px] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center"
+              data-testid="guest-qr-placeholder"
             >
-              {rotating ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              )}
-              Reset code
-            </button>
+              <QrCode className="h-12 w-12" aria-hidden="true" />
+              <span className="text-sm font-medium">
+                {notYetOpen ? 'QR code hidden until check-in opens' : 'QR code hidden — check-in is closed'}
+              </span>
+            </div>
+          </div>
+          {link.closed_reason && <p className="text-theme-text-secondary mb-2 text-sm">{link.closed_reason}</p>}
+          {link.check_in_opens_at && link.check_in_closes_at && (
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Guests can sign in from {formatShortDateTime(link.check_in_opens_at, tz)} to{' '}
+              {formatShortDateTime(link.check_in_closes_at, tz)}.
+              {notYetOpen ? ' The code appears here when check-in opens.' : ''}
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 print:hidden">
+            {fullPageLink}
+            {resetButton}
           </div>
         </>
       ) : null}

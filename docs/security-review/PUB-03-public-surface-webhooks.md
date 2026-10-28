@@ -1,6 +1,188 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 12 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (this PR)
+
+---
+
+## Pass 13 (2026-10-28, watchdog pickup) — a new event-QR guest entrance, a kiosk lookup/confirm mirror, a forms embed-policy endpoint and an applicant calendar download, all reviewed fresh; route count corrected (37, not 40) from re-derivation; 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed via
+`ListAgents`. Step 0: `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results after PR
+#3803 (Feature 02, Permissions & roles, pass 13) merged (`d2cd227f`). Row 03
+confirmed the next `⬜` row on a freshly-pulled `main`.
+
+**Baseline:** `e6da6486` (pass 12's merge). **Head:** `d2cd227f`.
+`git diff e6da6486 HEAD --stat -- backend/app/api/public/
+backend/app/core/public_portal_security.py
+backend/app/services/integration_services/webhook_service.py
+backend/app/utils/webhook_replay.py` touches **four** files:
+`display.py` (+284/-19), a brand-new `event_guest.py` (417 lines), `forms.py`
+(+57/-2) and `portal.py` (+51/-2). The three webhook receivers,
+`public_portal_security.py`, `webhook_service.py` and `webhook_replay.py` are
+byte-identical to pass 12's reviewed state (same diff command, no hunks). No
+migration touches a table only this feature's handlers write to; two
+migrations in the window add a column this feature's handlers now read
+(`guest_check_in_token`) or rely on correct behavior of
+(email-at-rest encryption), both reviewed below under Schema & migration
+notes.
+
+**Route count correction.** Pass 12 stated 40 routes and showed its
+arithmetic (28 after pass 7, +9, +1, +2). Re-deriving directly from the
+baseline commit (`git show e6da6486:... | ast-walk`, cross-checked against a
+plain `grep -c '^@router\.\(get\|post\|put\|patch\|delete\)'`, both methods
+agreeing) finds **37** routes at that commit, not 40 — `display.py` had 4
+(not implied higher), `forms.py` 2, `portal.py` 6, and the other ten files
+unchanged from their last-reviewed counts. The discrepancy is in a prior
+pass's arithmetic, not a hidden or miscounted route in the app itself: no
+route is missing from either count. Corrected baseline: **37**. New total
+after this pass's additions (`display.py` +2, `forms.py` +1, `portal.py` +1,
+`event_guest.py` +4 new file): **45**, independently confirmed by both
+methods above against the current head.
+
+**Not the same number as `check_route_permissions.py --strict`'s 279**,
+and that is expected rather than a discrepancy to resolve: that script (read
+this pass to confirm, rather than assumed from its name) checks **frontend**
+routes against `APPLICATION_PAGES.md`, not backend API endpoints — a
+different count for a different surface. It is unchanged from PERM-02 pass
+13's same-week figure because none of this pass's additions are new frontend
+pages; every one of them is a backend endpoint an existing public page (the
+event guest-sign-in page, the kiosk display, the embeddable form, the
+applicant status page) now calls.
+
+**New public surface, read in full:**
+
+- **`app/api/public/event_guest.py` (new, 4 routes, prefix
+  `/public/v1/event-guest`)** — the room-kiosk guest sign-in
+  (`display.py`), now reachable through the event's own QR code for a venue
+  with no kiosk. `GuestToken` is a 43-char path parameter (matches
+  `secrets.token_urlsafe(32)`'s output length) resolved only through
+  `Event.guest_check_in_token` (`GuestCheckInService.get_event_by_link_token`,
+  `backend/app/services/guest_check_in_service.py:761-785`) — the token
+  alone decides the event and, through it, the organization; there is no
+  client-supplied org or event id anywhere in this module. Every failure
+  mode (malformed token, unknown token, cancelled/draft event,
+  `allow_guest_check_in` off) answers the same 404, so the endpoint cannot be
+  used to probe which tokens are live. The four handlers **import their
+  gates from `display.py` rather than restating them** (`_rate_limit_display`,
+  `_rate_limit_guest_check_in`, `_rate_limit_guest_lookup`,
+  `_assert_guest_sign_in_open`, `_require_email_first`) — deliberately, per
+  the module's own docstring, so the two entrances cannot drift apart and a
+  caller gains no allowance by alternating between them. Confirmed identical
+  gate functions by reading both modules' imports, not assumed from the
+  docstring's claim. A honeypot field (`hp_website`) short-circuits to the
+  same plausible success/not-found response bots get elsewhere in this
+  feature. Confirm-token binding (`GuestCheckInService.issue_confirm_token` /
+  `read_confirm_token`, lines 542-599) is a signed JWT (`HS256`,
+  `settings.SECRET_KEY`) carrying `evt`/`loc`/`org` claims checked by exact
+  match on read — `loc` is the empty string for this module's calls (vs. an
+  actual location id for the kiosk path), so a token issued at a kiosk is
+  never accepted through an event link and vice versa; `exp` is a required
+  claim with a 10-minute TTL. The per-event daily cap
+  (`daily_cap_exceeded`, Redis `INCR`) is spent only after every rejection
+  gate, matching the ordering the module's docstring states and
+  `display.py`/`event_requests.py` (EV-19) already establish elsewhere in
+  this app.
+- **`app/api/public/display.py`'s new `guest_lookup`/`guest_confirm`
+  (+2 routes)** — the kiosk-side mirror of the same lookup/confirm pair,
+  scoped through `_resolve_guest_event` (display code → location →
+  event, `organization_id` taken from the resolved `location`, never the
+  request) rather than the link token. Same gate ordering, same honeypot,
+  same audit-log shape (`event_guest_lookup`/`event_guest_checkin`, email
+  itself never recorded — only the outcome and prospect id, matching
+  checklist §5's "no PII/PHI in audit payloads"). `GuestLookupService`'s
+  underlying `lookup_guest` (`guest_check_in_service.py:492-527`) was
+  re-checked against the new email-at-rest encryption (below) rather than
+  assumed unaffected because unchanged this pass.
+- **`app/api/public/forms.py`'s new `GET /{slug}/embed-policy`
+  (+1 route)** — answers nginx's `auth_request` for `/embed/f/<slug>` with
+  the `Content-Security-Policy: frame-ancestors` value to apply, read from
+  org settings' free-form JSON (`forms.embed_allowed_origins`) and from
+  `form.allow_embed`. The value is written into both a response header and
+  the response body, so the two inputs that reach it —
+  the slug (used only to key a lookup; validated by `SLUG_PATTERN.match`
+  before querying) and the stored origin list — were checked for anything
+  that could end the header early or inject a second directive.
+  `app/utils/embed_origins.py`'s `valid_embed_origins`/`normalize_embed_origin`
+  is the gate: an anchored regex (`^https://...\Z`) accepting only a
+  lowercase host, optional port, **no path, no wildcard, no character
+  outside `[a-z0-9.-:]`** — so no space, semicolon, quote or CRLF can reach
+  either the header or the body, and an invalid stored entry is dropped
+  (not raised) so one bad entry can't 500 every embedded form in the org.
+  Capped at 10 origins. A slug matching nothing, or a form with `allow_embed`
+  off, answers `'none'` with a 200 (never a 404/500) — same "no oracle"
+  shape as this feature's other public lookups. `Cache-Control: no-store`
+  is set so nginx's `auth_request` subrequest is never served a stale
+  policy. Rate-limited via the module's existing `_rate_limit_view`
+  (unchanged, reused).
+- **`app/api/public/portal.py`'s new `GET
+/application-status/{token}/next-meeting.ics` (+1 route)** — a calendar
+  file for the meeting the applicant's status page already shows, gated by
+  the same bearer token as that page
+  (`MembershipPipelineService._load_prospect_for_status_page`, matched by
+  `ProspectiveMember.status_token_hash == hash_status_token(token)` — a
+  hash comparison, not a plaintext lookup) and refused (404) wherever the
+  page would show no meeting card, so it discloses nothing the page does
+  not. `validate_ip_rate_limit(request)` runs as the handler's first line,
+  before any DB work. The filename in `Content-Disposition` is the
+  hardcoded literal `"next-meeting.ics"` — never attacker- or
+  event-title-influenced, so no header-injection surface there. The ICS
+  body is built by the already-reviewed `generate_ical_feed`
+  (`app/services/integration_services/ical_service.py`), whose `_escape_ics`
+  (lines 124-139) backslash-escapes `\`, `;`, `,` and collapses every CR/LF
+  variant to `\n` before `event.title`/location text is interpolated into
+  the file — the standard ICS-injection guard, confirmed present and
+  unchanged, not merely assumed because this is a GET.
+
+**Email/phone-at-rest encryption's effect on this feature, checked rather
+than assumed compatible:** `EventExternalAttendee.email`/`.phone` are now
+`EncryptedText` (migration `b8236e29ec44`, below), with a new `email_hash`
+column replacing the old plaintext `ix_ext_attendees_email` index. This
+feature's only read of attendee email is `GuestCheckInService.lookup_guest`,
+which never queries `EventExternalAttendee` at all — it checks
+`ProspectiveMember` (through `MembershipPipelineService`, itself migrated to
+hash-based lookup under the same revision, out of this feature's file set)
+and `User.email_hash.in_(email_fingerprints(normalized))`
+(`guest_check_in_service.py:513-523`) — a fingerprint-set match, not a
+plaintext comparison, so the encryption migration does not silently break
+guest recognition. `check_in_guest`'s write path (which does populate
+`EventExternalAttendee.email`) was not re-read in full this pass — it is
+unchanged by this diff and was already in scope under a prior pass's
+read of `guest_check_in_service.py`; noted here rather than re-claimed as
+newly verified.
+
+**RFC 8414/9728 metadata endpoints, PayPal/Documenso/Cal.com/Salesforce
+webhook handlers, and the rate-limited-OAuth-server routes (`mcp_oauth.py`):**
+unchanged, byte-identical to pass 12's already-fully-reviewed state;
+re-confirmed via the same diff command (no hunks) rather than re-read line by
+line this pass, per Step 3's instruction to spend a repeat pass's reading on
+what changed.
+
+**Nothing to fix, nothing to flag.** Every new or touched route carries a
+named compensating control (bearer token, signed confirm token, rate limit,
+honeypot, or — for the embed-policy endpoint, which needs none because it
+performs no write and discloses only a department's own publish-time
+choice — a strict output-origin whitelist). No `KNOWN_LIMITATIONS.md` entry
+needed.
+
+### Completion gate (pass 13)
+
+| Check                                                                                                                                                                                                                                                                                                         | Result                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                                                                                                                                                         | ✅ 0 violations                                       |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                                                                                                                                                                                | ✅ clean                                              |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                                                                                                                                                                             | ✅ clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                             | ✅ single head `0d9897752425`, 666 revisions          |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                         | ✅ 279 routes, 0 errors, 0 warnings                   |
+| scoped pytest (`-k "public or webhook or paypal or salesforce or integrations or minutes or mcp_oauth or calendar or finance_approval or branding or kiosk or guest or event_guest or embed or legal or display or security_txt or portal or next_meeting" -m "not integration and not slow and not docker"`) | ✅ 1509 passed, 1 skipped (`pywebpush`, pre-existing) |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, DB-schema/`SET NULL`, baseline member grants, endpoint-auth coverage, PII-cache exclusions)                                                                                             | ✅ 208 passed                                         |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                            | ✅ 0 errors                                           |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                 | ✅ 0 errors, 0 warnings                               |
+
+No `KNOWN_LIMITATIONS.md` change needed — nothing flagged this pass. Rotation
+row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments).
 
 ---
 

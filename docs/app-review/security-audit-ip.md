@@ -1,7 +1,61 @@
 # Application Review — Security / Audit / IP (Tier B, 2nd pass)
 
 **Prefix:** `SEC2` · **Iteration:** B23 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-26 (pass 5)
+
+---
+
+## Pass 5 (2026-10-26) — IP exception approve, reject and revoke were unlocked check-then-writes (1 fixed)
+
+The null-update method of B18–B22 has nothing to drive here: this module has no
+route that updates a model row from a partial payload. Its `PUT`/`PATCH` routes
+(`/security/weekly-report`, `/auth/mfa/policy`, `/organization/settings/auth`) write
+settings blobs, and the rest are actions. So the pass used the lens that fits an
+approval workflow, pitfall #27: a state change that reads a row, checks its status,
+then writes must read it under a lock, or two callers both pass the check.
+
+**Already right, and tested:** `acknowledge_alert` and `resolve_alert` read the alert
+`FOR UPDATE`, refuse a repeat with `ALERT_ACTION_ALREADY`, and leave the first
+acknowledger on the record (`test_security_alert_workflow.py`). The audit chain's head
+is a locked row with the locking read as the transaction's first, which is the
+snapshot subtlety #27 describes. The weekly report stamps `last_sent_at` after sending,
+the at-least-once order, which suits a report; a failed send is retried on the next tick
+and a due-slot is not resent (`test_security_weekly_report.py`).
+
+### SEC2-2 — LOW/MED — IP exception approve, reject and revoke raced each other — ✅ FIXED
+
+`approve_exception`, `reject_exception` and `revoke_exception` read the `IPException`
+with a plain select, required `approval_status` to be pending (or approved, for revoke),
+and then wrote the new status together with who acted and when. Two administrators
+acting on one request at once both passed the check. An approve and a reject could each
+commit, leaving the exception `approved` with a rejection's attribution beside it, or a
+second approver replacing the first's `approved_by`, `approved_at` and `valid_until`.
+That is an allowlist entry whose recorded decision does not match its effect, and it
+writes two audit events for one request.
+
+**Fixed:** the three lookups are `FOR UPDATE`. Each endpoint calls the service first, so
+the locked select is the exception's first load in the session and returns current
+values. The race needs two connections, so the new unit test asserts the cause rather
+than reproducing it: each lookup is a locking read. All three cases failed with the
+service change stashed and pass with it.
+
+### Not done
+
+- The race itself is not reproduced end to end; the test pins the lock, as
+  `test_capacity_locking.py` does for the capacity checks.
+- `request_ip_exception` does not refuse a second pending request for the same address
+  from the same member; two pending rows are harmless but noisy, and it was left alone.
+- The other five checklist dimensions were not re-run beyond the scans here; passes 1–4
+  stand, including SEC-2's open tail-truncation residual (needs an external chain-tip
+  attestation, infrastructure rather than code).
+- All 37 endpoints in `security_monitoring.py`, `ip_security.py`, `audit_logs.py` and
+  `error_logs.py` (16, 12, 3 and 6) carry an auth dependency (an AST scan).
+
+**Completion gate (pass 5):** `flake8 app/ tests/` 0 · `black --check app/ tests/` clean ·
+no frontend change · new `test_ip_exception_state_locking.py` 3 pass, 3 fail without the
+service change, marked `unit` and DB-free · 1,298 tests selected by
+`ip_|_ip|security|audit|geo|alert|error_log|capacity_locking` pass.
 
 ---
 
