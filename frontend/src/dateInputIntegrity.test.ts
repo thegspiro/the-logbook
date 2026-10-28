@@ -46,4 +46,18 @@ describe('date input containment', () => {
       expect(body).toContain('max-width: 100%');
     }
   );
+
+  // The width caps alone still overflowed on an iPad: iOS's native theme lays
+  // the control out regardless of them until the appearance is dropped.
+  it.each(['date', 'time', 'datetime-local', 'month'])(
+    'drops the native appearance of input[type=%s] on iOS WebKit',
+    (type) => {
+      const base = baseLayerBlocks(CSS).join('\n');
+      const ios = base.match(/@supports \(-webkit-touch-callout: none\)\s*\{([\s\S]*?)\n {2}\}/);
+      expect(ios, 'no iOS-scoped @supports block in @layer base').not.toBeNull();
+      const rule = (ios?.[1] ?? '').match(new RegExp(`input\\[type='${type}'\\][^{]*\\{([^}]*)\\}`));
+      expect(rule?.[1] ?? '').toContain('-webkit-appearance: none');
+      expect(rule?.[1] ?? '').toContain('appearance: none');
+    }
+  );
 });
