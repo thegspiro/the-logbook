@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 (this PR)
 
 ---
 
@@ -109,6 +109,173 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 13 (2026-10-28)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 matches immediately
+after PR #3807 (Feature 05, Finance & approvals, pass 13) merged — confirmed
+via `pull_request_read` (`merged: true`, `2026-10-28T12:21:33Z`). Row 05 is
+`✅`; row 06 (Elections & ballots) is the next `⬜` row, matching PR #3807's own
+"Next" note. **Watchdog pickup:** the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`
+returned no reachable peer on this machine) — PR #3807's own write-up recorded
+the same condition a few hours earlier, and every pass back through pass 10
+has recorded it too.
+
+**Baseline and delta.** Baseline is pass 12's merge (`e660a9c3`, PR #3691,
+2026-10-25). Unlike pass 12's true-zero delta, `git diff --stat
+e660a9c3..origin/main` across the feature's established scope
+(`api/v1/endpoints/elections.py`, `services/election_service.py`,
+`services/minutes_election_filing.py`, `schemas/election.py`,
+`models/election.py`, `utils/election_ballot_pdf.py`,
+`utils/election_pdf_style.py`, `mcp/tools/elections.py`, and the frontend
+`modules/elections` tree) shows a real but small change: 56 insertions, 7
+deletions across `elections.py`, `election_service.py` and `schemas/
+election.py` only. None of the 37 migrations merged in this window (contact
+and email encryption, passkeys, sensitive form fields, event guest check-in,
+leave/waiver encryption, several head merges) touch any of the 7 election
+tables — confirmed by grepping every new migration's `op.*` calls for
+`elections|candidates|votes|voting_tokens|manual_ballot|saved_ballot`: no
+hits.
+
+**The diff itself, reviewed line by line, is three already-shipped fixes**
+(not part of this rotation — landed on `main` by other work between passes),
+verified correct rather than re-implemented:
+
+1. **Dangling write-in merges, closed.** Deleting the target of a write-in
+   merge used to leave the merged variant's `merged_into_candidate_id`
+   pointing at a row that no longer existed — the column carries no foreign
+   key — so the variant's votes were silently credited to a missing
+   candidate and vanished from the tally. `ElectionService
+.release_merged_write_ins()` (`election_service.py:5844`) now clears the
+   merge before every candidate-deletion path: the `DELETE
+/{election_id}/candidates/{candidate_id}` endpoint
+   (`elections.py:2712`, its audit event now records
+   `write_in_merges_released`), a declined nomination
+   (`election_service.py:4976`), and `_drop_unused_approval_option_rows`'s
+   bulk cleanup on rollback-to-draft (`election_service.py:7306`). All three
+   call sites resolve the election through an org-scoped fetch before
+   touching any candidate row (14b), and `release_merged_write_ins` itself
+   additionally scopes its `UPDATE` by `election_id`, so it cannot reach a
+   candidate outside the election already proven to belong to the caller's
+   org. `get_election_results`'s merge-map construction
+   (`election_service.py:3300-3306`) was separately hardened to ignore a
+   merge whose target is not among the election's own candidates — handling
+   any row left dangling by a delete that happened before this fix shipped,
+   without needing a backfill migration. Guard:
+   `tests/test_election_merged_candidate_delete.py` (three tests: the
+   target survives with its votes after delete, a pre-existing dangling
+   merge is ignored, and declining a nomination releases the merge too).
+2. **Quorum-percentage validation reaches the org-defaults endpoint.**
+   `PATCH /elections/settings` (`ElectionSettingsUpdate`, `elections.py:936`)
+   writes `default_quorum_value`/`default_victory_percentage` into the
+   organization's election defaults, and until now was the one write path
+   with no bound: a value above 100 for a `percentage` quorum, or a
+   negative/absurd value for either field, stored cleanly and only broke
+   later when an election was created from the defaults. The two fields now
+   carry `Field(ge=1, le=INT32_MAX)` / `Field(ge=1, le=100)`
+   (`elections.py:938-943`, the same `INT32_MAX` column-bounds constant used
+   elsewhere in this schema), and the endpoint now re-checks the _merged_
+   result after an update (`elections.py:1100-1106`) — necessary because an
+   update can set only the type or only the value in one call, so neither
+   field alone says whether the resulting pair is valid. This brings the
+   defaults endpoint in line with the per-election create/update path
+   (`schemas/election.py:512-517`, `elections.py:1398-1409`), which already
+   had the same check. `schemas/election.py`'s `BallotItem
+.required_for_approval` and `PositionEligibility.min_votes_required`
+   gained matching upper bounds. No endpoint lost a previously-accepted
+   value: every bound is wide enough to admit any real election's numbers,
+   and the only rejected inputs (quorum > 100%, negative counts) were never
+   valid. Guard: `tests/test_election_feature_settings.py`.
+3. **A leadership-notification email now checks the template's own
+   switched-off flag.** `election_service.py:7688-7695` reads
+   `EmailTemplateService.is_switched_off()` before sending (via
+   `_notify_election_leadership`'s shared send path) and skips with a logged
+   notice rather than sending unconditionally. This closes the same class of
+   gap Pitfall #19 describes — a config switch with no reader — for this one
+   send path; the log call passes `template_type.value` and
+   `organization_id` as arguments rather than splicing them into the message
+   (Pitfall #33-compliant).
+
+No source file in this feature's scope needed a touch from this review itself
+— the three items above were already fixed on `main` by the time this pass
+started; this pass's job was to verify each against the seven checklist
+dimensions (authorization/tenant isolation for the deletion paths; input
+validation/abuse resistance for the bounds; data exposure/injection — neither
+applicable, no new query shape) and confirm none introduced a regression.
+
+**Re-enumeration.** `elections.py` re-walked by AST: **73 routes**, unchanged
+from pass 12, every one still carrying a `Depends(...)` in its signature. The
+4 intentionally-public, token-scoped routes are unchanged in behavior (lines
+shifted by the diff above, not their logic): `POST /ballot/lookup`
+(`lookup_ballot_by_token`, `:668`), `POST /ballot/vote`
+(`cast_vote_with_token`, `:826`), `POST /ballot/vote/bulk`
+(`cast_bulk_votes`, `:2934`), and `GET/POST /{election_id}/verify-receipt`
+(`verify_vote_receipt_post`, `:4802`; `verify_vote_receipt`, `:4825`). The
+diff's three hunks sit entirely outside these four routes.
+
+**App-review cross-check (Step 2).** ELEC2-8 (`has_user_voted` has no
+production caller) re-verified unchanged by a repo-wide grep excluding its own
+definition and a docstring reference: still called only from
+`tests/test_election_voting_flow.py`. Dead code, not a security defect;
+unchanged disposition, left to the app-review rotation.
+
+**Verified good (re-confirmed, not re-derived):** the five headline
+mechanisms restated across passes 11-12 — 512-bit tokens hashed at rest
+(ELEC-5), anonymous-ballot IP purge at close (ELEC-6), the eligibility gate on
+`cast_vote` (ELEC-1), method-aware vote-dedup hash (ELEC-3), and token-write
+row locking (ELEC2-5) — are unchanged; none of their implementing lines
+appear in this pass's diff.
+
+**Standing findings re-confirmed unchanged:**
+
+- **ELEC-12** — fixed (`MAX_SAVED_BALLOT_TEMPLATES_PER_ORG = 200`,
+  `elections.py:159`). Unchanged.
+- **ELEC-14** — fixed (`POST /{election_id}/verify-receipt`); deprecated
+  `GET` variant kept for external callers. Unchanged.
+- **ELEC-16** — accepted as is (owner decision); `list_manual_ballot_batches`
+  still has no cap or pagination.
+- **ELEC-28** — OPEN. The in-app ballot still cannot render a ballot-item or
+  multi-seat contest; this pass's diff did not touch ballot rendering.
+- **ELEC-40** — FLAGGED. New-ballot collision still made unreachable by
+  `_validate_ballot_item_identities`; the pre-existing-ballot residual is
+  unchanged and still mirrored in `KNOWN_LIMITATIONS.md`.
+- **ELEC-48** — LOW, FLAGGED. The synchronous send endpoints still race each
+  other with no job-row lock for either side; this pass's diff did not touch
+  the send paths.
+- **ELEC-49** — MEDIUM, FLAGGED. `rollback_election` still does not touch a
+  circulated/adopted minutes filing; `minutes_election_filing.py` is
+  byte-identical to pass 12, so the gap is unchanged.
+- **ELEC-50** — fixed (guard). `tests/test_election_response_viewer_convention.py`
+  is unchanged and still passes.
+
+**0 new findings, 0 fixed by this pass** (the three items above were fixed by
+other work before this pass started and are recorded here as verified, not as
+this pass's own fixes).
+
+## Guard tests added (pass 13)
+
+None from this pass. The three fixes landed with their own guard tests
+(`test_election_merged_candidate_delete.py`,
+`test_election_feature_settings.py`) before this pass began; both re-run
+clean below.
+
+## Completion gate (pass 13)
+
+| Check                                                       | Result                                                |
+| ----------------------------------------------------------- | ----------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                               | ✅ 0 violations (no Python file changed by this pass) |
+| `black --check app/ tests/ alembic/`                        | ✅ 2714 files unchanged                               |
+| `isort --check-only app/ tests/ alembic/`                   | ✅ clean                                              |
+| `validate_migrations.py --strict`                           | ✅ 667 revisions, single head `b74bcce55c11`          |
+| `check_route_permissions.py --strict` (repo root)           | ✅ 279 routes, 0 errors, 0 warnings                   |
+| `pytest tests/ -k "election or ballot or minutes_election"` | ✅ 1020 passed, 1 skipped (env-only `py_vapid`)       |
+| `cd frontend && npm run typecheck`                          | ✅ 0 errors                                           |
+| `cd frontend && npm run lint`                               | ✅ 0 errors, 0 warnings                               |
+
+No source file needed a fix this pass — only this findings file and
+`PROGRESS.md` were updated.
 
 ## Pass 12 (2026-10-25)
 
