@@ -1541,7 +1541,7 @@ async def import_single_record(
         logger.exception(f"Failed to import record for provider {provider_id}")
         await db.rollback()
         ext_import.import_status = "failed"
-        ext_import.import_error = str(e)
+        ext_import.import_error = safe_error_detail(e)
         await db.commit()
         await db.refresh(ext_import)
         raise HTTPException(
@@ -1730,7 +1730,7 @@ async def bulk_import_records(
             failed += 1
             errors.append(f"Failed to import record {import_id}")
             ext_import.import_status = "failed"
-            ext_import.import_error = str(e)
+            ext_import.import_error = safe_error_detail(e)
 
     try:
         await service.feed_imported_records_to_pipelines(created_records)
