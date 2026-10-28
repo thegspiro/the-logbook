@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811)** (branch
+`claude/security-review-membership-pipeline-p14`) — Feature 08 (Membership
+pipeline), pass 14. Watchdog pickup (dedicated `/loop 30m /security-review`
+session `session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable). PR #3810
+(Feature 07, Users & organizations, pass 13) had already merged (`5e8fa043`)
+with no open rotation PR behind it — confirmed via `search_pull_requests`, 0
+`is:open` results against `claude/security-review-*` head branches. Row 08
+confirmed the next `⬜` row on a freshly fast-forwarded `main`.
+
+**0 fixed, 0 new findings.** Real delta since this feature's own pass 13
+(merge `507ae1d0`): 1,209 insertions/324 deletions across 11 files, from 12
+directly-touching commits, all reviewed end to end — phone/address
+encryption at rest, a repo-wide rewrite of SQL email comparisons onto
+HMAC-keyed fingerprints (including the applicant self-access guard's own
+matching predicate in `prospect_privacy.py`), stage-linked email templates
+with an injection-safe appendix mechanism, a new applicant-facing
+next-meeting card and `.ics` download (same token/rate-limit/no-store
+posture as the existing status page), and stale-application
+coordinator/applicant emails closing a standing `KNOWN_LIMITATIONS` gap
+(a config switch that had no reader). MP-10 (listing half) and MP-22 both
+re-confirmed OPEN, unchanged (owner-accepted). All 53 routes in
+`membership_pipeline.py` re-enumerated by AST, unchanged from pass 13; the
+one new public route this pass (`next-meeting.ics`) lives in
+`api/public/portal.py`, outside this router, and was reviewed as part of
+this feature's own delta since it is driven entirely by this feature's
+service. See `docs/security-review/MP-08-membership-pipeline.md`'s
+**Pass 14** section for the full review.
+
+Rotation row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI) — re-check `search_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 13, PR #3810, merged), preserved for history</summary>
+
 **PR [#3810](https://github.com/thegspiro/the-logbook/pull/3810)** (branch
 `claude/security-review-users-organizations-p13`) — Feature 07 (Users &
 organizations), pass 13. Watchdog pickup (dedicated `/loop 30m
@@ -71,6 +106,8 @@ for the full review.
 Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08
 (Membership pipeline) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 13, PR #3809, merged), preserved for history</summary>
