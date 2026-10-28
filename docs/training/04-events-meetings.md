@@ -699,8 +699,16 @@ new one and stops any printed copy from working. Guests who scan it reach the
 same sign-in page as the kiosk's guest code. The QR page can print either code
 on its own. Members who are not managers never receive the code.
 
+**The guest code waits for check-in to open** _(2026-10-28)_. Like the member
+code, it is not shown before the check-in window opens or after it closes, so
+nobody scans it early and meets a sign-in that refuses them. The card says when
+it will appear and shows it by itself at opening time (it refreshes every 30
+seconds). **Reset** is offered even while the code is hidden, for a code that
+leaked before the event.
+
 > **Screenshot to create:** the event QR page with the guest code and its
-> Reset button, and the print choice for one code.
+> Reset button, and the print choice for one code. Also the card before
+> check-in opens, with the "will appear" note.
 
 ### Signing in a walk-in yourself _(2026-10-25)_
 

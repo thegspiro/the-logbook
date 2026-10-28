@@ -1970,7 +1970,8 @@ Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
      **Before you print** checklist (see
      [Before you print](#before-you-print-2026-10-27)). Browser prints of Code 128
      barcodes used to come out as solid black boxes; the bars now print on a white
-     background.
+     background. **Print** stays available after you change **Copies per item**;
+     it used to stay disabled until the page was reloaded. _(2026-10-28)_
    - **Print to _printer name_**: appears when your department has registered a
      network label printer. The labels go straight to it. See
      [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer).
@@ -2040,6 +2041,9 @@ altogether.
 
 The checklist is not shown for **PDF**, **Print to _printer name_**, or on a
 phone or tablet, where printing always downloads the PDF.
+
+The same checklist runs on the shared label page used for apparatus, facility,
+member and storage-area labels. _(2026-10-28)_
 
 ### Choosing which items to label
 

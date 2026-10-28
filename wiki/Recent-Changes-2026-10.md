@@ -5,6 +5,24 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 28, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).
+
+- **Switching an email template Off now really stops it.** Five emails (password
+  reset, IT password, welcome, ballot, application status link) cannot be turned
+  off. Operators: check the **Off** filter before upgrading.
+- **Five more emails use their templates**: certification expiration, post-event
+  and post-shift validation, member archived and prospect inactivity.
+- **Stale applications** email the coordinators, and optionally the applicant.
+- **The guest check-in code** appears only while check-in is open.
+- **An edited shift report** goes back to review.
+- **The department store cart** survives a reload.
+- **Labels** no longer lock Print after changing copies.
+- **Leave and waiver reasons** are encrypted at rest.
+- **Pages load faster**: the first download is about half the size.
+
 ## Recent changes: October 26 – 27, 2026
 
 The engineering audit is

@@ -5,10 +5,52 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 28, 2026
+
+A top-up of the October 26 – 27 section below, which merged first and covers
+`main` through `4a4eb2fd`. This pass started at `5c520451`, so the changes the
+two windows share are recorded once, below; what this pass adds to them is the
+first table here. New merges are those after `4a4eb2fd` (2026-10-28 02:10
+UTC) through `7c0162c0` (2026-10-28 12:02 UTC). Security-review passes (frontend-shared,
+cross-cutting-baseline, auth-session, permissions-roles,
+public-surface-webhooks, storefront-payments) are in
+`docs/security-review/PROGRESS.md`; the security, audit and IP app review (B23)
+is in `docs/app-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+**Added to changes already recorded below**
+
+| Change                                                                                                                                                                          | Guide              | Disposition                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------- |
+| #3781: five emails cannot be switched off; Cert Expiration, Post-Event/Post-Shift Validation, Member Archived and Prospect Inactivity are now sent                              | 08, `UPGRADING.md` | Added; list screenshot queued                               |
+| #3781: stale applications email their coordinators from the inactivity sweep, and applicants through the new **Application Going Inactive** template (migration `0d9897752425`) | 15, 08             | 15 already described it; `PROSPECTIVE_MEMBERS_MODULE` fixed |
+| #3771: the printout names the chosen class in its subtitle, and with **All** on a roster of several classes prints Operational, Administrative, Social, then Unclassified       | 02                 | Added                                                       |
+| #3770: **Before you print** also runs on the shared label page (apparatus, facility, member and storage-area labels)                                                            | 05                 | Added                                                       |
+
+**New in this window**
+
+| Change                                                                                                                                                                                      | Guide                    | Disposition                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------- |
+| Member Dropped email sends the template's attachments (#3797)                                                                                                                               | 08, `DROP_NOTIFICATIONS` | Added                                                      |
+| Guest check-in QR code hidden until check-in opens (#3795)                                                                                                                                  | 04                       | Added; screenshot queued                                   |
+| Shift report edited after review returns to **Pending review** (EC-17, #3772)                                                                                                               | 03                       | Added                                                      |
+| Department store cart kept in the browser, per member and window (#3772)                                                                                                                    | 18                       | Added                                                      |
+| Labels: Print re-enables after changing **Copies per item** (#3799)                                                                                                                         | 05                       | Added                                                      |
+| Inventory dashboard queue renamed **Waiting for action** (#3772)                                                                                                                            | 05                       | Already written; 05-97 and 05-132 images show the old name |
+| Leave and training-waiver reasons encrypted at rest (migration `b74bcce55c11`, #3794)                                                                                                       | 17, `UPGRADING.md`       | Added; operators back up first                             |
+| Getting Started lesson teaches passkeys beside the authenticator app (#3792)                                                                                                                | Learning Center          | In-app lesson; no guide change                             |
+| Every written-out refusal goes through `safe_error_detail`, and list-joining refusals are capped (#3793); first load halved (714 KB to 366 KB gzipped), footer stays below the fold (#3801) | none                     | Backend and performance; no screen change                  |
+
+**Screenshots to create:** Email Templates list filtered to **Off** with the
+disabled switch on an always-sent template; event QR page before check-in
+opens. **Replace:** `05-97` and `05-132` (heading now **Waiting for action**).
+The class switch, per-class printout, **Operational members** and label
+screenshots are queued in the section below. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 26 – 27, 2026
 
 Merged to `main` since `14f1e4b2` (2026-10-26 13:24 UTC) through `4a4eb2fd`
-(2026-10-27 22:10 UTC), 46 merges. Security-review passes (scheduling,
+(2026-10-28 02:10 UTC), 46 merges. Security-review passes (scheduling,
 events-requests, training-core, training-extended, skills-testing, compliance,
 admin-hours, grants-fundraising, medical-supplies, meetings-minutes,
 messaging-notifications with MSG-17 fixed, forms, integrations,

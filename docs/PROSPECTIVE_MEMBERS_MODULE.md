@@ -237,7 +237,7 @@ Pipeline-level inactivity settings are configured on the Pipeline Settings page:
 | Custom Timeout Days       | —                  | Used when preset is "custom"                                       |
 | Warning Threshold         | 80%                | When to show amber warning indicators                              |
 | Notify Coordinator        | true               | Send notification to coordinator when applicant approaches timeout |
-| Notify Applicant          | false              | Send notification to applicant when approaching timeout            |
+| Notify Applicant          | false              | Email the applicant the Application Going Inactive notice          |
 | Auto-Purge Enabled        | false              | Automatically purge inactive applicants after a period             |
 | Purge Days After Inactive | 365                | Days after deactivation before auto-purge (clamped to 30–1095)     |
 

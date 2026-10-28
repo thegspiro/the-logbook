@@ -1,5 +1,16 @@
 # Script currency
 
+## Flagged by the 2026-10-28 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                          | Beat             | Was                              | Now                                                               |
+| ------------------------------- | ---------------- | -------------------------------- | ----------------------------------------------------------------- |
+| **03** (IT), **07** (secretary) | Email templates  | Off fell back to default wording | Off stops the email; five essential emails cannot be switched off |
+| **Any inventory beat**          | Queue on the hub | Needs attention                  | Waiting for action                                                |
+| **Any store beat**              | Ordering         | Cart lost on reload              | Cart kept in the browser                                          |
+
 ## Flagged by the 2026-10-26 → 10-27 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).

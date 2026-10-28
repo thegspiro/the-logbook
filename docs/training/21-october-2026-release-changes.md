@@ -1,3 +1,22 @@
+# October 28, 2026 workflow updates
+
+Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).
+Nothing has been re-captured; see [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+A top-up of the October 26–27 updates below: the member-class matrix, attendance
+rights and label checklist are listed there.
+
+| Topic                                                         | Now in                                            |
+| ------------------------------------------------------------- | ------------------------------------------------- |
+| Off stops an email; always-sent emails; newly wired templates | [08 — Admin & Reports](./08-admin-reports.md)     |
+| Guest QR code waits for check-in to open                      | [04 — Events & Meetings](./04-events-meetings.md) |
+| Edited shift report returns to review                         | [03 — Scheduling](./03-scheduling.md)             |
+| Labels: Print fix after changing copies                       | [05 — Inventory](./05-inventory.md)               |
+| Store cart kept in the browser                                | [18 — Storefront](./18-storefront.md)             |
+| Encrypted leave and waiver reasons                            | [17 — Privacy](./17-privacy-data-rights.md)       |
+
+---
+
 # October 26–27, 2026 workflow updates
 
 Index for the latest window. Audit:

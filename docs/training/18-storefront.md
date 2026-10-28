@@ -515,6 +515,11 @@ Select **Department Store** in the sidebar.
 3. Type the name to embroider or engrave, if offered.
 4. Set the quantity and tap **Add to cart · $(line total)**.
 5. Tap **Review order** and check the cart: subtotal, tax, shipping and total.
+   The cart is kept **in this browser**, per member and per order window, so a
+   reload or a phone discarding the tab does not empty it. Prices come from the
+   current catalog, and a line whose product or size is no longer offered is
+   dropped. The saved cart is removed when you place the order, when the window
+   closes, and at sign-out. _(2026-10-27)_
 6. On the checkout page, choose pickup or shipping. Shipping asks for an
    address.
 7. Choose how you will pay.
