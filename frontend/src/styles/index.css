@@ -320,6 +320,29 @@
     min-width: 0;
     max-width: 100%;
   }
+
+  /* The caps above are not enough on iOS: with the native appearance WebKit's
+     iOS theme lays the control out itself, still overflowing the column on an
+     iPad and rendering taller than the fields beside it. Dropping the native
+     appearance hands sizing back to the box model; tapping still opens the
+     iOS picker. Scoped to iOS WebKit (the only engine with
+     -webkit-touch-callout) so desktop browsers keep their calendar button.
+     The empty value collapses to zero height without the min-height, and is
+     centred unless told otherwise. */
+  @supports (-webkit-touch-callout: none) {
+    input[type='date'],
+    input[type='time'],
+    input[type='datetime-local'],
+    input[type='month'] {
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    input::-webkit-date-and-time-value {
+      min-height: 1.5em;
+      text-align: start;
+    }
+  }
 }
 
 /*
