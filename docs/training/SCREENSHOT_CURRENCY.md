@@ -1,5 +1,21 @@
 # Screenshot currency
 
+## Queued by the October 26 – 27 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 00 | My Account → Security → Passkeys: empty list, **Add a passkey** form, and a list with one passkey | Create |
+| 00 | `00-23-login-two-factor`: second-factor step now offers the passkey beside the code | Replace |
+| 07 | Field editor with the **Sensitive** checkbox and its help text | Create |
+| 07 | Submission view with the lock-icon sensitive block, and one showing the **Restricted** note | Create |
+| 12 | Add Donor with type Business: **Organization Name** and optional contact | Create |
+| 05 | The **Before you print** card (Rollo 2" x 1" and a sheet size) | Create |
+| 08 | `08-38-email-configuration` Gmail with **Service account**: key upload and client ID | Re-check / create |
+| 15 | Email Templates list with **Application Step Completed** and **Application Status Link** | Create |
+
 ## Queued by the October 25 – 26 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).

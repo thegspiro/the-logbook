@@ -442,6 +442,19 @@ your account safe even if someone learns your password. When you turn it on,
 you get a set of **recovery codes**. Each one works once, if you ever lose
 your phone. Save them somewhere safe and private.
 
+**Passkeys (_2026-10-25_).** Instead of a code, you can use a **passkey**: your
+phone or computer confirms it is you with Face ID, a fingerprint or the device
+PIN. Open **My Account → Security → Passkeys**, choose **Add a passkey**, name
+it (for example _Jake's iPhone_), choose **Create passkey** and confirm on the
+device. You can keep up to three. If a passkey is your first second factor, save
+the recovery codes shown once. At sign-in, after your password, the page offers
+the passkey; the authenticator-app code and recovery codes still work. At a
+station computer, your phone can be the passkey through the browser's QR-code
+prompt (Bluetooth must be on). The option appears only when the department's
+site is on HTTPS at a domain name; an administrator can switch new passkeys off
+under **Settings → Authentication**. Moving the site to a different address
+retires every passkey, and you add new ones.
+
 **Two-step sign-in is required if you hold an administrative role.** Whatever
 your department chose for everyone else, a member who can manage settings,
 security, integrations, members, positions, audit logs or health records (in the

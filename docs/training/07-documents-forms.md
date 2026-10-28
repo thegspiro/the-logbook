@@ -316,7 +316,17 @@ For each field you can set:
   ZIP code), or minimum and maximum values;
 - the options, for dropdowns, multi-selects, checkboxes and radio buttons;
 - **Conditional Visibility** — show the field only when another question has a
-  certain answer.
+  certain answer;
+- **Sensitive** _(2026-10-25)_ — for questions such as criminal history, driving
+  record or medical history. Answers are stored encrypted and shown only to
+  members granted **View sensitive form answers** (`sensitive_answers.view`);
+  nobody else, including a Forms manager, sees them. They are left out of every
+  CSV download and are not passed to other modules, so an applicant created from
+  an interest form does not receive them. Turning it on also encrypts answers
+  already received, but not copies an integration already made. Once any answer
+  is stored this way the box cannot be turned off. The public form tells the
+  person their answer is encrypted. Out of the box only the System Owner holds
+  the permission.
 
 ### Conditional visibility (branching)
 
@@ -509,6 +519,10 @@ who can manage events. See
 3. **Export CSV** downloads the submissions on the page you are looking at,
    with the time, the sender and every answer.
 4. **Delete** removes a single submission.
+5. Answers to Sensitive fields appear under a lock icon, in their own block, for
+   members who may read them; each reveal is recorded in the audit log. Anyone
+   else sees _Restricted: this submission has answers to sensitive questions,
+   which you do not have permission to view._
 
 ![Form submissions table listing responses with their timestamps](./images/07-07-form-submissions.png)
 

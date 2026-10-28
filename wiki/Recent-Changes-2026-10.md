@@ -5,6 +5,27 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 26 – 27, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
+
+- **Passkeys** can be your second factor: Face ID, a fingerprint or the device
+  PIN instead of a code. Add up to three under My Account → Security. Operators:
+  the backend image needs rebuilding (`docs/UPGRADING.md`).
+- **Forms can mark a question Sensitive.** Answers are encrypted, hidden from
+  everyone without the new "view sensitive answers" permission, and kept out of
+  CSV files.
+- **Gmail** can send through a Google Workspace service account (Settings → Email).
+- **Applicant emails** (step completed, status link, welcome) are editable
+  templates.
+- **Donors** that are businesses or agencies need only an organization name.
+- **Label printing**: barcodes no longer print as black boxes, and a "Before you
+  print" card names the paper size to choose.
+- **Editing a draft event** keeps it a draft.
+- **Two-person rule** now also covers budget request decisions and IP-security
+  exception approvals.
+
 ## Recent changes: October 25 – 26, 2026
 
 The engineering audit is

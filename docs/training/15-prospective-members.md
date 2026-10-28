@@ -216,6 +216,16 @@ Each stage can be set up with:
 
 ![Editing the Attend a Business Meeting stage: Auto-Link Event Type set to Next Business Meeting, its help text saying that naming an event makes attendance required, the next upcoming meeting it will link, and the checkbox reading Auto-advance when the event's attendance is finalized, with its explanation that a sign-in at the door is not enough on its own](./images/15-15-meeting-stage-config.png)
 
+**Two more applicant emails are templates _(2026-10-26)_.** Under
+**Communications → Email Templates**, in the Prospective Members group, **Application
+Step Completed** (sent when a stage set to notify the applicant finishes) and
+**Application Status Link** (sent by an Enable Status Page stage) can be
+reworded like any other template. A stage's custom message fills
+`{{custom_message_html}}` in the status-link email and leaves no empty paragraph
+when the stage has none. A converted applicant's welcome email now uses the
+department's own **Welcome** template, wording and attachments, instead of the
+built-in default.
+
 **Required stages cannot be skipped.** **Skip** is refused on a stage marked
 Required, and the button is disabled with an explanation. To bypass one, untick
 **Required** on the stage first. That is a deliberate change to the pipeline

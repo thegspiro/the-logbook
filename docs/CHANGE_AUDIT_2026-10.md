@@ -5,6 +5,37 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 26 – 27, 2026
+
+Merged to `main` since `14f1e4b2` (2026-10-26 13:24 UTC) through `5c520451`
+(2026-10-27 12:28 UTC). Security-review passes (training-core,
+training-extended, skills-testing, compliance, admin-hours, grants-fundraising,
+medical-supplies, meetings-minutes, events-requests, messaging-notifications)
+are in `docs/security-review/PROGRESS.md`; the only code fix among them is
+MSG-17. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                 | Guide                       | Disposition                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------- |
+| **Passkeys** as a second factor (My Account → Security → Passkeys, up to three; login offers the passkey; admin switch under Settings → Authentication)                | 00, `MFA.md`, wiki Security | Added to 00; `UPGRADING` (needs `webauthn`, HTTPS domain) |
+| Forms: **Sensitive** fields, encrypted answers, `sensitive_answers.view`, left out of CSV and integrations (migration `ce541de8d3da`)                                  | 07, `FORMS_MODULE.md`       | Added; screenshots queued                                 |
+| Gmail **Service account** authentication on Settings → Email                                                                                                           | 08                          | Already written with the change; shot re-check queued     |
+| Pipeline **Application Step Completed** / **Application Status Link** emails editable; welcome email uses the department's Welcome template (migration `08e6220f2dce`) | 15                          | Added                                                     |
+| Fundraising: business, foundation or agency donor by organization name alone (migration `e03f96c98452`)                                                                | 12                          | Added; Add Donor shot queued                              |
+| Inventory print: black-box Code 128 barcodes fixed; **Before you print** paper-size step                                                                               | 05                          | Added; screenshot queued                                  |
+| Events edit form keeps a draft a draft and loads the server's lead-time default                                                                                        | 04                          | Added                                                     |
+| Finance budget request cannot be decided by its submitter or line owner; IP exception cannot be approved by its member or filer                                        | 11, 08, `COMPLIANCE.md`     | Added; no screen change                                   |
+| MSG-17: Gmail service-account key with a `token_uri` other than Google's is refused (SSRF)                                                                             | none                        | Backend; `docs/security-review/MSG-25-…`                  |
+| Wiki: eleven module and operator pages added, dead `../` links made absolute; `prospective_members.status_token` rotated with the key                                  | wiki                        | Merged in the window                                      |
+| Housekeeping: Alembic heads re-joined (`f5426e40b955`), WebKit apt cache in CI, E2E contrast audit waits for transitions, npm/pip minor bumps                          | none                        | No guide change                                           |
+
+**Screenshots to create:** My Account → Security → Passkeys (empty and with one
+passkey), login passkey step, the field editor's Sensitive checkbox, a
+submission with a lock-icon block and the Restricted note, Add Donor with
+Organization Name, the **Before you print** card, the Application Step
+Completed template. **Re-check:** Settings → Email with Gmail and Service
+account selected (08-38), 00-23 (login second-factor step now offers a
+passkey). See `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 25 – 26, 2026
 
 Merged to `main` since `a083c82a` (2026-10-25 13:18 UTC) through `14f1e4b2`

@@ -1,3 +1,23 @@
+# October 26–27, 2026 workflow updates
+
+Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
+Nothing has been re-captured; see [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                      | Now in                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------- |
+| Passkeys as a second factor                                | [00 — Getting Started](./00-getting-started.md)         |
+| Sensitive form fields and who can read them                | [07 — Documents & Forms](./07-documents-forms.md)       |
+| Gmail service-account sending                              | [08 — Admin & Reports](./08-admin-reports.md)           |
+| IP exception needs a second approver                       | [08 — Admin & Reports](./08-admin-reports.md)           |
+| Applicant step-completed and status-link email templates   | [15 — Prospective Members](./15-prospective-members.md) |
+| Organization donors by name alone                          | [12 — Grants](./12-grants-fundraising.md)               |
+| Before you print; barcode black-box fix                    | [05 — Inventory](./05-inventory.md)                     |
+| Draft events stay drafts when edited                       | [04 — Events & Meetings](./04-events-meetings.md)       |
+| Budget request cannot be decided by its submitter or owner | [11 — Finance](./11-finance.md)                         |
+
+---
+
 # October 25–26, 2026 workflow updates
 
 Index for the latest window. Audit:

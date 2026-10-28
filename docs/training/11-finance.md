@@ -252,7 +252,7 @@ As a finance manager, open **Finance > Budget requests** (or **Review requests**
    - **Approve as requested** — the requested amount becomes the line's budget.
    - **Approve a different amount** — enter the **Amount approved** and a note saying why (required).
    - **Decline** — a note saying why is required. The line's amount is not changed.
-5. Select **Record decision**. The owner and the submitter are emailed, and the list refreshes. To change a decision while the year is still a draft, filter to its status and select **Change**.
+5. Select **Record decision**. You cannot decide a request you submitted or one for a line your own position owns (a refusal with a message); a department with one finance manager grants **finance.manage** to a second member. The owner and the submitter are emailed, and the list refreshes. To change a decision while the year is still a draft, filter to its status and select **Change**.
 
 If the decision is refused (for example, an amount below what the line has already spent or committed), the reason is shown and nothing is saved.
 
