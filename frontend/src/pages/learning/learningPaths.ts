@@ -107,7 +107,7 @@ export const learningPaths: LearningPath[] = [
         why: 'The department reaches you at whatever is on this screen — a stale number here means a missed callout. Two-factor matters because your account can see other members’ personal information, not just your own.',
         how: [
           'On the Account tab, confirm the Phone and Mobile numbers are ones you actually answer. Urgent text messages, if you switch them on, need a number here.',
-          'Open the Security tab and enable two-factor authentication with an authenticator app. If your role includes administration or health records, it is required: a banner reading Your access requires two-factor authentication counts down to the date after which you can reach only the setup screens, and Set it up now takes you there.',
+          'Open the Security tab and set up two-factor authentication with a passkey on your phone or computer, an authenticator app, or both — either one is enough. If your role includes administration or health records, it is required: a banner reading Your access requires two-factor authentication counts down to the date after which you can reach only the setup screens, and Set it up now takes you there.',
           'Open Emergency Contacts and add at least one person the department can call for you.',
         ],
         screenshots: [
