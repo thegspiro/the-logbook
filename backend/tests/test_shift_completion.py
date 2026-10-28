@@ -2372,6 +2372,99 @@ class TestFilingOfficerCannotSetReviewStatus:
         assert updated.review_status == "pending_review"
 
 
+class TestAnEditedReportGoesBackToReview:
+    """EC-17: a reviewed report its officer changes does not keep its approval."""
+
+    async def _reviewed(self, db_session, setup_training_org, verdict, required):
+        org_id, officer_id, trainee_id = setup_training_org
+        config = await TrainingModuleConfigService(db_session).get_config(org_id)
+        config.report_review_required = required
+        await db_session.flush()
+        svc = ShiftCompletionService(db_session)
+        report = await svc.create_report(
+            organization_id=uuid.UUID(org_id),
+            officer_id=uuid.UUID(officer_id),
+            trainee_id=trainee_id,
+            shift_date=date.today() - timedelta(days=1),
+            hours_on_shift=12.0,
+            officer_narrative="Solid shift.",
+            review_status="pending_review",
+        )
+        await svc.review_report(
+            report.id,
+            uuid.UUID(org_id),
+            officer_id,
+            verdict,
+            reviewer_notes="Checked against the run sheet.",
+        )
+        return svc, report, org_id, officer_id
+
+    async def test_an_approved_report_returns_where_review_is_required(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id, officer_id = await self._reviewed(
+            db_session, setup_training_org, "approved", required=True
+        )
+
+        updated = await svc.update_report(
+            report.id,
+            uuid.UUID(org_id),
+            officer_id,
+            {"officer_narrative": "Solid shift. Led the hose team."},
+        )
+
+        assert updated.review_status == "pending_review"
+        assert (updated.reviewed_by, updated.reviewed_at) == (None, None)
+        assert updated.reviewer_notes == "Checked against the run sheet."
+
+    async def test_an_approved_report_stays_approved_where_review_is_off(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id, officer_id = await self._reviewed(
+            db_session, setup_training_org, "approved", required=False
+        )
+
+        updated = await svc.update_report(
+            report.id, uuid.UUID(org_id), officer_id, {"hours_on_shift": 10.0}
+        )
+
+        assert updated.review_status == "approved"
+
+    @pytest.mark.parametrize("required", [True, False])
+    async def test_a_revised_flagged_report_returns_to_the_reviewer(
+        self, db_session, setup_training_org, required
+    ):
+        svc, report, org_id, officer_id = await self._reviewed(
+            db_session, setup_training_org, "flagged", required=required
+        )
+
+        updated = await svc.update_report(
+            report.id,
+            uuid.UUID(org_id),
+            officer_id,
+            {"officer_narrative": "Corrected the call count."},
+        )
+
+        assert updated.review_status == "pending_review"
+
+    async def test_resaving_the_same_values_keeps_the_approval(
+        self, db_session, setup_training_org
+    ):
+        svc, report, org_id, officer_id = await self._reviewed(
+            db_session, setup_training_org, "approved", required=True
+        )
+
+        updated = await svc.update_report(
+            report.id,
+            uuid.UUID(org_id),
+            officer_id,
+            {"officer_narrative": "Solid shift.", "hours_on_shift": 12.0},
+        )
+
+        assert updated.review_status == "approved"
+        assert updated.reviewed_by == officer_id
+
+
 class TestReapprovalSignsOffOnce:
     """A report approved, flagged and approved again signs each skill off once."""
 

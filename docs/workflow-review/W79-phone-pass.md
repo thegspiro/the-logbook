@@ -148,7 +148,10 @@ checkbox uses `form-checkbox`.
   `touch-target-phone`.
 - Re-audited: nothing under 44px in the driven states.
 
-### W79-10 — LOW — The inventory dashboard contradicts itself about what needs attention — FLAGGED
+### W79-10 — LOW — The inventory dashboard contradicts itself about what needs attention — FIXED (2026-10-27)
+
+> **Fixed (owner decision: rename the queue).** The queue is now **Waiting
+> for action**; the tile keeps **Needs attention**. See `docs/KNOWN_LIMITATIONS.md`.
 
 **Saw:** as `quartermaster`, after the member's return notice, the headline
 tile read "Needs attention 0 · nothing waiting". Directly below it, the queue

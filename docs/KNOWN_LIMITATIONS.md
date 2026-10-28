@@ -6482,17 +6482,20 @@ Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
   - Decision: whether members get a "My dues" view (and on what gate), and
     which dues reminders go out (email first, pitfall 18).
 
-## Department Store — The Cart Does Not Survive a Reload (2026-10-15)
+## Department Store — The Cart Does Not Survive a Reload (2026-10-15, resolved 2026-10-27)
 
-Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
-
-- **What happens:** the cart lives only in the page's memory. A reload, or a
-  phone browser discarding the tab while the member switches apps, empties
-  it.
-- **Why it is not simply fixed:** keeping it means choosing where (browser
-  storage on that device, or saved on the server so it follows the member)
-  and how long it lasts, against an order window that closes.
-- **Decision:** whether to keep the cart, and where.
+**Resolved (owner decision: keep it in this browser).** The cart is saved in
+the browser's local storage, per member and per order window
+(`modules/storefront/utils/savedCart.ts`), and restored when the store loads.
+Only each line's product, variant, personalization and quantity are kept;
+names and prices are rebuilt from the current catalog, and a line whose
+product or variant is no longer offered is dropped. A saved cart is cleared
+when its order is placed, when its window is no longer open, and at sign-out
+(`purgeLocalMemberData`), since station computers are shared. Each window keeps
+its own cart, so with several windows open a reload shows the store's default
+window's cart until the member picks the other window again. It does not follow
+the member to another device. History in
+`docs/workflow-review/W67-department-store.md` (W67-6).
 
 ## Grants — Opportunities Could Not Be Edited (2026-10-15, edit and retire resolved 2026-10-25)
 
@@ -6555,23 +6558,16 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
 
-## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23)
+## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23, resolved 2026-10-27)
 
-Found driving W79 (`docs/workflow-review/W79-phone-pass.md`, W79-10).
-
-- **What happens:** on the inventory administration dashboard the headline
-  tile read "Needs attention 0 · nothing waiting" while the queue directly
-  below it read "Needs attention 1" (a member's pending return).
-- **Why:** two definitions share the name. The tile is the admin frame's
-  `needs_attention` metric (`admin_hub_service._inventory_attention`:
-  exceptions such as PPE past service life and stock below par). The queue is
-  assembled in `InventoryAdminHub.tsx` from work items: pending returns,
-  equipment requests and clearances. CLAUDE.md pitfall 29.
-- **Why it is not simply fixed:** choosing one definition changes a number
-  officers already watch, on a frame the other administration hubs share.
-- **Decision:** what inventory's "Needs attention" counts. Either the
-  backend resolver gains the work items (so the tile and queue are one
-  computation), or the queue is renamed so it does not claim the tile's name.
+**Resolved (owner decision: rename the queue).** The inventory dashboard's
+work queue (pending returns, requests, write-offs, low stock, maintenance due,
+overdue loans and deliveries, departure clearances) is now **Waiting for
+action**. The headline tile keeps **Needs attention** and its count, which the
+other administration hubs' frames share. The training guide follows; its two
+screenshots of the queue (`05-97`, `05-132`) still show the old heading until
+they are next captured. Covered by `InventoryAdminHub.test.tsx`. History in
+`docs/workflow-review/W79-phone-pass.md` (W79-10).
 
 ## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21)
 
@@ -7017,40 +7013,20 @@ documents-feature review pass should not decide unilaterally — Finance and
 Documents would need to agree on one order before this can lock safely
 without risking a new cross-feature deadlock.
 
-## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26)
+## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26, resolved 2026-10-27)
 
-Found by security review EC-14 pass 12
-(`docs/security-review/EC-14-equipment-check-shifts.md`, pass 12, EC-17).
-Pre-existing, not introduced by this pass's own delta — the same pass's
-delta hardened `update_report`'s `review_status` field specifically (a
-submitted report's status now changes only through review, and the
-submit-destination is read from the department's own config rather than
-trusted from the client), and its own docstring rewrite claims "The
-service allows only drafts" — true for that one field, not for the rest.
-
-`ShiftCompletionService.update_report`'s `UPDATABLE_FIELDS` loop writes
-`performance_rating`, `officer_narrative`, `areas_of_strength`,
-`areas_for_improvement`, `skills_observed`, `tasks_performed`,
-`hours_on_shift`, `calls_responded`, `call_types`, and `enrollment_id` onto
-the row for any update from the filing officer, with no check on
-`review_status` at all. A report that has already been reviewed and
-`approved` stays open to the same officer editing its narrative, rating, or
-recorded skills through `PUT /shift-reports/{id}`, weeks later, with no
-re-review triggered and nothing beyond the generic `shift_report_updated`
-audit-log entry (which records which fields changed, not that the report
-had already cleared review) to surface it to whoever approved the original
-version. Confirmed this does not re-run training credit —
-`_trigger_deferred_progress` only fires when the report was not already
-`approved` before this edit — so the risk is to the integrity of the
-record itself, not to double-granted credit.
-
-**Not fixed.** Closing it is a product decision between three shapes this
-pass should not pick unilaterally: block every `UPDATABLE_FIELDS` write
-once a report is no longer a draft (simplest, but removes the ability to
-fix a typo after approval), require any edit to an approved/pending report
-to go back through review (more correct, but is a workflow change its own
-users would need to learn), or accept the status quo and rely on the audit
-log as the record of what changed and when.
+**Resolved (owner decision: an edit sends the report back to review).**
+`ShiftCompletionService.update_report` now returns a submitted report to
+`pending_review` when its filing officer changes any field. A flagged report
+always goes back once revised. An approved one goes back where the department
+requires review; where review is off it stays approved, as a newly submitted
+report would. Returning a report clears its reviewer and review date, which
+vouched for the earlier text, and keeps the reviewer's notes. Re-saving
+unchanged values keeps the approval. Training credit is keyed on the report, so
+approving it again does not credit the trainee twice. The app's own screens
+edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
+`tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
+in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
