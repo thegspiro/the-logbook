@@ -1,6 +1,6 @@
 # Security Review — Feature 32: Locations & Kiosk (pass 10)
 
-**Prefix:** `LOC10` · **Iteration:** 32 · **Reviewed:** 2026-10-28 · **PR:** (this PR)
+**Prefix:** `LOC10` · **Iteration:** 32 · **Reviewed:** 2026-10-28 · **PR:** [#3788](https://github.com/thegspiro/the-logbook/pull/3788)
 
 **Backend:** `app/api/v1/endpoints/locations.py` (8 routes, unchanged), `app/services/location_service.py` (unchanged), `app/api/public/display.py` (**6 routes, up from 4** — gained `guest-lookup`/`guest-confirm`), `app/api/v1/endpoints/admin_hub.py` (3 routes, unchanged), `app/services/admin_hub_service.py` (unchanged), `app/models/location.py`, `app/models/admin_hub.py`, `app/schemas/location.py`, `app/schemas/admin_hub.py` (all unchanged). Also checked: `app/services/facilities_service.py`'s `delete_room`/`remove_location` call site (unchanged — the pass's diff to that file is unrelated pagination work, confirmed by line range), and `app/services/guest_check_in_service.py` (the new shared callee — read for this feature's own endpoint wiring; its internal logic was read in full and verified by Feature 16's pass 11, see below).
 **Frontend:** `pages/LocationsPage.tsx` (unchanged), `pages/RoomQRCodesPage.tsx` (one Tailwind class, unrelated mobile-layout fix), `pages/LocationKioskPage.tsx` (unchanged), `components/admin/AdminHubFrame.tsx` (unchanged).

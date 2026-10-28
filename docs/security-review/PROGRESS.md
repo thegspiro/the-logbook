@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-locations-kiosk`) —
+**PR [#3788](https://github.com/thegspiro/the-logbook/pull/3788)** (branch
+`claude/security-review-locations-kiosk`) —
 Feature 32 (Locations & kiosk), pass 10. **Watchdog pickup** — the
 dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
