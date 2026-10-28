@@ -89,7 +89,11 @@ moved.
 **Re-driven:** "Record a payment for Tariq Nolan" is visible at 44px, and its
 dialog fits the screen with both buttons reachable.
 
-### W66-3 — MED — An overpayment is taken without a word, and counts as collected — 🚩 FLAGGED
+### W66-3 — MED — An overpayment is taken without a word, and counts as collected — ✅ FIXED (2026-10-27)
+
+> **Fixed (owner decision: warn and allow, the excess becomes a donation).** The
+> dialog confirms an overpayment; the dues are settled at the balance and the
+> rest is a Fundraising donation from the member. See `docs/KNOWN_LIMITATIONS.md`.
 
 **Did:** with $70 left on Jordan's $120, recorded $75.
 **Saw:**

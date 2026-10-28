@@ -663,6 +663,18 @@ def _validate_config(integration_type: str, config: dict[str, Any]) -> dict[str,
     return config
 
 
+# INT2-3, owner decision 2026-10-27: these connected with no credential and
+# showed connected and enabled until a test failed. Their config schemas keep
+# each credential optional with a "" default, because a partial PATCH is
+# validated against the same schema, so connect checks them by name instead.
+_CREDENTIALS_REQUIRED_TO_CONNECT: dict[str, tuple[str, ...]] = {
+    "paypal": ("client_id", "client_secret"),
+    "documenso": ("api_token",),
+    "calcom": ("api_key",),
+    "salesforce": ("client_id", "client_secret"),
+}
+
+
 def _missing_required_fields(
     integration: Integration, config: dict[str, Any]
 ) -> list[str]:
@@ -677,7 +689,7 @@ def _missing_required_fields(
     if schema_cls is None:
         return []
     stored = integration.config or {}
-    return [
+    missing = [
         name
         for name, field in schema_cls.model_fields.items()
         if field.is_required()
@@ -685,6 +697,19 @@ def _missing_required_fields(
         and name not in stored
         and not integration.get_secret(name)
     ]
+    # Blank counts as absent here: these schemas default each credential to
+    # "", so a body of {"client_id": ""} would otherwise pass for one.
+    missing += [
+        name
+        for name in _CREDENTIALS_REQUIRED_TO_CONNECT.get(
+            integration.integration_type, ()
+        )
+        if name not in missing
+        and not config.get(name)
+        and not stored.get(name)
+        and not integration.get_secret(name)
+    ]
+    return missing
 
 
 def _extract_secrets(

@@ -1183,6 +1183,15 @@ before saving.
 > requirement that applies to nobody, because it would quietly vanish from
 > every member's compliance view.
 
+**Applying a requirement to every operational member** _(2026-10-27)_. Under
+**Member Categories**, the **Operational members** button ticks **Active**,
+**Probationary**, **Life** and **Retired** in one go. Those four are every
+operational member, whatever their status (see
+[Member Class and Member Status](./01-membership.md#member-class-and-member-status)).
+When all four are ticked, the button shows a check mark; selecting it again
+unticks those four. **Administrative** and **Honorary** are left as you set
+them either way, so tick them yourself if the requirement covers them too.
+
 ### Never Use an Hours Requirement for a Required Topic
 
 > **Warning — read this before creating any yearly refresher.** An **Hours**
@@ -1748,8 +1757,13 @@ Both need **Manage training records** and are recorded in the audit log.
 
 ## Finalizing a Training Session
 
-**Who can do this:** officers who can manage all events finalize; training
-officers approve.
+**Who can do this:** officers who can manage all events, and _(2026-10-27)_
+anyone with **training.manage** (a training manager), finalize; training
+officers approve. On a training session a training manager also gets **Edit**,
+**End Event**, **Record Times**, **Check In**, **Edit Times** and **Reopen
+Attendance**, without needing to manage all events. The session's organizer
+and alternate can check members in but not correct their times. See
+[Who runs an event's attendance](./04-events-meetings.md#who-runs-an-events-attendance-2026-10-27).
 
 A training session is finalized from its **event page**, with **Finalize
 Attendance** (or **End Event**, or by recording the event's actual end time).
@@ -1789,9 +1803,9 @@ at the top of Training Administration.
 > second officer must sign off before records count.
 
 **Correcting a finalized session.** Someone who can reopen finalized event
-attendance (usually the chief ranks) reopens the event's attendance. Correct
-the times or the links, then finalize again. Each member's record is updated in
-place. A member taken off the roster has their record marked **Cancelled**,
+attendance (usually the chief ranks), or any training manager, reopens the
+event's attendance with **Reopen Attendance**. Correct the times or the
+links, then finalize again. Each member's record is updated in place. A member taken off the roster has their record marked **Cancelled**,
 with the hours it had noted. Reopening cancels an approval link that was still
 waiting; finalizing again sends a new one.
 
@@ -1865,17 +1879,21 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
 - Arriving from the dashboard's non-compliant link filters the list and shows a
   **Non-compliant + at risk only** chip. Clear the chip to see everyone. A
   refresh after clearing it does not bring the filter back.
-
-- **Member class** switch _(2026-10-27)_: **All**, **Operational**,
-  **Administrative** or **Social** narrows the list, the rollups and the CSV to
-  one class, and shows only the requirements that grade someone in it. The
-  choice is kept in the address (`?class=`), so a refresh or a shared link opens
-  on the same class. A member whose tier nobody has classified appears only
-  under **All**.
+- **Reviewing one member class** _(2026-10-27)_. When your roster holds more
+  than one member class, a switch above the list offers **All**,
+  **Operational**, **Administrative** and **Social** (only the classes you
+  have). Choosing a class lists only its members, and only the requirements
+  that grade at least one of them, so administrative members are not read
+  against a column of operational requirements. The summary line names the
+  class ("12 tracked operational members"), and the rollups narrow to the same
+  class. The choice stays in the page address (`?class=`), so a refresh or a
+  shared link opens on the same class. A member
+  whose class is not recorded is listed only under **All**.
 
 The actions available are **Print**, a CSV export, and links to each member's
-training records. **Print** follows the class switch: with a class chosen it
-prints that class alone and says so in the subtitle; with **All** it prints one
+training records. Both **Print** and the CSV follow the class switch, and the
+CSV has a **Member class** column. With a class chosen, the printout carries
+that class alone and says so in its subtitle; with **All** it prints one
 heading per class (Operational, Administrative, Social, then Unclassified),
 each table carrying only its own requirements.
 
@@ -1908,12 +1926,6 @@ the same rules, so their figures agree:
   with the same thresholds. The figure you file for the year matches the
   dashboard. A report already generated keeps the figures it was generated
   with.
-- **Scoping a requirement to operational members is one click.** In the
-  requirement form's **Member Categories** section, **Operational members**
-  ticks all four types an operational member can be stored under (Active,
-  Probationary, Life, Retired) and clears them when they are already ticked.
-  Administrative and Honorary are left as they were. It shows as pressed while
-  all four are ticked, even on a requirement you scoped by hand. _(2026-10-27)_
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
@@ -3674,16 +3686,28 @@ Milestones are not printed.
 **Who can do this:** training officers.
 
 1. Open **Training Admin → Overview → Compliance Matrix**.
-2. Select **Print** above the list.
-3. A new tab opens with the full compliance matrix laid out for paper.
+2. Optionally pick a member class with the class switch (see
+   [Compliance Matrix](#compliance-matrix)).
+3. Select **Print** above the list.
+4. A new tab opens with the compliance matrix laid out for paper.
 
 The printed matrix includes:
 
 - a summary of **Compliant**, **At Risk** and **Non-Compliant** members, and
   the number of **Requirements** — the same standing the screen shows;
-- every member as a row, with their completion percentage, and every active
-  requirement as a column. Requirement names wrap in full instead of being cut
+- every member as a row, with their completion percentage, and the active
+  requirements as columns. Requirement names wrap in full instead of being cut
   off;
+- _(2026-10-27)_ **one table per member class** when you print with **All**
+  chosen and the roster holds more than one class: **Operational Members**,
+  **Administrative Members**, **Social Members**, and **Unclassified Members**
+  for anyone whose class is not recorded, each with its member count. Each
+  table has only the requirements that grade someone in that class. A roster
+  of one class prints as a single table against every active requirement;
+- _(2026-10-27)_ only the chosen class when you print with a class chosen. The
+  subtitle reads, for example, "Operational Members — Compliance Matrix"
+  instead of "Department-Wide Compliance Matrix", and **Requirements** counts
+  only the requirements that grade that class;
 - one mark per cell, explained in a key under the table: **✓** met, **◐** in
   progress, **✗** not started, **Exp** expired, **Due** an existing member
   before their catch-up deadline, and **—** only where the requirement does not

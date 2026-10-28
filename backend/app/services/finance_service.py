@@ -6762,9 +6762,17 @@ class FinanceService:
                 "Reverse that first if payment was received in error."
             )
 
+        balance = max(
+            dues.amount_due - (dues.amount_paid or Decimal("0")), Decimal("0")
+        )
         reference = kwargs.get("transaction_reference")
-        if reference and any(
-            payment.transaction_reference == reference for payment in dues.payments
+        if reference and (
+            any(payment.transaction_reference == reference for payment in dues.payments)
+            # Paid in full already, so a confirmed overpayment wrote no ledger
+            # row and only its donation carries the reference.
+            or (
+                not balance and await self._dues_excess_donation_exists(dues, reference)
+            )
         ):
             # Already recorded. Returning the current state — rather than
             # raising — is what makes a retried or double-clicked submission
@@ -6775,23 +6783,136 @@ class FinanceService:
             )
             return dues
 
-        payment = DuesPayment(
-            organization_id=dues.organization_id,
-            member_dues_id=dues.id,
-            amount=Decimal(str(kwargs.get("amount_paid", 0))),
-            payment_method=kwargs.get("payment_method"),
-            transaction_reference=reference,
-            notes=kwargs.get("notes"),
-            received_at=datetime.now(timezone.utc),
-            recorded_by=recorded_by,
-        )
-        dues.payments.append(payment)
+        amount = Decimal(str(kwargs.get("amount_paid", 0)))
+        # W66-3, owner decision 2026-10-27: an overpayment is warned about and
+        # allowed, and what exceeds the balance is a donation from the member,
+        # not dues collected. The screen warns before it sends; this refusal is
+        # for any caller that did not.
+        excess = max(amount - balance, Decimal("0"))
+        if excess and not kwargs.get("excess_as_donation"):
+            raise ValueError(
+                f"This payment is ${excess:.2f} more than the ${balance:.2f} still "
+                "owed. Confirm to record the extra as a donation."
+            )
+        notes = kwargs.get("notes")
+        if excess:
+            note = f"Overpaid by ${excess:.2f}; the extra was recorded as a donation."
+            notes = f"{notes}\n{note}" if notes else note
 
-        _apply_payment_totals(dues)
+        dues_portion = amount - excess
+        if dues_portion > 0:
+            payment = DuesPayment(
+                organization_id=dues.organization_id,
+                member_dues_id=dues.id,
+                amount=dues_portion,
+                payment_method=kwargs.get("payment_method"),
+                transaction_reference=reference,
+                notes=notes,
+                received_at=datetime.now(timezone.utc),
+                recorded_by=recorded_by,
+            )
+            dues.payments.append(payment)
+
+            _apply_payment_totals(dues)
+
+        if excess:
+            await self._record_dues_excess_as_donation(
+                dues, excess, kwargs.get("payment_method"), reference, recorded_by
+            )
 
         await self.db.flush()
         await self.db.refresh(dues, ["updated_at"])
         return dues
+
+    async def _member_donor(self, dues: MemberDues) -> Optional[str]:
+        """The member's donor record, created from their account if they have none."""
+        from app.models.grant import Donor, DonorType
+        from app.services.fundraising_service import FundraisingService
+
+        existing = await self.db.scalar(
+            select(Donor.id)
+            .where(
+                Donor.organization_id == dues.organization_id,
+                Donor.user_id == dues.user_id,
+            )
+            .order_by(Donor.created_at)
+            .limit(1)
+        )
+        if existing:
+            return str(existing)
+        member = await self.db.get(User, dues.user_id)
+        if member is None:
+            return None
+        donor = await FundraisingService(self.db).create_donor(
+            dues.organization_id,
+            {
+                "user_id": member.id,
+                "donor_type": DonorType.INDIVIDUAL,
+                "first_name": member.first_name,
+                "last_name": member.last_name,
+                "email": member.email,
+            },
+        )
+        return str(donor.id)
+
+    async def _dues_excess_donation_exists(
+        self, dues: MemberDues, reference: str
+    ) -> bool:
+        """Whether a retried overpayment already recorded its donation.
+
+        Needed besides the ledger check above: when the dues were already paid
+        in full, the whole payment is the donation and no ledger row exists.
+        """
+        from app.models.grant import Donation
+
+        recorded = await self.db.scalars(
+            select(Donation.custom_fields).where(
+                Donation.organization_id == dues.organization_id,
+                Donation.transaction_id == reference,
+            )
+        )
+        return any(
+            isinstance(fields, dict) and fields.get("dues_id") == str(dues.id)
+            for fields in recorded
+        )
+
+    async def _record_dues_excess_as_donation(
+        self,
+        dues: MemberDues,
+        excess: Decimal,
+        payment_method: Optional[str],
+        reference: Optional[str],
+        recorded_by: Optional[str],
+    ) -> None:
+        """Record what a dues payment paid beyond the balance as a donation.
+
+        No campaign (owner decision): it is a general gift. ``custom_fields``
+        names the dues it came from, which is also how a retried submission
+        recognises the donation it already recorded.
+        """
+        from app.models.grant import PaymentMethod, PaymentStatus
+        from app.services.fundraising_service import FundraisingService
+
+        method = (
+            PaymentMethod(payment_method)
+            if payment_method in {m.value for m in PaymentMethod}
+            else PaymentMethod.OTHER
+        )
+        await FundraisingService(self.db).create_donation(
+            dues.organization_id,
+            {
+                "donor_id": await self._member_donor(dues),
+                "campaign_id": None,
+                "amount": excess,
+                "donation_date": datetime.now(timezone.utc),
+                "payment_method": method,
+                "payment_status": PaymentStatus.COMPLETED,
+                "transaction_id": reference,
+                "notes": "Overpayment of member dues, recorded as a donation.",
+                "custom_fields": {"dues_id": str(dues.id)},
+            },
+            recorded_by,
+        )
 
     async def list_dues_payments(
         self, dues_id: str, org_id: str, viewer_user_id: Optional[str] = None

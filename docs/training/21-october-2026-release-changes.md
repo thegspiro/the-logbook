@@ -1,38 +1,44 @@
-# October 27–28, 2026 workflow updates
+# October 28, 2026 workflow updates
 
 Audit:
-[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-27--28-2026).
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).
 Nothing has been re-captured; see [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+A top-up of the October 26–27 updates below: the member-class matrix, attendance
+rights and label checklist are listed there.
 
-| Topic                                                             | Now in                                            |
-| ----------------------------------------------------------------- | ------------------------------------------------- |
-| Off stops an email; always-sent emails; newly wired templates     | [08 — Admin & Reports](./08-admin-reports.md)     |
-| Compliance matrix by member class; Operational members shortcut   | [02 — Training](./02-training.md)                 |
-| Organizer and training-manager attendance rights; guest QR timing | [04 — Events & Meetings](./04-events-meetings.md) |
-| Edited shift report returns to review                             | [03 — Scheduling](./03-scheduling.md)             |
-| Label names, fonts and Print fix                                  | [05 — Inventory](./05-inventory.md)               |
-| Store cart kept in the browser                                    | [18 — Storefront](./18-storefront.md)             |
-| Encrypted leave and waiver reasons                                | [17 — Privacy](./17-privacy-data-rights.md)       |
+| Topic                                                         | Now in                                            |
+| ------------------------------------------------------------- | ------------------------------------------------- |
+| Off stops an email; always-sent emails; newly wired templates | [08 — Admin & Reports](./08-admin-reports.md)     |
+| Guest QR code waits for check-in to open                      | [04 — Events & Meetings](./04-events-meetings.md) |
+| Edited shift report returns to review                         | [03 — Scheduling](./03-scheduling.md)             |
+| Labels: Print fix after changing copies                       | [05 — Inventory](./05-inventory.md)               |
+| Store cart kept in the browser                                | [18 — Storefront](./18-storefront.md)             |
+| Encrypted leave and waiver reasons                            | [17 — Privacy](./17-privacy-data-rights.md)       |
 
 ---
 
 # October 26–27, 2026 workflow updates
 
-Audit:
+Index for the latest window. Audit:
 [`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
-Nothing has been re-captured; see [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
 
-| Topic                                                      | Now in                                                  |
-| ---------------------------------------------------------- | ------------------------------------------------------- |
-| Passkeys as a second factor                                | [00 — Getting Started](./00-getting-started.md)         |
-| Sensitive form fields and who can read them                | [07 — Documents & Forms](./07-documents-forms.md)       |
-| Gmail service-account sending                              | [08 — Admin & Reports](./08-admin-reports.md)           |
-| IP exception needs a second approver                       | [08 — Admin & Reports](./08-admin-reports.md)           |
-| Applicant step-completed and status-link email templates   | [15 — Prospective Members](./15-prospective-members.md) |
-| Organization donors by name alone                          | [12 — Grants](./12-grants-fundraising.md)               |
-| Before you print; barcode black-box fix                    | [05 — Inventory](./05-inventory.md)                     |
-| Draft events stay drafts when edited                       | [04 — Events & Meetings](./04-events-meetings.md)       |
-| Budget request cannot be decided by its submitter or owner | [11 — Finance](./11-finance.md)                         |
+| Topic                                                                | Now in                                                                                                          |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Passkeys as a second sign-in step; the Allow passkeys policy         | [00 — Getting Started](./00-getting-started.md), [08 — Administration & Reports](./08-admin-reports.md)         |
+| Searching by email needs the complete address                        | [12 — Grants](./12-grants-fundraising.md), [15 — Prospective Members](./15-prospective-members.md)              |
+| Sensitive form fields                                                | [07 — Documents & Forms](./07-documents-forms.md)                                                               |
+| Who runs an event's attendance; training managers on Training events | [04 — Events & Meetings](./04-events-meetings.md), [02 — Training](./02-training.md)                            |
+| Compliance matrix by member class; Operational members shortcut      | [02 — Training](./02-training.md)                                                                               |
+| Applicant emails as editable templates                               | [15 — Prospective Members](./15-prospective-members.md), [08 — Administration & Reports](./08-admin-reports.md) |
+| Label printing: Before you print checklist, two-line names           | [05 — Inventory](./05-inventory.md)                                                                             |
+| Gmail service account                                                | [08 — Administration & Reports](./08-admin-reports.md) (written with the change)                                |
+| Email encryption, passkey dependency, switched-off templates         | Operator-facing: [`UPGRADING.md`](../UPGRADING.md)                                                              |
+| Draft events stay drafts when edited                                 | [04 — Events & Meetings](./04-events-meetings.md)                                                               |
+| IP exception needs a second approver                                 | [08 — Administration & Reports](./08-admin-reports.md)                                                          |
+| Budget request cannot be decided by its submitter or owner           | [11 — Finance](./11-finance.md)                                                                                 |
+| Organization donors by name alone                                    | [12 — Grants](./12-grants-fundraising.md)                                                                       |
 
 ---
 

@@ -5,10 +5,10 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
-## Recent changes: October 27 – 28, 2026
+## Recent changes: October 28, 2026
 
 The engineering audit is
-[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-27--28-2026).
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).
 
 - **Switching an email template Off now really stops it.** Five emails (password
   reset, IT password, welcome, ballot, application status link) cannot be turned
@@ -16,13 +16,10 @@ The engineering audit is
 - **Five more emails use their templates**: certification expiration, post-event
   and post-shift validation, member archived and prospect inactivity.
 - **Stale applications** email the coordinators, and optionally the applicant.
-- **Training compliance matrix** can be filtered and printed by member class.
-- **Event organizers and training managers** can run attendance; training
-  managers can edit, finalize and reopen Training events.
 - **The guest check-in code** appears only while check-in is open.
 - **An edited shift report** goes back to review.
 - **The department store cart** survives a reload.
-- **Labels** print two-line names and no longer lock Print after changing copies.
+- **Labels** no longer lock Print after changing copies.
 - **Leave and waiver reasons** are encrypted at rest.
 - **Pages load faster**: the first download is about half the size.
 
@@ -31,21 +28,29 @@ The engineering audit is
 The engineering audit is
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
 
-- **Passkeys** can be your second factor: Face ID, a fingerprint or the device
-  PIN instead of a code. Add up to three under My Account → Security. Operators:
-  the backend image needs rebuilding (`docs/UPGRADING.md`).
-- **Forms can mark a question Sensitive.** Answers are encrypted, hidden from
-  everyone without the new "view sensitive answers" permission, and kept out of
-  CSV files.
-- **Gmail** can send through a Google Workspace service account (Settings → Email).
-- **Applicant emails** (step completed, status link, welcome) are editable
-  templates.
+- **Passkeys** can be your second sign-in step, instead of or as well as an
+  authenticator code: Face ID, a fingerprint or the device PIN. Add up to three
+  under My Account → Security. Administrators can switch them off under MFA
+  Policy. Operators: the backend image needs rebuilding (`docs/UPGRADING.md`).
+- **Email addresses are encrypted at rest.** Search boxes now find an address
+  only when you type all of it. Operators: see `docs/UPGRADING.md`.
+- **Forms can have sensitive fields.** Their answers are encrypted and need a
+  separate permission to read; they never appear in a CSV export.
+- **Event organizers run their own event's attendance**, and training managers
+  run Training events from start to finish.
+- **The compliance matrix** can show and print one member class, and the
+  requirement form has an **Operational members** shortcut.
+- **Applicant emails** in the prospective members pipeline are now templates
+  you can edit or switch off.
+- **Label printing** shows a checklist of printer settings first, long names
+  wrap to two lines, and barcodes no longer print as black boxes.
+- **Gmail** can send through a Google Workspace service account.
 - **Donors** that are businesses or agencies need only an organization name.
-- **Label printing**: barcodes no longer print as black boxes, and a "Before you
-  print" card names the paper size to choose.
 - **Editing a draft event** keeps it a draft.
 - **Two-person rule** now also covers budget request decisions and IP-security
   exception approvals.
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
 
 ## Recent changes: October 25 – 26, 2026
 

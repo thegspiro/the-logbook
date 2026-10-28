@@ -114,11 +114,11 @@ on, the sign-in page shows **Google** and/or **Microsoft** buttons under
 not create a new Logbook account. The email address on your Google or
 Microsoft account must match an account your administrator has already set up.
 
-**Your sign-in code is still needed.** If you have turned on two-step sign-in
+**Your second step is still needed.** If you have turned on two-step sign-in
 (see [Account Settings](#account-settings)), you still enter the 6-digit code
-from your phone after Google or Microsoft lets you in. You can use one of your
-recovery codes instead. You have 5 minutes to enter it; after that, start
-again.
+from your phone, or select **Use your passkey**, after Google or Microsoft lets
+you in. You can use one of your recovery codes instead. You have 5 minutes to
+enter it; after that, start again.
 
 ![The login page's two-factor step — the 6-digit code field and the Use a recovery code link](./images/00-23-login-two-factor.png)
 
@@ -436,24 +436,14 @@ like, and a `+` at the start for an international number. A number needs 7 to
 as "call me" are refused, with a message showing what to enter. A number saved
 before these rules were added is kept as it is until you change it.
 
-**Two-step sign-in (MFA).** After your password, you also enter a 6-digit code
-from an app on your phone, such as Google Authenticator or Authy. This keeps
-your account safe even if someone learns your password. When you turn it on,
+**Two-step sign-in (MFA).** After your password, you also prove it is you a
+second way: with a **passkey** on your phone or computer (see
+[Using a passkey](#using-a-passkey-for-two-step-sign-in-2026-10-26)), or with a
+6-digit code from an app on your phone, such as Google Authenticator or Authy.
+You can set up either or both; either one is enough. This keeps your account
+safe even if someone learns your password. When you set up your first one,
 you get a set of **recovery codes**. Each one works once, if you ever lose
 your phone. Save them somewhere safe and private.
-
-**Passkeys (_2026-10-25_).** Instead of a code, you can use a **passkey**: your
-phone or computer confirms it is you with Face ID, a fingerprint or the device
-PIN. Open **My Account → Security → Passkeys**, choose **Add a passkey**, name
-it (for example _Jake's iPhone_), choose **Create passkey** and confirm on the
-device. You can keep up to three. If a passkey is your first second factor, save
-the recovery codes shown once. At sign-in, after your password, the page offers
-the passkey; the authenticator-app code and recovery codes still work. At a
-station computer, your phone can be the passkey through the browser's QR-code
-prompt (Bluetooth must be on). The option appears only when the department's
-site is on HTTPS at a domain name; an administrator can switch new passkeys off
-under **Settings → Authentication**. Moving the site to a different address
-retires every passkey, and you add new ones.
 
 **Two-step sign-in is required if you hold an administrative role.** Whatever
 your department chose for everyone else, a member who can manage settings,
@@ -467,12 +457,14 @@ you enroll. The 14 days start again if you are later promoted into such a role.
 **Some actions ask you to prove it is you.** Exporting the audit or error log,
 changing roles, positions, security or integration settings, resetting another
 administrator's password or two-factor, and deleting or anonymizing a member
-open a small box asking for your **authenticator code** (or your password, if you
-do not use two-step sign-in). Enter it and the action carries on by itself. It
+open a small box asking for your **authenticator code**, or offering **Use your
+passkey** if you have one (your password, if you do not use two-step sign-in).
+A member whose only second step is a passkey must use it here; the password is
+not accepted instead. Enter it and the action carries on by itself. It
 stays proven for 10 minutes on that browser, so a second sensitive action right
 after does not ask again. If you sign in only through a provider such as Google
-and have no password or authenticator, the box tells you to set up two-step
-sign-in first.
+and have no password, authenticator or passkey, the box tells you to set up
+two-step sign-in first.
 
 ![My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture](./images/00-31-mfa-recovery-codes.png)
 
@@ -480,6 +472,75 @@ sign-in first.
 > **Privacy** tab. None of them is required to be a member. If you have never
 > answered a question, The Logbook treats it as "no". It never takes silence
 > as permission. More detail: [Privacy & Your Data](./17-privacy-data-rights.md).
+
+### Using a passkey for two-step sign-in _(2026-10-26)_
+
+A passkey lets you confirm sign-in with Face ID, a fingerprint or your
+phone's PIN instead of typing a code. It still comes after your password (or
+Google or Microsoft); it does not replace it.
+
+**Adding a passkey.**
+
+1. Open **My Account → Security**. Under **Passkeys**, select **Add a
+   passkey**.
+2. Type a name in **Name this passkey**, such as "My phone", so you can tell
+   your devices apart later.
+3. Select **Create passkey** and confirm on your device.
+4. If this is your first second step, the page shows **Save your recovery
+   codes**. Copy them somewhere safe and select **Done**. They are not shown
+   again.
+
+You can have up to three passkeys. Each one shows whether it **Syncs across
+your devices** or is for **This device only**, when it was added, and when it
+was last used. Adding a passkey when you already have a second step asks you
+to prove it is you first.
+
+**Signing in with it.** After your password, the sign-in page shows **Use
+your passkey**. Select it and confirm on your device. If you also use an
+authenticator app, the code box is still there underneath. **Use a recovery
+code** works as before. A failed passkey counts toward the account lock, the
+same as a wrong code. At a station computer, the browser can offer to use the
+passkey on your phone by scanning a QR code; this needs Bluetooth on that
+computer. If it does not work, use your authenticator code or a recovery code.
+
+**Removing one.** Select the bin icon next to the passkey, prove it is you,
+and confirm **Remove passkey**. You get an email saying it was removed. If
+the passkey was your only second step, your recovery codes stop working too,
+and if your department requires two-step sign-in you are asked to set one up
+again.
+
+**If you only use passkeys,** your recovery codes are managed on the
+**Passkeys** card: it shows how many are left, and **Generate new recovery
+codes** replaces them. (If you also use an authenticator app, manage them on
+that card instead.)
+
+**When you won't see the option.** Passkeys only work when The Logbook is
+reached over HTTPS at its web address. If it is not, the card says so and you
+use an authenticator app. If the card says _"Your organization has turned off
+adding new passkeys"_, the passkeys you already have keep working. If it says
+_"This browser cannot create passkeys"_, open The Logbook in a current browser
+on your phone or computer.
+
+**For administrators.**
+
+- **Settings → Authentication → MFA Policy** has an **Allow passkeys** switch
+  (on by default). Turning it off stops members adding new passkeys. Ones
+  already added keep working until the member or an administrator removes
+  them. **Require two-factor authentication** is met by a passkey or an
+  authenticator app.
+- **A member lost one phone.** On the Members administration page, the
+  member's **Reset MFA** action now appears for members with a passkey too.
+  Its dialog lists their passkeys; **Remove** next to one takes away just that
+  passkey and keeps their other sign-in methods. The member is signed out
+  everywhere and gets an email. **Reset MFA** itself removes the authenticator
+  app, every passkey and the recovery codes; use it only when the member has
+  lost all their devices and codes.
+- **A passkey belongs to one web address.** If your department's Logbook
+  address changes, every passkey stops working. Members add new ones, and
+  where two-step sign-in is required, members whose only second step was a
+  passkey are asked to set one up at their next sign-in. Recovery codes keep
+  working throughout. Details:
+  [UPGRADING.md](../UPGRADING.md#the-backend-needs-the-webauthn-package-for-passkeys-2026-10-25).
 
 ---
 

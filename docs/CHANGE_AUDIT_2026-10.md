@@ -5,69 +5,89 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
-## Change audit: October 27 – 28, 2026
+## Change audit: October 28, 2026
 
-Merged to `main` since `5c520451` (2026-10-27 12:28 UTC) through `7c0162c0`
-(2026-10-28 12:02 UTC). Security-review passes (integrations, forms,
-reports-analytics, security-audit-ip, onboarding, scheduled-tasks,
-locations-kiosk, core-infra, frontend-shared, auth-session, permissions-roles,
-public-surface-webhooks, storefront-payments, cross-cutting-baseline) are in
-`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+A top-up of the October 26 – 27 section below, which merged first and covers
+`main` through `4a4eb2fd`. This pass started at `5c520451`, so the changes the
+two windows share are recorded once, below; what this pass adds to them is the
+first table here. New merges are those after `4a4eb2fd` (2026-10-28 02:10
+UTC) through `7c0162c0` (2026-10-28 12:02 UTC). Security-review passes (frontend-shared,
+cross-cutting-baseline, auth-session, permissions-roles,
+public-surface-webhooks, storefront-payments) are in
+`docs/security-review/PROGRESS.md`; the security, audit and IP app review (B23)
+is in `docs/app-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
 
-| Change                                                                                                                                                                         | Guide                    | Disposition                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ | ----------------------------------------------------------- |
-| Email templates: **Off now stops the email**; five emails cannot be switched off; Cert Expiration, Post-Event/Post-Shift Validation, Member Archived, Prospect Inactivity sent | 08, `UPGRADING.md`       | Added; list screenshot queued                               |
-| Stale applications: coordinators emailed by the inactivity sweep; applicants via the new **Application Going Inactive** template (migration `0d9897752425`)                    | 15, 08                   | 15 already described it; `PROSPECTIVE_MEMBERS_MODULE` fixed |
-| Member Dropped email sends the template's attachments                                                                                                                          | 08, `DROP_NOTIFICATIONS` | Added                                                       |
-| Compliance matrix: **member class** switch and class-aware Print; requirement form **Operational members** shortcut                                                            | 02                       | Added; screenshots queued                                   |
-| Event attendance tools open to the organizer, alternate and (Training events) `training.manage`; training managers edit, finalize and reopen Training events                   | 04, wiki Events          | Added                                                       |
-| Guest check-in QR code hidden until check-in opens                                                                                                                             | 04                       | Added; screenshot queued                                    |
-| Shift report edited after review returns to **Pending review** (EC-17)                                                                                                         | 03                       | Added                                                       |
-| Department store cart kept in the browser, per member and window                                                                                                               | 18                       | Added                                                       |
-| Labels: two-line names, sans-serif font, **Before you print** on the shared label page, Print re-enables after changing copies                                                 | 05                       | Added; label screenshots queued                             |
-| Inventory dashboard queue renamed **Waiting for action**                                                                                                                       | 05                       | Already written; 05-97 and 05-132 images show the old name  |
-| Leave and training-waiver reasons encrypted at rest (migration `b74bcce55c11`)                                                                                                 | 17, `UPGRADING.md`       | Added; operators back up first                              |
-| Getting Started lesson teaches passkeys beside the authenticator app                                                                                                           | Learning Center          | In-app lesson; no guide change                              |
-| Every written-out refusal goes through `safe_error_detail`, and list-joining refusals are capped; first load halved (714 KB to 366 KB gzipped); footer stays below the fold    | none                     | Backend and performance; no screen change                   |
-| CI: backend integration jobs get 45 minutes; E2E contrast audits wait for transitions; npm/pip bumps                                                                           | none                     | No guide change                                             |
+**Added to changes already recorded below**
+
+| Change                                                                                                                                                                          | Guide              | Disposition                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------- |
+| #3781: five emails cannot be switched off; Cert Expiration, Post-Event/Post-Shift Validation, Member Archived and Prospect Inactivity are now sent                              | 08, `UPGRADING.md` | Added; list screenshot queued                               |
+| #3781: stale applications email their coordinators from the inactivity sweep, and applicants through the new **Application Going Inactive** template (migration `0d9897752425`) | 15, 08             | 15 already described it; `PROSPECTIVE_MEMBERS_MODULE` fixed |
+| #3771: the printout names the chosen class in its subtitle, and with **All** prints Operational, Administrative, Social, then Unclassified                                      | 02                 | Added                                                       |
+| #3770: **Before you print** also runs on the shared label page (apparatus, facility, member and storage-area labels)                                                            | 05                 | Added                                                       |
+
+**New in this window**
+
+| Change                                                                                                                                                                                      | Guide                    | Disposition                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------- |
+| Member Dropped email sends the template's attachments (#3797)                                                                                                                               | 08, `DROP_NOTIFICATIONS` | Added                                                      |
+| Guest check-in QR code hidden until check-in opens (#3795)                                                                                                                                  | 04                       | Added; screenshot queued                                   |
+| Shift report edited after review returns to **Pending review** (EC-17, #3772)                                                                                                               | 03                       | Added                                                      |
+| Department store cart kept in the browser, per member and window (#3772)                                                                                                                    | 18                       | Added                                                      |
+| Labels: Print re-enables after changing **Copies per item** (#3799)                                                                                                                         | 05                       | Added                                                      |
+| Inventory dashboard queue renamed **Waiting for action** (#3772)                                                                                                                            | 05                       | Already written; 05-97 and 05-132 images show the old name |
+| Leave and training-waiver reasons encrypted at rest (migration `b74bcce55c11`, #3794)                                                                                                       | 17, `UPGRADING.md`       | Added; operators back up first                             |
+| Getting Started lesson teaches passkeys beside the authenticator app (#3792)                                                                                                                | Learning Center          | In-app lesson; no guide change                             |
+| Every written-out refusal goes through `safe_error_detail`, and list-joining refusals are capped (#3793); first load halved (714 KB to 366 KB gzipped), footer stays below the fold (#3801) | none                     | Backend and performance; no screen change                  |
 
 **Screenshots to create:** Email Templates list filtered to **Off** with the
-disabled switch on an always-sent template; Compliance Matrix with the class
-switch; the class-grouped printout; requirement form with **Operational
-members** pressed; event QR page before check-in opens; label sheet with
-two-line names. **Replace:** `05-97` and `05-132` (heading now **Waiting for
-action**). See `docs/training/SCREENSHOT_CURRENCY.md`.
+disabled switch on an always-sent template; event QR page before check-in
+opens. **Replace:** `05-97` and `05-132` (heading now **Waiting for action**).
+The class switch, per-class printout, **Operational members** and label
+screenshots are queued in the section below. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
 
 ## Change audit: October 26 – 27, 2026
 
-Merged to `main` since `14f1e4b2` (2026-10-26 13:24 UTC) through `5c520451`
-(2026-10-27 12:28 UTC). Security-review passes (training-core,
-training-extended, skills-testing, compliance, admin-hours, grants-fundraising,
-medical-supplies, meetings-minutes, events-requests, messaging-notifications)
-are in `docs/security-review/PROGRESS.md`; the only code fix among them is
-MSG-17. `CHANGELOG.md` stays closed.
+Merged to `main` since `14f1e4b2` (2026-10-26 13:24 UTC) through `4a4eb2fd`
+(2026-10-28 02:10 UTC), 46 merges. Security-review passes (scheduling,
+events-requests, training-core, training-extended, skills-testing, compliance,
+admin-hours, grants-fundraising, medical-supplies, meetings-minutes,
+messaging-notifications with MSG-17 fixed, forms, integrations,
+security-audit-ip, reports-analytics, onboarding, scheduled-tasks,
+locations-kiosk with LOC10-1 to LOC10-3, core-infrastructure) are in
+`docs/security-review/PROGRESS.md`; the compliance and skills app review (B22)
+is in `docs/app-review/PROGRESS.md`. Two documentation passes (#3730, #3746)
+merged in this window. `CHANGELOG.md` stays closed.
 
-| Change                                                                                                                                                                 | Guide                       | Disposition                                               |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------- |
-| **Passkeys** as a second factor (My Account → Security → Passkeys, up to three; login offers the passkey; admin switch under Settings → Authentication)                | 00, `MFA.md`, wiki Security | Added to 00; `UPGRADING` (needs `webauthn`, HTTPS domain) |
-| Forms: **Sensitive** fields, encrypted answers, `sensitive_answers.view`, left out of CSV and integrations (migration `ce541de8d3da`)                                  | 07, `FORMS_MODULE.md`       | Added; screenshots queued                                 |
-| Gmail **Service account** authentication on Settings → Email                                                                                                           | 08                          | Already written with the change; shot re-check queued     |
-| Pipeline **Application Step Completed** / **Application Status Link** emails editable; welcome email uses the department's Welcome template (migration `08e6220f2dce`) | 15                          | Added                                                     |
-| Fundraising: business, foundation or agency donor by organization name alone (migration `e03f96c98452`)                                                                | 12                          | Added; Add Donor shot queued                              |
-| Inventory print: black-box Code 128 barcodes fixed; **Before you print** paper-size step                                                                               | 05                          | Added; screenshot queued                                  |
-| Events edit form keeps a draft a draft and loads the server's lead-time default                                                                                        | 04                          | Added                                                     |
-| Finance budget request cannot be decided by its submitter or line owner; IP exception cannot be approved by its member or filer                                        | 11, 08, `COMPLIANCE.md`     | Added; no screen change                                   |
-| MSG-17: Gmail service-account key with a `token_uri` other than Google's is refused (SSRF)                                                                             | none                        | Backend; `docs/security-review/MSG-25-…`                  |
-| Wiki: eleven module and operator pages added, dead `../` links made absolute; `prospective_members.status_token` rotated with the key                                  | wiki                        | Merged in the window                                      |
-| Housekeeping: Alembic heads re-joined (`f5426e40b955`), WebKit apt cache in CI, E2E contrast audit waits for transitions, npm/pip minor bumps                          | none                        | No guide change                                           |
+| Change                                                                                                                                                                                                                                                                          | Guide                             | Disposition                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Passkeys** as a second factor: add up to three, **Use your passkey** at sign-in and step-up, **Allow passkeys** policy switch, remove one from **Reset MFA** (#3726; backend needs `webauthn`)                                                                                | 00, 08, glossary                  | Added; SSO, step-up and glossary sentences that named only a 6-digit code corrected; `UPGRADING` written with the change                      |
+| **Email addresses encrypted at rest** (migration `b8236e29ec44`): searching by part of an address no longer matches in the applicant list, donors, store orders, form picker or message history (#3743)                                                                         | 12, 15                            | Donor and applicant search sentences corrected; the member list filters in the browser and still matches; `UPGRADING` written with the change |
+| Forms: **Sensitive** fields, encrypted answers readable with `forms.manage` plus `sensitive_answers.view`, never in **Export CSV** or integrations (#3733)                                                                                                                      | 07                                | Added; Export CSV sentence corrected; `KNOWN_LIMITATIONS` written with the change                                                             |
+| Gmail **Service account** sending method on Settings → Email (#3731, #3755)                                                                                                                                                                                                     | 08                                | Written with the change; `UPGRADING`, `KNOWN_LIMITATIONS`                                                                                     |
+| Pipeline applicant emails are editable templates in a **Prospective Members** group; stage switch **Notify prospect when this stage is completed** (#3756)                                                                                                                      | 15, 08                            | Added; 08's Email Templates category list was out of date and the Application Withdrawn template's category in 15 was wrong, both corrected   |
+| A template switched **Off** now stops its email (#3781)                                                                                                                                                                                                                         | 15                                | Written with the change; `UPGRADING`                                                                                                          |
+| An event's organizer and alternate run its attendance; `training.manage` holders run Training events (edit, end, finalize, record times, reopen) (#3773)                                                                                                                        | 04, 02                            | Added; 04's Training Credit step named an **Add Attendee** button that does not exist, now **Check In**                                       |
+| Compliance matrix and its printout filtered by **member class**; one table per class when printing **All** (#3771)                                                                                                                                                              | 02                                | Added; "every active requirement as a column" corrected                                                                                       |
+| **Operational members** shortcut on the requirement form (#3779)                                                                                                                                                                                                                | 02                                | Added                                                                                                                                         |
+| Labels: **Before you print** checklist naming the paper size, two-line names, sans-serif text; barcodes no longer print as black boxes (#3770, #3762)                                                                                                                           | 05                                | Added; barcode fix needs no guide change                                                                                                      |
+| Fundraising: a business, foundation or agency donor recorded by organization name alone (migration `e03f96c98452`)                                                                                                                                                              | 12                                | Added                                                                                                                                         |
+| Events edit form keeps a draft a draft and loads the server's lead-time default                                                                                                                                                                                                 | 04                                | Added                                                                                                                                         |
+| A budget request cannot be decided by its submitter or line owner; an IP exception cannot be approved by its member or filer                                                                                                                                                    | 11, 08, `COMPLIANCE.md`           | Added; no screen change                                                                                                                       |
+| `KNOWN_LIMITATIONS`: event edit gaps, organization donors, two separation-of-duties guards (#3757)                                                                                                                                                                              | `KNOWN_LIMITATIONS`, `COMPLIANCE` | Written with the change                                                                                                                       |
+| Wiki: 11 module and operator pages, dead repo links fixed; `status_token` rotated with the encryption key (#3758)                                                                                                                                                               | wiki                              | Written with the change                                                                                                                       |
+| Backend only: a Gmail service-account key whose `token_uri` is not Google's own token endpoint is refused (MSG-17, #3768), a skill template refuses a null visibility or **require_all_critical** (B22, #3747), donor-privacy comment (#3765), encryption-registry test (#3790) | none                              | No screen change                                                                                                                              |
+| Housekeeping: dependency bumps including `@hookform/resolvers` 6.0.0 (#3749, #3750, #3751, #3753, #3776, #3777); WebKit install timeout, reduced-motion dialog audit, 45-minute integration budget (#3763, #3769, #3778)                                                        | none                              | No guide change                                                                                                                               |
 
-**Screenshots to create:** My Account → Security → Passkeys (empty and with one
-passkey), login passkey step, the field editor's Sensitive checkbox, a
-submission with a lock-icon block and the Restricted note, Add Donor with
-Organization Name, the **Before you print** card, the Application Step
-Completed template. **Re-check:** Settings → Email with Gmail and Service
-account selected (08-38), 00-23 (login second-factor step now offers a
-passkey). See `docs/training/SCREENSHOT_CURRENCY.md`.
+**Screenshots to create:** the Passkeys card and **Use your passkey** at sign-in,
+**Allow passkeys** in MFA Policy, a **Sensitive** field and the Restricted note,
+the compliance matrix class switch and a per-class printout, **Operational
+members** on the requirement form, the **Before you print** checklist, the
+stage's **Notify prospect** switch, Add Donor with **Organization Name**, and
+Settings → Email with **Service account**. **Re-check:** the Email Templates
+sidebar (new **Prospective Members** group) and 00-23 (the second-factor step
+now offers a passkey). See `docs/training/SCREENSHOT_CURRENCY.md`.
 
 ## Change audit: October 25 – 26, 2026
 

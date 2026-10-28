@@ -1978,6 +1978,9 @@ class MemberDuesPayment(BaseModel):
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     notes: Optional[str] = None
+    # W66-3: the officer confirmed that what exceeds the balance is a donation.
+    # Without it an overpayment is refused.
+    excess_as_donation: bool = False
 
 
 class MemberDuesWaive(BaseModel):

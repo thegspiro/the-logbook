@@ -501,7 +501,9 @@ business and organization that supports the department.
 ### What the donor list shows
 
 For each donor: their contact details, **total donated**, how many donations,
-and the date of their last donation. Search by name or email, or filter by type.
+and the date of their last donation. Search by name or a complete email address
+(part of an address no longer matches, since addresses are stored encrypted),
+or filter by type.
 A donor's first and last donation dates use the department's date, so an evening
 gift is dated the day it was given.
 

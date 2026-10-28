@@ -370,7 +370,7 @@ class FundraisingService:
         return result.scalar_one_or_none() is not None
 
     async def create_donation(
-        self, organization_id: str, data: Dict[str, Any], user_id: str
+        self, organization_id: str, data: Dict[str, Any], user_id: Optional[str]
     ) -> Donation:
         campaign_id = data.get("campaign_id")
         donor_id = data.get("donor_id")

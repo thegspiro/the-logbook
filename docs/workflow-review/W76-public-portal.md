@@ -138,7 +138,10 @@ The section buttons now carry `aria-current`.
   `https://your-domain.com/…`. It now uses this server's address, where the
   public API is served.
 
-### W76-6 — LOW — Three statistics fields can be enabled but always publish null — FLAGGED
+### W76-6 — LOW — Three statistics fields can be enabled but always publish null — FIXED (2026-10-27)
+
+> **Fixed (owner decision: define and wire all three).** See
+> `docs/KNOWN_LIMITATIONS.md` and `app/services/public_stats_service.py`.
 
 Data Control offers `stats.stations`, `stats.total_volunteer_hours` and
 `stats.total_calls_ytd`. `get_organization_stats` hard-codes all three to
