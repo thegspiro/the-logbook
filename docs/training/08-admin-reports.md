@@ -1687,6 +1687,25 @@ switch between them.
 
 ![Email template sidebar filtered to templates matching welcome](./images/08-36-template-search.png)
 
+**Off means off** _(2026-10-27)_. Switching a template **Off** stops that email
+from being sent at all; before this release it only fell back to the built-in
+wording and the email kept going out. The editor says what Off does. Five
+emails cannot be switched off, because their recipient could not get the
+content any other way: **Password Reset**, **IT Password Notification**,
+**Welcome**, **Ballot Notification** and **Application Status Link** (their
+switch is disabled). A department that never opened Email Templates keeps every
+email. Operators: check the **Off** filter before upgrading
+([`UPGRADING.md`](../UPGRADING.md)).
+
+Five templates that used to be stored but never used are now sent, in your
+wording: **Cert Expiration** (it now says "expires today" or "tomorrow" rather
+than "0 days left"), **Post-Event Validation**, **Post-Shift Validation**,
+**Member Archived** and **Prospect Inactivity Warning**. A new **Application
+Going Inactive** template carries the applicant notice
+([guide 15](./15-prospective-members.md#inactivity-timeout)). The **Member
+Dropped** email now includes the template's attachments (a return form), which
+it ignored before.
+
 A blue note above the list reads "Every email uses the current design,
 including templates your department had edited — there is nothing to adopt." It
 points to **Previous version** for wording the redesign replaced, and explains

@@ -1866,8 +1866,18 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   **Non-compliant + at risk only** chip. Clear the chip to see everyone. A
   refresh after clearing it does not bring the filter back.
 
+- **Member class** switch _(2026-10-27)_: **All**, **Operational**,
+  **Administrative** or **Social** narrows the list, the rollups and the CSV to
+  one class, and shows only the requirements that grade someone in it. The
+  choice is kept in the address (`?class=`), so a refresh or a shared link opens
+  on the same class. A member whose tier nobody has classified appears only
+  under **All**.
+
 The actions available are **Print**, a CSV export, and links to each member's
-training records.
+training records. **Print** follows the class switch: with a class chosen it
+prints that class alone and says so in the subtitle; with **All** it prints one
+heading per class (Operational, Administrative, Social, then Unclassified),
+each table carrying only its own requirements.
 
 ![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
 
@@ -1898,6 +1908,12 @@ the same rules, so their figures agree:
   with the same thresholds. The figure you file for the year matches the
   dashboard. A report already generated keeps the figures it was generated
   with.
+- **Scoping a requirement to operational members is one click.** In the
+  requirement form's **Member Categories** section, **Operational members**
+  ticks all four types an operational member can be stored under (Active,
+  Probationary, Life, Retired) and clears them when they are already ticked.
+  Administrative and Honorary are left as they were. It shows as pressed while
+  all four are ticked, even on a requirement you scoped by hand. _(2026-10-27)_
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member

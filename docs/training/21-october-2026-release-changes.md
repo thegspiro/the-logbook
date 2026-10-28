@@ -1,3 +1,21 @@
+# October 27–28, 2026 workflow updates
+
+Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-27--28-2026).
+Nothing has been re-captured; see [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                             | Now in                                            |
+| ----------------------------------------------------------------- | ------------------------------------------------- |
+| Off stops an email; always-sent emails; newly wired templates     | [08 — Admin & Reports](./08-admin-reports.md)     |
+| Compliance matrix by member class; Operational members shortcut   | [02 — Training](./02-training.md)                 |
+| Organizer and training-manager attendance rights; guest QR timing | [04 — Events & Meetings](./04-events-meetings.md) |
+| Edited shift report returns to review                             | [03 — Scheduling](./03-scheduling.md)             |
+| Label names, fonts and Print fix                                  | [05 — Inventory](./05-inventory.md)               |
+| Store cart kept in the browser                                    | [18 — Storefront](./18-storefront.md)             |
+| Encrypted leave and waiver reasons                                | [17 — Privacy](./17-privacy-data-rights.md)       |
+
+---
+
 # October 26–27, 2026 workflow updates
 
 Audit:

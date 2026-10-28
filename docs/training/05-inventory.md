@@ -1968,7 +1968,13 @@ Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
      again on this computer_ for a size you have set up. When no network
      printer is registered it links to **Settings → Label Printers**. Browser
      prints of Code 128 barcodes used to come out as solid black boxes; the
-     bars now print on a white background.
+     bars now print on a white background. The same step now runs on the
+     shared label page (apparatus, facility, member and storage-area labels).
+     Names wrap to **two lines** before they are cut, so "Golf Shirt — XXL —
+     Unisex Short Sleeve" and its long-sleeve twin stay distinguishable, and
+     labels use a sans-serif font that a 203 dpi thermal head prints cleanly.
+     **Print** stays available after you change **Copies per item**; it used to
+     stay disabled until the page was reloaded. _(2026-10-27/28)_
    - **Print to _printer name_**: appears when your department has registered a
      network label printer. The labels go straight to it. See
      [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer).

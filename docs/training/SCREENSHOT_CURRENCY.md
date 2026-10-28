@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Queued by the October 27 – 28 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-27--28-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 08 | Email Templates list on the **Off** filter, and an always-sent template with its switch disabled | Create |
+| 02 | Compliance Matrix with the **Member class** switch set to Operational | Create |
+| 02 | Printed compliance matrix grouped by class | Create |
+| 02 | Requirement form, Member Categories with **Operational members** pressed | Create |
+| 04 | Event QR page before check-in opens (guest code hidden, Reset offered) | Create |
+| 05 | `05-97-needs-attention-pending-return`, `05-132-departure-clearance-needs-attention`: heading is now **Waiting for action** | Replace |
+| 05 | Label preview with two-line names | Create |
+
 ## Queued by the October 26 – 27 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).

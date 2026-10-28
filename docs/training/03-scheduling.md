@@ -1613,6 +1613,13 @@ This section covers two things:
   calls, availability and compliance; and
 - **Shift reports**, the officer's write-up of each crew member after a shift.
 
+**An edit to a reviewed shift report sends it back to review** _(2026-10-27)_.
+When the filing officer changes any field of a submitted report, it returns to
+**Pending review** and the earlier reviewer and review date are cleared (the
+reviewer's notes are kept). A flagged report always goes back; an approved one
+goes back where the department requires review. Saving unchanged values keeps
+the approval, and training credit is not granted twice.
+
 ### Scheduling Reports
 
 Open **Scheduling Reports** from the Scheduling Administration hub. You need

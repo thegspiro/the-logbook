@@ -699,8 +699,33 @@ new one and stops any printed copy from working. Guests who scan it reach the
 same sign-in page as the kiosk's guest code. The QR page can print either code
 on its own. Members who are not managers never receive the code.
 
+**The guest code waits for check-in to open** _(2026-10-28)_. Like the member
+code, it is not shown before the check-in window opens or after it closes, so
+nobody scans it early and meets a sign-in that refuses them. The card says when
+it will appear and shows it by itself at opening time (it refreshes every 30
+seconds). **Reset** is offered even while the code is hidden, for a code that
+leaked before the event.
+
 > **Screenshot to create:** the event QR page with the guest code and its
-> Reset button, and the print choice for one code.
+> Reset button, and the print choice for one code. Also the card before
+> check-in opens, with the "will appear" note.
+
+### Who can run attendance and close out a Training event _(2026-10-27)_
+
+The attendance tools on an event page (roster, history and counts, member
+picker, add and bulk add, check in, Edit Times, remove) used to answer only to
+**events.manage**. They now also admit:
+
+| Who                                         | Which events      | Limits                                                                                                                      |
+| ------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **events.manage**                           | Any event         | None                                                                                                                        |
+| **training.manage**                         | Training events   | Can also edit the event, **Finalize**, **End Event**, **Record Times** and reopen attendance. Cannot change the event type  |
+| The event's **organizer or alternate**      | Their own event   | Cannot add or change their own attendance (someone else vouches for you); on a Training event cannot correct times or hours |
+
+A training manager's "this and all future" edit is refused if any occurrence it
+would reach is another event type. Duplicate, cancel, delete, templates,
+meetings and reminders stay with **events.manage**. The event page shows the
+roster, statistics and **Check In** to whoever the server admits.
 
 ### Signing in a walk-in yourself _(2026-10-25)_
 

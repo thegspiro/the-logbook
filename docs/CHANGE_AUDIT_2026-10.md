@@ -5,6 +5,39 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 27 – 28, 2026
+
+Merged to `main` since `5c520451` (2026-10-27 12:28 UTC) through `7c0162c0`
+(2026-10-28 12:02 UTC). Security-review passes (integrations, forms,
+reports-analytics, security-audit-ip, onboarding, scheduled-tasks,
+locations-kiosk, core-infra, frontend-shared, auth-session, permissions-roles,
+public-surface-webhooks, storefront-payments, cross-cutting-baseline) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                         | Guide                    | Disposition                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ | ----------------------------------------------------------- |
+| Email templates: **Off now stops the email**; five emails cannot be switched off; Cert Expiration, Post-Event/Post-Shift Validation, Member Archived, Prospect Inactivity sent | 08, `UPGRADING.md`       | Added; list screenshot queued                               |
+| Stale applications: coordinators emailed by the inactivity sweep; applicants via the new **Application Going Inactive** template (migration `0d9897752425`)                    | 15, 08                   | 15 already described it; `PROSPECTIVE_MEMBERS_MODULE` fixed |
+| Member Dropped email sends the template's attachments                                                                                                                          | 08, `DROP_NOTIFICATIONS` | Added                                                       |
+| Compliance matrix: **member class** switch and class-aware Print; requirement form **Operational members** shortcut                                                            | 02                       | Added; screenshots queued                                   |
+| Event attendance tools open to the organizer, alternate and (Training events) `training.manage`; training managers edit, finalize and reopen Training events                   | 04, wiki Events          | Added                                                       |
+| Guest check-in QR code hidden until check-in opens                                                                                                                             | 04                       | Added; screenshot queued                                    |
+| Shift report edited after review returns to **Pending review** (EC-17)                                                                                                         | 03                       | Added                                                       |
+| Department store cart kept in the browser, per member and window                                                                                                               | 18                       | Added                                                       |
+| Labels: two-line names, sans-serif font, **Before you print** on the shared label page, Print re-enables after changing copies                                                 | 05                       | Added; label screenshots queued                             |
+| Inventory dashboard queue renamed **Waiting for action**                                                                                                                       | 05                       | Already written; 05-97 and 05-132 images show the old name  |
+| Leave and training-waiver reasons encrypted at rest (migration `b74bcce55c11`)                                                                                                 | 17, `UPGRADING.md`       | Added; operators back up first                              |
+| Getting Started lesson teaches passkeys beside the authenticator app                                                                                                           | Learning Center          | In-app lesson; no guide change                              |
+| Every written-out refusal goes through `safe_error_detail`, and list-joining refusals are capped; first load halved (714 KB to 366 KB gzipped); footer stays below the fold    | none                     | Backend and performance; no screen change                   |
+| CI: backend integration jobs get 45 minutes; E2E contrast audits wait for transitions; npm/pip bumps                                                                           | none                     | No guide change                                             |
+
+**Screenshots to create:** Email Templates list filtered to **Off** with the
+disabled switch on an always-sent template; Compliance Matrix with the class
+switch; the class-grouped printout; requirement form with **Operational
+members** pressed; event QR page before check-in opens; label sheet with
+two-line names. **Replace:** `05-97` and `05-132` (heading now **Waiting for
+action**). See `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 26 – 27, 2026
 
 Merged to `main` since `14f1e4b2` (2026-10-26 13:24 UTC) through `5c520451`
