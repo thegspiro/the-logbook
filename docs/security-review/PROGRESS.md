@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3790](https://github.com/thegspiro/the-logbook/pull/3790)** (branch
+`claude/security-review-core-infrastructure-p10`) — Feature 33 (Core
+infrastructure), pass 11. **Rotation fork, resolved rather than discarded:**
+this PR and the now-merged PR #3789 both started from the same pre-pass-10
+`main` tip (`6c27ea21`) — two watchdog sessions picked up Feature 33
+concurrently, each independently confirming no open security-review PR via
+`search_pull_requests`/`list_pull_requests` and reading row 33 as the next
+`⬜` row. PR #3789 opened and merged first (pass 10, `CI10-33-core-infra.md`,
+**0 fixed, 0 new findings**). This PR is not a pure duplicate: it found one
+thing pass 10 did not (below), so rather than close it as superseded like
+the Feature 32 fork (PR #3788) was, its findings file was renumbered to
+`CI11-33-core-infra.md` (pass 11) and merged forward onto the current `main`
+as a short, additive follow-up — `CI10-33-core-infra.md` itself is untouched
+from PR #3789's merge.
+
+**1 fixed, 0 new application findings** (on top of pass 10's 0/0). Both
+passes read the same real delta since pass 9's merge (`8ae42b51`, PR #3681)
+and reached the same "verified good" conclusions for `rate_limit_passkey()`
+(`security_middleware.py`) and the new email-blind-index primitives
+(`security.py`/`encrypted_types.py`, supporting the email-at-rest-encryption
+migration `b8236e29ec44`). This pass additionally found: the rotation
+script's hand-written `_FINGERPRINT_COLUMNS` list (whose ciphertext-column
+counterpart already gets an automated check for free, via a type scan over
+live model metadata) had no equivalent automated check against the five real
+`keep_email_fingerprint` call sites — pass 10 verified the two lists agree
+today by hand but did not add a test closing the gap. A future sixth column
+added to one list without the other would silently stop matching by email
+after a future key rotation retires the old key. Fixed by adding two
+AST-based guard tests to `test_encryption_registry_coverage.py` that
+cross-check both lists in both directions; both pass today, confirming no
+live gap. Full writeup: `docs/security-review/CI11-33-core-infra.md`.
+
+Rotation row 33 → ✅ (already recorded by PR #3789's merge; unchanged by this
+PR); next is Feature 34 (Frontend shared) — re-check `search_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 10, PR #3789, merged), preserved for history</summary>
+
 **PR [#3789](https://github.com/thegspiro/the-logbook/pull/3789)** (branch
 `claude/security-review-core-infra-p10`) — Feature 33 (Core infrastructure),
 pass 10. Review-only: no application code changed. `config.py`/`database.py`
@@ -34,6 +73,8 @@ ops/design items re-confirmed unchanged and owner-accepted. Full writeup:
 Rotation row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
 shared) — re-check `search_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 10, PR #3787, merged), preserved for history</summary>
@@ -22575,6 +22616,63 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 33 (Core infrastructure, pass 11) — rotation fork resolved, 1 fix (guard test for a new crypto primitive), 0 new application findings
+
+**Rotation fork, resolved rather than discarded.** This pass and PR #3789
+(pass 10, logged below, merged `877beaa1`) both started from the same
+pre-pass-10 `main` tip (`6c27ea21`) — two watchdog sessions picked up
+Feature 33 concurrently, each independently confirming no open
+security-review PR and reading row 33 as the next `⬜` row. PR #3789 opened
+and merged first. Unlike the Feature 32 fork (PR #3788, closed as a pure
+duplicate), this pass found one thing pass 10 did not, so it was kept:
+renumbered to pass 11 (`CI11-33-core-infra.md`), merged forward as an
+additive follow-up onto the current `main` rather than reopened against a
+stale base. `docs/security-review/CI10-33-core-infra.md` itself is
+untouched from PR #3789's own merge.
+
+Both passes independently read the same real delta since pass 9's merge
+(`8ae42b51`, PR #3681) — `security_middleware.py`'s new
+`rate_limit_passkey()` (20/60s, its own bucket, wired to all five
+passkey-related routes in `auth.py`), `config.py`/`database.py`
+byte-identical, and the new keyed-HMAC email blind-index
+(`email_fingerprint`/`email_fingerprints`, HKDF-derived key, legacy-key
+fallback) plus `EncryptedDate` column type in `security.py`/
+`encrypted_types.py`, introduced by the email-at-rest-encryption migration
+(`b8236e29ec44`) — and reached the same "verified good" conclusions.
+
+**The one real finding, additional to pass 10:** `rotate_encryption_key.py`'s
+hand-written `_FINGERPRINT_COLUMNS` list — which tells the rotation script
+which email fingerprint columns to rewrite under the current key — had no
+automated check against the real set of `keep_email_fingerprint(...)` call
+sites across `app/models/`. Its ciphertext-column counterpart
+(`_PLAIN_COLUMNS`) already gets exactly this check for free, built from a
+type scan over live model metadata. Pass 10 verified the two lists agree by
+hand but did not add a test closing the gap; this pass does. A future model
+wired for email lookup without a matching list entry would keep working
+today (`email_fingerprints()` checks every legacy key) and silently stop
+matching by email the day that legacy key is finally retired — a false
+negative on a real member/applicant/customer's own address, not a leak.
+Fixed by adding two AST-based tests to `test_encryption_registry_coverage.py`
+(`test_every_keep_email_fingerprint_call_is_in_the_rotation_script` and its
+reverse-direction twin) that resolve each `keep_email_fingerprint` call's
+target model through the live SQLAlchemy declarative registry rather than
+trusting the call site's spelling, so a renamed model or attribute is still
+caught.
+
+Full write-up: `docs/security-review/CI11-33-core-infra.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 666
+revisions, single head `0d9897752425`; feature-scoped tests (16 files
+including the new `test_passkeys.py`/`test_rotate_email_fingerprints.py`/
+`test_email_fingerprint.py`/`test_encrypt_email_migration.py` coverage) —
+605 passed, 1 pre-existing skip; cross-cutting guard tests — 242 passed;
+frontend typecheck/lint — n/a, no frontend file touched this pass.
+
+Row 33 was already ✅ (recorded by PR #3789's merge; unchanged by this
+pass); next is Feature 34 (Frontend shared) — re-check `search_pull_requests`
+fresh rather than trusting this note.
 
 ### 2026-10-28 — Feature 33 (Core infrastructure, pass 10) — watchdog pickup, 0 fixed, 0 new findings
 
