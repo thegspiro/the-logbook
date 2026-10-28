@@ -207,13 +207,20 @@ applicable, no new query shape) and confirm none introduced a regression.
 
 **Re-enumeration.** `elections.py` re-walked by AST: **73 routes**, unchanged
 from pass 12, every one still carrying a `Depends(...)` in its signature. The
-4 intentionally-public, token-scoped routes are unchanged in behavior (lines
+5 intentionally-public, token-scoped routes are unchanged in behavior (lines
 shifted by the diff above, not their logic): `POST /ballot/lookup`
 (`lookup_ballot_by_token`, `:668`), `POST /ballot/vote`
 (`cast_vote_with_token`, `:826`), `POST /ballot/vote/bulk`
-(`cast_bulk_votes`, `:2934`), and `GET/POST /{election_id}/verify-receipt`
-(`verify_vote_receipt_post`, `:4802`; `verify_vote_receipt`, `:4825`). The
-diff's three hunks sit entirely outside these four routes.
+(`submit_ballot_with_token`, `:885` — **correction:** the route at this path
+is `submit_ballot_with_token`; `cast_bulk_votes` is a different, self-service
+route at `POST /{election_id}/vote/bulk`, `:2934`, already correctly listed
+in `permissionless_route_baseline.txt`), `POST /{election_id}/verify-receipt`
+(`verify_vote_receipt_post`, `:4802`), and `GET /{election_id}/verify-receipt`
+(`verify_vote_receipt`, `:4825`). The diff's three hunks sit entirely outside
+these five routes. Confirmed against the 5+7+1+60 = 73 classification: 5
+public/token-scoped, 7 self-service gated by sign-in alone (listed in
+`permissionless_route_baseline.txt`), 1 OR-gated (`list_candidates`:
+`elections.view` or `elections.manage`), and 60 `require_permission`-gated.
 
 **App-review cross-check (Step 2).** ELEC2-8 (`has_user_voted` has no
 production caller) re-verified unchanged by a repo-wide grep excluding its own
@@ -236,8 +243,27 @@ appear in this pass's diff.
   `GET` variant kept for external callers. Unchanged.
 - **ELEC-16** — accepted as is (owner decision); `list_manual_ballot_batches`
   still has no cap or pagination.
-- **ELEC-28** — OPEN. The in-app ballot still cannot render a ballot-item or
-  multi-seat contest; this pass's diff did not touch ballot rendering.
+- **ELEC-28** — **RESOLVED — correcting this pass's own first draft, and
+  passes 11/12.** Pass 9 (2026-10-14) read `ElectionBallot.tsx` and
+  `BallotItemCard.tsx` directly and found ELEC-28/W50-10/W50-11 already
+  fixed by the owner's 2026-10-05 decisions: the in-app ballot renders every
+  ballot item (not positions alone) through the same `BallotItemCard` the
+  emailed ballot uses, caps a multi-select at `max_votes_per_position`, and
+  names the seat count when `seats_per_position > 1`. Pass 10 re-confirmed
+  this. **Passes 11 and 12, and this pass's own first draft, then each
+  re-listed it as OPEN/unchanged without re-reading those two frontend
+  files** — the files are outside every one of those passes' own diffs
+  (including this one's), which is exactly how a stale copy-paste survives
+  undetected across three passes. Re-read fresh, directly, before this
+  commit: `ElectionBallot.tsx`'s docstring states the fix in the past tense
+  ("It used to be built from `election.positions` alone... (W50-10,
+  ELEC-28)"), its body reads `data.election.ballot_items` and renders
+  through `<BallotItemCard>` (`ElectionBallot.tsx:7-14,63,95,269`), and
+  `BallotItemCard.tsx:129` names the seat count for
+  `seats_per_position > 1`. Neither file has changed since pass 9 found
+  this. Corrected here rather than rewriting history, per this file's own
+  precedent (see pass 9's correction of pass 7/8, above) — the inline notes
+  on passes 11 and 12's own entries are corrected in the same commit.
 - **ELEC-40** — FLAGGED. New-ballot collision still made unreachable by
   `_validate_ballot_item_identities`; the pre-existing-ballot residual is
   unchanged and still mirrored in `KNOWN_LIMITATIONS.md`.
@@ -250,9 +276,11 @@ appear in this pass's diff.
 - **ELEC-50** — fixed (guard). `tests/test_election_response_viewer_convention.py`
   is unchanged and still passes.
 
-**0 new findings, 0 fixed by this pass** (the three items above were fixed by
-other work before this pass started and are recorded here as verified, not as
-this pass's own fixes).
+**0 new findings, 0 code fixed by this pass; 1 documentation correction**
+(the three items above were fixed by other work before this pass started
+and are recorded here as verified, not as this pass's own fixes; ELEC-28
+is restored to RESOLVED and the `/ballot/vote/bulk` route's function name
+is corrected, both documentation-only).
 
 ## Guard tests added (pass 13)
 
@@ -349,7 +377,10 @@ construction):**
 - **ELEC-16** — accepted as is (owner decision); `list_manual_ballot_batches`
   still has no cap or pagination.
 - **ELEC-28** — OPEN. The in-app ballot still cannot render a ballot-item or
-  multi-seat contest; converges with W50-10/W50-11.
+  multi-seat contest; converges with W50-10/W50-11. **Correction (pass 13):**
+  this re-regressed a pass-9/pass-10 correction without re-reading the
+  frontend files; pass 13 re-verified the code directly and restored this
+  to RESOLVED — see Pass 13's section.
 - **ELEC-40** — FLAGGED. New-ballot collision made unreachable by
   `_validate_ballot_item_identities`; the pre-existing-ballot residual is
   unchanged and still mirrored in `KNOWN_LIMITATIONS.md`.
@@ -446,7 +477,9 @@ correct. Guard added:
 without `viewer=` is gated by `elections.manage` alone).
 
 **Standing findings re-confirmed unchanged:** ELEC-12, ELEC-14, ELEC-16,
-ELEC-28, ELEC-40, ELEC-48.
+ELEC-28, ELEC-40, ELEC-48. **Correction (pass 13):** ELEC-28 was RESOLVED
+as of pass 9/10; listing it here as unchanged-and-open re-regressed that
+correction without re-reading the frontend files. See pass 13's section.
 
 ## Guard tests added (pass 11)
 
