@@ -143,6 +143,13 @@ are unchanged; the database cannot search or sort on them. They are covered by
 `scripts/rotate_encryption_key.py`. See
 [`docs/UPGRADING.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md).
 
+### Leave and waiver reasons
+
+The free-text `reason` on a member's leave of absence (`member_leaves_of_absence`)
+and on a training waiver (`training_waivers`) — often a diagnosis or a family
+illness — is stored as AES-256-GCM ciphertext. Screens, exports and anonymisation
+are unchanged. See [`docs/UPGRADING.md`](../docs/UPGRADING.md).
+
 ### Database and cache TLS
 
 The bundled MySQL and Redis can offer TLS with certificates from a private CA
