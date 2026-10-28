@@ -1,10 +1,104 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
 
 ---
 
-## Pass 12 (2026-10-25) — watchdog pickup: real delta (purchase -> expense report -> reimbursement check flow, budget-category deactivation closing sub-categories, draft withdrawal/cancellation), 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
+## Pass 13 (2026-10-28) — watchdog pickup: real delta (FIN8-05-1's fix shipped, a dues-waiver race/repeat-waiver fix, email/PII encryption reaching `payee_address` and `notification_emails`), 0 fixed this pass, 0 new findings
+
+**Scope.** Pass 12 merged as `0a21b5c5`. `git diff --numstat 0a21b5c5..HEAD`
+over this feature's established scope (`endpoints/finance.py`,
+`finance_service.py`, `finance_budget_request_service.py`,
+`finance_budget_access.py`, `finance_report_service.py`,
+`finance_reimbursement.py`, `finance_settings.py`, `schemas/finance.py`,
+`models/finance.py`, `public/finance_approvals.py`,
+`frontend/src/modules/finance/`) shows a near-zero real delta: 3
+insertions/2 deletions in `models/finance.py`, 13/0 in
+`finance_budget_request_service.py`, 11/1 in `finance_service.py`, and a
+5-line addition to one frontend test file (`amountLimits.test.tsx`). Every
+other file in scope — `finance.py`, `public/finance_approvals.py`,
+`finance_report_service.py`, `finance_reimbursement.py`,
+`finance_settings.py`, `finance_budget_access.py`, `schemas/finance.py` —
+is confirmed byte-identical to pass 12 (`git diff --stat` returns nothing
+for each). Route count re-enumerated by AST: **136**, unchanged from pass 12.
+
+**What's new, read in full rather than taken on the diff's framing:**
+
+- **FIN8-05-1 (MED) is now fixed in code, not just recorded as fixed.**
+  Pass 12's note already said the owner shipped this 2026-10-26; this pass
+  confirms the actual commit (`49994b9c`, within this window) is the fix
+  `FinanceBudgetRequestService.decide_request` now carries:
+  ```python
+  if str(request.submitted_by or "") == str(decided_by) or (
+      await self._acts_as_owner(request, org_id, decided_by)
+  ):
+      raise BudgetRequestForbiddenError(...)
+  ```
+  placed immediately after the existing stage/status checks, before any
+  mutation — the same shape `review_request` already used. No exception
+  for a one-person department, matching the owner's stated FIN-4 decision.
+  Already marked resolved in `KNOWN_LIMITATIONS.md` (the FIN8-05-1 section,
+  resolved 2026-10-26); nothing to update there.
+- **`waive_dues` now locks the row and refuses a repeat waiver**
+  (`finance_service.py:6820`, commit `84073154`, "refuse a repeat waiver
+  instead of replacing the first"). The read is now `.with_for_update()`
+  before the existing `assert_different_person` (FIN-4) check, so two
+  officers waiving the same dues record concurrently serialize instead of
+  racing (Pitfall #27's shape); and a second `waive_dues` call against an
+  already-`WAIVED` record now raises `ValueError` rather than silently
+  overwriting who waived it, when and why — the correct fix is
+  `unwaive_dues` first, which already existed and is unaffected. Confirmed
+  by direct read: the new `if dues.status == DuesStatus.WAIVED: raise
+ValueError(...)` sits after the lock and the SoD check, so it cannot be
+  raced past.
+- **App-wide email/PII-at-rest encryption reaches this feature**
+  (`ApprovalChainStep.notification_emails` → `EncryptedJSON`,
+  `CheckRequest.payee_address` → `EncryptedText`; migrations
+  `b8236e29ec44` and `5510d5ff49eb`, reviewed under their own Core
+  infrastructure rotation slot). Verified correctly applied here: neither
+  column is read through `ilike`/`LIKE` anywhere in `finance_service.py`
+  or `finance.py` (grepped both patterns, zero matches), so encrypting
+  them breaks no search path; `notification_emails` is only ever
+  round-tripped through the existing Pydantic schema fields
+  (`schemas/finance.py:863/889/910`), which the SQLAlchemy-level
+  `EncryptedJSON` type decrypts/encrypts transparently — no service code
+  needed to change. Neither column needed a fingerprint column (no
+  hash-based lookup exists for either), consistent with the pattern
+  `payer_email`-style write-only ciphertext columns already use elsewhere.
+
+**Standing items re-verified:**
+
+- **FIN8-05-1 — ✅ FIXED**, see above — closes out what pass 12 had
+  flagged as fixed-but-unconfirmed.
+- **FIN-30 (LOW) — still an accepted owner decision, not a live gap.**
+  `list_dues_payments` (`finance_service.py:6796`, unchanged body,
+  confirmed by direct read) still takes no `.offset()`/`.limit()`.
+  `KNOWN_LIMITATIONS.md` already records the owner's 2026-10-05 decision
+  to leave this as-is (one member's dues ledger is small); re-verified
+  that decision still matches the code and needs no update.
+
+**Not security-relevant, confirmed by reading the one other commit in the
+window's full log:** none — every non-merge commit touching this scope is
+one of the three described above.
+
+**0 fixed this pass** (both fixes above shipped in the owner's own prior
+commits, outside this review), **0 new findings.**
+
+### Completion gate (pass 13)
+
+| Check                                                                                                                                                                                                                                           | Result                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                                                                                                 | clean                                                 |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                                                                        | clean, 2706 files unchanged                           |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                                                                     | clean                                                 |
+| `scripts/validate_migrations.py --strict`                                                                                                                                                                                                       | passed, 666 revisions, single head `0d9897752425`     |
+| `scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                       | 279 routes, 0 errors, 0 warnings                      |
+| `pytest -k "finance or budget_request or approval_chain or dues or reimburs or quickbooks or waive"` (unit)                                                                                                                                     | 670 passed, 1 skipped (environment-only: `pywebpush`) |
+| Standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates, encryption-registry coverage, email-fingerprint, rotate-email-fingerprints) | 186 passed                                            |
+| `frontend: npm run typecheck`                                                                                                                                                                                                                   | 0 errors                                              |
+| `frontend: npm run lint`                                                                                                                                                                                                                        | 0 errors, 0 warnings                                  |
+
+---
 
 **Scope.** Pass 11 merged as `f9909b70` (PR #3562). `git diff f9909b70..HEAD`
 over this feature's full established scope (`endpoints/finance.py`,
