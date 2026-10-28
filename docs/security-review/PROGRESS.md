@@ -16,6 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** (branch `claude/security-review-locations-kiosk`) —
+Feature 32 (Locations & kiosk), pass 10. **Watchdog pickup** — the
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`). No security-review PR was open — confirmed via
+`search_pull_requests`/`list_pull_requests` (`state=open`), 0 results
+beyond two unrelated docs PRs (#3774/#3772), checked immediately before
+starting. PR #3786 (Feature 31, Scheduled tasks, pass 10) had already
+merged into `main` (head `8213ae8f`), and that merge commit itself already
+carried row 31 at ✅ and cleared the prior Open PR note, so there was
+nothing to record from Step 0. Row 32 was confirmed the next `⬜` row by
+reading the rotation table directly on this freshly-fetched `main`.
+**0 fixed, 0 new findings; one standing finding re-confirmed unchanged.**
+Real delta since pass 9's merge (`5d38437a`, PR #3677): exactly one real
+change, two new public routes in `app/api/public/display.py`
+(`guest-lookup`/`guest-confirm`, from commit `dd034161`) sharing an
+implementation with Feature 16 (Events & requests)'s own event-link path —
+Feature 16's pass 11 (PR #3748) already read the shared service
+(`GuestCheckInService`) in full and explicitly deferred this file's own
+route wiring to "Locations' own rotation slot." This pass reviewed exactly
+that: org-scoping through the display code (not client input), the same
+rate-limit/gate-ordering shape the file's existing write routes use, and
+the confirm token's room+event+org binding. All verified good. Routes
+re-enumerated by AST: 17, up from 15 (the two new routes; `locations.py`
+and `admin_hub.py` unchanged). LOC9-2 (hard-deleting a location nulls its
+location on nine kinds of records) re-confirmed unchanged at 9/9 tables,
+still flagged as an owner decision. See
+`LOC10-32-locations-kiosk.md`'s **Pass 10** section for the full review.
+
+Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `search_pull_requests`/`list_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 10, PR #3786, merged), preserved for history</summary>
+
 **PR [#3786](https://github.com/thegspiro/the-logbook/pull/3786)** (branch
 `claude/security-review-scheduled-tasks-p10`) — Feature 31 (Scheduled
 tasks), pass 10. **Watchdog pickup** — the dedicated `/loop 30m
@@ -52,6 +88,8 @@ last pass and is out of this feature's scope. See
 Rotation row 31 → ✅ (pending this PR's merge); next is Feature 32
 (Locations & kiosk) — re-check `search_pull_requests`/`list_pull_requests`
 fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 10, PR #3785, merged), preserved for history</summary>
@@ -22517,7 +22555,7 @@ PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -22527,6 +22565,52 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 32 (Locations & kiosk, pass 10) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable per `ListAgents`, confirmed
+at the start of this run). No open security-review PR — confirmed via
+`search_pull_requests`/`list_pull_requests` (`state=open`), 0 results
+beyond two unrelated docs PRs (#3774, #3772). PR #3786 (Feature 31,
+Scheduled tasks, pass 10) had already merged, docs-only relative to
+`PROGRESS.md`/the findings file for that feature. Row 32 (Locations &
+kiosk) was the first `⬜` on a freshly-pulled `main` (head `8213ae8f`, the
+merge of #3786).
+
+Real delta since pass 9's merge (`5d38437a`, PR #3677): exactly one real
+change, two new public routes in `app/api/public/display.py`
+(`guest-lookup`/`guest-confirm`, from commit `dd034161`, "Sign in
+recruitment-event guests by email, recognising active applicants"). The
+underlying implementation (`GuestCheckInService.lookup_guest`/
+`issue_confirm_token`/`read_confirm_token`/`check_in_known_prospect`) is
+shared with Feature 16 (Events & requests)'s own event-link path, and
+Feature 16's pass 11 (PR #3748) already read that service in full and
+explicitly deferred `display.py`'s own route wiring to "Locations' own
+rotation slot" — this pass reviewed exactly that deferred piece rather
+than re-deriving the service's internals. Verified good: the two new
+routes resolve their organization through the display code via the same
+`_resolve_guest_event` helper the file's existing routes use (never from
+client input), carry the same rate-limit/gate-ordering shape as the
+file's existing write routes (honeypot before the paid checks, every
+rejection gate before the daily-cap spend), and the confirm token is
+bound to the specific room, event and org it was issued for. The lookup's
+email-enumeration surface is narrowed to events that both resolve through
+a specific room's display code and opt into the pipeline, and every
+outcome is audited by outcome/prospect-id, never the typed email — the
+same disposition Feature 16's pass 11 reached independently for the
+sibling path. `facilities_service.py`'s substantial diff this window
+(+188/-23) is confined to unrelated Facilities pagination work;
+`delete_room`/`remove_location` are untouched. Routes re-enumerated by
+AST: 17, up from 15 (the two new routes; `locations.py`/`admin_hub.py`
+unchanged). LOC9-2 (hard-deleting a location nulls its location on nine
+kinds of records) re-confirmed unchanged at 9/9 tables, still flagged as
+an owner decision — no `KNOWN_LIMITATIONS.md` change needed. Full
+write-up: `docs/security-review/LOC10-32-locations-kiosk.md`.
+
+Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `search_pull_requests`/`list_pull_requests`
+fresh rather than trusting this note.
 
 ### 2026-10-27 — Feature 31 (Scheduled tasks, pass 10) — watchdog pickup, 0 fixed, 0 new findings
 
