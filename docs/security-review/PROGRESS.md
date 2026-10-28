@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3789](https://github.com/thegspiro/the-logbook/pull/3789)** (branch
+`claude/security-review-core-infra-p10`) — Feature 33 (Core infrastructure),
+pass 10. Review-only: no application code changed. `config.py`/`database.py`
+byte-identical to pass 9; `security_middleware.py`'s only change is a new
+`rate_limit_passkey()` dependency, verified good. Also reviewed, as
+genuinely infrastructure-level encryption-key-handling code: a new keyed
+email blind-index primitive (`security.py`) and a new `EncryptedDate`
+column type plus attribute-event fingerprint helper (`encrypted_types.py`)
+— both support an email-encryption-at-rest rollout already reviewed at the
+application layer by this same week's Feature 32 pass; this pass reviewed
+only the primitive itself and verified it good. **0 new findings.**
+CI9-33-1 (lint pin drift) re-confirmed still fixed; the CI-9/CI-10 residual
+ops/design items re-confirmed unchanged and owner-accepted. Full writeup:
+`docs/security-review/CI10-33-core-infra.md`.
+
+Rotation row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
+shared) — re-check `search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 10, PR #3787, merged), preserved for history</summary>
+
 **PR [#3787](https://github.com/thegspiro/the-logbook/pull/3787)** (branch
 `claude/security-review-locations-kiosk-p10`) — Feature 32 (Locations &
 kiosk), pass 10. Review-only: no application code changed. One real defect
@@ -33,6 +55,8 @@ tables) re-confirmed OPEN/FLAGGED, unchanged. Full writeup:
 Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
 infrastructure) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 10, PR #3786, merged), preserved for history</summary>
@@ -22542,7 +22566,7 @@ PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -22551,6 +22575,59 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 33 (Core infrastructure, pass 10) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session this
+rotation depends on was reported unreachable by the operator starting this
+run, and a concurrent duplicate PR for the prior row (Feature 32) had just
+been found and closed as superseded minutes earlier, so Step 0 was
+re-verified fresh rather than trusted: `git fetch origin main` (head
+`6c27ea21`) and `search_pull_requests` (`is:open is:pr
+head:claude/security-review-`, `thegspiro/the-logbook`) returned **0
+results** — no security-review PR open. PR #3787 (Feature 32, Locations &
+kiosk, pass 10) had already merged into `main`, and that merge commit already
+carried row 32 at ✅, so there was nothing left to record from Step 0 beyond
+the Open PR section. Row 33 (Core infrastructure) was confirmed the next `⬜`
+row by reading the rotation table directly on this freshly-fetched `main`.
+
+**Real delta since pass 9's merge (PR #3681, tip `8ae42b51`):** a scoped
+`git diff` against this feature's three declared files found `config.py` and
+`database.py` byte-identical, and a 23-line addition to
+`security_middleware.py` — a new `rate_limit_passkey()` dependency (20/60s,
+its own bucket, kept off the login rate limit by design), used at 5 call
+sites in `auth.py`, all but one (the pre-auth `/mfa/challenge` step, paired
+with `enforce_suspicious_ip`) behind `get_current_active_user`. Also read, as
+genuinely infrastructure-level encryption-key-handling code that happened to
+land in adjacent files this feature's prior passes track by diff rather than
+ownership: a new keyed email blind-index primitive in `security.py`
+(`email_fingerprint`/`email_fingerprints`, HKDF-derived HMAC key, never the
+AES data key itself) and a new `EncryptedDate` column type plus a
+`keep_email_fingerprint` SQLAlchemy attribute-event helper in
+`encrypted_types.py`. Both support an email-encryption-at-rest rollout
+spanning ~20 models/services that this same week's Feature 32 pass
+(`LOC10-32-locations-kiosk.md`) already reviewed at the application layer and
+found and fixed a real defect in — this pass reviewed only the primitive
+itself (keying, legacy-key ring for rotation, bounded derived-key cache,
+PII-free exception messages, correct non-firing on ORM row-hydration) and
+verified it good, not the ~20 consumers, which stay each consuming feature's
+own scope. `app/core/utils.py`'s new `list_within_detail_limit` helper
+(bounded-length refusal-message joining) was also reviewed fresh and has real
+consumers and its own test file.
+
+**0 new findings.** All CI-9/CI-10 residual ops/design items (TLS
+WARN-only-in-prod boundary, Redis `CERT_NONE` without a CA, no cache tenant
+namespacing, WS `accept()` before auth, MFA recovery-code entropy) re-confirmed
+unchanged and already mirrored in `KNOWN_LIMITATIONS.md` with the owner's
+2026-10-05 "accepted as-is" decision. CI9-33-1 (Backend Lint's pinned linter
+drift) re-confirmed still fixed — `.github/workflows/ci.yml` and
+`backend/requirements.txt` agree on `flake8==7.4.1`/`black==26.10.1`/
+`isort==9.0.2`, matching the versions this pass's own completion gate ran
+against. Full writeup: `docs/security-review/CI10-33-core-infra.md`.
+
+Rotation row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
+shared) — re-check `search_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-10-27 — Feature 32 (Locations & kiosk, pass 10) — watchdog pickup, 0 fixes needed (1 near-miss already fixed by another commit, re-verified), 3 flagged
 
