@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3804](https://github.com/thegspiro/the-logbook/pull/3804)** (branch
+`claude/security-review-public-surface-webhooks`) — Feature 03 (Public
+surface & webhooks), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed
+via `search_pull_requests` (`is:pr is:open` against the full open-PR list,
+none with a `claude/security-review-*` head) that PR #3803 (Feature 02,
+Permissions & roles, pass 13) had already merged (`d2cd227f`); row 03 was
+confirmed the next `⬜` by reading the rotation table on a freshly pulled
+`main`.
+
+Real delta since this feature's own pass 12 (merge `e6da6486`): a new
+`app/api/public/event_guest.py` (4 routes) lets an event with no room
+kiosk offer guest sign-in through the event's own QR code, reusing
+`display.py`'s rate limits, honeypot and JWT confirm-token gates rather
+than restating them; `display.py` gained the kiosk-side
+`guest-lookup`/`guest-confirm` mirror (+2 routes); `forms.py` gained a
+`GET /{slug}/embed-policy` endpoint answering nginx's `auth_request` with
+a regex-validated, injection-safe `Content-Security-Policy:
+frame-ancestors` value (+1 route); `portal.py` gained a token-gated
+`.ics` calendar download for an applicant's next meeting, built through
+the already-reviewed CRLF-escaping `generate_ical_feed` (+1 route). Also
+verified: `EventExternalAttendee.email`/`.phone` moving to `EncryptedText`
+under the app-wide email-encryption migration doesn't break this
+feature's guest-recognition lookup, which was already hash-based.
+
+**Route count corrected by re-derivation:** an AST walk of the baseline
+commit (cross-checked against a plain grep) finds 37 routes, not the 40
+pass 12 claimed — a prior pass's arithmetic error, not a missing or
+hidden route. New total after this pass's 8 added routes: 45.
+(`check_route_permissions.py --strict`'s 279 is a separate, frontend-route
+figure, unrelated to and unaffected by this backend-only change.) Full
+writeup: `docs/security-review/PUB-03-public-surface-webhooks.md`'s
+**Pass 13** section.
+
+Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments) — re-check `search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 13, PR #3803, merged), preserved for history</summary>
+
 **PR [#3803](https://github.com/thegspiro/the-logbook/pull/3803)** (branch
 `claude/security-review-permissions-roles`) — Feature 02 (Permissions &
 roles), pass 13. **0 fixes, 0 new findings.** Step 0 confirmed via
@@ -49,6 +89,8 @@ section.
 Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public
 surface & webhooks) — re-check `search_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 13, PR #3802, merged), preserved for history</summary>
