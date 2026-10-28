@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.security import email_fingerprints
 from app.core.utils import generate_uuid
 from app.models.inventory import InventoryItem
 from app.models.notification import NotificationChannel
@@ -1872,7 +1873,8 @@ class StorefrontService:
                 or_(
                     StoreOrder.order_number.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     StoreOrder.customer_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
-                    StoreOrder.customer_email.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    # Encrypted at rest: only a complete address matches.
+                    StoreOrder.customer_email_hash.in_(email_fingerprints(search)),
                 )
             )
 

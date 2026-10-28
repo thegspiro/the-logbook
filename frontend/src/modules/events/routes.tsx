@@ -129,7 +129,9 @@ export const getEventsRoutes = () => {
       <Route
         path="/events/:id/edit"
         element={
-          <ProtectedRoute requiredPermission="events.manage">
+          // training.manage reaches the page for Training events only; the
+          // page asks the server (can_edit_event) before offering the form.
+          <ProtectedRoute requiredAnyPermission={['events.manage', 'training.manage']}>
             <Suspense fallback={null}>
               <EventEditPage />
             </Suspense>

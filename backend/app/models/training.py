@@ -3404,7 +3404,7 @@ class ExternalUserMapping(Base):
         String(255)
     )  # Username from external system
     external_email: Mapped[Optional[str]] = mapped_column(
-        String(255)
+        EncryptedText
     )  # Email from external system
     external_name: Mapped[Optional[str]] = mapped_column(
         String(255)
@@ -5496,7 +5496,7 @@ class XAPIStatement(Base):
     )
 
     # Actor (who did it)
-    actor_email: Mapped[Optional[str]] = mapped_column(String(255))
+    actor_email: Mapped[Optional[str]] = mapped_column(EncryptedText)
     actor_name: Mapped[Optional[str]] = mapped_column(String(255))
     user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
@@ -5573,7 +5573,6 @@ class XAPIStatement(Base):
 
     __table_args__ = (
         Index("idx_xapi_org", "organization_id"),
-        Index("idx_xapi_actor", "actor_email"),
         Index("idx_xapi_verb", "verb_id"),
         Index("idx_xapi_timestamp", "statement_timestamp"),
         Index("idx_xapi_processed", "processed"),

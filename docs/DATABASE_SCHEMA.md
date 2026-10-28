@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**321 tables · 5300 columns · 1084 foreign keys**
+**321 tables · 5306 columns · 1084 foreign keys**
 
 ---
 
@@ -183,7 +183,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`email_attachments`](#email_attachments) | `EmailAttachment` | 8 | Stored attachment that can be included with email templates. |
 | [`email_template_backups`](#email_template_backups) | `EmailTemplateBackup` | 15 | A template as it stood before a release reset it to the shipped default. |
 | [`email_templates`](#email_templates) | `EmailTemplate` | 22 | Configurable email template stored in the database. |
-| [`message_history`](#message_history) | `MessageHistory` | 12 | Log of every email sent by the application. |
+| [`message_history`](#message_history) | `MessageHistory` | 13 | Log of every email sent by the application. |
 | [`scheduled_emails`](#scheduled_emails) | `ScheduledEmail` | 15 | An email scheduled to be sent at a future date/time. |
 
 ### Error Logging
@@ -211,7 +211,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`event_attendance_petitions`](#event_attendance_petitions) | `EventAttendancePetition` | 14 | A member's request to be recorded as present at an event that is over. |
-| [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
+| [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 18 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 56 | Event model for managing department events |
@@ -299,7 +299,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`donations`](#donations) | `Donation` | 26 | Donation model mapping to the existing donations table. |
-| [`donors`](#donors) | `Donor` | 26 | Donor model mapping to the existing donors table. |
+| [`donors`](#donors) | `Donor` | 27 | Donor model mapping to the existing donors table. |
 | [`fundraising_campaigns`](#fundraising_campaigns) | `FundraisingCampaign` | 24 | Fundraising campaign model mapping to the existing fundraising_campaigns table. |
 | [`fundraising_events`](#fundraising_events) | `FundraisingEvent` | 22 | Fundraising event model mapping to the existing fundraising_events table. |
 | [`grant_applications`](#grant_applications) | `GrantApplication` | 33 | Individual grant application tracked through the pipeline. |
@@ -477,7 +477,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
-| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 37 | Prospective member record, kept separate from the users table. |
+| [`prospective_members`](#prospective_members) | `ProspectiveMember` | 38 | Prospective member record, kept separate from the users table. |
 
 ### Nfc_Tag
 
@@ -618,7 +618,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`store_order_events`](#store_order_events) | `StoreOrderEvent` | 11 | Timeline entry on an order — the member-visible "order updates" feed |
 | [`store_order_items`](#store_order_items) | `StoreOrderItem` | 16 | A line item on an order. |
 | [`store_order_windows`](#store_order_windows) | `StoreOrderWindow` | 28 | A time-boxed ordering period ("order window") |
-| [`store_orders`](#store_orders) | `StoreOrder` | 33 | A member order placed against an order window |
+| [`store_orders`](#store_orders) | `StoreOrder` | 34 | A member order placed against an order window |
 | [`store_payment_events`](#store_payment_events) | `StorePaymentEvent` | 19 | A payment a provider says it received, and what we did about it. |
 | [`store_product_images`](#store_product_images) | `StoreProductImage` | 9 | Uploaded product photo, stored out of line from the catalog row. |
 | [`store_product_variants`](#store_product_variants) | `StoreProductVariant` | 11 | A size/color option on a product (e.g. "L / Navy") |
@@ -726,7 +726,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 64 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 65 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -890,7 +890,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `schedule_day` | INTEGER | yes |  |  |  |
 | `next_run_date` | DATE | yes |  |  |  |
 | `last_run_at` | DATETIME | yes |  |  |  |
-| `email_recipients` | JSON | yes |  | `list()` |  |
+| `email_recipients` | TEXT | yes |  | `list()` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `is_active` | BOOL | no |  | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -1455,7 +1455,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `sort_by` | VARCHAR(100) | yes |  |  |  |
 | `sort_direction` | VARCHAR(10) | yes |  | `'asc'` |  |
 | `output_format` | VARCHAR(50) | yes |  | `'pdf'` |  |
-| `email_recipients` | JSON | yes |  |  |  |
+| `email_recipients` | TEXT | yes |  |  |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -2027,7 +2027,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `grace_period_days` | INTEGER | no |  | `0` |  |
 | `include_current_month` | BOOL | no |  | `1` |  |
 | `auto_report_frequency` | VARCHAR(20) | no |  | `none` |  |
-| `report_email_recipients` | JSON | yes |  |  |  |
+| `report_email_recipients` | TEXT | yes |  |  |  |
 | `report_day_of_month` | INTEGER | yes |  | `1` |  |
 | `notify_non_compliant_members` | BOOL | no |  | `0` |  |
 | `notify_days_before_deadline` | JSON | yes |  | generated |  |
@@ -2080,7 +2080,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | VARCHAR(20) | no | IDX | `pending` |  |
 | `report_data` | JSON | yes |  |  |  |
 | `summary` | JSON | yes |  |  |  |
-| `emailed_to` | JSON | yes |  |  |  |
+| `emailed_to` | TEXT | yes |  |  |  |
 | `emailed_at` | DATETIME | yes |  |  |  |
 | `generated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `generated_at` | DATETIME | no |  | `now()` |  |
@@ -2127,7 +2127,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `users.id` ON DELETE CASCADE |
 | `provider` | VARCHAR(20) | no |  | `google` |  |
-| `primary_email` | VARCHAR(255) | no |  |  |  |
+| `primary_email` | TEXT | no |  |  |  |
 | `status` | VARCHAR(20) | no |  | `'pending'` |  |
 | `external_user_id` | VARCHAR(64) | yes |  |  |  |
 | `credentials_sent` | BOOL | no |  | `0` |  |
@@ -2588,7 +2588,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2623,9 +2623,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | yes | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `to_email` | VARCHAR(320) | no |  |  |  |
-| `cc_emails` | JSON | yes |  |  |  |
-| `bcc_emails` | JSON | yes |  |  |  |
+| `to_email` | TEXT | no |  |  |  |
+| `recipient_fingerprints` | JSON | yes |  |  |  |
+| `cc_emails` | TEXT | yes |  |  |  |
+| `bcc_emails` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
 | `template_type` | VARCHAR(50) | yes |  |  |  |
 | `status` | ENUM(`sent`, `failed`) | no | IDX | `sent` |  |
@@ -2650,10 +2651,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `custom`) | no |  |  |  |
-| `to_emails` | JSON | no |  |  |  |
-| `cc_emails` | JSON | yes |  |  |  |
-| `bcc_emails` | JSON | yes |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `custom`) | no |  |  |  |
+| `to_emails` | TEXT | no |  |  |  |
+| `cc_emails` | TEXT | yes |  |  |  |
+| `bcc_emails` | TEXT | yes |  |  |  |
 | `context` | JSON | no |  | `dict()` |  |
 | `scheduled_at` | DATETIME | no |  |  |  |
 | `status` | ENUM(`pending`, `sent`, `failed`, `cancelled`) | no | IDX | `pending` |  |
@@ -2754,7 +2755,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `contact_name` | VARCHAR(255) | no |  |  |  |
-| `contact_email` | VARCHAR(255) | no |  |  |  |
+| `contact_email` | TEXT | no |  |  |  |
 | `contact_phone` | TEXT | yes |  |  |  |
 | `organization_name` | VARCHAR(255) | yes |  |  |  |
 | `outreach_type` | VARCHAR(100) | no |  | `'other'` |  |
@@ -2837,7 +2838,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `event_id` | VARCHAR(36) | no | FK, IDX |  | → `events.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
-| `email` | VARCHAR(255) | yes | IDX |  |  |
+| `email` | TEXT | yes |  |  |  |
+| `email_hash` | VARCHAR(64) | yes | IDX |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `organization_name` | VARCHAR(255) | yes |  |  |  |
 | `checked_in` | BOOL | no |  | `0` |  |
@@ -2853,7 +2855,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `ix_ext_attendees_email` (`email`)
+- `ix_ext_attendees_email_hash` (`email_hash`)
 - `ix_ext_attendees_event_id` (`event_id`)
 - `ix_ext_attendees_org_id` (`organization_id`)
 - `ix_ext_attendees_prospect_id` (`prospect_id`)
@@ -3232,7 +3234,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `actual_completion` | DATE | yes |  |  |  |
 | `contractor_name` | VARCHAR(200) | yes |  |  |  |
 | `contractor_phone` | TEXT | yes |  |  |  |
-| `contractor_email` | VARCHAR(200) | yes |  |  |  |
+| `contractor_email` | TEXT | yes |  |  |  |
 | `project_manager` | VARCHAR(200) | yes |  |  |  |
 | `permit_numbers` | TEXT | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -3351,7 +3353,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `contact_name` | VARCHAR(200) | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `alt_phone` | TEXT | yes |  |  |  |
-| `email` | VARCHAR(200) | yes |  |  |  |
+| `email` | TEXT | yes |  |  |  |
 | `service_contract_number` | VARCHAR(100) | yes |  |  |  |
 | `priority` | INTEGER | no |  | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -3423,7 +3425,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `carrier_name` | VARCHAR(200) | no |  |  |  |
 | `agent_name` | VARCHAR(200) | yes |  |  |  |
 | `agent_phone` | TEXT | yes |  |  |  |
-| `agent_email` | VARCHAR(200) | yes |  |  |  |
+| `agent_email` | TEXT | yes |  |  |  |
 | `coverage_amount` | NUMERIC(14, 2) | yes |  |  |  |
 | `deductible` | NUMERIC(10, 2) | yes |  |  |  |
 | `annual_premium` | NUMERIC(10, 2) | yes |  |  |  |
@@ -3820,7 +3822,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `step_type` | ENUM(`approval`, `notification`) | no |  | `'approval'` |  |
 | `approver_type` | ENUM(`position`, `permission`, `specific_user`, `email`) | yes |  |  |  |
 | `approver_value` | VARCHAR(500) | yes |  |  |  |
-| `notification_emails` | JSON | yes |  |  |  |
+| `notification_emails` | TEXT | yes |  |  |  |
 | `email_template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
 | `allow_self_approval` | BOOL | no |  | `False` |  |
 | `auto_approve_under` | NUMERIC(12, 2) | yes |  |  |  |
@@ -4484,7 +4486,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `data` | JSON | no |  |  |  |
 | `sensitive_data` | TEXT | yes |  |  |  |
 | `submitter_name` | VARCHAR(255) | yes |  |  |  |
-| `submitter_email` | VARCHAR(255) | yes |  |  |  |
+| `submitter_email` | TEXT | yes |  |  |  |
 | `is_public_submission` | BOOL | yes |  | `False` |  |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
 | `user_agent` | VARCHAR(500) | yes |  |  |  |
@@ -4517,7 +4519,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `allow_multiple_submissions` | BOOL | yes |  | `True` |  |
 | `require_authentication` | BOOL | yes |  | `True` |  |
 | `notify_on_submission` | BOOL | yes |  | `False` |  |
-| `notification_emails` | JSON | yes |  |  |  |
+| `notification_emails` | TEXT | yes |  |  |  |
 | `public_slug` | VARCHAR(12) | yes | UQ, UQ-IDX | `generate_slug()` |  |
 | `is_public` | BOOL | yes |  | `False` |  |
 | `allow_embed` | BOOL | no |  | `false` |  |
@@ -4564,7 +4566,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `recurring_frequency` | ENUM(`weekly`, `monthly`, `quarterly`, `annually`) | yes |  |  |  |
 | `is_anonymous` | BOOL | no |  | `0` |  |
 | `donor_name` | VARCHAR(255) | yes |  |  |  |
-| `donor_email` | VARCHAR(255) | yes |  |  |  |
+| `donor_email` | TEXT | yes |  |  |  |
 | `dedication_type` | ENUM(`in_honor`, `in_memory`) | yes |  |  |  |
 | `dedication_name` | VARCHAR(255) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -4597,7 +4599,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `first_name` | VARCHAR(100) | yes |  |  |  |
 | `last_name` | VARCHAR(100) | yes |  |  |  |
-| `email` | VARCHAR(255) | yes |  |  |  |
+| `email` | TEXT | yes |  |  |  |
+| `email_hash` | VARCHAR(64) | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `address_line1` | TEXT | yes |  |  |  |
 | `address_line2` | TEXT | yes |  |  |  |
@@ -4621,7 +4624,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_donors_email` (`organization_id`, `email`)
+- `idx_donors_email_hash` (`organization_id`, `email_hash`)
 - `idx_donors_name` (`organization_id`, `last_name`, `first_name`)
 - `idx_donors_type` (`organization_id`, `donor_type`)
 - `idx_donors_user` (`user_id`)
@@ -5764,7 +5767,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `vendor_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_vendors.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `title` | VARCHAR(150) | yes |  |  |  |
-| `email` | VARCHAR(255) | yes |  |  |  |
+| `email` | TEXT | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `phone_extension` | VARCHAR(20) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -7356,7 +7359,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `pipeline_id` | VARCHAR(36) | yes | FK, IDX |  | → `membership_pipelines.id` ON DELETE SET NULL |
 | `first_name` | VARCHAR(100) | no |  |  |  |
 | `last_name` | VARCHAR(100) | no |  |  |  |
-| `email` | VARCHAR(255) | no |  |  |  |
+| `email` | TEXT | no |  |  |  |
+| `email_hash` | VARCHAR(64) | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `mobile` | TEXT | yes |  |  |  |
 | `date_of_birth` | TEXT | yes |  |  |  |
@@ -7385,19 +7389,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `withdrawal_reason` | TEXT | yes |  |  |  |
 | `inactive_since` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
-| `active_email` | VARCHAR(255) | yes |  | server default |  |
+| `active_email_hash` | VARCHAR(64) | yes |  | server default |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
 
-- `idx_prospect_org_email` (`organization_id`, `email`)
+- `idx_prospect_org_email_hash` (`organization_id`, `email_hash`)
 - `idx_prospect_org_pipeline` (`organization_id`, `pipeline_id`)
 - `idx_prospect_org_status` (`organization_id`, `status`)
 - `ix_prospective_members_pipeline_id` (`pipeline_id`)
 - `ix_prospective_members_status` (`status`)
 - UNIQUE `ix_prospective_members_status_token_hash` (`status_token_hash`)
-- UNIQUE `uq_prospect_org_active_email` (`organization_id`, `active_email`)
+- UNIQUE `uq_prospect_org_active_email_hash` (`organization_id`, `active_email_hash`)
 
 ## Nfc_Tag
 
@@ -7593,7 +7597,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `rule_id` | VARCHAR(36) | yes | FK, IDX |  | → `notification_rules.id` ON DELETE SET NULL |
 | `recipient_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
-| `recipient_email` | VARCHAR(255) | yes |  |  |  |
+| `recipient_email` | TEXT | yes |  |  |  |
 | `department_message_id` | VARCHAR(36) | yes | FK |  | → `department_messages.id` ON DELETE CASCADE |
 | `channel` | ENUM(`email`, `in_app`) | no |  |  |  |
 | `subject` | VARCHAR(500) | yes |  |  |  |
@@ -7736,7 +7740,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `current_step` | INTEGER | yes |  | `0` |  |
 | `organization_name` | VARCHAR(255) | yes |  |  |  |
 | `organization_type` | VARCHAR(50) | yes |  |  |  |
-| `admin_email` | VARCHAR(255) | yes |  |  |  |
+| `admin_email` | TEXT | yes |  |  |  |
 | `admin_username` | VARCHAR(100) | yes |  |  |  |
 | `security_keys_verified` | BOOL | yes |  | `False` |  |
 | `database_verified` | BOOL | yes |  | `False` |  |
@@ -7857,7 +7861,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `display_name` | VARCHAR(200) | yes |  |  |  |
 | `title` | VARCHAR(150) | yes |  |  |  |
-| `email` | VARCHAR(320) | yes |  |  |  |
+| `email` | TEXT | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -8428,7 +8432,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `order_number` | VARCHAR(30) | no |  |  |  |
 | `customer_name` | VARCHAR(200) | no |  |  |  |
-| `customer_email` | VARCHAR(255) | yes |  |  |  |
+| `customer_email` | TEXT | yes |  |  |  |
+| `customer_email_hash` | VARCHAR(64) | yes |  |  |  |
 | `customer_phone` | TEXT | yes |  |  |  |
 | `status` | ENUM(`submitted`, `awaiting_payment`, `paid`, `ordered`, `ready_for_pickup`, `fulfilled`, `cancelled`) | no |  | `submitted` |  |
 | `payment_status` | ENUM(`unpaid`, `pending_verification`, `partial`, `paid`, `refunded`, `waived`) | no |  | `unpaid` |  |
@@ -8458,6 +8463,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_store_orders_org_customer_email_hash` (`organization_id`, `customer_email_hash`)
 - `ix_store_orders_org_payment` (`organization_id`, `payment_status`)
 - `ix_store_orders_org_status` (`organization_id`, `status`)
 - `ix_store_orders_org_window` (`organization_id`, `window_id`)
@@ -8484,7 +8490,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `amount` | NUMERIC(10, 2) | no |  | `0` |  |
 | `currency` | VARCHAR(3) | no |  | `USD` |  |
 | `payer_name` | VARCHAR(200) | yes |  |  |  |
-| `payer_email` | VARCHAR(255) | yes |  |  |  |
+| `payer_email` | TEXT | yes |  |  |  |
 | `reference` | VARCHAR(255) | yes |  |  |  |
 | `status` | ENUM(`applied`, `matched`, `unmatched`, `ambiguous`, `ignored`, `duplicate`) | no |  | `unmatched` |  |
 | `matched_order_id` | VARCHAR(36) | yes | FK, IDX |  | → `store_orders.id` ON DELETE SET NULL |
@@ -9395,7 +9401,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `external_user_id` | VARCHAR(255) | no |  |  |  |
 | `external_username` | VARCHAR(255) | yes |  |  |  |
-| `external_email` | VARCHAR(255) | yes |  |  |  |
+| `external_email` | TEXT | yes |  |  |  |
 | `external_name` | VARCHAR(255) | yes |  |  |  |
 | `internal_user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `is_mapped` | BOOL | yes |  | `False` |  |
@@ -10812,7 +10818,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `actor_email` | VARCHAR(255) | yes | IDX |  |  |
+| `actor_email` | TEXT | yes |  |  |  |
 | `actor_name` | VARCHAR(255) | yes |  |  |  |
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `verb_id` | VARCHAR(500) | no | IDX |  |  |
@@ -10840,7 +10846,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_xapi_actor` (`actor_email`)
 - `idx_xapi_org` (`organization_id`)
 - `idx_xapi_processed` (`processed`)
 - `idx_xapi_timestamp` (`statement_timestamp`)
@@ -11012,7 +11017,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `first_name` | VARCHAR(100) | no |  |  |  |
 | `middle_name` | VARCHAR(100) | yes |  |  |  |
 | `last_name` | VARCHAR(100) | no |  |  |  |
-| `email` | VARCHAR(255) | yes |  |  |  |
+| `email` | TEXT | yes |  |  |  |
 | `phone` | TEXT | yes |  |  |  |
 | `mobile` | TEXT | yes |  |  |  |
 | `address_street` | TEXT | yes |  |  |  |
@@ -11027,7 +11032,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_prospect_org_email` (`organization_id`, `email`)
 - `idx_prospect_org_status` (`organization_id`, `status`)
 
 ### `sessions`
@@ -11085,8 +11089,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `username` | VARCHAR(100) | no |  |  |  |
-| `email` | VARCHAR(255) | no | IDX |  |  |
-| `personal_email` | VARCHAR(255) | yes |  |  |  |
+| `email` | TEXT | no |  |  |  |
+| `email_hash` | VARCHAR(64) | yes |  |  |  |
+| `personal_email` | TEXT | yes |  |  |  |
 | `password_hash` | VARCHAR(255) | yes |  |  |  |
 | `oauth_provider` | VARCHAR(50) | yes |  |  |  |
 | `oauth_subject` | VARCHAR(255) | yes | IDX |  |  |
@@ -11152,12 +11157,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_user_created_at` (`created_at`)
 - `idx_user_last_login_at` (`last_login_at`)
 - UNIQUE `idx_user_org_badge_code` (`organization_id`, `badge_code`)
-- UNIQUE `idx_user_org_email` (`organization_id`, `email`)
+- UNIQUE `idx_user_org_email_hash` (`organization_id`, `email_hash`)
 - UNIQUE `idx_user_org_membership_number` (`organization_id`, `membership_number`)
 - `idx_user_org_status_deleted` (`organization_id`, `status`, `deleted_at`)
 - UNIQUE `idx_user_org_username` (`organization_id`, `username`)
 - `ix_users_calendar_feed_token` (`calendar_feed_token`)
-- `ix_users_email` (`email`)
 - `ix_users_member_class` (`member_class`)
 - `ix_users_member_status` (`member_status`)
 - `ix_users_oauth_subject` (`oauth_subject`)

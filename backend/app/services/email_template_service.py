@@ -437,6 +437,14 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "cert_name", "description": "Name of the certification"},
         {"name": "expiration_date", "description": "Expiration date of the cert"},
         {"name": "days_remaining", "description": "Days until expiration"},
+        {
+            "name": "days_unit",
+            "description": "'day' when one day remains, otherwise 'days'",
+        },
+        {
+            "name": "expires_when",
+            "description": "When it expires: 'today', 'tomorrow' or 'in N days'",
+        },
         {"name": "renewal_url", "description": "Link to training/certification page"},
     ],
     "post_event_validation": [
@@ -614,6 +622,21 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "first_name", "description": "Applicant's first name"},
         {"name": "applicant_name", "description": "Applicant's full name"},
         {"name": "step_name", "description": "Name of the completed pipeline stage"},
+    ],
+    "application_going_inactive": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "days_inactive",
+            "description": "Days since the application last moved",
+        },
+        {
+            "name": "inactive_date",
+            "description": (
+                "Date the application will be marked inactive, in the "
+                "department's timezone"
+            ),
+        },
     ],
     "application_status_link": [
         {"name": "first_name", "description": "Applicant's first name"},
@@ -1084,6 +1107,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "cert_name": "EMT-Basic Certification",
             "expiration_date": "April 15, 2026",
             "days_remaining": "45",
+            "days_unit": "days",
+            "expires_when": "in 45 days",
             "renewal_url": "https://example.com/training/certifications",
         }
     ),
@@ -1300,6 +1325,14 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "first_name": "Alex",
             "applicant_name": "Alex Johnson",
             "step_name": "Background Check",
+        }
+    ),
+    "application_going_inactive": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "days_inactive": "75",
+            "inactive_date": "March 30, 2026",
         }
     ),
     "application_status_link": _sample(
@@ -1560,6 +1593,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_withdrawn": {"applicant_name": "full"},
     "application_step_completed": {"first_name": "first", "applicant_name": "full"},
     "application_status_link": {"first_name": "first", "applicant_name": "full"},
+    "application_going_inactive": {"first_name": "first", "applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -1647,6 +1681,7 @@ TEST_SAMPLE_DATES: Dict[
     "it_password_notification": {"request_time": (0, None, _strf(_DATE_TIME))},
     "duplicate_application": {"original_date": (-30, None, _strf(_DATE))},
     "application_withdrawn": {"withdrawal_date": (0, None, _strf(_DATE))},
+    "application_going_inactive": {"inactive_date": (15, None, _strf(_DATE))},
     # The assignment and decline notices print the ISO date
     # (SchedulingService: shift.shift_date.isoformat()), so the test does too.
     "shift_assignment": {
@@ -2007,12 +2042,16 @@ DEFAULT_CERT_EXPIRATION_HTML = build_shell(
     + action("{{renewal_url}}", "View Certifications"),
     accent=ACCENT_AMBER,
     chip="Action required",
-    tab_note="{{days_remaining}} days left",
+    # expires_when / days_unit rather than "{{days_remaining}} days": the
+    # reminder goes out on a certificate's last day and the day before, and
+    # "0 days left" / "1 days" is what the code-built email was fixed to stop
+    # saying before this template was ever sent.
+    tab_note="Expires {{expires_when}}",
     subtitle="Renew to stay compliant for calls and drills",
     # The subtitle is advice, not the news; the inbox preview leads with
     # the countdown instead.
-    preheader="{{cert_name}} expires in {{days_remaining}} days",
-    lead=countdown_tile("{{days_remaining}}", "days"),
+    preheader="{{cert_name}} expires {{expires_when}}",
+    lead=countdown_tile("{{days_remaining}}", "{{days_unit}}"),
 )
 
 DEFAULT_CERT_EXPIRATION_TEXT = """Certification Expiration Notice
@@ -2022,8 +2061,7 @@ Hello {{recipient_name}},
 This is a reminder that your certification is approaching its expiration date:
 
 Certification: {{cert_name}}
-Expiration Date: {{expiration_date}}
-Days Remaining: {{days_remaining}}
+Expiration Date: {{expiration_date}} ({{expires_when}})
 
 Please take action to renew this certification before it expires.
 
@@ -2534,6 +2572,39 @@ application online: {{status_url}}
 {{footer_text}}"""
 
 DEFAULT_APPLICATION_STATUS_LINK_SUBJECT = "Track Your Membership Application"
+
+# Sent to an applicant whose application has not moved for long enough that
+# the pipeline's inactivity timeout is approaching, when the pipeline's
+# "Notify the applicant" box is ticked. Says a date rather than a count of
+# days, so the last day never reads "in 1 days".
+DEFAULT_APPLICATION_GOING_INACTIVE_HTML = build_shell(
+    "Is Your Application Still Active?",
+    """        <p>Hi {{first_name}},</p>
+        <p>Your membership application with {{organization_name}} has not
+        moved in {{days_inactive}} days. If we don't hear from you, it will be
+        marked inactive on <strong>{{inactive_date}}</strong>.</p>
+        <p>If you are still interested in joining, please get in touch with
+        our membership coordinator before then.</p>""",
+    accent=ACCENT_AMBER,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_GOING_INACTIVE_TEXT = """Is Your Application Still Active?
+
+Hi {{first_name}},
+
+Your membership application with {{organization_name}} has not moved in
+{{days_inactive}} days. If we don't hear from you, it will be marked inactive
+on {{inactive_date}}.
+
+If you are still interested in joining, please get in touch with our
+membership coordinator before then.
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT = (
+    "Your application with {{organization_name}} is going inactive"
+)
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
@@ -3381,6 +3452,31 @@ def _insert_appendix_token(
     return body[: match.start()] + token + "\n" + body[match.start() :]
 
 
+# Emails a department cannot switch off. Each carries something its
+# recipient cannot get any other way: a way back into an account, login
+# details, a ballot link, an applicant's private status link (whose pipeline
+# stage stays open until it is sent). Every other type, once switched off,
+# is not sent at all.
+ALWAYS_SENT_TYPES: frozenset = frozenset(
+    {
+        EmailTemplateType.PASSWORD_RESET,
+        EmailTemplateType.IT_PASSWORD_NOTIFICATION,
+        EmailTemplateType.WELCOME,
+        EmailTemplateType.BALLOT_NOTIFICATION,
+        EmailTemplateType.APPLICATION_STATUS_LINK,
+    }
+)
+
+
+def is_always_sent(template_type: Any) -> bool:
+    try:
+        return EmailTemplateType(getattr(template_type, "value", template_type)) in (
+            ALWAYS_SENT_TYPES
+        )
+    except ValueError:
+        return False
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -3409,6 +3505,27 @@ class EmailTemplateService:
         )
         email_template: Optional[EmailTemplate] = result.scalar_one_or_none()
         return email_template
+
+    async def is_switched_off(
+        self, organization_id: str, template_type: EmailTemplateType
+    ) -> bool:
+        """Whether the department switched this email off, so it is not sent.
+
+        Only a stored row can be off: a department that never opened the
+        Email Templates screen has none, and its emails go out on the code
+        defaults as they always did. Custom templates are chosen by id, not
+        by type, so the type-wide answer does not apply to them.
+        """
+        if template_type == EmailTemplateType.CUSTOM or is_always_sent(template_type):
+            return False
+        result = await self.db.execute(
+            select(EmailTemplate.is_active).where(
+                EmailTemplate.organization_id == str(organization_id),
+                EmailTemplate.template_type == template_type,
+            )
+        )
+        states = list(result.scalars().all())
+        return bool(states) and not any(states)
 
     async def list_templates(self, organization_id: str) -> List[EmailTemplate]:
         """List all templates for an organization.
@@ -3602,6 +3719,11 @@ class EmailTemplateService:
         template: Optional[EmailTemplate] = result.scalar_one_or_none()
         if not template:
             return None
+        if fields.get("is_active") is False and is_always_sent(template.template_type):
+            raise ValueError(
+                "This email cannot be switched off: its recipient has no "
+                "other way to receive what it carries"
+            )
 
         # An allowlist, not a skip list: `fields` arrives as **kwargs, so a
         # caller could otherwise name `id` or `organization_id` and move a
@@ -4073,6 +4195,8 @@ class EmailTemplateService:
         template_type: EmailTemplateType,
         context: Dict[str, Any],
         organization: Optional[Any] = None,
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
     ) -> Tuple[str, str, Optional[str]]:
         """Render a type's shipped default, for a department with no stored row.
 
@@ -4100,7 +4224,47 @@ class EmailTemplateService:
             css_styles=None,
             footer_key=defn.get("footer"),
         )
-        return cls.render_static(template, context, organization=organization)
+        return cls.render_static(
+            template,
+            context,
+            organization=organization,
+            appendix_html=appendix_html,
+            appendix_text=appendix_text,
+        )
+
+    async def render_stored_or_default(
+        self,
+        organization: Any,
+        template_type: EmailTemplateType,
+        context: Dict[str, Any],
+        appendix_html: Optional[str] = None,
+        appendix_text: Optional[str] = None,
+    ) -> Tuple[str, str, Optional[str]]:
+        """The department's switched-on template for this type, or the default.
+
+        For senders that render outside ``EmailService``. Whether the email
+        should go out at all is :meth:`is_switched_off`, asked first.
+        """
+        template = (
+            await self.get_template(str(organization.id), template_type)
+            if organization is not None
+            else None
+        )
+        if template is not None:
+            return self.render(
+                template,
+                context,
+                organization=organization,
+                appendix_html=appendix_html,
+                appendix_text=appendix_text,
+            )
+        return self.render_default(
+            template_type,
+            context,
+            organization=organization,
+            appendix_html=appendix_html,
+            appendix_text=appendix_text,
+        )
 
     #: Country omitted from a formatted address when it is this one. A US
     #: department's own mail does not say "USA" under every address, and the
@@ -4500,6 +4664,19 @@ class EmailTemplateService:
             "description": (
                 "Sent to an applicant when a pipeline stage set to notify "
                 "them on completion is completed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_GOING_INACTIVE,
+            "footer": "public",
+            "name": "Application Going Inactive",
+            "subject": DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT,
+            "html": DEFAULT_APPLICATION_GOING_INACTIVE_HTML,
+            "text": DEFAULT_APPLICATION_GOING_INACTIVE_TEXT,
+            "description": (
+                "Sent to an applicant whose application is approaching the "
+                "pipeline's inactivity timeout, when the pipeline is set to "
+                "notify the applicant."
             ),
         },
         {

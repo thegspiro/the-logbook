@@ -87,6 +87,34 @@ def _stub_integrations(monkeypatch):
         "app.services.cert_alert_service.wrap_email_body",
         lambda org, title, body, **_kwargs: body,
     )
+    # The reminder renders the Cert Expiration template. These tests script
+    # the session's reads in order, so the template lookups are answered here:
+    # never switched off, and the shipped default rendered without an
+    # organization (whose logo and footer these stubs do not carry).
+    monkeypatch.setattr(
+        "app.services.cert_alert_service.EmailTemplateService",
+        _ShippedCertTemplate,
+    )
+
+
+class _ShippedCertTemplate:
+    def __init__(self, _db):
+        pass
+
+    async def is_switched_off(self, *_args):
+        return False
+
+    async def render_stored_or_default(
+        self, _org, template_type, context, appendix_html=None, appendix_text=None
+    ):
+        from app.services.email_template_service import EmailTemplateService
+
+        return EmailTemplateService.render_default(
+            template_type,
+            context,
+            appendix_html=appendix_html,
+            appendix_text=appendix_text,
+        )
 
 
 class TestGetAlertConfig:
@@ -295,6 +323,71 @@ class TestSalutation:
         assert "Jane" not in kwargs["text_body"].replace("Janie", "")
 
 
+def _scripted_db(record, member):
+    """config, rules, org, expiring [record], member; anything after is empty."""
+    scripted = [
+        _one(_org({"enabled": True})),
+        _scalars([]),
+        _one(_org({"enabled": True})),
+        _scalars([record]),
+        _one(member),
+    ]
+
+    async def _execute(*_args, **_kwargs):
+        return scripted.pop(0) if scripted else _scalars([])
+
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=_execute)
+    db.commit = AsyncMock()
+    return db
+
+
+class TestTheReminderIsTheTemplate:
+    async def test_the_record_details_follow_the_templates_body(self, monkeypatch):
+        send_email = AsyncMock(return_value=(1, None))
+        monkeypatch.setattr(
+            "app.services.cert_alert_service.EmailService",
+            lambda org: SimpleNamespace(send_email=send_email),
+        )
+        record = _record(90, certification_number="FF-<12>", issuing_agency="NFPA")
+        db = _scripted_db(record, _member())
+
+        await CertAlertService(db).process_alerts("org-1")
+
+        kwargs = send_email.await_args.kwargs
+        html = kwargs["html_body"]
+        assert html.index("View Certifications") < html.index("FF-&lt;12&gt;")
+        assert "Issuing Agency:</strong> NFPA" in html
+        assert "Certification #: FF-<12>" in kwargs["text_body"]
+        assert kwargs["template_type"] == "cert_expiration"
+
+    async def test_a_switched_off_template_sends_nothing_and_stamps_the_tier(
+        self, monkeypatch
+    ):
+        send_email = AsyncMock(return_value=(1, None))
+        monkeypatch.setattr(
+            "app.services.cert_alert_service.EmailService",
+            lambda org: SimpleNamespace(send_email=send_email),
+        )
+
+        class SwitchedOff(_ShippedCertTemplate):
+            async def is_switched_off(self, *_args):
+                return True
+
+        monkeypatch.setattr(
+            "app.services.cert_alert_service.EmailTemplateService", SwitchedOff
+        )
+        record = _record(90)
+        db = _scripted_db(record, _member())
+
+        out = await CertAlertService(db).process_alerts("org-1")
+
+        send_email.assert_not_awaited()
+        assert out["alerts_sent"] == 0
+        # Stamped all the same, so tomorrow's run does not try again.
+        assert record.alert_90_sent_at is not None
+
+
 class TestExpiredEscalation:
     async def test_expired_cert_escalates_and_marks(self):
         record = _record(-10)  # expired 10 days ago
@@ -371,11 +464,14 @@ class TestExpiryWording:
 
         await CertAlertService(db).process_alerts("org-1")
 
+        # The email is the Cert Expiration template now (its subject names
+        # no count); what must still hold is that the last day and the day
+        # before never read "0 days" or "1 days".
         kwargs = send_email.await_args.kwargs
-        assert kwargs["subject"] == (
-            f"Certification Expires {when.title()}: Firefighter I"
-        )
+        assert kwargs["subject"].startswith("Certification Expiring: Firefighter I")
+        assert f"Expires {when}" in kwargs["html_body"]
+        assert f"({when})" in kwargs["text_body"]
         for body in (kwargs["html_body"], kwargs["text_body"]):
-            assert f"({when})" in body
             assert " days)" not in body
             assert "0 days" not in body
+            assert "1 days" not in body

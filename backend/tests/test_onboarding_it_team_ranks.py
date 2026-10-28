@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import email_fingerprint
 from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.services.onboarding import OnboardingService
@@ -54,7 +55,9 @@ def _contact(rank: str | None = None) -> dict:
 
 async def _rank_of(db_session: AsyncSession, email: str) -> str | None:
     user = (
-        await db_session.execute(select(User).where(User.email == email))
+        await db_session.execute(
+            select(User).where(User.email_hash == email_fingerprint(email))
+        )
     ).scalar_one()
     return user.rank
 
@@ -228,7 +231,9 @@ class TestThePrimaryContactIsTheSystemOwner:
         await OperationalRankService(db_session).seed_defaults(str(org.id))
         email = await self._owner(service, str(org.id))
         owner = (
-            await db_session.execute(select(User).where(User.email == email))
+            await db_session.execute(
+                select(User).where(User.email_hash == email_fingerprint(email))
+            )
         ).scalar_one()
         owner.rank = "fire_chief"
         await db_session.flush()

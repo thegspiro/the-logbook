@@ -49,6 +49,17 @@ export interface EventRSVPSectionProps {
    * refuses all of them.
    */
   attendanceFinalized?: boolean;
+  /**
+   * Server-decided (`can_correct_attendance_times`). False for an organizer on
+   * a Training event, where times and credited hours are a training manager's
+   * or an event manager's to correct, so Edit Times is not offered.
+   */
+  canCorrectTimes?: boolean;
+  /**
+   * A row whose attendance the viewer may not write: an organizer's own, since
+   * someone else vouches for them. Its check-in and row actions are hidden.
+   */
+  readOnlyUserId?: string | undefined;
 }
 
 export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
@@ -63,6 +74,8 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
   onPrintRoster,
   onExportCSV,
   attendanceFinalized = false,
+  canCorrectTimes = true,
+  readOnlyUserId,
 }) => {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -109,13 +122,14 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                 const effectiveCheckOut = rsvp.override_check_out_at || rsvp.checked_out_at;
                 const effectiveDuration = rsvp.override_duration_minutes ?? rsvp.attendance_duration_minutes;
                 const isRemoving = removeConfirmUserId === rsvp.user_id;
+                const canWriteRow = !attendanceFinalized && rsvp.user_id !== readOnlyUserId;
 
                 return (
                   <div key={rsvp.id} className="bg-theme-surface-secondary rounded-lg p-3">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="text-theme-text-primary text-sm font-medium">{rsvp.user_name}</p>
-                        <p className="text-theme-text-muted text-xs">{rsvp.user_email}</p>
+                        {rsvp.user_email && <p className="text-theme-text-muted text-xs">{rsvp.user_email}</p>}
                         {rsvp.guest_count > 0 && (
                           <p className="text-theme-text-muted mt-0.5 text-xs">
                             +{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}
@@ -128,7 +142,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                         >
                           {getRSVPStatusLabel(rsvp.status)}
                         </span>
-                        {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && !attendanceFinalized && (
+                        {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && canWriteRow && (
                           <button
                             onClick={() => {
                               onCheckIn(rsvp.user_id);
@@ -174,14 +188,16 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                     )}
 
                     {/* Action buttons */}
-                    {!attendanceFinalized && (
+                    {canWriteRow && (
                       <div className="mt-2 flex items-center gap-3">
-                        <button
-                          onClick={() => onOpenOverrideModal(rsvp)}
-                          className="touch-target-phone text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                        >
-                          Edit Times
-                        </button>
+                        {canCorrectTimes && (
+                          <button
+                            onClick={() => onOpenOverrideModal(rsvp)}
+                            className="touch-target-phone text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            Edit Times
+                          </button>
+                        )}
                         {!isRemoving ? (
                           <button
                             onClick={() => onSetRemoveConfirmUserId(rsvp.user_id)}

@@ -25,11 +25,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import generate_temporary_password
+from app.core.security import email_fingerprints, generate_temporary_password
 from app.models.directory_account import (
     DirectoryAccountProvision,
     DirectoryAccountStatus,
@@ -1171,7 +1171,9 @@ class DirectoryAccountService:
             select(User.id).where(
                 User.organization_id == str(organization_id),
                 User.id != str(user_id),
-                func.lower(User.email).in_(own),
+                User.email_hash.in_(
+                    [fp for address in own for fp in email_fingerprints(address)]
+                ),
             )
         )
         if other_member.first() is not None:

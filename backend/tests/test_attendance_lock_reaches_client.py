@@ -66,11 +66,14 @@ def _sentence(refusal):
 
 
 def _user():
+    # An events manager: the attendance routes authorize inside the handler
+    # now (organizers are admitted per event), so calling one directly no
+    # longer skips the gate the way a signature dependency did.
     return SimpleNamespace(
         id="user-1",
         organization_id="org-1",
         username="officer",
-        positions=[],
+        positions=[SimpleNamespace(permissions=["events.manage"])],
         rank=None,
     )
 

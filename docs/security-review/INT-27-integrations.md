@@ -1,6 +1,146 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-24 (pass 9, this PR), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 9); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-27 (pass 10, this PR), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 10); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 10 (2026-10-27) — watchdog pickup; true zero backend delta; 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents` — no reachable agents). `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) and `list_pull_requests`
+both returned 0 results — PR #3775 (Feature 26, Forms, pass 10) had just
+merged, its one CI failure (`Backend Integration Tests (MySQL 8.0)`
+cancelled at the ~30-minute job-timeout mark, with every test passed up to
+that point and the diff docs-only) resolved by a single `rerun_failed_jobs`
+re-run rather than any code change. Row 27 (Integrations) was confirmed the
+first `⬜` row in `PROGRESS.md`'s rotation table on a freshly fetched `main`
+(head `3665a893`, the merge of #3775).
+
+**Baseline `09b18569`** (pass 9's merge, PR #3641). Per-file `git log
+09b18569..HEAD` across every file this feature has accumulated into scope
+across passes 1–9 — `integrations.py`, `salesforce_sync.py`,
+`calcom_sync.py`, `mcp_keys.py`, `google_workspace.py`,
+`google_calendar_oauth.py`, `outlook_calendar_oauth.py`,
+`api/public/calendar.py`, `integrations_webhook.py`, `salesforce_webhook.py`,
+`models/directory_account.py`, `models/directory_account_departure.py`,
+`models/integration.py`, `schemas/integration.py`,
+`services/directory_account_service.py`,
+`services/google_workspace_attention_digest.py`,
+`services/integration_health.py`, `services/paypal_backfill_service.py`,
+`utils/ssrf_transport.py`, `mcp/keys.py`,
+every file under `services/integration_services/` (28 files — `base.py`,
+every connector, `calendar_oauth_common.py`, `directory_common.py`, etc.),
+and `frontend/src/pages/IntegrationsPage.tsx` — returns **zero commits** for
+every one of them. `git diff --stat 09b18569..HEAD` against the whole
+`services/integration_services/` directory is empty. Three days of
+genuinely heavy, parallel activity landed elsewhere in the app (503 files,
++29129/-5275 across the full repo diff) and none of it touched this
+feature's files.
+
+### The two near-misses, checked and ruled out
+
+- **`scheduled_tasks.py` changed (+100/-27), but not this feature's hooks.**
+  `git diff` on the file shows every hunk inside `run_compliance_auto_reports`
+  (Feature 20) or `run_prospect_attendance_advance` (Feature 08, prospect
+  attendance); `run_directory_account_departure_check` and
+  `run_google_workspace_suspension_sync` are byte-identical to pass 9.
+- **A new "Gmail — Sending Through a Service Account" `KNOWN_LIMITATIONS.md`
+  entry, dated 2026-10-25 — after this pass's baseline — but not this
+  feature's.** The code it documents (`app/utils/google_oauth.py`,
+  `app/services/gmail_api_sender.py`) is outbound departmental mail sending,
+  not a directory/connector/webhook integration this rotation's row covers,
+  and it already has its own dedicated review: commit `5c520451`
+  (`security(messaging-notifications): add MSG-17 (Gmail token_uri SSRF),
+fixed`) shows it was found and fixed under Feature 25's own rotation
+  (`docs/security-review/MSG-25-messaging-notifications.md`, MSG-17),
+  contemporaneously with this pass's own window — not left unreviewed by
+  either rotation. Re-deriving it here would repeat Pitfall #29's mistake;
+  it is noted, not re-reviewed.
+- Two frontend files touched "calendar" by name but not this feature:
+  `components/CalendarView.tsx` and `pages/scheduling/CalendarSubscribeCard.tsx`
+  both swap `formatDateCustom` for a new `formatCalendarDate` helper (a
+  date-formatting utility change on the Events/Scheduling calendar grids),
+  confirmed by direct read to be unrelated to `IntegrationsPage.tsx` or any
+  connector's calendar OAuth flow.
+
+### Route surface re-enumerated by AST — unchanged
+
+A Python `ast` walk (not a text grep) over every `@router.*` decorator in
+this feature's ten route files finds **38 routes total**, identical to pass
+9's count, file by file: `integrations.py` 11, `salesforce_sync.py` 9,
+`calcom_sync.py` 1, `mcp_keys.py` 4, `google_workspace.py` 4,
+`google_calendar_oauth.py` 2, `outlook_calendar_oauth.py` 2,
+`api/public/calendar.py` 2, `integrations_webhook.py` 2,
+`salesforce_webhook.py` 1. `check_route_permissions.py --strict`: 279
+application routes, 0 errors/warnings (see completion gate).
+
+### Migrations since pass 9 — none belong to this feature
+
+13 new migration files landed in the window (grants/fundraising donor-name
+changes, sensitive form fields, event-guest check-in tokens, form embedding,
+passkeys, PII encryption, lot recalls, and four merge revisions resolving
+parallel branch heads). Grepping all 13 (case-insensitive) for
+`integration`/`salesforce`/`directory_account`/`google_workspace`/
+`microsoft_365`/`calcom`/`mcp_key`/`calendar_sync`/`ical` (the one apparent
+hit, inside the lot-recalls migration's docstring, is the substring `ical`
+inside the word "Medical" — a false positive, confirmed by direct read):
+zero real matches. No table this feature owns was created, altered, or
+backfilled. `validate_migrations.py --strict`: 663 revisions (up from pass
+9's 650, matching the 13 new files), single head `c616fa1bd492`, PASSED.
+
+### Standing findings — all re-verified, none changed
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist,
+  `app/utils/url_validator.py`): unchanged, still an explicit owner decision.
+  **OPEN.**
+- **INT-11** (Salesforce "clear the refresh token" has a reachable UI
+  control): confirmed **FIXED** since pass 8, unchanged —
+  `IntegrationsPage.tsx`'s `handleSwitchSalesforceToClientCredentials`
+  button is untouched by this window's (nil) diff.
+- INT-2, INT-3, INT-4, INT-6, INT-8, INT-9: SOQL injection defense,
+  instance-URL domain pinning, OAuth `error` URL-encoding, secret handling
+  (`SECRET_CONFIG_KEYS`), webhook replay dedup, module gating, the
+  DNS-rebinding SSRF transport pin (`SSRFSafeAsyncTransport`), the wall-clock
+  deadline (`INTEGRATION_DEADLINE_SECONDS`), Google Calendar's response-size
+  cap, Retry Sync's lock-then-read ordering (Pitfall #27), the PayPal
+  backfill's idempotency (`_already_recorded`/the unique-constraint key): none
+  of the files carrying them changed since pass 9 per the diff above — all
+  re-confirmed unregressed, not re-derived.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same as
+  every prior pass.
+- **`docs/KNOWN_LIMITATIONS.md`**: the Microsoft 365 and Google Workspace
+  sections (all dated 2026-10-23 or earlier) re-read and still match the
+  current code exactly — no edit needed. The new Gmail section (2026-10-25)
+  is a different feature, as established above.
+
+## Guard tests added
+
+None by this pass — no code changed. Every existing guard test for this
+feature's prior fixes was re-run as part of the scoped suite below and
+confirmed still passing.
+
+## Completion gate (pass 10)
+
+| Check                                                                                                                                                                                                                                                | Result                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1)                                                                                                                                                                                                         | ✅ 0 violations                                                                                                                                                         |
+| `black --check app/ tests/ alembic/` (black 26.10.1)                                                                                                                                                                                                 | ✅ 2696 files unchanged                                                                                                                                                 |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2)                                                                                                                                                                                              | ✅ clean                                                                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                    | ✅ 663 revisions, single head `c616fa1bd492`, PASSED                                                                                                                    |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                    | ✅ 279 routes, 0 errors, 0 warnings                                                                                                                                     |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365 or directory"`) | ✅ 9300 passed, 22 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite, no-timezone-tables), 0 failed                            |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                   | ✅ 0 errors (after `npm ci` from the repo root — sandbox `node_modules` predated the `@simplewebauthn/browser` passkeys dependency; environment gap, not a code defect) |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                        | ✅ exit 0, 0 warnings                                                                                                                                                   |
+
+No backend or frontend source file was modified by this pass itself — every
+file this feature owns is byte-identical to pass 9's baseline. This pass's
+own contribution is re-enumerating the route inventory by AST, confirming
+that, and ruling out the two places a careless scan could have mistaken
+other features' work for this one's.
+
+Next: Feature 28 (Security, audit & IP).
 
 ---
 

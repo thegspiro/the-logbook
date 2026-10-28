@@ -312,7 +312,18 @@ const EmailTemplatesPage: React.FC = () => {
   }, [selectedTemplate, previewTemplate, previewOverrides, previewMemberId]);
 
   const handleToggleActive = async () => {
-    if (!selectedTemplate) return;
+    if (!selectedTemplate || selectedTemplate.always_sent) return;
+    // Off means the email is not sent at all, so say so before it happens.
+    if (selectedTemplate.is_active) {
+      const switchOff = await confirm({
+        title: 'Switch this email off?',
+        message: `${selectedTemplate.name} will not be sent to anyone until you switch it back on.`,
+        confirmLabel: 'Switch off',
+        cancelLabel: 'Keep sending',
+        variant: 'warning',
+      });
+      if (!switchOff) return;
+    }
     setIsTogglingActive(true);
     try {
       await updateTemplate(selectedTemplate.id, { is_active: !selectedTemplate.is_active });
@@ -643,15 +654,26 @@ const EmailTemplatesPage: React.FC = () => {
                         <span>Reset</span>
                       </button>
                       <span className="text-theme-text-muted text-xs">
-                        {selectedTemplate.is_active ? 'Active' : 'Inactive'}
+                        {selectedTemplate.always_sent
+                          ? 'Always sent'
+                          : selectedTemplate.is_active
+                            ? 'Active'
+                            : 'Off — not sent'}
                       </span>
                       <button
                         onClick={() => {
                           void handleToggleActive();
                         }}
-                        disabled={isTogglingActive}
+                        disabled={isTogglingActive || selectedTemplate.always_sent === true}
                         className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
-                        title={selectedTemplate.is_active ? 'Deactivate template' : 'Activate template'}
+                        aria-label={selectedTemplate.is_active ? 'Switch this email off' : 'Switch this email on'}
+                        title={
+                          selectedTemplate.always_sent
+                            ? 'This email cannot be switched off: its recipient has no other way to receive what it carries'
+                            : selectedTemplate.is_active
+                              ? 'Switch this email off'
+                              : 'Switch this email on'
+                        }
                       >
                         {isTogglingActive ? (
                           <Loader2 className="h-7 w-7 animate-spin" />

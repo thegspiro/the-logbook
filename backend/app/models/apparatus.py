@@ -29,6 +29,7 @@ from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedJSON
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -2092,7 +2093,7 @@ class ApparatusReportConfig(Base):
 
     # Recipients
     email_recipients: Mapped[Optional[list[str]]] = mapped_column(
-        JSON, nullable=True
+        EncryptedJSON, nullable=True
     )  # Array of email addresses or user_ids
 
     # Status

@@ -40,8 +40,6 @@ import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
 import { LabelScopePicker } from '../components/LabelScopePicker';
 import { LabelScanConfirm } from '../components/LabelScanConfirm';
-import { PrintSetupChecklist } from '../components/PrintSetupChecklist';
-import { isPrintChecklistSkipped } from '../utils/printChecklist';
 import { PrinterLanguage, Symbology, labelPrinterService } from '../../../services/labelService';
 import type { LabelPrinterConfig, PrintLabelsResult } from '../../../services/labelService';
 import {
@@ -60,6 +58,9 @@ import { MAX_LABEL_SETUPS, MAX_SETUP_NAME, usableSetupLines } from '../utils/lab
 import type { LabelSetup } from '../utils/labelSetups';
 import { Breadcrumbs, PromptDialog } from '../../../components/ux';
 import { BARCODE_SVG_PRINT_CSS } from '../../../components/labels/barcodePrintCss';
+import { LABEL_FONT_FAMILY, labelNameStyle } from '../../../components/labels/labelText';
+import { PrintSetupChecklist } from '../../../components/labels/PrintSetupChecklist';
+import { isPrintChecklistSkipped } from '../../../components/labels/printChecklist';
 import { SheetStartPicker } from '../../../components/labels/SheetStartPicker';
 import {
   buildLabelFilterPath,
@@ -444,11 +445,10 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, symbology, la
           overflow: 'hidden',
           boxSizing: 'border-box',
           pageBreakInside: 'avoid',
+          fontFamily: LABEL_FONT_FAMILY,
         }}
       >
-        <div style={{ fontSize: preset.nameFontSize, fontWeight: 600, textAlign: 'center', color: '#000' }}>
-          {item.name}
-        </div>
+        <div style={labelNameStyle(preset.nameFontSize)}>{item.name}</div>
         <div style={{ fontSize: preset.subtitleFontSize, color: '#999', textAlign: 'center', marginTop: '4px' }}>
           No barcode value
         </div>
@@ -472,25 +472,10 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, symbology, la
         overflow: 'hidden',
         boxSizing: 'border-box',
         pageBreakInside: 'avoid',
+        fontFamily: LABEL_FONT_FAMILY,
       }}
     >
-      {!labelLines.includes(HIDE_NAME) && (
-        <div
-          style={{
-            fontSize: preset.nameFontSize,
-            fontWeight: 600,
-            textAlign: 'center',
-            lineHeight: 1.2,
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            color: '#000',
-          }}
-        >
-          {item.name}
-        </div>
-      )}
+      {!labelLines.includes(HIDE_NAME) && <div style={labelNameStyle(preset.nameFontSize)}>{item.name}</div>}
       {isQr ? (
         <>
           <QRCodeSVG

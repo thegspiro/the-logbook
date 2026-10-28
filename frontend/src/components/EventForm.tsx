@@ -102,6 +102,12 @@ interface EventFormProps {
    * reopened. The edit page leaves them out of the save.
    */
   attendanceLocked?: boolean | undefined;
+  /**
+   * The editor may change everything but the type: a training manager editing
+   * a Training event. The API refuses a type change from them, because it would
+   * take the event out of training oversight and out of their reach.
+   */
+  eventTypeLocked?: boolean | undefined;
 }
 
 const EVENT_TYPES: EventType[] = [
@@ -221,6 +227,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   editingEventId,
   showOrganizerPickers = false,
   attendanceLocked = false,
+  eventTypeLocked = false,
 }) => {
   const tz = useTimezone();
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -289,6 +296,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   const lockNoticeId = useId();
   const scheduleLockHintId = useId();
   const checkInLockHintId = useId();
+  const typeLockHintId = useId();
   const reminderAudienceEdited = useRef(initialData?.reminder_target !== undefined);
 
   // Existing attachments from initialData (shown when editing)
@@ -847,8 +855,8 @@ export const EventForm: React.FC<EventFormProps> = ({
             required
             value={formData.event_type}
             onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
-            disabled={attendanceLocked}
-            aria-describedby={attendanceLocked ? lockNoticeId : undefined}
+            disabled={attendanceLocked || eventTypeLocked}
+            aria-describedby={attendanceLocked ? lockNoticeId : eventTypeLocked ? typeLockHintId : undefined}
             className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             {EVENT_TYPES.filter((t) => visibleTypes.includes(t)).map((type) => (
@@ -866,6 +874,11 @@ export const EventForm: React.FC<EventFormProps> = ({
               </optgroup>
             )}
           </select>
+          {eventTypeLocked && !attendanceLocked && (
+            <p id={typeLockHintId} className="text-theme-text-muted mt-2 text-sm">
+              Only an event manager can change a training event&apos;s type.
+            </p>
+          )}
           {formData.event_type === EventTypeEnum.TRAINING && editingEventId && (
             <p className="text-theme-text-muted mt-2 text-sm">
               Training details are edited on the event page&apos;s Requirements &amp; Programs card.

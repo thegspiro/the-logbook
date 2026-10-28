@@ -231,14 +231,15 @@ Normal ──(warning threshold)──> Warning ──(timeout reached)──> I
 
 Pipeline-level inactivity settings are configured on the Pipeline Settings page:
 
-| Setting                   | Default            | Description                                                       |
-| ------------------------- | ------------------ | ----------------------------------------------------------------- |
-| Timeout Preset            | 3 months (90 days) | How long before an idle applicant is deactivated                  |
-| Custom Timeout Days       | —                  | Used when preset is "custom"                                      |
-| Warning Threshold         | 80%                | When to show amber warning indicators                             |
-| Notify Coordinator        | true               | Email the coordinators when the sweep marks an applicant inactive |
-| Auto-Purge Enabled        | false              | Automatically purge inactive applicants after a period            |
-| Purge Days After Inactive | 365                | Days after deactivation before auto-purge (clamped to 30–1095)    |
+| Setting                   | Default            | Description                                                        |
+| ------------------------- | ------------------ | ------------------------------------------------------------------ |
+| Timeout Preset            | 3 months (90 days) | How long before an idle applicant is deactivated                   |
+| Custom Timeout Days       | —                  | Used when preset is "custom"                                       |
+| Warning Threshold         | 80%                | When to show amber warning indicators                              |
+| Notify Coordinator        | true               | Send notification to coordinator when applicant approaches timeout |
+| Notify Applicant          | false              | Send notification to applicant when approaching timeout            |
+| Auto-Purge Enabled        | false              | Automatically purge inactive applicants after a period             |
+| Purge Days After Inactive | 365                | Days after deactivation before auto-purge (clamped to 30–1095)     |
 
 ### Per-Stage Overrides
 

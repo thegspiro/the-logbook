@@ -676,18 +676,28 @@ owner made, recorded so they are not mistaken for gaps:
   which is untouched; an application with no `inactive_since` is never
   auto-purged.
 
-## Prospective Members — The Inactivity "Notify" Checkboxes Have No Reader (2026-10-26, resolved 2026-10-27)
+## Prospective Members — The Inactivity "Notify" Checkboxes Have No Reader (resolved 2026-10-27)
 
-**Resolved (owner decision: wire the coordinator email, drop the applicant
-box).** `MembershipPipelineService.notify_coordinators_of_inactivity`, run at
-the end of the daily inactivity sweep, emails the membership coordinators one
-digest of the applications the sweep marked inactive, where the pipeline's
-`notify_coordinator` is on (a pipeline that never stored it counts as on, as
-the settings screen shows it ticked). Each application is listed once per
-inactive spell, a failed send is retried for 7 days, and an application marked
-inactive by hand is not listed. **Notify applicant** is gone from Pipeline
-Settings; no email goes to an applicant, and a stored `notify_applicant` value
-is ignored. Covered by `tests/test_prospect_inactivity_notice.py`.
+Pipeline Settings → Inactivity offers **Notify coordinator** (on by default)
+and **Notify applicant**. Until 2026-10-27 both were saved and nothing read
+either: the daily inactivity sweep (`process_inactivity_warnings` in
+`membership_pipeline_service.py`) only logged an `inactivity_warning_sent`
+activity entry — the shape Pitfall #19 forbids.
+
+**Resolved as the owner chose.** On each warning the sweep records (at most
+once a week per applicant, the cadence it already had):
+
+- **Notify coordinator** emails the membership coordinators — the same
+  recipients as the withdrawal notice, filtered by their membership-admin
+  email preference — through the **Prospect Inactivity Warning** template.
+- **Notify applicant** emails the applicant through the new **Application
+  Going Inactive** template (`application_going_inactive`, migration
+  `0d9897752425`), which gives the date the application will be marked
+  inactive.
+
+A pipeline with no stored inactivity settings behaves as Pipeline Settings
+shows it: coordinator on, applicant off. Either template can be switched off
+in Communications → Email Templates, which stops that email.
 
 ## Email Link Address — How a Change Reaches Every Worker (2026-09-25)
 

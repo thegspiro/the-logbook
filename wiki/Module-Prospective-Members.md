@@ -124,10 +124,11 @@ Under **Inactivity Timeout** set the **Default Inactivity Period** (default
 3 months) and **Warning Threshold** (default 80%), then **Save Inactivity
 Settings**. Applicants approaching the timeout show amber, then red, on the
 board; past it, the daily `membership_inactivity_warnings` task marks them
-**Inactive**. A warning is recorded in the applicant's activity log. With
-**Email the membership coordinators when the daily check marks an application
-inactive** ticked (the default), the coordinators get one email per run listing
-the applications it marked. The applicant is never emailed.
+**Inactive**. A warning is recorded in the applicant's activity log, at most
+once a week per applicant. With **Notify coordinator** on (the default) the
+membership coordinators are emailed the **Prospect Inactivity Warning**; with
+**Notify applicant** on, the applicant is emailed **Application Going
+Inactive**, which gives the date the application will be marked inactive.
 
 **Auto-purge** (off by default) permanently deletes applications that have
 been inactive longer than the purge period (default 365 days, clamped to
@@ -214,10 +215,9 @@ A coordinator can reactivate it like any other withdrawal.
 
 ## Rules and gotchas
 
-- **The inactivity email reports deactivations, not warnings.** The
-  coordinators hear about an application when the daily check marks it
-  inactive, not while it is still amber. One marked inactive by hand is not
-  emailed, since whoever did it already knows.
+- **Inactivity notification checkboxes do not send anything yet.** The two
+  "Notify…" boxes under Inactivity Timeout are saved but no code reads them;
+  the warning goes to the applicant's activity log only.
 - **Medical screening records stay on the applicant record after conversion.**
   See [Medical Screening](Module-Medical-Screening#rules-and-gotchas).
 - **Automated Email stages need working email.** With no SMTP configured, or a

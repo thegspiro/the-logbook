@@ -97,6 +97,15 @@ class TestParseKey:
         with pytest.raises(GoogleOAuthError, match="private_key"):
             parse_service_account_key(json.dumps(info))
 
+    def test_rejects_a_token_uri_pointed_elsewhere(self):
+        # from_service_account_info sends the signed JWT assertion to
+        # whatever token_uri the key names, so a value other than Google's
+        # own endpoint would make this process POST that assertion to a host
+        # of the submitter's choosing — the SSRF this field is checked for.
+        info = key_info(token_uri="http://169.254.169.254/latest/meta-data/")
+        with pytest.raises(GoogleOAuthError, match="token_uri"):
+            parse_service_account_key(json.dumps(info))
+
     def test_client_id_for_the_admin_console(self):
         assert service_account_client_id(json.dumps(key_info())) == (
             "112233445566778899"

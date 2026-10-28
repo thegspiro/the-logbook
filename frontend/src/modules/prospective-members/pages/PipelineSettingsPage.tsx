@@ -888,7 +888,21 @@ export const PipelineSettingsPage: React.FC = () => {
                           }
                           className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                         />
-                        Email the membership coordinators when the daily check marks an application inactive
+                        Notify membership coordinator when applications approach timeout
+                      </label>
+                      <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={inactivityConfig.notify_applicant}
+                          onChange={(e) =>
+                            setInactivityConfig({
+                              ...inactivityConfig,
+                              notify_applicant: e.target.checked,
+                            })
+                          }
+                          className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                        />
+                        Notify the applicant that their application is going inactive
                       </label>
                     </div>
                   </div>

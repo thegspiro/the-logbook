@@ -21,11 +21,15 @@ pytestmark = pytest.mark.unit
 
 
 def _user():
+    # An events manager. The route now authorizes inside the handler (training
+    # managers are admitted per event), so a direct call no longer skips the
+    # gate the way a signature dependency did; events.manage is let through
+    # before any read, which keeps this test on the update's own 404.
     return SimpleNamespace(
         id="user-1",
         organization_id="org-1",
         username="officer",
-        positions=[],
+        positions=[SimpleNamespace(permissions=["events.manage"])],
         rank=None,
     )
 
