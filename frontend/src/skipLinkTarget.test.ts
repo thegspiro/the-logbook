@@ -194,9 +194,13 @@ const publicPages = (): Array<{ file: string; component: string }> => {
     if (byFilename.length === 1) return { file: path.relative(SRC, byFilename[0] ?? ''), component: name };
 
     // A component can live in a file named for something else — onboarding's
-    // placeholder steps share `components/PlaceholderPages.tsx`.
+    // placeholder steps share `components/PlaceholderPages.tsx`. A router's
+    // `const X = lazyWithRetry(...)` names the page without declaring it, so it
+    // is not a second candidate.
     const declaring = globSync(path.join(SRC, '**/*.tsx')).filter((file) =>
-      new RegExp(`(?:export )?const ${name}\\b|function ${name}\\b`).test(fs.readFileSync(file, 'utf8'))
+      new RegExp(`(?:export )?const ${name}\\b(?!\\s*=\\s*lazyWithRetry\\()|function ${name}\\b`).test(
+        fs.readFileSync(file, 'utf8')
+      )
     );
     if (declaring.length !== 1) {
       throw new Error(`cannot locate ${name}: ${declaring.length} files declare it`);

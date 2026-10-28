@@ -907,6 +907,12 @@ jobs:
         if: "!cancelled()"
         run: node scripts/validate-pwa.mjs
 
+      # What every visit downloads before the first page renders. On a phone
+      # over 4G it was 714 KB and the first paint came at 8.3s on every route.
+      - name: Check first-load bundle budget
+        if: "!cancelled()"
+        run: node scripts/check-initial-bundle.mjs
+
       # Blocking at high/critical. If an advisory can only be fixed by a
       # breaking major upgrade, track the accepted risk in docs/COMPLIANCE.md
       # instead of silencing it here.

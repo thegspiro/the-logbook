@@ -201,7 +201,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <CommandPalette />
         <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
         <div className="mobile-header-offset flex min-h-screen flex-col md:ml-64">
-          <main className="flex-1" id="main-content" tabIndex={-1}>
+          {/* At least a screen tall, so the footer starts below the fold. A
+              page is short while its code or data loads, and with flex-1
+              alone the footer sat mid-screen until the content arrived and
+              pushed it away: a layout shift on every route, about 0.05-0.1
+              on a phone and all of /events' 0.12. */}
+          <main className="min-h-dvh flex-1" id="main-content" tabIndex={-1}>
             <MfaGraceBanner />
             <SystemNoticesBanner />
             <HeldOfflineItemsNotice />
@@ -238,7 +243,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
       <CommandPalette />
       <TopNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
-      <main className="flex-1" id="main-content" tabIndex={-1}>
+      {/* A screen tall for the same reason as the left-nav layout's. */}
+      <main className="min-h-dvh flex-1" id="main-content" tabIndex={-1}>
         <MfaGraceBanner />
         <SystemNoticesBanner />
         <HeldOfflineItemsNotice />
