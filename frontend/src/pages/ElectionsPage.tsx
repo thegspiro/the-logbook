@@ -23,6 +23,7 @@ import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
+import { describeEligibilityRules } from '../modules/elections/eligibilityRules';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
@@ -71,6 +72,9 @@ export const ElectionsPage: React.FC = () => {
     reminders_enabled: true,
     auto_open_enabled: true,
   });
+  // The department's election-wide voter rules, which the server copies onto
+  // a new election. Shown so the secretary knows what the election starts with.
+  const [defaultVoterRules, setDefaultVoterRules] = useState<string[]>([]);
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [upcomingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
@@ -124,6 +128,7 @@ export const ElectionsPage: React.FC = () => {
           reminders_enabled: s.reminders_enabled ?? true,
           auto_open_enabled: s.auto_open_enabled ?? true,
         });
+        setDefaultVoterRules(describeEligibilityRules(s.eligibility?.rules));
       } catch {
         // Non-fatal: fields stay visible; the backend gates enforcement.
       }
@@ -1297,6 +1302,27 @@ export const ElectionsPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
+                </div>
+
+                <div className="bg-theme-surface-secondary mt-6 rounded-md p-4" data-testid="create-voter-rules">
+                  <p className="text-theme-text-primary text-sm font-medium">Voter rules from Election Settings</p>
+                  {defaultVoterRules.length === 0 ? (
+                    <p className="text-theme-text-muted mt-1 text-sm">
+                      No election-wide rules. Every member whose tier may vote is eligible, subject to each ballot
+                      item&apos;s own rules.
+                    </p>
+                  ) : (
+                    <>
+                      <ul className="text-theme-text-secondary mt-1 list-disc pl-5 text-sm">
+                        {defaultVoterRules.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Change them for this election on its Eligibility tab, any time before voting opens.
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-6 flex justify-end space-x-3">

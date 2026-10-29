@@ -602,6 +602,26 @@ def _tier_benefits(user: Any, org: Any) -> dict:
     return benefits if isinstance(benefits, dict) else {}
 
 
+def _tier_name(user: Any, org: Any) -> str:
+    """The display name of ``user``'s membership tier, else its id."""
+    tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
+    tiers = tier_config.get("tiers", []) if isinstance(tier_config, dict) else []
+    member_tier_id = getattr(user, "membership_type", None) or "active"
+    tier_def = next(
+        (t for t in tiers if isinstance(t, dict) and t.get("id") == member_tier_id),
+        None,
+    )
+    return str((tier_def or {}).get("name") or member_tier_id)
+
+
+def _positive_int(value: Any) -> Optional[int]:
+    """``value`` if it is a positive whole number, else None. ``bool`` is an
+    ``int`` subclass and is refused, so a stray ``true`` is not read as 1."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
 # Domain label for the key fingerprint stored on each vote; distinct from the
 # audit log's so the two fingerprints of one shared key do not match.
 _VOTE_KEY_ID_LABEL = b"logbook:vote-signing-key-id:v1"
@@ -644,6 +664,11 @@ class ElectionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Election-wide rule outcomes, keyed (election id, user id). One
+        # request evaluates a member against the same rules from several
+        # paths (roster, item annotation, ineligibility reason), and each
+        # evaluation is a handful of attendance queries.
+        self._election_rule_reasons: Dict[Tuple[str, str], Optional[str]] = {}
 
     @overload
     @staticmethod
@@ -1000,6 +1025,52 @@ class ElectionService:
         html_parts.append("</ul>")
         return "\n".join(html_parts), "\n".join(text_parts)
 
+    async def _universal_gate(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+        organization: Optional["Organization"] = None,
+    ) -> Tuple[Optional[str], bool]:
+        """The eligibility gates a voter must clear before ANY scope-specific
+        rule (per-item ``eligible_voter_types``, per-position
+        ``voter_types``) is even considered.
+
+        Returns ``(reason, has_override)``. ``reason`` is None when the
+        member passes, else why not:
+
+        - their membership tier has ``benefits.voting_eligible == False``
+          (e.g. the shipped "probationary" tier), or
+        - they fail this election's ``eligibility_rules`` (meeting
+          attendance, minimum tenure).
+
+        ``has_override`` is True when this election's ``voter_overrides``
+        names this user. It grants blanket eligibility for every scope, so
+        ``reason`` is always None alongside it.
+        """
+        has_override = bool(
+            election.voter_overrides
+            and any(o.get("user_id") == str(user.id) for o in election.voter_overrides)
+        )
+        if has_override:
+            return None, True
+
+        org: Optional[Organization]
+        if organization:
+            org = organization
+        else:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+        if not _tier_benefits(user, org).get("voting_eligible", True):
+            return (
+                f"Membership tier '{_tier_name(user, org)}' is not eligible to vote",
+                False,
+            )
+
+        return await self._election_rules_reason(user, election, organization_id), False
+
     async def _member_voting_gates(
         self,
         user: "User",
@@ -1007,19 +1078,7 @@ class ElectionService:
         organization_id: str,
         organization: Optional["Organization"] = None,
     ) -> Tuple[bool, bool]:
-        """The two universal eligibility gates a voter must clear before ANY
-        scope-specific rule (per-item ``eligible_voter_types``, per-position
-        ``voter_types``) is even considered.
-
-        Returns ``(tier_voting_eligible, has_override)``:
-
-        - ``tier_voting_eligible``: False when the member's membership tier
-          has ``benefits.voting_eligible == False`` (e.g. the shipped
-          "probationary" tier) — a global ban that applies regardless of
-          which scope (ballot item or plain position) is being evaluated.
-        - ``has_override``: True when this election's ``voter_overrides``
-          names this user — grants blanket eligibility for every scope,
-          bypassing per-item/per-position voter-type rules entirely.
+        """``_universal_gate`` as ``(passes_universal_gates, has_override)``.
 
         Both ``annotate_ballot_items_for_user`` (item eligibility) and the
         plain-position eligibility snapshot in ``send_ballot_emails`` apply
@@ -1029,21 +1088,113 @@ class ElectionService:
         live positional credential, and an overridden member's override
         didn't reach their positional votes (Codex round 6, ELEC-30/31).
         """
-        org: Optional[Organization]
-        if organization:
-            org = organization
-        else:
-            org_result = await self.db.execute(
-                select(Organization).where(Organization.id == organization_id)
-            )
-            org = org_result.scalar_one_or_none()
-        tier_voting_eligible = _tier_benefits(user, org).get("voting_eligible", True)
-
-        has_override = bool(
-            election.voter_overrides
-            and any(o.get("user_id") == str(user.id) for o in election.voter_overrides)
+        reason, has_override = await self._universal_gate(
+            user, election, organization_id, organization
         )
-        return tier_voting_eligible, has_override
+        return reason is None, has_override
+
+    async def _election_rules_reason(
+        self, user: "User", election: Election, organization_id: str
+    ) -> Optional[str]:
+        """Why ``user`` fails this election's ``eligibility_rules``, or None.
+
+        The rules are copied from the department's defaults when the
+        election is created and validated on every write, but the column is
+        free-form JSON, so it is read defensively: a malformed rule is
+        skipped rather than raised, because an exception here would take
+        down the whole roster or ballot send rather than one rule.
+        """
+        rules = getattr(election, "eligibility_rules", None)
+        if not isinstance(rules, dict):
+            return None
+        key = (str(election.id), str(user.id))
+        if key in self._election_rule_reasons:
+            return self._election_rule_reasons[key]
+        reason = await self._evaluate_election_rules(
+            str(user.id), str(organization_id), rules
+        )
+        self._election_rule_reasons[key] = reason
+        return reason
+
+    async def _evaluate_election_rules(
+        self, user_id: str, organization_id: str, rules: Dict[str, Any]
+    ) -> Optional[str]:
+        from app.services.membership_tier_service import (
+            MembershipTierService,
+            required_recent_meetings,
+        )
+
+        tier_svc = MembershipTierService(self.db)
+
+        min_tenure = _positive_int(rules.get("min_tenure_months"))
+        if min_tenure is not None:
+            # A member with no recorded start date passes: missing data is
+            # not evidence that they joined recently.
+            months = await tier_svc.get_tenure_months(user_id, organization_id)
+            if months is not None and months < min_tenure:
+                return (
+                    f"Requires at least {min_tenure} months of membership; "
+                    f"member has {months}"
+                )
+
+        attendance = rules.get("attendance")
+        if not isinstance(attendance, dict):
+            return None
+        meeting_types = attendance.get("meeting_types")
+        if not isinstance(meeting_types, list) or not all(
+            isinstance(t, str) for t in meeting_types
+        ):
+            meeting_types = None
+        mode = attendance.get("mode")
+        if mode == "count":
+            min_meetings = _positive_int(attendance.get("min_meetings"))
+            of_last = _positive_int(attendance.get("of_last_meetings"))
+            if min_meetings is None or of_last is None:
+                return None
+            recent = await tier_svc.get_recent_meeting_attendance(
+                user_id, organization_id, of_last, meeting_types
+            )
+            required = required_recent_meetings(
+                min(min_meetings, of_last), of_last, recent.considered
+            )
+            if recent.attended < required:
+                return (
+                    f"Attended {recent.attended} of the last {recent.considered} "
+                    f"meetings; {required} required to vote"
+                )
+        elif mode == "percent":
+            min_pct = attendance.get("min_pct")
+            period = _positive_int(attendance.get("period_months"))
+            if (
+                isinstance(min_pct, bool)
+                or not isinstance(min_pct, (int, float))
+                or min_pct <= 0
+                or period is None
+            ):
+                return None
+            actual_pct = await tier_svc.get_meeting_attendance_pct(
+                user_id=user_id,
+                organization_id=organization_id,
+                period_months=period,
+                meeting_types=meeting_types,
+            )
+            if actual_pct < min_pct:
+                return (
+                    f"Meeting attendance is {actual_pct:.1f}% over the last "
+                    f"{period} months; {min_pct:g}% required to vote"
+                )
+        return None
+
+    def _has_election_rules(self, election: Election) -> bool:
+        """Whether this election carries any election-wide rule to enforce."""
+        rules = getattr(election, "eligibility_rules", None)
+        if not isinstance(rules, dict):
+            return False
+        attendance = rules.get("attendance")
+        return _positive_int(rules.get("min_tenure_months")) is not None or (
+            isinstance(attendance, dict)
+            and attendance.get("mode") in ("count", "percent")
+        )
 
     async def annotate_ballot_items_for_user(
         self,
@@ -1076,18 +1227,9 @@ class ElectionService:
                 select(Organization).where(Organization.id == organization_id)
             )
             org = org_result.scalar_one_or_none()
-        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
-        tiers = tier_config.get("tiers", [])
-        member_tier_id = getattr(user, "membership_type", None) or "active"
-        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
-
-        # Human-readable tier name for the ineligibility reason below. The
-        # voting_eligible/override booleans themselves come from the shared
-        # gate helper so this path can never drift from the positional one.
-        tier_name = member_tier_id
-        if tier_def:
-            tier_name = tier_def.get("name", member_tier_id)
-        tier_voting_eligible, has_override = await self._member_voting_gates(
+        # The universal gates come from the shared helper so this path can
+        # never drift from the positional one.
+        gate_reason, has_override = await self._universal_gate(
             user, election, organization_id, org
         )
 
@@ -1099,9 +1241,9 @@ class ElectionService:
             # A secretary override grants eligibility for every item
             if has_override:
                 pass
-            elif not tier_voting_eligible:
+            elif gate_reason is not None:
                 eligible = False
-                reason = f"Membership tier '{tier_name}' is not eligible to vote"
+                reason = gate_reason
             else:
                 eligible_types = item.get("eligible_voter_types", ["all"])
                 if not await self._user_has_role_type(user, eligible_types):
@@ -1193,6 +1335,13 @@ class ElectionService:
             if not benefits.get("voting_eligible", True):
                 tier_name = tier_def.get("name", member_tier_id)
                 return f"Membership tier '{tier_name}' is not eligible to vote"
+
+        # Election-wide rules (attendance, tenure) also affect every item
+        rules_reason = await self._election_rules_reason(
+            user, election, organization_id
+        )
+        if rules_reason:
+            return rules_reason
 
         # Check each item for role-type and attendance requirements
         role_blocked = 0
@@ -1652,6 +1801,28 @@ class ElectionService:
                                     f"{period} months, below the {min_pct:.0f}% minimum required to vote"
                                 ),
                             )
+
+        # ---- Election-wide rules (attendance, tenure) ----
+        # Checked after the tier rules, which apply alongside them, and
+        # skipped for a secretary override exactly as the tier rules are.
+        # Also skipped for a member on the frozen roll: the roll was drawn
+        # through these same rules when voting opened, and the rules cannot
+        # change once it is open. Re-evaluating them live would let a meeting
+        # held mid-vote take away a ballot the member's emailed link -- which
+        # carries the send-time snapshot -- still honours.
+        on_frozen_roll = snapshot is not None and str(user_id) in snapshot
+        if not _has_override and not on_frozen_roll:
+            rules_reason = await self._election_rules_reason(
+                user, election, str(organization_id)
+            )
+            if rules_reason:
+                return VoterEligibility(
+                    is_eligible=False,
+                    has_voted=False,
+                    positions_voted=[],
+                    positions_remaining=[],
+                    reason=rules_reason,
+                )
 
         # Check position-specific eligibility (if checking for a specific position)
         if position and election.position_eligibility:
@@ -3160,8 +3331,9 @@ class ElectionService:
         secretary voter override are added back.
 
         This is deliberately election-level only: per-ballot-item role or
-        attendance restrictions are not modeled here, since turnout is
-        reported for the election as a whole.
+        check-in restrictions are not modeled here, since turnout is
+        reported for the election as a whole. Election-wide rules
+        (``eligibility_rules``) are election-level, so they are.
         """
         # Roll frozen at open: the snapshot is the denominator, plus any
         # secretary overrides granted after the freeze.
@@ -3182,6 +3354,25 @@ class ElectionService:
             select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
+
+        # Election-wide rules (attendance, tenure) are per member, so the
+        # tier-grouped count below cannot express them: evaluate each member
+        # through the same gate the ballot send applies.
+        if self._has_election_rules(election):
+            members_result = await self.db.execute(
+                select(User)
+                .where(User.organization_id == str(organization_id))
+                .where(User.is_active)
+            )
+            eligible = 0
+            for member in members_result.scalars().all():
+                reason, _ = await self._universal_gate(
+                    member, election, str(organization_id), org
+                )
+                if reason is None:
+                    eligible += 1
+            return eligible
+
         tiers = (((org.settings or {}).get("membership_tiers", {}) if org else {})).get(
             "tiers", []
         )
@@ -5766,6 +5957,7 @@ class ElectionService:
             # value held by the ORM session) with stateful keys stripped above.
             ballot_items=cloned_ballot_items,
             position_eligibility=copy.deepcopy(source.position_eligibility),
+            eligibility_rules=copy.deepcopy(getattr(source, "eligibility_rules", None)),
             start_date=start_date,
             end_date=end_date,
             nomination_deadline=nomination_deadline,
@@ -6796,6 +6988,7 @@ class ElectionService:
         # decide the race under different (weaker) conditions:
         #   - quorum: a quorum-required election's runoff needs the same bar
         #   - position_eligibility: position-level voter-type restrictions
+        #   - eligibility_rules: election-wide attendance and tenure rules
         #   - meeting/event link + attendees: the electorate context
         #   - voter_overrides: members granted eligibility for this race
         # The anonymity salt is generated FRESH (never copied): salts are
@@ -6878,6 +7071,10 @@ class ElectionService:
             ),
             ballot_items=runoff_ballot_items or None,
             position_eligibility=copy.deepcopy(election.position_eligibility),
+            # A runoff decides the same race, so the same voters qualify.
+            eligibility_rules=copy.deepcopy(
+                getattr(election, "eligibility_rules", None)
+            ),
             start_date=runoff_start,
             end_date=runoff_end,
             anonymous_voting=election.anonymous_voting,
@@ -11710,14 +11907,6 @@ class ElectionService:
         )
         ballot_recipient_ids = {str(uid) for uid in (election.email_recipients or [])}
 
-        # Membership tier definitions for the positional (no-ballot-items)
-        # eligibility path below
-        tier_defs = (
-            ((organization.settings or {}) if organization else {})
-            .get("membership_tiers", {})
-            .get("tiers", [])
-        )
-
         roster = []
         for user in users:
             user_id = str(user.id)
@@ -11791,18 +11980,10 @@ class ElectionService:
                 if has_override:
                     positional_eligible = True
                 else:
-                    member_tier_id = getattr(user, "membership_type", None) or "active"
-                    tier_def = next(
-                        (t for t in tier_defs if t.get("id") == member_tier_id),
-                        None,
+                    positional_reason, _ = await self._universal_gate(
+                        user, election, str(organization_id), organization
                     )
-                    benefits = (tier_def or {}).get("benefits", {})
-                    positional_eligible = benefits.get("voting_eligible", True)
-                    if not positional_eligible:
-                        tier_name = (tier_def or {}).get("name", member_tier_id)
-                        positional_reason = (
-                            f"Membership tier '{tier_name}' is not eligible " f"to vote"
-                        )
+                    positional_eligible = positional_reason is None
 
             # Overall ineligibility reason
             overall_reason = None

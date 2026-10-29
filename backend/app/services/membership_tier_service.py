@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from typing import (
     AbstractSet,
     Any,
+    Callable,
     Dict,
     FrozenSet,
     Iterable,
@@ -148,6 +149,77 @@ def tally_attendance(
     )
 
 
+def stint_window(
+    member: Any, periods: Sequence[MemberServicePeriod], today: date
+) -> Tuple[date, date]:
+    """Every meeting since the member's current stint began, up to ``today``.
+
+    A member with no known start is judged on every meeting to date; the
+    count rule then looks only at the most recent of them.
+    """
+    stint_start = current_stint_start(member, periods)
+    return (stint_start or date.min), today
+
+
+def whole_months_between(start: date, end: date) -> int:
+    """Completed calendar months from ``start`` to ``end`` (0 if end <= start)."""
+    if end <= start:
+        return 0
+    delta = relativedelta(end, start)
+    return delta.years * 12 + delta.months
+
+
+@dataclass(frozen=True)
+class RecentAttendance:
+    """Attendance at a member's most recent eligible meetings."""
+
+    attended: int
+    # How many eligible meetings were looked at: the requested look-back, or
+    # fewer when the member has not had that many since their stint began.
+    considered: int
+
+
+def tally_recent_attendance(
+    meetings: Iterable[Tuple[str, date]],
+    window: Tuple[date, date],
+    waived_ids: AbstractSet[str],
+    present_ids: AbstractSet[str],
+    leaves: Sequence[Any],
+    last_meetings: int,
+) -> RecentAttendance:
+    """Attendance at the ``last_meetings`` most recent eligible meetings.
+
+    Eligibility (window, waivers, leave) comes from ``tally_attendance``, so
+    the count rule excludes exactly the meetings the percentage rule does.
+    Ties on a date are broken by meeting id so the result is stable.
+    """
+    meetings = list(meetings)
+    tally = tally_attendance(meetings, window, waived_ids, present_ids, leaves)
+    dated = sorted(
+        ((md, mid) for mid, md in meetings if mid in tally.eligible),
+        reverse=True,
+    )
+    recent = {mid for _, mid in dated[:last_meetings]}
+    return RecentAttendance(
+        attended=len(recent & tally.attended), considered=len(recent)
+    )
+
+
+def required_recent_meetings(
+    min_meetings: int, of_last_meetings: int, considered: int
+) -> int:
+    """Meetings a member must have attended among the ``considered`` ones.
+
+    A member who has had fewer eligible meetings than the look-back -- a
+    recent joiner, or a department that has not met that often -- is held to
+    the same proportion rather than to a count they could not reach:
+    6 of 12 becomes 2 of 4. Rounded up, so the proportion is never relaxed.
+    """
+    if considered >= of_last_meetings:
+        return min_meetings
+    return -(-min_meetings * considered // of_last_meetings)
+
+
 class MembershipTierService:
     """Manages membership tier progression and meeting attendance queries."""
 
@@ -163,6 +235,7 @@ class MembershipTierService:
         user_id: str,
         organization_id: str,
         period_months: int = 12,
+        meeting_types: Optional[Sequence[str]] = None,
     ) -> float:
         """
         Calculate a member's meeting attendance percentage over a look-back
@@ -171,9 +244,88 @@ class MembershipTierService:
         member's current stint began, and none that have not happened yet.
         Waived meetings and meetings that fall within an active Leave of Absence
         are excluded from both numerator and denominator so they don't penalise
-        the member's percentage.
+        the member's percentage. ``meeting_types`` limits the count to those
+        meeting types; None counts every meeting.
         Returns 100.0 if no eligible meetings occurred.
         """
+        loaded = await self._load_attendance(
+            user_id,
+            organization_id,
+            lambda member, periods, today: attendance_window(
+                member, periods, period_months, today
+            ),
+            meeting_types,
+        )
+        if loaded is None:
+            return 100.0  # No meetings held — don't penalise
+        return tally_attendance(*loaded).pct
+
+    async def get_recent_meeting_attendance(
+        self,
+        user_id: str,
+        organization_id: str,
+        last_meetings: int,
+        meeting_types: Optional[Sequence[str]] = None,
+    ) -> RecentAttendance:
+        """How many of the member's last ``last_meetings`` meetings they attended.
+
+        Judged on the same eligible meetings as the percentage rule -- held
+        since the member's current stint began, on or before the department's
+        today, not waived and not during a leave of absence -- so the two
+        rules can never disagree on which meetings a member is charged with.
+        """
+        loaded = await self._load_attendance(
+            user_id,
+            organization_id,
+            stint_window,
+            meeting_types,
+        )
+        if loaded is None:
+            return RecentAttendance(attended=0, considered=0)
+        return tally_recent_attendance(*loaded, last_meetings=last_meetings)
+
+    async def get_tenure_months(
+        self, user_id: str, organization_id: str
+    ) -> Optional[int]:
+        """Whole months since the member's current stint began, or None when
+        the member has no known start date."""
+        member_result = await self.db.execute(
+            select(User).where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+            )
+        )
+        member = member_result.scalar_one_or_none()
+        if member is None:
+            return None
+        periods = await MemberServiceHistoryService(self.db).list_periods(
+            organization_id, user_id
+        )
+        start = current_stint_start(member, periods)
+        if start is None:
+            return None
+        today = await resolve_org_today(self.db, organization_id)
+        return whole_months_between(start, today)
+
+    async def _load_attendance(
+        self,
+        user_id: str,
+        organization_id: str,
+        window_for: Callable[
+            [Any, Sequence[MemberServicePeriod], date], Tuple[date, date]
+        ],
+        meeting_types: Optional[Sequence[str]],
+    ) -> Optional[
+        Tuple[
+            List[Tuple[str, date]],
+            Tuple[date, date],
+            AbstractSet[str],
+            AbstractSet[str],
+            List[Any],
+        ]
+    ]:
+        """The inputs ``tally_attendance`` needs, or None when no meeting
+        falls inside the member's window."""
         today = await resolve_org_today(self.db, organization_id)
         member_result = await self.db.execute(
             select(User).where(
@@ -189,25 +341,22 @@ class MembershipTierService:
             if member is not None
             else []
         )
-        window_start, window_end = attendance_window(
-            member, periods, period_months, today
-        )
+        window_start, window_end = window_for(member, periods, today)
 
-        window_meetings_subq = select(Meeting.id).where(
+        meeting_filters = [
             Meeting.organization_id == organization_id,
             Meeting.meeting_date >= window_start,
             Meeting.meeting_date <= window_end,
-        )
+        ]
+        if meeting_types:
+            meeting_filters.append(Meeting.meeting_type.in_(list(meeting_types)))
+        window_meetings_subq = select(Meeting.id).where(*meeting_filters)
         meetings_result = await self.db.execute(
-            select(Meeting.id, Meeting.meeting_date).where(
-                Meeting.organization_id == organization_id,
-                Meeting.meeting_date >= window_start,
-                Meeting.meeting_date <= window_end,
-            )
+            select(Meeting.id, Meeting.meeting_date).where(*meeting_filters)
         )
         meetings = [(row[0], row[1]) for row in meetings_result.all()]
         if not meetings:
-            return 100.0  # No meetings held — don't penalise
+            return None
 
         waived_result = await self.db.execute(
             select(MeetingAttendee.meeting_id).where(
@@ -237,9 +386,7 @@ class MembershipTierService:
         )
         present_ids = {row[0] for row in attended_result.all()}
 
-        return tally_attendance(
-            meetings, (window_start, window_end), waived_ids, present_ids, leaves
-        ).pct
+        return meetings, (window_start, window_end), waived_ids, present_ids, leaves
 
     # ------------------------------------------------------------------
     # Tier resolution helpers

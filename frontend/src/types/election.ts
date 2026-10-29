@@ -12,6 +12,7 @@ import type {
   QuorumType,
   BallotSendJobStatus,
   BallotSendJobKind,
+  AttendanceRuleMode,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -41,6 +42,46 @@ export interface PositionEligibility {
 
 // VotingMethod and VictoryCondition are now defined in constants/enums.ts
 
+/**
+ * Meeting-attendance requirement every voter in an election must meet.
+ * Mirrors backend `AttendanceRule`: `count` = attended `min_meetings` of the
+ * member's last `of_last_meetings` meetings; `percent` = attended `min_pct`%
+ * of the meetings in the last `period_months`. Waived meetings and leave are
+ * not counted. `meeting_types` null counts every meeting.
+ */
+export interface AttendanceRule {
+  mode: AttendanceRuleMode;
+  min_meetings?: number | null;
+  of_last_meetings?: number | null;
+  min_pct?: number | null;
+  period_months?: number | null;
+  meeting_types?: string[] | null;
+}
+
+/** Election-wide voter rules, stored on the election (backend `ElectionEligibilityRules`). */
+export interface ElectionEligibilityRules {
+  attendance: AttendanceRule;
+  min_tenure_months?: number | null;
+}
+
+/** The department's default voter eligibility (backend `EligibilityDefaults`). */
+export interface EligibilityDefaults {
+  rules: ElectionEligibilityRules;
+  default_require_attendance: boolean;
+  default_voter_types: string[];
+  position_voter_types: Record<string, string[]>;
+}
+
+/** One membership tier's own voting rules, reported read-only. */
+export interface TierVotingRule {
+  tier_id: string;
+  name: string;
+  voting_eligible: boolean;
+  requires_meeting_attendance: boolean;
+  min_attendance_pct: number;
+  attendance_period_months: number;
+}
+
 export interface Election {
   id: string;
   organization_id: string;
@@ -50,6 +91,7 @@ export interface Election {
   positions?: string[];
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
+  eligibility_rules?: ElectionEligibilityRules | null;
   meeting_date?: string;
   meeting_id?: string;
   meeting_title?: string;
@@ -237,6 +279,8 @@ export interface ElectionUpdate {
   positions?: string[];
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
+  // null removes every election-wide rule; an omitted key leaves them alone
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
   // null clears the link on PATCH (exclude_unset); an omitted key leaves it alone
   meeting_date?: string | null | undefined;
   meeting_id?: string | null | undefined;
@@ -727,6 +771,10 @@ export interface ElectionSettings {
   // Officers (other than the recorder) who must attest a paper-ballot
   // batch before its votes count. 0 disables attestation. Default 2.
   paper_ballot_attestations_required?: number;
+  /** Default voter eligibility, copied onto each election created afterwards. */
+  eligibility?: EligibilityDefaults;
+  /** Read-only: each membership tier's own voting rules, edited on the tier settings. */
+  tier_voting_rules?: TierVotingRule[];
   /**
    * Read-only posture reported by GET /elections/settings. `security` is not
    * an `ElectionSettingsUpdate` field, so echoing it back on PATCH is ignored.

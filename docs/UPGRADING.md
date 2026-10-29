@@ -625,6 +625,29 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Election Settings gains a Voter Eligibility section (2026-10-29)
+
+Nothing changes who may vote in any existing election. Migration
+`e1a7c4b2d9f3` adds a nullable `elections.eligibility_rules` column and leaves
+every existing row NULL, which means "no election-wide rules", the behaviour
+every election had before. The downgrade drops the column.
+
+What is new:
+
+- **Election Settings → Voter Eligibility** sets the department's default
+  meeting-attendance rule ("attended N of the last M meetings" or "N% of
+  meetings over M months"), a minimum membership tenure, the check-in default
+  for new ballot items, and who votes for named positions. These defaults
+  start empty or match the previous behaviour, so an upgrade changes nothing
+  until someone sets them.
+- **A new election copies the defaults when it is created.** It can change its
+  own copy on its Eligibility tab until voting opens. After that the copy is
+  fixed, and changing the defaults never reaches an election that already
+  exists.
+- **The election-wide rules apply alongside each membership tier's own voting
+  rules**, which are unchanged and still edited under Members → Settings →
+  Tiers. A secretary's voter override bypasses both.
+
 ### A template switched Off now stops its email (2026-10-27)
 
 **Before upgrading, open Communications → Email Templates and choose the

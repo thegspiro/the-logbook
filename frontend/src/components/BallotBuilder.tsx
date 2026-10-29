@@ -38,7 +38,15 @@ import {
   X,
 } from 'lucide-react';
 import { electionService } from '../services/api';
-import type { Election, BallotItem, BallotTemplate, SavedBallotTemplate, VictoryCondition } from '../types/election';
+import { DEFAULT_ELIGIBILITY, VOTER_TYPE_OPTIONS } from '../modules/elections/eligibilityRules';
+import type {
+  Election,
+  BallotItem,
+  BallotTemplate,
+  EligibilityDefaults,
+  SavedBallotTemplate,
+  VictoryCondition,
+} from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ElectionStatus, VoteType, BallotItemType, VictoryCondition as VC } from '../constants/enums';
 
@@ -63,37 +71,6 @@ const BALLOT_TYPE_LABELS: Record<string, string> = {
 };
 
 // ─── Shared constants ───────────────────────────────────────────
-
-// `administrative` and `social` are the member's **class** alone — what kind
-// of member they are — answered for every standing. `regular`, `life` and
-// `probationary` are the member's **status** alone. `operational` is neither:
-// it is a legacy category preserved for its pre-split meaning
-// (membership_type == "active"), so it requires class == operational AND
-// status == regular — it does NOT include probationary, life or retired
-// members, even though those are all operational-class. Use `regular` (which
-// includes life) or a specific status option to reach a wider operational
-// slice.
-//
-// The labels have to say which is which, and get `operational`'s narrower
-// meaning right — a label implying it spans every status would have an
-// administrator omit probationary/life members from a ballot they intended
-// to include.
-//
-// See ElectionService._user_has_role_type() for the authoritative mapping and
-// app/utils/membership.py for the vocabulary.
-const VOTER_TYPE_OPTIONS = [
-  { value: 'all', label: 'All Members' },
-  { value: 'regular', label: 'Regular Members (status)' },
-  { value: 'life', label: 'Life Members (status)' },
-  { value: 'regular,life', label: 'Regular + Life Members (status)' },
-  { value: 'probationary', label: 'Probationary Members (status)' },
-  {
-    value: 'operational',
-    label: 'Operational Members (Regular status only)',
-  },
-  { value: 'administrative', label: 'Administrative Members — any status' },
-  { value: 'social', label: 'Social / Associate Members — any status' },
-];
 
 const VICTORY_CONDITION_OPTIONS: { value: VictoryCondition; label: string }[] = [
   { value: VC.MOST_VOTES, label: 'Most Votes (Plurality)' },
@@ -567,9 +544,48 @@ interface BallotBuilderProps {
   electionId: string;
   election: Election;
   onUpdate: (updatedElection: Election) => void;
+  /**
+   * The department's eligibility defaults from Election Settings. New and
+   * custom items start from them; omitted (a member without
+   * `elections.manage`, or settings still loading), the built-in defaults
+   * apply — every member, check-in required.
+   */
+  eligibilityDefaults?: EligibilityDefaults | undefined;
 }
 
-export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, election, onUpdate }) => {
+export const BallotBuilder: React.FC<BallotBuilderProps> = ({
+  electionId,
+  election,
+  onUpdate,
+  eligibilityDefaults = DEFAULT_ELIGIBILITY,
+}) => {
+  const blankCustomForm = useCallback(
+    (): Partial<BallotItem> => ({
+      type: 'general_vote',
+      vote_type: 'approval',
+      eligible_voter_types: [...eligibilityDefaults.default_voter_types],
+      require_attendance: eligibilityDefaults.default_require_attendance,
+    }),
+    [eligibilityDefaults]
+  );
+  /**
+   * Set the custom item's position, and when the department has said who
+   * votes for that position, its voter types with it. Matched without regard
+   * to case or spacing, as the backend matches it on create.
+   */
+  const withPosition = (prev: Partial<BallotItem>, position: string | undefined): Partial<BallotItem> => {
+    const key = position?.trim().toLowerCase();
+    const mapped = key
+      ? Object.entries(eligibilityDefaults.position_voter_types).find(
+          ([name]) => name.trim().toLowerCase() === key
+        )?.[1]
+      : undefined;
+    return {
+      ...prev,
+      position,
+      ...(mapped ? { eligible_voter_types: [...mapped] } : {}),
+    };
+  };
   const [templates, setTemplates] = useState<BallotTemplate[]>([]);
   const [savedTemplates, setSavedTemplates] = useState<SavedBallotTemplate[]>([]);
   const [ballotItems, setBallotItems] = useState<BallotItem[]>(election.ballot_items || []);
@@ -587,11 +603,15 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
 
   // Custom item form
   const [showCustomForm, setShowCustomForm] = useState(false);
-  const [customForm, setCustomForm] = useState<Partial<BallotItem>>({
-    type: 'general_vote',
-    vote_type: 'approval',
-    eligible_voter_types: ['all'],
-    require_attendance: true,
+  const [customForm, setCustomForm] = useState<Partial<BallotItem>>(blankCustomForm);
+  // Settings arrive after the first render; a form nobody has touched yet
+  // takes them up.
+  const customFormOpenRef = useRef(false);
+  useEffect(() => {
+    if (!customFormOpenRef.current) setCustomForm(blankCustomForm());
+  }, [blankCustomForm]);
+  useEffect(() => {
+    customFormOpenRef.current = showCustomForm;
   });
 
   // Card interaction state
@@ -828,18 +848,13 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
       ...(customForm.position ? { position: customForm.position } : {}),
       eligible_voter_types: customForm.eligible_voter_types || ['all'],
       vote_type: customForm.vote_type || 'approval',
-      require_attendance: customForm.require_attendance ?? true,
+      require_attendance: customForm.require_attendance ?? eligibilityDefaults.default_require_attendance,
     };
 
     const updated = [...ballotItems, newItem];
     await saveItems(updated);
     setShowCustomForm(false);
-    setCustomForm({
-      type: 'general_vote',
-      vote_type: 'approval',
-      eligible_voter_types: ['all'],
-      require_attendance: true,
-    });
+    setCustomForm(blankCustomForm());
   };
 
   // ── Render ────────────────────────────────────────────────────
@@ -1315,12 +1330,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                         <select
                           id="ballot-custom-position"
                           value={customForm.position || ''}
-                          onChange={(e) =>
-                            setCustomForm((prev) => ({
-                              ...prev,
-                              position: e.target.value || undefined,
-                            }))
-                          }
+                          onChange={(e) => setCustomForm((prev) => withPosition(prev, e.target.value || undefined))}
                           className={selectClass}
                         >
                           <option value="">Select position...</option>
@@ -1341,12 +1351,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                         id="ballot-custom-position"
                         type="text"
                         value={customForm.position || ''}
-                        onChange={(e) =>
-                          setCustomForm((prev) => ({
-                            ...prev,
-                            position: e.target.value || undefined,
-                          }))
-                        }
+                        onChange={(e) => setCustomForm((prev) => withPosition(prev, e.target.value || undefined))}
                         className={inputClass}
                         placeholder="e.g., Chief"
                       />
@@ -1384,7 +1389,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                   <input
                     type="checkbox"
                     id="custom_require_attendance"
-                    checked={customForm.require_attendance ?? true}
+                    checked={customForm.require_attendance ?? eligibilityDefaults.default_require_attendance}
                     onChange={(e) =>
                       setCustomForm((prev) => ({
                         ...prev,

@@ -23,7 +23,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,6 +83,7 @@ from app.schemas.election import (
     ElectionSettingsResponse,
     ElectionStats,
     ElectionUpdate,
+    EligibilityDefaults,
     EligibilityRosterResponse,
     EmailBallot,
     EmailBallotResponse,
@@ -442,6 +443,9 @@ async def create_election(
     import secrets as _secrets
 
     election_data = election.model_dump()
+    await _apply_eligibility_defaults(
+        db, current_user.organization_id, election, election_data
+    )
     # Validate client-supplied meeting/event links belong to the caller's org
     # before storing them (XC-1).
     try:
@@ -960,6 +964,8 @@ class ElectionSettingsUpdate(BaseModel):
             "attestation."
         ),
     )
+    # Replaced whole: the settings screen sends the complete object.
+    eligibility: Optional[EligibilityDefaults] = None
 
     @field_validator(
         "nominations_enabled",
@@ -975,11 +981,165 @@ class ElectionSettingsUpdate(BaseModel):
             raise ValueError("feature flags must be true or false")
         return value
 
+    @field_validator("eligibility", mode="before")
+    @classmethod
+    def eligibility_must_not_be_null(cls, value):
+        """Omit eligibility to leave it alone; null would erase it silently."""
+        if value is None:
+            raise ValueError("eligibility must be an object")
+        return value
+
 
 def _feature_flag(features: dict, name: str) -> bool:
     """Resolve persisted flags consistently, including legacy null values."""
     value = features.get(name, True)
     return value if isinstance(value, bool) else True
+
+
+def _eligibility_defaults(org_settings: dict) -> EligibilityDefaults:
+    """The department's stored eligibility defaults.
+
+    The value is validated on every write, but ``organizations.settings`` is
+    free-form JSON, so a stored value that no longer validates falls back to
+    the built-in defaults (no election-wide rules, check-in required on new
+    items) rather than failing every create and settings read.
+    """
+    raw = org_settings.get("election_eligibility")
+    if not isinstance(raw, dict):
+        return EligibilityDefaults()
+    try:
+        return EligibilityDefaults.model_validate(raw)
+    except ValidationError:
+        logger.warning("Stored election_eligibility is invalid; using defaults")
+        return EligibilityDefaults()
+
+
+def _tier_voting_rules(org_settings: dict) -> list:
+    """Each membership tier's own voting rules, for read-only display.
+
+    Defaults mirror ``MembershipTierBenefits`` so a tier that never set a
+    benefit reports what the ballot check would apply to it.
+    """
+    tier_config = org_settings.get("membership_tiers", {})
+    tiers = tier_config.get("tiers", []) if isinstance(tier_config, dict) else []
+    rules = []
+    for tier in tiers:
+        if not isinstance(tier, dict) or not tier.get("id"):
+            continue
+        benefits = tier.get("benefits")
+        if not isinstance(benefits, dict):
+            benefits = {}
+        rules.append(
+            {
+                "tier_id": str(tier["id"]),
+                "name": str(tier.get("name") or tier["id"]),
+                "voting_eligible": bool(benefits.get("voting_eligible", True)),
+                "requires_meeting_attendance": bool(
+                    benefits.get("voting_requires_meeting_attendance", False)
+                ),
+                "min_attendance_pct": float(
+                    benefits.get("voting_min_attendance_pct", 0.0) or 0.0
+                ),
+                "attendance_period_months": int(
+                    benefits.get("voting_attendance_period_months", 12) or 12
+                ),
+            }
+        )
+    return rules
+
+
+def _active_rules_or_none(rules: Optional[dict]) -> Optional[dict]:
+    """Election-wide rules as stored on the election: None when no rule is
+    in force, so an election with nothing to enforce reads exactly like one
+    created before the column existed."""
+    if not rules:
+        return None
+    attendance = rules.get("attendance") or {}
+    if attendance.get("mode", "none") == "none" and not rules.get("min_tenure_months"):
+        return None
+    return rules
+
+
+async def _apply_eligibility_defaults(
+    db: AsyncSession,
+    organization_id: Any,
+    election: ElectionCreate,
+    election_data: dict,
+) -> None:
+    """Fill a new election's eligibility from the department's defaults.
+
+    Only what the request left out is filled: an explicit
+    ``eligibility_rules`` (null included, meaning "no rules") or
+    ``position_eligibility`` always wins. Defaults are copied, never
+    referenced, so a later settings change leaves this election alone.
+    """
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == str(organization_id))
+    )
+    org = org_result.scalar_one_or_none()
+    defaults = _eligibility_defaults((org.settings or {}) if org else {})
+
+    if "eligibility_rules" in election.model_fields_set:
+        election_data["eligibility_rules"] = _active_rules_or_none(
+            election_data.get("eligibility_rules")
+        )
+    else:
+        election_data["eligibility_rules"] = _active_rules_or_none(
+            defaults.rules.model_dump()
+        )
+
+    if (
+        election_data.get("position_eligibility") is None
+        and election_data.get("positions")
+        and defaults.position_voter_types
+    ):
+        # Matched without regard to case or surrounding space: "chief" on
+        # the election is the "Chief" the secretary configured.
+        by_name = {
+            name.strip().casefold(): types
+            for name, types in defaults.position_voter_types.items()
+        }
+        seeded = {
+            position: {"voter_types": list(by_name[position.strip().casefold()])}
+            for position in election_data["positions"]
+            if position.strip().casefold() in by_name
+        }
+        if seeded:
+            election_data["position_eligibility"] = seeded
+
+
+def _settings_response(org_settings: dict) -> dict:
+    """The flat settings shape GET and PATCH both return."""
+    election_defaults = org_settings.get("election_defaults", {})
+    proxy_config = org_settings.get("proxy_voting", {})
+    features = org_settings.get("election_features", {})
+    if not isinstance(features, dict):
+        features = {}
+    return {
+        # Flat fields matching frontend ElectionSettings type
+        "default_voting_method": election_defaults.get(
+            "voting_method", "simple_majority"
+        ),
+        "default_victory_condition": election_defaults.get(
+            "victory_condition", "most_votes"
+        ),
+        "default_victory_percentage": election_defaults.get("victory_percentage"),
+        "default_anonymous_voting": election_defaults.get("anonymous_voting", True),
+        "default_allow_write_ins": election_defaults.get("allow_write_ins", False),
+        "default_quorum_type": election_defaults.get("quorum_type", "none"),
+        "default_quorum_value": election_defaults.get("quorum_value"),
+        "proxy_voting_enabled": proxy_config.get("enabled", False),
+        "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
+        "nominations_enabled": _feature_flag(features, "nominations_enabled"),
+        "paper_ballots_enabled": _feature_flag(features, "paper_ballots_enabled"),
+        "reminders_enabled": _feature_flag(features, "reminders_enabled"),
+        "auto_open_enabled": _feature_flag(features, "auto_open_enabled"),
+        "paper_ballot_attestations_required": features.get(
+            "paper_ballot_attestations_required", 2
+        ),
+        "eligibility": _eligibility_defaults(org_settings).model_dump(),
+        "tier_voting_rules": _tier_voting_rules(org_settings),
+    }
 
 
 @router.get("/settings", response_model=ElectionSettingsResponse)
@@ -1005,39 +1165,12 @@ async def get_election_settings(
             detail="Organization not found",
         )
 
-    org_settings = org.settings or {}
-    election_defaults = org_settings.get("election_defaults", {})
-    proxy_config = org_settings.get("proxy_voting", {})
-    features = org_settings.get("election_features", {})
-    if not isinstance(features, dict):
-        features = {}
-
     from app.core.config import settings as app_settings
 
     signing_key_configured = bool(app_settings.VOTE_SIGNING_KEY)
 
     return {
-        # Flat fields matching frontend ElectionSettings type
-        "default_voting_method": election_defaults.get(
-            "voting_method", "simple_majority"
-        ),
-        "default_victory_condition": election_defaults.get(
-            "victory_condition", "most_votes"
-        ),
-        "default_victory_percentage": election_defaults.get("victory_percentage"),
-        "default_anonymous_voting": election_defaults.get("anonymous_voting", True),
-        "default_allow_write_ins": election_defaults.get("allow_write_ins", False),
-        "default_quorum_type": election_defaults.get("quorum_type", "none"),
-        "default_quorum_value": election_defaults.get("quorum_value"),
-        "proxy_voting_enabled": proxy_config.get("enabled", False),
-        "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
-        "nominations_enabled": _feature_flag(features, "nominations_enabled"),
-        "paper_ballots_enabled": _feature_flag(features, "paper_ballots_enabled"),
-        "reminders_enabled": _feature_flag(features, "reminders_enabled"),
-        "auto_open_enabled": _feature_flag(features, "auto_open_enabled"),
-        "paper_ballot_attestations_required": features.get(
-            "paper_ballot_attestations_required", 2
-        ),
+        **_settings_response(org.settings or {}),
         "security": {
             "vote_signing_key_configured": signing_key_configured,
             "anonymity_salt_auto_destroy": True,
@@ -1125,6 +1258,9 @@ async def update_election_settings(
         if flag in update_data:
             features[flag] = update_data[flag]
 
+    if "eligibility" in update_data:
+        org_settings["election_eligibility"] = update_data["eligibility"]
+
     org_settings["election_defaults"] = election_defaults
     org_settings["proxy_voting"] = proxy_config
     org_settings["election_features"] = features
@@ -1142,28 +1278,7 @@ async def update_election_settings(
     )
 
     # Return the full updated settings in the same flat shape as GET
-    return {
-        "default_voting_method": election_defaults.get(
-            "voting_method", "simple_majority"
-        ),
-        "default_victory_condition": election_defaults.get(
-            "victory_condition", "most_votes"
-        ),
-        "default_victory_percentage": election_defaults.get("victory_percentage"),
-        "default_anonymous_voting": election_defaults.get("anonymous_voting", True),
-        "default_allow_write_ins": election_defaults.get("allow_write_ins", False),
-        "default_quorum_type": election_defaults.get("quorum_type", "none"),
-        "default_quorum_value": election_defaults.get("quorum_value"),
-        "proxy_voting_enabled": proxy_config.get("enabled", False),
-        "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
-        "nominations_enabled": _feature_flag(features, "nominations_enabled"),
-        "paper_ballots_enabled": _feature_flag(features, "paper_ballots_enabled"),
-        "reminders_enabled": _feature_flag(features, "reminders_enabled"),
-        "auto_open_enabled": _feature_flag(features, "auto_open_enabled"),
-        "paper_ballot_attestations_required": features.get(
-            "paper_ballot_attestations_required", 2
-        ),
-    }
+    return _settings_response(org_settings)
 
 
 # ============================================
@@ -1322,6 +1437,10 @@ async def update_election(
         update_data["eligible_voters"] = [
             str(v) for v in update_data["eligible_voters"]
         ]
+    if "eligibility_rules" in update_data:
+        update_data["eligibility_rules"] = _active_rules_or_none(
+            update_data["eligibility_rules"]
+        )
 
     # Update fields — explicit allowlist prevents writing to read-only columns
     # (e.g. organization_id, created_by, voter_anonymity_salt) if the Pydantic
@@ -1333,6 +1452,10 @@ async def update_election(
         "positions",
         "ballot_items",
         "position_eligibility",
+        # Editable only before voting opens: the OPEN and CLOSED branches
+        # above refuse every field but their own, so a running election's
+        # electorate is never redrawn after ballots have gone out.
+        "eligibility_rules",
         "meeting_date",
         "meeting_id",
         # `event_id` belongs here beside `meeting_id`: the block below

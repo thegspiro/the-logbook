@@ -1,9 +1,15 @@
 /**
  * Elections Settings Page
  *
- * Centralised configuration for proxy voting, optional election features,
- * test ballots, and security posture.
+ * Centralised configuration for voter eligibility, proxy voting, optional
+ * election features, test ballots, and security posture.
  * Requires `elections.manage` permission.
+ *
+ * Voter Eligibility holds the department's defaults. Each has a reader: the
+ * election-wide rules and position voter types are copied onto an election
+ * when it is created (backend `create_election`), and the ballot-item
+ * defaults seed new items in the ballot builder. Nothing here changes an
+ * election that already exists.
  *
  * There is deliberately no "Defaults" section. `election_defaults` (voting
  * method, victory condition, quorum, anonymity, write-ins) is stored by
@@ -15,10 +21,28 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Loader2, Settings as SettingsIcon, UserCheck, ToggleRight, Send, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router';
+import {
+  Loader2,
+  Plus,
+  Settings as SettingsIcon,
+  UserCheck,
+  ToggleRight,
+  Send,
+  ShieldCheck,
+  Trash2,
+  Vote,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
-import type { ElectionSettings, ElectionListItem } from '../types/election';
+import type {
+  ElectionSettings,
+  ElectionListItem,
+  EligibilityDefaults,
+  ElectionEligibilityRules,
+} from '../types/election';
+import { DEFAULT_ELIGIBILITY, VOTER_TYPE_OPTIONS } from '../modules/elections/eligibilityRules';
+import { EligibilityRulesEditor } from '../modules/elections/components/EligibilityRulesEditor';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
@@ -26,10 +50,11 @@ import { GovernancePageHeader } from '../components/governance/GovernancePageHea
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 
-type SectionKey = 'proxy' | 'features' | 'test' | 'security';
+type SectionKey = 'proxy' | 'eligibility' | 'features' | 'test' | 'security';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'proxy', label: 'Proxy Voting', icon: UserCheck, description: 'Voting on behalf of an absent member' },
+  { key: 'eligibility', label: 'Voter Eligibility', icon: Vote, description: 'Who may vote, by default' },
   { key: 'features', label: 'Features', icon: ToggleRight, description: 'Optional election workflows' },
   { key: 'test', label: 'Test Ballot', icon: Send, description: 'Preview the voting experience' },
   { key: 'security', label: 'Security', icon: ShieldCheck, description: 'Integrity guarantees in force' },
@@ -37,6 +62,39 @@ const SECTIONS: SettingsSection<SectionKey>[] = [
 
 const isSectionKey = (value: string | null): value is SectionKey =>
   value !== null && SECTIONS.some((section) => section.key === value);
+
+/** The section a bare /elections/settings opens on, and so carries no ?tab=. */
+const DEFAULT_SECTION: SectionKey = 'proxy';
+
+interface PositionRow {
+  /** Stable React key; a position's name is what the secretary is editing. */
+  key: number;
+  name: string;
+  voterTypes: string[];
+}
+
+let positionRowKey = 0;
+const toPositionRows = (map: Record<string, string[]>): PositionRow[] =>
+  Object.entries(map).map(([name, voterTypes]) => ({ key: ++positionRowKey, name, voterTypes }));
+
+/**
+ * The rows as the map the API stores, or why they cannot be saved yet. A
+ * blank or repeated name stays on screen with its error rather than being
+ * dropped from what is saved.
+ */
+const positionRowsToMap = (rows: PositionRow[]): { map: Record<string, string[]> } | { error: string } => {
+  const map: Record<string, string[]> = {};
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const name = row.name.trim();
+    if (!name) return { error: 'Every position needs a name.' };
+    const folded = name.toLowerCase();
+    if (seen.has(folded)) return { error: `"${name}" is listed more than once.` };
+    seen.add(folded);
+    map[name] = row.voterTypes;
+  }
+  return { map };
+};
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -94,6 +152,8 @@ export const ElectionsSettingsPage: React.FC = () => {
    * stays in the box and nothing is sent until it is valid.
    */
   const [maxProxiesDraft, setMaxProxiesDraft] = useState<string | null>(null);
+  const [positionRows, setPositionRows] = useState<PositionRow[]>([]);
+  const [positionRowsError, setPositionRowsError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -105,6 +165,7 @@ export const ElectionsSettingsPage: React.FC = () => {
       setSettings(settingsData);
       // The savers read this ref, so the loaded values have to land in both.
       settingsRef.current = settingsData;
+      setPositionRows(toPositionRows(settingsData.eligibility?.position_voter_types ?? {}));
       setElections(electionsData);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load settings'));
@@ -167,10 +228,30 @@ export const ElectionsSettingsPage: React.FC = () => {
 
   const activeSection: SectionKey = isSectionKey(searchParams.get('tab'))
     ? (searchParams.get('tab') as SectionKey)
-    : 'proxy';
+    : DEFAULT_SECTION;
 
   const switchSection = (key: SectionKey) => {
-    setSearchParams(key === 'proxy' ? {} : { tab: key }, { replace: true });
+    setSearchParams(key === DEFAULT_SECTION ? {} : { tab: key }, { replace: true });
+  };
+
+  const eligibility: EligibilityDefaults = settings.eligibility ?? DEFAULT_ELIGIBILITY;
+
+  // Debounced: the rule editor reports each valid keystroke, and the
+  // position names are typed. One write lands once the typing stops.
+  const updateEligibility = (patch: Partial<EligibilityDefaults>) => {
+    const current = settingsRef.current.eligibility ?? DEFAULT_ELIGIBILITY;
+    updateField('eligibility', { ...current, ...patch }, { immediate: false });
+  };
+
+  const updatePositionRows = (rows: PositionRow[]) => {
+    setPositionRows(rows);
+    const result = positionRowsToMap(rows);
+    if ('error' in result) {
+      setPositionRowsError(result.error);
+      return;
+    }
+    setPositionRowsError(null);
+    updateEligibility({ position_voter_types: result.map });
   };
 
   const renderContent = () => {
@@ -183,6 +264,200 @@ export const ElectionsSettingsPage: React.FC = () => {
     }
 
     switch (activeSection) {
+      case 'eligibility': {
+        const tierRules = settings.tier_voting_rules ?? [];
+        return (
+          <div className="space-y-8">
+            <div>
+              <SettingsPanelHead
+                title="Voter Eligibility"
+                description="The department's default rules for who may vote. They are copied onto each election when it is created, where they can still be changed until voting opens. Changing them here does not change an election that already exists."
+              />
+              <p className="text-theme-text-muted text-sm">
+                A secretary&apos;s voter override on an election still lets a member vote who fails these rules.
+              </p>
+            </div>
+
+            <section aria-labelledby="eligibility-rules-heading" className="space-y-4">
+              <h3 id="eligibility-rules-heading" className="text-theme-text-primary text-base font-semibold">
+                Rules every voter must meet
+              </h3>
+              <EligibilityRulesEditor
+                idPrefix="default-eligibility"
+                value={eligibility.rules}
+                onChange={(next: ElectionEligibilityRules) => updateEligibility({ rules: next })}
+              />
+            </section>
+
+            <section aria-labelledby="eligibility-items-heading" className="space-y-4">
+              <h3 id="eligibility-items-heading" className="text-theme-text-primary text-base font-semibold">
+                New ballot items
+              </h3>
+              <ToggleRow
+                checked={eligibility.default_require_attendance}
+                onChange={(next) => updateEligibility({ default_require_attendance: next })}
+                label="Require voters to be checked in as present"
+                description="New ballot items only count a vote from a member checked in at the meeting. Each item can still be changed on its own."
+              />
+              <div className="max-w-sm">
+                <label htmlFor="default-voter-types" className={labelClass}>
+                  Who can vote on a new item
+                </label>
+                <select
+                  id="default-voter-types"
+                  className={selectClass}
+                  value={eligibility.default_voter_types.join(',')}
+                  onChange={(e) => updateEligibility({ default_voter_types: e.target.value.split(',') })}
+                >
+                  {VOTER_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </section>
+
+            <section aria-labelledby="eligibility-positions-heading" className="space-y-4">
+              <div>
+                <h3 id="eligibility-positions-heading" className="text-theme-text-primary text-base font-semibold">
+                  Who votes for each position
+                </h3>
+                <p className="text-theme-text-muted text-sm">
+                  When a new election or ballot item names one of these positions, only these members may vote for it. A
+                  position not listed is open to every eligible voter.
+                </p>
+              </div>
+              {positionRows.length === 0 && (
+                <p className="text-theme-text-secondary text-sm">No positions are restricted.</p>
+              )}
+              <ul className="space-y-3">
+                {positionRows.map((row, index) => (
+                  <li key={row.key} className="flex flex-wrap items-end gap-3">
+                    <div className="min-w-0 flex-1">
+                      <label htmlFor={`position-name-${row.key}`} className={labelClass}>
+                        Position
+                      </label>
+                      <input
+                        id={`position-name-${row.key}`}
+                        type="text"
+                        className={inputClass}
+                        maxLength={200}
+                        placeholder="e.g., Chief"
+                        value={row.name}
+                        onChange={(e) =>
+                          updatePositionRows(
+                            positionRows.map((r, i) => (i === index ? { ...r, name: e.target.value } : r))
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <label htmlFor={`position-voters-${row.key}`} className={labelClass}>
+                        Who can vote
+                      </label>
+                      <select
+                        id={`position-voters-${row.key}`}
+                        className={selectClass}
+                        value={row.voterTypes.join(',')}
+                        onChange={(e) =>
+                          updatePositionRows(
+                            positionRows.map((r, i) =>
+                              i === index ? { ...r, voterTypes: e.target.value.split(',') } : r
+                            )
+                          )
+                        }
+                      >
+                        {VOTER_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      aria-label={`Remove ${row.name.trim() || 'this position'}`}
+                      onClick={() => updatePositionRows(positionRows.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {positionRowsError && (
+                <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+                  {positionRowsError} The list is not saved until this is fixed.
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn-secondary flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+                onClick={() =>
+                  setPositionRows([...positionRows, { key: ++positionRowKey, name: '', voterTypes: ['operational'] }])
+                }
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add position
+              </button>
+            </section>
+
+            <section aria-labelledby="eligibility-tiers-heading" className="space-y-3">
+              <div>
+                <h3 id="eligibility-tiers-heading" className="text-theme-text-primary text-base font-semibold">
+                  Membership tier rules
+                </h3>
+                <p className="text-theme-text-muted text-sm">
+                  Each membership tier carries its own voting rules, which apply alongside the rules above. They are
+                  changed in{' '}
+                  <Link to="/members/admin/settings/tiers" className="text-theme-text-primary font-medium underline">
+                    membership tier settings
+                  </Link>
+                  .
+                </p>
+              </div>
+              {tierRules.length === 0 ? (
+                <p className="text-theme-text-secondary text-sm">No membership tiers are configured.</p>
+              ) : (
+                <table className="rwd-table w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-theme-text-secondary">
+                      <th scope="col" className="py-2 pr-4 font-medium">
+                        Tier
+                      </th>
+                      <th scope="col" className="py-2 pr-4 font-medium">
+                        May vote
+                      </th>
+                      <th scope="col" className="py-2 font-medium">
+                        Tier attendance rule
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tierRules.map((tier) => (
+                      <tr key={tier.tier_id} className="border-theme-surface-border border-t">
+                        <td data-label="Tier" className="text-theme-text-primary py-2 pr-4">
+                          {tier.name}
+                        </td>
+                        <td data-label="May vote" className="text-theme-text-primary py-2 pr-4">
+                          {tier.voting_eligible ? 'Yes' : 'No'}
+                        </td>
+                        <td data-label="Tier attendance rule" className="text-theme-text-primary py-2">
+                          {tier.voting_eligible && tier.requires_meeting_attendance && tier.min_attendance_pct > 0
+                            ? `${tier.min_attendance_pct}% of meetings over ${tier.attendance_period_months} months`
+                            : 'None'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          </div>
+        );
+      }
+
       case 'proxy':
         return (
           <div>
@@ -415,7 +690,7 @@ export const ElectionsSettingsPage: React.FC = () => {
       onSectionChange={switchSection}
       navLabel="Election settings sections"
       title="Election Settings"
-      subtitle="Proxy voting, election features, and ballot integrity"
+      subtitle="Voter eligibility, proxy voting, election features, and ballot integrity"
       saveState={saveState}
       onRetrySave={retry}
       pageHeader={(controls) => (
@@ -423,7 +698,7 @@ export const ElectionsSettingsPage: React.FC = () => {
           icon={SettingsIcon}
           title="Election Settings"
           breadcrumbLabel="Settings"
-          subtitle="Proxy voting, election features, and ballot integrity"
+          subtitle="Voter eligibility, proxy voting, election features, and ballot integrity"
           actions={controls}
         />
       )}

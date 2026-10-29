@@ -155,6 +155,24 @@ def seat_rule_error(
     return None
 
 
+def clean_voter_types(values: List[str]) -> List[str]:
+    """Keep eligibility rules deterministic and safe to persist as JSON.
+
+    Shared by ballot items and the department's eligibility defaults, which
+    seed ballot items, so a default can never hold a value an item refuses.
+    """
+    cleaned: List[str] = []
+    for value in values:
+        value = value.strip()
+        if not value or len(value) > 100 or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+            raise ValueError("Voter types must be 1-100 letters, numbers, '_' or '-'")
+        if value not in cleaned:
+            cleaned.append(value)
+    if "all" in cleaned and len(cleaned) > 1:
+        raise ValueError("'all' cannot be combined with other voter types")
+    return cleaned
+
+
 # Ballot Item Schemas
 
 
@@ -259,23 +277,7 @@ class BallotItem(BaseModel):
     @field_validator("eligible_voter_types")
     @classmethod
     def validate_eligible_voter_types(cls, values: List[str]) -> List[str]:
-        """Keep eligibility rules deterministic and safe to persist as JSON."""
-        cleaned = []
-        for value in values:
-            value = value.strip()
-            if (
-                not value
-                or len(value) > 100
-                or not re.fullmatch(r"[A-Za-z0-9_-]+", value)
-            ):
-                raise ValueError(
-                    "Voter types must be 1-100 letters, numbers, '_' or '-'"
-                )
-            if value not in cleaned:
-                cleaned.append(value)
-        if "all" in cleaned and len(cleaned) > 1:
-            raise ValueError("'all' cannot be combined with other voter types")
-        return cleaned
+        return clean_voter_types(values)
 
 
 class BallotItemInput(BallotItem):
@@ -322,6 +324,173 @@ class PositionEligibility(BaseModel):
     )
 
 
+VALID_ATTENDANCE_RULE_MODES = {"none", "count", "percent"}
+# Mirrors app.models.meeting.MeetingType; kept as literals so this schema
+# module does not import the ORM.
+VALID_MEETING_TYPES = {
+    "business",
+    "special",
+    "committee",
+    "board",
+    "trustee",
+    "executive",
+    "annual",
+    "other",
+}
+MAX_ATTENDANCE_LOOKBACK_MEETINGS = 60
+MAX_ATTENDANCE_PERIOD_MONTHS = 60
+MAX_TENURE_MONTHS = 600
+
+
+class AttendanceRule(BaseModel):
+    """A meeting-attendance requirement every voter in an election must meet.
+
+    ``count``: attended at least ``min_meetings`` of the member's last
+    ``of_last_meetings`` meetings. ``percent``: attended at least ``min_pct``
+    of the meetings held in the last ``period_months``. Either way, waived
+    meetings and meetings during a leave of absence are not counted, and
+    only meetings since the member's current stint began are considered.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str = Field(default="none")
+    min_meetings: Optional[int] = Field(
+        default=None, ge=1, le=MAX_ATTENDANCE_LOOKBACK_MEETINGS
+    )
+    of_last_meetings: Optional[int] = Field(
+        default=None, ge=1, le=MAX_ATTENDANCE_LOOKBACK_MEETINGS
+    )
+    min_pct: Optional[float] = Field(default=None, gt=0, le=100)
+    period_months: Optional[int] = Field(
+        default=None, ge=1, le=MAX_ATTENDANCE_PERIOD_MONTHS
+    )
+    meeting_types: Optional[List[str]] = Field(
+        default=None,
+        max_length=len(VALID_MEETING_TYPES),
+        description="Meeting types that count; null counts every meeting",
+    )
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        return _validate_choice(v, VALID_ATTENDANCE_RULE_MODES, "attendance rule mode")
+
+    @field_validator("meeting_types")
+    @classmethod
+    def validate_meeting_types(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        cleaned: List[str] = []
+        for value in v:
+            _validate_choice(value, VALID_MEETING_TYPES, "meeting type")
+            if value not in cleaned:
+                cleaned.append(value)
+        # An empty list would count no meetings at all, which reads as a
+        # perfect record for everyone -- say "every meeting" explicitly.
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def validate_mode_fields(self) -> "AttendanceRule":
+        if self.mode == "count":
+            if self.min_meetings is None or self.of_last_meetings is None:
+                raise ValueError(
+                    "A meeting-count rule needs both the number of meetings to "
+                    "attend and how many recent meetings to look back over"
+                )
+            if self.min_meetings > self.of_last_meetings:
+                raise ValueError(
+                    "Meetings required cannot exceed the meetings looked back over"
+                )
+        elif self.mode == "percent":
+            if self.min_pct is None or self.period_months is None:
+                raise ValueError(
+                    "A percentage rule needs both the minimum percentage and "
+                    "the look-back period in months"
+                )
+        return self
+
+
+class ElectionEligibilityRules(BaseModel):
+    """Election-wide voter rules, stored on ``elections.eligibility_rules``.
+
+    These apply to every ballot item and position in the election, on top of
+    each item's own voter types and check-in requirement and each membership
+    tier's own rules. A secretary's voter override bypasses them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    attendance: AttendanceRule = Field(default_factory=AttendanceRule)
+    min_tenure_months: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=MAX_TENURE_MONTHS,
+        description="Months of membership in the member's current stint",
+    )
+
+
+class EligibilityDefaults(BaseModel):
+    """The department's default voter eligibility, set on Election Settings.
+
+    ``rules`` is copied onto each election created afterwards. The other
+    fields seed what a secretary builds: new ballot items take
+    ``default_require_attendance`` and ``default_voter_types``, and a new
+    election's ``position_eligibility`` takes ``position_voter_types`` for
+    the positions it names. Changing these never touches an existing
+    election.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rules: ElectionEligibilityRules = Field(default_factory=ElectionEligibilityRules)
+    default_require_attendance: bool = True
+    default_voter_types: List[str] = Field(
+        default_factory=lambda: ["all"], min_length=1, max_length=50
+    )
+    position_voter_types: Dict[str, List[str]] = Field(
+        default_factory=dict, max_length=100
+    )
+
+    @field_validator("default_voter_types")
+    @classmethod
+    def validate_default_voter_types(cls, v: List[str]) -> List[str]:
+        return clean_voter_types(v)
+
+    @field_validator("position_voter_types")
+    @classmethod
+    def validate_position_voter_types(
+        cls, v: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        cleaned: Dict[str, List[str]] = {}
+        # Elections match these names without regard to case, so "Chief" and
+        # "chief" would be one position configured twice.
+        seen: set = set()
+        for position, types in v.items():
+            name = position.strip()
+            if not name or len(name) > 200:
+                raise ValueError("Position names must be 1-200 characters")
+            if name.casefold() in seen:
+                raise ValueError(f"Position '{name}' is listed more than once")
+            seen.add(name.casefold())
+            if not types:
+                raise ValueError(f"Position '{name}' needs at least one voter type")
+            cleaned[name] = clean_voter_types(types)
+        return cleaned
+
+
+class TierVotingRule(BaseModel):
+    """One membership tier's own voting rules, reported read-only so the
+    eligibility settings can show them beside the election-wide rules."""
+
+    tier_id: str
+    name: str
+    voting_eligible: bool
+    requires_meeting_attendance: bool
+    min_attendance_pct: float
+    attendance_period_months: int
+
+
 # Election Schemas
 
 
@@ -343,6 +512,13 @@ class ElectionBase(BaseModel):
     )
     position_eligibility: Optional[Dict[str, PositionEligibility]] = Field(
         default=None, description="Eligibility rules per position"
+    )
+    eligibility_rules: Optional[ElectionEligibilityRules] = Field(
+        default=None,
+        description=(
+            "Election-wide voter rules; omitted on create to copy the "
+            "department's defaults"
+        ),
     )
     meeting_date: Optional[datetime] = Field(
         default=None, description="Meeting date for ballot"
@@ -574,6 +750,7 @@ class ElectionUpdate(BaseModel):
     positions: Optional[List[str]] = Field(default=None, max_length=100)
     ballot_items: Optional[List[BallotItemInput]] = Field(default=None, max_length=250)
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
+    eligibility_rules: Optional[ElectionEligibilityRules] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
     event_id: Optional[UUID] = None
@@ -685,6 +862,7 @@ class ElectionResponse(UTCResponseBase):
     positions: Optional[List[str]] = None
     ballot_items: Optional[List[BallotItem]] = None
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
+    eligibility_rules: Optional[ElectionEligibilityRules] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
     meeting_title: Optional[str] = None
@@ -1821,6 +1999,10 @@ class ElectionSettingsResponse(BaseModel):
     # Officers (other than the recorder) who must attest a paper-ballot
     # batch before its votes count. 0 disables attestation.
     paper_ballot_attestations_required: Optional[int] = 2
+    eligibility: EligibilityDefaults = Field(default_factory=EligibilityDefaults)
+    # Each membership tier's own voting rules, read-only here: they are
+    # edited on the membership tier settings and apply alongside these.
+    tier_voting_rules: List[TierVotingRule] = Field(default_factory=list)
     security: Optional[Dict[str, Any]] = None
 
 

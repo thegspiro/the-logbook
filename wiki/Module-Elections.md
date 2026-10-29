@@ -164,6 +164,10 @@ Beyond standing, a member may also be restricted by:
   to be checked in as present at the meeting (`require_attendance`). The roll
   is frozen at open, so a member checked in after opening is recorded present
   but cannot vote without an override
+- **Election-wide rules** — `elections.eligibility_rules` holds a
+  meeting-attendance requirement and a minimum tenure that every voter in that
+  election must meet, whatever the ballot item. See
+  [Election-Wide Voter Rules](#election-wide-voter-rules)
 - **Restricted voter list** — An election can be limited to a specific
   `eligible_voters` list. An empty list is stored as `NULL` (no restriction)
 - **Secretary overrides** — The secretary can grant eligibility overrides for
@@ -172,6 +176,38 @@ Beyond standing, a member may also be restricted by:
   On an election restricted to an `eligible_voters` list, an override
   **extends** the list: the member votes in the app, is sent a ballot email
   and counts in the eligible total, as the roster shows
+
+### Election-Wide Voter Rules
+
+`elections.eligibility_rules` (`ElectionEligibilityRules`) is copied from
+the department's defaults (`org.settings.election_eligibility.rules`, set on
+**Election Settings → Voter Eligibility**) when the election is created. An
+explicit value on the create request, `null` included, wins. It can be changed
+while the election is a draft or taking nominations; the update endpoint
+refuses it once the election is open. `NULL` means no rules, which is what
+every election created before the column existed carries.
+
+- **Attendance, count mode**: the member attended at least `min_meetings` of
+  their last `of_last_meetings` eligible meetings. A member who has had fewer
+  eligible meetings than the look-back is held to the same proportion, rounded
+  up, so 6 of 12 becomes 2 of 4 (`required_recent_meetings`).
+- **Attendance, percent mode**: `min_pct` of the meetings in the last
+  `period_months`. This is the same calculation as the tier rule.
+- **`meeting_types`**: limits which meeting types count. `null` counts every
+  meeting.
+- **`min_tenure_months`**: whole months since the member's current stint
+  began. A member with no recorded start date passes.
+
+Both attendance modes judge the same eligible meetings as the tier rule (see
+[Voting Attendance Window](#voting-attendance-window)): meetings since the
+current stint began, up to the department's today, excluding waived meetings
+and leave.
+
+The rules are part of the universal gate (`ElectionService._universal_gate`),
+together with the tier's `voting_eligible`. That gate is used by the in-app
+ballot check, per-item annotation, the eligibility roster, the roll frozen at
+open, emailed-ballot snapshots and the turnout denominator, so they cannot
+disagree. A voter override bypasses the rules. Runoffs and clones copy them.
 
 ### Voter-Roll Freeze
 
@@ -699,18 +735,37 @@ with status badges and links.
 
 ## Election Settings
 
-`/elections/settings` (`elections.manage`) has four sections:
+`/elections/settings` (`elections.manage`) has five sections:
 
-| Section          | Contents                                                       |
-| ---------------- | -------------------------------------------------------------- |
-| **Proxy Voting** | Enable/disable proxy voting; **Max Proxies Per Person** (1–10) |
-| **Features**     | Per-department feature toggles (below)                         |
-| **Test Ballot**  | **Send Test Ballot** to preview the voting experience          |
-| **Security**     | The integrity guarantees in force                              |
+| Section               | Contents                                                       |
+| --------------------- | -------------------------------------------------------------- |
+| **Proxy Voting**      | Enable/disable proxy voting; **Max Proxies Per Person** (1–10) |
+| **Voter Eligibility** | Default voter rules for new elections (below)                  |
+| **Features**          | Per-department feature toggles (below)                         |
+| **Test Ballot**       | **Send Test Ballot** to preview the voting experience          |
+| **Security**          | The integrity guarantees in force                              |
 
 Every election's voting options (method, victory condition, anonymity,
 write-ins, results visibility, runoffs) are chosen on its own create form;
-there are no organization-wide election defaults.
+there are no organization-wide defaults for those voting options. Voter
+eligibility is the exception: see [Voter Eligibility Defaults](#voter-eligibility-defaults).
+
+### Voter Eligibility Defaults
+
+Stored in `org.settings.election_eligibility` (`EligibilityDefaults`). Each
+part has a reader, and none of them changes an existing election:
+
+- **Rules every voter must meet** (attendance, tenure) are copied onto each new
+  election. See [Election-Wide Voter Rules](#election-wide-voter-rules).
+- **New ballot items**: the check-in requirement and **Who can vote** that new
+  and custom items start with in the ballot builder. Built-in templates keep
+  their own per-template voter types.
+- **Who votes for each position**: position name → voter types. A new
+  election's `position_eligibility` is seeded for the positions it names,
+  matched without regard to case, and a custom ballot item takes the mapped
+  voter types when its position is chosen.
+- **Membership tier rules** are shown read-only (`tier_voting_rules`) with a
+  link to the tier settings where they are edited.
 
 ### Feature Toggles
 

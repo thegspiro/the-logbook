@@ -371,6 +371,16 @@ export const VictoryCondition = {
 export type VictoryCondition = (typeof VictoryCondition)[keyof typeof VictoryCondition];
 
 // ============================================
+// Attendance Rule Mode (Election.eligibility_rules.attendance.mode)
+// ============================================
+export const AttendanceRuleMode = {
+  NONE: 'none',
+  COUNT: 'count',
+  PERCENT: 'percent',
+} as const;
+export type AttendanceRuleMode = (typeof AttendanceRuleMode)[keyof typeof AttendanceRuleMode];
+
+// ============================================
 // Ballot Choice (voter action on a ballot item)
 // ============================================
 export const BallotChoice = {

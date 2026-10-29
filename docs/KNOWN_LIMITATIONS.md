@@ -6349,7 +6349,7 @@ not), no frontend code reads them (the only references are the type definition
 and one test fixture), and the settings screen renders no control for any of
 them.
 
-The wiki already says so: _"there are no organization-wide election defaults"_
+The wiki already says so: _"there are no organization-wide defaults for those voting options"_
 (`wiki/Module-Elections.md`, Election Settings). The API disagrees with it in
 the one place a person or an integrator would look. A client that PATCHes
 `default_voting_method: "ranked_choice"` gets a 200 and sees the value come back
