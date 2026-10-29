@@ -149,6 +149,10 @@ class MemberAnonymizationService:
         user.emergency_contacts = None
         user.notification_preferences = None
         user.status_change_reason = None
+        # Free text a secretary wrote about the member when overriding their
+        # voting waiting period; the dates and the waiver flag beside it are
+        # standing, not personal, and are kept.
+        user.voting_wait_override_reason = None
         user.password_hash = None
         user.oauth_provider = None
         user.oauth_subject = None
