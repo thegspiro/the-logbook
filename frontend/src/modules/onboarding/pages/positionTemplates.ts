@@ -479,4 +479,47 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
       },
     ],
   },
+  // Committees and teams a member serves on. Recorded as positions so the
+  // profile and roster show them; they grant nothing beyond the baseline
+  // every member already holds. Matches DEFAULT_POSITIONS' committee kind;
+  // save_session_roles deletes any seeded position the wizard did not
+  // submit, so leaving these out here would strip them from new installs.
+  committees: {
+    name: 'Committees & Teams',
+    description: 'Groups a member serves on, shown apart from their offices',
+    positions: [
+      {
+        id: 'community_outreach_team',
+        name: 'Community Education / Outreach Team',
+        description: 'Members who deliver community education and public outreach events',
+        icon: Users,
+        priority: 10,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'history_committee',
+        name: 'History Committee',
+        description: "Members who keep the department's history, archives and memorials",
+        icon: Users,
+        priority: 10,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'fundraising_committee',
+        name: 'Fundraising Committee',
+        description: "Members who plan and run the department's fundraising",
+        icon: Users,
+        priority: 10,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'membership_committee',
+        name: 'Membership Committee',
+        description: 'Members who review applications and interview prospective members',
+        icon: Users,
+        priority: 10,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+    ],
+  },
 });

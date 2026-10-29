@@ -14,9 +14,13 @@ from app.utils.membership import (
     DEFAULT_STATUS,
     MemberClass,
     MemberStatus,
+    accepted_member_statuses,
+    canonical_member_status,
     derive_membership_type,
+    is_builtin_status,
     is_operational,
     split_membership_type,
+    status_for_tier,
 )
 
 LEGACY_VALUES = (
@@ -256,10 +260,17 @@ class TestApplyingACustomTierKeepsTheClass:
         return member
 
     def test_a_senior_firefighter_stays_operational(self):
+        """The class is kept; the status *is* the tier.
+
+        Until 2026-10-29 the ladder column kept the rung the member stood on
+        before (``regular``), so a senior member matched no rung the ladder
+        column could see. A tier id is a standing in its own right now, and
+        ``member_status`` carries it.
+        """
         member = self._reconciled(membership_type="senior")
 
         assert member.member_class == MemberClass.OPERATIONAL
-        assert member.member_status == MemberStatus.REGULAR
+        assert member.member_status == "senior"
         assert member.membership_type == "senior"
 
     def test_a_recognised_value_still_overwrites(self):
@@ -284,3 +295,91 @@ class TestApplyingACustomTierKeepsTheClass:
         _reconcile_membership(None, None, member)
 
         assert member.member_class is None
+
+
+class TestATierIdIsAStatus:
+    """``member_status`` holds a department's own tier ids beside the seven.
+
+    One spelling per standing: the shipped ladder names its second rung
+    ``active`` and the column stores that standing as ``regular``, so a tier
+    id that is also a legacy word is stored as the status it splits to and any
+    other tier id as itself.
+    """
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("active", "regular"),
+            ("Active ", "regular"),
+            ("probationary", "probationary"),
+            ("life", "life"),
+            ("regular", "regular"),
+            ("senior", "senior"),
+            ("Senior", "senior"),
+            ("administrative", "regular"),
+            (None, None),
+            ("  ", None),
+        ],
+    )
+    def test_canonical_spelling(self, value, expected):
+        assert canonical_member_status(value) == expected
+
+    @pytest.mark.parametrize("status", MemberStatus.ALL)
+    def test_the_seven_are_built_in(self, status):
+        assert is_builtin_status(status)
+        assert canonical_member_status(status) == status
+
+    def test_a_tier_id_is_not_built_in(self):
+        assert not is_builtin_status("senior")
+
+    def test_a_tier_round_trips_through_the_legacy_column(self):
+        """An operational member on ``senior`` keeps ``membership_type='senior'``.
+
+        That is what the legacy column held for them before the ladder column
+        learned tier ids, and the shift-signup exclusion list and the tier
+        readers are keyed on it.
+        """
+        assert derive_membership_type(MemberClass.OPERATIONAL, "senior") == "senior"
+        assert derive_membership_type(None, "senior") == "senior"
+
+    def test_a_non_operational_member_on_a_tier_still_collapses(self):
+        # Lossy by design, as for every administrative standing: the legacy
+        # gates only ask "does this member ride".
+        assert (
+            derive_membership_type(MemberClass.ADMINISTRATIVE, "senior")
+            == "administrative"
+        )
+        assert derive_membership_type(MemberClass.SOCIAL, "senior") == "honorary"
+
+    def test_an_organization_accepts_its_own_tiers(self):
+        accepted = accepted_member_statuses(["probationary", "active", "senior"])
+        assert set(MemberStatus.ALL) <= accepted
+        assert "senior" in accepted
+        assert "active" not in accepted, "stored as 'regular', never as 'active'"
+        assert "cadet" not in accepted
+
+
+class TestATierCountsAsWhatItSaysItDoes:
+    """``status_for_tier`` is the one place a tier id becomes a built-in status."""
+
+    def test_a_built_in_status_is_itself(self):
+        assert status_for_tier("life") == "life"
+        assert status_for_tier("active", {"active": "life"}) == "regular"
+
+    def test_a_tier_with_no_ranks_as_counts_as_nothing(self):
+        # What a custom tier matched before the setting existed: no ballot
+        # restricted to a built-in status, no probationary account mirror.
+        assert status_for_tier("senior") is None
+        assert status_for_tier("senior", {}) is None
+        assert status_for_tier("senior", {"life": "life"}) is None
+
+    def test_a_tier_counts_as_the_status_it_names(self):
+        assert status_for_tier("senior", {"senior": "regular"}) == "regular"
+        assert status_for_tier("Senior ", {"senior": "Regular"}) == "regular"
+
+    def test_a_ranks_as_that_is_not_a_status_is_ignored(self):
+        assert status_for_tier("senior", {"senior": "operational"}) is None
+
+    def test_blank_is_nothing(self):
+        assert status_for_tier(None) is None
+        assert status_for_tier("") is None

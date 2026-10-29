@@ -480,8 +480,9 @@ button on the **Members** page, which goes to the same place.
    - first and last name;
    - home address (street, city, state, ZIP);
    - primary phone and email;
-   - **Membership Type**: Probationary, Regular, Life or Administrative (it
-     starts on Probationary); and
+   - **Member class** (Operational, Administrative or Social) and
+     **Membership status** (Probationary, Regular, Life, or one of your
+     department's own tiers; it starts on Probationary); and
    - a primary emergency contact (name, relationship, phone).
 
    There is no username box. The Logbook makes the username from the part of
@@ -1526,23 +1527,34 @@ Because they are separate, you can record a **probationary treasurer** (an
 administrative member who is still on probation). You can also record a
 **life member who still rides** (an operational member with life status).
 
-On most member screens you still pick one **Membership Type**: Prospective,
-Probationary, Active, Life, Retired, Honorary or Administrative. The Logbook
-works out the class and status from that choice:
+Every member screen asks the two questions separately _(2026-10-29)_: Add
+Member, the member's edit page, the CSV import and the roster filters each have
+a **Member class** control and a **Membership status** control. Pick
+Administrative and Life for a treasurer who has served twenty years; pick
+Operational and Probationary for a new firefighter. Any class can hold any
+status.
 
-| Membership Type you pick | Member class   | Member status |
-| ------------------------ | -------------- | ------------- |
-| Prospective              | Operational    | Prospective   |
-| Probationary             | Operational    | Probationary  |
-| Active                   | Operational    | Regular       |
-| Life                     | Operational    | Life          |
-| Retired                  | Operational    | Retired       |
-| Honorary                 | Social         | Honorary      |
-| Administrative           | Administrative | Regular       |
+The **Membership status** list offers the seven built-in statuses **and your
+department's own membership tiers** by name. The shipped ladder's "Active
+Member" rung is the regular status under that name, so it appears once; a rung
+such as "Senior Member" is a standing of its own. A tier a member reaches by
+years of service shows here exactly as one an officer set by hand.
+
+The older single **Membership Type** value is still stored for reports and
+imports written against it, and The Logbook works it out from the pair. A
+spreadsheet import may still give `membershipType`; the `memberClass` and
+`memberStatus` columns state the pair directly and win when both are given.
 
 When you convert an applicant into a member, the conversion dialog asks for
 **Member class** and **Starting status** directly. An administrative member's
 ID card shows **Member Class** where other cards show **Rank**.
+
+> **A member with no class.** A member who was moved onto a department tier
+> before the class existed may show **Not set** for their class. They are
+> left alone on purpose rather than guessed onto the riding body; until an
+> officer sets the class from the edit page, they are treated as neither
+> operational nor administrative, so they cannot sign up for shifts or match
+> a class-restricted ballot. The roster's **Class not set** filter finds them.
 
 > **Two different "statuses".** The member status above is the membership
 > ladder. It is not the same as the account status in
@@ -1575,8 +1587,13 @@ Two things follow from this:
 > will not include them.
 
 > **What if a member has a custom membership tier, such as Senior?** A custom
-> tier matches none of the built-in voter groups. Add the member to the ballot
-> another way, such as by position or an explicit voter list.
+> tier matches none of the built-in voter groups until you say what it counts
+> as. Open **Members Admin → Settings → Membership Tiers** and set the tier's
+> **Counts as** to the built-in status it stands in for — Senior counts as
+> Regular, say — and its members get every ballot that status gets. Left
+> unset, the tier matches nothing, which is how it has always behaved; add the
+> member to the ballot another way, such as by position or an explicit voter
+> list.
 
 ### Honorary members are the "social" class
 
@@ -1591,9 +1608,8 @@ A rank, such as Captain or Fire Chief, is a place in the chain of command. It
 comes with permissions. An administrative member sits outside the chain of
 command, so they cannot hold a rank.
 
-- When a member's Membership Type is **Administrative**, the **Rank** field is
-  greyed out. It says: _"Administrative members do not hold an operational
-  rank."_
+- When a member's class is **Administrative**, the **Rank** field is greyed
+  out. It says: _"Administrative members do not hold an operational rank."_
 - If you move a member who has a rank into the administrative class, The
   Logbook clears their rank when you save.
 - If you try to give an administrative member a rank, the save is refused:
@@ -1601,8 +1617,53 @@ command, so they cannot hold a rank.
   an operational class first, or leave the rank blank."_
 
 > **What if an administrative member really does hold a rank?** Change their
-> class first. Set their Membership Type to an operational type, save, and then
-> set the rank.
+> class first. Set their class to Operational, save, and then set the rank.
+
+### Probationary is a standing, not a class
+
+A probationary member can be operational, administrative or social. Setting a
+member's status to Probationary puts their account on **Probationary** status
+too, and moving them off it puts the account back to **Active**; a member on
+Leave or Suspended is left where they are. This now applies to administrative
+and social probationers as well, who used to stay Active whatever the ladder
+said.
+
+---
+
+## Offices and Committees
+
+A **position** is one of two things _(2026-10-29)_:
+
+| Kind          | What it is                                                                                             | Examples                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| **Office**    | A job with permissions. Holding it is what lets the member do that job in The Logbook.                 | Treasurer, Quartermaster, Training Officer, Public Information Officer       |
+| **Committee** | A group a member serves on. It is recorded and shown, and grants nothing beyond what every member has. | History Committee, Membership Committee, Community Education / Outreach Team |
+
+Every department starts with four committees: **Community Education /
+Outreach Team**, **History Committee**, **Fundraising Committee** and
+**Membership Committee**. The matching offices — Public Outreach, Historian,
+Fundraising Chair and Membership Coordinator — are the chairs, and carry the
+permissions the chair's work needs. Add your own committees under **Settings →
+Roles** by choosing **Committee** when you create the position.
+
+A member's profile lists their **Offices** and their **Committees** apart, and
+the members admin hub marks a committee on its chips and in **Manage
+Positions**, which is where both kinds are assigned. The baseline Member
+position every member holds is neither, and is not listed as one.
+
+**Rank, class, status, office, committee, qualification.** Five examples:
+
+- **Jim** is operational and a regular member, and holds the EMT and Driver /
+  Operator qualifications, so he can staff the ambulance as the EMT or the
+  driver.
+- **Jane** is an administrative member with life status, and holds the
+  Treasurer office.
+- **Krishna** is a probationary member, holds the EMT qualification, and is
+  on the Community Education / Outreach Team.
+- **David** is operational with no rank, holds the Officer in Charge
+  qualification so he can be the officer on a shift, and holds the
+  Quartermaster office.
+- **Gene** is a life member on the History Committee.
 
 ---
 
@@ -1636,6 +1697,15 @@ the other.
 **Ranks are not turned into qualifications.** A member with the EMT rank does
 not automatically get an EMT qualification, because the rank does not say
 which card they hold or when it expires.
+
+**Officer in Charge is a qualification** _(2026-10-29)_. A member your
+department has cleared to lead a crew without holding an officer rank — an
+acting officer, or whatever your bylaws call it — gets the **Officer in
+Charge** qualification from their profile, with an expiry if your clearance
+has one. It clears the officer, captain and lieutenant seats on a shift, the
+same seats a Lieutenant's rank clears. Until it existed, the only way to clear
+the officer seat without a rank was a completed training program that targets
+it; that still works.
 
 A member gets a qualification in one of two ways:
 
@@ -2073,7 +2143,10 @@ On this screen you can:
 
 - add a tier (type a name under **Add a tier**), rename one, move it up or
   down, or remove it;
-- set each tier's **Years of service**;
+- set each tier's **Years of service** — this is where your department sets
+  how many credited years make a **Life** member, or any other tier; the
+  shipped twenty for Life is a common arrangement, not a rule;
+- set what a tier of your own **Counts as** (see below);
 - open **Show rights** to set what the tier gives its members (see below);
 - turn **Advance members automatically by years of service** on or off; and
 - choose what happens **When a former member rejoins**.
@@ -2090,6 +2163,16 @@ _"These tiers have not been saved yet — nothing reads them until you do."_
 | **Can hold elected office**                          | When cleared, members at this tier cannot be nominated, accept a nomination or be added as a candidate |
 | **Must meet a meeting-attendance threshold to vote** | Members must have attended a set share of meetings over a set number of months before they can vote    |
 | **Exempt from training requirements**                | Members at this tier are not graded for training compliance at all                                     |
+
+**Counts as** _(2026-10-29)_ sits on the row of any tier whose id is not one
+of the built-in statuses. A member's tier is their membership status, and some
+rules — the voter groups above, the probationary account status — are keyed on
+the built-in statuses. **Counts as** names the built-in status the tier stands
+in for: set Senior to count as Regular and its members get every ballot a
+regular member gets. Left unset, the tier counts as nothing, which is how a
+custom tier has always behaved; the shipped Senior tier is left unset when you
+upgrade, so no ballot widens without a decision. The Probationary, Active and
+Life rungs are the built-in statuses themselves and need nothing here.
 
 **Rules the screen enforces:**
 

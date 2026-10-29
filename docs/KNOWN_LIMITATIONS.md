@@ -1,5 +1,38 @@
 # Known Limitations & Open Decisions
 
+## Members — Class, Status, Tiers and Committees (2026-10-29)
+
+The member standing rework (class and status as two controls, tiers as
+statuses, committee positions) leaves these for the owner:
+
+- **A tier member's missing class is not guessed.** Members moved onto a
+  department tier before `member_class` existed carry no class. Migration
+  `c4d7e2a91b60` settles their status to the tier and leaves the class NULL
+  (owner decision 2026-10-29: flag, do not guess). They show **Not set** on the
+  profile and under the roster's **Class not set** filter, and are treated as
+  neither operational nor administrative until an officer sets the class.
+- **The shipped Senior tier counts as nothing until set.** `ranks_as` is left
+  unset on upgrade so no ballot's electorate widens without a decision; a
+  department whose bylaws treat senior members as regular members sets
+  **Counts as** on the tier by hand.
+- **Tier benefits still resolve by the legacy field.** Voting eligibility,
+  the office-holding right and training exemption are looked up by
+  `membership_type == tier.id`, which for an operational member on a tier is
+  the tier id, but for an administrative or social member is the class word.
+  An administrative life member therefore does not receive the Life tier's
+  training exemption through the tier. The readers (election service,
+  training service, events, attendance dashboard, service history) should move
+  to `MembershipTierService.tier_for_status(tiers, member_status)`; not done
+  here to keep the change set to one model change.
+- **The pipeline's conversion outcomes are built-in statuses only.** The
+  applicant conversion dialog offers the seven built-in statuses, not the
+  department's tiers; a converted member who should start on a custom tier is
+  moved there from the edit page.
+- **The baseline Member position is no longer shown on the profile chips.**
+  It is of kind `system`, held by everyone, and the profile now lists offices
+  and committees; the members admin hub still shows it where it can be
+  removed from an archived member.
+
 This page consolidates known limitations and deferred design decisions surfaced
 by the ongoing code review (see [review-log.md](./review-log.md) for the raw
 findings and rotation). Items here are **intentionally open** — they need an

@@ -625,6 +625,58 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Member class and membership status are two controls; four committees appear (2026-10-29)
+
+**Every department gains four positions:** Community Education / Outreach
+Team, History Committee, Fundraising Committee and Membership Committee.
+Migration `d8f1a4c27b93` inserts them for every organization that does not
+already have a position under those slugs. They are committees — a new
+`positions.kind` column, `office` / `committee` / `system` — and grant nothing
+beyond the baseline every member already holds (they carry a copy of the
+Member position's list). They can be assigned from Manage Positions like any
+office; a department that does not want one can simply leave it unassigned
+(seeded positions cannot be deleted). The onboarding wizard offers the same
+four to new installations.
+
+**The single "Membership Type" dropdown is gone.** Add Member, the member edit
+page, the CSV import and the roster now carry **Member class** and
+**Membership status** separately, so an administrative life member can be
+recorded. Nothing changes on existing rows except the point below. The old
+`membership_type` value is still stored and derived from the pair, so reports
+and integrations reading it keep working; the `membershipType` import column
+still works, and `memberClass` / `memberStatus` columns are added.
+
+**`users.member_status` now holds your department's own tier ids** and is
+widened from 20 to 50 characters (migration `c4d7e2a91b60`). A member on a
+tier such as `senior` used to have the ladder column stale or empty; the
+migration settles it to the tier. Their **class is not touched**: a tier
+member whose class was never recorded shows **Not set** on the profile and
+under the roster's **Class not set** filter, and stays outside shifts and
+class-restricted ballots until an officer sets it on the edit page.
+
+**Check the Senior tier's "Counts as".** Tiers gain a **Counts as** setting
+(the built-in status a custom tier stands in for). It is **left unset on
+upgrade**, so a member on Senior keeps matching no ballot restricted to
+regular or life members, exactly as before. If your bylaws treat senior
+members as regular members, set it under Members Admin → Settings →
+Membership Tiers.
+
+**Automatic tier advancement now moves administrative and social members
+too**, by status only; their class is never changed. An administrative
+member with twenty years reaches Life like anyone else.
+
+**An administrative or social probationer is now put on Probationary account
+status** when their status is set to probationary, as operational probationers
+already were.
+
+**A new "Officer in Charge" qualification** can be granted from a member's
+profile and clears the officer, captain and lieutenant seats.
+
+**Downgrade.** Reverting `c4d7e2a91b60` nulls any `member_status` longer than
+20 characters before narrowing the column. Reverting `d8f1a4c27b93` removes
+only the seeded committees nobody holds; one a member serves on survives as an
+ordinary position.
+
 ### A template switched Off now stops its email (2026-10-27)
 
 **Before upgrading, open Communications → Email Templates and choose the

@@ -37,8 +37,14 @@ import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
-import { withoutRankMirrors } from '../utils/positions';
-import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
+import { groupPositionsByKind } from '../utils/positions';
+import {
+  effectiveMemberClass,
+  isAdministrativeMember,
+  memberClassLabel,
+  memberStatusLabel,
+  membershipTypeLabel,
+} from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
 import type {
   ContactInfoSettings,
@@ -745,12 +751,17 @@ export const MemberProfilePage: React.FC = () => {
     (inventoryModuleEnabled && canViewTargetInventory) ||
     Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0);
 
+  const heldPositions = groupPositionsByKind(user?.roles || []);
   const rankLabel = user
-    ? isAdministrativeMember(undefined, user.membership_type)
+    ? isAdministrativeMember(user.member_class, user.membership_type)
       ? 'Administrative'
       : formatRank(user.rank)
     : '';
-  const memberTypeLabel = user ? membershipTypeLabel(user.membership_type) : '';
+  // Class and status are two facts; a row written before the pair existed
+  // falls back to the fused legacy label.
+  const classLabel = user ? memberClassLabel(effectiveMemberClass(user.member_class, user.membership_type)) : '';
+  const ladderLabel = user?.member_status ? `${memberStatusLabel(user.member_status)} member` : '';
+  const memberTypeLabel = ladderLabel || (user ? membershipTypeLabel(user.membership_type) : '');
   // "Administrative · Administrative" would be the class stated twice.
   const headerSubtitle = [rankLabel, memberTypeLabel === rankLabel ? '' : memberTypeLabel].filter(Boolean).join(' · ');
   // A member who goes by another name is headed by it, so the name on their
@@ -880,8 +891,14 @@ export const MemberProfilePage: React.FC = () => {
                     @{user.username}
                     {user.membership_number && <> · #{user.membership_number}</>}
                   </p>
+                  {/* Offices and committees apart: a Treasurer who also
+                      serves on the History Committee holds two different
+                      kinds of thing, and one row of chips said otherwise. */}
+                  {heldPositions.committees.length > 0 && heldPositions.offices.length > 0 && (
+                    <p className="text-theme-text-muted mt-2 text-xs font-medium uppercase">Offices</p>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {withoutRankMirrors(user.roles || []).map((role) => (
+                    {heldPositions.offices.map((role) => (
                       <span
                         key={role.id}
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -894,6 +911,21 @@ export const MemberProfilePage: React.FC = () => {
                       </span>
                     ))}
                   </div>
+                  {heldPositions.committees.length > 0 && (
+                    <>
+                      <p className="text-theme-text-muted mt-2 text-xs font-medium uppercase">Committees</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {heldPositions.committees.map((role) => (
+                          <span
+                            key={role.id}
+                            className="inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-900 dark:bg-teal-500/20 dark:text-teal-300"
+                          >
+                            {role.name}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1313,9 +1345,21 @@ export const MemberProfilePage: React.FC = () => {
                     <p className="text-theme-text-primary mt-1 text-sm">{rankLabel}</p>
                   </div>
                 )}
+                {classLabel && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member class</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{classLabel}</p>
+                  </div>
+                )}
+                {!classLabel && user.member_status && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member class</p>
+                    <p className="text-theme-accent-red mt-1 text-sm">Not set — edit the member to choose one</p>
+                  </div>
+                )}
                 {memberTypeLabel && (
                   <div>
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member type</p>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Membership status</p>
                     <p className="text-theme-text-primary mt-1 text-sm">{memberTypeLabel}</p>
                   </div>
                 )}
@@ -1337,7 +1381,7 @@ export const MemberProfilePage: React.FC = () => {
                     <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.hire_date, tz)}</p>
                   </div>
                 )}
-                {!rankLabel && !memberTypeLabel && !user.station && !user.platoon && !user.hire_date && (
+                {!rankLabel && !classLabel && !memberTypeLabel && !user.station && !user.platoon && !user.hire_date && (
                   <p className="text-theme-text-muted text-sm">No membership details on file.</p>
                 )}
                 {canManageMembers && (

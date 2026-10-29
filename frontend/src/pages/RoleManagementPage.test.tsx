@@ -260,6 +260,22 @@ describe('RoleManagementPage', () => {
       expect(roleService.createRole).toHaveBeenCalledWith(expect.objectContaining({ name: 'Report Reader' }));
     });
 
+    it('creates an office by default, and a committee when asked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
+      await user.type(screen.getByLabelText('Role Name'), 'Bingo Night Crew');
+      expect(screen.getByRole('radio', { name: /^Office/ })).toBeChecked();
+      await user.click(screen.getByRole('radio', { name: /^Committee/ }));
+      await user.click(screen.getByRole('button', { name: 'Create Role' }));
+
+      await waitFor(() => expect(roleService.createRole).toHaveBeenCalledTimes(1));
+      expect(roleService.createRole).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Bingo Night Crew', kind: 'committee' })
+      );
+    });
+
     it('does not resend an unchanged name that only gained surrounding spaces', async () => {
       const user = userEvent.setup();
       renderWithRouter(<RoleManagementPage />);

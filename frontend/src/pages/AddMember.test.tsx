@@ -18,10 +18,15 @@ const mockPreviewNextMembershipId = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetLocations = vi.fn();
 
+const mockGetTierConfig = vi.fn();
+
 vi.mock('../services/api', () => ({
   userService: {
     createMember: (...args: unknown[]) => mockCreateMember(...args) as unknown,
     getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
+  },
+  memberStatusService: {
+    getTierConfig: (...args: unknown[]) => mockGetTierConfig(...args) as unknown,
   },
   organizationService: {
     previewNextMembershipId: (...args: unknown[]) => mockPreviewNextMembershipId(...args) as unknown,
@@ -63,7 +68,8 @@ import { renderWithRouter } from '../test/utils';
 import AddMember from './AddMember';
 
 const rankSelect = () => screen.getByRole('combobox', { name: /^rank$/i });
-const membershipSelect = () => screen.getByRole('combobox', { name: /membership type/i });
+const classSelect = () => screen.getByRole('combobox', { name: /member class/i });
+const statusSelect = () => screen.getByRole('combobox', { name: /membership status/i });
 
 /**
  * Fill every field `validateForm` insists on, so submit actually reaches the API.
@@ -118,6 +124,8 @@ describe('AddMember', { timeout: 20_000 }, () => {
     mockCreateMember.mockResolvedValue({ id: 'u1' });
     mockGetWelcomeEmailAvailability.mockReset();
     mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockConnected.clear();
   });
 
@@ -144,7 +152,7 @@ describe('AddMember', { timeout: 20_000 }, () => {
     await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
     await user.selectOptions(rankSelect(), 'captain');
-    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.selectOptions(classSelect(), 'administrative');
 
     expect(rankSelect()).toBeDisabled();
     expect(rankSelect()).toHaveValue('');
@@ -157,26 +165,54 @@ describe('AddMember', { timeout: 20_000 }, () => {
     await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
     await fillRequired(user);
-    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.selectOptions(classSelect(), 'administrative');
+    await user.selectOptions(statusSelect(), 'life');
     await user.click(screen.getByRole('button', { name: /save member/i }));
 
     await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
     const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+    // The pair the fused dropdown could not say: an administrative life member.
     expect(payload.member_class).toBe('administrative');
-    expect(payload.member_status).toBe('regular');
+    expect(payload.member_status).toBe('life');
     expect(payload.rank).toBeUndefined();
   });
 
-  it("maps the form's 'regular' onto the class and status it means", async () => {
-    // 'regular' is a member *status*; the backend's legacy vocabulary spells
-    // that case 'active', so sending the raw string would land in the column as
-    // an unrecognised tier.
+  it("offers the department's own tiers as statuses, by name", async () => {
+    mockGetTierConfig.mockResolvedValueOnce({
+      auto_advance: true,
+      tiers: [
+        { id: 'active', name: 'Active Member', years_required: 1, sort_order: 1, benefits: {} },
+        { id: 'senior', name: 'Senior Member', years_required: 10, sort_order: 2, benefits: {} },
+      ],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    // The ladder's second rung is the regular status under the tier's name,
+    // not a second entry beside it; senior is its own standing.
+    const senior = await screen.findByRole('option', { name: 'Senior Member' });
+    expect(senior).toHaveValue('senior');
+    expect(screen.getByRole('option', { name: 'Active Member' })).toHaveValue('regular');
+    expect(screen.queryByRole('option', { name: 'Regular' })).not.toBeInTheDocument();
+
+    await fillRequired(user);
+    await user.selectOptions(statusSelect(), 'senior');
+    await user.click(screen.getByRole('button', { name: /save member/i }));
+
+    await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+    const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.member_class).toBe('operational');
+    expect(payload.member_status).toBe('senior');
+  });
+
+  it('sends the class and status as a pair, with the regular status spelled as the backend stores it', async () => {
     const user = userEvent.setup();
     renderWithRouter(<AddMember />);
     await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
     await fillRequired(user);
-    await user.selectOptions(membershipSelect(), 'regular');
+    await user.selectOptions(statusSelect(), 'regular');
     await user.selectOptions(rankSelect(), 'captain');
     await user.click(screen.getByRole('button', { name: /save member/i }));
 
@@ -608,6 +644,8 @@ describe('AddMember — the position dropdown', () => {
     mockGetLocations.mockResolvedValue([]);
     mockGetWelcomeEmailAvailability.mockReset();
     mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockConnected.clear();
   });
 

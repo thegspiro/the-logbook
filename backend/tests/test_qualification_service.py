@@ -188,6 +188,28 @@ class TestQualificationsAreNotRanks:
         assert {"paramedic", "firefighter_ii"} <= qualification_only
 
 
+class TestOfficerInCharge:
+    """The acting-officer card: cleared to lead a crew without an officer rank.
+
+    Until 2026-10-29 the only way to clear the officer seat without a rank was
+    a completed training program targeting it; a department whose clearance is
+    a decision rather than a course had nowhere to record it.
+    """
+
+    def test_clears_exactly_the_officer_seats(self):
+        from app.services.shift_eligibility_service import OFFICER_SEATS
+
+        assert positions_for_qualifications(["officer_in_charge"]) == set(OFFICER_SEATS)
+
+    def test_is_not_a_rank(self):
+        from app.services.operational_rank_service import DEFAULT_RANKS
+
+        assert "officer_in_charge" not in {code for code, _l, _o, _p in DEFAULT_RANKS}
+
+    def test_has_a_label(self):
+        assert qualification_label("officer_in_charge") == "Officer in Charge"
+
+
 class TestGrantDateGatesCurrencyToo:
     """Both ends of the window, not just the expiry.
 

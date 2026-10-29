@@ -644,6 +644,9 @@ class ElectionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Organization id -> the tier "Counts as" map, read once per request;
+        # see ``_ranks_as_for_org``.
+        self._ranks_as_cache: Dict[str, Dict[str, str]] = {}
 
     @overload
     @staticmethod
@@ -850,6 +853,26 @@ class ElectionService:
     # Role / eligibility helpers
     # ------------------------------------------------------------------
 
+    async def _ranks_as_for_org(self, organization_id: Any) -> Dict[str, str]:
+        """``MembershipTierService.ranks_as_by_tier`` for one organization.
+
+        Read once per service instance (one request), because the voter-type
+        check runs once per member per ballot item and the tier ladder does
+        not change under a running request.
+        """
+        if not organization_id:
+            return {}
+        key = str(organization_id)
+        if key not in self._ranks_as_cache:
+            from app.services.membership_tier_service import MembershipTierService
+
+            result = await self.db.execute(
+                select(Organization).where(Organization.id == key)
+            )
+            org: Optional[Organization] = result.scalar_one_or_none()
+            self._ranks_as_cache[key] = MembershipTierService.ranks_as_by_tier(org)
+        return self._ranks_as_cache[key]
+
     async def _user_has_role_type(self, user: User, role_types: List[str]) -> bool:
         """
         Check if a user has any of the specified voter-type categories.
@@ -878,38 +901,33 @@ class ElectionService:
         from app.utils.membership import (
             MemberClass,
             MemberStatus,
+            is_builtin_status,
             split_membership_type,
+            status_for_tier,
         )
 
         member_class = getattr(user, "member_class", None)
         member_status = getattr(user, "member_status", None)
         membership_type = getattr(user, "membership_type", None)
-        live_class, live_status = split_membership_type(membership_type)
 
-        # A live membership_type that is an org-configured custom tier
-        # ("senior") splits to (None, None) — that is the important case,
-        # not the fallback one. `_reconcile_membership` (models/user.py)
-        # deliberately *preserves* member_class/member_status from before a
-        # switch onto such a tier, because shift eligibility needs to keep
-        # recognizing a member who still rides. That carryover must not
-        # leak into election eligibility: a member moved onto a custom tier
-        # is meant to match no built-in voter category (see
-        # split_membership_type's docstring — "would widen the electorate
-        # of any ballot restricted to either"), so the stale class/status
-        # cached on the row is discarded here regardless of what shift
-        # eligibility keeps it for.
-        if membership_type and live_class is None and live_status is None:
-            member_class, member_status = None, None
-        elif not member_class or not member_status:
+        if not member_class or not member_status:
             # A row written before the split, or a caller passing a stub. The
             # legacy field still carries both facts, just fused.
-            member_class, member_status = live_class, live_status
-        # Deliberately not defaulted. Both stay None when the member's
-        # membership_type is an org-configured tier id ("senior") rather than
-        # one of the seven known values, and None matches no class and no
-        # status — which is what such a member matched before. Defaulting here
+            live_class, live_status = split_membership_type(membership_type)
+            member_class = member_class or live_class
+            member_status = member_status or live_status
+
+        # A department's own tier id ("senior") on the ladder column counts
+        # as the built-in status its "Counts as" setting names, and as
+        # nothing at all without one. Deliberately not defaulted: defaulting
         # would quietly enrol every custom tier in the operational regular
-        # body. The role-slug fallback below still applies to them.
+        # body, widening the electorate of any ballot restricted to it. The
+        # role-slug fallback below still applies to such a member.
+        if member_status and not is_builtin_status(member_status):
+            member_status = status_for_tier(
+                member_status,
+                await self._ranks_as_for_org(getattr(user, "organization_id", None)),
+            )
         member_class = (member_class or "").strip().lower()
         member_status = (member_status or "").strip().lower()
 
