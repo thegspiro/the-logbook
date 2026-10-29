@@ -333,8 +333,13 @@ export const ElectionsSettingsPage: React.FC = () => {
               )}
               <ul className="space-y-3">
                 {positionRows.map((row, index) => (
-                  <li key={row.key} className="flex flex-wrap items-end gap-3">
-                    <div className="min-w-0 flex-1">
+                  // Stacked on a phone, where two fields side by side cut the
+                  // voter-type labels short; one row from `sm:` up.
+                  <li
+                    key={row.key}
+                    className="border-theme-surface-border grid gap-3 border-b pb-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:border-0 sm:pb-0"
+                  >
+                    <div className="min-w-0">
                       <label htmlFor={`position-name-${row.key}`} className={labelClass}>
                         Position
                       </label>
@@ -352,7 +357,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                         }
                       />
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
                       <label htmlFor={`position-voters-${row.key}`} className={labelClass}>
                         Who can vote
                       </label>
@@ -377,7 +382,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      className="btn-icon"
+                      className="btn-icon justify-self-end"
                       aria-label={`Remove ${row.name.trim() || 'this position'}`}
                       onClick={() => updatePositionRows(positionRows.filter((_, i) => i !== index))}
                     >

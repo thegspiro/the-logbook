@@ -42,6 +42,9 @@ const parseBounded = (field: NumberField, raw: string): number | null => {
 
 type Drafts = Partial<Record<NumberField, string>>;
 
+/** Id suffix of the one error the two count boxes share. */
+const COUNT_PAIR_ERROR = 'count-pair-error';
+
 const withoutDrafts = (drafts: Drafts, ...fields: NumberField[]): Drafts =>
   Object.fromEntries(Object.entries(drafts).filter(([key]) => !fields.includes(key as NumberField)));
 
@@ -132,9 +135,14 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
     const bounds = ELIGIBILITY_BOUNDS[field];
     const draft = drafts[field];
     const saved = savedNumber(value, field);
-    const errorId = id(`${field}-error`);
+    // The count pair's disagreement is one error about two boxes, so it is
+    // shown once under the row rather than inside whichever box was typed in
+    // last — where it widened that column and pushed its partner aside.
+    const pairError = ruleError !== null && (field === 'min_meetings' || field === 'of_last_meetings');
+    const errorId = id(pairError ? COUNT_PAIR_ERROR : `${field}-error`);
     return (
-      <div>
+      // Fixed width, so a range error wraps inside its own column.
+      <div className="w-48">
         <label htmlFor={id(field)} className="form-label">
           {FIELD_LABELS[field]}
         </label>
@@ -155,11 +163,9 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
           />
           {suffix && <span className="text-theme-text-secondary text-sm">{suffix}</span>}
         </div>
-        {draft !== undefined && (
+        {draft !== undefined && !pairError && (
           <p id={errorId} role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
-            {ruleError && (field === 'min_meetings' || field === 'of_last_meetings')
-              ? ruleError
-              : `Enter a ${bounds.integer ? 'whole number' : 'number'} from ${bounds.min} to ${bounds.max}.`}{' '}
+            {`Enter a ${bounds.integer ? 'whole number' : 'number'} from ${bounds.min} to ${bounds.max}.`}{' '}
             {saved == null ? 'Nothing is saved yet.' : `It is still saved as ${saved}.`}
           </p>
         )}
@@ -195,9 +201,17 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
         </div>
 
         {attendance.mode === AttendanceRuleMode.COUNT && (
-          <div className="flex flex-wrap gap-4">
-            {numberInput('min_meetings')}
-            {numberInput('of_last_meetings', 'meetings')}
+          <div>
+            <div className="flex flex-wrap gap-4">
+              {numberInput('min_meetings')}
+              {numberInput('of_last_meetings', 'meetings')}
+            </div>
+            {ruleError !== null && (
+              <p id={id(COUNT_PAIR_ERROR)} role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                {ruleError} The saved rule is still {attendance.min_meetings ?? '?'} of the last{' '}
+                {attendance.of_last_meetings ?? '?'}.
+              </p>
+            )}
           </div>
         )}
         {attendance.mode === AttendanceRuleMode.PERCENT && (

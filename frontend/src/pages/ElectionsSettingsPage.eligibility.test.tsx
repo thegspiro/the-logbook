@@ -122,7 +122,11 @@ describe('ElectionsSettingsPage — voter eligibility', () => {
 
     expect(attended).toHaveValue(13);
     expect(attended).toHaveAttribute('aria-invalid', 'true');
+    // One error for the pair, under the row, and the box it came from points at it.
     expect(screen.getByRole('alert')).toHaveTextContent('cannot be more than the meetings looked back over');
+    // Typing "13" passed through "1", a valid count that was saved on the way.
+    expect(screen.getByRole('alert')).toHaveTextContent('The saved rule is still 1 of the last 12.');
+    expect(attended).toHaveAccessibleDescription(/cannot be more than the meetings looked back over/);
     await act(() => new Promise((resolve) => setTimeout(resolve, 900)));
     // "1" was valid on the way to "13" and may have been sent; "13" never is.
     for (const [sent] of mockUpdateSettings.mock.calls as [ElectionSettings][]) {
