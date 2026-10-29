@@ -606,6 +606,12 @@ SCHEDULE = {
         "recommended_time": "07:35",
         "cron": "35 7 * * *",
     },
+    "weather_alert_poll": {
+        "description": "Check each department's NWS weather zone for severe and extreme alerts, and show or send new ones as the department chose (dashboard banner, bell, email)",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
+    },
     "google_workspace_suspension_sync": {
         "description": "Finish Google Workspace and Microsoft 365 suspensions (and their lifting) that a member's departure or return left unsettled, retry failed ones, and retry taking departed members out of their groups and passing on name changes",
         "frequency": "every 15 minutes",
@@ -5606,6 +5612,21 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
 
 
+async def run_weather_alert_poll(db: AsyncSession) -> Dict[str, Any]:
+    """Poll each department's NWS zone for Severe and Extreme alerts.
+
+    Every 15 minutes. A department without an enabled NWS Weather Alerts
+    integration costs one query. New alerts are announced as the department
+    chose; see app/services/weather_alert_service.
+    """
+    from app.services.weather_alert_service import poll_department
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        return await poll_department(db_session, org)
+
+    return await _for_each_org(db, "weather_alert_poll", process)
+
+
 def _supply_summary(
     expiring: int, restock: int, shelf_lots: int, uncounted: int = 0
 ) -> str:
@@ -8018,6 +8039,7 @@ TASK_RUNNERS = {
     "nfc_card_tap_purge": run_nfc_card_tap_purge,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
+    "weather_alert_poll": run_weather_alert_poll,
     "compliance_auto_reports": run_compliance_auto_reports,
     "compliance_member_notices": run_compliance_member_notices,
     "saved_report_delivery": run_saved_report_delivery,
@@ -8079,6 +8101,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "shift_auto_checkout": 900,
     "publish_scheduled_messages": 900,
     "storefront_window_lifecycle": 900,
+    # Idempotent per (department, NWS alert id); see weather_alert_service.
+    "weather_alert_poll": 900,
     # Every 30 minutes
     "event_reminders": 1800,
     "post_event_validation": 1800,

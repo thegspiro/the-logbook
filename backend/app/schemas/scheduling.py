@@ -305,6 +305,10 @@ class ShiftFinalizeRequest(BaseModel):
     # The reason is recorded in the audit log.
     override_incomplete_checks: bool = False
     override_reason: Optional[str] = None
+    # Finalize without the trainee reports the department requires. Only a
+    # scheduling admin may, and the reason is recorded in the audit log.
+    override_missing_reports: bool = False
+    report_override_reason: Optional[str] = Field(default=None, max_length=500)
     # Crew-to-crew handoff captured at finalize.
     pass_down_notes: Optional[str] = None
 
@@ -352,6 +356,17 @@ class ShiftFinalizeRequest(BaseModel):
                         "A member cannot be credited with more calls than the "
                         "apparatus ran"
                     )
+        return self
+
+    @model_validator(mode="after")
+    def _report_override_needs_a_reason(self) -> "ShiftFinalizeRequest":
+        if (
+            self.override_missing_reports
+            and not (self.report_override_reason or "").strip()
+        ):
+            raise ValueError(
+                "Give a reason for closing out without the trainee reports"
+            )
         return self
 
 
@@ -526,6 +541,20 @@ class CloseoutAttachableCall(UTCResponseBase):
     unit_labels: List[str] = Field(default_factory=list)
     # This shift already claims the call; unticking it in the picker detaches.
     attached: bool = False
+
+
+class MissingTraineeReport(BaseModel):
+    user_id: str
+    name: str
+
+
+class TraineeReportRequirementResponse(BaseModel):
+    """What close-out still needs in trainee reports, for the close-out screens."""
+
+    required: bool
+    missing: List[MissingTraineeReport]
+    # Whether the caller may close out without them (scheduling.manage).
+    can_override: bool
 
 
 class CloseoutStateResponse(UTCResponseBase):

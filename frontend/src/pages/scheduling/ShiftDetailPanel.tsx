@@ -91,6 +91,7 @@ import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
 import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
+import TraineeReportGate, { type TraineeReportGateState } from '../../modules/scheduling/components/TraineeReportGate';
 import { displayNameOf } from '../../utils/memberName';
 import { useConfirm } from '../../contexts/ConfirmContext';
 
@@ -278,6 +279,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [passDownNotes, setPassDownNotes] = useState('');
   const [overrideChecks, setOverrideChecks] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
+  const [reportGate, setReportGate] = useState<TraineeReportGateState>({ blocked: false, override: false, reason: '' });
   const [handoff, setHandoff] = useState<{ shift_date: string | null; pass_down_notes: string } | null>(null);
   const [showReopenConfirm, setShowReopenConfirm] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
@@ -946,10 +948,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       const entries = Object.entries(manualHours)
         .map(([uid, val]) => ({ user_id: uid, hours: parseFloat(val) }))
         .filter((e) => e.hours > 0 && !isNaN(e.hours));
-      const opts: { override_incomplete_checks?: boolean; override_reason?: string; pass_down_notes?: string } = {};
+      const opts: {
+        override_incomplete_checks?: boolean;
+        override_reason?: string;
+        override_missing_reports?: boolean;
+        report_override_reason?: string;
+        pass_down_notes?: string;
+      } = {};
       if (overrideChecks) {
         opts.override_incomplete_checks = true;
         if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
+      }
+      if (reportGate.override) {
+        opts.override_missing_reports = true;
+        opts.report_override_reason = reportGate.reason;
       }
 
       if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
@@ -1016,8 +1028,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
    * have accepted. The override is offered, not demanded.
    */
   const overrideBlocked =
-    requireEndOfShiftChecks &&
-    ((hasIncompleteEquipmentChecks && !overrideChecks) || (overrideChecks && overrideReason.trim().length === 0));
+    (requireEndOfShiftChecks &&
+      ((hasIncompleteEquipmentChecks && !overrideChecks) || (overrideChecks && overrideReason.trim().length === 0))) ||
+    reportGate.blocked;
 
   /**
    * What Escape means here, handed to `useDialog` via DialogPanel rather than
@@ -1902,6 +1915,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       className={inputCls}
                     />
                   </div>
+
+                  <TraineeReportGate shiftId={shift.id} onChange={setReportGate} />
 
                   {/* Enforcement ON: block, or override with a logged reason.
                       Also offered when the status could not be read — the server

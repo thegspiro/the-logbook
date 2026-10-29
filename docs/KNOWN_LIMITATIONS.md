@@ -2347,6 +2347,27 @@ settings.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 
+> **Generic Webhooks — resolved (2026-10-29), as the owner chose: build it
+> out.** A connected webhook is now sent `event.created`, `shift.created` and
+> `training.recorded`, the events the chat integrations get, through
+> `dispatch_generic_webhooks` beside the chat dispatch. Its settings pick which
+> (`event_types`, validated against `WEBHOOK_EVENT_TYPES`); none ticked means
+> all, so a webhook connected earlier starts receiving every event. Each
+> delivery is recorded in the integration's run history. Covered by
+> `tests/test_generic_webhook_dispatch.py`.
+>
+> **NWS Weather Alerts — resolved (2026-10-29), as the owner chose: build it
+> out.** `weather_alert_poll` checks each department's zone every 15 minutes
+> and keeps Severe and Extreme alerts (real ones, not tests) in the new
+> `weather_alerts` table, unique on department and NWS alert id, so each alert
+> is announced once. The department picks the channels in the integration's
+> settings: a dashboard banner while the alert is active
+> (`GET /integrations/weather/active-alerts`), a bell notice to every current
+> member, and an email under the new optional **Severe weather alerts** kind;
+> banner and bell default on, email off. The row is committed before anyone is
+> told, so a crash in between loses that alert's notices rather than repeating
+> them to the department. Covered by `tests/test_weather_alerts.py`.
+
 Both are listed in the integrations catalogue as `available`
 (`app/api/v1/endpoints/integrations.py`), can be connected, and pass their
 **Test** — and that test is the only thing either of them ever does.
@@ -2385,6 +2406,16 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    **Labelled (2026-10-11):** the setting's description now says it changes
    the reminder, and it shows "Not in effect yet — a shift can still be closed
    out without a report." Enforcing it at close-out is still open.
+   **Resolved (2026-10-29), owner decision: enforce at close-out.** With the
+   setting on (and post-shift validation on, which is when the box shows),
+   `finalize_shift` refuses while any member in a training seat has no shift
+   completion report for the shift, naming them; a shift with no training
+   seats closes as before. A `scheduling.manage` holder may override with a
+   reason (`override_missing_reports`), audit-logged as
+   `shift_finalized_report_override`; a shift officer without that grant may
+   not. Both close-out paths show the block (`TraineeReportGate`, reading
+   `GET /scheduling/shifts/{id}/trainee-reports`). Covered by
+   `tests/test_shift_trainee_report_requirement.py`.
 2. **"Reviewer role"** (Shift Reports settings). Saved as
    `report_review_role` in the training module config and read by nothing.
    Approving reports is gated on `training.manage` alone
@@ -2490,10 +2521,16 @@ recorded here rather than built.
    notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
    email the channel of record; whether a cancellation should email, and
    under which member email kind, is a product decision.
+   **Resolved (2026-10-29), owner decision: email under Shift notices.** The
+   crew is now emailed as well as notified in the app, after the cancellation
+   is saved; a member who turned Shift notices off gets the bell entry only.
 7. **The month and week calendars stop at 500 shifts without saying so.**
    `get_month_shifts` and `get_week_shifts` pass `limit=500`, so a department
    running enough units with day and night shifts loses the end of the month
    from the calendar.
+   **Resolved (2026-10-29), owner decision: load every shift in range.** Both
+   now pass no limit; the week or month is the bound. Covered by
+   `test_month_view_is_not_capped_at_500`.
 8. **Driver/EVOC enforcement knows the seat named `driver` only.** Custom
    seat names are stored as typed, so a department that names its wheel seat
    "Engineer" or "Driver/Operator" seats members without the required EVOC

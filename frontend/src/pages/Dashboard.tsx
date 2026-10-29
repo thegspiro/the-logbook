@@ -16,6 +16,7 @@ import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistr
 import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDashboard';
 import { canViewChiefDashboard } from '../components/dashboard/chiefWidgetRegistry';
 import OrganizationSetupWidget from '../components/dashboard/OrganizationSetupWidget';
+import WeatherAlertBanner from '../components/dashboard/WeatherAlertBanner';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
@@ -1819,6 +1820,7 @@ const Dashboard: React.FC = () => {
           : 'Dashboard content loaded.'}
       </div>
       <div data-page-main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
+        <WeatherAlertBanner />
         {/* Header — who and when. The month's hours are stated once, by the
             hours card, which carries the same total plus the split behind it
             and its own failure state; a second copy up here restated the

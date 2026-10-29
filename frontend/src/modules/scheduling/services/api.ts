@@ -30,6 +30,7 @@ import type {
   TimeOffFilters,
   CallTypeOption,
   CloseoutState,
+  TraineeReportRequirement,
   CloseoutAttendanceEntry,
   CloseoutCallsPayload,
   MemberCallCredit,
@@ -816,6 +817,8 @@ export const schedulingService = {
     opts?: {
       override_incomplete_checks?: boolean;
       override_reason?: string;
+      override_missing_reports?: boolean;
+      report_override_reason?: string;
       pass_down_notes?: string;
       member_call_counts?: MemberCallCredit[];
     }
@@ -826,10 +829,19 @@ export const schedulingService = {
       body.override_incomplete_checks = true;
       if (opts.override_reason) body.override_reason = opts.override_reason;
     }
+    if (opts?.override_missing_reports) {
+      body.override_missing_reports = true;
+      body.report_override_reason = opts.report_override_reason;
+    }
     if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
     if (opts?.member_call_counts?.length) body.member_call_counts = opts.member_call_counts;
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`, body);
     return normalizeShift(response.data);
+  },
+
+  async getTraineeReportRequirement(shiftId: string): Promise<TraineeReportRequirement> {
+    const response = await api.get<TraineeReportRequirement>(`/scheduling/shifts/${shiftId}/trainee-reports`);
+    return response.data;
   },
 
   // -- Resumable close-out -------------------------------------------------

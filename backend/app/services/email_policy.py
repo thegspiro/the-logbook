@@ -87,6 +87,7 @@ class EmailKind(str, enum.Enum):
     BUDGET_REQUESTS = "budget_requests"
     MINUTES_ACTION_ITEMS = "minutes_action_items"
     MINUTES_CIRCULATED = "minutes_circulated"
+    WEATHER_ALERTS = "weather_alerts"
 
     # Optional, sent to officers because of a role they hold
     EVENT_DUTIES = "event_duties"
@@ -287,6 +288,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "Shift reminders",
             "Shift assignments",
+            "A shift you were on was cancelled",
             "Shift swap expired",
             "End-of-shift summary",
             "Overdue trainee shift reports",
@@ -352,6 +354,22 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "The Treasurer's decision on a budget request",
         ),
         rationale="Finance > Next year's budget shows the same deadline and decisions.",
+    ),
+    # Sent only when the department turned on email for its NWS weather
+    # integration (owner decision 2026-10-29); otherwise no member gets one.
+    EmailKind.WEATHER_ALERTS: EmailPolicy(
+        label="Severe weather alerts",
+        required=False,
+        audience=_M,
+        includes=(
+            "A severe or extreme National Weather Service alert for the "
+            "department's area, when the department sends these by email",
+        ),
+        rationale=(
+            "The dashboard banner and the bell carry the same alert when the "
+            "department has them on; the National Weather Service publishes "
+            "it too."
+        ),
     ),
     EmailKind.EVENT_DUTIES: EmailPolicy(
         label="Event officer duties",

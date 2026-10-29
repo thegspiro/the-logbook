@@ -90,8 +90,8 @@ The page shows:
 | **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                            |
 | **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                           |
 | **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                       |
-| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                  |
-| **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                         |
+| **Automation**     | Generic Webhooks   | Sends a signed message to a web address when an event, shift or training record is created       |
+| **Safety**         | NWS Weather Alerts | Shows severe weather alerts for your zone on the dashboard, in the bell or by email              |
 | **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                              |
 | **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave   |
 | **Access Control** | Microsoft 365      | Creates and licenses a Microsoft 365 account for each new member; blocks sign-in when they leave |
@@ -786,9 +786,10 @@ The **NWS Weather Alerts** integration talks to the National Weather Service
 
 ### Configuration
 
-| Field           | What to enter                                                                   |
-| --------------- | ------------------------------------------------------------------------------- |
-| **NWS Zone ID** | Your area's zone code: state, then C or Z, then three digits. Example: `VAZ053` |
+| Field                                 | What to enter                                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **NWS Zone ID**                       | Your area's zone code: state, then C or Z, then three digits. Example: `VAZ053`                                         |
+| **Tell members about severe weather** | How members hear: a dashboard banner, a bell notice, an email, or any mix. Banner and bell start ticked, email unticked |
 
 > **Tip.** Find your zone at
 > [weather.gov/pdd/gis](https://www.weather.gov/pdd/gis). Search by county or
@@ -796,17 +797,31 @@ The **NWS Weather Alerts** integration talks to the National Weather Service
 
 ### How It Works
 
-> **Important. Only the test works today.** Select **Test** and The Logbook asks
-> the weather service for your zone's current alerts. It tells you whether the
-> zone is valid and how many alerts are active, for example "Zone VAZ053 is
-> valid. 2 active alert(s)."
->
-> Nothing happens after that. The Logbook does not check for alerts on its own,
-> and alerts do not appear anywhere in the app. Do not rely on it to warn
-> members about severe weather. Keep your current alerting.
+The Logbook checks your zone every 15 minutes. Only **Severe** and
+**Extreme** alerts count, which is warnings such as Tornado Warning, Severe
+Thunderstorm Warning and Flash Flood Warning. Advisories, statements and most
+watches are left out, so the banner is not always showing something. Test
+messages and exercises are ignored.
 
-The alerts it can read are the ones the weather service publishes for your
-zone, such as Tornado Warning, Flood Warning and Fire Weather Watch.
+What members see depends on what you ticked:
+
+| Channel              | What happens                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard banner** | Every member's dashboard shows the alert while it is in effect: what it is, until when, and **What to do**. It goes when the alert expires or the weather service cancels it |
+| **Bell notice**      | Every current member gets one bell notice when the alert is first issued                                                                                                     |
+| **Email**            | Every current member gets one email when the alert is first issued. A member can turn these off under **Severe weather alerts** in their own email settings                  |
+
+Each alert is announced once, however often the zone is checked. An alert the
+weather service cancels and then reissues under the same name is not announced
+twice.
+
+**Test** asks the weather service for your zone's current alerts and tells you
+whether the zone is valid and how many alerts are active, for example "Zone
+VAZ053 is valid. 2 active alert(s)."
+
+> **Important.** This is a convenience, not an alerting system. If the weather
+> service or the connection to it is down, nothing is shown and nobody is told.
+> Keep your department's own warning arrangements.
 
 ---
 
@@ -835,15 +850,24 @@ A generic webhook sends signed messages to a web address that you choose.
 
 ### Configuration
 
-| Field           | What to enter                                                  |
-| --------------- | -------------------------------------------------------------- |
-| **Webhook URL** | The address of the system that will receive the messages       |
-| **Secret**      | Optional. Lets the receiving system check a message is genuine |
+| Field                 | What to enter                                                  |
+| --------------------- | -------------------------------------------------------------- |
+| **Webhook URL**       | The address of the system that will receive the messages       |
+| **Secret**            | Optional. Lets the receiving system check a message is genuine |
+| **Send these events** | Which events to send. Leave all unticked to send every one     |
 
-> **Important. Only the test message is sent today.** **Test** sends one test
-> message to your address, so you can check your system receives it. The
-> Logbook does not yet send anything when something happens in the app. There
-> is nothing to subscribe to.
+The Logbook sends a message when one of these happens. They are the same
+events Slack, Discord and Teams are told about:
+
+| Event                      | Event name          | Sent when                        |
+| -------------------------- | ------------------- | -------------------------------- |
+| An event is created        | `event.created`     | Someone creates a calendar event |
+| A shift is created         | `shift.created`     | Someone creates a shift          |
+| A training record is added | `training.recorded` | A training record is added       |
+
+**Test** sends one `test.ping` message, so you can check your system receives
+it before anything real happens. A webhook connected before 2026-10-29 has no
+events ticked, so it is sent all of them.
 
 ### When delivery fails
 
@@ -865,12 +889,12 @@ Pass this part to whoever writes the system that receives the messages.
 **What your system receives.** An HTTP `POST` with a JSON body and these
 headers:
 
-| Header                | Value                                             |
-| --------------------- | ------------------------------------------------- |
-| `Content-Type`        | `application/json`                                |
-| `X-Webhook-Event`     | The event name — `test.ping` for the test message |
-| `User-Agent`          | `TheLogbook-Webhook/1.0`                          |
-| `X-Webhook-Signature` | Only when a **Secret** is set — see below         |
+| Header                | Value                                     |
+| --------------------- | ----------------------------------------- |
+| `Content-Type`        | `application/json`                        |
+| `X-Webhook-Event`     | The event name, such as `shift.created`   |
+| `User-Agent`          | `TheLogbook-Webhook/1.0`                  |
+| `X-Webhook-Signature` | Only when a **Secret** is set — see below |
 
 The body of the test message:
 
@@ -885,6 +909,14 @@ The body of the test message:
 ```
 
 `timestamp` is the sending time in whole seconds since 1 January 1970 (UTC).
+
+The other events carry the same three keys, with these fields in `data`:
+
+| Event name          | `data` fields                                              |
+| ------------------- | ---------------------------------------------------------- |
+| `event.created`     | `title`, `event_type`, `start_time` (ISO 8601), `location` |
+| `shift.created`     | `type`, `start_time`, `end_time` (ISO 8601), `crew`        |
+| `training.recorded` | `member_name`, `course_name`, `hours`                      |
 
 Answer with any 2xx status, such as 200 or 204.
 
@@ -1515,7 +1547,7 @@ key or email address.
 | Google Calendar reads Reconnect required                   | Select **Reconnect with Google** on the card. See [Google Calendar](#google-calendar)                                                                                      |
 | Salesforce sync reports missing fields                     | Run **Check readiness**. Create the missing fields in Salesforce, or tick **Skip custom fields my Salesforce org hasn't created yet**                                      |
 | Webhook test never arrives                                 | Check the address is public and starts with `https://`. Ask whoever runs the receiving system to check it answers                                                          |
-| Weather alerts not showing                                 | Expected: alerts are not shown anywhere yet. **Test** only checks the zone code                                                                                            |
+| Weather alerts not showing                                 | Only Severe and Extreme alerts are shown, and only on the channels ticked in the integration's settings. Check the zone with **Test**                                      |
 | Shift feed or department feed not updating                 | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                           |
 | Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                                |
 | Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                                  |
