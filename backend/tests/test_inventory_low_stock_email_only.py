@@ -79,11 +79,18 @@ class _FakeEmail:
 
 
 async def _run(low_stock, admins):
-    """Drive the task with a db whose two queries return orgs then admins."""
+    """Drive the task with a db whose two queries return orgs then admins.
+
+    A later query is the bell copy looking for an unread entry, and finds none.
+    """
     _FakeEmail.sent = {}
+    answers = iter([_result([_org()]), _result(admins)])
+    no_unread = MagicMock()
+    no_unread.scalars.return_value = iter(())
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=[_result([_org()]), _result(admins)])
+    db.execute = AsyncMock(side_effect=lambda *_a, **_k: next(answers, no_unread))
     db.rollback = AsyncMock()
+    db.commit = AsyncMock()
     sms_cls = MagicMock()
 
     with patch.object(

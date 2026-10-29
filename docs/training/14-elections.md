@@ -74,12 +74,12 @@ You can use elections for:
 Two permissions control the module. Role Management lists them under Elections
 as **View elections** and **Manage elections**.
 
-| Page                    | What it is for                                   | Who can open it                    |
-| ----------------------- | ------------------------------------------------ | ---------------------------------- |
-| **Elections** list      | Every election in the department                 | Roles that can view elections      |
-| An election's page      | Details, ballot, voting and results              | Roles that can view elections      |
-| **Election Settings**   | Proxy voting, optional features and test ballots | Roles that can manage elections    |
-| The emailed ballot page | Voting from the link in a ballot email           | Anyone holding a valid ballot link |
+| Page                    | What it is for                                 | Who can open it                    |
+| ----------------------- | ---------------------------------------------- | ---------------------------------- |
+| **Elections** list      | Every election in the department               | Roles that can view elections      |
+| An election's page      | Details, ballot, voting and results            | Roles that can view elections      |
+| **Election Settings**   | Proxy voting, features, defaults, test ballots | Roles that can manage elections    |
+| The emailed ballot page | Voting from the link in a ballot email         | Anyone holding a valid ballot link |
 
 To reach **Election Settings**, select the gear button at the top of the
 Elections list.
@@ -1243,7 +1243,7 @@ report, it is your full defence if the result is disputed.
 
 **Who can do this:** roles that can manage elections.
 
-Open **Elections** and select the gear button. Election Settings has four
+Open **Elections** and select the gear button. Election Settings has five
 sections.
 
 ### Proxy Voting
@@ -1270,6 +1270,22 @@ turn them off, and turning one off blocks it, not just hides it.
 turned off.** Closing works out results and erases private voting data on
 anonymous elections — a privacy promise, not a convenience.
 
+### Defaults
+
+Where the **Create Election** form starts. An officer can still change any of
+these for one election, and elections already created are not affected.
+
+| Setting                          | Default         | What it does                                                          |
+| -------------------------------- | --------------- | --------------------------------------------------------------------- |
+| **How is the winner determined** | Most Votes Wins | The winner rule a new election starts with, and its percentage        |
+| **Anonymous voting**             | On              | Whether a new election starts anonymous                               |
+| **Allow write-in candidates**    | Off             | Whether a new election starts allowing write-ins                      |
+| **Quorum**                       | No quorum       | A percentage of eligible voters, or a number of voters, who must vote |
+
+The create form has no quorum box of its own. When the department sets a
+quorum, the form shows it as a line, **Quorum: 51% of eligible voters must
+vote**, and the new election takes it.
+
 ### Test Ballot
 
 Choose a draft election and select **Send Test Ballot** to preview voting. See
@@ -1279,9 +1295,6 @@ Choose a draft election and select **Send Test Ballot** to preview voting. See
 
 Shows the integrity safeguards in force, such as vote seals and the one-vote
 rule.
-
-There are no department-wide election defaults. The voting method, winning
-rule, anonymity and write-ins are chosen on each election's own form.
 
 ![Election Settings open on Proxy Voting, with the Features, Test Ballot and Security sections beside it](./images/14-16-election-settings.png)
 
@@ -1462,9 +1475,9 @@ differently.
 - **Elections is under Governance.** It is **Governance → Elections**, not
   under Events & Meetings.
 - **There is no Election Type field** on the create form.
-- **Election Settings has no Defaults section.** Its sections are **Proxy
-  Voting**, **Features**, **Test Ballot** and **Security**. Everything else is
-  set on each election.
+- **Election Settings has a Defaults section again** (2026-10-29). It sets
+  where the create form starts; it was removed for a while because nothing
+  read it.
 - **There is no Publish Results or Hide Results switch.** Closing releases the
   results.
 - **The details card reads One choice per voter** where it once read Simple

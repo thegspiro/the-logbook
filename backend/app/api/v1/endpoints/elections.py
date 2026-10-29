@@ -38,7 +38,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
-from app.core.utils import safe_error_detail
+from app.core.utils import list_within_detail_limit, safe_error_detail
 from app.models.election import (
     BallotSendJobKind,
     Candidate,
@@ -53,6 +53,9 @@ from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.user import Organization, User
 from app.schemas.column_bounds import INT32_MAX
 from app.schemas.election import (
+    VALID_QUORUM_TYPES,
+    VALID_VICTORY_CONDITIONS,
+    VALID_VOTING_METHODS,
     AttendeeCheckIn,
     AttendeeCheckInResponse,
     AttendeeListResponse,
@@ -952,6 +955,52 @@ async def submit_ballot_with_token(
 # ============================================
 
 
+_ELECTION_DEFAULT_CHOICES = {
+    "default_voting_method": VALID_VOTING_METHODS,
+    "default_victory_condition": VALID_VICTORY_CONDITIONS,
+    "default_quorum_type": VALID_QUORUM_TYPES,
+}
+
+
+def _election_defaults_view(stored) -> dict:
+    """The department's election defaults as the create-election form reads them.
+
+    A value saved before these were validated, or an explicit null, reads as
+    the built-in default rather than reaching the form, which would submit it.
+    The built-ins are the form's own starting values, so a department that
+    never set a default sees no change.
+    """
+    defaults = stored if isinstance(stored, dict) else {}
+
+    def choice(key: str, valid, fallback: str) -> str:
+        value = defaults.get(key)
+        return value if isinstance(value, str) and value in valid else fallback
+
+    def flag(key: str, fallback: bool) -> bool:
+        value = defaults.get(key)
+        return value if isinstance(value, bool) else fallback
+
+    def positive(key: str) -> Optional[int]:
+        value = defaults.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            return None
+        return value
+
+    return {
+        "default_voting_method": choice(
+            "voting_method", VALID_VOTING_METHODS, "simple_majority"
+        ),
+        "default_victory_condition": choice(
+            "victory_condition", VALID_VICTORY_CONDITIONS, "most_votes"
+        ),
+        "default_victory_percentage": positive("victory_percentage"),
+        "default_anonymous_voting": flag("anonymous_voting", True),
+        "default_allow_write_ins": flag("allow_write_ins", False),
+        "default_quorum_type": choice("quorum_type", VALID_QUORUM_TYPES, "none"),
+        "default_quorum_value": positive("quorum_value"),
+    }
+
+
 class ElectionSettingsUpdate(BaseModel):
     """Org-level election default settings."""
 
@@ -987,6 +1036,25 @@ class ElectionSettingsUpdate(BaseModel):
     # ``eligibility``, null is meaningful: the annual meeting uses the
     # regular-meeting defaults.
     annual_eligibility: Optional[EligibilityDefaults] = None
+
+    @field_validator(
+        "default_voting_method",
+        "default_victory_condition",
+        "default_quorum_type",
+    )
+    @classmethod
+    def defaults_must_be_known_choices(cls, value, info):
+        """Store only a value the create-election form can start from.
+
+        These were free strings until the form began reading them (ELEC2-9),
+        so a typo was accepted and then silently ignored.
+        """
+        valid = _ELECTION_DEFAULT_CHOICES[info.field_name]
+        if value is not None and value not in valid:
+            raise ValueError(
+                list_within_detail_limit("must be one of: ", sorted(valid))
+            )
+        return value
 
     @field_validator(
         "nominations_enabled",
@@ -1224,17 +1292,7 @@ def _settings_response(org_settings: dict) -> dict:
         features = {}
     return {
         # Flat fields matching frontend ElectionSettings type
-        "default_voting_method": election_defaults.get(
-            "voting_method", "simple_majority"
-        ),
-        "default_victory_condition": election_defaults.get(
-            "victory_condition", "most_votes"
-        ),
-        "default_victory_percentage": election_defaults.get("victory_percentage"),
-        "default_anonymous_voting": election_defaults.get("anonymous_voting", True),
-        "default_allow_write_ins": election_defaults.get("allow_write_ins", False),
-        "default_quorum_type": election_defaults.get("quorum_type", "none"),
-        "default_quorum_value": election_defaults.get("quorum_value"),
+        **_election_defaults_view(election_defaults),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
         "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
         "nominations_enabled": _feature_flag(features, "nominations_enabled"),

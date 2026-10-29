@@ -48,6 +48,16 @@ describe('EligibilitySettingsCard', () => {
     expect(probationary).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // Officer assignment runs the same eligibility check and refuses an excluded
+  // type, so the card must not promise a manual override.
+  it('does not promise that an officer can still assign an excluded member', async () => {
+    render(<EligibilitySettingsCard />);
+    await screen.findByRole('group', { name: 'Excluded from Self-Signup' });
+
+    expect(screen.queryByText(/can still assign/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/an officer cannot assign them either/)).toBeInTheDocument();
+  });
+
   it("offers the department's own seats, and keeps an open seat that was retired", async () => {
     // SCHED-CUSTOM-SEAT: a custom seat is assignable, so opening it to every
     // member is a grant the backend honours.

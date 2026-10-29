@@ -17,12 +17,20 @@ import { useAuthStore } from '../stores/authStore';
 import {
   ElectionStatus,
   MeetingKind,
+  QuorumType,
   VotingMethod as VM,
   VictoryCondition as VC,
   RunoffType,
 } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import {
+  BUILT_IN_ELECTION_DEFAULTS,
+  WINNER_RULES,
+  describeQuorum,
+  electionDefaultsFrom,
+  type ElectionFormDefaults,
+} from '../utils/electionDefaults';
 import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
@@ -43,6 +51,34 @@ interface PositionSuggestion {
   kind: 'Position' | 'Rank';
 }
 
+/** A new election's form, starting from the department's defaults. */
+const blankElectionForm = (defaults: ElectionFormDefaults): ElectionCreate => ({
+  title: '',
+  description: '',
+  election_type: 'general',
+  positions: [],
+  start_date: '',
+  end_date: '',
+  max_votes_per_position: 1,
+  seats_per_position: 1,
+  results_visible_immediately: false,
+  enable_runoffs: false,
+  runoff_type: RunoffType.TOP_TWO,
+  max_runoff_rounds: 3,
+  auto_open: false,
+  reminder_hours_before_close: undefined,
+  tie_policy: 'co_winners',
+  // Held at a regular business meeting unless the officer says otherwise,
+  // or links an annual meeting record.
+  meeting_kind: MeetingKind.REGULAR,
+  ...defaults,
+});
+
+const holdsBuiltInDefaults = (form: ElectionCreate): boolean =>
+  (Object.keys(BUILT_IN_ELECTION_DEFAULTS) as (keyof ElectionFormDefaults)[]).every(
+    (key) => form[key] === BUILT_IN_ELECTION_DEFAULTS[key]
+  );
+
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
   const [filteredElections, setFilteredElections] = useState<ElectionListItem[]>([]);
@@ -52,28 +88,8 @@ export const ElectionsPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { busy, run } = useSubmitGuard();
   const [createError, setCreateError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<ElectionCreate>({
-    title: '',
-    description: '',
-    election_type: 'general',
-    positions: [],
-    start_date: '',
-    end_date: '',
-    anonymous_voting: true,
-    allow_write_ins: false,
-    max_votes_per_position: 1,
-    seats_per_position: 1,
-    results_visible_immediately: false,
-    voting_method: VM.SIMPLE_MAJORITY,
-    victory_condition: VC.MOST_VOTES,
-    enable_runoffs: false,
-    runoff_type: RunoffType.TOP_TWO,
-    max_runoff_rounds: 3,
-    auto_open: false,
-    reminder_hours_before_close: undefined,
-    tie_policy: 'co_winners',
-    meeting_kind: MeetingKind.REGULAR,
-  });
+  const [electionDefaults, setElectionDefaults] = useState<ElectionFormDefaults>(BUILT_IN_ELECTION_DEFAULTS);
+  const [formData, setFormData] = useState<ElectionCreate>(() => blankElectionForm(BUILT_IN_ELECTION_DEFAULTS));
   const [positionInput, setPositionInput] = useState('');
   const [featureFlags, setFeatureFlags] = useState({
     reminders_enabled: true,
@@ -140,6 +156,12 @@ export const ElectionsPage: React.FC = () => {
           auto_open_enabled: s.auto_open_enabled ?? true,
         });
         setElectionSettings(s);
+        const defaults = electionDefaultsFrom(s);
+        setElectionDefaults(defaults);
+        // Only a form still on the built-in values takes the department's
+        // defaults: an officer who opened the dialog and chose a winner rule
+        // before the settings arrived keeps what they chose.
+        setFormData((prev) => (holdsBuiltInDefaults(prev) ? { ...prev, ...defaults } : prev));
       } catch {
         // Non-fatal: fields stay visible; the backend gates enforcement.
       }
@@ -288,28 +310,7 @@ export const ElectionsPage: React.FC = () => {
         };
         await electionService.createElection(submitData);
         setShowCreateModal(false);
-        setFormData({
-          title: '',
-          description: '',
-          election_type: 'general',
-          positions: [],
-          start_date: '',
-          end_date: '',
-          anonymous_voting: true,
-          allow_write_ins: false,
-          max_votes_per_position: 1,
-          seats_per_position: 1,
-          results_visible_immediately: false,
-          voting_method: VM.SIMPLE_MAJORITY,
-          victory_condition: VC.MOST_VOTES,
-          enable_runoffs: false,
-          runoff_type: RunoffType.TOP_TWO,
-          max_runoff_rounds: 3,
-          auto_open: false,
-          reminder_hours_before_close: undefined,
-          tie_policy: 'co_winners',
-          meeting_kind: MeetingKind.REGULAR,
-        });
+        setFormData(blankElectionForm(electionDefaults));
         setPositionInput('');
         await fetchElections();
       } catch (err: unknown) {
@@ -335,6 +336,10 @@ export const ElectionsPage: React.FC = () => {
     });
   };
 
+  const quorumNote = describeQuorum({
+    quorum_type: formData.quorum_type ?? QuorumType.NONE,
+    quorum_value: formData.quorum_value,
+  });
   const addedPositions = formData.positions || [];
   const positionQuery = positionInput.trim().toLowerCase();
   const seenSuggestions = new Set(addedPositions.map((p) => p.toLowerCase()));
@@ -991,12 +996,11 @@ export const ElectionsPage: React.FC = () => {
                       }}
                       className="form-input mt-1 shadow-xs"
                     >
-                      <option value="simple_majority|most_votes">Most Votes Wins (Plurality)</option>
-                      <option value="simple_majority|majority">Majority Required (&gt;50%)</option>
-                      <option value="simple_majority|supermajority">Supermajority Required (2/3)</option>
-                      <option value="ranked_choice|majority">Ranked Choice Voting</option>
-                      <option value="approval|most_votes">Approval Voting (Yes/No per candidate)</option>
-                      <option value="simple_majority|threshold">Custom Threshold</option>
+                      {WINNER_RULES.map((rule) => (
+                        <option key={rule.value} value={rule.value}>
+                          {rule.label}
+                        </option>
+                      ))}
                     </select>
                     <p className="text-theme-text-muted mt-1 text-xs">
                       {formData.voting_method === VM.RANKED_CHOICE
@@ -1161,6 +1165,13 @@ export const ElectionsPage: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  {quorumNote && (
+                    <p className="text-theme-text-secondary text-sm">
+                      <span className="text-theme-text-primary font-medium">Quorum:</span> {quorumNote}. This is the
+                      department&apos;s default, set in Election Settings.
+                    </p>
+                  )}
 
                   <div className="space-y-2">
                     <label className="flex items-center">

@@ -2385,12 +2385,19 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    members are the exceptions. **Same refusal now extends to pattern
    generation (2026-10-24):** generated seats run the same check, so an
    excluded member is left unseated rather than seated by the pattern.
+   **Resolved (2026-10-29), owner decision: correct the text.** The card now
+   says an excluded type cannot sign up or be assigned, except to a shift
+   opened to all members. No override was added.
 6. **"Manage schedules" sees assign controls the server refuses.**
    `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
    `scheduling.manage` holders, but creating, editing or removing an assignment
    requires `scheduling.assign` or being the shift officer
    (`endpoints/scheduling.py`); `scheduling.manage` does not imply it. The
    officer fills the form and gets "Insufficient permissions".
+   **Resolved (2026-10-29), owner decision: hide the controls.** Both screens
+   now offer assigning only to `scheduling.assign` holders and the shift's own
+   officer; the server's rule is unchanged. A manage-only officer still sees
+   the check-in QR code and the declined/removed list, which are read-only.
 7. **A shift-panel hint points to a tab that no longer exists.**
    `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
    tab". Equipment checks moved to Inventory; the working route is the panel's
@@ -6237,6 +6244,24 @@ was not meant to; each is a definition or a trade-off.
 
 ## Member Emails — An Opted-Out Officer or Nominee Hears Nothing for Email-Only Alerts (2026-09-30)
 
+> ✅ **Resolved (2026-10-29), as the owner chose: give them in-app copies.**
+> `app/services/officer_alert_copies.py` writes a bell entry for every officer
+> each alert is about, whether or not they receive the email: low stock, the
+> shelf-audit digest, NFPA retirement, Supplies to Replace and the automatic
+> reorder request; member archived, the property return summary, a new store
+> order, the directory-accounts digest, and an applicant withdrawing, going
+> inactive or coming up for auto-purge. A recurring digest refreshes an unread
+> entry instead of adding one per run. Two of the original items needed
+> nothing: failed equipment checks already wrote a bell entry for every
+> recipient, and the third-party nominee's accept-or-decline request already
+> had one (`_record_nominee_bell_notice`). Behaviour that changed with it: an
+> auto-purge warning, the shelf-audit digest and a withdrawal now count as given
+> when every coordinator or manager has turned the email off, because the bell
+> entries are the notice. Still open: there is no administrator view of who has
+> opted out of what. Covered by `tests/test_officer_alert_copies.py` and
+> `tests/test_prospect_auto_purge_warning.py`. The history below is kept as the
+> record.
+
 **Open (owner decision).** Since 2026-09-28 every member email is either always
 sent or optional (`app/services/email_policy.py`), and a member's **Email
 Notifications** switch, or their own switch for one optional email, stops it.
@@ -6338,6 +6363,18 @@ lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 
+> ✅ **Resolved (2026-10-29), as the owner chose: wire a reader.** Election
+> Settings has a **Defaults** section again, and the **Create Election** form
+> starts from the saved values; with nothing saved it starts where it always
+> did. The PATCH now refuses an unknown voting method, victory condition or
+> quorum type, and the GET reads a value stored before that check (or a null)
+> as the built-in. A default quorum, which the form has no control for, is
+> shown on the form as a read-only line. Accepted limit: only the form reads
+> the defaults, so an election created directly through the API still takes
+> the schema's own. Covered by `tests/test_election_defaults.py`,
+> `ElectionsPage.defaults.test.tsx`, `ElectionsSettingsPage.test.tsx` and
+> `utils/electionDefaults.test.ts`. The history below is kept as the record.
+
 `PATCH /elections/settings` accepts `default_voting_method`,
 `default_victory_condition`, `default_victory_percentage`,
 `default_anonymous_voting`, `default_allow_write_ins`, `default_quorum_type` and
@@ -6349,7 +6386,7 @@ not), no frontend code reads them (the only references are the type definition
 and one test fixture), and the settings screen renders no control for any of
 them.
 
-The wiki already says so: _"there are no organization-wide defaults for those voting options"_
+The wiki already says so: _"there are no organization-wide election defaults"_
 (`wiki/Module-Elections.md`, Election Settings). The API disagrees with it in
 the one place a person or an integrator would look. A client that PATCHes
 `default_voting_method: "ranked_choice"` gets a 200 and sees the value come back

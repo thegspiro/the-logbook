@@ -13,18 +13,24 @@
  * new items in the ballot builder. Nothing here changes an election that
  * already exists.
  *
- * There is deliberately no "Defaults" section. `election_defaults` (voting
- * method, victory condition, quorum, anonymity, write-ins) is stored by
- * PATCH /elections/settings, but neither the create-election form nor the
- * backend create path reads it, so a control for it would claim an effect it
- * does not have (CLAUDE.md pitfall #19). Every write sends the settings object
- * as loaded, so the stored values still round-trip unchanged.
+ * Defaults are the values the create-election form starts from (ELEC2-9).
+ * Only that form reads them: an election created straight through the API
+ * still takes the schema's own defaults.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
-import { Loader2, Settings as SettingsIcon, UserCheck, ToggleRight, Send, ShieldCheck, Vote } from 'lucide-react';
+import {
+  Loader2,
+  Settings as SettingsIcon,
+  UserCheck,
+  ToggleRight,
+  Send,
+  ShieldCheck,
+  SlidersHorizontal,
+  Vote,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { ElectionSettings, ElectionListItem, EligibilityDefaults } from '../types/election';
@@ -38,13 +44,15 @@ import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
+import { ElectionDefaultsSection } from '../modules/elections/components/ElectionDefaultsSection';
 
-type SectionKey = 'proxy' | 'eligibility' | 'features' | 'test' | 'security';
+type SectionKey = 'proxy' | 'eligibility' | 'features' | 'defaults' | 'test' | 'security';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'proxy', label: 'Proxy Voting', icon: UserCheck, description: 'Voting on behalf of an absent member' },
   { key: 'eligibility', label: 'Voter Eligibility', icon: Vote, description: 'Who may vote, by default' },
   { key: 'features', label: 'Features', icon: ToggleRight, description: 'Optional election workflows' },
+  { key: 'defaults', label: 'Defaults', icon: SlidersHorizontal, description: 'Where a new election starts' },
   { key: 'test', label: 'Test Ballot', icon: Send, description: 'Preview the voting experience' },
   { key: 'security', label: 'Security', icon: ShieldCheck, description: 'Integrity guarantees in force' },
 ];
@@ -172,9 +180,11 @@ export const ElectionsSettingsPage: React.FC = () => {
   const updateField = <K extends keyof ElectionSettings>(
     key: K,
     value: ElectionSettings[K],
-    { immediate = true }: { immediate?: boolean } = {}
-  ) => {
-    const next = { ...settingsRef.current, [key]: value };
+    options: { immediate?: boolean } = {}
+  ) => updateFields({ [key]: value }, options);
+
+  function updateFields(patch: Partial<ElectionSettings>, { immediate = true }: { immediate?: boolean } = {}) {
+    const next = { ...settingsRef.current, ...patch };
     settingsRef.current = next;
     setSettings(next);
     const write = () => electionService.updateSettings(settingsRef.current);
@@ -183,7 +193,7 @@ export const ElectionsSettingsPage: React.FC = () => {
     } else {
       saveDebounced('election-settings', write, { errorMessage: 'Failed to save settings' });
     }
-  };
+  }
 
   const activeSection: SectionKey = isSectionKey(searchParams.get('tab'))
     ? (searchParams.get('tab') as SectionKey)
@@ -351,6 +361,17 @@ export const ElectionsSettingsPage: React.FC = () => {
           </div>
         );
       }
+
+      case 'defaults':
+        return (
+          <div>
+            <SettingsPanelHead
+              title="Defaults"
+              description="Where the Create Election form starts. Officers can still change any of these for one election, and elections already created are not affected."
+            />
+            <ElectionDefaultsSection settings={settings} onChange={updateFields} />
+          </div>
+        );
 
       case 'proxy':
         return (

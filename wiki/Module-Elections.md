@@ -779,20 +779,16 @@ with status badges and links.
 
 ## Election Settings
 
-`/elections/settings` (`elections.manage`) has five sections:
+`/elections/settings` (`elections.manage`) has six sections:
 
 | Section               | Contents                                                       |
 | --------------------- | -------------------------------------------------------------- |
 | **Proxy Voting**      | Enable/disable proxy voting; **Max Proxies Per Person** (1–10) |
 | **Voter Eligibility** | Default voter rules for new elections (below)                  |
 | **Features**          | Per-department feature toggles (below)                         |
+| **Defaults**          | Where a new election's form starts (below)                     |
 | **Test Ballot**       | **Send Test Ballot** to preview the voting experience          |
 | **Security**          | The integrity guarantees in force                              |
-
-Every election's voting options (method, victory condition, anonymity,
-write-ins, results visibility, runoffs) are chosen on its own create form;
-there are no organization-wide defaults for those voting options. Voter
-eligibility is the exception: see [Voter Eligibility Defaults](#voter-eligibility-defaults).
 
 ### Voter Eligibility Defaults
 
@@ -832,6 +828,18 @@ defaults above, and an election copies the set for its kind:
 - **Runoffs and clones** keep the kind.
 
 The membership tier rules apply at both kinds of meeting.
+
+### Defaults
+
+The **Create Election** form starts from the department's defaults (since
+2026-10-29, ELEC2-9): the winner rule and its percentage, anonymous voting,
+write-ins, and the quorum. An officer can change any of them on one election,
+and elections already created are unaffected. With nothing saved, the form
+starts where it always did: most votes wins, anonymous, no write-ins, no
+quorum. The form has no quorum control of its own, so a default quorum shows
+there as a read-only line. Only the form reads these: an election created
+directly through the API takes the schema's own defaults. Runoffs and results
+visibility have no default and are set on each election.
 
 ### Feature Toggles
 
