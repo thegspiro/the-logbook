@@ -1287,7 +1287,9 @@ async def _accepted_member_status_or_400(
     organization = org_result.scalar_one_or_none()
     settings = (organization.settings if organization else None) or {}
     tiers = (settings.get("membership_tiers") or {}).get("tiers") or []
-    tier_ids = [t.get("id") for t in tiers if isinstance(t, dict) and t.get("id")]
+    tier_ids: list[str] = [
+        str(t["id"]) for t in tiers if isinstance(t, dict) and t.get("id")
+    ]
     if canonical not in accepted_member_statuses(tier_ids):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -644,6 +644,9 @@ class ElectionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Organization id -> the tier "Counts as" map, read once per request;
+        # see ``_ranks_as_for_org``.
+        self._ranks_as_cache: Dict[str, Dict[str, str]] = {}
 
     @overload
     @staticmethod
@@ -860,18 +863,15 @@ class ElectionService:
         if not organization_id:
             return {}
         key = str(organization_id)
-        cache = getattr(self, "_ranks_as_cache", None)
-        if cache is None:
-            cache = self._ranks_as_cache = {}
-        if key not in cache:
+        if key not in self._ranks_as_cache:
             from app.services.membership_tier_service import MembershipTierService
 
             result = await self.db.execute(
                 select(Organization).where(Organization.id == key)
             )
-            org = result.scalar_one_or_none()
-            cache[key] = MembershipTierService.ranks_as_by_tier(org)
-        return cache[key]
+            org: Optional[Organization] = result.scalar_one_or_none()
+            self._ranks_as_cache[key] = MembershipTierService.ranks_as_by_tier(org)
+        return self._ranks_as_cache[key]
 
     async def _user_has_role_type(self, user: User, role_types: List[str]) -> bool:
         """

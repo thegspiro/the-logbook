@@ -2862,7 +2862,7 @@ def position_kind_for(slug: str | None) -> str:
         return POSITION_KIND_OFFICE
     definition = DEFAULT_POSITIONS.get(slug)
     if definition and definition.get("kind") in POSITION_KINDS:
-        return definition["kind"]
+        return str(definition["kind"])
     if slug in SYSTEM_POSITION_SLUGS:
         return POSITION_KIND_SYSTEM
     return POSITION_KIND_OFFICE

@@ -309,7 +309,7 @@ class MembershipTierService:
         return None
 
     @staticmethod
-    def ranks_as_by_tier(organization: Organization) -> Dict[str, str]:
+    def ranks_as_by_tier(organization: Optional[Organization]) -> Dict[str, str]:
         """tier id (canonical) -> the built-in status it counts as.
 
         Only tiers that declare ``ranks_as`` appear; a tier without one counts
@@ -338,7 +338,7 @@ class MembershipTierService:
         """
         stored = getattr(member, "member_status", None)
         if stored:
-            return stored
+            return str(stored)
         _cls, status = split_membership_type(getattr(member, "membership_type", None))
         if status:
             return status
