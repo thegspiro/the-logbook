@@ -1,6 +1,6 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 19 (this PR)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19), 2026-10-29 (pass 20) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3740](https://github.com/thegspiro/the-logbook/pull/3740) (pass 19 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 20 (this PR)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (94 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
@@ -17,6 +17,87 @@ that tree changed this pass)
 `a8c3b50b6d9b_nfc_card_taps_and_auto_suspend`
 
 ---
+
+## Pass 20 (2026-10-29, watchdog pickup) — near-zero delta, one wording-only refusal fix, 0 fixed, 0 new findings
+
+**Watchdog pickup.** `list_pull_requests` (state=open) returned 0 PRs with a
+`claude/security-review-*` head branch, and no Claude session was reachable
+via `ListAgents` (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #3832
+(Feature 12, Facilities, pass 13) had already merged (`3949326e`); this
+pickup followed promptly rather than waiting for the next scheduled tick.
+`PROGRESS.md`'s rotation table had row 13 (Apparatus & NFC) as the first
+`⬜`, matching PR #3832's own "Next feature" note.
+
+### Scope and delta
+
+Baseline: pass 19's merge (`1dfe6f47`, PR #3740). `git log 1dfe6f47..HEAD`
+restricted to this feature's full declared scope (`apparatus.py`,
+`apparatus_service.py`, `evoc_level_service.py`,
+`driver_exception_service.py`, `external_apparatus_service.py`,
+`nfc_tags.py`, `nfc_tag_service.py`, `nfc_card_admin_service.py`,
+`nfc_card_status_sync.py`, `mcp/tools/apparatus.py`, `models/nfc_tag.py`,
+`schemas/nfc_tag.py`, `frontend/src/modules/apparatus`) returns exactly
+one non-merge commit, `4cac9ff2` ("Keep three refusals within what
+safe_error_detail lets through"), read in full:
+
+- **`evoc_level_service.py` (1 line)** — `delete_evoc_level`'s refusal
+  message ("Cannot delete EVOC level that is assigned to apparatus...")
+  previously said "Remove the EVOC requirement from those apparatus
+  first.", which matches `safe_error_detail`'s `DELETE ... FROM` SQL-sniff
+  pattern and so was replaced with the generic "An unexpected error
+  occurred." Reworded to "Clear the EVOC requirement on those apparatus
+  first." — same meaning, no longer matches the pattern. Pure wording; the
+  method's query (`Apparatus.required_evoc_level_id == level_id AND
+Apparatus.organization_id == organization_id`) is untouched, and this is
+  a different method from `check_evoc_eligibility` (the one AP2-4 concerns,
+  defined further down the same file) — confirmed by reading both in
+  place, not by proximity in the diff. This is the same cross-cutting
+  refusal-message-capping commit already independently reviewed for
+  Documents & legal (PR #3816) and Facilities (PR #3832); its only new
+  touch in this feature's scope is this one line.
+
+No other file in the declared scope has a single commit since pass 19.
+`frontend/src/modules/apparatus`, `nfc_tags.py`, `nfc_tag_service.py`,
+`nfc_card_admin_service.py`, `nfc_card_status_sync.py`, `mcp/tools/
+apparatus.py`, `models/nfc_tag.py`, and `schemas/nfc_tag.py` are all
+byte-identical to pass 19.
+
+### Route inventory
+
+Re-enumerated **by AST** (not `grep -c`) this pass: `apparatus.py` **94**,
+`nfc_tags.py` **11** — both unchanged from pass 19.
+`check_route_permissions.py --strict` (repo-wide): 280 routes, 0 errors,
+0 warnings.
+
+### Standing flagged item (unchanged)
+
+**AP2-4** (MED, app-review, mirrored in `KNOWN_LIMITATIONS.md`) re-confirmed
+unchanged — `check_evoc_eligibility` (the eligibility-check method AP2-4
+concerns) has zero commits in this pass's delta; the one touched line this
+pass is in a different method (`delete_evoc_level`) and changes only a
+refusal's wording, not any query or the fail-open verdict AP2-4 describes.
+
+## Findings (pass 20)
+
+None new. The one real change this pass is a one-line error-message reword
+with no query, permission, or org-scoping content — verified by reading
+the method in full, not inferred from the commit's stated intent. AP2-4
+remains the only standing item.
+
+## Completion gate (pass 20)
+
+| Check                                                                       | Result                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                               | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                                        | ✅ 2725 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/`                                   | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                           | ✅ 669 revisions, single head                    |
+| `python3 scripts/check_route_permissions.py --strict`                       | ✅ 280 routes, 0 errors/0 warnings               |
+| Scoped backend pytest (`-k "apparatus or nfc or evoc or driver_exception"`) | ✅ 1377 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                          | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                               | ✅ 0 errors, 0 warnings                          |
+| `npx vitest run src/modules/apparatus`                                      | ✅ 114 passed (15 files)                         |
 
 ## Pass 19 (2026-10-26, watchdog pickup) — real delta: Member ID Cards admin surface (NFC tap log, bulk revoke, coverage report), 0 fixed, 0 new findings
 
