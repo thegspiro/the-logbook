@@ -1339,10 +1339,13 @@ class SchedulingService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = 100,
         open_to_all_only: bool = False,
     ) -> Tuple[List[Shift], int]:
         """Get shifts with date filtering and pagination.
+
+        ``limit=None`` returns every shift in the range: the calendar views
+        pass it, because their date range is the bound.
 
         ``open_to_all_only`` keeps just the shifts flagged
         ``open_to_all_members`` — the set every eligible member can see
@@ -1364,13 +1367,11 @@ class SchedulingService:
 
         # Paginated results. The id breaks ties between shifts sharing a
         # date and start time, so a page boundary never repeats or skips one.
-        query = (
-            query.order_by(
-                Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
-            )
-            .offset(skip)
-            .limit(limit)
-        )
+        query = query.order_by(
+            Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+        ).offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.db.execute(query)
         shifts = list(result.scalars().all())
 
@@ -3421,17 +3422,22 @@ class SchedulingService:
     async def get_week_shifts(
         self, organization_id: UUID | str, week_start: date
     ) -> List[Shift]:
-        """Get all shifts for a specific week"""
+        """Get all shifts for a specific week.
+
+        Uncapped: a fixed cap of 500 silently dropped the end of the range
+        for a department running enough units, with nothing on screen to say
+        so. Seven days of one department's shifts is the bound.
+        """
         week_end = week_start + timedelta(days=6)
         shifts, _ = await self.get_shifts(
-            organization_id, start_date=week_start, end_date=week_end, limit=500
+            organization_id, start_date=week_start, end_date=week_end, limit=None
         )
         return shifts
 
     async def get_month_shifts(
         self, organization_id: UUID | str, year: int, month: int
     ) -> List[Shift]:
-        """Get all shifts for a specific month"""
+        """Get all shifts for a specific month, uncapped (see get_week_shifts)."""
         start = date(year, month, 1)
         if month == 12:
             end = date(year + 1, 1, 1) - timedelta(days=1)
@@ -3439,7 +3445,7 @@ class SchedulingService:
             end = date(year, month + 1, 1) - timedelta(days=1)
 
         shifts, _ = await self.get_shifts(
-            organization_id, start_date=start, end_date=end, limit=500
+            organization_id, start_date=start, end_date=end, limit=None
         )
         return shifts
 

@@ -793,6 +793,33 @@ class TestCalendarHelpers:
         assert len(shifts) >= 1
 
     @pytest.mark.asyncio
+    async def test_month_view_is_not_capped_at_500(
+        self, db_session, setup_org_and_users
+    ):
+        """A fixed cap of 500 silently dropped the end of a busy month."""
+        from app.models.training import Shift
+
+        org_id, user_id, _ = setup_org_and_users
+        year, month = 2031, 3
+        db_session.add_all(
+            Shift(
+                organization_id=org_id,
+                shift_date=date(year, month, 1 + i % 28),
+                start_time=datetime(year, month, 1 + i % 28, i % 24, 0),
+                created_by=user_id,
+            )
+            for i in range(510)
+        )
+        await db_session.flush()
+
+        shifts = await SchedulingService(db_session).get_month_shifts(
+            uuid.UUID(org_id), year, month
+        )
+
+        assert len(shifts) == 510
+        assert shifts[-1].shift_date == date(year, month, 28)
+
+    @pytest.mark.asyncio
     async def test_get_summary(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)

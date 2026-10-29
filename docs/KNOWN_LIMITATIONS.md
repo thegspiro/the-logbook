@@ -2494,6 +2494,9 @@ recorded here rather than built.
    `get_month_shifts` and `get_week_shifts` pass `limit=500`, so a department
    running enough units with day and night shifts loses the end of the month
    from the calendar.
+   **Resolved (2026-10-29), owner decision: load every shift in range.** Both
+   now pass no limit; the week or month is the bound. Covered by
+   `test_month_view_is_not_capped_at_500`.
 8. **Driver/EVOC enforcement knows the seat named `driver` only.** Custom
    seat names are stored as typed, so a department that names its wheel seat
    "Engineer" or "Driver/Operator" seats members without the required EVOC
