@@ -151,8 +151,8 @@ export const MedicalScreeningPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="page-header mb-6 gap-3 sm:items-center">
+        <div className="page-header-title flex items-center gap-3">
           <Stethoscope className="text-theme-text-muted h-6 w-6 shrink-0" />
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">Medical Screening</h1>

@@ -528,8 +528,8 @@ export default function RoomQRCodesPage() {
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Locations
         </Link>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="page-header gap-3 sm:items-center">
+          <div className="page-header-title">
             <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Check-In QR Codes</h1>
             <p className="text-theme-text-secondary mt-1">
               {layout === 'grid'
@@ -537,7 +537,7 @@ export default function RoomQRCodesPage() {
                 : 'Full-page signs, one code per printed page — post them on doors and dashboards.'}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             {canViewReaders && (
               <Link
                 to="/locations/card-readers"

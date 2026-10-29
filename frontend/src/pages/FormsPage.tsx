@@ -498,8 +498,8 @@ const FormsPage: React.FC = () => {
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Page Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="page-header mb-8 gap-3 sm:items-center">
+          <div className="page-header-title flex items-center space-x-3">
             <div className="shrink-0 rounded-lg bg-red-800 p-2">
               <FormInput className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
@@ -510,7 +510,7 @@ const FormsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 void loadData();

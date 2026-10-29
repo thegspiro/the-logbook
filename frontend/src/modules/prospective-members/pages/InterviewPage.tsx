@@ -585,8 +585,8 @@ export const InterviewPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="page-header mb-6 gap-3 sm:items-center">
+        <div className="page-header-title flex items-center gap-3">
           <button
             type="button"
             onClick={() => void navigate('/prospective-members')}

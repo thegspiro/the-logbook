@@ -84,8 +84,8 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   );
 
   const header = embedded ? (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div>
+    <div className="page-header mb-6 gap-3 sm:items-start">
+      <div className="page-header-title">
         {/* Embedded, the Events hub's section nav already names this page,
             so the title stays for heading navigation only and the hub
             keeps the page's one <h1>. */}

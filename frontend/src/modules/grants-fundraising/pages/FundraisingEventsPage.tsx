@@ -85,8 +85,8 @@ const FundraisingEventsPage: React.FC = () => {
   const campaignNames = useMemo(() => new Map(campaigns.map((c) => [c.id, c.name])), [campaigns]);
 
   const header = (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
+    <div className="page-header gap-4 sm:items-center">
+      <div className="page-header-title">
         <h1 className="text-theme-text-primary text-2xl font-bold">Fundraising Events</h1>
         <p className="text-theme-text-secondary mt-1 text-sm">
           Dinners, raffles and other events, and what each raised

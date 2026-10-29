@@ -214,12 +214,12 @@ const BudgetsPage: React.FC = () => {
       <Breadcrumbs />
 
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="page-header gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-2xl font-bold">Budgets</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Budgeted, spent, and encumbered amounts by category</p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="page-header-actions flex flex-col flex-wrap gap-2 sm:flex-row sm:items-center">
           <select
             value={selectedFiscalYear}
             onChange={(e) => {

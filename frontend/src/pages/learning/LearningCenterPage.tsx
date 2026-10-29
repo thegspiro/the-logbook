@@ -24,8 +24,8 @@ export default function LearningCenterPage() {
 
   return (
     <div data-page-main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <div className="page-header mb-8 gap-4 sm:items-start">
+        <div className="page-header-title">
           <div className="mb-2 flex items-center gap-2">
             <BookOpenCheck className="h-7 w-7 text-cyan-700 dark:text-cyan-400" aria-hidden="true" />
             <h1 className="text-theme-text-primary text-3xl font-bold">Learning Center</h1>

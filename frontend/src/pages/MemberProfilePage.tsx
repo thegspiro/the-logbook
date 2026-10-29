@@ -827,8 +827,8 @@ export const MemberProfilePage: React.FC = () => {
           </button>
 
           <div className="card p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-center gap-4">
+            <div className="page-header gap-3 sm:items-start">
+              <div className="page-header-title flex items-center gap-4">
                 {/* Profile Photo with Upload */}
                 <div className="group relative">
                   {user.photo_url ? (
@@ -930,7 +930,7 @@ export const MemberProfilePage: React.FC = () => {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="page-header-actions flex flex-wrap items-center gap-2">
                 {canViewIdCard && (
                   <Link
                     to={`/members/${userId}/id-card`}

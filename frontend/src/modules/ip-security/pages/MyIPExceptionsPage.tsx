@@ -47,8 +47,8 @@ const MyIPExceptionsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+        <div className="page-header mb-6 gap-3 sm:items-center">
+          <div className="page-header-title flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-blue-600 p-2">
               <Shield className="h-5 w-5 text-white" />
             </div>
@@ -57,7 +57,7 @@ const MyIPExceptionsPage: React.FC = () => {
               <p className="text-theme-text-muted text-sm">Request an IP exception and track its status</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowForm(!showForm)}
               className="rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"

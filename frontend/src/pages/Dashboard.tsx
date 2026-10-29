@@ -1825,8 +1825,8 @@ const Dashboard: React.FC = () => {
             figure with no way to see what it was made of. */}
         <div className="mb-5 sm:mb-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{greeting}</h1>
+            <div className="page-header-title">
+              <h1 className="text-theme-text-primary text-2xl font-bold break-words sm:text-3xl">{greeting}</h1>
               <p className="text-theme-text-muted mt-0.5 text-sm sm:text-base">
                 {formatDateCustom(new Date(), { weekday: 'long', month: 'long', day: 'numeric' }, tz)}
                 <span className="hidden sm:inline">{' · ' + departmentName}</span>

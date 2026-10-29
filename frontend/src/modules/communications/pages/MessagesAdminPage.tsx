@@ -190,8 +190,8 @@ const MessagesAdminPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
       <Breadcrumbs items={[{ label: 'Communications' }, { label: 'Messages' }]} />
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
+      <div className="page-header mb-4 gap-3 sm:items-center">
+        <h1 className="page-header-title text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
           <Megaphone className="h-6 w-6 shrink-0" aria-hidden="true" />
           Department Messages
         </h1>

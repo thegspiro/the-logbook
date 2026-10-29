@@ -268,8 +268,8 @@ export const SavedReportsPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Reports
         </Link>
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        <div className="page-header mb-6 gap-3 sm:items-start">
+          <div className="page-header-title">
             <h1 className="text-theme-text-primary text-3xl font-bold">Saved Reports</h1>
             <p className="text-theme-text-secondary mt-1">
               Reports saved with their settings. A scheduled report is emailed as a summary with a link back here; the

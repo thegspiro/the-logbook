@@ -1415,8 +1415,8 @@ export default function LocationsPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+      <div className="page-header gap-3 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">
             {isSingleStation ? 'Location & Rooms' : 'Locations & Rooms'}
           </h1>
@@ -1426,7 +1426,7 @@ export default function LocationsPage() {
               : 'Manage station addresses and room names for events, forms, and QR check-in'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 self-start lg:shrink-0 lg:self-auto">
+        <div className="page-header-actions flex flex-wrap items-center gap-2">
           {canExportQRCodes && (
             <Link
               to="/locations/qr-codes"

@@ -227,8 +227,8 @@ const CampaignsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="page-header gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-2xl font-bold">Fundraising Campaigns</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Track each campaign's progress toward its goal</p>
         </div>

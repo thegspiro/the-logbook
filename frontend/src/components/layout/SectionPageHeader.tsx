@@ -184,8 +184,8 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
     <div>
       <SectionNav items={items} active={active} label={stripLabel} accent={accent} />
       {trail.length > 0 && <Breadcrumbs items={trail} />}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 sm:flex-[1_1_16rem]">
+      <div className="page-header mb-8 gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
             <Icon className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
             <span className="min-w-0">{title}</span>
@@ -193,7 +193,7 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
           {subtitle && <div className="text-theme-text-muted mt-2">{subtitle}</div>}
         </div>
         {actions && (
-          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-[0_1_auto] sm:justify-end">{actions}</div>
+          <div className="page-header-actions flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>
         )}
       </div>
     </div>

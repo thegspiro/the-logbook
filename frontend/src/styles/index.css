@@ -711,6 +711,47 @@
   );
 }
 
+/* --- Page header ---
+   A page's title on the left and its actions on the right, stacked on a phone.
+
+   The usual way to write this — `flex-col sm:flex-row sm:justify-between` with
+   an action group that cannot shrink — switches to a row at a fixed width and
+   then never wraps. Whether the row fits is decided by how many actions the
+   viewer is allowed and how long the title is, not by the viewport, and the
+   sidebar takes 256px of it from md up. It broke both ways: on /locations at
+   768px the buttons ran 14px off the screen, and on /inventory at 1280px the
+   buttons squeezed the title column to 169px and "Inventory Items" spilled out
+   of it.
+
+   So from `sm` up the row wraps on its content: the title keeps at least 16rem
+   and grows, and the actions sit beside it only while they fit, otherwise
+   dropping to their own line, still at the right. Display, wrapping, gap,
+   vertical alignment and margins stay with the call site, so a group reads the
+   same in the markup as any other flex row. */
+@utility page-header {
+  display: flex;
+  flex-direction: column;
+  @media (min-width: 640px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@utility page-header-title {
+  min-width: 0;
+  @media (min-width: 640px) {
+    flex: 1 0 16rem;
+  }
+}
+
+@utility page-header-actions {
+  min-width: 0;
+  @media (min-width: 640px) {
+    margin-left: auto;
+  }
+}
+
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
   /* red-800, not red-600. White on red-600 measures 4.83:1 — AA for large

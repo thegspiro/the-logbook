@@ -739,8 +739,8 @@ const NotificationsPage: React.FC = () => {
         <Breadcrumbs />
 
         {/* Page Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="page-header mb-8 gap-3 sm:items-center">
+          <div className="page-header-title flex items-center space-x-3">
             <div className="shrink-0 rounded-lg bg-orange-600 p-2">
               <Bell className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
