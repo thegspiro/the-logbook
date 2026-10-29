@@ -101,6 +101,16 @@ describe('purgeLocalMemberData', () => {
     expect(result.drafts).toBe(3);
   });
 
+  it('removes every saved department-store cart', async () => {
+    localStorage.setItem('store-cart-m1-w1', JSON.stringify({ lines: [{ productId: 'p1', quantity: 1 }] }));
+    localStorage.setItem('store-cart-m2-w1', JSON.stringify({ lines: [{ productId: 'p1', quantity: 1 }] }));
+
+    await purgeLocalMemberData();
+
+    expect(localStorage.getItem('store-cart-m1-w1')).toBeNull();
+    expect(localStorage.getItem('store-cart-m2-w1')).toBeNull();
+  });
+
   it('still clears the other stores when one throws', async () => {
     mockClearAllDrafts.mockImplementation(() => {
       throw new Error('localStorage unavailable (private browsing)');

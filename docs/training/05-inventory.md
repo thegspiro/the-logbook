@@ -854,7 +854,7 @@ Hand the item in as usual; it stays on your list until they confirm they have
 it."
 
 The notice appears on **Inventory Administration → Return Requests**, and as a
-"Pending return" row in **Needs attention**. When the gear arrives:
+"Pending return" row in **Waiting for action**. When the gear arrives:
 
 1. Open the notice and receive it.
 2. Choose the condition you see.
@@ -878,7 +878,7 @@ item and would end every other member's issuance.
 
 ![Receive Item for Nadia Belhaj's return of two pairs of Firefighting Gloves: Good chosen as the observed condition, the quantity box empty with the hint that the count must match the 2 the member reported, and Receive disabled](./images/05-96-receive-pool-return.png)
 
-![The top of Inventory Administration: Needs attention with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one](./images/05-97-needs-attention-pending-return.png)
+![The top of Inventory Administration: Waiting for action with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one](./images/05-97-needs-attention-pending-return.png)
 
 > **What if the gear came back another way?** If you take the item back through
 > **Return** on the members page, a pool return or a loan check-in, the
@@ -1198,7 +1198,7 @@ Needs the **Manage gear, uniforms and equipment** permission.
 3. Save.
 
 When the stock drops to or below the reorder point, the item appears in
-**Needs attention** and in the daily low-stock email.
+**Waiting for action** and in the daily low-stock email.
 
 ### Creating a Reorder Request
 
@@ -1256,7 +1256,7 @@ they can be issued at once.
 
 Pool items with a reorder point warn you when stock is low.
 
-**On the administration page.** **Needs attention** on **Inventory
+**On the administration page.** **Waiting for action** on **Inventory
 Administration** lists each low-stock category with what is on hand and its
 reorder level. The **Reorder Requests** card shows how many there are. The same
 list also flags maintenance that is due or overdue, overdue loans and overdue
@@ -1953,6 +1953,11 @@ Needs the **Manage gear, uniforms and equipment** permission.
    - **Item name**, **Asset tag** and **Serial number** print unless you switch
      them off. Leaving the name off gives a small tag's height to the code. The
      asset tag or serial number is left off anyway when it repeats the code.
+   - _(2026-10-27)_ A long item name wraps onto a second line in the preview
+     and the browser print, and only then ends in "…", so "Golf Shirt — XXL —
+     Unisex Short Sleeve" and its long-sleeve twin no longer print the same.
+     Label text prints in a plain sans-serif font (Arial or Helvetica), which a
+     thermal printer reproduces more cleanly at small sizes than a serif font.
    - **Location**, **Storage area** (the shelf's full path, such as `Supply
 Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
      on one extra line, in the order you pick them, space permitting.
@@ -1961,7 +1966,12 @@ Room > Rack A > Shelf 2`), **Category**, **Size** and **Condition** print
 5. Print one of three ways:
    - **PDF** (best for sticker and thermal printers): downloads a PDF sized to
      the exact label. Open it and print with your label printer selected.
-   - **Print Labels**: prints through your browser's print window.
+   - **Print Labels**: prints through your browser's print window, after the
+     **Before you print** checklist (see
+     [Before you print](#before-you-print-2026-10-27)). Browser prints of Code 128
+     barcodes used to come out as solid black boxes; the bars now print on a white
+     background. **Print** stays available after you change **Copies per item**;
+     it used to stay disabled until the page was reloaded. _(2026-10-28)_
    - **Print to _printer name_**: appears when your department has registered a
      network label printer. The labels go straight to it. See
      [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer).
@@ -2004,6 +2014,36 @@ and for this part of The Logbook. See
 > areas.
 
 ![The items list right after Add Item: the green line "1 item added. Label it now?" with Print label and Dismiss](./images/05-119-item-added-label-prompt.png)
+
+### Before you print _(2026-10-27)_
+
+A web page cannot choose the printer's paper. The printer feeds whatever stock
+its driver's paper size setting names, so a Rollo left on its 4" x 6"
+default prints a 2" x 1" job scaled onto the wrong size. So when you print
+through the browser, a **Before you print** window first names the settings to
+use in the print dialog, for the label size you chose:
+
+1. **Printer**: your label printer.
+2. **Paper size**: the label size by name, such as 2" x 1" for a roll, or
+   Letter (8.5" x 11") for an Avery sheet. For a roll it adds where to find it
+   (under "More settings"), and what to do if that size is not listed: add it
+   once in the printer driver's own preferences, then reopen the page.
+3. **Margins**: None for a roll, Default for a sheet.
+4. **Scale**: 100%, not "Fit to page", or barcodes may not scan.
+
+Select **Open print dialog** to carry on, or **Back** to change something
+first. Tick **Don't show again for _size_ on this computer** once that printer
+is set up: the checklist is skipped for that size in this browser only, and
+still shows for any other size, including each custom size. When no network
+printer is registered, the window also points to **Settings → Label
+Printers**, where an administrator can register one and skip the print dialog
+altogether.
+
+The checklist is not shown for **PDF**, **Print to _printer name_**, or on a
+phone or tablet, where printing always downloads the PDF.
+
+The same checklist runs on the shared label page used for apparatus, facility,
+member and storage-area labels. _(2026-10-28)_
 
 ### Choosing which items to label
 
@@ -2111,6 +2151,10 @@ It cannot open or withdraw their application.
 The shared label pages for these modules also offer four **Zebra** sizes
 (2" x 1", 3" x 1", 4" x 2" and 4" x 6"). Their print buttons read **PDF** and
 **Print in browser**, and the settings panel has **Download test label**.
+**Print in browser** shows the same
+[Before you print](#before-you-print-2026-10-27) checklist _(2026-10-27)_, and names wrap
+onto two lines there too. A size you have ticked **Don't show again** for
+stays skipped on every label page in that browser.
 
 ### Connecting a Sticker / Label Printer
 
@@ -2130,7 +2174,9 @@ a barcode that scans is to avoid any scaling.
    to a printer.
 4. When printing, choose the label printer, set **Scale** to **100%** (turn off
    "Fit to page" or "Shrink to fit"), set margins to **None**, and set the
-   paper size to the label size.
+   paper size to the label size. The **Before you print** checklist names
+   these for the size you chose. A Rollo finds the gap between labels on its
+   own, but its driver's paper size must still match the label.
 
 > **Rollo and other roll-fed printers.** Two Rollo sizes are built in: **Rollo
 > 4" x 6"** (portrait shipping labels) and **Rollo / Thermal 2" x 1"** (small
@@ -2296,7 +2342,7 @@ Keep track of inspections, repairs and other work on equipment.
 ### Viewing Maintenance Due
 
 On **Inventory Administration**, the **Maintenance** card shows how many items
-are due. **Needs attention** lists each item whose maintenance is due or
+are due. **Waiting for action** lists each item whose maintenance is due or
 overdue, with **Open item**.
 
 ### Creating a Maintenance Record
@@ -2417,7 +2463,7 @@ The **property return report** created when a member is dropped is a separate
 document. See
 [Membership > Member Status Management](./01-membership.md#member-status-management).
 
-![The Needs attention card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button](./images/05-132-departure-clearance-needs-attention.png)
+![The Waiting for action card on the Inventory Administration hub with an Unresolved departure clearance row: the member, one item outstanding, the due date and a Review button](./images/05-132-departure-clearance-needs-attention.png)
 
 ### Creating a Clearance
 
@@ -2427,7 +2473,7 @@ button to start a clearance by hand.
 1. Drop the member while they hold department property. The clearance is
    created with one line for each assignment, temporary loan and pool issuance
    they hold.
-2. On **Inventory Administration**, **Needs attention** shows "Unresolved
+2. On **Inventory Administration**, **Waiting for action** shows "Unresolved
    departure clearance · _member_ · _n_ outstanding". Select **Review**.
 3. The clearance shows the totals (items, resolved, **Outstanding**, **Value
    outstanding**) and every line, with how it was held and what has happened to
@@ -2745,12 +2791,12 @@ manage inventory.
 
 The **Overview** dashboard shows:
 
-1. **Needs attention** (officers who can manage inventory). One list of work
+1. **Waiting for action** (officers who can manage inventory). One list of work
    waiting on you, most urgent first: overdue deliveries, gear requests,
    pending returns, pending write-offs, low-stock items, maintenance due,
    overdue loans and unresolved departure clearances. Each row has an action,
    such as **Review**, **Receive**, **Check in** or **Open item**. When it is
-   empty it reads "Nothing needs attention. All inventory work is up to date."
+   empty it reads "Nothing is waiting for action. All inventory work is up to date."
 2. **Finish inventory setup**, until rooms, storage areas, categories and items
    all exist (see [First-Run Setup](#first-run-setup)).
 3. **Supply lines**: three large cards for the stock a department appoints

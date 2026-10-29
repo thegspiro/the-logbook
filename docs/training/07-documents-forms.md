@@ -316,7 +316,51 @@ For each field you can set:
   ZIP code), or minimum and maximum values;
 - the options, for dropdowns, multi-selects, checkboxes and radio buttons;
 - **Conditional Visibility** — show the field only when another question has a
-  certain answer.
+  certain answer;
+- **Sensitive** — keep the answers encrypted and restricted (see below).
+
+### Sensitive fields _(2026-10-26)_
+
+Some questions need more protection than the rest of the form: criminal
+history, driving record or medical history, for example. Tick **Sensitive**
+under **Required** in the field's settings, then select **Update Field** (or
+**Add Field**). The field shows a **Sensitive** badge in the builder. A
+duplicated field stays sensitive.
+
+**Who can read the answers.** Only members who can manage forms
+(**forms.manage**) **and** hold **sensitive_answers.view** see answers to
+sensitive fields, with a lock icon beside each question. No position has
+**sensitive_answers.view** by default; out of the box only the IT Manager's
+full access includes it. Managing forms does not include it either. To let,
+say, your membership committee read these answers, an administrator adds it to
+their position (see
+[Managing Permissions](./08-admin-reports.md#managing-permissions)). Each time
+someone opens submissions with these answers shown, it is recorded in the
+audit log.
+
+**What everyone else sees.** A member who can manage forms but lacks the
+permission sees the other answers, and the note _"Restricted: this submission
+has answers to sensitive questions, which you do not have permission to
+view."_ The **Results** tab leaves sensitive questions out for them.
+
+**Limits.**
+
+- **Export CSV** never includes sensitive answers, whoever downloads it.
+- **Integrations** never receive them. If a form that feeds another module
+  (for example **Membership Interest**) has a sensitive field, publishing it
+  warns that the module receives none of those answers. On a **Membership
+  Interest** form, marking the name or email field sensitive means no
+  prospective member is created.
+- **The person filling in the form** sees the note _"This answer is stored
+  encrypted and is visible only to authorized staff."_ under the question.
+  This includes a public or embedded form. They are not shown their answer
+  back after submitting.
+- **Marking an existing field sensitive** encrypts the answers already
+  received. It does not reach copies an integration already made, such as a
+  prospective member created from the form earlier. Mark fields sensitive
+  before you publish.
+- **You cannot un-mark it** once any answer is stored this way, because that
+  would turn encrypted answers back into plain text.
 
 ### Conditional visibility (branching)
 
@@ -507,8 +551,12 @@ who can manage events. See
 2. **Responses** lists submissions, newest first, 20 to a page. Each shows who
    sent it (or **Anonymous**) and when. Select one to see every answer.
 3. **Export CSV** downloads the submissions on the page you are looking at,
-   with the time, the sender and every answer.
+   with the time, the sender and every answer except answers to
+   [sensitive fields](#sensitive-fields-2026-10-26), which are never exported.
 4. **Delete** removes a single submission.
+5. Answers to [sensitive fields](#sensitive-fields-2026-10-26) appear under a
+   lock icon for members who may read them; anyone else sees the _Restricted_
+   note instead.
 
 ![Form submissions table listing responses with their timestamps](./images/07-07-form-submissions.png)
 

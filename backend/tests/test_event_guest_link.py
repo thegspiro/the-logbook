@@ -270,6 +270,70 @@ class TestEndpointGates:
         cap.assert_not_awaited()
 
 
+@pytest.mark.unit
+class TestManagerSeesWhetherTheCodeWouldWork:
+    """The card hides the code exactly while a scan of it would be refused."""
+
+    def _response(self, **overrides):
+        return events_endpoints._guest_link_response(
+            _event(guest_check_in_token=TOKEN, **overrides)
+        )
+
+    def test_open_window_reports_open_with_its_bounds(self):
+        result = self._response()
+
+        assert result.is_open is True
+        assert result.closed_reason is None
+        opens = datetime.fromisoformat(result.check_in_opens_at)
+        closes = datetime.fromisoformat(result.check_in_closes_at)
+        assert opens < datetime.now(timezone.utc) < closes
+        assert result.guest_token == TOKEN
+
+    def test_before_the_window_reports_closed(self):
+        now = datetime.now(timezone.utc)
+        result = self._response(
+            start_datetime=now + timedelta(hours=3),
+            end_datetime=now + timedelta(hours=5),
+        )
+
+        assert result.is_open is False
+        assert result.closed_reason == "Check-in for this event has not opened yet."
+        assert datetime.fromisoformat(result.check_in_opens_at) > now
+
+    def test_after_the_window_reports_closed(self):
+        now = datetime.now(timezone.utc)
+        result = self._response(
+            start_datetime=now - timedelta(hours=5),
+            end_datetime=now - timedelta(hours=3),
+        )
+
+        assert result.is_open is False
+        assert result.closed_reason == "Check-in has closed for this event."
+
+    def test_finalized_attendance_reports_closed_inside_the_window(self):
+        result = self._response(attendance_finalized_at=datetime.now(timezone.utc))
+
+        assert result.is_open is False
+        assert result.closed_reason == "Attendance for this event has been closed."
+
+    def test_agrees_with_what_the_public_endpoint_enforces(self):
+        """One definition: the manager's view and the public gate cannot drift."""
+        now = datetime.now(timezone.utc)
+        cases = [
+            _event(),
+            _event(start_datetime=now + timedelta(hours=3)),
+            _event(attendance_finalized_at=now),
+        ]
+        for event in cases:
+            is_open, _reason = GuestCheckInService.guest_sign_in_state(event, now)
+            try:
+                display._assert_guest_sign_in_open(event)
+                accepted = True
+            except HTTPException:
+                accepted = False
+            assert accepted is is_open
+
+
 # ---- Integration: the real endpoints against the real schema ----
 
 

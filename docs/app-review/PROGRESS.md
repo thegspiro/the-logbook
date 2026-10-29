@@ -61,7 +61,7 @@ from its open list.
 | B20 | finance                    | FIN2   | ✅     |
 | B21 | orgs, roles & users        | ORU2   | ✅     |
 | B22 | compliance & skills        | CS2    | ✅     |
-| B23 | security, audit & IP       | SEC2   | ⬜     |
+| B23 | security, audit & IP       | SEC2   | ✅     |
 | B24 | core infra                 | CI2    | ⬜     |
 | B25 | onboarding                 | ONB2   | ⬜     |
 | B26 | public-portal              | PP2    | ⬜     |
@@ -3444,3 +3444,17 @@ secrets redacted for non-admins. See
   five checklist dimensions. Gate: flake8 / black / isort / mypy (changed schema) clean · 1,079 related
   tests pass · new file 40 pass, all `integration`. See compliance-skills.md → Pass 5. Next: B23 security,
   audit & IP.
+- **B23 security, audit & IP ✅ (pass 5) — three IP-exception state changes were unlocked
+  check-then-writes (SEC2-2).** This module has no route that updates a model row from a partial
+  payload (its `PUT`/`PATCH` routes write settings blobs), so the null-update method had nothing to
+  drive; the pass used the pitfall #27 lens on its approval workflows instead. **Fixed** —
+  `approve_exception`, `reject_exception` and `revoke_exception` read the `IPException` with a plain select
+  and then wrote status plus who acted, so two administrators acting on one request could each pass the
+  status check and leave an exception approved with a rejection's attribution beside it; the three
+  lookups are now `FOR UPDATE`. The new unit test pins the locking read (the race needs two connections)
+  and fails for all three with the change stashed. **Verified good:** alert acknowledge/resolve are
+  locked, guarded and tested; the audit chain's head lock; the weekly report's send-then-stamp order;
+  all 37 endpoints in the four files carry an auth dependency. **Not done:** a duplicate pending
+  request from one member is not refused. **Not re-run:** the other five checklist dimensions; SEC-2's
+  tail-truncation residual stays open. Gate: flake8 / black clean · 1,298 related tests pass · new file
+  3 pass, unit-marked. See security-audit-ip.md → Pass 5. Next: B24 core infra.

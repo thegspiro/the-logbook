@@ -1,27 +1,30 @@
 import React from 'react';
 import { Route, Navigate } from 'react-router';
-import {
-  Welcome,
-  OnboardingCheck,
-  OrganizationSetup,
-  StationSetup,
-  ApparatusSetup,
-  NavigationChoice,
-  EmailPlatformChoice,
-  EmailConfiguration,
-  FileStorageChoice,
-  FileStorageConfiguration,
-  AuthenticationChoice,
-  ITTeamBackupAccess,
-  PositionSetup,
-  ModuleOverview,
-  SystemOwnerCreation,
-  KeyCustody,
-  SetupComplete,
-  SetupPrerequisites,
-} from './pages';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import { SecurityCheckPlaceholder } from './components/PlaceholderPages';
 import { OnboardingGate } from './components/OnboardingGate';
+
+// Lazy, like every other module's pages: a first-run wizard is visited once
+// per installation, and imported eagerly it was the largest part of the entry
+// chunk every member downloads on every visit.
+const Welcome = lazyWithRetry(() => import('./pages/Welcome'));
+const OnboardingCheck = lazyWithRetry(() => import('./pages/OnboardingCheck'));
+const OrganizationSetup = lazyWithRetry(() => import('./pages/OrganizationSetup'));
+const StationSetup = lazyWithRetry(() => import('./pages/StationSetup'));
+const ApparatusSetup = lazyWithRetry(() => import('./pages/ApparatusSetup'));
+const NavigationChoice = lazyWithRetry(() => import('./pages/NavigationChoice'));
+const EmailPlatformChoice = lazyWithRetry(() => import('./pages/EmailPlatformChoice'));
+const EmailConfiguration = lazyWithRetry(() => import('./pages/EmailConfiguration'));
+const FileStorageChoice = lazyWithRetry(() => import('./pages/FileStorageChoice'));
+const FileStorageConfiguration = lazyWithRetry(() => import('./pages/FileStorageConfiguration'));
+const AuthenticationChoice = lazyWithRetry(() => import('./pages/AuthenticationChoice'));
+const ITTeamBackupAccess = lazyWithRetry(() => import('./pages/ITTeamBackupAccess'));
+const PositionSetup = lazyWithRetry(() => import('./pages/RoleSetup'));
+const ModuleOverview = lazyWithRetry(() => import('./pages/ModuleOverview'));
+const SystemOwnerCreation = lazyWithRetry(() => import('./pages/AdminUserCreation'));
+const KeyCustody = lazyWithRetry(() => import('./pages/KeyCustody'));
+const SetupComplete = lazyWithRetry(() => import('./pages/SetupComplete'));
+const SetupPrerequisites = lazyWithRetry(() => import('./pages/SetupPrerequisites'));
 
 /** Wraps a setup step so a configured installation redirects to sign-in. */
 const gated = (page: React.ReactElement) => <OnboardingGate>{page}</OnboardingGate>;

@@ -172,7 +172,6 @@ async def test_property_return_email_releases_session_before_delivery(monkeypatc
             "performed_by_name": "Test Admin",
             "performed_by_title": "Chief",
         },
-        member_email="member@example.com",
     )
     assert session_was_open_during_send is False
 
@@ -248,7 +247,6 @@ async def test_default_property_return_email_escapes_html_but_not_text(monkeypat
             "performed_by_name": "Test Admin",
             "performed_by_title": "Chief",
         },
-        member_email="member@example.com",
     )
 
     html_body = captured["html_body"]
@@ -328,7 +326,107 @@ async def test_a_switched_off_member_dropped_template_sends_nothing(monkeypatch)
             "performed_by_name": "Test Admin",
             "performed_by_title": "Chief",
         },
-        member_email="member@example.com",
     )
 
     assert sends == []
+
+
+class TestMemberDroppedAttachments:
+    """The Member Dropped template allows attachments, so a department's
+    return form or checklist rides with the property-return email."""
+
+    async def _send(self, monkeypatch, tmp_path, allow_attachments):
+        from app.services import file_storage_service
+
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(tmp_path))
+        form = tmp_path / "org-1" / "email-attachments" / "tpl" / "f.pdf"
+        form.parent.mkdir(parents=True)
+        form.write_bytes(b"%PDF-1.4")
+        template = SimpleNamespace(
+            allow_attachments=allow_attachments,
+            attachments=[
+                SimpleNamespace(
+                    id="a-1", filename="Return Form.pdf", storage_path=str(form)
+                ),
+                # Another department's file is never attached.
+                SimpleNamespace(
+                    id="a-2", filename="Theirs.pdf", storage_path="/etc/passwd"
+                ),
+            ],
+        )
+        captured: dict = {}
+
+        class Result:
+            def scalar_one_or_none(self):
+                return SimpleNamespace(name="Test Department")
+
+        class Session:
+            async def execute(self, _query):
+                return Result()
+
+        async def get_session():
+            yield Session()
+
+        class TemplateService:
+            def __init__(self, _session):
+                pass
+
+            async def is_switched_off(self, *_args):
+                return False
+
+            async def get_template(self, *_args):
+                return template
+
+            def render(self, *_args, **_kwargs):
+                return ("Edited subject", "<p>Edited</p>", "Edited")
+
+        class EmailService:
+            def __init__(self, _organization):
+                pass
+
+            async def send_email(self, **kwargs):
+                captured.update(kwargs)
+
+        monkeypatch.setattr(
+            "app.api.v1.endpoints.member_status.database_manager.get_session",
+            get_session,
+        )
+        monkeypatch.setattr("app.services.email_service.EmailService", EmailService)
+        monkeypatch.setattr(
+            "app.services.email_template_service.EmailTemplateService",
+            TemplateService,
+        )
+
+        await _send_property_return_email(
+            organization_id="org-1",
+            to_emails=["member@example.com"],
+            cc_emails=[],
+            report_data={
+                "member_name": "Test Member",
+                "drop_type_display": "Voluntary",
+                "effective_date": "2026-08-12",
+                "return_deadline": "2026-08-26",
+                "item_count": 0,
+                "items": [],
+                "total_value": 0,
+                "performed_by_name": "Test Admin",
+                "performed_by_title": "Chief",
+            },
+        )
+        return captured, form
+
+    async def test_the_templates_attachments_are_sent(self, monkeypatch, tmp_path):
+        captured, form = await self._send(monkeypatch, tmp_path, True)
+
+        assert captured["subject"] == "Edited subject"
+        assert captured["attachment_paths"] == [
+            (str(form.resolve()), "Return Form.pdf")
+        ]
+
+    async def test_none_when_the_template_does_not_allow_them(
+        self, monkeypatch, tmp_path
+    ):
+        captured, _form = await self._send(monkeypatch, tmp_path, False)
+
+        assert captured["subject"] == "Edited subject"
+        assert not captured.get("attachment_paths")

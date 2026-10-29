@@ -3025,10 +3025,18 @@ async def _event_for_guest_link(
 
 
 def _guest_link_response(event: Event) -> GuestCheckInLinkResponse:
+    is_open, closed_reason = GuestCheckInService.guest_sign_in_state(
+        event, datetime.now(dt_timezone.utc)
+    )
+    opens_at, closes_at = GuestCheckInService.guest_check_in_window(event)
     return GuestCheckInLinkResponse(
         event_id=str(event.id),
         allow_guest_check_in=bool(event.allow_guest_check_in),
         guest_token=event.guest_check_in_token,
+        is_open=is_open,
+        closed_reason=closed_reason,
+        check_in_opens_at=opens_at.isoformat(),
+        check_in_closes_at=closes_at.isoformat(),
     )
 
 

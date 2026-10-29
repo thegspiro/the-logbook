@@ -1,8 +1,137 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13)
 
 ---
+
+## Pass 14 (2026-10-28) — watchdog pickup: real delta (phone/address encryption, email-by-fingerprint rewrite across the self-access guard and every SQL email match, stage-linked email templates, applicant-facing next-meeting card + ICS, stale-application coordinator/applicant emails), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
+
+**Step 0/1.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results after PR #3810 (Feature 07, Users & organizations, pass 13)
+merged — the dedicated review session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remained unreachable throughout (confirmed via `ListAgents`). Rotation row 08
+(Membership pipeline) was confirmed the next `⬜` by reading `PROGRESS.md`'s
+rotation table directly on freshly fetched `main` (`5e8fa043`, PR #3810's
+merge commit).
+
+**Scope confirmation.** Rotation table row 08 plus this feature's established
+additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`,
+`utils/prospect_fields.py`, `frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `507ae1d0` (pass 13's merge commit, PR #3702). `git log
+--no-merges 507ae1d0..HEAD` over the declared scope: 12 non-merge commits, each
+read in full via `git show` (not sampled, not taken from commit titles alone).
+1,209 insertions / 324 deletions across 11 files.
+
+**The real delta, by area:**
+
+| Area                                                         | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Commits                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Phone/address encryption                                     | `prospective_members.phone`/`mobile`/`address_*` now `EncryptedText` (AES-256-GCM), reusing the already-reviewed column type pass 13 verified for `date_of_birth`. Nowhere in this feature's scope filters, sorts, or `LIKE`s these columns in SQL — every site is a plain ORM attribute read/write, which the transparent type handles correctly.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `fde3d647`                                                                            |
+| Email-by-fingerprint rewrite                                 | Every SQL comparison against `ProspectiveMember.email` (and `User.email` where this feature's service calls into it) now matches `email_hash` against `email_fingerprints()` — an HMAC-SHA256 list keyed on the current and legacy `ENCRYPTION_KEY`s, so lookups survive a key rotation. This is the applicant self-access guard's own matching logic (`prospect_privacy.py::_link_predicate`), plus five more SQL sites in `membership_pipeline_service.py` (search, member-match, bulk existing-member check, single lookup, duplicate check). Each rewrite traced individually against its pre-image; all preserve org-scoping and, for the guard, the exact set of records a caller is hidden from — only the email-matching predicate's implementation changed. `ProspectiveMember.email_hash` widened to nullable (mirrors `User.email_hash`; a raw-SQL insert that bypasses the ORM listener has no fingerprint and simply never matches — fails closed, not open, since `.in_()` excludes NULL).                                                                                                                                                                              | `b48d63f2`, `43c11090`, `d8d4e3f3` (mypy-only)                                        |
+| Stage-linked email templates                                 | An automated-email stage can now link a custom `EmailTemplate`; the send path resolves it with an explicit `organization_id` filter and a `template_type == CUSTOM` check (a system template is refused at save time with a 400, and a dangling/switched-off/non-custom link at send time falls back to the stage's own sections, logged as `stage_email_template_unavailable`). The per-stage custom message is pre-escaped (`html.escape`) and substituted into the template as a variable value through `EmailTemplateService.render()`'s `appendix_html` mechanism — not spliced into the template source — so `{{...}}` typed into a coordinator's message is never expanded as a second round of template syntax.                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `c91b309d`                                                                            |
+| Applicant-facing next-meeting card + `.ics`                  | New `GET /application-status/{token}/next-meeting.ics` (in `api/public/portal.py`, outside this feature's primary file scope but driven entirely by `MembershipPipelineService` methods reviewed here). Reviewed as this feature's surface: same token/length/charset validation and `validate_ip_rate_limit` as the existing status page, same `no-store, private` / `Referrer-Policy: no-referrer` / `X-Robots-Tag: noindex` headers, discloses nothing the status page itself would not (explicitly gated on the same `public_step_ids`/`show_future` checks). The `.ics` body goes through the pre-existing `_escape_ics()` helper (backslash/comma/newline escaping), not reimplemented. Every new event query (`_next_event_for_meeting_config`, `_linked_open_meeting_event`) filters `organization_id`. The nightly `roll_forward_missed_meeting` (called from `scheduled_tasks.py::run_prospect_attendance_advance`, itself outside this feature's scope) is safe to run twice: an open linked event is a no-op, a miss is recorded once per event (keyed in the activity log), and the link is unique on `(prospect_id, event_id)` — checked against CLAUDE.md Pitfall #36. | `2c95e130`                                                                            |
+| Applicant emails: from hand-built HTML to editable templates | `send_application_step_completed_email` / `send_application_status_link_email` replace inline `wrap_email_body(...)` construction with new `EmailTemplateType.APPLICATION_STEP_COMPLETED` / `APPLICATION_STATUS_LINK` templates. Confirmed `EmailTemplateService._replace_variables` HTML-escapes every substituted value by default (`escape_html=True`), with only a named allowlist (`_RAW_HTML_VARIABLES`) — system-built, already-safe HTML fragments — exempted; `applicant_name`/`step_name`/`custom_message` are not in that allowlist, so a name or stage name containing `<`/`&` cannot break out of the template markup. Failure logs now carry the prospect id rather than the email address (data-exposure checklist item, incidental fix).                                                                                                                                                                                                                                                                                                                                                                                                                              | `04af8b97`                                                                            |
+| Stale-application coordinator/applicant emails               | Closes a standing `KNOWN_LIMITATIONS` gap (Pitfall #19 shape): the pipeline's `notify_coordinator`/`notify_applicant` settings had a UI and were stored but nothing read them. Now sent through `EmailService.send_inactivity_warning_email` / `send_application_going_inactive_email`, org-scoped throughout, recipients filtered through the existing `recipients_for(..., EmailKind.MEMBERSHIP_ADMIN, ...)` preference mechanism (not a bare roster query), sent **before** the commit that records the warning (a reminder — a duplicate on retry is a nuisance, a silently-dropped one is the failure being fixed; CLAUDE.md Pitfall #36's "send, then stamp" branch, correctly chosen for this direction), and wrapped in its own `try/except` so a mail failure cannot fail or roll back the sweep. Log line passes `organization_id`/exception as arguments, not spliced into the message (Pitfall #33).                                                                                                                                                                                                                                                                      | `1a9810fc`, `f1d6b6d5` (docstring-only correction of the gap this commit then closed) |
+| Message-length fixes (no security content)                   | Two coordinator-facing `ValueError` messages (meeting-stage attendance refusal) were silently replaced by `safe_error_detail`'s generic fallback once over 300 characters; shortened and long names clipped. Fifteen more refusal messages across the codebase (one path through this feature) now use `list_within_detail_limit` so a long id/name list is truncated with a count instead of pushing the whole message over the cap. Pure UX fixes — the information they disclose (which ids/names) is already the caller's own data, already shown pre-fix when short enough.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `f21d8ea6`, `b4d9388a`                                                                |
+| Test fixtures                                                | `StageConfigModal.test.tsx` fixtures gained the `allow_embed` field the forms schema already required; no behavior change.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `749f90f4`                                                                            |
+
+**Tenant isolation re-derived on every new/changed by-id or by-email site**,
+not assumed from the diff's framing: `_link_predicate`'s rewritten
+fingerprint clause, `check_existing_members`, the bulk existing-member check
+(`func.lower(ProspectiveMember.email).in_(normalized)` →
+`ProspectiveMember.email_hash.in_([...])`), the single-lookup and duplicate-
+check sites, `_resolve_stage_template`, `_next_event_for_meeting_config`, and
+`_linked_open_meeting_event` — every one carries its pre-existing
+`organization_id`/`prospect.organization_id` filter unchanged; the rewrites
+only changed the email-matching predicate, never the scoping clause beside
+it.
+
+**Route enumeration (checklist §1/§2), done fresh via AST walk, not diffed:**
+**53 routes** in `membership_pipeline.py` — unchanged from pass 13 (and pass
+12). `git diff 507ae1d0..HEAD -- backend/app/api/v1/endpoints/membership_pipeline.py`
+is empty; the one new endpoint this pass (`next-meeting.ics`) was added to
+`api/public/portal.py`, outside this router, and is reviewed above as part of
+the feature's delta rather than counted in this file's route total.
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`** — the email
+search site that used to be an `ilike` is now an exact-match fingerprint `IN`
+(documented UX tradeoff, consistent with the same change already made this
+window to `forms_service.py`, `fundraising_service.py` and
+`storefront_service.py` outside this feature's scope). **No raw `csv.writer`,
+no `window.confirm`/`alert`/`prompt`** introduced in this window's commits or
+present anywhere in this feature's current scope (grepped fresh over the full
+frontend diff, not limited by file).
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages` does not appear
+  anywhere in this window's diff. **Still OPEN**, unchanged;
+  `docs/KNOWN_LIMITATIONS.md`'s entry still matches.
+- **MP-22** — `delete_prospect_document` and `_delete_inactive_prospects`
+  likewise do not appear in this window's diff. **Still OPEN**, unchanged;
+  owner-accepted tradeoff.
+
+Both re-confirmed by searching the actual diff text for the function names,
+not copied from the prior write-up.
+
+### Verified good ✅ (pass 14)
+
+- **The applicant self-access guard is unweakened by the fingerprint
+  rewrite**: `_link_predicate` still ORs the transfer-id clause with the
+  email-match clause; only the email clause's implementation changed, from a
+  plain lowercase SQL comparison (which would have silently stopped matching
+  anything the moment the column became ciphertext) to a fingerprint `IN`
+  against the HMAC-keyed `email_hash`. Traced end to end, not assumed from
+  the commit message.
+- **The new public `.ics` endpoint cannot disclose more than the status page
+  it is unlocked by**: same token validation, same rate limit, same
+  no-store/no-index headers, and the service method it calls shares the
+  exact stage/visibility gate (`_status_page_meeting`) the status page's own
+  `next_meeting` field uses — one definition, not two that could drift
+  (CLAUDE.md Pitfall #29).
+- **The stage-template appendix mechanism cannot be used to inject a second
+  round of `{{variable}}` expansion**: a coordinator's custom message is
+  substituted as a context value, not concatenated into the template source
+  before rendering, confirmed by reading `EmailTemplateService.render()`
+  directly rather than trusting the commit message's claim.
+- **Every new/changed email-sending path HTML-escapes caller-supplied names
+  by default**: confirmed in `_replace_variables` that escaping is the
+  default and the raw-HTML allowlist is a named, closed set that none of
+  this pass's new context keys (`applicant_name`, `step_name`,
+  `prospect_name`, `pipeline_stage`, `coordinator_name`) belong to.
+- **The nightly missed-meeting rollforward is idempotent** under CLAUDE.md
+  Pitfall #36: re-run with the same prospect/event state, it writes nothing
+  twice (checked the recorded-event-id set and the unique link constraint,
+  not just the docstring's claim).
+- **No regression on any previously-closed finding** (MP-1 through MP-9,
+  MP-11 through MP-21, MP-23 through MP-34) — none of their call sites
+  appear in this pass's diff.
+
+### Completion gate (pass 14)
+
+Run against CI's pinned toolchain (`flake8==7.4.1`, `black==26.10.1`,
+`isort==9.0.2`, confirmed installed at these exact versions before running)
+under `python3.13` (the sandbox's bare `python3` resolves to 3.11); frontend
+against the repo's existing `node_modules`.
+
+| Check                                                                         | Result                                                    |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                 | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/`                                          | ✅ 2714 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/`                                     | ✅ clean                                                  |
+| `python3.13 scripts/validate_migrations.py --strict`                          | ✅ 667 revisions, single head `b74bcce55c11`              |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)          | ✅ 279 routes, 0 errors, 0 warnings                       |
+| scoped backend pytest (`-k "membership or prospect or pipeline or election"`) | ✅ 1,972 passed, 1 skipped (environment-only, `py_vapid`) |
+| `cd frontend && npm run typecheck`                                            | ✅ 0 errors                                               |
+| `cd frontend && npm run lint`                                                 | ✅ 0 errors, 0 warnings                                   |
+| scoped frontend suite (`npx vitest run src/modules/prospective-members`)      | ✅ 316 passed (35 files)                                  |
+
+No application source file changed this pass (0 fixes — the real changes
+already landed on `main` via the twelve commits above, all independently
+tested and already merged). Every check above verifies that the delta which
+landed since pass 13 is sound, not that a new patch applied cleanly.
 
 ## Pass 13 (2026-10-25) — watchdog pickup: real delta (DOB/emergency-contact encryption, stage-email meeting fallback, 99-column NOT NULL sweep, auto-enrollment prerequisite skip), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
 

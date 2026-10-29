@@ -491,13 +491,19 @@ business and organization that supports the department.
 1. Select **Grants & Fundraising → Donors**, then **Add Donor**.
 2. Fill in the name, email, phone and address, and the **Donor Type**:
    Individual, Business, Foundation, Government or Other.
-3. For a business or foundation, add the **Company Name**.
+3. Names depend on the type. An **Individual** needs a first and last name.
+   Any other type (Business, Foundation, Government, Other) needs only the
+   **Organization Name**; a contact is optional. The list sorts an
+   organization by its name among the surnames and leads with that name when
+   there is no contact.
 4. Save.
 
 ### What the donor list shows
 
 For each donor: their contact details, **total donated**, how many donations,
-and the date of their last donation. Search by name or email, or filter by type.
+and the date of their last donation. Search by name or a complete email address
+(part of an address no longer matches, since addresses are stored encrypted),
+or filter by type.
 A donor's first and last donation dates use the department's date, so an evening
 gift is dated the day it was given.
 

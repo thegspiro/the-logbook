@@ -105,13 +105,14 @@ PUBLIC_PORTAL_FIELDS: tuple[PublicPortalField, ...] = (
     PublicPortalField(
         "stats",
         "total_volunteer_hours",
-        "Total volunteer hours recorded.",
+        "Volunteer hours this calendar year, in whole hours: approved admin "
+        "hours, completed training, and shift and event attendance.",
         False,
     ),
     PublicPortalField(
         "stats",
         "total_calls_ytd",
-        "Calls answered so far this year.",
+        "Calls recorded in call tracking so far this calendar year.",
         False,
     ),
     PublicPortalField(
@@ -123,7 +124,7 @@ PUBLIC_PORTAL_FIELDS: tuple[PublicPortalField, ...] = (
     PublicPortalField(
         "stats",
         "stations",
-        "Number of stations.",
+        "Number of Fire Station facilities, not counting archived ones.",
         False,
     ),
     PublicPortalField(

@@ -522,6 +522,10 @@ describe('EventQRCodePage', () => {
         event_id: '1',
         allow_guest_check_in: true,
         guest_token: GUEST_TOKEN,
+        is_open: true,
+        closed_reason: null,
+        check_in_opens_at: '2026-01-25T17:00:00Z',
+        check_in_closes_at: '2026-01-25T20:00:00Z',
       });
     });
 

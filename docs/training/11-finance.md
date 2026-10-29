@@ -252,7 +252,7 @@ As a finance manager, open **Finance > Budget requests** (or **Review requests**
    - **Approve as requested** — the requested amount becomes the line's budget.
    - **Approve a different amount** — enter the **Amount approved** and a note saying why (required).
    - **Decline** — a note saying why is required. The line's amount is not changed.
-5. Select **Record decision**. The owner and the submitter are emailed, and the list refreshes. To change a decision while the year is still a draft, filter to its status and select **Change**.
+5. Select **Record decision**. You cannot decide a request you submitted or one for a line your own position owns (a refusal with a message); a department with one finance manager grants **finance.manage** to a second member. The owner and the submitter are emailed, and the list refreshes. To change a decision while the year is still a draft, filter to its status and select **Change**.
 
 If the decision is refused (for example, an amount below what the line has already spent or committed), the reason is shown and nothing is saved.
 
@@ -1507,6 +1507,12 @@ the list it links to.
 2. Select **Record payment**. The amount is prefilled with what is still owed.
 3. Adjust the **amount received** (must be greater than zero), and optionally choose a **method** and enter a **reference** (check number, receipt number) and **notes**.
 4. Select **Record payment**.
+
+If the amount is more than the member still owes, you are asked first. Confirming
+records what is owed against the dues and the rest as a **donation** from the
+member, under no campaign, in **Fundraising**. A donor record is created for the
+member if they do not have one. If their dues are already paid, the whole amount
+is the donation. Choose **Change the amount** to go back instead.
 
 Every payment is recorded as its own entry in the member's payment history. The
 amount paid shown on the dues record is the **sum of that history**, so if the

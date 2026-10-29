@@ -258,7 +258,9 @@ department-wide settings.
 
 The screen has these sections: **General** (Profile, Contact, Addresses),
 **Modules**, **Email**, **Department Email**, **Storage**, **Label Printers**
-and **Authentication** (Sign-in, MFA Policy).
+and **Authentication** (Sign-in, MFA Policy). MFA Policy also holds the
+**Allow passkeys** switch _(2026-10-26)_; see
+[Using a passkey](./00-getting-started.md#using-a-passkey-for-two-step-sign-in-2026-10-26).
 
 > **MFA Policy is a floor, not the whole rule.** Members holding administration
 > or health-record permissions must use two-step sign-in even when the policy is
@@ -266,9 +268,10 @@ and **Authentication** (Sign-in, MFA Policy).
 > the server sees them without it (`MFA_GRACE_DAYS`). Before upgrading, make sure
 > the IT manager has saved their recovery codes. Sensitive actions (log exports,
 > role and position changes, security and integration settings, administrator
-> resets, deleting a member) also ask for a fresh authenticator code, valid 10
-> minutes (`STEPUP_WINDOW_MINUTES`). Anything calling those endpoints directly
-> must `POST /auth/step-up` first or receives `403 LB-AUTH-013`. Details:
+> resets, deleting a member) also ask for a fresh second-step check (an
+> authenticator code or a passkey), valid 10 minutes (`STEPUP_WINDOW_MINUTES`).
+> Anything calling those endpoints directly must `POST /auth/step-up` first or
+> receives `403 LB-AUTH-013`. Details:
 > [`UPGRADING.md`](../UPGRADING.md) and the Security-Authentication wiki page.
 
 ### How settings screens are laid out
@@ -1673,10 +1676,17 @@ switch between them.
 - **Search** filters as you type, by template name and type. With no matches it
   reads "No matching templates".
 - Templates are grouped into **categories** you can open and close, each with a
-  count: **Members & Accounts**, **Events & Scheduling**, **Training**,
-  **Elections**, **Inventory**, **Department Store** and **Other**. Searching
-  opens every group, and the group holding the template you are editing stays
-  open.
+  count: **Members & Accounts**, **Prospective Members**, **Events &
+  Scheduling**, **Training & Certifications**, **Elections & Voting**,
+  **Inventory & Property**, **Suggestion Boxes**, **Department Store** and
+  **Other**. Searching opens every group, and the group holding the template
+  you are editing stays open.
+- **Prospective Members** holds the emails applicants receive — **Application
+  Step Completed**, **Application Status Link**, **Application Going
+  Inactive**, **Application Withdrawn** and **Duplicate Application Notice** —
+  and the coordinators' **Prospect Inactivity Warning**. _(2026-10-26)_ When
+  each is sent, and its variables, is in
+  [Prospective Members → Emails to Applicants](./15-prospective-members.md#emails-to-applicants).
 - Each entry says whether your department has changed it and how much it is
   used — for example "Edited · sent 1,204 times" or "Default · never sent",
   counted from your department's Message History.
@@ -1686,6 +1696,25 @@ switch between them.
 ![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
 ![Email template sidebar filtered to templates matching welcome](./images/08-36-template-search.png)
+
+**Off means off** _(2026-10-27)_. Switching a template **Off** stops that email
+from being sent at all; before this release it only fell back to the built-in
+wording and the email kept going out. The editor says what Off does. Five
+emails cannot be switched off, because their recipient could not get the
+content any other way: **Password Reset**, **IT Password Notification**,
+**Welcome**, **Ballot Notification** and **Application Status Link** (their
+switch is disabled). A department that never opened Email Templates keeps every
+email. Operators: check the **Off** filter before upgrading
+([`UPGRADING.md`](../UPGRADING.md)).
+
+Five templates that used to be stored but never used are now sent, in your
+wording: **Cert Expiration** (it now says "expires today" or "tomorrow" rather
+than "0 days left"), **Post-Event Validation**, **Post-Shift Validation**,
+**Member Archived** and **Prospect Inactivity Warning**. A new **Application
+Going Inactive** template carries the applicant notice
+([guide 15](./15-prospective-members.md#inactivity-timeout)). The **Member
+Dropped** email now includes the template's attachments (a return form), which
+it ignored before.
 
 A blue note above the list reads "Every email uses the current design,
 including templates your department had edited — there is nothing to adopt." It
@@ -2254,7 +2283,9 @@ parts the department lets trainees see, and never the reviewer's notes.
 
 - **Members** can ask for an exception for their own address on **My IP
   Exceptions** with **New Request**: the address, a use case, how many days
-  (1–90) and details.
+  (1–90) and details. Someone else must approve it: the member the exception is
+  for, and the officer who filed it, are refused, so a one-administrator
+  department grants the permission to a second member.
 - **Officers with security.manage** ("Manage IP security and access controls")
   or **settings.manage** approve or reject requests on the **Pending Requests**
   tab, revoke exceptions, and block countries.

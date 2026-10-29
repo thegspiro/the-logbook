@@ -4560,6 +4560,7 @@ async def record_dues_payment(
             event_data={
                 "dues_id": dues_id,
                 "amount_paid": str(data.amount_paid),
+                "excess_as_donation": data.excess_as_donation,
             },
             user_id=str(current_user.id),
             username=current_user.username,

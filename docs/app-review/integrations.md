@@ -60,7 +60,11 @@ destination connects, reconnect keeps it, blank-means-keep on a connected PATCH,
 integration with no destination (iCal) still connects, a non-URL edit of a connected
 generic webhook still saves — pass either way.
 
-### INT2-3 — LOW/MED — credential-based integrations also connect with no credentials — 🚩 FLAGGED (owner decision)
+### INT2-3 — LOW/MED — credential-based integrations also connect with no credentials — ✅ FIXED (2026-10-27)
+
+> **Fixed (owner decision: require the credentials at connect).** PayPal,
+> Documenso, Cal.com and Salesforce now refuse to connect without their
+> credentials; see `docs/KNOWN_LIMITATIONS.md` (INT2-3).
 
 The same first-connect gap exists for PayPal, Documenso, Cal.com and Salesforce: `connect`
 with an empty (or minimal) config returns 200 and marks them connected and enabled, and

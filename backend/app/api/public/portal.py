@@ -47,6 +47,11 @@ from app.schemas.public_portal import (
     PublicOrganizationInfo,
     PublicOrganizationStats,
 )
+from app.services.public_stats_service import (
+    count_calls_ytd,
+    count_stations,
+    volunteer_hours_ytd,
+)
 
 router = APIRouter(prefix="/public/v1", tags=["public-portal"])
 
@@ -388,10 +393,10 @@ async def get_organization_stats(
         await check_portal_enabled(config, db)
 
         # Get organization
-        result = await db.execute(
+        org_result = await db.execute(
             select(Organization).where(Organization.id == str(api_key.organization_id))
         )
-        org = result.scalar_one_or_none()
+        org = org_result.scalar_one_or_none()
 
         if not org:
             raise HTTPException(
@@ -417,11 +422,13 @@ async def get_organization_stats(
         )
         total_apparatus = apparatus_result.scalar() or 0
 
+        # W76-6: these three published null whatever Data Control said. Their
+        # definitions are the owner's (2026-10-27); see public_stats_service.
         stats_data = {
-            "total_volunteer_hours": None,
-            "total_calls_ytd": None,
+            "total_volunteer_hours": await volunteer_hours_ytd(db, org),
+            "total_calls_ytd": await count_calls_ytd(db, org),
             "total_members": total_members,
-            "stations": None,
+            "stations": await count_stations(db, org_id_str),
             "apparatus": total_apparatus,
             "founded_year": org.founded_year if hasattr(org, "founded_year") else None,
         }

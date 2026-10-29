@@ -264,6 +264,10 @@ need it:
 - **Access changes when your status changes.** A leave of absence, a change of
   rank or assignment, a suspension, or leaving the department changes or ends
   your access. This can happen without prior notice.
+- **Leave and waiver reasons are encrypted.** What you tell an officer when
+  you request a leave of absence or a training waiver (often a diagnosis or a
+  family matter) is stored encrypted and shown only on the screens that already
+  showed it. _(2026-10-28)_
 - **Records you create here belong to the department.** Reports, minutes,
   attendance and messages are department records, kept on the department's
   retention schedule. They do not leave with you.

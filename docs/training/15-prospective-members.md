@@ -25,10 +25,11 @@ that matches its own onboarding process.
 14. [Bulk Actions](#bulk-actions)
 15. [Pipeline Statistics & Reports](#pipeline-statistics--reports)
 16. [Public Application Status Page](#public-application-status-page)
-17. [Printing Labels](#printing-labels)
-18. [Realistic Example: New Firefighter Application](#realistic-example-new-firefighter-application)
-19. [Troubleshooting](#troubleshooting)
-20. [If You Learned an Older Version](#if-you-learned-an-older-version)
+17. [Emails to Applicants](#emails-to-applicants)
+18. [Printing Labels](#printing-labels)
+19. [Realistic Example: New Firefighter Application](#realistic-example-new-firefighter-application)
+20. [Troubleshooting](#troubleshooting)
+21. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -201,18 +202,19 @@ described in [Membership → Pipeline Stage Types](./01-membership.md#pipeline-s
 
 Each stage can be set up with:
 
-| Setting                                    | What it does                                                                                                                                                                                                                                                                                                  |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auto-Advance**                           | Move to the next stage automatically when this stage's condition is met                                                                                                                                                                                                                                       |
-| **Required**                               | The stage must be completed — it cannot be skipped                                                                                                                                                                                                                                                            |
-| **Inactivity Timeout Override**            | A custom timeout for this stage, instead of the pipeline's                                                                                                                                                                                                                                                    |
-| **Email Settings** (automated email stage) | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link                                                                                                                                                                                                                             |
-| **Email Template** (automated email stage) | A switched-on custom template to send instead of the section-built email; its subject and body are used, with first name, last name, prospect name, stage name and status link filled in. System templates cannot be chosen. A template that is later switched off or deleted falls back to the section email |
-| **Form** (form stages)                     | Which form to link                                                                                                                                                                                                                                                                                            |
-| **Event Type** (meeting stage)             | Interview, orientation, or ride-along                                                                                                                                                                                                                                                                         |
-| **Auto-Link Event Type** (meeting stage)   | Which event type the stage waits on. Naming one makes attendance required                                                                                                                                                                                                                                     |
-| **Scheduling** (meeting stage)             | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected                                                                                                                                                                                                                                  |
-| **Collection Method** (document stage)     | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected                                                                                                                                                                                                                                  |
+| Setting                                          | What it does                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auto-Advance**                                 | Move to the next stage automatically when this stage's condition is met                                                                                                                                                                                                                                       |
+| **Required**                                     | The stage must be completed — it cannot be skipped                                                                                                                                                                                                                                                            |
+| **Inactivity Timeout Override**                  | A custom timeout for this stage, instead of the pipeline's                                                                                                                                                                                                                                                    |
+| **Email Settings** (automated email stage)       | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link                                                                                                                                                                                                                             |
+| **Email Template** (automated email stage)       | A switched-on custom template to send instead of the section-built email; its subject and body are used, with first name, last name, prospect name, stage name and status link filled in. System templates cannot be chosen. A template that is later switched off or deleted falls back to the section email |
+| **Notify prospect when this stage is completed** | Under **Prospect Communication**. Emails the applicant the **Application Step Completed** template when they advance past the stage. Off by default. See [Emails to Applicants](#emails-to-applicants)                                                                                                        |
+| **Form** (form stages)                           | Which form to link                                                                                                                                                                                                                                                                                            |
+| **Event Type** (meeting stage)                   | Interview, orientation, or ride-along                                                                                                                                                                                                                                                                         |
+| **Auto-Link Event Type** (meeting stage)         | Which event type the stage waits on. Naming one makes attendance required                                                                                                                                                                                                                                     |
+| **Scheduling** (meeting stage)                   | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected                                                                                                                                                                                                                                  |
+| **Collection Method** (document stage)           | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected                                                                                                                                                                                                                                  |
 
 ![Editing the Attend a Business Meeting stage: Auto-Link Event Type set to Next Business Meeting, its help text saying that naming an event makes attendance required, the next upcoming meeting it will link, and the checkbox reading Auto-advance when the event's attendance is finalized, with its explanation that a sign-in at the door is not enough on its own](./images/15-15-meeting-stage-config.png)
 
@@ -429,8 +431,9 @@ Applications**, **Rejected**, **Withdrawn** and **Converted**.
 - Switch to **Table** for a sortable list, one page at a time.
 - **Filter** by status: **Active** or **On Hold**.
 - **Search accepts a full name.** Every word you type must match the first
-  name, last name or email. So "John Smith" and "smith john" find the same
-  person.
+  name or last name, or be the applicant's complete email address. So "John
+  Smith" and "smith john" find the same person. Part of an address no longer
+  matches, because addresses are stored encrypted _(2026-10-26)_.
 
 ![Kanban board with a column per pipeline stage and applicant cards](./images/15-04-kanban-board.png)
 
@@ -1044,8 +1047,8 @@ Application**.
   Coordinator** positions are emailed the applicant, pipeline, stage and reason.
   If nobody holds either, every officer who can manage prospective members is.
 - The applicant gets a confirmation email, dated in the department's time zone.
-  It uses the **Application Withdrawn** template (**Communications → Email
-  Templates**, under Members & Accounts), which the department can reword.
+  It uses the **Application Withdrawn** template (**Email Templates**, under
+  Prospective Members), which the department can reword.
 - If either email fails, the withdrawal still stands. These are emails only — no
   text messages.
 - In any other state (approved, converted, rejected) there is no button. The
@@ -1068,6 +1071,46 @@ Application**.
 > you re-send it from their record.
 
 ![Public application status page showing an applicant's progress through the pipeline](./images/15-13-application-status.png)
+
+---
+
+## Emails to Applicants
+
+_(2026-10-26)_ The emails the pipeline sends an applicant are templates the
+department can reword. Open **Administration > Forms & Comms > Email
+Templates** (needs **settings.manage**) and expand the **Prospective Members**
+group. Editing, previewing, **Send Test to Me** and **Reset** work as for any
+template; see
+[Administration → Email Templates](./08-admin-reports.md#email-templates). Each
+of these closes with the **Public** footer by default.
+
+| Template                         | Sent when                                                                                                                                    | Variables                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Application Step Completed**   | The applicant advances past a stage with **Notify prospect when this stage is completed** ticked                                             | `first_name`, `applicant_name`, `step_name`                                                                  |
+| **Application Status Link**      | The applicant reaches an enabling **Enable Status Page** stage                                                                               | `first_name`, `applicant_name`, `status_url`, `custom_message`, `custom_message_html`, `custom_message_text` |
+| **Application Going Inactive**   | The application nears the inactivity timeout and the pipeline is set to notify the applicant (see [Inactivity Timeout](#inactivity-timeout)) | `first_name`, `applicant_name`, `days_inactive`, `inactive_date`                                             |
+| **Application Withdrawn**        | The applicant withdraws from their status page                                                                                               | `applicant_name`, `withdrawal_date`                                                                          |
+| **Duplicate Application Notice** | Someone applies again with an email address that already has an active application. The department's own email address is BCC'd              | `applicant_name`, `original_date`                                                                            |
+
+- **`status_url` is the applicant's private link.** Keep it in the Application
+  Status Link template: delivering it is the reason the email exists.
+- **The stage's message.** The Enable Status Page stage's **Message in the link
+  email (optional)** reaches the template three ways. `custom_message_html` is
+  that message as its own paragraph and `custom_message_text` is it followed by
+  a blank line, for the plain-text version; both are empty when the stage has
+  no message, so no gap is left. `custom_message` is the message exactly as
+  written.
+- **Untouched templates read as before.** The built-in wording of the first two
+  is what those emails said before they became templates.
+- **Switching a template off stops that email.** Nothing goes out in its place.
+  For **Application Status Link** that means the applicant stays on the Enable
+  Status Page stage, as when the email cannot be sent.
+
+The **Automated Email** stage's own email is still built from the stage's
+**Email Settings**, or from the custom template chosen in its **Email
+Template** setting (see [Stage Configuration Options](#stage-configuration-options)).
+A converted applicant's welcome email uses the department's **Welcome Email**
+template.
 
 ---
 
@@ -1233,6 +1276,12 @@ work differently from what they may say.
   an older applicant look wrong, check the activity log for the original.
 - **Destroy old printed applicant badges.** Badges once carried the applicant's
   private status-page link. Today's badges carry only a short code.
+- **The step-completed and status-link emails can be reworded.** They used to
+  have fixed wording. They are now the **Application Step Completed** and
+  **Application Status Link** templates; see
+  [Emails to Applicants](#emails-to-applicants). A converted applicant's welcome
+  email once ignored the department's edited **Welcome Email** template; it now
+  uses it.
 - **Cal.com bookings do not advance anyone.** Only the end of the meeting does;
   your IT administrator may need to update the Cal.com setup.
 

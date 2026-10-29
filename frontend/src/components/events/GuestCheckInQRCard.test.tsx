@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { useAuthStore } from '../../stores/authStore';
@@ -24,7 +24,27 @@ vi.mock('qrcode.react', () => ({
 const TOKEN = 'a'.repeat(43);
 const NEW_TOKEN = 'b'.repeat(43);
 
-const link = (guest_token: string | null) => ({ event_id: 'evt-1', allow_guest_check_in: true, guest_token });
+const HOUR = 60 * 60 * 1000;
+const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+
+const link = (guest_token: string | null, overrides: Record<string, unknown> = {}) => ({
+  event_id: 'evt-1',
+  allow_guest_check_in: true,
+  guest_token,
+  is_open: true,
+  closed_reason: null,
+  check_in_opens_at: iso(-HOUR),
+  check_in_closes_at: iso(HOUR),
+  ...overrides,
+});
+
+const notYetOpen = (guest_token: string | null) =>
+  link(guest_token, {
+    is_open: false,
+    closed_reason: 'Check-in for this event has not opened yet.',
+    check_in_opens_at: iso(2 * HOUR),
+    check_in_closes_at: iso(4 * HOUR),
+  });
 
 const renderCard = (props: Partial<React.ComponentProps<typeof GuestCheckInQRCard>> = {}) =>
   renderWithRouter(<GuestCheckInQRCard eventId="evt-1" eventName="Open House" allowGuestCheckIn {...props} />);
@@ -150,5 +170,82 @@ describe('GuestCheckInQRCard', () => {
 
     expect(screen.queryByRole('button', { name: /Print Guest QR Code/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Show full size' })).not.toBeInTheDocument();
+  });
+
+  describe('before and after the check-in window', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('withholds the code, the link and Print until check-in opens', async () => {
+      getGuestCheckInLink.mockResolvedValue(notYetOpen(TOKEN));
+      renderCard({ onPrint: vi.fn() });
+
+      expect(await screen.findByTestId('guest-qr-placeholder')).toHaveTextContent(
+        'QR code hidden until check-in opens'
+      );
+      expect(screen.getByText('Check-in for this event has not opened yet.')).toBeInTheDocument();
+      expect(screen.getByText(/The code appears here when check-in opens/)).toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Guest check-in link')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Print Guest QR Code/ })).not.toBeInTheDocument();
+    });
+
+    it('still lets a manager reset a code that leaked before the event', async () => {
+      getGuestCheckInLink.mockResolvedValue(notYetOpen(TOKEN));
+      rotateGuestCheckInLink.mockResolvedValue(notYetOpen(NEW_TOKEN));
+      const user = userEvent.setup();
+      renderCard();
+      await screen.findByTestId('guest-qr-placeholder');
+
+      await user.click(screen.getByRole('button', { name: /Reset code/ }));
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Reset code' }));
+
+      await waitFor(() => expect(rotateGuestCheckInLink).toHaveBeenCalledWith('evt-1'));
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+    });
+
+    it('says check-in is closed, not that the code is coming, once it has ended', async () => {
+      getGuestCheckInLink.mockResolvedValue(
+        link(TOKEN, {
+          is_open: false,
+          closed_reason: 'Check-in has closed for this event.',
+          check_in_opens_at: iso(-4 * HOUR),
+          check_in_closes_at: iso(-2 * HOUR),
+        })
+      );
+      renderCard();
+
+      expect(await screen.findByTestId('guest-qr-placeholder')).toHaveTextContent('check-in is closed');
+      expect(screen.queryByText(/The code appears here/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+    });
+
+    it('hides the code while attendance is finalized, inside the window', async () => {
+      getGuestCheckInLink.mockResolvedValue(
+        link(TOKEN, { is_open: false, closed_reason: 'Attendance for this event has been closed.' })
+      );
+      renderCard();
+
+      expect(await screen.findByText('Attendance for this event has been closed.')).toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+    });
+
+    it('shows the code without a reload once the window opens', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      getGuestCheckInLink.mockResolvedValueOnce(notYetOpen(TOKEN)).mockResolvedValue(link(TOKEN));
+      renderCard();
+      await screen.findByTestId('guest-qr-placeholder');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000);
+      });
+
+      expect(await screen.findByTestId('qr-code')).toHaveAttribute(
+        'data-value',
+        `${window.location.origin}/event-guest/${TOKEN}`
+      );
+      expect(screen.queryByTestId('guest-qr-placeholder')).not.toBeInTheDocument();
+    });
   });
 });

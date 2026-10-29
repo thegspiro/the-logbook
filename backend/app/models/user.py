@@ -1050,7 +1050,9 @@ class MemberLeaveOfAbsence(Base):
         default=LeaveType.LEAVE_OF_ABSENCE,
         server_default="leave_of_absence",
     )
-    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Encrypted at rest: members explain a leave in their own words, and the
+    # explanation is often medical or family detail.
+    reason: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
 
     # The period the member is on leave (inclusive, month-level granularity)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
