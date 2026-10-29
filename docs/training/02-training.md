@@ -496,12 +496,12 @@ The class timeline numbers each class. It shows the class's date and start
 time, status, credit hours, instructor, how many members signed up, and an
 **Event** link to the calendar entry. From here you can:
 
-| Action                        | What it does                                                                                                                   |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Reschedule**                | Moves the class and its calendar event together. Everyone who signed up stays signed up.                                       |
-| **Cancel class**              | Cancels the event instead of deleting it, so anyone signed up sees the cancellation. The class stays listed for the record.    |
-| **Shift remaining**           | Moves every class that has not happened yet later (or earlier) by a number of days. Classes that already ran keep their dates. |
-| **Create _N_ missing events** | Appears only when a class has no event — because scheduling it failed, or someone deleted the event. It only fills gaps.       |
+| Action                        | What it does                                                                                                                                                                                                                              |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reschedule**                | Moves the class and its calendar event together. Everyone who signed up stays signed up.                                                                                                                                                  |
+| **Cancel class**              | Cancels the event instead of deleting it, so anyone signed up sees the cancellation. The class stays listed for the record.                                                                                                               |
+| **Shift remaining**           | Moves every class that has not happened yet later (or earlier) by a number of days, up to 14 either way _(2026-10-29)_. Classes that already ran keep their dates. A longer move is a rescheduled course: reschedule the classes instead. |
+| **Create _N_ missing events** | Appears only when a class has no event — because scheduling it failed, or someone deleted the event. It only fills gaps.                                                                                                                  |
 
 **Reschedule** and **Cancel class** are the two icon buttons at the right of
 each row. On a healthy cohort the missing-events button is absent, as in the
