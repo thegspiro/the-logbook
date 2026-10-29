@@ -30,9 +30,13 @@ What the sweep can and cannot see:
   followed into the called function's ``return`` values, with its parameters
   bound to what the call passed, up to ``MAX_CALL_DEPTH`` calls deep. A call
   is followed when it names a function in the same module or imported from
-  ``app``, a method through ``self``, ``cls`` or its class, or a function
-  through an imported ``app`` module; a call through any other object (an
-  instance held in a variable, a service built inline) is not.
+  ``app``, a function through an imported ``app`` module, or a method on an
+  object whose class the source shows: ``self`` or ``cls``, the class itself,
+  a class built inline (``FooService(db).describe(...)``), a name assigned
+  from one, a parameter annotated with one, or a ``self`` attribute some
+  method assigns or annotates that way. The method is looked up on that class
+  and then its bases. An object whose class only the running program knows
+  -- one returned from a call, or held in a container -- is not followed.
 * A message produced by a call is not text the first check can read, and is
   skipped there; the second check reads into it as above.
 * A raise that never reaches ``safe_error_detail`` is still checked. That is
@@ -409,8 +413,10 @@ class _Index:
     """Where each function and method in ``app/`` is, and what each module imports.
 
     Enough to resolve the calls a refusal message makes: a function in the same
-    module or imported from ``app``, a method through ``self``, ``cls`` or its
-    class, and a function through an imported ``app`` module.
+    module or imported from ``app``, a function through an imported ``app``
+    module, and a method -- through ``self``, ``cls`` or its class, or through
+    an object whose class the source shows (see :meth:`class_of`), looked up
+    on that class and then its bases.
     """
 
     def __init__(self, modules):
@@ -420,8 +426,10 @@ class _Index:
         self.methods = {}
         self.owners = {}
         self.imports = {}
+        self.class_defs = {}
         self._module_scopes = {}
         self._local_scopes = {}
+        self._attribute_values = {}
         for name, tree, facts in modules:
             self.trees[name] = tree
             self.imports[name] = facts.imports
@@ -431,6 +439,7 @@ class _Index:
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     functions[node.name] = node
                 elif isinstance(node, ast.ClassDef):
+                    self.class_defs[(name, node.name)] = node
                     self.methods[(name, node.name)] = {
                         item.name: item
                         for item in node.body
@@ -470,57 +479,183 @@ class _Index:
             return submodule, None
         return self.module_file(dotted), original
 
-    def resolve(self, func, module, owner_class):
-        """The function definition a call's ``func`` expression names, or None."""
+    def class_named(self, node, module):
+        """``(module, class)`` for a name or ``module.Class`` naming an app class."""
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                node = ast.parse(node.value, mode="eval").body
+            except SyntaxError:
+                return None
+        if isinstance(node, ast.Subscript):
+            # Optional[FooService]
+            return self.class_named(node.slice, module)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            # FooService | None
+            return self.class_named(node.left, module) or self.class_named(
+                node.right, module
+            )
+        if isinstance(node, ast.Name):
+            if (module, node.id) in self.class_defs:
+                return (module, node.id)
+            source, original = self._imported(module, node.id)
+            if source is not None and (source, original) in self.class_defs:
+                return (source, original)
+            return None
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            source, original = self._imported(module, node.value.id)
+            if source is not None and original is None:
+                if (source, node.attr) in self.class_defs:
+                    return (source, node.attr)
+        return None
+
+    def method(self, class_ref, name, seen=frozenset()):
+        """``name`` on the class ``class_ref`` or, failing that, on its bases."""
+        if class_ref is None or class_ref in seen:
+            return None
+        found = self.methods.get(class_ref, {}).get(name)
+        if found is not None:
+            return found
+        class_module = class_ref[0]
+        for base in self.class_defs[class_ref].bases:
+            found = self.method(
+                self.class_named(base, class_module), name, seen | {class_ref}
+            )
+            if found is not None:
+                return found
+        return None
+
+    def attribute_values(self, class_ref):
+        """What each ``self.<attr>`` is assigned or annotated as, in any method."""
+        if class_ref not in self._attribute_values:
+            values = {}
+            for node in ast.walk(self.class_defs[class_ref]):
+                if isinstance(node, ast.Assign):
+                    targets, value = node.targets, node.value
+                elif isinstance(node, ast.AnnAssign):
+                    targets, value = [node.target], node.annotation
+                else:
+                    continue
+                for target in targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    ):
+                        values.setdefault(target.attr, []).append(value)
+            self._attribute_values[class_ref] = values
+        return self._attribute_values[class_ref]
+
+    def class_of(self, node, frame, seen=frozenset()):
+        """The ``(module, class)`` of the object ``node`` evaluates to, if shown.
+
+        The source shows it when the object is built by calling the class
+        (``FooService(db)``), comes from a name every binding of which is such
+        a call, is a parameter annotated with the class, or is a ``self``
+        attribute some method of the class assigns or annotates that way.
+        """
+        if isinstance(node, ast.Await):
+            return self.class_of(node.value, frame, seen)
+        if isinstance(node, ast.Call):
+            return self.class_named(node.func, frame.module)
+        if isinstance(node, ast.Attribute):
+            if (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "self"
+                and frame.owner_class is not None
+            ):
+                owner = (frame.module, frame.owner_class)
+                for value in self.attribute_values(owner).get(node.attr, []):
+                    found = self.class_of(value, frame, seen) or self.class_named(
+                        value, frame.module
+                    )
+                    if found is not None:
+                        return found
+            return None
+        if not isinstance(node, ast.Name) or node.id in seen:
+            return None
+        if node.id in ("self", "cls"):
+            if frame.owner_class is None:
+                return None
+            return (frame.module, frame.owner_class)
+        seen = seen | {node.id}
+        if frame.function is not None:
+            arguments = frame.function.args
+            for param in [
+                *arguments.posonlyargs,
+                *arguments.args,
+                *arguments.kwonlyargs,
+            ]:
+                if param.arg == node.id and param.annotation is not None:
+                    found = self.class_named(param.annotation, frame.module)
+                    if found is not None:
+                        return found
+        scope = next((s for s in frame.scopes if node.id in s), None)
+        if scope is None:
+            return None
+        found = None
+        for value in scope[node.id]:
+            if isinstance(value, _Argument):
+                value_class = self.class_of(
+                    value.expression, frame._replace(scopes=value.scopes), seen
+                )
+            elif value is not None:
+                value_class = self.class_of(value, frame, seen)
+            else:
+                continue
+            if value_class is None or (found is not None and value_class != found):
+                return None
+            found = value_class
+        return found
+
+    def resolve(self, func, frame):
+        """``(definition, first parameter is implicit)`` for a call, or None.
+
+        The flag says the call binds the callee's first parameter itself: a
+        method called on an instance, or a classmethod on its class.
+        """
+        module = frame.module
         if isinstance(func, ast.Name):
             local = self.functions.get(module, {}).get(func.id)
             if local is not None:
-                return local
+                return local, False
             source, original = self._imported(module, func.id)
             if source is not None and original is not None:
-                return self.functions.get(source, {}).get(original)
+                found = self.functions.get(source, {}).get(original)
+                if found is not None:
+                    return found, False
             return None
-        if not (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)):
+        if not isinstance(func, ast.Attribute):
             return None
-        receiver = func.value.id
-        if receiver in ("self", "cls"):
-            if owner_class is None:
-                return None
-            return self.methods.get((module, owner_class), {}).get(func.attr)
-        if (module, receiver) in self.methods:
-            return self.methods[(module, receiver)].get(func.attr)
-        source, original = self._imported(module, receiver)
-        if source is None:
+        receiver = func.value
+        if isinstance(receiver, ast.Name) and receiver.id not in ("self", "cls"):
+            named_class = self.class_named(receiver, module)
+            if named_class is not None:
+                found = self.method(named_class, func.attr)
+                if found is None:
+                    return None
+                return found, "classmethod" in _decorator_names(found)
+            source, original = self._imported(module, receiver.id)
+            if source is not None and original is None:
+                found = self.functions.get(source, {}).get(func.attr)
+                return (found, False) if found is not None else None
+        found = self.method(self.class_of(receiver, frame), func.attr)
+        if found is None:
             return None
-        if original is None:
-            return self.functions.get(source, {}).get(func.attr)
-        return self.methods.get((source, original), {}).get(func.attr)
+        return found, "staticmethod" not in _decorator_names(found)
 
-    def bound_scope(self, function, call, caller_scopes):
+    def bound_scope(self, function, call, caller_scopes, implicit_first):
         """The callee's bindings, with each parameter bound to what was passed.
 
         A parameter the call does not supply takes its default; one passed by
         ``*args`` or ``**kwargs``, or with no default, stays unreadable.
         """
-        module, owner_class = self.owners[id(function)]
+        module, _ = self.owners[id(function)]
         scope = {
             name: list(values) for name, values in self.local_scope(function).items()
         }
         arguments = function.args
         positional = [*arguments.posonlyargs, *arguments.args]
-        decorators = _decorator_names(function)
-        if (
-            owner_class is not None
-            and "staticmethod" not in decorators
-            and isinstance(call.func, ast.Attribute)
-            and (
-                "classmethod" in decorators
-                or (
-                    isinstance(call.func.value, ast.Name)
-                    and call.func.value.id in ("self", "cls")
-                )
-            )
-        ):
+        if implicit_first:
             positional = positional[1:]
         passed = {}
         if not any(isinstance(arg, ast.Starred) for arg in call.args):
@@ -607,10 +742,11 @@ class _Frame(NamedTuple):
     scopes: tuple
     module: str
     owner_class: object
+    function: object
     depth: int
 
 
-def _message_frames(argument, scopes, module, owner_class, index):
+def _message_frames(argument, scopes, module, owner_class, function, index):
     """The message expression, and everything it is built from.
 
     Followed transitively: each name the message reads, back to the values
@@ -620,7 +756,7 @@ def _message_frames(argument, scopes, module, owner_class, index):
     parameters bound to what was passed, up to ``MAX_CALL_DEPTH`` calls deep.
     """
     frames = []
-    pending = [_Frame(argument, scopes, module, owner_class, 0)]
+    pending = [_Frame(argument, scopes, module, owner_class, function, 0)]
     followed_names, followed_calls = set(), set()
     while pending:
         frame = pending.pop()
@@ -645,15 +781,16 @@ def _message_frames(argument, scopes, module, owner_class, index):
                 and index is not None
                 and frame.depth < MAX_CALL_DEPTH
             ):
-                callee = index.resolve(node.func, frame.module, frame.owner_class)
-                if callee is None or id(node) in followed_calls:
+                resolved = index.resolve(node.func, frame)
+                if resolved is None or id(node) in followed_calls:
                     continue
+                callee, implicit_first = resolved
                 callee_module, callee_class = index.owners[id(callee)]
                 if (callee_module, callee.name) in SELF_LIMITING_HELPERS:
                     continue
                 followed_calls.add(id(node))
                 callee_scopes = (
-                    index.bound_scope(callee, node, frame.scopes),
+                    index.bound_scope(callee, node, frame.scopes, implicit_first),
                     index.module_scope(callee_module),
                 )
                 pending.extend(
@@ -662,6 +799,7 @@ def _message_frames(argument, scopes, module, owner_class, index):
                         callee_scopes,
                         callee_module,
                         callee_class,
+                        callee,
                         frame.depth + 1,
                     )
                     for returned in _own_nodes(callee)
@@ -684,7 +822,9 @@ def _unbounded_joins(module, tree, sites, index):
             local = index.local_scope(function) if index else _assignments(function)
             scopes = (local, module_scope)
             owner_class = index.owners[id(function)][1] if index else None
-        for frame in _message_frames(argument, scopes, module, owner_class, index):
+        for frame in _message_frames(
+            argument, scopes, module, owner_class, function, index
+        ):
             for node in _walk_uncapped(frame.expression):
                 if _is_list_join(node) and not _is_bounded(node.args[0], frame.scopes):
                     yield frame.module, node.lineno, ast.unparse(node.args[0]), lineno
@@ -1023,6 +1163,94 @@ def test_the_join_check_follows_methods_and_imports():
             ),
         }
     ) == ["names"]
+
+
+_DESCRIBER = (
+    "class Describer:\n"
+    "    def __init__(self, db=None):\n"
+    "        self.db = db\n"
+    "    def describe(self, names):\n"
+    '        return ", ".join(names)\n'
+)
+
+
+def test_the_join_check_follows_methods_on_objects():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    # A name assigned from a constructor, and a constructor called inline.
+    assert refusing(
+        "def refuse(ids, db):\n"
+        "    describer = Describer(db)\n"
+        "    raise ValueError(describer.describe(ids))\n"
+    ) == ["names"]
+    assert refusing(
+        "def refuse(ids, db):\n    raise ValueError(Describer(db).describe(ids))\n"
+    ) == ["names"]
+    # A parameter annotated with the class, plainly, optionally or as a string.
+    for annotation in ("Describer", "Optional[Describer]", '"Describer"'):
+        assert refusing(
+            f"def refuse(describer: {annotation}, ids):\n"
+            "    raise ValueError(describer.describe(ids))\n"
+        ) == ["names"], annotation
+    # A self attribute a method assigns.
+    assert refusing(
+        "class Service:\n"
+        "    def __init__(self, db):\n"
+        "        self.describer = Describer(db)\n"
+        "    def refuse(self, ids):\n"
+        "        raise ValueError(self.describer.describe(ids))\n"
+    ) == ["names"]
+    # A method the class inherits.
+    assert refusing(
+        "class Special(Describer):\n"
+        "    pass\n"
+        "def refuse(ids):\n"
+        "    raise ValueError(Special().describe(ids))\n"
+    ) == ["names"]
+
+
+def test_a_method_call_binds_self_before_its_arguments():
+    # Were self not bound by the call, STATUSES would land on self, names
+    # would be left unreadable, and a fixed list would read as data.
+    assert (
+        _joins(
+            _DESCRIBER + "def refuse(db):\n"
+            "    raise ValueError(Describer(db).describe(STATUSES))\n"
+        )
+        == []
+    )
+
+
+def test_the_join_check_follows_objects_across_modules():
+    assert _joins_in(
+        {
+            "describing.py": _DESCRIBER,
+            "service.py": (
+                "from app.describing import Describer\n"
+                "def refuse(ids, db):\n"
+                "    describer = Describer(db)\n"
+                "    raise ValueError(describer.describe(ids))\n"
+            ),
+        }
+    ) == ["names"]
+
+
+def test_an_object_of_unknown_class_is_not_followed():
+    # Built by a call the index cannot see into, or bound to two classes.
+    assert (
+        _joins(
+            _DESCRIBER + "class Other:\n"
+            "    def describe(self, names):\n"
+            '        return "; ".join(names)\n'
+            "def refuse(ids, flag):\n"
+            "    describer = make_describer()\n"
+            "    either = Describer()\n"
+            "    either = Other()\n"
+            "    raise ValueError(describer.describe(ids) + either.describe(ids))\n"
+        )
+        == []
+    )
 
 
 def test_the_join_check_stops_at_the_call_depth():
