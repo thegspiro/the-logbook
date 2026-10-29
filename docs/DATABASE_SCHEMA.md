@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**322 tables · 5329 columns · 1090 foreign keys**
+**322 tables · 5336 columns · 1090 foreign keys**
 
 ---
 
@@ -167,7 +167,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`ballot_send_jobs`](#ballot_send_jobs) | `BallotSendJob` | 16 | One request to email ballots, run in the background. |
 | [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 55 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 57 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -727,7 +727,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 65 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 70 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -2309,6 +2309,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `positions` | JSON | yes |  |  |  |
 | `ballot_items` | JSON | yes |  |  |  |
 | `position_eligibility` | JSON | yes |  |  |  |
+| `eligibility_rules` | JSON | yes |  |  |  |
+| `meeting_kind` | VARCHAR(20) | no |  | `regular` |  |
 | `email_sent` | BOOL | no |  | `0` |  |
 | `email_sent_at` | DATETIME | yes |  |  |  |
 | `email_recipients` | JSON | yes |  |  |  |
@@ -11167,6 +11169,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
 | `member_status` | VARCHAR(50) | yes | IDX |  |  |
+| `member_class_since` | DATETIME | yes |  |  |  |
+| `member_status_since` | DATETIME | yes |  |  |  |
+| `voting_wait_from` | DATE | yes |  |  |  |
+| `voting_wait_waived` | BOOL | no |  | `0` |  |
+| `voting_wait_override_reason` | VARCHAR(500) | yes |  |  |  |
 | `membership_type_changed_at` | DATETIME | yes |  |  |  |
 | `status` | ENUM(`active`, `inactive`, `suspended`, `probationary`, `leave`, `retired`, `dropped_voluntary`, `dropped_involuntary`, `archived`) | no | IDX | `active` |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |

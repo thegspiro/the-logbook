@@ -11,10 +11,17 @@ import { electionService, eventService, meetingsService, ranksService, roleServi
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { EventListItem } from '../types/event';
 import type { Role } from '../types/role';
-import type { ElectionListItem, ElectionCreate } from '../types/election';
+import type { ElectionListItem, ElectionCreate, ElectionSettings } from '../types/election';
 import type { VotingMethod, VictoryCondition } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus, QuorumType, VotingMethod as VM, VictoryCondition as VC, RunoffType } from '../constants/enums';
+import {
+  ElectionStatus,
+  MeetingKind,
+  QuorumType,
+  VotingMethod as VM,
+  VictoryCondition as VC,
+  RunoffType,
+} from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import {
@@ -30,6 +37,7 @@ import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
+import { MEETING_KIND_LABELS, defaultsForKind, describeEligibilityRules } from '../modules/elections/eligibilityRules';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
@@ -60,6 +68,9 @@ const blankElectionForm = (defaults: ElectionFormDefaults): ElectionCreate => ({
   auto_open: false,
   reminder_hours_before_close: undefined,
   tie_policy: 'co_winners',
+  // Held at a regular business meeting unless the officer says otherwise,
+  // or links an annual meeting record.
+  meeting_kind: MeetingKind.REGULAR,
   ...defaults,
 });
 
@@ -84,6 +95,13 @@ export const ElectionsPage: React.FC = () => {
     reminders_enabled: true,
     auto_open_enabled: true,
   });
+  // The department's eligibility defaults, which the server copies onto a new
+  // election by its meeting kind. Shown so the secretary knows what the
+  // election starts with.
+  const [electionSettings, setElectionSettings] = useState<ElectionSettings>({});
+  const voterRules = describeEligibilityRules(
+    defaultsForKind(electionSettings, formData.meeting_kind ?? MeetingKind.REGULAR).rules
+  );
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [upcomingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
@@ -137,6 +155,7 @@ export const ElectionsPage: React.FC = () => {
           reminders_enabled: s.reminders_enabled ?? true,
           auto_open_enabled: s.auto_open_enabled ?? true,
         });
+        setElectionSettings(s);
         const defaults = electionDefaultsFrom(s);
         setElectionDefaults(defaults);
         // Only a form still on the built-in values takes the department's
@@ -221,6 +240,9 @@ export const ElectionsPage: React.FC = () => {
           meeting_id: id,
           event_id: undefined,
           meeting_date: meeting.meeting_date,
+          // An annual meeting record decides the kind; any other meeting is
+          // a regular one. Still a choice the secretary can change below.
+          meeting_kind: meeting.meeting_type === 'annual' ? MeetingKind.ANNUAL : MeetingKind.REGULAR,
         });
       }
     } else if (source === 'event') {
@@ -1305,6 +1327,55 @@ export const ElectionsPage: React.FC = () => {
                         may choose up to that many. Ranked choice elects one per race.
                       </p>
                     </div>
+                  </div>
+                </div>
+
+                <div className="bg-theme-surface-secondary mt-6 space-y-3 rounded-md p-4">
+                  <div className="max-w-xs">
+                    <label
+                      htmlFor="election-meeting-kind"
+                      className="text-theme-text-primary block text-sm font-medium"
+                    >
+                      Held at
+                    </label>
+                    <select
+                      id="election-meeting-kind"
+                      value={formData.meeting_kind ?? MeetingKind.REGULAR}
+                      onChange={(e) => setFormData({ ...formData, meeting_kind: e.target.value as MeetingKind })}
+                      aria-describedby="election-meeting-kind-help"
+                      className="form-input mt-1 shadow-xs"
+                    >
+                      {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((kind) => (
+                        <option key={kind} value={kind}>
+                          {MEETING_KIND_LABELS[kind]}
+                        </option>
+                      ))}
+                    </select>
+                    <p id="election-meeting-kind-help" className="text-theme-text-muted mt-1 text-xs">
+                      Decides which voter rules from Election Settings this election starts with.
+                    </p>
+                  </div>
+                  <div data-testid="create-voter-rules">
+                    <p className="text-theme-text-primary text-sm font-medium">
+                      Voter rules for {MEETING_KIND_LABELS[formData.meeting_kind ?? MeetingKind.REGULAR].toLowerCase()}s
+                    </p>
+                    {voterRules.length === 0 ? (
+                      <p className="text-theme-text-muted mt-1 text-sm">
+                        No election-wide rules. Every member whose tier may vote is eligible, subject to each ballot
+                        item&apos;s own rules.
+                      </p>
+                    ) : (
+                      <>
+                        <ul className="text-theme-text-secondary mt-1 list-disc pl-5 text-sm">
+                          {voterRules.map((line) => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                        <p className="text-theme-text-muted mt-1 text-xs">
+                          Change them for this election on its Eligibility tab, any time before voting opens.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
 

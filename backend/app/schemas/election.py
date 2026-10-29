@@ -5,7 +5,7 @@ Request and response schemas for election-related endpoints.
 """
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import AbstractSet, Any, Dict, List, Optional, Sequence, TypeVar
 from uuid import UUID
 
@@ -20,6 +20,7 @@ from pydantic import (
 
 from app.schemas.base import UTCResponseBase, as_utc
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
+from app.utils.membership import VOTER_TYPE_KEYS
 
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
@@ -155,6 +156,24 @@ def seat_rule_error(
     return None
 
 
+def clean_voter_types(values: List[str]) -> List[str]:
+    """Keep eligibility rules deterministic and safe to persist as JSON.
+
+    Shared by ballot items and the department's eligibility defaults, which
+    seed ballot items, so a default can never hold a value an item refuses.
+    """
+    cleaned: List[str] = []
+    for value in values:
+        value = value.strip()
+        if not value or len(value) > 100 or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+            raise ValueError("Voter types must be 1-100 letters, numbers, '_' or '-'")
+        if value not in cleaned:
+            cleaned.append(value)
+    if "all" in cleaned and len(cleaned) > 1:
+        raise ValueError("'all' cannot be combined with other voter types")
+    return cleaned
+
+
 # Ballot Item Schemas
 
 
@@ -259,23 +278,7 @@ class BallotItem(BaseModel):
     @field_validator("eligible_voter_types")
     @classmethod
     def validate_eligible_voter_types(cls, values: List[str]) -> List[str]:
-        """Keep eligibility rules deterministic and safe to persist as JSON."""
-        cleaned = []
-        for value in values:
-            value = value.strip()
-            if (
-                not value
-                or len(value) > 100
-                or not re.fullmatch(r"[A-Za-z0-9_-]+", value)
-            ):
-                raise ValueError(
-                    "Voter types must be 1-100 letters, numbers, '_' or '-'"
-                )
-            if value not in cleaned:
-                cleaned.append(value)
-        if "all" in cleaned and len(cleaned) > 1:
-            raise ValueError("'all' cannot be combined with other voter types")
-        return cleaned
+        return clean_voter_types(values)
 
 
 class BallotItemInput(BallotItem):
@@ -322,6 +325,233 @@ class PositionEligibility(BaseModel):
     )
 
 
+VALID_ATTENDANCE_RULE_MODES = {"none", "count", "percent"}
+# Which of the department's eligibility defaults an election copies: those
+# for regular business meetings, or the annual meeting's own.
+VALID_MEETING_KINDS = {"regular", "annual"}
+# Mirrors app.models.meeting.MeetingType; kept as literals so this schema
+# module does not import the ORM.
+VALID_MEETING_TYPES = {
+    "business",
+    "special",
+    "committee",
+    "board",
+    "trustee",
+    "executive",
+    "annual",
+    "other",
+}
+MAX_ATTENDANCE_LOOKBACK_MEETINGS = 60
+MAX_ATTENDANCE_PERIOD_MONTHS = 60
+MAX_WAITING_PERIOD_MONTHS = 600
+VALID_WAITING_PERIOD_MODES = {"none", "never", "months"}
+
+
+class AttendanceRule(BaseModel):
+    """A meeting-attendance requirement every voter in an election must meet.
+
+    ``count``: attended at least ``min_meetings`` of the member's last
+    ``of_last_meetings`` meetings. ``percent``: attended at least ``min_pct``
+    of the meetings held in the last ``period_months``. Either way, waived
+    meetings and meetings during a leave of absence are not counted, and
+    only meetings since the member's current stint began are considered.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str = Field(default="none")
+    min_meetings: Optional[int] = Field(
+        default=None, ge=1, le=MAX_ATTENDANCE_LOOKBACK_MEETINGS
+    )
+    of_last_meetings: Optional[int] = Field(
+        default=None, ge=1, le=MAX_ATTENDANCE_LOOKBACK_MEETINGS
+    )
+    min_pct: Optional[float] = Field(default=None, gt=0, le=100)
+    period_months: Optional[int] = Field(
+        default=None, ge=1, le=MAX_ATTENDANCE_PERIOD_MONTHS
+    )
+    meeting_types: Optional[List[str]] = Field(
+        default=None,
+        max_length=len(VALID_MEETING_TYPES),
+        description="Meeting types that count; null counts every meeting",
+    )
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        return _validate_choice(v, VALID_ATTENDANCE_RULE_MODES, "attendance rule mode")
+
+    @field_validator("meeting_types")
+    @classmethod
+    def validate_meeting_types(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        cleaned: List[str] = []
+        for value in v:
+            _validate_choice(value, VALID_MEETING_TYPES, "meeting type")
+            if value not in cleaned:
+                cleaned.append(value)
+        # An empty list would count no meetings at all, which reads as a
+        # perfect record for everyone -- say "every meeting" explicitly.
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def validate_mode_fields(self) -> "AttendanceRule":
+        if self.mode == "count":
+            if self.min_meetings is None or self.of_last_meetings is None:
+                raise ValueError(
+                    "A meeting-count rule needs both the number of meetings to "
+                    "attend and how many recent meetings to look back over"
+                )
+            if self.min_meetings > self.of_last_meetings:
+                raise ValueError(
+                    "Meetings required cannot exceed the meetings looked back over"
+                )
+        elif self.mode == "percent":
+            if self.min_pct is None or self.period_months is None:
+                raise ValueError(
+                    "A percentage rule needs both the minimum percentage and "
+                    "the look-back period in months"
+                )
+        return self
+
+
+class WaitingPeriod(BaseModel):
+    """How long a member of one type waits before they may vote.
+
+    ``none``: no wait. ``never``: members of this type may not vote at all.
+    ``months``: they may vote ``months`` after becoming that type, counted from
+    ``users.member_class_since`` / ``member_status_since`` (or a secretary's
+    ``voting_wait_from``) and never from before their current stint.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str = Field(default="none")
+    months: Optional[int] = Field(default=None, ge=1, le=MAX_WAITING_PERIOD_MONTHS)
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        return _validate_choice(v, VALID_WAITING_PERIOD_MODES, "waiting period mode")
+
+    @model_validator(mode="after")
+    def validate_months(self) -> "WaitingPeriod":
+        if self.mode == "months" and self.months is None:
+            raise ValueError("A waiting period in months needs the number of months")
+        if self.mode != "months":
+            self.months = None
+        return self
+
+
+class ElectionEligibilityRules(BaseModel):
+    """Election-wide voter rules, stored on ``elections.eligibility_rules``.
+
+    These apply to every ballot item and position in the election, on top of
+    each item's own voter types and check-in requirement and each membership
+    tier's own rules. A secretary's voter override bypasses them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    attendance: AttendanceRule = Field(default_factory=AttendanceRule)
+    waiting_periods: Dict[str, WaitingPeriod] = Field(
+        default_factory=dict,
+        description=(
+            "Per member type (see app.utils.membership.VOTER_TYPE_KEYS): how "
+            "long after becoming that type a member may vote. A type not "
+            "listed has no waiting period"
+        ),
+    )
+
+    @field_validator("waiting_periods")
+    @classmethod
+    def validate_waiting_periods(
+        cls, v: Dict[str, WaitingPeriod]
+    ) -> Dict[str, WaitingPeriod]:
+        unknown = sorted(set(v) - set(VOTER_TYPE_KEYS))
+        if unknown:
+            raise ValueError(
+                f"Unknown member type(s) {', '.join(unknown)}. Must be one of: "
+                f"{', '.join(VOTER_TYPE_KEYS)}"
+            )
+        # "none" is what an absent key already means; storing it would make
+        # two spellings of one rule.
+        return {k: p for k, p in v.items() if p.mode != "none"}
+
+
+class ElectionEligibilityRulesRead(ElectionEligibilityRules):
+    """The rules as read back from a stored election.
+
+    Ignores keys the write model no longer knows, so a row written by an
+    earlier build of this feature (one carrying ``min_tenure_months``) reads
+    rather than failing response validation with a 500.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class EligibilityDefaults(BaseModel):
+    """The department's default voter eligibility, set on Election Settings.
+
+    ``rules`` is copied onto each election created afterwards. The other
+    fields seed what a secretary builds: new ballot items take
+    ``default_require_attendance`` and ``default_voter_types``, and a new
+    election's ``position_eligibility`` takes ``position_voter_types`` for
+    the positions it names. Changing these never touches an existing
+    election.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rules: ElectionEligibilityRules = Field(default_factory=ElectionEligibilityRules)
+    default_require_attendance: bool = True
+    default_voter_types: List[str] = Field(
+        default_factory=lambda: ["all"], min_length=1, max_length=50
+    )
+    position_voter_types: Dict[str, List[str]] = Field(
+        default_factory=dict, max_length=100
+    )
+
+    @field_validator("default_voter_types")
+    @classmethod
+    def validate_default_voter_types(cls, v: List[str]) -> List[str]:
+        return clean_voter_types(v)
+
+    @field_validator("position_voter_types")
+    @classmethod
+    def validate_position_voter_types(
+        cls, v: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        cleaned: Dict[str, List[str]] = {}
+        # Elections match these names without regard to case, so "Chief" and
+        # "chief" would be one position configured twice.
+        seen: set = set()
+        for position, types in v.items():
+            name = position.strip()
+            if not name or len(name) > 200:
+                raise ValueError("Position names must be 1-200 characters")
+            if name.casefold() in seen:
+                raise ValueError(f"Position '{name}' is listed more than once")
+            seen.add(name.casefold())
+            if not types:
+                raise ValueError(f"Position '{name}' needs at least one voter type")
+            cleaned[name] = clean_voter_types(types)
+        return cleaned
+
+
+class TierVotingRule(BaseModel):
+    """One membership tier's own voting rules, reported read-only so the
+    eligibility settings can show them beside the election-wide rules."""
+
+    tier_id: str
+    name: str
+    voting_eligible: bool
+    requires_meeting_attendance: bool
+    min_attendance_pct: float
+    attendance_period_months: int
+
+
 # Election Schemas
 
 
@@ -343,6 +573,21 @@ class ElectionBase(BaseModel):
     )
     position_eligibility: Optional[Dict[str, PositionEligibility]] = Field(
         default=None, description="Eligibility rules per position"
+    )
+    eligibility_rules: Optional[ElectionEligibilityRules] = Field(
+        default=None,
+        description=(
+            "Election-wide voter rules; omitted on create to copy the "
+            "department's defaults"
+        ),
+    )
+    meeting_kind: Optional[str] = Field(
+        default=None,
+        description=(
+            "regular or annual: which of the department's eligibility "
+            "defaults the election copies. Omitted on create, it is annual "
+            "when the linked meeting is an annual meeting, else regular"
+        ),
     )
     meeting_date: Optional[datetime] = Field(
         default=None, description="Meeting date for ballot"
@@ -451,6 +696,11 @@ class ElectionBase(BaseModel):
     def validate_tie_policy(cls, v: str) -> str:
         return _validate_choice(v, VALID_TIE_POLICIES, "tie policy")
 
+    @field_validator("meeting_kind")
+    @classmethod
+    def validate_meeting_kind(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
+
     @field_validator("quorum_type")
     @classmethod
     def validate_quorum_type(cls, v: str) -> str:
@@ -555,6 +805,7 @@ ELECTION_UPDATE_REQUIRED_FIELDS = frozenset(
         "quorum_type",
         "auto_open",
         "tie_policy",
+        "meeting_kind",
     }
 )
 
@@ -574,6 +825,8 @@ class ElectionUpdate(BaseModel):
     positions: Optional[List[str]] = Field(default=None, max_length=100)
     ballot_items: Optional[List[BallotItemInput]] = Field(default=None, max_length=250)
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
+    eligibility_rules: Optional[ElectionEligibilityRules] = None
+    meeting_kind: Optional[str] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
     event_id: Optional[UUID] = None
@@ -598,6 +851,11 @@ class ElectionUpdate(BaseModel):
     reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
     nomination_deadline: Optional[datetime] = None
     tie_policy: Optional[str] = None
+
+    @field_validator("meeting_kind")
+    @classmethod
+    def validate_meeting_kind(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
 
     @field_validator("tie_policy")
     @classmethod
@@ -685,6 +943,8 @@ class ElectionResponse(UTCResponseBase):
     positions: Optional[List[str]] = None
     ballot_items: Optional[List[BallotItem]] = None
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
+    eligibility_rules: Optional[ElectionEligibilityRulesRead] = None
+    meeting_kind: str = "regular"
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
     meeting_title: Optional[str] = None
@@ -1821,7 +2081,68 @@ class ElectionSettingsResponse(BaseModel):
     # Officers (other than the recorder) who must attest a paper-ballot
     # batch before its votes count. 0 disables attestation.
     paper_ballot_attestations_required: Optional[int] = 2
+    eligibility: EligibilityDefaults = Field(default_factory=EligibilityDefaults)
+    # The annual meeting's own defaults; null means it uses ``eligibility``.
+    annual_eligibility: Optional[EligibilityDefaults] = None
+    # Each membership tier's own voting rules, read-only here: they are
+    # edited on the membership tier settings and apply alongside these.
+    tier_voting_rules: List[TierVotingRule] = Field(default_factory=list)
     security: Optional[Dict[str, Any]] = None
+
+
+class MemberWaitOutcome(BaseModel):
+    """Where a member stands against one meeting kind's waiting period."""
+
+    meeting_kind: str
+    state: str = Field(..., description="no_rule, never, waived, eligible or waiting")
+    months: Optional[int] = None
+    eligible_from: Optional[date] = None
+    reason: Optional[str] = None
+
+
+class MemberVotingEligibilityResponse(BaseModel):
+    """A member's voting waiting period, for their profile."""
+
+    user_id: str
+    member_type: Optional[str] = None
+    member_type_label: Optional[str] = None
+    # When the member became their type, as recorded (before any override).
+    type_since: Optional[date] = None
+    # The date the wait actually counts from (override, else type_since
+    # clamped to the current stint).
+    wait_starts: Optional[date] = None
+    voting_wait_from: Optional[date] = None
+    voting_wait_waived: bool = False
+    voting_wait_override_reason: Optional[str] = None
+    # One per meeting kind, under the department's current defaults.
+    outcomes: List[MemberWaitOutcome] = Field(default_factory=list)
+
+
+class MemberVotingEligibilityUpdate(BaseModel):
+    """A secretary's per-member override of the voting waiting period.
+
+    Omit a field to leave it alone; ``voting_wait_from: null`` clears the
+    date. ``reason`` is required whenever the result leaves an override in
+    place, and is cleared with the last of them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    voting_wait_from: Optional[date] = None
+    voting_wait_waived: Optional[bool] = None
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("voting_wait_waived", mode="before")
+    @classmethod
+    def waived_must_be_boolean(cls, value):
+        if value is None:
+            raise ValueError("voting_wait_waived must be true or false")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
 
 
 class NonVoterRecord(BaseModel):
