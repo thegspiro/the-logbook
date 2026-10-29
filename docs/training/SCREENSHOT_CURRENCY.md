@@ -12,6 +12,9 @@ Nothing was captured by this pass.
 | 15 | The applicant's form page with **Save and finish later** | Create |
 | 07 | Field editor with **Pre-fill from applicant (follow-up forms)** | Create |
 | 01 | `01-27-stage-type-picker`: the thirteenth tile, **Follow-up Form** | Replace |
+| 05 | `05-69-label-print-page`, `05-33-label-printing`: the preview now sits under the controls | Re-check |
+| 02 | The cohort **Shift remaining** dialog (limited to 14 days either way) | Re-check |
+| any | A shot showing a red error box on one of the twelve screens moved from `alert-error` to `alert-danger` | Re-check |
 
 ## Queued by the October 28 – 29 documentation pass
 

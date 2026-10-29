@@ -1996,6 +1996,8 @@ and for this part of The Logbook. See
 
 ![The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
 
+_(2026-10-29)_ The preview now sits directly under the controls instead of a screen below them, so a change to size or copies is visible without scrolling.
+
 ![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
 
 > **Saved setups for the department.** Above the printer controls, **Save
