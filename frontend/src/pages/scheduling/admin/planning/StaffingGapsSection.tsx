@@ -212,7 +212,14 @@ const StaffingGapsSection: React.FC = () => {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Refresh
         </button>
-        <p className="text-theme-text-muted min-w-0 flex-1 text-right text-sm" role="status" aria-live="polite">
+        {/* A 14rem basis, not flex-1's zero: in a wrapping row a zero basis takes
+            whatever is left on the line — 22px beside the date fields on a
+            phone — and the summary was drawn far outside it. */}
+        <p
+          className="text-theme-text-muted min-w-0 flex-[1_1_14rem] text-right text-sm"
+          role="status"
+          aria-live="polite"
+        >
           {rangeReversed
             ? ''
             : loading
