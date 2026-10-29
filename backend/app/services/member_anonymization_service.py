@@ -29,7 +29,9 @@ docs/COMPLIANCE.md):
   prospect-linked medical results, every linked source form submission
   (including later duplicate applications referenced only from step
   progress), and the mapped_data applicant copies that form-driven
-  pipeline steps store in prospect_step_progress.action_result.
+  pipeline steps store in prospect_step_progress.action_result, the
+  follow-up forms they were sent, and the applicant copy each election
+  package took (its ballot item, an official election record, is retained).
 
 What is deliberately NOT touched:
 - audit_logs — append-only and hash-chained; rewriting them is tampering.
@@ -41,6 +43,7 @@ Preconditions: the member must already be departed (soft-deleted or in a
 departed/archived status). Anonymization is irreversible by design.
 """
 
+import copy
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -55,6 +58,8 @@ from app.models.medical_screening import ScreeningRecord
 from app.models.meeting import MeetingAttendee
 from app.models.membership_pipeline import (
     ProspectDocument,
+    ProspectElectionPackage,
+    ProspectFormRequest,
     ProspectInterview,
     ProspectiveMember,
     ProspectStepProgress,
@@ -313,6 +318,22 @@ class MemberAnonymizationService:
                     progress.action_result = {**action_result, "mapped_data": None}
                     step_progress_scrubbed += 1
 
+            # Follow-up forms: each one's submission is the applicant's own
+            # answers, its draft and change log hold their contact details,
+            # and its link would keep opening the form.
+            requests_result = await self.db.execute(
+                select(ProspectFormRequest).where(
+                    ProspectFormRequest.prospect_id == prospect.id,
+                    ProspectFormRequest.organization_id == user.organization_id,
+                )
+            )
+            for form_request in requests_result.scalars().all():
+                if form_request.submission_id:
+                    submission_ids.add(str(form_request.submission_id))
+                form_request.token = None
+                form_request.draft_data = None
+                form_request.changes = None
+
             if submission_ids:
                 result = await self.db.execute(
                     update(FormSubmission)
@@ -361,6 +382,40 @@ class MemberAnonymizationService:
                 .where(ProspectInterview.prospect_id == prospect.id)
                 .values(notes=None, recommendation_notes=None)
             )
+            # An election package keeps its own copy of the applicant's
+            # details -- contact details, notes, follow-up answers -- taken
+            # when it was assembled. Keep only what the package's ballot item
+            # and stage list need, under the anonymized name.
+            packages_result = await self.db.execute(
+                select(ProspectElectionPackage).where(
+                    ProspectElectionPackage.prospect_id == prospect.id
+                )
+            )
+            for package in packages_result.scalars().all():
+                old_snapshot = (
+                    package.applicant_snapshot
+                    if isinstance(package.applicant_snapshot, dict)
+                    else {}
+                )
+                package.applicant_snapshot = {
+                    "first_name": prospect.first_name,
+                    "last_name": prospect.last_name,
+                    "desired_membership_type": old_snapshot.get(
+                        "desired_membership_type"
+                    ),
+                    "stage_history": copy.deepcopy(
+                        old_snapshot.get("stage_history") or []
+                    ),
+                }
+                package.coordinator_notes = None
+                config = copy.deepcopy(
+                    package.package_config
+                    if isinstance(package.package_config, dict)
+                    else {}
+                )
+                for key in ("supporting_statement", "custom_fields", "documents"):
+                    config.pop(key, None)
+                package.package_config = config
             # Uploaded applicant documents (ID photos, background checks)
             # are pure PII: remove the files best-effort, then the rows.
             docs_result = await self.db.execute(

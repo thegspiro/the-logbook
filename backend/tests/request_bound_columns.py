@@ -558,10 +558,6 @@ NOT_COLUMN_BACKED = {
         "SERVICE_VALIDATED",
         "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",
     ),
-    "app.schemas.course_cohort:CohortShiftRequest.days": (
-        "ARITHMETIC",
-        "feeds timedelta(days=...); the right limit is how far a class may be shifted, a business rule",
-    ),
 }
 
 
@@ -597,8 +593,7 @@ POLICY_BOUNDED = [
 # accept at both ends and the ones just past them it must refuse. ``shape`` says how the
 # value sits in the field: alone, as a list element, or as a dict value.
 # The reminder lead times (30 days, i.e. 30 days or 720 hours; app/schemas/reminder_limits.py)
-# are a department rule the owner chose. The other business limits (how many days a class
-# may shift) stay in NOT_COLUMN_BACKED until the owner picks a number.
+# are a department rule the owner chose. A class shift is limited to 14 days either way (MAX_COHORT_SHIFT_DAYS), also an owner's rule.
 MAX32 = 2**31 - 1
 MIN32 = -(2**31)
 FLOAT32 = 3.4e38
@@ -615,6 +610,7 @@ _RANGES = {
     "gift_list": ("list", [Decimal("0.01"), MAX_GIFT], [0, MAX_GIFT + Decimal("0.01")]),
     "lead_days": ("list", [0, 30], [-1, 31]),
     "lead_hours": ("list", [0, 720], [-1, 721]),
+    "shift_days": ("scalar", [-14, 14], [-15, 15]),
     "float_any": ("scalar", [-FLOAT32, FLOAT32], [-2 * FLOAT32, 2 * FLOAT32]),
     "float_nonneg": ("scalar", [0, FLOAT32], [-1, 2 * FLOAT32]),
     "float_pos": ("scalar", [1, FLOAT32], [0, 2 * FLOAT32]),
@@ -622,6 +618,7 @@ _RANGES = {
 }
 
 DOMAIN_BOUNDED = {
+    "app.schemas.course_cohort:CohortShiftRequest.days": _RANGES["shift_days"],
     "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_quorum_value": _RANGES[
         "pos_i32"
     ],

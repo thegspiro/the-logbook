@@ -548,7 +548,7 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
         </label>
 
         {validationError ? (
-          <p className="alert-error text-sm" role="alert">
+          <p className="alert-danger text-sm" role="alert">
             {validationError}
           </p>
         ) : null}

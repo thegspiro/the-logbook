@@ -39,6 +39,7 @@ from sqlalchemy.orm import aliased, contains_eager, selectinload
 
 from app.api.dependencies import PaginationParams, user_has_permission
 from app.core.config import settings
+from app.core.utils import list_within_detail_limit
 from app.models.apparatus import Apparatus
 from app.models.email_template import EmailTemplate
 from app.models.facilities import Facility
@@ -8928,9 +8929,12 @@ class FinanceService:
             lines = f"budget lines under {pronoun}"
         else:
             lines = f"budget lines in or under {pronoun}"
-        named = ", ".join(f'"{name}"' for name in names)
         noun, verb = ("category", "is") if single else ("categories", "are")
         raise ValueError(
-            f"The budget {noun} {named} {verb} inactive, so {lines} take no "
-            "new charges. Choose another budget line."
+            list_within_detail_limit(
+                f"The budget {noun} ",
+                [f'"{name}"' for name in names],
+                f" {verb} inactive, so {lines} take no new charges. "
+                "Choose another budget line.",
+            )
         )

@@ -46,6 +46,7 @@ from app.models.membership_pipeline import (
     ProspectDocument,
     ProspectElectionPackage,
     ProspectEventLink,
+    ProspectFormRequest,
     ProspectInterview,
     ProspectiveMember,
     ProspectStatus,
@@ -492,11 +493,12 @@ def _incomplete_required_steps(
 
 
 def _required_steps_refusal(names: List[str]) -> str:
-    listed = ", ".join(f"'{n}'" for n in names)
     noun = "stage is" if len(names) == 1 else "stages are"
-    return (
+    return list_within_detail_limit(
         f"This applicant cannot be converted yet: the required {noun} not "
-        f"complete: {listed}."
+        "complete: ",
+        [f"'{n}'" for n in names],
+        ".",
     )
 
 
@@ -956,6 +958,20 @@ class MembershipPipelineService:
         await assert_in_org(
             self.db, Form, form_id, organization_id, allow_none=True, label="form"
         )
+        # A Follow-up Form stage names its form under its own key. Sharing
+        # `form_id` would run _ensure_membership_form_integration on it, and
+        # every follow-up submission would then file a new applicant.
+        follow_up_id = (
+            config.get("follow_up_form_id") if isinstance(config, dict) else None
+        )
+        await assert_in_org(
+            self.db,
+            Form,
+            follow_up_id,
+            organization_id,
+            allow_none=True,
+            label="follow-up form",
+        )
 
     async def add_step(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
@@ -1003,6 +1019,18 @@ class MembershipPipelineService:
         ):
             max_order = max(taken, default=-1)
             data["sort_order"] = max_order + 1
+
+        config = dict(data.get("config") or {})
+        if (
+            getattr(data.get("step_type"), "value", data.get("step_type"))
+            == PipelineStepType.FOLLOW_UP_FORM.value
+            and "auto_advance" not in config
+        ):
+            # A Follow-up Form stage advances on submission unless the
+            # department unticks it. Stored rather than read as a default
+            # because _try_auto_advance_step treats a missing key as off.
+            config["auto_advance"] = True
+        data["config"] = config
 
         step = MembershipPipelineStep(
             id=generate_uuid(),
@@ -1233,6 +1261,7 @@ class MembershipPipelineService:
                         row.completed_at = None
                         row.completed_by = None
                     await self.ensure_election_package_on_entry(prospect, fallback_step)
+                    await self._send_follow_up_on_entry(prospect, fallback_step)
                 await self._log_activity(
                     prospect_id=prospect.id,
                     action="step_deleted_auto_moved",
@@ -1952,6 +1981,11 @@ class MembershipPipelineService:
         ):
             await self.db.commit()
             created = await self.get_prospect(prospect.id, organization_id)
+        # A pipeline can also open on a follow-up form.
+        if created is not None and created.current_step is not None:
+            if await self._send_follow_up_on_entry(created, created.current_step):
+                await self.db.commit()
+                created = await self.get_prospect(prospect.id, organization_id)
         if created is None:
             raise RuntimeError(f"Prospect {prospect.id} not found after commit")
         return created
@@ -3395,6 +3429,7 @@ class MembershipPipelineService:
             progress.completed_by = None
 
         await self.ensure_election_package_on_entry(prospect, step, assigned_by)
+        await self._send_follow_up_on_entry(prospect, step)
 
         await self._log_activity(
             prospect_id=prospect.id,
@@ -4014,6 +4049,7 @@ class MembershipPipelineService:
             )
 
         await self.ensure_election_package_on_entry(prospect, prev_step, regressed_by)
+        await self._send_follow_up_on_entry(prospect, prev_step)
 
         await self._log_activity(
             prospect_id=prospect_id,
@@ -4093,6 +4129,8 @@ class MembershipPipelineService:
                 # email stage stays for a coordinator to complete.
                 if sent and not next_step.is_final_step:
                     return (str(next_step.id), "stage_email_sent")
+
+            await self._send_follow_up_on_entry(prospect, next_step)
 
             if is_status_page_stage(next_step):
                 await self.db.flush()
@@ -5796,6 +5834,35 @@ class MembershipPipelineService:
             )
             return False
 
+    async def try_auto_advance_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+        *,
+        step_type: PipelineStepType,
+        trigger: str,
+        completed_by: Optional[str] = None,
+        action_result: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Auto-advance past one named stage of ``step_type``.
+
+        For evidence that names its stage — a follow-up form belongs to the
+        stage that sent it — where :meth:`try_auto_advance_current_step` would
+        have to guess it from the current one. The same gates apply: the
+        stage's ``auto_advance`` box, the applicant being on that stage, and
+        the stage's own completion check.
+        """
+        return await self._try_auto_advance_step(
+            prospect_id=prospect_id,
+            organization_id=organization_id,
+            step_id=step_id,
+            completed_by=completed_by,
+            trigger=trigger,
+            for_step_types={step_type},
+            action_result=action_result,
+        )
+
     async def try_auto_advance_current_step(
         self,
         prospect_id: str,
@@ -6735,6 +6802,32 @@ class MembershipPipelineService:
                     "nothing was purged; please try again"
                 )
 
+        # A follow-up form's submission belongs to the application alone, but
+        # sits in the Forms module, linked only through the request row the
+        # cascade below removes. Deleted first, or the answers — sensitive ones
+        # included — would outlive the application they were collected for.
+        from app.models.forms import FormSubmission
+
+        follow_up_submissions = (
+            (
+                await self.db.execute(
+                    select(ProspectFormRequest.submission_id).where(
+                        ProspectFormRequest.prospect_id.in_(ids),
+                        ProspectFormRequest.submission_id.isnot(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if follow_up_submissions:
+            await self.db.execute(
+                delete(FormSubmission).where(
+                    FormSubmission.id.in_(list(follow_up_submissions)),
+                    FormSubmission.organization_id == organization_id,
+                )
+            )
+
         # Cascade handles the dependent rows.
         await self.db.execute(
             delete(ProspectiveMember).where(ProspectiveMember.id.in_(ids))
@@ -7577,6 +7670,19 @@ class MembershipPipelineService:
             snapshot["date_of_birth"] = (
                 str(prospect.date_of_birth) if prospect.date_of_birth else None
             )
+        # Only when the stage asks for it: a stage configured before this
+        # setting existed has no package_fields to say so, and _field_enabled
+        # reads that as "everything" -- which must not start copying answers
+        # into packages that never carried them.
+        if (
+            package_fields is not None
+            and package_fields.get("include_follow_up_answers") is True
+        ):
+            from app.services.follow_up_form_service import FollowUpFormService
+
+            snapshot["follow_up_forms"] = await FollowUpFormService(
+                self.db
+            ).package_answers(str(prospect.id), str(prospect.organization_id))
 
         pkg = ProspectElectionPackage(
             id=generate_uuid(),
@@ -7597,6 +7703,27 @@ class MembershipPipelineService:
             performed_by=created_by,
         )
         return pkg
+
+    async def _send_follow_up_on_entry(
+        self, prospect: ProspectiveMember, step: Optional[MembershipPipelineStep]
+    ) -> bool:
+        """Email the follow-up form of a Follow-up Form stage just entered.
+
+        Called beside ensure_election_package_on_entry on every path onto a
+        stage, so the applicant gets the link however they arrive. Only the
+        first arrival sends; the stage stays open until the applicant submits
+        (FollowUpFormService.submit). Returns True when a request was written,
+        for a caller that commits on its own.
+        """
+        if step is None or effective_step_type(step) != PipelineStepType.FOLLOW_UP_FORM:
+            return False
+        from app.services.follow_up_form_service import FollowUpFormService
+
+        await self.db.flush()
+        request, _ = await FollowUpFormService(self.db).send_for_stage(
+            prospect, step, only_if_unsent=True
+        )
+        return request is not None
 
     async def ensure_election_package_on_entry(
         self,
@@ -8494,6 +8621,16 @@ class MembershipPipelineService:
             current_stage_action = self._build_current_stage_action(
                 prospect.current_step
             )
+            if (
+                current_stage_action is None
+                and effective_step_type(prospect.current_step)
+                == PipelineStepType.FOLLOW_UP_FORM
+            ):
+                from app.services.follow_up_form_service import FollowUpFormService
+
+                current_stage_action = await FollowUpFormService(
+                    self.db
+                ).status_page_action(prospect)
 
         next_meeting = None
         found = await self._status_page_meeting(prospect, public_step_ids, show_future)

@@ -1330,24 +1330,25 @@ asks for an optional reason, then **Confirm Rejection**. See
 
 ### Pipeline Stage Types
 
-There are **twelve** stage types. You pick one from a grid of tiles in the
+There are **thirteen** stage types. You pick one from a grid of tiles in the
 **Add Pipeline Stage** (or **Edit Stage**) dialog. Picking a tile changes the
 settings shown below it.
 
-| Stage type                | Purpose                         | What happens                                                                                                                                                    |
-| ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Form Submission**       | Collect the applicant's details | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                              |
-| **Document Upload**       | Collect required documents      | Documents such as ID or a background check are uploaded. Can auto-advance when they are all in                                                                  |
-| **Meeting**               | Interview or orientation        | Needs the applicant at a meeting. Links to upcoming events                                                                                                      |
-| **Election / Vote**       | Membership vote                 | Reaching the stage in any way creates the applicant's election package, once. They cannot advance past the vote without a package, or until the vote is decided |
-| **Manual Approval**       | Coordinator sign-off            | An officer marks the stage complete                                                                                                                             |
-| **Enable Status Page**    | Turn online tracking on or off  | Turns this applicant's public status page on or off, then completes itself. See [Enable Status Page Stages](#enable-status-page-stages)                         |
-| **Automated Email**       | Send an email                   | Sends a set email when the applicant arrives, then completes itself once it is sent. See [Automated Email Stages](#automated-email-stages)                      |
-| **Reference Check**       | Collect references              | Collect and check personal or work references                                                                                                                   |
-| **Checklist**             | Several items to sign off       | A list of items, such as orientation or gear issue, instead of one approval                                                                                     |
-| **Interview Requirement** | A set number of interviews      | The applicant needs that many interviews before advancing                                                                                                       |
-| **Multi-Signer Approval** | Several roles must agree        | Every named role must sign off                                                                                                                                  |
-| **Medical Screening**     | Medical clearance               | Needs a physical exam or medical clearance before advancing                                                                                                     |
+| Stage type                        | Purpose                            | What happens                                                                                                                                                                                                                                             |
+| --------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Form Submission**               | Collect the applicant's details    | Links to a form from the Forms module. Can auto-advance when the form is submitted                                                                                                                                                                       |
+| **Document Upload**               | Collect required documents         | Documents such as ID or a background check are uploaded. Can auto-advance when they are all in                                                                                                                                                           |
+| **Meeting**                       | Interview or orientation           | Needs the applicant at a meeting. Links to upcoming events                                                                                                                                                                                               |
+| **Election / Vote**               | Membership vote                    | Reaching the stage in any way creates the applicant's election package, once. They cannot advance past the vote without a package, or until the vote is decided                                                                                          |
+| **Manual Approval**               | Coordinator sign-off               | An officer marks the stage complete                                                                                                                                                                                                                      |
+| **Enable Status Page**            | Turn online tracking on or off     | Turns this applicant's public status page on or off, then completes itself. See [Enable Status Page Stages](#enable-status-page-stages)                                                                                                                  |
+| **Automated Email**               | Send an email                      | Sends a set email when the applicant arrives, then completes itself once it is sent. See [Automated Email Stages](#automated-email-stages)                                                                                                               |
+| **Reference Check**               | Collect references                 | Collect and check personal or work references                                                                                                                                                                                                            |
+| **Checklist**                     | Several items to sign off          | A list of items, such as orientation or gear issue, instead of one approval                                                                                                                                                                              |
+| **Interview Requirement**         | A set number of interviews         | The applicant needs that many interviews before advancing                                                                                                                                                                                                |
+| **Multi-Signer Approval**         | Several roles must agree           | Every named role must sign off                                                                                                                                                                                                                           |
+| **Medical Screening**             | Medical clearance                  | Needs a physical exam or medical clearance before advancing                                                                                                                                                                                              |
+| **Follow-up Form** _(2026-10-29)_ | Confirm and add to the application | Emails the applicant a personal link to a form pre-filled with what is on file; changed answers update the record. Advances when they submit, unless that is switched off. See [Follow-up Forms](./15-prospective-members.md#follow-up-forms-2026-10-29) |
 
 > **What if the vote did not pass?** An applicant who is on a ballot cannot
 > advance until the vote is decided. An applicant who was not elected cannot
@@ -1361,7 +1362,7 @@ description, type and starting settings. The presets are:
 - Coordinator Approval, Reference Check, New Member Orientation, Interview
   Panel, Officer Sign-Off, Physical Exam.
 
-![The stage type picker in the Stage Configuration modal, showing all twelve stage types](./images/01-27-stage-type-picker.png)
+![The stage type picker in the Stage Configuration modal, showing the stage types](./images/01-27-stage-type-picker.png)
 
 For each stage type's settings, see
 [Prospective Members → Stage Types](./15-prospective-members.md#stage-types).
@@ -1476,7 +1477,7 @@ the left to see its settings. (If you have none yet, it shows "Create your
 first pipeline".) From there you can:
 
 - create and customize pipelines;
-- add, remove or reorder stages (twelve stage types);
+- add, remove or reorder stages (thirteen stage types);
 - set auto-advance, emails, form links and event links for each stage;
 - choose the default pipeline for new applicants;
 - turn **Public Application Status Page** on or off, and with it **Show

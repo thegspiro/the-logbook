@@ -5,7 +5,7 @@
  */
 
 // Loading & Progress
-export { Skeleton, SkeletonRow, SkeletonCard, SkeletonPage, SkeletonCardGrid } from './Skeleton';
+export { Skeleton, SkeletonText, SkeletonRow, SkeletonCard, SkeletonPage, SkeletonCardGrid } from './Skeleton';
 export { TopProgressBar } from './TopProgressBar';
 export { ProgressSteps } from './ProgressSteps';
 export type { Step } from './ProgressSteps';

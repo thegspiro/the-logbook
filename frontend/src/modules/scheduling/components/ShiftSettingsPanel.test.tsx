@@ -139,6 +139,22 @@ describe('ShiftSettingsPanel', () => {
     }
   );
 
+  // Four General cards are drawn only once the feature settings arrive, above
+  // the template and defaults cards, so those wait for the answer.
+  it('keeps the General cards after the first invisible until the feature settings answer', async () => {
+    const HIDES_ALL_BUT_FIRST = '[&>*:not(:first-child)]:invisible';
+    let settle: (value: SchedulingFeatureSettings) => void = () => {};
+    vi.mocked(schedulingService.getFeatureSettings).mockReturnValueOnce(
+      new Promise<SchedulingFeatureSettings>((resolve) => (settle = resolve))
+    );
+    renderPanel('general');
+    const general = () => screen.getByTestId('general-settings');
+    expect(general()).toHaveClass(HIDES_ALL_BUT_FIRST);
+
+    settle({ hours_window_days: 7 } as SchedulingFeatureSettings);
+    await waitFor(() => expect(general()).not.toHaveClass(HIDES_ALL_BUT_FIRST));
+  });
+
   it('no longer renders its own heading — the page owns the title', () => {
     renderPanel('general');
 

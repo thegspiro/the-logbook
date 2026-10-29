@@ -118,6 +118,18 @@ async def get_available_requirements(
         return {"requirements": requirements}
 
 
+@router.get("/config/positions")
+async def get_available_positions(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_permission("training.manage", "compliance.manage")),
+):
+    """Get the positions a compliance profile can be scoped to."""
+    async with handle_service_errors("Failed to fetch positions"):
+        service = ComplianceConfigService(db)
+        positions = await service.get_available_positions(current_user.organization_id)
+        return {"positions": positions}
+
+
 # =============================================================================
 # Compliance Profiles
 # =============================================================================

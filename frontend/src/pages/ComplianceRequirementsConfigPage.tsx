@@ -3,7 +3,7 @@
  *
  * Allows compliance officers to configure:
  * - Compliance thresholds (what % = compliant vs at-risk vs non-compliant)
- * - Compliance profiles (role/membership-based requirement sets, including
+ * - Compliance profiles (position/membership-based requirement sets, including
  *   required admin hours per category and year/quarter)
  * - Report scheduling (monthly/yearly auto-generation + email)
  * - Manual report generation and history
@@ -46,11 +46,11 @@ import type {
   ComplianceProfile,
   ComplianceProfileCreate,
   AvailableRequirement,
+  AvailablePosition,
   ComplianceReportSummary,
   ComplianceReportGenerate,
 } from '../types/training';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
-import { Breadcrumbs } from '../components/ux';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 
 // Shared form input classes
@@ -108,6 +108,7 @@ export default function ComplianceRequirementsConfigPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [config, setConfig] = useState<ComplianceConfigData | null>(null);
   const [requirements, setRequirements] = useState<AvailableRequirement[]>([]);
+  const [positions, setPositions] = useState<AvailablePosition[]>([]);
   const [reports, setReports] = useState<ComplianceReportSummary[]>([]);
   const [reportsTotal, setReportsTotal] = useState(0);
 
@@ -129,6 +130,7 @@ export default function ComplianceRequirementsConfigPage() {
   const [profileName, setProfileName] = useState('');
   const [profileDescription, setProfileDescription] = useState('');
   const [profileMembershipTypes, setProfileMembershipTypes] = useState<string[]>([]);
+  const [profilePositionIds, setProfilePositionIds] = useState<string[]>([]);
   const [profileRequiredReqs, setProfileRequiredReqs] = useState<string[]>([]);
   const [profileOptionalReqs, setProfileOptionalReqs] = useState<string[]>([]);
   const [profileCompliantOverride, setProfileCompliantOverride] = useState('');
@@ -196,6 +198,15 @@ export default function ComplianceRequirementsConfigPage() {
     }
   }, []);
 
+  const loadPositions = useCallback(async () => {
+    try {
+      const data = await complianceConfigService.getAvailablePositions();
+      setPositions(asArray(data.positions));
+    } catch {
+      // Non-critical — profiles can still be scoped by membership type alone
+    }
+  }, []);
+
   const loadReports = useCallback(async () => {
     try {
       const data = await complianceConfigService.listReports({ limit: 20 });
@@ -222,11 +233,11 @@ export default function ComplianceRequirementsConfigPage() {
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
-      await Promise.all([loadConfig(), loadRequirements(), loadReports(), loadAdminHoursCategories()]);
+      await Promise.all([loadConfig(), loadRequirements(), loadPositions(), loadReports(), loadAdminHoursCategories()]);
       setIsLoading(false);
     };
     void load();
-  }, [loadConfig, loadRequirements, loadReports, loadAdminHoursCategories]);
+  }, [loadConfig, loadRequirements, loadPositions, loadReports, loadAdminHoursCategories]);
 
   const handleSaveConfig = async () => {
     setIsSaving(true);
@@ -279,6 +290,7 @@ export default function ComplianceRequirementsConfigPage() {
     setProfileName('');
     setProfileDescription('');
     setProfileMembershipTypes([]);
+    setProfilePositionIds([]);
     setProfileRequiredReqs([]);
     setProfileOptionalReqs([]);
     setProfileCompliantOverride('');
@@ -293,6 +305,7 @@ export default function ComplianceRequirementsConfigPage() {
     setProfileName(profile.name);
     setProfileDescription(profile.description ?? '');
     setProfileMembershipTypes(profile.membershipTypes ?? []);
+    setProfilePositionIds(profile.roleIds ?? []);
     setProfileRequiredReqs(profile.requiredRequirementIds ?? []);
     setProfileOptionalReqs(profile.optionalRequirementIds ?? []);
     setProfileCompliantOverride(profile.compliantThresholdOverride?.toString() ?? '');
@@ -339,6 +352,9 @@ export default function ComplianceRequirementsConfigPage() {
         // so unchecking every entry actually clears the stored list on
         // update instead of leaving the old selection behind.
         membership_types: profileMembershipTypes,
+        // role_ids hold position ids (see _find_matching_profile). Always sent
+        // for the same reason as membership_types.
+        role_ids: profilePositionIds,
         required_requirement_ids: profileRequiredReqs,
         optional_requirement_ids: profileOptionalReqs,
         compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : null,
@@ -474,6 +490,19 @@ export default function ComplianceRequirementsConfigPage() {
     return requirements.find((r: AvailableRequirement) => r.id === id)?.name ?? id;
   };
 
+  const getPositionName = (id: string) => {
+    return positions.find((p: AvailablePosition) => p.id === id)?.name ?? 'Deleted position';
+  };
+
+  // A position deleted after it was selected stays in the stored list until the
+  // profile is saved without it, so it is listed here to keep it removable.
+  const selectablePositions: AvailablePosition[] = [
+    ...positions,
+    ...profilePositionIds
+      .filter((id: string) => !positions.some((p: AvailablePosition) => p.id === id))
+      .map((id: string) => ({ id, name: getPositionName(id) })),
+  ];
+
   const getAdminHoursCategoryName = (id: string) => {
     return adminHoursCategories.find((c: AdminHoursCategory) => c.id === id)?.name ?? id;
   };
@@ -493,19 +522,11 @@ export default function ComplianceRequirementsConfigPage() {
     { id: 'reports', label: 'Report History', icon: <FileText className="h-4 w-4" /> },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-6 p-6">
-        <Breadcrumbs underHub="/training/admin" />
-        <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
-          <RefreshCw className="text-theme-text-secondary h-8 w-8 animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+  // The header and the section tabs need no data, so they are drawn while it
+  // loads: a centred spinner in a narrower column was replaced wholesale, and
+  // the tabs landed ~220px from where its box had been.
+  const pageTop = (
+    <>
       <TrainingPageHeader
         icon={Shield}
         title="Compliance Requirements Configuration"
@@ -534,6 +555,23 @@ export default function ComplianceRequirementsConfigPage() {
           </button>
         ))}
       </div>
+    </>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+        {pageTop}
+        <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
+          <RefreshCw className="text-theme-text-secondary h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      {pageTop}
 
       {/* Tab Content */}
       {activeTab === 'thresholds' && (
@@ -849,6 +887,41 @@ export default function ComplianceRequirementsConfigPage() {
                   <p className="text-theme-text-secondary mt-1 text-xs">Leave empty to apply to all membership types</p>
                 </div>
 
+                {/* Positions */}
+                <div className="md:col-span-2">
+                  <span className={labelClass} id="compliance-positions-label">
+                    Applies to Members Holding a Position
+                  </span>
+                  <p className="text-theme-text-secondary mb-2 text-xs">
+                    Leave empty to apply regardless of position. When membership types are also selected, a member must
+                    match both — e.g. Life members who hold a &ldquo;Non-Operational&rdquo; position.
+                  </p>
+                  {selectablePositions.length === 0 ? (
+                    <p className="text-theme-text-secondary text-sm italic">No positions found.</p>
+                  ) : (
+                    <div
+                      className="border-theme-surface-border max-h-48 space-y-1 overflow-y-auto rounded border p-2"
+                      role="group"
+                      aria-labelledby="compliance-positions-label"
+                    >
+                      {selectablePositions.map((position: AvailablePosition) => (
+                        <label
+                          key={position.id}
+                          className="hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-start gap-2 rounded p-1"
+                        >
+                          <input
+                            type="checkbox"
+                            className={checkboxClass}
+                            checked={profilePositionIds.includes(position.id)}
+                            onChange={() => toggleRequirement(position.id, profilePositionIds, setProfilePositionIds)}
+                          />
+                          <span className="text-theme-text-primary text-sm">{position.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Threshold Overrides */}
                 <div>
                   <label className={labelClass} htmlFor="compliance-compliant-threshold-override">
@@ -1097,6 +1170,9 @@ export default function ComplianceRequirementsConfigPage() {
               <div className="text-theme-text-secondary mt-3 flex flex-wrap gap-4 text-xs">
                 {profile.membershipTypes && profile.membershipTypes.length > 0 && (
                   <span>Types: {profile.membershipTypes.join(', ')}</span>
+                )}
+                {profile.roleIds && profile.roleIds.length > 0 && (
+                  <span>Positions: {profile.roleIds.map(getPositionName).join(', ')}</span>
                 )}
                 {profile.compliantThresholdOverride != null && (
                   <span>Compliant: ≥{profile.compliantThresholdOverride}%</span>

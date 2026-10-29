@@ -142,6 +142,8 @@ export interface ElectionPackageFieldConfig {
   include_date_of_birth: boolean;
   include_documents: boolean;
   include_stage_history: boolean;
+  /** Non-sensitive follow-up form answers; sensitive answers are never packaged. */
+  include_follow_up_answers?: boolean | undefined;
   custom_note_prompt?: string | undefined; // prompt shown to coordinator when packaging
 }
 
@@ -269,6 +271,18 @@ export interface MedicalScreeningStageConfig {
   auto_advance?: boolean | undefined;
 }
 
+/**
+ * A Follow-up Form stage. The form is named under its own key, not
+ * `form_id`: the backend turns any stage's `form_id` into an interest-form
+ * integration, and a follow-up submission must never file a new applicant.
+ */
+export interface FollowUpFormStageConfig {
+  follow_up_form_id: string;
+  follow_up_form_name?: string | undefined;
+  custom_message?: string | undefined;
+  auto_advance?: boolean | undefined;
+}
+
 export type StageConfig =
   | FormStageConfig
   | DocumentStageConfig
@@ -281,7 +295,8 @@ export type StageConfig =
   | ChecklistConfig
   | InterviewRequirementConfig
   | MultiApprovalConfig
-  | MedicalScreeningStageConfig;
+  | MedicalScreeningStageConfig
+  | FollowUpFormStageConfig;
 
 /**
  * The config every stage type starts from, and the shape a reader falls back to
@@ -349,6 +364,12 @@ export const DEFAULT_STAGE_CONFIGS: Record<StageType, () => StageConfig> = {
     required_screenings: ['physical_exam'],
     require_all_passed: true,
   }),
+  follow_up_form: () => ({
+    follow_up_form_id: '',
+    follow_up_form_name: '',
+    custom_message: '',
+    auto_advance: true,
+  }),
 };
 
 /** The default config for a stage type, safe for an unknown/legacy value. */
@@ -359,6 +380,114 @@ export function defaultStageConfig(stageType: StageType): StageConfig {
 // =============================================================================
 // Pipeline Stage
 // =============================================================================
+
+// =============================================================================
+// Follow-up Forms
+// =============================================================================
+
+/** One applicant-record value a follow-up submission changed. */
+export interface FollowUpChange {
+  field: string;
+  label: string;
+  old?: string | null | undefined;
+  new?: string | null | undefined;
+  /** False when the record was left as it was (an email another open application uses). */
+  applied: boolean;
+}
+
+/** A field of a follow-up form, as the applicant's page renders it. */
+export interface PublicFollowUpFormField {
+  id: string;
+  label: string;
+  field_type: string;
+  placeholder?: string | null | undefined;
+  help_text?: string | null | undefined;
+  required: boolean;
+  min_length?: number | null | undefined;
+  max_length?: number | null | undefined;
+  min_value?: number | null | undefined;
+  max_value?: number | null | undefined;
+  options?: { value: string; label: string }[] | null | undefined;
+  condition_field_id?: string | null | undefined;
+  condition_operator?: string | null | undefined;
+  condition_value?: string | null | undefined;
+  sort_order: number;
+  width: string;
+  is_sensitive: boolean;
+}
+
+/** What the applicant's link opens: the form, filled with what is known. */
+export interface PublicFollowUpForm {
+  form_name: string;
+  form_description?: string | null | undefined;
+  organization_name?: string | null | undefined;
+  applicant_first_name: string;
+  fields: PublicFollowUpFormField[];
+  /** The saved draft, or what the applicant record holds, by field id. */
+  values: Record<string, string>;
+  draft_saved_at?: string | null | undefined;
+}
+
+export const FollowUpFormStatus = {
+  NOT_SENT: 'not_sent',
+  SENT: 'sent',
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+} as const;
+export type FollowUpFormStatus = (typeof FollowUpFormStatus)[keyof typeof FollowUpFormStatus];
+
+/** A follow-up form sent to an applicant (snake_case, as the API sends it). */
+export interface FollowUpFormRequest {
+  id: string;
+  prospect_id: string;
+  step_id?: string | null | undefined;
+  step_name?: string | null | undefined;
+  form_id?: string | null | undefined;
+  form_name?: string | null | undefined;
+  status: FollowUpFormStatus;
+  first_sent_at?: string | null | undefined;
+  last_sent_at?: string | null | undefined;
+  draft_saved_at?: string | null | undefined;
+  submitted_at?: string | null | undefined;
+  submission_id?: string | null | undefined;
+  /** Reminders the daily task has sent, at most three. */
+  reminder_count?: number | undefined;
+  last_reminder_at?: string | null | undefined;
+  changes: FollowUpChange[];
+  contact_changed: boolean;
+  contact_change_reviewed_at?: string | null | undefined;
+  contact_change_reviewed_by_name?: string | null | undefined;
+}
+
+/**
+ * One answer of a submitted follow-up form. A sensitive answer comes back as
+ * null with `withheld` set unless the viewer holds sensitive_answers.view.
+ */
+export interface FollowUpAnswer {
+  field_id: string;
+  label: string;
+  answer?: string | null | undefined;
+  is_sensitive: boolean;
+  withheld: boolean;
+}
+
+/** A submitted follow-up form's answers, as the Interview page shows them. */
+export interface FollowUpAnswers {
+  request_id: string;
+  step_name?: string | null | undefined;
+  form_id?: string | null | undefined;
+  form_name?: string | null | undefined;
+  submitted_at?: string | null | undefined;
+  answers: FollowUpAnswer[];
+}
+
+/** A follow-up form's non-sensitive answers, as an election package carries them. */
+export interface PackageFollowUpForm {
+  form_name?: string | null | undefined;
+  stage_name?: string | null | undefined;
+  submitted_at?: string | null | undefined;
+  answers: { label: string; answer: string }[];
+}
 
 // =============================================================================
 // Report Stage Groups
@@ -628,6 +757,8 @@ export interface ApplicantListItem {
   deactivated_at?: string | undefined;
   withdrawn_at?: string | undefined;
   withdrawal_reason?: string | undefined;
+  /** A follow-up form changed their email or phone, and nobody has reviewed it. */
+  contact_change_pending?: boolean | undefined;
   created_at: string;
 }
 
@@ -823,7 +954,7 @@ export interface SignOffResult {
  * documents will be sent for e-signature via Documenso).
  */
 export interface CurrentStageAction {
-  type: 'calcom_scheduling' | 'documenso_signature';
+  type: 'calcom_scheduling' | 'documenso_signature' | 'follow_up_form';
   label: string;
   url?: string | undefined;
   message?: string | undefined;
@@ -985,6 +1116,8 @@ export interface ElectionPackage {
   documents?: { name: string; url: string }[] | undefined;
   stage_summary?: { stage_name: string; completed_at?: string | undefined }[] | undefined;
   custom_fields?: Record<string, string> | undefined;
+  /** Present only when the election stage's package settings include them. */
+  follow_up_forms?: PackageFollowUpForm[] | undefined;
 
   // Recommended ballot item configuration (from stage config)
   recommended_ballot_item?:
@@ -1156,6 +1289,7 @@ export interface BackendProspectResponse {
 
 /** Backend prospect list item response (ProspectListResponse schema). */
 export interface BackendProspectListResponse {
+  contact_change_pending?: boolean | undefined;
   target_role_name: string | null;
   deactivated_at: string | null;
   withdrawn_at: string | null;
@@ -1210,6 +1344,7 @@ export interface BackendElectionPackageResponse {
     created_at?: string;
     documents?: { name: string; document_type: string }[];
     stage_history?: { stage_name: string; completed_at?: string }[];
+    follow_up_forms?: PackageFollowUpForm[];
   } | null;
   coordinator_notes: string | null;
   package_config: {

@@ -25,10 +25,16 @@ What the sweep can and cannot see:
   on any ``.join`` in a refusal whose list the source does not show is fixed
   in size: a constant, an enum, a slice with a fixed end, or a local built only
   from those. Build such a message with ``list_within_detail_limit``, which
-  keeps it under the cap however long the list gets. A join assembled into a
-  variable before the ``raise`` is not followed.
-* A message produced by a call (a helper, ``str(exc)``) is not text the sweep
-  can read, and is skipped.
+  keeps it under the cap however long the list gets. Names the message reads
+  are followed back to what they were bound to, and calls it makes are
+  followed into the called function's ``return`` values, with its parameters
+  bound to what the call passed, up to ``MAX_CALL_DEPTH`` calls deep. A call
+  is followed when it names a function in the same module or imported from
+  ``app``, a method through ``self``, ``cls`` or its class, or a function
+  through an imported ``app`` module; a call through any other object (an
+  instance held in a variable, a service built inline) is not.
+* A message produced by a call is not text the first check can read, and is
+  skipped there; the second check reads into it as above.
 * A raise that never reaches ``safe_error_detail`` is still checked. That is
   deliberate: whether a service error reaches a client is decided by whichever
   endpoint calls the service, today or later.
@@ -39,6 +45,7 @@ Matching is done on the AST, in the manner of ``test_log_call_shape.py``.
 import ast
 import functools
 from pathlib import Path
+from typing import NamedTuple
 from unittest.mock import patch
 
 from app.core import utils
@@ -139,57 +146,81 @@ def _is_super_init(call):
     )
 
 
-class _MessageSites(ast.NodeVisitor):
-    """Collect each refusal message expression with its enclosing function.
+class _ModuleFacts(ast.NodeVisitor):
+    """Everything the sweep needs from one module, read in a single pass.
 
-    A site is a ``raise`` of a refusal class, or a ``super().__init__`` call
-    inside a refusal class: a subclass that composes its own message hands it
-    there, so its raise sites pass data rather than the text.
+    Its classes, its ``from app... import`` names, each function's nearest
+    enclosing class, and every place a refusal message could be: a ``raise``
+    of a call, or a ``super().__init__`` call inside a class. Which of those
+    are refusals is settled by :meth:`sites` once every module's classes are
+    known, since a refusal class may be defined anywhere.
     """
 
-    def __init__(self, refusal_classes):
-        self.refusal_classes = refusal_classes
-        self.functions = [None]
-        self.classes = [None]
-        self.sites = []
+    def __init__(self, module):
+        self.module = module
+        self.class_defs = []
+        self.imports = {}
+        self.owners = {}
+        self._functions = [None]
+        self._classes = [None]
+        self._candidates = []
+
+    @classmethod
+    def read(cls, tree, module):
+        facts = cls(module)
+        facts.visit(tree)
+        return facts
 
     def _visit_function(self, node):
-        self.functions.append(node)
+        self.owners[id(node)] = (self.module, self._classes[-1])
+        self._functions.append(node)
         self.generic_visit(node)
-        self.functions.pop()
+        self._functions.pop()
 
     visit_FunctionDef = _visit_function
     visit_AsyncFunctionDef = _visit_function
 
     def visit_ClassDef(self, node):
-        self.classes.append(node.name)
+        self.class_defs.append(node)
+        self._classes.append(node.name)
         self.generic_visit(node)
-        self.classes.pop()
+        self._classes.pop()
 
-    def _record(self, lineno, call):
-        argument = _message_argument(call)
-        if argument is not None:
-            self.sites.append((lineno, argument, self.functions[-1]))
+    def visit_ImportFrom(self, node):
+        if (node.module or "").startswith("app"):
+            for alias in node.names:
+                self.imports[alias.asname or alias.name] = (node.module, alias.name)
 
     def visit_Raise(self, node):
-        if (
-            isinstance(node.exc, ast.Call)
-            and _base_name(node.exc.func) in self.refusal_classes
-        ):
-            self._record(node.lineno, node.exc)
+        if isinstance(node.exc, ast.Call):
+            self._candidates.append(
+                (_base_name(node.exc.func), node.lineno, node.exc, self._functions[-1])
+            )
         self.generic_visit(node)
 
     def visit_Call(self, node):
-        if self.classes[-1] in self.refusal_classes and _is_super_init(node):
-            self._record(node.lineno, node)
+        # A subclass that composes its own message hands it to
+        # super().__init__, so its raise sites pass data rather than the text.
+        if self._classes[-1] is not None and _is_super_init(node):
+            self._candidates.append(
+                (self._classes[-1], node.lineno, node, self._functions[-1])
+            )
         self.generic_visit(node)
+
+    def sites(self, refusal_classes):
+        """``(lineno, message expression, enclosing function)`` per refusal."""
+        sites = []
+        for name, lineno, call, function in self._candidates:
+            if name in refusal_classes:
+                argument = _message_argument(call)
+                if argument is not None:
+                    sites.append((lineno, argument, function))
+        return sites
 
 
 def _message_sites(tree, refusal_classes):
     """``(lineno, message expression, enclosing function)`` for each refusal."""
-    visitor = _MessageSites(refusal_classes)
-    visitor.visit(tree)
-    return visitor.sites
+    return _ModuleFacts.read(tree, None).sites(refusal_classes)
 
 
 def _refusals(tree, sites):
@@ -274,14 +305,14 @@ def _is_bounded(node, scopes, seen=frozenset()):
     if isinstance(node, ast.Name):
         if _is_constant_name(node.id):
             return True
-        if node.id in seen:
-            return False
         for scope in scopes:
             if node.id in scope:
-                values = scope[node.id]
+                key = (id(scope), node.id)
+                if key in seen:
+                    return False
                 return all(
-                    value is not None and _is_bounded(value, scopes, seen | {node.id})
-                    for value in values
+                    _is_bounded_value(value, scopes, seen | {key})
+                    for value in scope[node.id]
                 )
         return False
     if isinstance(node, ast.Attribute):
@@ -298,10 +329,14 @@ def _is_bounded(node, scopes, seen=frozenset()):
         return False
     if isinstance(node, ast.Subscript):
         index = node.slice
-        return (
-            isinstance(index, ast.Slice)
-            and isinstance(index.upper, ast.Constant)
-            and isinstance(index.upper.value, int)
+        if not isinstance(index, ast.Slice) or index.upper is None:
+            return False
+        upper = index.upper
+        if isinstance(upper, ast.Constant):
+            return isinstance(upper.value, int)
+        # xs[:_SHOWN]: a slice ending at a constant is as fixed as a literal.
+        return isinstance(upper, (ast.Name, ast.Attribute)) and _is_constant_name(
+            _base_name(upper)
         )
     if isinstance(node, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
         return all(_is_bounded(gen.iter, scopes, seen) for gen in node.generators)
@@ -325,29 +360,334 @@ def _is_bounded(node, scopes, seen=frozenset()):
     return False
 
 
-def _unbounded_joins(tree, sites):
-    """Yield ``(lineno, joined source)`` for each join of data into a refusal."""
+class _Argument(NamedTuple):
+    """What a call passed for a parameter, with the caller's scopes to read it in."""
+
+    expression: ast.expr
+    scopes: tuple
+
+
+def _is_bounded_value(value, scopes, seen):
+    if value is None:
+        return False
+    if isinstance(value, _Argument):
+        return _is_bounded(value.expression, value.scopes, seen)
+    return _is_bounded(value, scopes, seen)
+
+
+#: How many calls deep a message is followed into the functions that build it.
+MAX_CALL_DEPTH = 3
+
+#: Callees not followed: they bound what they are given by construction.
+SELF_LIMITING_HELPERS = frozenset({("app/core/utils.py", "list_within_detail_limit")})
+
+
+def _module_scope(tree):
     top_level = [
         node for node in tree.body if isinstance(node, (ast.Assign, ast.AnnAssign))
     ]
-    module_scope = _assignments(ast.Module(body=top_level, type_ignores=[]))
-    function_scopes = {}
+    return _assignments(ast.Module(body=top_level, type_ignores=[]))
+
+
+def _own_nodes(function):
+    """The nodes of ``function`` itself, not of functions or classes nested in it."""
+    pending = list(ast.iter_child_nodes(function))
+    while pending:
+        node = pending.pop()
+        yield node
+        if not isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+        ):
+            pending.extend(ast.iter_child_nodes(node))
+
+
+def _decorator_names(function):
+    return {_base_name(d) for d in function.decorator_list}
+
+
+class _Index:
+    """Where each function and method in ``app/`` is, and what each module imports.
+
+    Enough to resolve the calls a refusal message makes: a function in the same
+    module or imported from ``app``, a method through ``self``, ``cls`` or its
+    class, and a function through an imported ``app`` module.
+    """
+
+    def __init__(self, modules):
+        """``modules`` is ``(module name, tree, _ModuleFacts)`` for each module."""
+        self.trees = {}
+        self.functions = {}
+        self.methods = {}
+        self.owners = {}
+        self.imports = {}
+        self._module_scopes = {}
+        self._local_scopes = {}
+        for name, tree, facts in modules:
+            self.trees[name] = tree
+            self.imports[name] = facts.imports
+            self.owners.update(facts.owners)
+            functions = {}
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    functions[node.name] = node
+                elif isinstance(node, ast.ClassDef):
+                    self.methods[(name, node.name)] = {
+                        item.name: item
+                        for item in node.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    }
+            self.functions[name] = functions
+
+    @staticmethod
+    def relative(path):
+        return str(Path(path).relative_to(BACKEND))
+
+    def module_file(self, dotted):
+        base = dotted.replace(".", "/")
+        for candidate in (f"{base}.py", f"{base}/__init__.py"):
+            if candidate in self.trees:
+                return candidate
+        return None
+
+    def module_scope(self, module):
+        if module not in self._module_scopes:
+            self._module_scopes[module] = _module_scope(self.trees[module])
+        return self._module_scopes[module]
+
+    def local_scope(self, function):
+        if id(function) not in self._local_scopes:
+            self._local_scopes[id(function)] = _assignments(function)
+        return self._local_scopes[id(function)]
+
+    def _imported(self, module, name):
+        """``(module file, original name)`` that ``name`` was imported as, if any."""
+        target = self.imports.get(module, {}).get(name)
+        if target is None:
+            return None, None
+        dotted, original = target
+        submodule = self.module_file(f"{dotted}.{original}")
+        if submodule is not None:
+            return submodule, None
+        return self.module_file(dotted), original
+
+    def resolve(self, func, module, owner_class):
+        """The function definition a call's ``func`` expression names, or None."""
+        if isinstance(func, ast.Name):
+            local = self.functions.get(module, {}).get(func.id)
+            if local is not None:
+                return local
+            source, original = self._imported(module, func.id)
+            if source is not None and original is not None:
+                return self.functions.get(source, {}).get(original)
+            return None
+        if not (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)):
+            return None
+        receiver = func.value.id
+        if receiver in ("self", "cls"):
+            if owner_class is None:
+                return None
+            return self.methods.get((module, owner_class), {}).get(func.attr)
+        if (module, receiver) in self.methods:
+            return self.methods[(module, receiver)].get(func.attr)
+        source, original = self._imported(module, receiver)
+        if source is None:
+            return None
+        if original is None:
+            return self.functions.get(source, {}).get(func.attr)
+        return self.methods.get((source, original), {}).get(func.attr)
+
+    def bound_scope(self, function, call, caller_scopes):
+        """The callee's bindings, with each parameter bound to what was passed.
+
+        A parameter the call does not supply takes its default; one passed by
+        ``*args`` or ``**kwargs``, or with no default, stays unreadable.
+        """
+        module, owner_class = self.owners[id(function)]
+        scope = {
+            name: list(values) for name, values in self.local_scope(function).items()
+        }
+        arguments = function.args
+        positional = [*arguments.posonlyargs, *arguments.args]
+        decorators = _decorator_names(function)
+        if (
+            owner_class is not None
+            and "staticmethod" not in decorators
+            and isinstance(call.func, ast.Attribute)
+            and (
+                "classmethod" in decorators
+                or (
+                    isinstance(call.func.value, ast.Name)
+                    and call.func.value.id in ("self", "cls")
+                )
+            )
+        ):
+            positional = positional[1:]
+        passed = {}
+        if not any(isinstance(arg, ast.Starred) for arg in call.args):
+            for param, arg in zip(positional, call.args):
+                passed[param.arg] = _Argument(arg, caller_scopes)
+        for keyword in call.keywords:
+            if keyword.arg is not None:
+                passed[keyword.arg] = _Argument(keyword.value, caller_scopes)
+        module_scopes = (self.module_scope(module),)
+        defaults = dict(
+            zip(
+                [param.arg for param in positional][
+                    len(positional) - len(arguments.defaults) :
+                ],
+                arguments.defaults,
+            )
+        )
+        defaults.update(
+            (param.arg, default)
+            for param, default in zip(arguments.kwonlyargs, arguments.kw_defaults)
+            if default is not None
+        )
+        for name in [param.arg for param in [*positional, *arguments.kwonlyargs]]:
+            value = passed.get(name)
+            if value is None and name in defaults:
+                value = _Argument(defaults[name], module_scopes)
+            if value is not None and scope.get(name):
+                scope[name][0] = value
+        return scope
+
+
+def _is_list_join(node):
+    """Whether ``node`` joins items into text: ``", ".join(items)``.
+
+    The separator must be a string literal or a constant, which leaves out
+    SQLAlchemy's ``select(...).join(table, ...)`` and ``os.path.join``. An
+    empty separator is left out too: ``"".join(c for c in uid if c.isalnum())``
+    rebuilds one string rather than listing items.
+    """
+    if not (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "join"
+        and len(node.args) == 1
+        and not node.keywords
+    ):
+        return False
+    separator = node.func.value
+    if isinstance(separator, ast.Constant):
+        return isinstance(separator.value, str) and separator.value != ""
+    return isinstance(separator, (ast.Name, ast.Attribute)) and _is_constant_name(
+        _base_name(separator)
+    )
+
+
+def _capped_items(call):
+    """The items argument of a ``list_within_detail_limit`` call, if this is one.
+
+    Whatever is built into those items is cut to fit by the helper itself.
+    """
+    if _base_name(call.func) != "list_within_detail_limit":
+        return None
+    if len(call.args) > 1:
+        return call.args[1]
+    return next((kw.value for kw in call.keywords if kw.arg == "items"), None)
+
+
+def _walk_uncapped(expression):
+    """``ast.walk`` that does not descend into a capped list of items."""
+    pending = [expression]
+    while pending:
+        node = pending.pop()
+        yield node
+        capped = _capped_items(node) if isinstance(node, ast.Call) else None
+        pending.extend(
+            child for child in ast.iter_child_nodes(node) if child is not capped
+        )
+
+
+class _Frame(NamedTuple):
+    """An expression that becomes part of a message, and where to read it."""
+
+    expression: ast.expr
+    scopes: tuple
+    module: str
+    owner_class: object
+    depth: int
+
+
+def _message_frames(argument, scopes, module, owner_class, index):
+    """The message expression, and everything it is built from.
+
+    Followed transitively: each name the message reads, back to the values
+    bound to it in the innermost scope that binds it; each argument a callee
+    reads, back to the caller's expression; and each call to a function the
+    index can resolve, into that function's ``return`` values with its
+    parameters bound to what was passed, up to ``MAX_CALL_DEPTH`` calls deep.
+    """
+    frames = []
+    pending = [_Frame(argument, scopes, module, owner_class, 0)]
+    followed_names, followed_calls = set(), set()
+    while pending:
+        frame = pending.pop()
+        frames.append(frame)
+        for node in _walk_uncapped(frame.expression):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                scope = next((s for s in frame.scopes if node.id in s), None)
+                if scope is None or (id(scope), node.id) in followed_names:
+                    continue
+                followed_names.add((id(scope), node.id))
+                for value in scope[node.id]:
+                    if isinstance(value, _Argument):
+                        pending.append(
+                            frame._replace(
+                                expression=value.expression, scopes=value.scopes
+                            )
+                        )
+                    elif value is not None:
+                        pending.append(frame._replace(expression=value))
+            elif (
+                isinstance(node, ast.Call)
+                and index is not None
+                and frame.depth < MAX_CALL_DEPTH
+            ):
+                callee = index.resolve(node.func, frame.module, frame.owner_class)
+                if callee is None or id(node) in followed_calls:
+                    continue
+                callee_module, callee_class = index.owners[id(callee)]
+                if (callee_module, callee.name) in SELF_LIMITING_HELPERS:
+                    continue
+                followed_calls.add(id(node))
+                callee_scopes = (
+                    index.bound_scope(callee, node, frame.scopes),
+                    index.module_scope(callee_module),
+                )
+                pending.extend(
+                    _Frame(
+                        returned.value,
+                        callee_scopes,
+                        callee_module,
+                        callee_class,
+                        frame.depth + 1,
+                    )
+                    for returned in _own_nodes(callee)
+                    if isinstance(returned, ast.Return) and returned.value is not None
+                )
+    return frames
+
+
+def _unbounded_joins(module, tree, sites, index):
+    """Yield each join of data into a refusal.
+
+    As ``(join module, join line, joined source, refusal line)``: the join can
+    sit in another function, or another module, from the ``raise`` it feeds.
+    """
+    module_scope = index.module_scope(module) if index else _module_scope(tree)
     for lineno, argument, function in sites:
         if function is None:
-            scopes = (module_scope,)
+            scopes, owner_class = (module_scope,), None
         else:
-            if function not in function_scopes:
-                function_scopes[function] = _assignments(function)
-            scopes = (function_scopes[function], module_scope)
-        for node in ast.walk(argument):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "join"
-                and node.args
-                and not _is_bounded(node.args[0], scopes)
-            ):
-                yield lineno, ast.unparse(node.args[0])
+            local = index.local_scope(function) if index else _assignments(function)
+            scopes = (local, module_scope)
+            owner_class = index.owners[id(function)][1] if index else None
+        for frame in _message_frames(argument, scopes, module, owner_class, index):
+            for node in _walk_uncapped(frame.expression):
+                if _is_list_join(node) and not _is_bounded(node.args[0], frame.scopes):
+                    yield frame.module, node.lineno, ast.unparse(node.args[0]), lineno
 
 
 def _sent_to_client(text):
@@ -362,28 +702,39 @@ def _app_sweep():
 
     Returns ``(refusals, joins)``: written-out messages as
     ``(path, lineno, text)``, and joins of data into a message as
-    ``(path, lineno, joined source)``. Cached because parsing the whole of
+    ``(join module, join line, joined source, refusal module, refusal line)``,
+    each join once however many refusals it reaches. Cached because parsing the whole of
     ``app/`` takes several seconds and several tests read the result; the
     per-test timeout is 30.
     """
-    parsed = [
+    return _sweep(
         (path, ast.parse(path.read_text(encoding="utf-8")))
         for path in _python_sources()
-    ]
-    refusal_classes = _refusal_classes(
-        node
-        for _, tree in parsed
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ClassDef)
     )
-    refusals, joins = [], []
+
+
+def _sweep(parsed):
+    modules = []
     for path, tree in parsed:
-        sites = _message_sites(tree, refusal_classes)
-        refusals.extend((path, lineno, text) for lineno, text in _refusals(tree, sites))
-        joins.extend(
-            (path, lineno, joined) for lineno, joined in _unbounded_joins(tree, sites)
+        module = _Index.relative(path)
+        modules.append((module, tree, _ModuleFacts.read(tree, module)))
+    refusal_classes = _refusal_classes(
+        cls for _, _, facts in modules for cls in facts.class_defs
+    )
+    index = _Index(modules)
+    refusals, joins = [], set()
+    for module, tree, facts in modules:
+        sites = facts.sites(refusal_classes)
+        refusals.extend(
+            (BACKEND / module, lineno, text) for lineno, text in _refusals(tree, sites)
         )
-    return tuple(refusals), tuple(joins)
+        joins.update(
+            (join_module, join_line, joined, module, raise_line)
+            for join_module, join_line, joined, raise_line in _unbounded_joins(
+                module, tree, sites, index
+            )
+        )
+    return tuple(refusals), tuple(sorted(joins))
 
 
 def _app_refusals():
@@ -444,6 +795,9 @@ BOUNDED_JOINS = {
         "an attendance-lock refusal: attendance_lock_http_error sends it without "
         "the length cap, and it lists field names"
     ),
+    ("app/services/file_storage_service.py", "remote_storage.labels().values()"): (
+        "the remote storage platforms registered in code"
+    ),
     ("app/services/minutes_record_service.py", "failed"): (
         "SuggestionApplyConflict has its own 409 handler, which sends the message "
         "and the failed ids without safe_error_detail"
@@ -452,20 +806,36 @@ BOUNDED_JOINS = {
 
 
 def _app_unbounded_joins():
+    """Each data-sized join once, with one refusal it reaches.
+
+    Excluded by where the refusal is raised, since that decides whether it
+    passes through safe_error_detail; allowlisted by where the join is.
+    """
+    first_refusal = {}
+    for join_module, join_line, joined, module, raise_line in _app_sweep()[1]:
+        if module.startswith(JOINS_NOT_SENT_THROUGH_SAFE_ERROR_DETAIL):
+            continue
+        first_refusal.setdefault((join_module, join_line, joined), (module, raise_line))
     return [
-        (path, lineno, joined)
-        for path, lineno, joined in _app_sweep()[1]
-        if not str(path.relative_to(BACKEND)).startswith(
-            JOINS_NOT_SENT_THROUGH_SAFE_ERROR_DETAIL
+        (join_module, join_line, joined, module, raise_line)
+        for (join_module, join_line, joined), (module, raise_line) in sorted(
+            first_refusal.items()
         )
     ]
 
 
 def test_no_refusal_joins_a_list_that_grows_with_the_data():
     offenders = [
-        f"{path.relative_to(BACKEND)}:{lineno}: ', '.join({joined})"
-        for path, lineno, joined in _app_unbounded_joins()
-        if (str(path.relative_to(BACKEND)), joined) not in BOUNDED_JOINS
+        f"{join_module}:{join_line}: .join({joined})"
+        + (
+            ""
+            if (join_module, join_line) == (module, raise_line)
+            else f"  (reaches the refusal at {module}:{raise_line})"
+        )
+        for join_module, join_line, joined, module, raise_line in (
+            _app_unbounded_joins()
+        )
+        if (join_module, joined) not in BOUNDED_JOINS
     ]
 
     assert not offenders, (
@@ -482,8 +852,7 @@ def test_no_refusal_joins_a_list_that_grows_with_the_data():
 def test_every_bounded_join_entry_still_matches_a_join():
     """An entry for a join that has gone would excuse the next one written."""
     present = {
-        (str(path.relative_to(BACKEND)), joined)
-        for path, _, joined in _app_unbounded_joins()
+        (join_module, joined) for join_module, _, joined, _, _ in _app_unbounded_joins()
     }
     stale = sorted(set(BOUNDED_JOINS) - present)
     assert not stale, f"BOUNDED_JOINS entries that match nothing: {stale}"
@@ -525,9 +894,21 @@ def test_the_sweep_skips_what_it_cannot_read():
     assert _found('raise RuntimeError("not a refusal")') == []
 
 
+def _joins_in(modules):
+    """The joined sources the check reports across ``modules``.
+
+    ``modules`` maps a name under ``app/`` to its source: ``"a.py"`` is
+    ``app/a.py``, imported as ``app.a``, so calls between them resolve as they
+    do in the sweep.
+    """
+    _, joins = _sweep(
+        (APP / name, ast.parse(source)) for name, source in modules.items()
+    )
+    return [joined for _, _, joined, _, _ in joins]
+
+
 def _joins(source):
-    tree, sites = _sites(source)
-    return [joined for _, joined in _unbounded_joins(tree, sites)]
+    return _joins_in({"snippet.py": source})
 
 
 def test_the_join_check_flags_lists_that_come_from_data():
@@ -549,6 +930,138 @@ def test_the_join_check_flags_lists_that_come_from_data():
         "    def __init__(self, ids):\n"
         '        super().__init__("Taken: " + ", ".join(ids))'
     ) == ["ids"]
+
+
+def test_the_join_check_follows_variables_built_before_the_raise():
+    assert _joins(
+        "def f(ids):\n"
+        '    shown = ", ".join(ids)\n'
+        '    raise ValueError(f"Unknown: {shown}")'
+    ) == ["ids"]
+    # Through a second variable, and when the message itself is a variable.
+    assert _joins(
+        "def f(rows):\n"
+        "    names = [r.name for r in rows]\n"
+        '    shown = ", ".join(names)\n'
+        '    message = "Blocked: " + shown\n'
+        "    raise ValueError(message)"
+    ) == ["names"]
+    # A capped variable is still capped.
+    assert (
+        _joins(
+            "def f(ids):\n"
+            '    shown = ", ".join(ids[:3])\n'
+            '    raise ValueError(f"Unknown: {shown}")'
+        )
+        == []
+    )
+    # A name bound twice in a cycle is followed once.
+    assert (
+        _joins("def f(a):\n" "    b = a\n" "    a = b\n" '    raise ValueError(f"{a}")')
+        == []
+    )
+
+
+def test_the_join_check_follows_calls_into_other_functions():
+    helper = (
+        "def describe(names):\n"
+        '    return "Blocked: " + ", ".join(names)\n'
+        "def refuse(rows):\n"
+        "    raise ValueError(describe([r.name for r in rows]))\n"
+    )
+    assert _joins(helper) == ["names"]
+    # The caller decides: a fixed list passed in is a fixed list joined.
+    assert _joins(helper.replace("[r.name for r in rows]", "STATUSES")) == []
+    # A default stands in for an argument the call leaves out.
+    assert (
+        _joins(
+            "def describe(names=STATUSES):\n"
+            '    return ", ".join(names)\n'
+            "def refuse():\n"
+            "    raise ValueError(describe())\n"
+        )
+        == []
+    )
+    # A helper that slices before it joins is capped wherever it is called.
+    assert (
+        _joins(
+            "def describe(names):\n"
+            '    return ", ".join(names[:3])\n'
+            "def refuse(ids):\n"
+            "    raise ValueError(describe(ids))\n"
+        )
+        == []
+    )
+
+
+def test_the_join_check_follows_methods_and_imports():
+    assert _joins(
+        "class Service:\n"
+        "    def _describe(self, names):\n"
+        '        return ", ".join(names)\n'
+        "    def refuse(self, ids):\n"
+        '        raise ValueError(f"Unknown: {self._describe(ids)}")\n'
+    ) == ["names"]
+    helpers = {"helpers.py": 'def describe(names):\n    return ", ".join(names)\n'}
+    assert _joins_in(
+        {
+            **helpers,
+            "service.py": (
+                "from app.helpers import describe\n"
+                "def refuse(ids):\n"
+                "    raise ValueError(describe(ids))\n"
+            ),
+        }
+    ) == ["names"]
+    assert _joins_in(
+        {
+            **helpers,
+            "service.py": (
+                "from app import helpers\n"
+                "def refuse(ids):\n"
+                "    raise ValueError(helpers.describe(ids))\n"
+            ),
+        }
+    ) == ["names"]
+
+
+def test_the_join_check_stops_at_the_call_depth():
+    chain = "".join(
+        f"def f{n}(names):\n    return f{n + 1}(names)\n" for n in range(1, 5)
+    )
+    joining = 'def f{}(names):\n    return ", ".join(names)\n'
+    refuse = "def refuse(ids):\n    raise ValueError(f1(ids))\n"
+    # f1 -> f2 -> f3 joins: three calls deep, within MAX_CALL_DEPTH.
+    shallow = "".join(
+        f"def f{n}(names):\n    return f{n + 1}(names)\n" for n in range(1, 3)
+    )
+    assert _joins(shallow + joining.format(3) + refuse) == ["names"]
+    # f1 -> ... -> f5 joins: past it, and not followed.
+    assert _joins(chain + joining.format(5) + refuse) == []
+
+
+def test_the_join_check_reads_only_lists_joined_into_text():
+    # SQLAlchemy's join and os.path.join are not text joins.
+    assert (
+        _joins(
+            "def q(table, ids):\n"
+            "    return select(Item).join(table, Item.id.in_(ids))\n"
+            "def refuse(table, ids):\n"
+            "    raise ValueError(str(q(table, ids)))\n"
+        )
+        == []
+    )
+    # An empty separator rebuilds one string; it does not list items.
+    assert _joins('def f(uid):\n    raise ValueError("".join(uid))') == []
+    # Items handed to list_within_detail_limit are cut to fit by the helper.
+    assert (
+        _joins(
+            "def f(errs):\n"
+            "    raise ValueError(list_within_detail_limit(\n"
+            '        "", [".".join(e) for e in errs], separator="; "))'
+        )
+        == []
+    )
 
 
 def test_the_join_check_leaves_fixed_lists_alone():

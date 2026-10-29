@@ -1266,8 +1266,13 @@ async def resolve_outreach_signup_role(
     labels = get_outreach_roles(org)
 
     if not requested_role:
-        options = ", ".join(role_label(labels, name) for name in wanted)
-        raise ValueError(f"Choose what you would like to do: {options}.")
+        raise ValueError(
+            list_within_detail_limit(
+                "Choose what you would like to do: ",
+                [role_label(labels, name) for name in wanted],
+                ".",
+            )
+        )
     if requested_role not in wanted:
         raise ValueError(
             f"{role_label(labels, requested_role)} is not one of the roles "

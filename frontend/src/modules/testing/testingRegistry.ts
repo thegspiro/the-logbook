@@ -139,6 +139,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/ballot', label: 'Ballot voting', note: 'Token-based; reached from a ballot email', isPublic: true },
       { path: '/application-status/:token', label: 'Application status', isPublic: true },
+      {
+        path: '/application-form/:token',
+        label: 'Applicant follow-up form',
+        note: 'Token-based; reached from a Follow-up Form stage email',
+        isPublic: true,
+      },
       { path: '/event-request/status/:token', label: 'Event request status', isPublic: true },
       {
         path: '/display/:code',

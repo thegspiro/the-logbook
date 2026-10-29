@@ -1155,6 +1155,12 @@ tabs:
 - **Data Control** — which fields the portal shares. Every field is listed and
   off until you turn it on. Fields holding personal information carry a **PII**
   badge.
+  The three statistics that used to come back empty now carry figures
+  _(2026-10-28)_: stations counts the Fire Station facilities that are not
+  archived, calls counts calls in call tracking since 1 January, and volunteer
+  hours totals this calendar year's approved admin hours, completed training and
+  shift and event attendance, each hour counted once. Both yearly figures follow
+  the department's time zone.
 
 **Nothing is shared until all three are done:** the portal enabled, a key
 created, and the fields turned on under Data Control.
@@ -1683,8 +1689,10 @@ switch between them.
   you are editing stays open.
 - **Prospective Members** holds the emails applicants receive — **Application
   Step Completed**, **Application Status Link**, **Application Going
-  Inactive**, **Application Withdrawn** and **Duplicate Application Notice** —
-  and the coordinators' **Prospect Inactivity Warning**. _(2026-10-26)_ When
+  Inactive**, **Application Withdrawn**, **Duplicate Application Notice**,
+  **Application Follow-up Form** and **Application Contact Details Changed**
+  _(2026-10-29)_ — and the coordinators' **Prospect Inactivity Warning**.
+  _(2026-10-26)_ When
   each is sent, and its variables, is in
   [Prospective Members → Emails to Applicants](./15-prospective-members.md#emails-to-applicants).
 - Each entry says whether your department has changed it and how much it is
@@ -1699,11 +1707,12 @@ switch between them.
 
 **Off means off** _(2026-10-27)_. Switching a template **Off** stops that email
 from being sent at all; before this release it only fell back to the built-in
-wording and the email kept going out. The editor says what Off does. Five
+wording and the email kept going out. The editor says what Off does. Seven
 emails cannot be switched off, because their recipient could not get the
 content any other way: **Password Reset**, **IT Password Notification**,
-**Welcome**, **Ballot Notification** and **Application Status Link** (their
-switch is disabled). A department that never opened Email Templates keeps every
+**Welcome**, **Ballot Notification**, **Application Status Link**, and
+_(2026-10-29)_ **Application Follow-up Form** and **Application Contact
+Details Changed** (their switch is disabled). A department that never opened Email Templates keeps every
 email. Operators: check the **Off** filter before upgrading
 ([`UPGRADING.md`](../UPGRADING.md)).
 

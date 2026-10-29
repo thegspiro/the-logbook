@@ -19,6 +19,7 @@ const ApplicationStatusPage = lazyWithRetry(() =>
   }))
 );
 const InterviewPage = lazyWithRetry(() => import('./pages/InterviewPage'));
+const FollowUpFormPage = lazyWithRetry(() => import('./pages/FollowUpFormPage'));
 const ProspectLabelPrintPage = lazyWithRetry(() => import('./pages/ProspectLabelPrintPage'));
 const SignOffsPage = lazyWithRetry(() => import('./pages/SignOffsPage'));
 
@@ -121,6 +122,15 @@ export const getProspectiveMembersPublicRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ApplicationStatusPage />
+          </Suspense>
+        }
+      />
+      {/* Applicant follow-up form (no auth required; the link's token is the credential) */}
+      <Route
+        path="/application-form/:token"
+        element={
+          <Suspense fallback={null}>
+            <FollowUpFormPage />
           </Suspense>
         }
       />

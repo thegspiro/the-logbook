@@ -46,6 +46,7 @@ import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/
 import ElectionPackageSection from './ElectionPackageSection';
 import LinkedEventsSection from './LinkedEventsSection';
 import ApplicantDocumentsSection from './ApplicantDocumentsSection';
+import FollowUpFormsSection from './FollowUpFormsSection';
 import { ApplicantActionPanels } from './ApplicantActionPanels';
 
 /** Maps snake_case backend field keys to human-readable labels. */
@@ -714,6 +715,9 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
 
                   {/* Documents */}
                   <ApplicantDocumentsSection applicant={applicant} tz={tz} />
+
+                  {/* Follow-up Forms */}
+                  <FollowUpFormsSection applicant={applicant} tz={tz} />
 
                   {/* Checklist Stage Section */}
                   {applicant.current_stage_type === StageTypeEnum.CHECKLIST &&

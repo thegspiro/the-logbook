@@ -27,6 +27,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import { courseCohortService } from '../../services/api';
+import { MAX_COHORT_SHIFT_DAYS } from '../../constants/config';
+import { shiftDaysError } from '../../utils/cohortShift';
 import { SkeletonPage } from '../../components/ux/Skeleton';
 import { Breadcrumbs } from '../../components/ux/Breadcrumbs';
 import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
@@ -142,11 +144,12 @@ export const CohortDetailPage: React.FC = () => {
   const handleShift = () =>
     withBusy(async () => {
       if (!cohortId) return;
-      const days = Number(shiftDays);
-      if (!days) {
-        toast.error('Enter a number of days');
+      const shiftError = shiftDaysError(shiftDays);
+      if (shiftError) {
+        toast.error(shiftError);
         return;
       }
+      const days = Number(shiftDays);
       try {
         const result = await courseCohortService.shiftClasses(cohortId, {
           days,
@@ -313,12 +316,16 @@ export const CohortDetailPage: React.FC = () => {
             <input
               id="shift-days"
               type="number"
+              min={-MAX_COHORT_SHIFT_DAYS}
+              max={MAX_COHORT_SHIFT_DAYS}
+              step={1}
               value={shiftDays}
               onChange={(e) => setShiftDays(e.target.value)}
               className="form-input md:max-w-[10rem]"
             />
             <p className="text-theme-text-muted mt-1 text-xs">
-              Days. Negative pulls the schedule forward. Classes that already happened are left alone.
+              Days, up to {MAX_COHORT_SHIFT_DAYS} either way. Negative pulls the schedule forward. Classes that already
+              happened are left alone.
             </p>
           </div>
           <button type="button" onClick={() => void handleShift()} disabled={busy} className="btn-primary">

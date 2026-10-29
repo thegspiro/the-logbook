@@ -27,6 +27,7 @@ import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
+import { SkeletonText } from '../components/ux/Skeleton';
 import { SchedulingPageHeader } from '../components/scheduling/SchedulingPageHeader';
 import ShiftBoard from './scheduling/board/ShiftBoard';
 
@@ -145,6 +146,7 @@ const SchedulingPage: React.FC = () => {
     templatesLoaded,
     shiftApparatus: apparatusList,
     summary,
+    summaryError,
     loadInitialData,
     loadSummary,
   } = useSchedulingStore();
@@ -530,8 +532,11 @@ const SchedulingPage: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'schedule' && (
           <>
-            {/* Summary Stats */}
-            {summary && (
+            {/* Summary Stats. Drawn from the first paint, placeholders where
+                the figures go — the summary is always fetched on mount, and
+                the row appearing with it pushed the board ~180px down. A failed
+                summary drops the row. */}
+            {!summaryError && (
               <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
                 {/* Each label names its own window and whose figure it is. Three
                     of these count scheduled shifts over different spans and the
@@ -541,24 +546,26 @@ const SchedulingPage: React.FC = () => {
                     record happened to fall in the current month. */}
                 <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">Shifts on record (all dates)</p>
-                  <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">{summary.shifts_scheduled}</p>
+                  <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
+                    {summary ? summary.shifts_scheduled : <SkeletonText className="w-10" />}
+                  </p>
                 </div>
                 <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">Shifts this week</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
-                    {summary.shifts_scheduled_this_week}
+                    {summary ? summary.shifts_scheduled_this_week : <SkeletonText className="w-10" />}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">Shifts this month</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
-                    {summary.shifts_scheduled_this_month}
+                    {summary ? summary.shifts_scheduled_this_month : <SkeletonText className="w-10" />}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">Department hours this month</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
-                    {summary.hours_worked_this_month}
+                    {summary ? summary.hours_worked_this_month : <SkeletonText className="w-10" />}
                   </p>
                 </div>
               </div>
