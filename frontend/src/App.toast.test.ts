@@ -12,7 +12,12 @@ describe('global toast presentation', () => {
       stylesheet.slice(stylesheet.indexOf('.app-toaster'))
     )?.[1];
 
-    expect(mobileRule).toMatch(/top:\s*calc\(4rem \+ env\(safe-area-inset-top\)\)\s*!important/);
+    // Below the fixed mobile header, whose height is a variable since it drops
+    // to 3rem on a short landscape screen; on every other phone it is 4rem.
+    expect(mobileRule).toMatch(
+      /top:\s*calc\(var\(--mobile-header-height\) \+ env\(safe-area-inset-top\)\)\s*!important/
+    );
+    expect(stylesheet).toMatch(/:root \{\s*--mobile-header-height:\s*4rem;/);
     expect(mobileRule).toMatch(/right:\s*1rem\s*!important/);
     expect(mobileRule).toMatch(/left:\s*1rem\s*!important/);
     expect(mobileRule).toMatch(/\.app-toaster > div[\s\S]*max-width:\s*100%\s*!important/);
