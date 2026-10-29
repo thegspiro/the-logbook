@@ -780,6 +780,41 @@ class TestWaitingPeriods:
         assert row["will_receive_ballot"] is False
         assert row["ineligibility_reason"].startswith("Administrative members may vote")
 
+    async def _tier_org(self, db, ranks_as):
+        org = await _org(db)
+        tier = {"id": "cadet", "name": "Cadet", "sort_order": 0}
+        if ranks_as:
+            tier["ranks_as"] = ranks_as
+        org.settings = {"membership_tiers": {"tiers": [tier]}}
+        await db.flush()
+        return org
+
+    async def test_a_tier_takes_the_wait_of_the_status_it_counts_as(self, db_session):
+        # The same "Counts as" that decides who may vote decides the wait, so
+        # one member is never a probationer for the ballot and typeless here.
+        org = await self._tier_org(db_session, "probationary")
+        cadet = await _typed_member(
+            db_session, org, "cadet", "operational", "cadet", _ago(years=3)
+        )
+        election = await _election(db_session, org, cadet, _waits(probationary=NEVER))
+        result = await self._check(db_session, cadet, election, org)
+        assert result.is_eligible is False
+        assert result.reason == "Probationary members are not eligible to vote"
+
+        roster = await ElectionService(db_session).get_eligibility_roster(
+            election.id, org.id
+        )
+        row = next(r for r in roster["roster"] if r["user_id"] == str(cadet.id))
+        assert row["will_receive_ballot"] is False
+
+    async def test_a_tier_that_counts_as_nothing_has_no_wait(self, db_session):
+        org = await self._tier_org(db_session, None)
+        cadet = await _typed_member(
+            db_session, org, "cadetfree", "operational", "cadet", _ago(days=3)
+        )
+        election = await _election(db_session, org, cadet, _waits(probationary=NEVER))
+        assert (await self._check(db_session, cadet, election, org)).is_eligible
+
 
 @pytest.mark.integration
 class TestCreateAndUpdate:

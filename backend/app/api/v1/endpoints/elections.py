@@ -1457,15 +1457,19 @@ async def update_election_settings(
 
 
 async def _member_voting_eligibility(
-    db: AsyncSession, member: User, org_settings: dict
+    db: AsyncSession, member: User, org: Optional[Organization]
 ) -> MemberVotingEligibilityResponse:
     """A member's waiting-period standing under each meeting kind's current
     defaults, judged by the same helpers the ballot check uses, so the
     profile card cannot disagree with the ballot (pitfall #29)."""
+    org_settings = (org.settings or {}) if org else {}
     tier_svc = MembershipTierService(db)
     organization_id = str(member.organization_id)
     type_key = voter_type_key(
-        member.member_class, member.member_status, member.membership_type
+        member.member_class,
+        member.member_status,
+        member.membership_type,
+        MembershipTierService.ranks_as_by_tier(org),
     )
     tz = await resolve_scheduling_timezone(db, organization_id)
     today = today_in(tz)
@@ -1541,9 +1545,7 @@ async def get_member_voting_eligibility(
     """
     member = await _org_member(db, user_id, current_user.organization_id)
     org = await db.get(Organization, str(current_user.organization_id))
-    return await _member_voting_eligibility(
-        db, member, (org.settings or {}) if org else {}
-    )
+    return await _member_voting_eligibility(db, member, org)
 
 
 @router.put(
@@ -1624,9 +1626,7 @@ async def update_member_voting_eligibility(
     )
 
     org = await db.get(Organization, str(current_user.organization_id))
-    return await _member_voting_eligibility(
-        db, member, (org.settings or {}) if org else {}
-    )
+    return await _member_voting_eligibility(db, member, org)
 
 
 # ============================================

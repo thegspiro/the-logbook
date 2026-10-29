@@ -55,6 +55,22 @@ Every member also holds the baseline **Member** position. Higher priority means
 more authority; priority orders positions in lists and is not itself a
 permission.
 
+**Every position has a `kind`** _(2026-10-29)_: `office` (a permission-bearing
+job), `committee` (a group a member serves on, granting nothing of its own) or
+`system` (the baseline `member`, the `it_manager` owner and the rank mirrors).
+`POSITION_KINDS` in `app/core/permissions.py` is the vocabulary; every
+`DEFAULT_POSITIONS` entry states its kind, and `position_kind_for(slug)`
+answers for a seeded slug. The member profile groups a member's positions by
+it, and the positions editor asks for it when a position is created. A client
+may create or change a position as `office` or `committee`; `system` is
+reserved and refused, and a seeded position keeps the kind the registry gives
+it. Four committees are seeded to every agency type — `community_outreach_team`,
+`history_committee`, `fundraising_committee`, `membership_committee` — each
+carrying a _copy_ of the baseline `member` list (never the same list object:
+CLAUDE.md pitfall #23), so a member whose only position is a committee still
+reaches the member screens; `tests/test_baseline_member_grants.py` holds the
+four to the baseline.
+
 | Position (slug)                                                           | Priority | What it manages beyond the baseline                                                                                                                                                       |
 | ------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **IT Manager** (`it_manager`)                                             | 100      | `*` — every permission. The System Owner position held by whoever sets up the platform                                                                                                    |
@@ -88,6 +104,10 @@ permission.
 | **Firefighter** (`firefighter`)                                           | 15       | Baseline only                                                                                                                                                                             |
 | **EMT** (`emt`)                                                           | 12       | Baseline only                                                                                                                                                                             |
 | **Member** (`member`)                                                     | 10       | The baseline every member holds (below)                                                                                                                                                   |
+| **Community Education / Outreach Team** (`community_outreach_team`)       | 10       | A committee: nothing beyond the baseline                                                                                                                                                  |
+| **History Committee** (`history_committee`)                               | 10       | A committee: nothing beyond the baseline                                                                                                                                                  |
+| **Fundraising Committee** (`fundraising_committee`)                       | 10       | A committee: nothing beyond the baseline                                                                                                                                                  |
+| **Membership Committee** (`membership_committee`)                         | 10       | A committee: nothing beyond the baseline                                                                                                                                                  |
 
 The **baseline** (the Member position) is read access to the member directory,
 organization, training, scheduling, inventory, storefront, meetings, elections,
@@ -301,14 +321,14 @@ groups the Role Management screen shows.
 | Screen                | Route             | Gate                           | What it does                                                    |
 | --------------------- | ----------------- | ------------------------------ | --------------------------------------------------------------- |
 | **Role Management**   | `/settings/roles` | `positions.manage_permissions` | Create, edit, clone and delete positions; edit permission lists |
-| **Members admin hub** | `/members/admin`  | `members.manage`               | Member list; **Manage Roles** assigns positions to a member     |
+| **Members admin hub** | `/members/admin`  | `members.manage`               | Member list; **Manage Positions** assigns positions to a member |
 
 `/admin/members` redirects to `/members/admin`.
 
 ### Assigning positions
 
-In the members admin hub, open a member's **Manage Roles** dialog, tick the
-positions to hold and save. A member may hold several positions; their
+In the members admin hub, open a member's **Manage Positions** dialog, tick
+the positions to hold (offices are listed first, then committees) and save. A member may hold several positions; their
 permissions are the union. The server refuses an assignment that would give a
 position carrying permissions the person saving does not hold (the grant
 ceiling); positions the member already held are not re-checked. The baseline
@@ -318,7 +338,9 @@ Member position can be removed only from an archived member.
 
 - **System positions cannot be deleted**, and cannot be renamed — except the
   baseline `member` position, whose display name a department may change.
-  No position's slug can be changed. A system position's priority is fixed.
+  No position's slug can be changed. A system position's priority and kind are
+  fixed; a department's own position may be switched between office and
+  committee.
 - **Permissions on any position can be edited**, subject to the grant ceiling:
   you cannot add permissions you do not hold, and you cannot edit a position
   whose current permissions already exceed yours.

@@ -7,7 +7,97 @@
  * them ends up spelling "administrative" differently from the rest.
  */
 
-import { MEMBERSHIP_TYPE_LABELS, MemberClass, MemberStatus, MembershipType } from '../constants/enums';
+import {
+  MEMBER_CLASS_LABELS,
+  MEMBER_STATUS_LABELS,
+  MEMBERSHIP_TYPE_LABELS,
+  MemberClass,
+  MemberStatus,
+  MembershipType,
+} from '../constants/enums';
+import type { MembershipTier } from '../types/user';
+
+/** The legacy words that name a *status* rather than a class, in the status spelling. */
+const STATUS_BY_LEGACY_WORD: Record<string, MemberStatus> = {
+  prospective: MemberStatus.PROSPECTIVE,
+  probationary: MemberStatus.PROBATIONARY,
+  active: MemberStatus.REGULAR,
+  life: MemberStatus.LIFE,
+  retired: MemberStatus.RETIRED,
+  honorary: MemberStatus.HONORARY,
+  administrative: MemberStatus.REGULAR,
+};
+
+const BUILTIN_STATUSES = Object.values(MemberStatus) as string[];
+
+/** Whether `value` is one of the seven built-in ladder statuses. */
+export function isBuiltinStatus(value?: string | null): value is MemberStatus {
+  return BUILTIN_STATUSES.includes((value ?? '').trim().toLowerCase());
+}
+
+/**
+ * A status or tier id spelled the way `member_status` stores it.
+ *
+ * Mirrors `canonical_member_status` in the Python module: the shipped ladder
+ * names its second rung `active` and the column stores that standing as
+ * `regular`, so a tier id that is also a legacy word becomes the status it
+ * means and any other tier id (`senior`) is itself. Blank is `undefined`.
+ */
+export function canonicalMemberStatus(value?: string | null): string | undefined {
+  const key = (value ?? '').trim().toLowerCase();
+  if (!key) return undefined;
+  if (BUILTIN_STATUSES.includes(key)) return key;
+  return STATUS_BY_LEGACY_WORD[key] ?? key;
+}
+
+export function memberClassLabel(memberClass?: string | null): string {
+  const key = (memberClass ?? '').trim().toLowerCase() as MemberClass;
+  return MEMBER_CLASS_LABELS[key] ?? '';
+}
+
+/**
+ * Human label for a stored `member_status`. A built-in status has a fixed
+ * label; a department tier id takes the tier's own name when the ladder is at
+ * hand, and is humanised otherwise.
+ */
+export function memberStatusLabel(memberStatus?: string | null, tiers?: readonly MembershipTier[]): string {
+  const key = canonicalMemberStatus(memberStatus);
+  if (!key) return '';
+  const tier = tiers?.find((t) => canonicalMemberStatus(t.id) === key);
+  if (tier?.name) return tier.name;
+  if (isBuiltinStatus(key)) return MEMBER_STATUS_LABELS[key];
+  const humanised = key.replace(/_/g, ' ');
+  return `${humanised.charAt(0).toUpperCase()}${humanised.slice(1)}`;
+}
+
+export interface MemberStatusOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * What the Status control offers: the seven built-in statuses plus the
+ * department's own tiers, one entry per standing. A tier whose id is also a
+ * built-in status (the shipped `probationary`, `active`, `life` rungs) is the
+ * same entry under the tier's name, so Regular reads "Active Member" where the
+ * department calls it that. `extra` carries values already stored on the roster
+ * that neither list names, so a filter can still select them.
+ */
+export function statusOptionsFor(tiers?: readonly MembershipTier[], extra?: readonly string[]): MemberStatusOption[] {
+  const seen = new Map<string, string>();
+  for (const status of Object.values(MemberStatus)) {
+    seen.set(status, MEMBER_STATUS_LABELS[status]);
+  }
+  for (const tier of tiers ?? []) {
+    const key = canonicalMemberStatus(tier.id);
+    if (key) seen.set(key, tier.name || seen.get(key) || key);
+  }
+  for (const value of extra ?? []) {
+    const key = canonicalMemberStatus(value);
+    if (key && !seen.has(key)) seen.set(key, memberStatusLabel(key));
+  }
+  return [...seen.entries()].map(([value, label]) => ({ value, label }));
+}
 
 /**
  * Legacy `membership_type` -> the member class it implies.

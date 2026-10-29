@@ -3,7 +3,7 @@
  */
 
 import type { NotificationPreferences, ProfileVisibility } from './user';
-import type { UserStatus } from '../constants/enums';
+import type { PositionKind, UserStatus } from '../constants/enums';
 
 export interface Role {
   id: string;
@@ -25,6 +25,14 @@ export interface Role {
    * pickers and roster chips leave these out — see `utils/positions.ts`.
    */
   mirrors_rank?: boolean | undefined;
+  /**
+   * office | committee | system. An office is a permission-bearing job; a
+   * committee is a group a member serves on, shown apart from the offices;
+   * system is the platform's own (member, the owner, the rank mirrors).
+   * Optional only so a fixture built by hand stays valid; the server always
+   * sends it.
+   */
+  kind?: PositionKind | undefined;
 }
 
 export interface Permission {
@@ -61,6 +69,9 @@ export interface UserWithRoles {
   /** Set while a sign-in lockout is in force; sent to members.manage holders only. */
   locked_until?: string | null | undefined;
   membership_type?: string | undefined;
+  /** The pair `membership_type` fuses: operational/administrative/social, and the ladder standing. */
+  member_class?: string | null | undefined;
+  member_status?: string | null | undefined;
   hire_date?: string | undefined;
   date_of_birth?: string | undefined;
   rank?: string | undefined;

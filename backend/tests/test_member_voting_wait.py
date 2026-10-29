@@ -80,6 +80,30 @@ class TestVoterTypeKey:
     def test_a_custom_tier_has_no_type(self):
         assert voter_type_key(None, None, "senior") is None
 
+    # A department tier on the ladder column takes the waiting period of the
+    # built-in status its "Counts as" names -- the same resolution
+    # `_user_has_role_type` uses for who may vote, so one member is never
+    # "regular" for the ballot and typeless for the wait.
+    def test_a_tier_that_counts_as_a_status_takes_that_status(self):
+        ranks_as = {"senior": "regular", "cadet": "probationary"}
+        assert voter_type_key("operational", "senior", None, ranks_as) == "regular"
+        assert voter_type_key("operational", "cadet", None, ranks_as) == "probationary"
+
+    def test_a_tier_with_no_counts_as_has_no_type(self):
+        assert voter_type_key("operational", "senior", None, {}) is None
+        assert voter_type_key("operational", "senior") is None
+
+    def test_class_still_decides_before_a_tier(self):
+        ranks_as = {"senior": "regular"}
+        assert (
+            voter_type_key("administrative", "senior", None, ranks_as)
+            == "administrative"
+        )
+
+    def test_the_shipped_ladder_spelling_resolves(self):
+        # The shipped `active` tier is stored as the `regular` status.
+        assert voter_type_key("operational", "active") == "regular"
+
 
 @pytest.mark.unit
 class TestEvaluateWait:
@@ -346,6 +370,36 @@ class TestMemberVotingEligibilityEndpoints:
         # No annual set: the annual meeting uses the regular rules.
         assert {o.state for o in response.outcomes} == {"waiting"}
         assert response.outcomes[0].reason.startswith("Administrative members may vote")
+
+    async def test_a_tier_member_is_reported_as_the_status_it_counts_as(
+        self, db_session
+    ):
+        # The card resolves a department tier the way the ballot does.
+        org = await _org(
+            db_session,
+            {
+                "membership_tiers": {
+                    "tiers": [
+                        {"id": "cadet", "name": "Cadet", "ranks_as": "probationary"}
+                    ]
+                },
+                "election_eligibility": {
+                    "rules": {
+                        "attendance": {"mode": "none"},
+                        "waiting_periods": {"probationary": {"mode": "never"}},
+                    }
+                },
+            },
+        )
+        secretary = await _member(db_session, org, "secretary")
+        cadet = await _member(
+            db_session, org, "cadet", member_class="operational", member_status="cadet"
+        )
+        response = await get_member_voting_eligibility(
+            user_id=cadet.id, db=db_session, current_user=secretary
+        )
+        assert response.member_type == "probationary"
+        assert {o.state for o in response.outcomes} == {"never"}
 
     async def test_another_organizations_member_is_not_found(self, db_session):
         org, secretary, _ = await self._setup(db_session)

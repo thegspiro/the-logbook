@@ -845,6 +845,39 @@ class MembershipTier(BaseModel):
         default_factory=MembershipTierBenefits,
         description="Benefits granted to members at this tier",
     )
+    # "Counts as". A tier whose id is one of the built-in statuses (the
+    # shipped probationary, active and life rungs) is that status and needs
+    # nothing here. Any other tier (senior) counts as the built-in status
+    # named here wherever a rule is keyed on status -- ballots restricted to
+    # regular members, the probationary account-status mirror -- and as
+    # nothing at all when unset, which is what such a tier matched before
+    # the setting existed. Left unset on the shipped `senior` rung on
+    # purpose: widening a department's electorate is the department's call.
+    ranks_as: Optional[str] = Field(
+        default=None,
+        description=(
+            "The built-in membership status this tier counts as "
+            "(prospective | probationary | regular | life | retired | "
+            "honorary | junior); unset means it counts as none"
+        ),
+    )
+
+    @field_validator("ranks_as")
+    @classmethod
+    def _ranks_as_is_a_builtin_status(cls, value: Optional[str]) -> Optional[str]:
+        from app.utils.membership import MemberStatus
+
+        if value is None:
+            return None
+        normalised = value.strip().lower()
+        if not normalised:
+            return None
+        if normalised not in MemberStatus.ALL:
+            raise ValueError(
+                f"Unknown status '{value}' for ranks_as. "
+                f"Expected one of: {', '.join(MemberStatus.ALL)}."
+            )
+        return normalised
 
 
 class RejoinServiceCredit(str, Enum):

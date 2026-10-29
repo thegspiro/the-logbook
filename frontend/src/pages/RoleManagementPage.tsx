@@ -11,6 +11,7 @@ import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 import { mirrorsRank } from '../utils/positions';
+import { PositionKind } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
@@ -44,6 +45,7 @@ export const RoleManagementPage: React.FC = () => {
     description: '',
     permissions: [] as string[],
     priority: 50,
+    kind: PositionKind.OFFICE as 'office' | 'committee',
   });
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export const RoleManagementPage: React.FC = () => {
       description: '',
       permissions: [],
       priority: 50,
+      kind: PositionKind.OFFICE,
     });
     setEditingRole(null);
     setError(null);
@@ -87,6 +90,7 @@ export const RoleManagementPage: React.FC = () => {
       description: role.description || '',
       permissions: role.permissions,
       priority: role.priority,
+      kind: role.kind === PositionKind.COMMITTEE ? PositionKind.COMMITTEE : PositionKind.OFFICE,
     });
     setEditingRole(role);
     setError(null);
@@ -148,6 +152,9 @@ export const RoleManagementPage: React.FC = () => {
             description: formData.description !== editingRole.description ? formData.description : undefined,
             permissions: formData.permissions,
             priority: formData.priority !== editingRole.priority ? formData.priority : undefined,
+            // The platform's own positions keep their kind; the server refuses
+            // a change there, so none is sent.
+            kind: !editingRole.is_system && formData.kind !== editingRole.kind ? formData.kind : undefined,
           });
         } else {
           // Create new role
@@ -270,6 +277,11 @@ export const RoleManagementPage: React.FC = () => {
                       {mirrorsRank(role) && (
                         <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
                           Mirrors a rank
+                        </span>
+                      )}
+                      {role.kind === PositionKind.COMMITTEE && (
+                        <span className="inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-900 dark:bg-teal-500/20 dark:text-teal-300">
+                          Committee
                         </span>
                       )}
                       <span className="text-theme-text-muted text-sm">Priority: {role.priority}</span>
@@ -398,6 +410,43 @@ export const RoleManagementPage: React.FC = () => {
                     className="form-input mt-1"
                   />
                 </div>
+
+                {!editingRole?.is_system && (
+                  <fieldset>
+                    <legend className="text-theme-text-secondary block text-sm font-medium">Kind</legend>
+                    <div className="mt-1 flex flex-wrap gap-4">
+                      {(
+                        [
+                          [
+                            PositionKind.OFFICE,
+                            'Office',
+                            'A job with permissions, such as Treasurer or Training Officer',
+                          ],
+                          [
+                            PositionKind.COMMITTEE,
+                            'Committee',
+                            'A group a member serves on, shown apart from their offices',
+                          ],
+                        ] as const
+                      ).map(([value, label, help]) => (
+                        <label key={value} className="flex items-start gap-2">
+                          <input
+                            type="radio"
+                            name="role-kind"
+                            value={value}
+                            checked={formData.kind === value}
+                            onChange={() => setFormData({ ...formData, kind: value })}
+                            className="form-checkbox mt-0.5"
+                          />
+                          <span className="text-theme-text-secondary text-sm">
+                            {label}
+                            <span className="text-theme-text-muted block text-xs">{help}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
 
                 {!editingRole?.is_system && (
                   <div>

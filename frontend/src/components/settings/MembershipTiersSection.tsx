@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import type { MembershipTier } from '../../types/user';
-import { RejoinServiceCredit } from '../../constants/enums';
+import { MEMBER_STATUS_LABELS, MemberStatus, RejoinServiceCredit } from '../../constants/enums';
+import { isBuiltinStatus } from '../../utils/membership';
 
 interface MembershipTiersSectionProps {
   tiers: MembershipTier[];
@@ -242,10 +243,47 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         type="number"
                         min={0}
                         className="form-input"
+                        aria-describedby={`years-help-${tier.id}`}
                         value={tier.years_required}
                         onChange={(e) => onUpdateTier(tier.id, { years_required: Number(e.target.value) || 0 })}
                       />
+                      <p id={`years-help-${tier.id}`} className="text-theme-text-muted mt-1 text-[11px]">
+                        Credited years to reach this tier; set it to match your bylaws.
+                      </p>
                     </div>
+
+                    {/* "Counts as". A rung named for a built-in status (the
+                        shipped probationary, active and life) is that status
+                        and needs nothing here. Any other rung counts as
+                        nothing — matches no ballot restricted by status — until
+                        the department says what it stands in for. */}
+                    {!isBuiltinStatus(tier.id) && tier.id !== 'active' && (
+                      <div className="w-40">
+                        <label
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                          htmlFor={`ranks-as-${tier.id}`}
+                        >
+                          Counts as
+                        </label>
+                        <select
+                          id={`ranks-as-${tier.id}`}
+                          className="form-input"
+                          value={tier.ranks_as ?? ''}
+                          onChange={(e) =>
+                            onUpdateTier(tier.id, {
+                              ranks_as: (e.target.value || null) as MemberStatus | null,
+                            })
+                          }
+                        >
+                          <option value="">Nothing (no status rules apply)</option>
+                          {(Object.values(MemberStatus) as MemberStatus[]).map((status) => (
+                            <option key={status} value={status}>
+                              {MEMBER_STATUS_LABELS[status]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       {/* The count is what makes removal safe to offer: a rung

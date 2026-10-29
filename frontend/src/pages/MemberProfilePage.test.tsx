@@ -236,6 +236,41 @@ describe('MemberProfilePage position badges', () => {
     expect(screen.getByText('Member')).toBeInTheDocument();
     expect(screen.queryByText('Firefighter')).not.toBeInTheDocument();
   });
+
+  // Jane: the treasurer who also serves on the history committee holds two
+  // different kinds of thing, and one row of chips said otherwise.
+  it('shows offices and committees apart, and leaves out the baseline member position', async () => {
+    getUserWithRoles.mockResolvedValue({
+      ...targetUser,
+      roles: [
+        { id: 'role-member', name: 'Member', slug: 'member', is_system: true, mirrors_rank: false, kind: 'system' },
+        {
+          id: 'role-treasurer',
+          name: 'Treasurer',
+          slug: 'treasurer',
+          is_system: true,
+          mirrors_rank: false,
+          kind: 'office',
+        },
+        {
+          id: 'role-history',
+          name: 'History Committee',
+          slug: 'history_committee',
+          is_system: true,
+          mirrors_rank: false,
+          kind: 'committee',
+        },
+      ],
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+    expect(screen.getByText('Offices')).toBeInTheDocument();
+    expect(screen.getByText('Treasurer')).toBeInTheDocument();
+    expect(screen.getByText('Committees')).toBeInTheDocument();
+    expect(screen.getByText('History Committee')).toBeInTheDocument();
+    expect(screen.queryByText('Member')).not.toBeInTheDocument();
+  });
 });
 
 const shareNothing = {
