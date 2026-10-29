@@ -50,6 +50,16 @@ QUALIFICATIONS: Dict[str, Dict[str, Any]] = {
         "label": "Advanced EMT",
         "positions": ["ems"],
     },
+    "officer_in_charge": {
+        "label": "Officer in Charge",
+        # A member cleared to lead a crew without holding an officer rank --
+        # the department's acting-officer or AIC clearance, granted from the
+        # profile with an expiry like any other card. The three seats are
+        # ``OFFICER_SEATS`` in the shift eligibility service, which imports
+        # this module and so cannot be imported here;
+        # ``tests/test_qualification_service.py`` pins the two equal.
+        "positions": ["officer", "captain", "lieutenant"],
+    },
     "paramedic": {
         "label": "Paramedic",
         # A paramedic can staff the medic unit and, holding the higher

@@ -1,14 +1,15 @@
 # October 29, 2026 workflow updates
 
-Audit:
-[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026-second-pass).
-Nothing has been re-captured; see [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
 
-| Topic                                                             | Now in                                                                        |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| New **Follow-up Form** pipeline stage, pre-fill and contact flags | [15 — Prospective Members](./15-prospective-members.md#follow-up-form-stages) |
-| Shift remaining limited to 14 days either way                     | [02 — Training](./02-training.md)                                             |
-| Label print preview sits under the controls                       | [05 — Inventory](./05-inventory.md)                                           |
+| Topic                                                              | Now in                                                                                         |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Follow-up Form stage: sending, drafts, write-back, contact changes | [15 — Prospective Members](./15-prospective-members.md), [01 — Membership](./01-membership.md) |
+| Pre-fill from applicant on a form field                            | [07 — Documents & Forms](./07-documents-forms.md)                                              |
+| Shift remaining is limited to 14 days                              | [02 — Training](./02-training.md)                                                              |
 
 ---
 

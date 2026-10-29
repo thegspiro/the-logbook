@@ -482,6 +482,44 @@ export const MemberStatus = {
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
 
 // ============================================
+// Position Kind
+// ============================================
+// What a position is. Mirrors POSITION_KINDS in backend/app/core/permissions.py.
+export const PositionKind = {
+  OFFICE: 'office',
+  COMMITTEE: 'committee',
+  SYSTEM: 'system',
+} as const;
+export type PositionKind = (typeof PositionKind)[keyof typeof PositionKind];
+
+export const POSITION_KIND_LABELS: Record<PositionKind, string> = {
+  office: 'Office',
+  committee: 'Committee',
+  system: 'System',
+};
+
+export const MEMBER_CLASS_LABELS: Record<MemberClass, string> = {
+  operational: 'Operational',
+  administrative: 'Administrative',
+  social: 'Social',
+};
+
+/**
+ * Labels for the built-in ladder statuses. `member_status` also holds the
+ * department's own tier ids (`senior`), whose display name lives in the tier
+ * config; `memberStatusLabel` in `utils/membership.ts` resolves those.
+ */
+export const MEMBER_STATUS_LABELS: Record<MemberStatus, string> = {
+  prospective: 'Prospective',
+  probationary: 'Probationary',
+  regular: 'Regular',
+  life: 'Life',
+  retired: 'Retired',
+  honorary: 'Honorary',
+  junior: 'Junior',
+};
+
+// ============================================
 // Pipeline / Applicant Stage Types
 // ============================================
 export const StageType = {
@@ -602,6 +640,9 @@ export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
   { value: 'emt', label: 'EMT' },
   { value: 'aemt', label: 'Advanced EMT' },
   { value: 'paramedic', label: 'Paramedic' },
+  // Cleared to lead a crew without an officer rank: the acting-officer / AIC
+  // card. Clears the officer, captain and lieutenant seats.
+  { value: 'officer_in_charge', label: 'Officer in Charge' },
 ];
 
 /**

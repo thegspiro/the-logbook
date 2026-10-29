@@ -228,6 +228,8 @@ export interface ElectionCreate {
   reminder_hours_before_close?: number | undefined;
   nomination_deadline?: string | undefined;
   tie_policy?: TiePolicy | undefined;
+  quorum_type?: QuorumType | undefined;
+  quorum_value?: number | undefined;
 }
 
 export interface ElectionUpdate {
@@ -712,11 +714,11 @@ export interface ProxyVoteCreate {
 export interface ElectionSettings {
   default_voting_method?: VotingMethod;
   default_victory_condition?: VictoryCondition;
-  default_victory_percentage?: number;
+  default_victory_percentage?: number | null;
   default_anonymous_voting?: boolean;
   default_allow_write_ins?: boolean;
-  default_quorum_type?: string;
-  default_quorum_value?: number;
+  default_quorum_type?: QuorumType;
+  default_quorum_value?: number | null;
   proxy_voting_enabled?: boolean;
   max_proxies_per_person?: number;
   // Per-department feature toggles (all default ON)

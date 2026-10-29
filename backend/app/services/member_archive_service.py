@@ -201,16 +201,42 @@ async def check_and_auto_archive(
             .options(selectinload(User.roles))
         )
         admins = admin_result.scalars().all()
-        admin_emails = []
-        for u in admins:
-            role_slugs = [r.slug for r in (u.roles or [])]
-            if any(r in role_slugs for r in ADMIN_NOTIFY_ROLE_SLUGS):
-                if u.email and member_receives_email(
-                    u.notification_preferences,
-                    EmailKind.MEMBERSHIP_ADMIN,
-                    department_required_kinds(org),
-                ):
-                    admin_emails.append(u.email)
+        notified = [
+            u
+            for u in admins
+            if any(r.slug in ADMIN_NOTIFY_ROLE_SLUGS for r in (u.roles or []))
+        ]
+        admin_emails = [
+            u.email
+            for u in notified
+            if u.email
+            and member_receives_email(
+                u.notification_preferences,
+                EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
+            )
+        ]
+
+        # Every officer above gets a bell entry, whatever their email choices
+        # or the template switch: the email is optional, and it was this
+        # notice's only copy.
+        from app.services.officer_alert_copies import add_in_app_copies
+
+        member_name = member.display_name or "A member"
+        await add_in_app_copies(
+            db,
+            organization_id=str(organization_id),
+            recipient_ids=[str(u.id) for u in notified],
+            category="member_archived",
+            subject=f"Member archived: {member_name}",
+            message=(
+                f"{member_name} was archived automatically after returning all "
+                "department property."
+            ),
+            action_url=f"/members/{member.id}",
+            metadata={"user_id": str(member.id)},
+        )
+        await db.commit()
 
         if admin_emails and not archived_email_off:
             subject, html_body, text_body = await template_svc.render_stored_or_default(

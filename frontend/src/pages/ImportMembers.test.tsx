@@ -177,6 +177,8 @@ describe('ImportMembers', () => {
       'email',
       'joinDate',
       'membershipType',
+      'memberClass',
+      'memberStatus',
       'rank',
       'role',
       'station',
@@ -216,7 +218,7 @@ describe('ImportMembers', () => {
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
-        'Importing without 24 optional column(s): middleName, membershipNumber, username, dateOfBirth and 20 more',
+        'Importing without 26 optional column(s): middleName, membershipNumber, username, dateOfBirth and 22 more',
         { icon: '⚠️' }
       );
     });

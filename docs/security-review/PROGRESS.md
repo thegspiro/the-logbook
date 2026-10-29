@@ -16,6 +16,82 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3832](https://github.com/thegspiro/the-logbook/pull/3832)** (branch
+`claude/security-review-facilities-p13`) — Feature 12 (Facilities), pass
+13, a watchdog pickup.
+Dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` ("No reachable agents"). PR #3823 (Feature 11, Inventory, pass 13) had already merged (`d65ad33f`), and this pickup followed promptly
+rather than waiting for the next scheduled tick. Confirmed no
+security-review PR open via `list_pull_requests` (state=open) — the 4 open
+PRs at the time were all unrelated feature work, none with a
+`claude/security-review-` head branch. Row 12 confirmed the next `⬜` row on
+a freshly fetched `main` (head `eef41c7d`), matching PR #3823's own "Next
+feature" note.
+
+**0 fixed, 0 new findings.** Zero diff since this feature's own pass 12
+(merge `c9d9198e`, PR #3739) across `endpoints/facilities.py`,
+`services/facilities_service.py`, `mcp/tools/facilities.py`,
+`schemas/facilities.py` and the entire frontend `modules/facilities` tree.
+Two cross-cutting commits outside this rotation touched `models/
+facilities.py` and the shared `services/documents_service.py`: phone/
+address and email encryption on four models' contact fields (`Facility
+EmergencyContact`, `FacilityCapitalProject`, `FacilityInsurancePolicy`,
+`FacilityOccupant` — switched to `EncryptedText`, no fingerprint added
+since none of these columns is ever SQL-filtered/sorted/searched, confirmed
+by grep), and the same refusal-message-capping fix already reviewed for
+Documents & legal (PR #3816) re-verified here since `documents_service.py`
+is also this feature's declared scope. Both encryption migrations are
+`create_all`-tolerant and idempotent for every facilities table they touch.
+All 102 routes re-enumerated by AST, unchanged from pass 12. FAC-30
+re-confirmed FLAGGED/unchanged (owner-accepted). See
+`docs/security-review/FAC-12-facilities.md`'s **Pass 13** section for the
+full review.
+
+Rotation row 12 → ✅ (pending this PR's merge); next is Feature 13
+(Apparatus & NFC) — re-check `search_pull_requests`/`list_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 13, PR #3823, merged), preserved for history</summary>
+
+**PR [#3823](https://github.com/thegspiro/the-logbook/pull/3823)** (branch
+`claude/security-review-inventory-p13`) — Feature 11 (Inventory), pass 13,
+a watchdog pickup.
+Dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` ("No reachable agents"). PR #3816 (Feature 10, Documents &
+legal, pass 13) had already merged (`e8a5c00b`), and this pickup followed
+promptly rather than waiting for the next scheduled tick. Confirmed no
+security-review PR open via `list_pull_requests` (state=open) — the 5 open
+PRs at the time were all unrelated feature work, none with a
+`claude/security-review-` head branch. Row 11 confirmed the next `⬜` row on
+a freshly fetched `main` (head `e8a5c00b`), matching PR #3816's own "Next
+feature" note.
+
+**0 fixed, 0 new findings.** Near-zero delta since this feature's own pass
+12 (merge `6eefb3c4`, PR #3738): zero diff across all five endpoint files
+and both service/schema files (confirmed by `git diff` returning empty for
+every one), plus 7 commits outside this rotation — 5 frontend-only
+print/a11y/dashboard-naming fixes, and 2 cross-cutting PII encryption
+sweeps whose only touch in scope is `InventoryVendorContact.phone`/`.email`
+switching from `String` to `EncryptedText` in `models/inventory.py`.
+Verified the encrypted columns are never SQL-filtered/sorted/searched (the
+only query against the table orders by `.name`) and both accompanying
+migrations are `create_all`-tolerant and idempotent on
+`inventory_vendor_contacts` specifically. All 197 routes re-enumerated by
+AST, identical set and count to pass 12. INV-22 re-confirmed OPEN,
+unchanged (owner-accepted). See
+`docs/security-review/INV-11-inventory.md`'s **Pass 13** section for the
+full review.
+
+Rotation row 11 → ✅ (pending this PR's merge); next is Feature 12
+(Facilities) — re-check `search_pull_requests`/`list_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 13, PR #3816, merged), preserved for history</summary>
+
 **PR [#3816](https://github.com/thegspiro/the-logbook/pull/3816)** (branch
 `claude/security-review-documents-legal-p13`) — Feature 10 (Documents &
 legal), pass 13.
@@ -44,6 +120,8 @@ the full review.
 Rotation row 10 → ✅ (pending this PR's merge); next is Feature 11
 (Inventory) — re-check `search_pull_requests`/`list_pull_requests` fresh
 rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 13, PR #3813, merged), preserved for history</summary>
@@ -23027,7 +23105,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
@@ -42283,3 +42361,100 @@ files).
 
 Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
 re-check `search_pull_requests` fresh rather than trusting this note.
+
+### 2026-10-29 — Feature 11 (Inventory, pass 13) — watchdog pickup, near-zero delta (frontend print/a11y fixes, 2 cross-cutting encryption touches), 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` — "No reachable agents"). No open security-review PR —
+confirmed via `list_pull_requests` (state=open), 0 results among
+`claude/security-review-*` head branches (5 unrelated feature PRs were
+open at the time). PR #3816 (Feature 10, Documents & legal, pass 13) had
+already merged (`e8a5c00b`); this pickup followed promptly rather than
+waiting for the next scheduled tick. Row 11 confirmed the next `⬜` row by
+reading the rotation table on a freshly fetched `main`, matching PR
+#3816's own "Next feature" note.
+
+Real delta since pass 12's own merge (`6eefb3c4`, PR #3738): zero diff
+across all five endpoint files (`inventory.py`, `inventory_nfc.py`,
+`labels.py`, `inventory_kiosk.py`, `inventory_last_seen.py`) and both
+`inventory_service.py`/`schemas/inventory.py` — confirmed by `git diff
+6eefb3c4..HEAD --stat` returning nothing for any of them. Seven commits
+touched the declared scope, none made through this rotation: five
+frontend-only UX/print/a11y/dashboard-naming fixes, and two cross-cutting
+PII encryption sweeps whose only in-scope touch is
+`InventoryVendorContact.phone`/`.email` switching from `String` to
+`EncryptedText` in `models/inventory.py`. Verified the encrypted columns
+are never SQL-filtered/sorted/searched anywhere in this feature (the only
+query against the table orders by `.name`) and that both accompanying
+migrations guard `inventory_vendor_contacts` against `create_all` (Pitfall
+#26) and detect already-encrypted values before re-encrypting. All 197
+routes re-enumerated by AST, identical set and count to pass 12. INV-22
+re-verified still open, owner-accepted, unchanged.
+
+Full write-up: `docs/security-review/INV-11-inventory.md`'s **Pass 13**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 667
+revisions, single head `b74bcce55c11`; `check_route_permissions.py
+--strict` — 279 routes, 0 errors/warnings; scoped backend tests
+(`-k "inventory or label or nfc or kiosk"`) — 2040 passed, 1 pre-existing
+skip (`pywebpush`); frontend `npm run typecheck`/`npm run lint` — 0
+errors, 0 warnings; scoped frontend suite (`src/modules/inventory`) —
+1875 passed (126 files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `search_pull_requests`/`list_pull_requests` fresh rather than
+trusting this note.
+
+### 2026-10-29 — Feature 12 (Facilities, pass 13) — watchdog pickup, zero diff in this feature's own files, 2 cross-cutting encryption touches reviewed, 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` — "No reachable agents"). No open security-review PR —
+confirmed via `list_pull_requests` (state=open), 0 results among
+`claude/security-review-*` head branches (4 unrelated feature PRs were
+open at the time). PR #3823 (Feature 11, Inventory, pass 13) had already
+merged (`d65ad33f`); this pickup followed promptly rather than waiting for
+the next scheduled tick. Row 12 confirmed the next `⬜` row by reading the
+rotation table on a freshly fetched `main` (head `eef41c7d`), matching PR
+#3823's own "Next feature" note.
+
+Real delta since pass 12's own merge (`c9d9198e`, PR #3739): zero diff in
+`endpoints/facilities.py`, `services/facilities_service.py`,
+`mcp/tools/facilities.py`, `schemas/facilities.py`, and the entire
+frontend `modules/facilities` tree — confirmed by `git diff --stat`
+against the pass-12 merge commit returning nothing for any of them. Two
+cross-cutting commits made outside this rotation touched `models/
+facilities.py` and the shared `services/documents_service.py`: phone/
+address and email encryption switched four models' contact fields
+(`FacilityEmergencyContact`, `FacilityCapitalProject`,
+`FacilityInsurancePolicy`, `FacilityOccupant`) to `EncryptedText`, with no
+fingerprint column added for any of them — correct, since grepping every
+reference to each renamed column across this feature's files found none
+in a `.filter()`/`.ilike()`/`.order_by()`/`.where()` call, only in Pydantic
+schema declarations. Both accompanying migrations (`5510d5ff49eb`,
+`b8236e29ec44`) guard every facilities table they touch against
+`create_all` (Pitfall #26) and detect already-encrypted values before
+re-encrypting. The third touch — the refusal-message-capping fix
+(`b4d9388a`) in `documents_service.py` — is the identical commit already
+reviewed for Documents & legal (PR #3816); re-verified independently here
+since that file is also Facilities' declared scope. All 102 routes
+re-enumerated by AST, unchanged from pass 12; `Depends(` count (204) also
+matches. FAC-30 re-verified still open, owner-accepted, unchanged.
+
+Full write-up: `docs/security-review/FAC-12-facilities.md`'s **Pass 13**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 669
+revisions, single head `30e5b112ec00`; `check_route_permissions.py
+--strict` — 280 routes, 0 errors/warnings; scoped backend tests
+(`-k "facilit"`) — 304 passed, 1 pre-existing skip (`py_vapid`); frontend
+`npm run typecheck`/`npm run lint` — 0 errors, 0 warnings; scoped frontend
+suite (`src/modules/facilities`) — 147 passed (19 files).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC) — re-check `search_pull_requests`/`list_pull_requests` fresh rather
+than trusting this note.

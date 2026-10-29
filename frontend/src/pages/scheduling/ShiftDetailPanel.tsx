@@ -180,7 +180,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // (mirrors the backend's per-shift authority). Editing/deleting the shift
   // record itself still requires scheduling.manage.
   const isShiftOfficer = !!(shift.shift_officer_id && user?.id && String(shift.shift_officer_id) === String(user.id));
-  const canAssign = checkPermission('scheduling.assign') || canManage || isShiftOfficer;
+  // Not `|| canManage`: creating, editing and removing an assignment require
+  // scheduling.assign or being the shift officer, and scheduling.manage implies
+  // neither, so a manage-only officer was offered a form the server refused.
+  const canAssign = checkPermission('scheduling.assign') || isShiftOfficer;
   // Filling the roster is not fitting out the rig: the officer who prints the
   // QR card may still not be the one who mounts the truck's NFC tag.
   const canWriteApparatusTags = checkPermission('apparatus.manage_nfc_tags');
@@ -2931,7 +2934,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               </div>
 
               {/* QR Code for apparatus check-in (officers) */}
-              {canAssign && shift.apparatus_id && (
+              {(canAssign || canManage) && shift.apparatus_id && (
                 <div>
                   <button
                     onClick={() => setShowQR(!showQR)}
@@ -2975,7 +2978,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               )}
 
               {/* Declined / Removed Members (admin visibility) */}
-              {canAssign && inactiveAssignments.length > 0 && (
+              {(canAssign || canManage) && inactiveAssignments.length > 0 && (
                 <div className="opacity-60">
                   <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
                     Declined / Removed ({inactiveAssignments.length})

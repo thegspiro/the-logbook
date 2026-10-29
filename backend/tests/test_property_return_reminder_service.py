@@ -438,6 +438,7 @@ async def test_a_switched_off_template_stops_only_the_members_email(switched_off
     admin_rows = MagicMock()
     admin_rows.scalars.return_value.all.return_value = [
         SimpleNamespace(
+            id="qm-1",
             email="qm@x.org",
             roles=[SimpleNamespace(slug="quartermaster")],
             notification_preferences=None,

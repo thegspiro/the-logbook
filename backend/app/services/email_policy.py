@@ -414,7 +414,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Supplies expiring or to restock",
             "Failed equipment checks",
         ),
-        rationale="Inventory shows the same alerts.",
+        rationale="The bell carries the same alerts, and Inventory shows them.",
     ),
     EmailKind.MEMBERSHIP_ADMIN: EmailPolicy(
         label="Membership and store administration",
@@ -427,7 +427,10 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "New store orders",
             "Google Workspace accounts needing attention (administrators)",
         ),
-        rationale="The same records are kept in Membership and the store.",
+        rationale=(
+            "The bell carries the same notices, and the records are kept in "
+            "Membership and the store."
+        ),
     ),
     EmailKind.MINUTES_ACTION_ITEMS: EmailPolicy(
         label="Action items from meeting minutes",

@@ -4,6 +4,11 @@ import userEvent from '@testing-library/user-event';
 
 const mockGetEligibility = vi.fn();
 const mockUpdateEligibility = vi.fn();
+vi.mock('../../../hooks/useMembershipTierOptions', () => ({
+  useMembershipTierOptions: () => ({ tiers: mockTiers(), loaded: true }),
+}));
+const mockTiers = vi.fn(() => [] as { id: string; name: string }[]);
+
 vi.mock('../services/api', () => ({
   schedulingService: {
     getEligibilitySettings: (...a: unknown[]) => mockGetEligibility(...a) as unknown,
@@ -46,6 +51,16 @@ describe('EligibilitySettingsCard', () => {
 
     await user.click(probationary);
     expect(probationary).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // Officer assignment runs the same eligibility check and refuses an excluded
+  // type, so the card must not promise a manual override.
+  it('does not promise that an officer can still assign an excluded member', async () => {
+    render(<EligibilitySettingsCard />);
+    await screen.findByRole('group', { name: 'Excluded from Self-Signup' });
+
+    expect(screen.queryByText(/can still assign/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/an officer cannot assign them either/)).toBeInTheDocument();
   });
 
   it("offers the department's own seats, and keeps an open seat that was retired", async () => {

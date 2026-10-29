@@ -1,14 +1,14 @@
 # Script currency
 
-## Flagged by the 2026-10-29 second-pass changes
+## Flagged by the 2026-10-29 changes
 
-Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026-second-pass).
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
 Rows are **Open**; nothing was re-recorded.
 
-| Script             | Beat                                    | Was                | Now                                                                                             |
-| ------------------ | --------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
-| **14**             | Shift remaining and the roster (8:00)   | Any number of days | Limited to 14 days either way; the form explains a refusal. Mention it after "seven days, done" |
-| **07** (Secretary) | Prospective-member pipeline, if covered | Twelve stage types | A thirteenth, **Follow-up Form**, emails the applicant a pre-filled form; worth a short beat    |
+| Script                   | Beat              | Was                | Now                                                                           |
+| ------------------------ | ----------------- | ------------------ | ----------------------------------------------------------------------------- |
+| **Any recruitment beat** | Pipeline stages   | Twelve stage types | A **Follow-up Form** stage sends a pre-filled form; answers update the record |
+| **Any training beat**    | Shifting a course | Up to a year       | **Shift remaining** moves classes at most 14 days                             |
 
 ## Flagged by the 2026-10-28 → 10-29 changes
 

@@ -160,8 +160,18 @@ def _granted_later() -> set[str]:
 #: ``43e9df281412`` creates it on existing departments with the storefront
 #: grants already in place, so there is no stored row missing them.
 #: ``compliance_officer`` (2026-09-24) likewise, by revision ``3c918c06466d``.
+#: The four seeded committees (2026-10-29) likewise, by revision
+#: ``d8f1a4c27b93``, which inserts each with a copy of the baseline list.
 _REGISTERED_AFTER_THIS_MIGRATION = frozenset(
-    {"emt", "assistant_membership_coordinator", "compliance_officer"}
+    {
+        "emt",
+        "assistant_membership_coordinator",
+        "compliance_officer",
+        "community_outreach_team",
+        "history_committee",
+        "fundraising_committee",
+        "membership_committee",
+    }
 )
 
 

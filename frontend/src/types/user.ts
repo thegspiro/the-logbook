@@ -4,6 +4,8 @@
 
 import type {
   ConsentStatus,
+  MemberClass,
+  MemberStatus,
   EmailLinkDomainSource,
   FiscalYearLabel,
   GoogleAuthMethod,
@@ -38,6 +40,9 @@ export interface User {
   platoon?: string | undefined;
   status: UserStatus;
   membership_type?: string | undefined;
+  /** The pair `membership_type` fuses; see `UserProfileUpdate`. */
+  member_class?: string | null | undefined;
+  member_status?: string | null | undefined;
   compliance_exempt?: boolean | undefined;
   date_of_birth?: string | undefined;
   hire_date?: string | undefined;
@@ -346,6 +351,14 @@ export interface UserProfileUpdate {
   rank?: string | undefined;
   station?: string | undefined;
   platoon?: string | undefined;
+  /**
+   * The two independent facts the legacy `membership_type` fuses. Sent as a
+   * pair, always both: the backend treats a write to either as a statement
+   * about both, and the backend derives `membership_type` from them.
+   * `member_status` is a built-in status or one of the department's tier ids.
+   */
+  member_class?: MemberClass | undefined;
+  member_status?: string | undefined;
   address_street?: string | null | undefined;
   address_city?: string | null | undefined;
   address_state?: string | null | undefined;
@@ -433,6 +446,13 @@ export interface MembershipTier {
   years_required: number;
   sort_order: number;
   benefits: MembershipTierBenefits;
+  /**
+   * "Counts as": the built-in status this tier stands in for wherever a rule
+   * is keyed on status (ballots restricted to regular members, the
+   * probationary account mirror). A tier whose id is itself a built-in status
+   * needs none; any other tier counts as nothing until this is set.
+   */
+  ranks_as?: MemberStatus | null | undefined;
 }
 
 export interface MembershipTierConfig {

@@ -153,6 +153,20 @@ const ElectionVoteConfig: React.FC<ElectionVoteConfigProps> = ({ config, setConf
                 />
                 Include stage completion history
               </label>
+              <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={fields.include_follow_up_answers ?? false}
+                  onChange={(e) => updateField('include_follow_up_answers', e.target.checked)}
+                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring mt-0.5 rounded-sm text-red-700 dark:text-red-500"
+                />
+                <span>
+                  Include follow-up form answers
+                  <span className="text-theme-text-muted block text-xs">
+                    Answers to questions marked sensitive are never included.
+                  </span>
+                </span>
+              </label>
               <div className="pt-1">
                 <label htmlFor="stage-custom-note-prompt" className="text-theme-text-muted mb-1 block text-xs">
                   Custom note prompt (optional)

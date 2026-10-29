@@ -2708,6 +2708,54 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
+    # Committees and teams. A committee is a position so membership of it is
+    # recorded, shown on the profile and the roster, and assignable from the
+    # same Manage Positions dialog as an office -- but it is not an office: it
+    # grants nothing beyond the baseline every member holds. Its permission
+    # list is a *copy* of the `member` position's, settled below the dict
+    # (the baseline is defined last), so a member whose only position is a
+    # committee still reaches the store and the rest of the member screens
+    # (`tests/test_corporate_storefront_grants.py`), and
+    # `tests/test_baseline_member_grants.py` holds it to the baseline. The
+    # existing officer positions these sit beside -- `public_outreach`,
+    # `historian`, `fundraising_chair`, `membership_coordinator` -- are the
+    # chairs, with the permissions the chair's work needs.
+    "community_outreach_team": {
+        "name": "Community Education / Outreach Team",
+        "slug": "community_outreach_team",
+        "description": "Members who deliver community education and public outreach events",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
+    "history_committee": {
+        "name": "History Committee",
+        "slug": "history_committee",
+        "description": "Members who keep the department's history, archives and memorials",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
+    "fundraising_committee": {
+        "name": "Fundraising Committee",
+        "slug": "fundraising_committee",
+        "description": "Members who plan and run the department's fundraising",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
+    "membership_committee": {
+        "name": "Membership Committee",
+        "slug": "membership_committee",
+        "description": "Members who review applications and interview prospective members",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
     "member": {
         "name": "Member",
         "slug": "member",
@@ -2778,6 +2826,67 @@ DEFAULT_POSITIONS: dict[str, dict] = {
 #: field, never by assigning a position named after it. The positions screen
 #: still lists them, because that is where their stored grants are edited.
 RANK_MIRRORING_POSITION_SLUGS: frozenset[str] = frozenset(OPERATIONAL_RANKS)
+
+#: What a position is. An **office** is a permission-bearing job (Treasurer,
+#: Quartermaster, Training Officer); a **committee** is a group a member
+#: serves on (History Committee), recorded like an office but granting
+#: nothing; a **system** position is the platform's own -- the baseline
+#: `member`, the `it_manager` owner, and the mirrors of the operational
+#: ranks -- and is never offered as either on the member screens.
+POSITION_KIND_OFFICE = "office"
+POSITION_KIND_COMMITTEE = "committee"
+POSITION_KIND_SYSTEM = "system"
+POSITION_KINDS: tuple[str, ...] = (
+    POSITION_KIND_OFFICE,
+    POSITION_KIND_COMMITTEE,
+    POSITION_KIND_SYSTEM,
+)
+
+#: The seeded slugs that are the platform's own rather than a department's
+#: office: the rank mirrors, the baseline member position and the owner.
+SYSTEM_POSITION_SLUGS: frozenset[str] = RANK_MIRRORING_POSITION_SLUGS | frozenset(
+    {"member", "it_manager"}
+)
+
+#: The seeded committee slugs, by name so a migration and a test can list them.
+COMMITTEE_POSITION_SLUGS: frozenset[str] = frozenset(
+    slug
+    for slug, definition in DEFAULT_POSITIONS.items()
+    if definition.get("kind") == POSITION_KIND_COMMITTEE
+)
+
+
+def position_kind_for(slug: str | None) -> str:
+    """The kind a seeded slug carries; an unknown slug is an office."""
+    if not slug:
+        return POSITION_KIND_OFFICE
+    definition = DEFAULT_POSITIONS.get(slug)
+    if definition and definition.get("kind") in POSITION_KINDS:
+        return str(definition["kind"])
+    if slug in SYSTEM_POSITION_SLUGS:
+        return POSITION_KIND_SYSTEM
+    return POSITION_KIND_OFFICE
+
+
+# Every seeded definition states its kind. The committees state theirs
+# inline; the rest are settled here so a new office cannot be added without
+# being one, and the system set stays one list.
+for _slug, _definition in DEFAULT_POSITIONS.items():
+    _definition.setdefault(
+        "kind",
+        (
+            POSITION_KIND_SYSTEM
+            if _slug in SYSTEM_POSITION_SLUGS
+            else POSITION_KIND_OFFICE
+        ),
+    )
+
+# A committee carries the baseline, as a copy (never the `member` list object:
+# pitfall #23 is what sharing it would reintroduce).
+for _slug in COMMITTEE_POSITION_SLUGS:
+    DEFAULT_POSITIONS[_slug]["permissions"] = list(
+        DEFAULT_POSITIONS["member"]["permissions"]
+    )
 
 
 def position_mirrors_rank(slug: str | None, is_system: bool | None) -> bool:

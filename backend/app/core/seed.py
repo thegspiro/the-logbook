@@ -103,6 +103,7 @@ async def seed_roles(db: AsyncSession, organization_id: uuid.UUID | str):
             permissions=role_data["permissions"],
             is_system=role_data["is_system"],
             priority=role_data["priority"],
+            kind=role_data.get("kind", "office"),
         )
 
         db.add(role)

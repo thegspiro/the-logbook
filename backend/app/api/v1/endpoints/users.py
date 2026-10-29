@@ -118,6 +118,9 @@ from app.utils.membership import (
     DEACTIVATED_EMAIL_MESSAGE,
     DEACTIVATED_USERNAME_MESSAGE,
     DEFAULT_CLASS,
+    MemberStatus,
+    accepted_member_statuses,
+    canonical_member_status,
     is_administrative,
     split_membership_type,
 )
@@ -462,6 +465,12 @@ async def create_member(
         current_user, canonical_rank, db, get_client_ip(request)
     )
     _refuse_administrative_rank(user_data.member_class, None, canonical_rank)
+    # A tier id the organization does not have is refused here, not stored:
+    # the column would hold a standing no ladder rung, ballot rule or
+    # advancement scan could place.
+    user_data.member_status = await _accepted_member_status_or_400(
+        db, str(current_user.organization_id), user_data.member_status
+    )
 
     # Auto-generate membership number if not provided and auto-generation is on
     membership_number = user_data.membership_number
@@ -1249,6 +1258,50 @@ async def _enforce_rank_grant_ceiling(
             )
 
 
+async def _accepted_member_status_or_400(
+    db: AsyncSession,
+    organization_id: str,
+    member_status: str | None,
+) -> str | None:
+    """Settle a ``member_status`` against the organization's own ladder.
+
+    The schema can only check the shape: the column holds the seven built-in
+    statuses *and* the department's membership tier ids, and only the
+    organization knows the latter. A built-in status needs no lookup. A tier
+    id is checked against ``settings["membership_tiers"]`` under the
+    Organization row lock (Pitfall #27), Organization before member, the
+    order ``MembershipTierService.advance_all`` and ``change_membership_type``
+    use -- so a request landing a member on a rung cannot interleave with
+    the tier editor removing that rung between its occupancy count and its
+    commit. Returns the canonical spelling.
+    """
+    canonical = canonical_member_status(member_status)
+    if canonical is None or canonical in MemberStatus.ALL:
+        return canonical
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.id == str(organization_id))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    organization = org_result.scalar_one_or_none()
+    settings = (organization.settings if organization else None) or {}
+    tiers = (settings.get("membership_tiers") or {}).get("tiers") or []
+    tier_ids: list[str] = [
+        str(t["id"]) for t in tiers if isinstance(t, dict) and t.get("id")
+    ]
+    if canonical not in accepted_member_statuses(tier_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unknown member_status '{member_status}'. Expected one of "
+                f"{', '.join(MemberStatus.ALL)} or one of this organization's "
+                f"membership tiers: {', '.join(sorted(tier_ids)) or 'none'}."
+            ),
+        )
+    return canonical
+
+
 def _refuse_administrative_rank(
     member_class: str | None,
     membership_type: str | None,
@@ -1983,6 +2036,15 @@ async def update_user_profile(
     # at the SQL level, but `user.member_class`/`user.rank` would still read
     # whatever they were before a concurrent request's commit. Same
     # requirement as quorum_service.py's calculate_quorum.
+    # Before the member lock, because a tier id takes the Organization lock
+    # (see the helper) and Organization-then-member is the order every other
+    # writer of a member's standing uses; the reverse would deadlock against
+    # the advancement scan.
+    if profile_update.member_status is not None:
+        profile_update.member_status = await _accepted_member_status_or_400(
+            db, str(current_user.organization_id), profile_update.member_status
+        )
+
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))

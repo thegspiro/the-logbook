@@ -566,7 +566,8 @@ You need to be able to manage schedules for both of these.
 ## Shift Assignments
 
 **Who can do this:** officers whose position includes **Assign members to
-shifts** or **Manage schedules**, and the shift officer named on that shift.
+shifts**, and the shift officer named on that shift. **Manage schedules** alone
+does not let you assign anyone, and the buttons below are not shown to you.
 
 1. On the calendar, open the shift's **Shift details**.
 2. On an open seat in the crew board, select **Assign someone** (on a narrow
@@ -3804,6 +3805,23 @@ then your department's own.
 > rank. Members of that rank can still be eligible through a qualification,
 > training or an open position.
 
+**Which seats a qualification clears.** A qualification on a member's profile
+clears these seats while it is in force on the day of the shift:
+
+| Qualification               | Seats it clears                |
+| --------------------------- | ------------------------------ |
+| Firefighter I, Firefighter II | Firefighter                  |
+| Driver / Operator           | Driver/Operator                |
+| EMT, Advanced EMT           | EMT                            |
+| Paramedic                   | EMT, Paramedic                 |
+| Officer in Charge           | Officer, Captain, Lieutenant   |
+
+**Officer in Charge** _(2026-10-29)_ is how a member with no officer rank is
+cleared to lead a shift: give it on the profile, with an expiry if your
+clearance has one. A held office such as Quartermaster or Treasurer never
+clears a seat; an office says nothing about what its holder is trained to do
+on a rig.
+
 ![Operational Ranks settings, listing each rank with the shift positions it may fill](./images/03-33-settings-eligibility.png)
 
 **Who Can Fill What** (on the Scheduling Admin hub) shows the result: which
@@ -3840,7 +3858,7 @@ eligibility. Don't confuse the two:
 
 | Setting                       | What it does                                                                                                                         |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Excluded from Self-Signup** | Membership types that cannot sign themselves up for shifts. Unless you change it: Prospective, Retired, Honorary and Administrative |
+| **Excluded from Self-Signup** | Types that can't sign up or be assigned, except to a shift open to all. By default: Prospective, Retired, Honorary, Administrative  |
 | **Open Positions**            | Seats any eligible member can sign up for, whatever their rank or training                                                           |
 | **Members can sign up until** | When a shift stops taking sign-ups: when it starts, or 15 minutes to 1 day before                                                    |
 
@@ -3884,9 +3902,8 @@ Scheduling uses two permissions. On the Role Management screen:
 - With **Assign members to shifts** only, you can fill existing shifts but not
   create or delete them.
 - **Assigning always needs Assign members to shifts** (or being the officer
-  named on that shift). With **Manage schedules** alone, the crew board
-  controls still show, but The Logbook refuses the assignment. Give scheduling
-  officers both.
+  named on that shift). With **Manage schedules** alone, the crew board's
+  assign controls are not shown. Give scheduling officers both.
 - **The officer named on a shift** can manage that shift's crew, attendance,
   calls and close-out without either permission. Editing or deleting the shift
   itself still needs **Manage schedules**.

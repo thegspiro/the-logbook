@@ -244,10 +244,13 @@ A coordinator can reactivate it like any other withdrawal.
 - **Models:** `app/models/membership_pipeline.py` — `membership_pipelines`,
   `membership_pipeline_steps`, `prospective_members`, `prospect_step_progress`,
   `prospect_activity_log`, `prospect_documents`, `prospect_election_packages`,
-  `prospect_interviews`, `prospect_event_links`. A converted applicant is
+  `prospect_interviews`, `prospect_event_links`, `prospect_form_requests`
+  (follow-up form links, drafts and reminders). A converted applicant is
   stored as `transferred`; the frontend shows `converted`.
 - **Scheduled tasks:** `membership_inactivity_warnings`,
-  `membership_auto_purge`, `prospect_attendance_advance`.
+  `membership_auto_purge`, `prospect_attendance_advance`,
+  `prospect_follow_up_reminders` (hourly; follow-up form reminders every seven
+  days, up to three).
 - **Notable migrations:** `77d4aa7798dd` (target position, lifecycle stamps),
   `1b52ea3a079e` (`public_show_future_stages`), `941e1251ad74` (Application
   Withdrawn template), `601fdb28ab8c` (`conversion_config`), `99b16109d44c`

@@ -39,7 +39,13 @@ from app.services.member_service_history_service import (
     summarize,
     whole_years,
 )
-from app.utils.membership import is_administrative
+from app.utils.membership import (
+    LEGACY_MEMBERSHIP_TYPES,
+    canonical_member_status,
+    derive_membership_type,
+    is_administrative,
+    split_membership_type,
+)
 from app.utils.org_timezone import resolve_org_today, scheduling_timezone, today_in
 
 
@@ -284,6 +290,87 @@ class MembershipTierService:
                 return tier
         return None
 
+    @staticmethod
+    def tier_for_status(
+        tiers: List[Dict[str, Any]], member_status: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """The rung a stored ``member_status`` stands on, if it is on this ladder.
+
+        Matched in canonical spelling, because the shipped ladder names its
+        second rung ``active`` and the column stores that standing as
+        ``regular`` (see ``canonical_member_status``).
+        """
+        wanted = canonical_member_status(member_status)
+        if wanted is None:
+            return None
+        for tier in tiers:
+            if canonical_member_status(tier.get("id")) == wanted:
+                return tier
+        return None
+
+    @staticmethod
+    def ranks_as_by_tier(organization: Optional[Organization]) -> Dict[str, str]:
+        """tier id (canonical) -> the built-in status it counts as.
+
+        Only tiers that declare ``ranks_as`` appear; a tier without one counts
+        as nothing, which is what ``status_for_tier`` relies on.
+        """
+        settings = organization.settings if organization else None
+        if not isinstance(settings, dict):
+            return {}
+        tiers = (settings.get("membership_tiers") or {}).get("tiers") or []
+        mapping: Dict[str, str] = {}
+        for tier in tiers:
+            if not isinstance(tier, dict):
+                continue
+            tier_id = canonical_member_status(tier.get("id"))
+            ranks_as = (tier.get("ranks_as") or "").strip().lower()
+            if tier_id and ranks_as:
+                mapping[tier_id] = ranks_as
+        return mapping
+
+    @staticmethod
+    def _current_standing(member: Any) -> Optional[str]:
+        """The ladder standing to judge a member by.
+
+        ``member_status`` is the authority; a row written before it existed
+        still carries the standing fused into ``membership_type``.
+        """
+        stored = getattr(member, "member_status", None)
+        if stored:
+            return str(stored)
+        _cls, status = split_membership_type(getattr(member, "membership_type", None))
+        if status:
+            return status
+        legacy = (getattr(member, "membership_type", None) or "").strip().lower()
+        return legacy or None
+
+    @staticmethod
+    def _move_to_tier(member: Any, tier_id: str) -> None:
+        """Put ``member`` on ``tier_id`` without touching their class.
+
+        The ladder is a statement about tenure, so every class climbs it: an
+        administrative member with twenty years reaches Life like anyone
+        else, and stays administrative. The one exception is a tier named
+        in the legacy vocabulary for a *class* (``administrative``,
+        ``honorary``): such a rung is a class change by construction, and is
+        written the way it always was, through the legacy column, so the
+        reconciler moves the class with it.
+        """
+        legacy = canonical_tier = canonical_member_status(tier_id)
+        if tier_id in LEGACY_MEMBERSHIP_TYPES:
+            cls, _status = split_membership_type(tier_id)
+            if cls != "operational":
+                member.membership_type = tier_id
+                return
+        member.member_status = canonical_tier
+        # Written as well as derived at flush so a caller reading the row
+        # before the flush -- the audit entry, a test double -- sees the
+        # legacy value the reconciler will settle on.
+        member.membership_type = derive_membership_type(
+            getattr(member, "member_class", None), legacy
+        )
+
     # ------------------------------------------------------------------
     # Batch auto-advance
     # ------------------------------------------------------------------
@@ -454,15 +541,18 @@ class MembershipTierService:
             if not target_tier:
                 continue
 
-            current_type = candidate.membership_type or "active"
-            if current_type == target_tier["id"]:
-                continue
-
-            # Only advance (don't demote), and only along this ladder
-            current_tier_def = self.get_tier_by_id(tiers, current_type)
+            current_tier_def = self.tier_for_status(
+                tiers, self._current_standing(candidate)
+            )
             if current_tier_def is None:
+                # Only advance along this ladder: a standing that is not a
+                # rung (administrative, honorary, retired, prospective in the
+                # shipped defaults) is left where it is.
                 off_ladder += 1
                 continue
+            if current_tier_def["id"] == target_tier["id"]:
+                continue
+            # Only advance (don't demote)
             if target_tier.get("sort_order", 0) <= current_tier_def.get(
                 "sort_order", 0
             ):
@@ -489,21 +579,22 @@ class MembershipTierService:
                 continue
             # Re-check eligibility under the lock: the batch read above may
             # now be stale (another transaction already advanced or changed
-            # this member's type since).
-            current_type = member.membership_type or "active"
-            if current_type == target_tier["id"]:
-                continue
-            current_tier_def = self.get_tier_by_id(tiers, current_type)
+            # this member's standing since).
+            current_tier_def = self.tier_for_status(
+                tiers, self._current_standing(member)
+            )
             if current_tier_def is None:
                 off_ladder += 1
+                continue
+            if current_tier_def["id"] == target_tier["id"]:
                 continue
             if target_tier.get("sort_order", 0) <= current_tier_def.get(
                 "sort_order", 0
             ):
                 continue
 
-            previous_type = current_type
-            member.membership_type = target_tier["id"]
+            previous_type = current_tier_def["id"]
+            self._move_to_tier(member, target_tier["id"])
             member.membership_type_changed_at = now
 
             # An administrative member holds no operational rank, and this is a
@@ -522,7 +613,12 @@ class MembershipTierService:
             # The account status follows the tier the same way it follows a
             # change made by hand: a member advanced off the probationary rung
             # becomes active. Applied here so the audit entry records it.
-            status_change = sync_account_status_with_membership(member, now=now)
+            status_change = sync_account_status_with_membership(
+                member,
+                now=now,
+                member_status=canonical_member_status(target_tier["id"]),
+                ranks_as_by_tier=self.ranks_as_by_tier(organization),
+            )
 
             advanced.append(
                 {

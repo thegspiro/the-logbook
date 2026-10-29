@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
@@ -4981,7 +4981,9 @@ class SchedulingService:
             conflicts = (await self.db.execute(overlap_query)).scalars().all()
             if conflicts:
                 dates = sorted({str(value) for value in conflicts})
-                return f"Member has a conflicting shift on {', '.join(dates)}"
+                return list_within_detail_limit(
+                    "Member has a conflicting shift on ", dates
+                )
 
         if shift.shift_date:
             leaves = await MemberLeaveService(self.db).get_active_leaves_for_user(

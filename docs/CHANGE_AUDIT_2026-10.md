@@ -5,28 +5,32 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
-## Change audit: October 29, 2026 (second pass)
+## Change audit: October 29, 2026
 
-Merged to `main` after the pass below (`7ac356b4`) through `2aac367a`
-(2026-10-29 11:29 UTC). Security-review pass 13 for documents-legal (#3816, 0 findings)
-is in `docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+Merged to `main` since `7ac356b4` (2026-10-29 03:12 UTC) through `2aac367a`
+(2026-10-29 11:29 UTC), 8 merges. The documents-legal security-review pass
+(#3816) is in `docs/security-review/PROGRESS.md`; the October 28 – 29
+documentation pass (#3814) merged in this window. `CHANGELOG.md` stays closed.
 
-| Change                                                                                                                                                                 | Guide                                            | Disposition                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
-| **Follow-up Form** pipeline stage: personal link, pre-fill with write-back, contact-change flag and old-address notice, drafts; migration `f34e25e2c820` (#3814 range) | 15, `FORMS_MODULE`, `PROSPECTIVE_MEMBERS_MODULE` | Added to 15; module docs written with the change |
-| Two new templates: Application Follow-up Form, Application Contact Details Changed                                                                                     | 15                                               | Added                                            |
-| A cohort's **Shift remaining** is limited to -14..14 days (was 365)                                                                                                    | 02                                               | Added                                            |
-| Inventory label page: preview under the controls                                                                                                                       | 05                                               | Added                                            |
-| Admin hubs and several pages hold content invisible until first load settles (`useFirstLoadHold`, skeletons), so pages no longer jump                                  | none                                             | Visual only                                      |
-| `alert-error` replaced by `alert-danger` on twelve screens                                                                                                             | none                                             | Visual only                                      |
-| Refusal messages that list data are capped (event requests, finance, operational ranks)                                                                                | none                                             | Backend                                          |
+| Change                                                                                                                                                                                                                                                                                         | Guide          | Disposition                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Follow-up Form** pipeline stage: a personal link to a form pre-filled from the applicant record, drafts, write-back, a **Contact details changed** flag, **Send now / Resend**; two new templates that are always sent; **Pre-fill from applicant (follow-up forms)** on form fields (#3820) | 15, 07, 08, 01 | Added. Corrected "twelve stage types" (15, 01), "five emails cannot be switched off" (08, now seven), and 15's claim that Application Status Link can be switched off; 15's card description now names the flag. Developer docs written with the change |
+| **Shift remaining** on a cohort moves classes at most 14 days either way (#3819)                                                                                                                                                                                                               | 02             | Added; `KNOWN_LIMITATIONS` written with the change                                                                                                                                                                                                      |
+| Label print page: the preview sits under the controls instead of a screen below (#3817)                                                                                                                                                                                                        | none           | Guide 05 did not describe the position                                                                                                                                                                                                                  |
+| Pages no longer jump while they load (#3821)                                                                                                                                                                                                                                                   | none           | Visual only                                                                                                                                                                                                                                             |
+| Refusals that list names (an event request's roles, inactive budget lines, org-chart seats on a rank) keep as many as fit and add "and _N_ more", instead of growing past the length limit and reaching the user as no message at all (#3815); medical-supplies tests across midnight (#3818)  | none           | Backend and tests                                                                                                                                                                                                                                       |
+| `alert-error` replaced by `alert-danger` on twelve screens, so their error boxes show the danger styling (#3820)                                                                                                                                                                               | none           | Visual only                                                                                                                                                                                                                                             |
 
-**Screenshots to create:** Follow-up Form stage in the stage builder; the
-applicant page's follow-up forms section (with the Contact details changed
-flag); the applicant-facing form page. **Re-check:** `05-69-label-print-page`
-and `05-33-label-printing` (preview position), the cohort Shift remaining
-dialog, and any shot showing a red error alert (`alert-danger` styling).
-Operators: the follow-up migration is additive; nothing blocks a boot.
+**Screenshots to create:** the Follow-up Form stage settings, the applicant
+drawer's **Follow-up Forms** section, the applicant's form page with **Save and
+finish later**, and a card with **Contact details changed**. **Replace:**
+`01-27-stage-type-picker` (a thirteenth tile). **Re-check:**
+`05-69-label-print-page` and `05-33-label-printing` (the preview now sits under
+the controls), the cohort **Shift remaining** dialog, and any shot showing a red
+error box on one of the twelve screens. See
+`docs/training/SCREENSHOT_CURRENCY.md`. The second pass over this window (#3831)
+merged into this section: it added the guide 05 preview note and a guide 02
+row for a refused shift.
 
 ## Change audit: October 28 – 29, 2026
 
