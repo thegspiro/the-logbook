@@ -1,5 +1,18 @@
 # Screenshot currency
 
+## Queued by the October 29 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 15 | Stage settings for a **Follow-up Form** stage, with **Advance the applicant when they submit the form** | Create |
+| 15 | The applicant drawer's **Follow-up Forms** section with **Send now / Resend** and **Mark reviewed**; a card with **Contact details changed** | Create |
+| 15 | The applicant's form page with **Save and finish later** | Create |
+| 07 | Field editor with **Pre-fill from applicant (follow-up forms)** | Create |
+| 01 | `01-27-stage-type-picker`: the thirteenth tile, **Follow-up Form** | Replace |
+
 ## Queued by the October 28 – 29 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28--29-2026).
