@@ -81,6 +81,29 @@ test.describe('WCAG A/AA at desktop width', () => {
   }
 });
 
+// The phone pass audits every theme, but only at phone width, and the light
+// theme is the only one audited here. What renders only from `lg` up — a
+// settings section sidebar — was never seen in the dark themes: a sweep on
+// 2026-10-29 found its active description at 3.89:1 in high contrast.
+const DARK_THEMES = ['dark', 'high-contrast'] as const;
+const THEMED_ROUTES = [...HUB_ROUTES, '/scheduling/admin/settings/shift-reports'];
+
+test.describe('WCAG A/AA at desktop width in the dark themes', () => {
+  for (const theme of DARK_THEMES) {
+    for (const path of THEMED_ROUTES) {
+      test(`${path} — ${theme}`, async ({ page }) => {
+        await open(page, path, { width: 1440, height: 900 });
+        await page.evaluate((t) => localStorage.setItem('theme-preference', t), theme);
+        await page.reload();
+        await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+        await page.waitForFunction(() => !document.querySelector('[data-testid="admin-hub-body"][data-held]'));
+        await page.waitForTimeout(400);
+        expect(await runAxe(page), `${path} at 1440px in ${theme}`).toEqual([]);
+      });
+    }
+  }
+});
+
 test.describe('WCAG A/AA at tablet width', () => {
   test.use({ hasTouch: true });
 

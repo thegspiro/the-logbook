@@ -1131,8 +1131,11 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{label}</p>
+                  {/* Full violet-400, not /70: the dimmed tint measured 3.89:1 on
+                      the high-contrast theme, under AA. Dark-mode hierarchy
+                      comes from size here, as it does elsewhere. */}
                   <p
-                    className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-400/70' : 'text-theme-text-muted'}`}
+                    className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-muted'}`}
                   >
                     {description}
                   </p>
