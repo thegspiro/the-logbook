@@ -621,6 +621,15 @@ export interface CloseoutState {
   attachable_calls: CloseoutAttachableCall[];
 }
 
+/** What close-out still needs in trainee reports (GET /shifts/{id}/trainee-reports). */
+export interface TraineeReportRequirement {
+  /** The department requires a report for each member in a training seat. */
+  required: boolean;
+  missing: { user_id: string; name: string }[];
+  /** The viewer may close out without them (scheduling.manage). */
+  can_override: boolean;
+}
+
 export interface CloseoutAttendanceEntry {
   user_id: string;
   checked_in_at?: string | null;

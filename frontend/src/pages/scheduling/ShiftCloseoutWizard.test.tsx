@@ -11,7 +11,7 @@
  *     "not tracked" and "a quiet tour".
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
@@ -20,9 +20,13 @@ const mockGetState = vi.fn();
 const mockSaveAttendance = vi.fn();
 const mockSaveCalls = vi.fn();
 const mockFinalize = vi.fn();
+// No trainee reports required unless a block says so (and puts this back).
+const NO_REPORTS_REQUIRED = { required: false, missing: [], can_override: false };
+const reportRequirement = vi.hoisted((): { current: unknown } => ({ current: null }));
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
+    getTraineeReportRequirement: () => Promise.resolve(reportRequirement.current ?? NO_REPORTS_REQUIRED),
     getCloseoutState: (...a: unknown[]) => mockGetState(...a) as unknown,
     saveCloseoutAttendance: (...a: unknown[]) => mockSaveAttendance(...a) as unknown,
     saveCloseoutCalls: (...a: unknown[]) => mockSaveCalls(...a) as unknown,
@@ -201,6 +205,59 @@ describe('close-out blockers the checklist used to own', () => {
         'sh1',
         undefined,
         expect.objectContaining({ pass_down_notes: 'Pump packing leaking' })
+      );
+    });
+  });
+});
+
+describe('trainee reports the department requires', () => {
+  const missingTerry = (canOverride: boolean) => ({
+    required: true,
+    missing: [{ user_id: 't1', name: 'Terry Trainee' }],
+    can_override: canOverride,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetState.mockResolvedValue(baseState({ closeout_step: 2, reported_call_count: 3 }));
+    mockFinalize.mockResolvedValue({ id: 'sh1' });
+  });
+
+  afterEach(() => {
+    reportRequirement.current = null;
+  });
+
+  it('names the trainee and blocks close-out for a shift officer', async () => {
+    reportRequirement.current = missingTerry(false);
+    renderWizard();
+
+    expect(await screen.findByText('Terry Trainee')).toBeInTheDocument();
+    expect(screen.getByText(/A scheduling admin can close the shift out without them/)).toBeInTheDocument();
+    // The gate reports to the wizard from an effect, one render after it draws.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Close out shift/ })).toBeDisabled());
+  });
+
+  it('lets a scheduling admin override with a reason, and sends it', async () => {
+    const user = userEvent.setup();
+    reportRequirement.current = missingTerry(true);
+    renderWizard();
+
+    await user.click(await screen.findByRole('checkbox', { name: /Close out anyway, without this report/ }));
+    expect(screen.getByRole('button', { name: /Close out shift/ })).toBeDisabled();
+    await user.type(
+      screen.getByLabelText(/Reason for closing out without the trainee reports/),
+      'Trainee went home sick'
+    );
+    await user.click(screen.getByRole('button', { name: /Close out shift/ }));
+
+    await waitFor(() => {
+      expect(mockFinalize).toHaveBeenCalledWith(
+        'sh1',
+        undefined,
+        expect.objectContaining({
+          override_missing_reports: true,
+          report_override_reason: 'Trainee went home sick',
+        })
       );
     });
   });

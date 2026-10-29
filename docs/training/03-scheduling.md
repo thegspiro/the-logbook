@@ -2124,12 +2124,16 @@ Pick one section at a time from the list. There are seven:
 | ----------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------- |
 | **Reports are filed by the officer on the rig** | Off       | Only the shift's Shift Officer can file its reports, and close-out drafts go to them. A shift with no Shift Officer can't have reports until one is set |
 | **Enable post-shift validation**                | On        | Sends the Shift Officer a reminder after the shift ends, to check the records and close it out      |
-| **Require officer shift completion report**     | Off       | Adds a line to that reminder saying a report is required (see the note below)                      |
+| **Require officer shift completion report**     | Off       | Each trainee needs a report before the shift can be closed out (see the note below)                |
 | **Validation window (hours after shift end)**   | 2         | How long after a shift ends it still gets a reminder. From 1 to 24 hours                          |
 
-> **Important.** **Require officer shift completion report** only changes the
-> reminder's wording. The Logbook does not stop a shift being closed out
-> without a report.
+> **Require officer shift completion report** blocks close-out while any member
+> in a training seat on the shift has no shift completion report for it, and
+> the close-out screen names them. A shift with no training seats closes as
+> normal. The reminder also says a report is required. A shift officer has to
+> file the reports first; an officer with **Manage schedules** can tick **Close
+> out anyway** and give a reason, which goes on the record. The box only
+> applies while **Enable post-shift validation** is on.
 
 The reminder goes only to shifts that have a Shift Officer. In departments
 that record a call count at close-out, it also asks the officer to record the

@@ -10149,6 +10149,66 @@ class SchedulingService:
             if s.get("check_timing") == "end_of_shift" and not s.get("is_completed")
         )
 
+    @staticmethod
+    def trainee_reports_required(org: Any) -> bool:
+        """Whether this department requires trainee reports before close-out.
+
+        The Shift Reports setting "Require officer shift completion report"
+        (``shift_reports.post_shift_validation.require_officer_report``). The
+        screen shows that box only while post-shift validation is on, so a
+        stored value behind validation turned off does not enforce anything.
+        """
+        settings = (getattr(org, "settings", None) or {}) if org else {}
+        psv = (settings.get("shift_reports") or {}).get("post_shift_validation") or {}
+        return bool(psv.get("enabled", True)) and bool(
+            psv.get("require_officer_report", False)
+        )
+
+    async def missing_trainee_reports(
+        self, shift_id: UUID | str, organization_id: UUID | str
+    ) -> List[Tuple[str, str]]:
+        """Members in a training seat on this shift with no report filed for it.
+
+        Owner decision 2026-10-29: when the department requires reports, each
+        member seated in a training slot needs a shift completion report for
+        this shift before it can be closed out. A shift with no training seats
+        needs none. Returned as ``(user_id, name)``, ordered by name.
+        """
+        seated = (
+            await self.db.execute(
+                select(ShiftAssignment.user_id, User)
+                .join(User, User.id == ShiftAssignment.user_id)
+                .where(
+                    ShiftAssignment.shift_id == str(shift_id),
+                    ShiftAssignment.is_training.is_(True),
+                    ShiftAssignment.assignment_status.notin_(
+                        self.INACTIVE_ASSIGNMENT_STATUSES
+                    ),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).all()
+        if not seated:
+            return []
+        reported = set(
+            (
+                await self.db.execute(
+                    select(ShiftCompletionReport.trainee_id).where(
+                        ShiftCompletionReport.shift_id == str(shift_id),
+                        ShiftCompletionReport.organization_id == str(organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        missing = {
+            str(user_id): (user.display_name or "A member")
+            for user_id, user in seated
+            if str(user_id) not in {str(r) for r in reported}
+        }
+        return sorted(missing.items(), key=lambda item: (item[1], item[0]))
+
     async def finalize_shift(
         self,
         shift_id: UUID,
@@ -10161,6 +10221,7 @@ class SchedulingService:
         reported_call_types: Optional[Dict[str, int]] = None,
         member_call_counts_in: Optional[Dict[str, int]] = None,
         attach_call_ids: Optional[List[str]] = None,
+        override_missing_reports: bool = False,
     ) -> Tuple[Optional[Shift], Optional[str]]:
         """Mark a shift as finalized after officer review.
 
@@ -10185,6 +10246,11 @@ class SchedulingService:
         rejected while any end-of-shift equipment check is outstanding, unless
         ``override_incomplete_checks`` is set (the caller audit-logs the
         override). ``pass_down_notes`` records the crew handoff.
+
+        When the department requires trainee reports, finalization is also
+        rejected while a member in a training seat has no shift completion
+        report for this shift, unless ``override_missing_reports`` is set (only
+        a scheduling admin may, and the caller audit-logs it).
         """
         try:
             # for_update=True for lock-ordering consistency with
@@ -10272,6 +10338,16 @@ class SchedulingService:
                             "are incomplete. Complete them, or finalize with "
                             "an override."
                         )
+
+            if not override_missing_reports and self.trainee_reports_required(org):
+                missing = await self.missing_trainee_reports(shift_id, organization_id)
+                if missing:
+                    return None, list_within_detail_limit(
+                        "A shift completion report is still needed for: ",
+                        [name for _, name in missing],
+                        suffix=". File it, or ask a scheduling admin to close "
+                        "out with an override.",
+                    )
 
             # Create attendance records for manually-entered hours
             #

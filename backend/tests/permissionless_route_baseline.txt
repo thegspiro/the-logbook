@@ -296,6 +296,11 @@ app/api/v1/endpoints/scheduling.py::get_pre_shift_eligible_shifts
 app/api/v1/endpoints/scheduling.py::get_scheduling_feature_settings
 app/api/v1/endpoints/scheduling.py::get_shift_closeout_state
 app/api/v1/endpoints/scheduling.py::get_shift_handoff
+# Trainee report requirement (2026-10-29): calls _authorize_shift_management
+# with scheduling.manage first, which admits that grant or the shift's own
+# officer for a shift resolved org-scoped, and refuses everyone else (404 for a
+# shift outside the caller's org). Returns names of members seated on it.
+app/api/v1/endpoints/scheduling.py::get_shift_trainee_report_requirement
 app/api/v1/endpoints/scheduling.py::get_standing_claim_for_shift
 app/api/v1/endpoints/scheduling.py::list_apparatus_options
 app/api/v1/endpoints/scheduling.py::list_basic_apparatus

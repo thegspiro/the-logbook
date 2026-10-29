@@ -24,6 +24,7 @@ const shift = {
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getShiftAssignments: vi.fn().mockResolvedValue([]),
+    getTraineeReportRequirement: vi.fn().mockResolvedValue({ required: false, missing: [], can_override: false }),
     getShiftPreShiftWork: vi.fn().mockResolvedValue([]),
     getMyAttendance: vi.fn().mockResolvedValue(null),
     getShiftAttendance: vi.fn().mockResolvedValue([]),

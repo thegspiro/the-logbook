@@ -2385,6 +2385,16 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    **Labelled (2026-10-11):** the setting's description now says it changes
    the reminder, and it shows "Not in effect yet — a shift can still be closed
    out without a report." Enforcing it at close-out is still open.
+   **Resolved (2026-10-29), owner decision: enforce at close-out.** With the
+   setting on (and post-shift validation on, which is when the box shows),
+   `finalize_shift` refuses while any member in a training seat has no shift
+   completion report for the shift, naming them; a shift with no training
+   seats closes as before. A `scheduling.manage` holder may override with a
+   reason (`override_missing_reports`), audit-logged as
+   `shift_finalized_report_override`; a shift officer without that grant may
+   not. Both close-out paths show the block (`TraineeReportGate`, reading
+   `GET /scheduling/shifts/{id}/trainee-reports`). Covered by
+   `tests/test_shift_trainee_report_requirement.py`.
 2. **"Reviewer role"** (Shift Reports settings). Saved as
    `report_review_role` in the training module config and read by nothing.
    Approving reports is gated on `training.manage` alone

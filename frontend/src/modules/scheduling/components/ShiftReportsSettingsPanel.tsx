@@ -523,13 +523,9 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                         Require officer shift completion report
                       </span>
                       <p className="text-theme-text-muted text-xs">
-                        Tells officers, in the post-shift reminder, that a shift completion report is required. The
-                        report covers staffing, call response, and training observations.
-                      </p>
-                      {/* Pitfall #19: the reminder text is this setting's only reader — close-out never checks for a
-                          report — so the screen must not promise a block that does not happen. */}
-                      <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
-                        Not in effect yet — a shift can still be closed out without a report.
+                        Each member in a training seat needs a shift completion report for the shift before it can be
+                        closed out, and the post-shift reminder says so. A scheduling admin can close out without them,
+                        giving a reason that goes on the record.
                       </p>
                     </div>
                   </label>
