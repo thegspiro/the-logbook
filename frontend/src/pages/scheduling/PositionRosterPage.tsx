@@ -4,34 +4,25 @@
  * "Who is cleared to drive?" — answered in one screen instead of opening each
  * apparatus's operator tab in turn.
  *
- * Eligibility for a shift position comes from five independent sources OR'd
- * together (rank, a held position, completed training, a current
- * qualification, the org's open-position list), so a member can hold a
- * position for a reason that is not obvious from their profile. This page
- * shows the sources alongside each name, and pairs them with the member's EVOC
- * standing so the gap that matters is visible: someone whose rank lets them
- * sign up as a driver with no EVOC certification behind it.
+ * Eligibility for a shift position comes from four independent sources OR'd
+ * together (rank, a current qualification, completed training, the org's
+ * open-position list), so a member can hold a position for a reason that is
+ * not obvious from their profile. A held RBAC position (Quartermaster,
+ * Treasurer) is deliberately not one of them: an office says nothing about
+ * what its holder is trained to do on a rig. This page shows the sources
+ * alongside each name, and pairs them with the member's EVOC standing so the
+ * gap that matters is visible: someone whose rank lets them sign up as a
+ * driver with no EVOC certification behind it.
  *
- * Only the qualification source can lapse on its own -- rank, held positions
- * and completed programs all persist until somebody edits a record -- so it is
- * the one that carries its expiry date onto the badge.
+ * Only the qualification source can lapse on its own -- rank and completed
+ * programs persist until somebody edits a record -- so it is the one that
+ * carries its expiry date onto the badge.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import {
-  AlertTriangle,
-  BadgeCheck,
-  Briefcase,
-  GraduationCap,
-  Loader2,
-  Search,
-  Shield,
-  Truck,
-  Unlock,
-  Users,
-} from 'lucide-react';
+import { AlertTriangle, BadgeCheck, GraduationCap, Loader2, Search, Shield, Truck, Unlock, Users } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { PositionRosterMember, PositionRosterResponse } from '../../modules/scheduling/types';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
@@ -66,19 +57,13 @@ const TABS = [
 type TabId = (typeof TABS)[number]['id'];
 
 // One entry per source type the roster endpoint emits. A type with no entry
-// here falls back to the rank styling, which is how a held-position source
-// spent its life masquerading as a second rank badge -- and how a
-// qualification joined it when that source was added.
+// here falls back to the rank styling, which is how a qualification source
+// spent its first weeks masquerading as a second rank badge.
 // `reason` is read out in place of the icon and colour, which are all a sighted
 // reader has to tell the source apart; without it a rank badge beside the rank
 // itself announced as "Engineer, Engineer" on a page whose job is saying why.
 const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string; reason: string }> = {
   rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400', reason: 'By rank' },
-  position: {
-    icon: Briefcase,
-    className: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400',
-    reason: 'By held position',
-  },
   qualification: {
     icon: BadgeCheck,
     className: 'bg-teal-500/15 text-teal-800 dark:text-teal-400',

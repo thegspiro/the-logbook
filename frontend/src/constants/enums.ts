@@ -622,6 +622,9 @@ export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
   { value: 'emt', label: 'EMT' },
   { value: 'aemt', label: 'Advanced EMT' },
   { value: 'paramedic', label: 'Paramedic' },
+  // Cleared to lead a crew without an officer rank: the acting-officer / AIC
+  // card. Clears the officer, captain and lieutenant seats.
+  { value: 'officer_in_charge', label: 'Officer in Charge' },
 ];
 
 /**
