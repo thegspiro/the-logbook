@@ -108,17 +108,18 @@ pipeline never has to mark it.
 
 Each stage has a type that decides how it behaves:
 
-| Type                      | What happens                                                                                                           | Moves on by itself?                                        |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| **Form Submission**       | The applicant fills out a form from the Forms module                                                                   | Optional — when the form is submitted                      |
-| **Document Upload**       | The applicant provides required documents                                                                              | Optional — when every required document is on file         |
-| **Manual Approval**       | A coordinator reviews and advances by hand                                                                             | No                                                         |
-| **Multi-Signer Approval** | Named officers (the Chief, the President…) must each sign. See [Sign-offs](#sign-offs-multi-signer-approval)           | Yes — when the last named officer signs                    |
-| **Election Vote**         | Members vote on the applicant. An election package is created the moment the applicant arrives, however they got there | No — it depends on the vote. No package, no advance        |
-| **Automated Email**       | The Logbook emails the applicant when they arrive                                                                      | Yes — once the email is sent, unless it is the final stage |
-| **Meeting**               | An interview, orientation or ride-along                                                                                | Optional — when the event's attendance is finalized        |
+| Type                      | What happens                                                                                                                             | Moves on by itself?                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Form Submission**       | The applicant fills out a form from the Forms module                                                                                     | Optional — when the form is submitted                      |
+| **Document Upload**       | The applicant provides required documents                                                                                                | Optional — when every required document is on file         |
+| **Manual Approval**       | A coordinator reviews and advances by hand                                                                                               | No                                                         |
+| **Multi-Signer Approval** | Named officers (the Chief, the President…) must each sign. See [Sign-offs](#sign-offs-multi-signer-approval)                             | Yes — when the last named officer signs                    |
+| **Election Vote**         | Members vote on the applicant. An election package is created the moment the applicant arrives, however they got there                   | No — it depends on the vote. No package, no advance        |
+| **Automated Email**       | The Logbook emails the applicant when they arrive                                                                                        | Yes — once the email is sent, unless it is the final stage |
+| **Meeting**               | An interview, orientation or ride-along                                                                                                  | Optional — when the event's attendance is finalized        |
+| **Follow-up Form**        | The applicant is emailed a personal link to a form, pre-filled with what is on file. See [Follow-up Form stages](#follow-up-form-stages) | Optional — when the applicant submits the form             |
 
-The builder offers twelve types in all. The other five — Enable Status Page,
+The builder offers thirteen types in all. The other five — Enable Status Page,
 Reference Check, Checklist, Interview Requirement and Medical Screening — are
 described in [Membership → Pipeline Stage Types](./01-membership.md#pipeline-stage-types).
 
@@ -234,6 +235,43 @@ passed or was cancelled. The email will include the next one instead". Drafts
 are never named. If no event of the type is coming up, the email goes out with
 only your **Additional details**, and the applicant's activity log records that
 the meeting was missing.
+
+### Follow-up Form stages
+
+_(2026-10-29)_ A **Follow-up Form** stage lets the department confirm what the
+interest form said and ask more probing questions. Build the form in the Forms
+module first, then add the stage and choose it.
+
+- **The link.** When an applicant arrives on the stage — advanced, placed, moved
+  back or opened on it — they are emailed a personal link (template
+  **Application Follow-up Form**). Only the first arrival sends. Use **Send now /
+  Resend** on the applicant's page to send it again; the link is always the same,
+  so a resend never issues a second one.
+- **How long it works.** Until the form is submitted, and only while the
+  application is in progress or on hold. Rejecting, withdrawing, transferring or
+  deactivating the application stops the link; reactivating it brings it back
+  with the draft intact.
+- **Pre-fill from applicant.** On a form field, **Pre-fill from applicant** names
+  the applicant record field it opens with. A changed answer is written back on
+  submission, and each change is kept as old → new on the applicant's page. A
+  field cannot be both **Sensitive** and pre-filled; the Forms module refuses the
+  pair.
+- **Contact changes.** A changed email, phone or mobile raises a **Contact
+  details changed** flag on the card and page until a coordinator marks it
+  reviewed. A changed email is applied, and a notice goes to the **old** address
+  (template **Application Contact Details Changed**) saying what changed but not
+  the new value. If another open application already uses that email, it is
+  recorded for the coordinator but not applied.
+- **Drafts.** The applicant's page saves a draft three seconds after they stop
+  typing, and on **Save and finish later**.
+- **Advancing.** Submitting completes the stage and advances the applicant unless
+  **Advance the applicant when they submit the form** is unticked.
+- **Not yet built:** reminders, coordinator emails on submission, and showing the
+  answers on the Interview page and in the election package.
+
+> **Screenshot to create:** `15-` the stage builder with Follow-up Form chosen;
+> the applicant page's follow-up forms section with a Contact details changed
+> flag; the applicant's `/application-form/` page.
 
 ### Using Cal.com and Documenso in Stages
 
@@ -1084,13 +1122,15 @@ template; see
 [Administration → Email Templates](./08-admin-reports.md#email-templates). Each
 of these closes with the **Public** footer by default.
 
-| Template                         | Sent when                                                                                                                                    | Variables                                                                                                    |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Application Step Completed**   | The applicant advances past a stage with **Notify prospect when this stage is completed** ticked                                             | `first_name`, `applicant_name`, `step_name`                                                                  |
-| **Application Status Link**      | The applicant reaches an enabling **Enable Status Page** stage                                                                               | `first_name`, `applicant_name`, `status_url`, `custom_message`, `custom_message_html`, `custom_message_text` |
-| **Application Going Inactive**   | The application nears the inactivity timeout and the pipeline is set to notify the applicant (see [Inactivity Timeout](#inactivity-timeout)) | `first_name`, `applicant_name`, `days_inactive`, `inactive_date`                                             |
-| **Application Withdrawn**        | The applicant withdraws from their status page                                                                                               | `applicant_name`, `withdrawal_date`                                                                          |
-| **Duplicate Application Notice** | Someone applies again with an email address that already has an active application. The department's own email address is BCC'd              | `applicant_name`, `original_date`                                                                            |
+| Template                                | Sent when                                                                                                                                    | Variables                                                                                                    |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Application Step Completed**          | The applicant advances past a stage with **Notify prospect when this stage is completed** ticked                                             | `first_name`, `applicant_name`, `step_name`                                                                  |
+| **Application Status Link**             | The applicant reaches an enabling **Enable Status Page** stage                                                                               | `first_name`, `applicant_name`, `status_url`, `custom_message`, `custom_message_html`, `custom_message_text` |
+| **Application Going Inactive**          | The application nears the inactivity timeout and the pipeline is set to notify the applicant (see [Inactivity Timeout](#inactivity-timeout)) | `first_name`, `applicant_name`, `days_inactive`, `inactive_date`                                             |
+| **Application Follow-up Form**          | The applicant arrives on a Follow-up Form stage, or a coordinator uses Resend (see [Follow-up Form stages](#follow-up-form-stages))          | form link and applicant name                                                                                 |
+| **Application Contact Details Changed** | An applicant changes their email on a follow-up form; sent to the old address                                                                | applicant name, what changed (never the new value)                                                           |
+| **Application Withdrawn**               | The applicant withdraws from their status page                                                                                               | `applicant_name`, `withdrawal_date`                                                                          |
+| **Duplicate Application Notice**        | Someone applies again with an email address that already has an active application. The department's own email address is BCC'd              | `applicant_name`, `original_date`                                                                            |
 
 - **`status_url` is the applicant's private link.** Keep it in the Application
   Status Link template: delivering it is the reason the email exists.

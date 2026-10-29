@@ -1,3 +1,17 @@
+# October 29, 2026 workflow updates
+
+Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026-second-pass).
+Nothing has been re-captured; see [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                             | Now in                                                                        |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| New **Follow-up Form** pipeline stage, pre-fill and contact flags | [15 — Prospective Members](./15-prospective-members.md#follow-up-form-stages) |
+| Shift remaining limited to 14 days either way                     | [02 — Training](./02-training.md)                                             |
+| Label print preview sits under the controls                       | [05 — Inventory](./05-inventory.md)                                           |
+
+---
+
 # October 28–29, 2026 workflow updates
 
 Index for the latest window. Audit:

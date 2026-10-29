@@ -5,6 +5,20 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 29, 2026 (second pass)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026-second-pass).
+
+- **A new Follow-up Form stage** emails an applicant a personal link to a form
+  pre-filled with what is on file. Changed answers update the applicant's record,
+  and a changed email or phone is flagged for a coordinator.
+- **Shifting a class schedule** is limited to 14 days either way.
+- **Inventory labels:** the preview now shows right under the controls.
+- Pages no longer jump while they load.
+- Screenshots to create or re-check are in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 28 – 29, 2026
 
 The engineering audit is
