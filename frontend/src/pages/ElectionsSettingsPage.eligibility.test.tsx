@@ -192,3 +192,61 @@ describe('ElectionsSettingsPage — voter eligibility', () => {
     expect(screen.getByRole('row', { name: /Probationary/ })).toHaveTextContent('No');
   });
 });
+
+describe('ElectionsSettingsPage — annual meeting eligibility', () => {
+  beforeEach(() => {
+    mockGetSettings.mockReset();
+    mockGetElections.mockReset();
+    mockUpdateSettings.mockReset();
+    mockGetElections.mockResolvedValue([]);
+    mockUpdateSettings.mockImplementation((data: unknown) => Promise.resolve(data));
+    window.history.pushState({}, '', '/elections/settings?tab=eligibility');
+  });
+
+  const lastSent = (): ElectionSettings => {
+    const calls = mockUpdateSettings.mock.calls;
+    const sent = calls[calls.length - 1]?.[0] as ElectionSettings | undefined;
+    if (!sent) throw new Error('nothing was sent');
+    return sent;
+  };
+
+  it('starts the annual meeting on the regular rules and copies them when switched on', async () => {
+    const user = userEvent.setup();
+    mockGetSettings.mockResolvedValue({ ...structuredClone(stored), annual_eligibility: null });
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Annual meeting' }));
+    expect(screen.getByText('The annual meeting uses the regular business meeting rules.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: 'Use different rules at the annual meeting' }));
+    await waitFor(() => expect(lastSent().annual_eligibility).toEqual(eligibility), SETTLE);
+    expect(screen.getByLabelText('Requirement')).toHaveValue('none');
+  });
+
+  it('saves a change to the annual rules without touching the regular ones', async () => {
+    const user = userEvent.setup();
+    mockGetSettings.mockResolvedValue({ ...structuredClone(stored), annual_eligibility: structuredClone(eligibility) });
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Annual meeting' }));
+    await user.type(screen.getByLabelText('Minimum months of membership'), '12');
+
+    await waitFor(() => expect(lastSent().annual_eligibility?.rules.min_tenure_months).toBe(12), SETTLE);
+    expect(lastSent().eligibility?.rules.min_tenure_months).toBeNull();
+  });
+
+  it('asks before discarding the annual rules', async () => {
+    const user = userEvent.setup();
+    mockGetSettings.mockResolvedValue({ ...structuredClone(stored), annual_eligibility: structuredClone(eligibility) });
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Annual meeting' }));
+    await user.click(screen.getByRole('switch', { name: 'Use different rules at the annual meeting' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep them' }));
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('switch', { name: 'Use different rules at the annual meeting' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard annual rules' }));
+    await waitFor(() => expect(lastSent().annual_eligibility).toBeNull(), SETTLE);
+  });
+});

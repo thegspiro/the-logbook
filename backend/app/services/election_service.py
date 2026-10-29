@@ -5958,6 +5958,7 @@ class ElectionService:
             ballot_items=cloned_ballot_items,
             position_eligibility=copy.deepcopy(source.position_eligibility),
             eligibility_rules=copy.deepcopy(getattr(source, "eligibility_rules", None)),
+            meeting_kind=getattr(source, "meeting_kind", None) or "regular",
             start_date=start_date,
             end_date=end_date,
             nomination_deadline=nomination_deadline,
@@ -7075,6 +7076,7 @@ class ElectionService:
             eligibility_rules=copy.deepcopy(
                 getattr(election, "eligibility_rules", None)
             ),
+            meeting_kind=getattr(election, "meeting_kind", None) or "regular",
             start_date=runoff_start,
             end_date=runoff_end,
             anonymous_voting=election.anonymous_voting,

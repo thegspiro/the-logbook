@@ -17,6 +17,7 @@ import pytest
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy import text
 
 from app.api.v1.endpoints.elections import (
     ElectionSettingsUpdate,
@@ -735,3 +736,232 @@ class TestCreateAndUpdate:
             )
         assert exc.value.status_code == 400
         assert election.eligibility_rules == COUNT_2_OF_3
+
+
+# ---------------------------------------------------------------------------
+# Regular business meetings and the annual meeting
+# ---------------------------------------------------------------------------
+
+ANNUAL_DEFAULTS = {
+    "rules": {
+        "attendance": {"mode": "count", "min_meetings": 3, "of_last_meetings": 3},
+        "min_tenure_months": 12,
+    },
+    "default_require_attendance": True,
+    "default_voter_types": ["all"],
+    "position_voter_types": {"Secretary": ["regular", "life"]},
+}
+
+
+@pytest.mark.unit
+class TestMeetingKindSchema:
+    def test_unknown_kind_is_refused(self):
+        with pytest.raises(ValidationError, match="meeting kind"):
+            ElectionUpdate.model_validate({"meeting_kind": "quarterly"})
+
+    def test_kind_cannot_be_cleared(self):
+        with pytest.raises(ValidationError):
+            ElectionUpdate.model_validate({"meeting_kind": None})
+
+
+@pytest.mark.unit
+class TestAnnualSettings:
+    async def test_get_reports_no_annual_defaults_until_set(self):
+        db, _ = _settings_db({})
+        response = await get_election_settings(db=db, current_user=Mock())
+        assert response["annual_eligibility"] is None
+
+    async def test_patch_stores_and_clears_the_annual_defaults(self):
+        db, organization = _settings_db({})
+        response = await update_election_settings(
+            settings_update=ElectionSettingsUpdate.model_validate(
+                {"annual_eligibility": ANNUAL_DEFAULTS}
+            ),
+            db=db,
+            current_user=Mock(),
+        )
+        assert (
+            organization.settings["election_eligibility_annual"]["rules"][
+                "min_tenure_months"
+            ]
+            == 12
+        )
+        assert response["annual_eligibility"]["position_voter_types"] == {
+            "Secretary": ["regular", "life"]
+        }
+
+        # null means "the annual meeting uses the regular defaults"
+        response = await update_election_settings(
+            settings_update=ElectionSettingsUpdate.model_validate(
+                {"annual_eligibility": None}
+            ),
+            db=db,
+            current_user=Mock(),
+        )
+        assert "election_eligibility_annual" not in organization.settings
+        assert response["annual_eligibility"] is None
+
+
+@pytest.mark.integration
+class TestMeetingKind:
+    def _payload(self, **extra):
+        now = datetime.now(timezone.utc)
+        return {
+            "title": "Officers 2027",
+            "positions": ["Chief", "Secretary"],
+            "start_date": now + timedelta(days=1),
+            "end_date": now + timedelta(days=2),
+            **extra,
+        }
+
+    async def _org_with(self, db_session, annual=True):
+        org = await _org(
+            db_session,
+            {
+                "rules": COUNT_2_OF_3,
+                "default_require_attendance": True,
+                "default_voter_types": ["all"],
+                "position_voter_types": {"Chief": ["operational"]},
+            },
+        )
+        if annual:
+            org.settings = {
+                **org.settings,
+                "election_eligibility_annual": ANNUAL_DEFAULTS,
+            }
+            await db_session.flush()
+        admin = await _member(db_session, org, "secretary", date(2010, 1, 1))
+        return org, admin
+
+    async def _create(self, db_session, admin, **extra):
+        return await create_election(
+            election=ElectionCreate.model_validate(self._payload(**extra)),
+            db=db_session,
+            current_user=admin,
+        )
+
+    async def test_an_annual_election_copies_the_annual_defaults(self, db_session):
+        org, admin = await self._org_with(db_session)
+        response = await self._create(db_session, admin, meeting_kind="annual")
+
+        assert response.meeting_kind == "annual"
+        assert response.eligibility_rules.min_tenure_months == 12
+        assert response.eligibility_rules.attendance.min_meetings == 3
+        assert {k: v.voter_types for k, v in response.position_eligibility.items()} == {
+            "Secretary": ["regular", "life"]
+        }
+
+    async def test_a_regular_election_ignores_the_annual_defaults(self, db_session):
+        org, admin = await self._org_with(db_session)
+        response = await self._create(db_session, admin)
+
+        assert response.meeting_kind == "regular"
+        assert response.eligibility_rules.attendance.min_meetings == 2
+        assert set(response.position_eligibility) == {"Chief"}
+
+    async def test_the_kind_follows_a_linked_annual_meeting(self, db_session):
+        org, admin = await self._org_with(db_session)
+        [annual_meeting] = await _meetings(
+            db_session, org, [date(2027, 1, 15)], MeetingType.ANNUAL
+        )
+        response = await self._create(
+            db_session, admin, meeting_id=str(annual_meeting.id)
+        )
+        assert response.meeting_kind == "annual"
+        assert response.eligibility_rules.min_tenure_months == 12
+
+    async def test_an_explicit_kind_wins_over_the_linked_meeting(self, db_session):
+        org, admin = await self._org_with(db_session)
+        [annual_meeting] = await _meetings(
+            db_session, org, [date(2027, 1, 15)], MeetingType.ANNUAL
+        )
+        response = await self._create(
+            db_session,
+            admin,
+            meeting_id=str(annual_meeting.id),
+            meeting_kind="regular",
+        )
+        assert response.meeting_kind == "regular"
+
+    async def test_without_annual_defaults_the_annual_meeting_uses_the_regular_ones(
+        self, db_session
+    ):
+        org, admin = await self._org_with(db_session, annual=False)
+        response = await self._create(db_session, admin, meeting_kind="annual")
+
+        assert response.meeting_kind == "annual"
+        assert response.eligibility_rules.attendance.min_meetings == 2
+
+    async def test_changing_the_kind_reapplies_that_kinds_rules(self, db_session):
+        org, admin = await self._org_with(db_session)
+        created = await self._create(db_session, admin)
+
+        response = await update_election(
+            election_id=created.id,
+            election_update=ElectionUpdate(meeting_kind="annual"),
+            db=db_session,
+            current_user=admin,
+        )
+        assert response.meeting_kind == "annual"
+        assert response.eligibility_rules.min_tenure_months == 12
+        # The regular meeting's Chief rule does not survive the move.
+        assert set(response.position_eligibility) == {"Secretary"}
+
+    async def test_rules_sent_with_the_kind_change_win(self, db_session):
+        org, admin = await self._org_with(db_session)
+        created = await self._create(db_session, admin)
+
+        response = await update_election(
+            election_id=created.id,
+            election_update=ElectionUpdate.model_validate(
+                {"meeting_kind": "annual", "eligibility_rules": None}
+            ),
+            db=db_session,
+            current_user=admin,
+        )
+        assert response.meeting_kind == "annual"
+        assert response.eligibility_rules is None
+
+    async def test_an_open_election_cannot_change_its_kind(self, db_session):
+        org, admin = await self._org_with(db_session)
+        election = await _election(db_session, org, admin, COUNT_2_OF_3)
+        with pytest.raises(HTTPException) as exc:
+            await update_election(
+                election_id=election.id,
+                election_update=ElectionUpdate(meeting_kind="annual"),
+                db=db_session,
+                current_user=admin,
+            )
+        assert exc.value.status_code == 400
+        assert election.meeting_kind == "regular"
+
+    async def test_an_existing_election_reads_as_regular(self, db_session):
+        # A row written without the column — as every row before the
+        # migration was — takes the server default.
+        org, admin = await self._org_with(db_session)
+        election_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+        await db_session.execute(
+            text(
+                "INSERT INTO elections (id, organization_id, title, election_type, "
+                "start_date, end_date, status, anonymous_voting, allow_write_ins, "
+                "max_votes_per_position, voting_method, victory_condition, "
+                "quorum_type, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, is_runoff, "
+                "runoff_round, created_at, updated_at) VALUES (:id, :org, "
+                "'Legacy', 'general', :start, :end, 'draft', 1, 0, 1, "
+                "'simple_majority', 'most_votes', 'none', 0, 0, 0, 'top_two', "
+                "3, 0, 0, NOW(), NOW())"
+            ),
+            {
+                "id": election_id,
+                "org": org.id,
+                "start": now + timedelta(days=1),
+                "end": now + timedelta(days=2),
+            },
+        )
+        result = await db_session.execute(
+            text("SELECT meeting_kind FROM elections WHERE id = :id"),
+            {"id": election_id},
+        )
+        assert result.scalar_one() == "regular"

@@ -767,6 +767,28 @@ part has a reader, and none of them changes an existing election:
 - **Membership tier rules** are shown read-only (`tier_voting_rules`) with a
   link to the tier settings where they are edited.
 
+#### Regular Business Meetings and the Annual Meeting
+
+Every election records where it is held, in `elections.meeting_kind`: either
+`regular` (a business meeting) or `annual`. The section keeps two sets of the
+defaults above, and an election copies the set for its kind:
+
+- **Regular business meetings** use `org.settings.election_eligibility`.
+- **The annual meeting** uses `org.settings.election_eligibility_annual` when
+  **Use different rules at the annual meeting** is on. It starts as a copy of
+  the regular set, so only what differs needs changing. When the toggle is
+  off, the setting is `null` and the annual meeting uses the regular set.
+- **On the create form**, **Held at** sets the kind. Linking a meeting record
+  whose type is annual selects **Annual meeting**. Calendar events carry no
+  annual type. A request that omits the kind gets `annual` from a linked annual
+  meeting, and `regular` otherwise.
+- **Changing an election's kind** on its Eligibility tab replaces its rules and
+  `position_eligibility` with that kind's defaults, after a confirmation. This
+  is allowed until voting opens. Rules sent in the same request win.
+- **Runoffs and clones** keep the kind.
+
+The membership tier rules apply at both kinds of meeting.
+
 ### Feature Toggles
 
 **Features** lets each department turn optional workflows on or off (all ON

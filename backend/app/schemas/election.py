@@ -325,6 +325,9 @@ class PositionEligibility(BaseModel):
 
 
 VALID_ATTENDANCE_RULE_MODES = {"none", "count", "percent"}
+# Which of the department's eligibility defaults an election copies: those
+# for regular business meetings, or the annual meeting's own.
+VALID_MEETING_KINDS = {"regular", "annual"}
 # Mirrors app.models.meeting.MeetingType; kept as literals so this schema
 # module does not import the ORM.
 VALID_MEETING_TYPES = {
@@ -520,6 +523,14 @@ class ElectionBase(BaseModel):
             "department's defaults"
         ),
     )
+    meeting_kind: Optional[str] = Field(
+        default=None,
+        description=(
+            "regular or annual: which of the department's eligibility "
+            "defaults the election copies. Omitted on create, it is annual "
+            "when the linked meeting is an annual meeting, else regular"
+        ),
+    )
     meeting_date: Optional[datetime] = Field(
         default=None, description="Meeting date for ballot"
     )
@@ -627,6 +638,11 @@ class ElectionBase(BaseModel):
     def validate_tie_policy(cls, v: str) -> str:
         return _validate_choice(v, VALID_TIE_POLICIES, "tie policy")
 
+    @field_validator("meeting_kind")
+    @classmethod
+    def validate_meeting_kind(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
+
     @field_validator("quorum_type")
     @classmethod
     def validate_quorum_type(cls, v: str) -> str:
@@ -731,6 +747,7 @@ ELECTION_UPDATE_REQUIRED_FIELDS = frozenset(
         "quorum_type",
         "auto_open",
         "tie_policy",
+        "meeting_kind",
     }
 )
 
@@ -751,6 +768,7 @@ class ElectionUpdate(BaseModel):
     ballot_items: Optional[List[BallotItemInput]] = Field(default=None, max_length=250)
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     eligibility_rules: Optional[ElectionEligibilityRules] = None
+    meeting_kind: Optional[str] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
     event_id: Optional[UUID] = None
@@ -775,6 +793,11 @@ class ElectionUpdate(BaseModel):
     reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
     nomination_deadline: Optional[datetime] = None
     tie_policy: Optional[str] = None
+
+    @field_validator("meeting_kind")
+    @classmethod
+    def validate_meeting_kind(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
 
     @field_validator("tie_policy")
     @classmethod
@@ -863,6 +886,7 @@ class ElectionResponse(UTCResponseBase):
     ballot_items: Optional[List[BallotItem]] = None
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     eligibility_rules: Optional[ElectionEligibilityRules] = None
+    meeting_kind: str = "regular"
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
     meeting_title: Optional[str] = None
@@ -2000,6 +2024,8 @@ class ElectionSettingsResponse(BaseModel):
     # batch before its votes count. 0 disables attestation.
     paper_ballot_attestations_required: Optional[int] = 2
     eligibility: EligibilityDefaults = Field(default_factory=EligibilityDefaults)
+    # The annual meeting's own defaults; null means it uses ``eligibility``.
+    annual_eligibility: Optional[EligibilityDefaults] = None
     # Each membership tier's own voting rules, read-only here: they are
     # edited on the membership tier settings and apply alongside these.
     tier_voting_rules: List[TierVotingRule] = Field(default_factory=list)

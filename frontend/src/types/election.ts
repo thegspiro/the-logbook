@@ -13,6 +13,7 @@ import type {
   BallotSendJobStatus,
   BallotSendJobKind,
   AttendanceRuleMode,
+  MeetingKind,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -92,6 +93,7 @@ export interface Election {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   eligibility_rules?: ElectionEligibilityRules | null;
+  meeting_kind?: MeetingKind;
   meeting_date?: string;
   meeting_id?: string;
   meeting_title?: string;
@@ -248,6 +250,8 @@ export interface ElectionCreate {
   positions?: string[] | undefined;
   ballot_items?: BallotItem[] | undefined;
   position_eligibility?: { [position: string]: PositionEligibility } | undefined;
+  // Omitted, the server derives it from the linked meeting's type.
+  meeting_kind?: MeetingKind | undefined;
   meeting_date?: string | undefined;
   meeting_id?: string | undefined;
   event_id?: string | undefined;
@@ -281,6 +285,9 @@ export interface ElectionUpdate {
   position_eligibility?: { [position: string]: PositionEligibility };
   // null removes every election-wide rule; an omitted key leaves them alone
   eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  // Changing it replaces the election's rules with that kind's defaults,
+  // unless the same request sends eligibility_rules / position_eligibility.
+  meeting_kind?: MeetingKind | undefined;
   // null clears the link on PATCH (exclude_unset); an omitted key leaves it alone
   meeting_date?: string | null | undefined;
   meeting_id?: string | null | undefined;
@@ -773,6 +780,11 @@ export interface ElectionSettings {
   paper_ballot_attestations_required?: number;
   /** Default voter eligibility, copied onto each election created afterwards. */
   eligibility?: EligibilityDefaults;
+  /**
+   * The annual meeting's own defaults; null means it uses `eligibility`.
+   * Unlike `eligibility`, null is a value PATCH accepts.
+   */
+  annual_eligibility?: EligibilityDefaults | null;
   /** Read-only: each membership tier's own voting rules, edited on the tier settings. */
   tier_voting_rules?: TierVotingRule[];
   /**

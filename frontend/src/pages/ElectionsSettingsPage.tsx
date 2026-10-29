@@ -5,11 +5,13 @@
  * election features, test ballots, and security posture.
  * Requires `elections.manage` permission.
  *
- * Voter Eligibility holds the department's defaults. Each has a reader: the
- * election-wide rules and position voter types are copied onto an election
- * when it is created (backend `create_election`), and the ballot-item
- * defaults seed new items in the ballot builder. Nothing here changes an
- * election that already exists.
+ * Voter Eligibility holds the department's defaults, as one set for regular
+ * business meetings and, optionally, a second for the annual meeting. Each
+ * has a reader: the election-wide rules and position voter types are copied
+ * onto an election when it is created (backend `create_election`, choosing
+ * the set by the election's meeting kind), and the ballot-item defaults seed
+ * new items in the ballot builder. Nothing here changes an election that
+ * already exists.
  *
  * There is deliberately no "Defaults" section. `election_defaults` (voting
  * method, victory condition, quorum, anonymity, write-ins) is stored by
@@ -22,27 +24,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Link } from 'react-router';
-import {
-  Loader2,
-  Plus,
-  Settings as SettingsIcon,
-  UserCheck,
-  ToggleRight,
-  Send,
-  ShieldCheck,
-  Trash2,
-  Vote,
-} from 'lucide-react';
+import { Loader2, Settings as SettingsIcon, UserCheck, ToggleRight, Send, ShieldCheck, Vote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
-import type {
-  ElectionSettings,
-  ElectionListItem,
-  EligibilityDefaults,
-  ElectionEligibilityRules,
-} from '../types/election';
-import { DEFAULT_ELIGIBILITY, VOTER_TYPE_OPTIONS } from '../modules/elections/eligibilityRules';
-import { EligibilityRulesEditor } from '../modules/elections/components/EligibilityRulesEditor';
+import type { ElectionSettings, ElectionListItem, EligibilityDefaults } from '../types/election';
+import { MeetingKind } from '../constants/enums';
+import { DEFAULT_ELIGIBILITY, MEETING_KIND_LABELS } from '../modules/elections/eligibilityRules';
+import { EligibilityDefaultsEditor } from '../modules/elections/components/EligibilityDefaultsEditor';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
@@ -65,36 +54,6 @@ const isSectionKey = (value: string | null): value is SectionKey =>
 
 /** The section a bare /elections/settings opens on, and so carries no ?tab=. */
 const DEFAULT_SECTION: SectionKey = 'proxy';
-
-interface PositionRow {
-  /** Stable React key; a position's name is what the secretary is editing. */
-  key: number;
-  name: string;
-  voterTypes: string[];
-}
-
-let positionRowKey = 0;
-const toPositionRows = (map: Record<string, string[]>): PositionRow[] =>
-  Object.entries(map).map(([name, voterTypes]) => ({ key: ++positionRowKey, name, voterTypes }));
-
-/**
- * The rows as the map the API stores, or why they cannot be saved yet. A
- * blank or repeated name stays on screen with its error rather than being
- * dropped from what is saved.
- */
-const positionRowsToMap = (rows: PositionRow[]): { map: Record<string, string[]> } | { error: string } => {
-  const map: Record<string, string[]> = {};
-  const seen = new Set<string>();
-  for (const row of rows) {
-    const name = row.name.trim();
-    if (!name) return { error: 'Every position needs a name.' };
-    const folded = name.toLowerCase();
-    if (seen.has(folded)) return { error: `"${name}" is listed more than once.` };
-    seen.add(folded);
-    map[name] = row.voterTypes;
-  }
-  return { map };
-};
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -152,8 +111,9 @@ export const ElectionsSettingsPage: React.FC = () => {
    * stays in the box and nothing is sent until it is valid.
    */
   const [maxProxiesDraft, setMaxProxiesDraft] = useState<string | null>(null);
-  const [positionRows, setPositionRows] = useState<PositionRow[]>([]);
-  const [positionRowsError, setPositionRowsError] = useState<string | null>(null);
+  /** Which set of eligibility defaults the section is showing. */
+  const [eligibilityKind, setEligibilityKind] = useState<MeetingKind>(MeetingKind.REGULAR);
+  const { confirm } = useConfirm();
 
   const loadData = useCallback(async () => {
     try {
@@ -165,7 +125,6 @@ export const ElectionsSettingsPage: React.FC = () => {
       setSettings(settingsData);
       // The savers read this ref, so the loaded values have to land in both.
       settingsRef.current = settingsData;
-      setPositionRows(toPositionRows(settingsData.eligibility?.position_voter_types ?? {}));
       setElections(electionsData);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load settings'));
@@ -238,20 +197,25 @@ export const ElectionsSettingsPage: React.FC = () => {
 
   // Debounced: the rule editor reports each valid keystroke, and the
   // position names are typed. One write lands once the typing stops.
-  const updateEligibility = (patch: Partial<EligibilityDefaults>) => {
-    const current = settingsRef.current.eligibility ?? DEFAULT_ELIGIBILITY;
-    updateField('eligibility', { ...current, ...patch }, { immediate: false });
+  const updateEligibility = (kind: MeetingKind, next: EligibilityDefaults) => {
+    updateField(kind === MeetingKind.ANNUAL ? 'annual_eligibility' : 'eligibility', next, { immediate: false });
   };
 
-  const updatePositionRows = (rows: PositionRow[]) => {
-    setPositionRows(rows);
-    const result = positionRowsToMap(rows);
-    if ('error' in result) {
-      setPositionRowsError(result.error);
+  const setAnnualOwnRules = async (own: boolean) => {
+    if (own) {
+      // Starts as a copy, so only what differs at the annual meeting needs changing.
+      updateField('annual_eligibility', structuredClone(settingsRef.current.eligibility ?? DEFAULT_ELIGIBILITY));
       return;
     }
-    setPositionRowsError(null);
-    updateEligibility({ position_voter_types: result.map });
+    const discard = await confirm({
+      title: 'Use the regular rules at the annual meeting?',
+      message:
+        "The annual meeting's own rules will be discarded, and annual-meeting elections created from now on will copy the regular-meeting rules. Elections that already exist keep the rules they have.",
+      confirmLabel: 'Discard annual rules',
+      cancelLabel: 'Keep them',
+      variant: 'warning',
+    });
+    if (discard) updateField('annual_eligibility', null);
   };
 
   const renderContent = () => {
@@ -266,6 +230,7 @@ export const ElectionsSettingsPage: React.FC = () => {
     switch (activeSection) {
       case 'eligibility': {
         const tierRules = settings.tier_voting_rules ?? [];
+        const annualEligibility = settings.annual_eligibility ?? null;
         return (
           <div className="space-y-8">
             <div>
@@ -278,135 +243,59 @@ export const ElectionsSettingsPage: React.FC = () => {
               </p>
             </div>
 
-            <section aria-labelledby="eligibility-rules-heading" className="space-y-4">
-              <h3 id="eligibility-rules-heading" className="text-theme-text-primary text-base font-semibold">
-                Rules every voter must meet
-              </h3>
-              <EligibilityRulesEditor
-                idPrefix="default-eligibility"
-                value={eligibility.rules}
-                onChange={(next: ElectionEligibilityRules) => updateEligibility({ rules: next })}
-              />
-            </section>
-
-            <section aria-labelledby="eligibility-items-heading" className="space-y-4">
-              <h3 id="eligibility-items-heading" className="text-theme-text-primary text-base font-semibold">
-                New ballot items
-              </h3>
-              <ToggleRow
-                checked={eligibility.default_require_attendance}
-                onChange={(next) => updateEligibility({ default_require_attendance: next })}
-                label="Require voters to be checked in as present"
-                description="New ballot items only count a vote from a member checked in at the meeting. Each item can still be changed on its own."
-              />
-              <div className="max-w-sm">
-                <label htmlFor="default-voter-types" className={labelClass}>
-                  Who can vote on a new item
-                </label>
-                <select
-                  id="default-voter-types"
-                  className={selectClass}
-                  value={eligibility.default_voter_types.join(',')}
-                  onChange={(e) => updateEligibility({ default_voter_types: e.target.value.split(',') })}
+            <div role="group" aria-label="Which meetings these rules are for" className="flex flex-wrap gap-2">
+              {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={eligibilityKind === kind}
+                  onClick={() => setEligibilityKind(kind)}
+                  className={
+                    eligibilityKind === kind
+                      ? 'btn-primary rounded-md px-3 py-2 text-sm'
+                      : 'btn-secondary rounded-md px-3 py-2 text-sm'
+                  }
                 >
-                  {VOTER_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </section>
+                  {MEETING_KIND_LABELS[kind]}
+                </button>
+              ))}
+            </div>
 
-            <section aria-labelledby="eligibility-positions-heading" className="space-y-4">
-              <div>
-                <h3 id="eligibility-positions-heading" className="text-theme-text-primary text-base font-semibold">
-                  Who votes for each position
-                </h3>
+            {eligibilityKind === MeetingKind.REGULAR ? (
+              <div className="space-y-2">
                 <p className="text-theme-text-muted text-sm">
-                  When a new election or ballot item names one of these positions, only these members may vote for it. A
-                  position not listed is open to every eligible voter.
+                  Used by every election held at a regular business meeting
+                  {annualEligibility ? '.' : ', and at the annual meeting until it is given rules of its own.'}
                 </p>
+                <EligibilityDefaultsEditor
+                  key="regular"
+                  idPrefix="regular-eligibility"
+                  value={eligibility}
+                  onChange={(next) => updateEligibility(MeetingKind.REGULAR, next)}
+                />
               </div>
-              {positionRows.length === 0 && (
-                <p className="text-theme-text-secondary text-sm">No positions are restricted.</p>
-              )}
-              <ul className="space-y-3">
-                {positionRows.map((row, index) => (
-                  // Stacked on a phone, where two fields side by side cut the
-                  // voter-type labels short; one row from `sm:` up.
-                  <li
-                    key={row.key}
-                    className="border-theme-surface-border grid gap-3 border-b pb-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:border-0 sm:pb-0"
-                  >
-                    <div className="min-w-0">
-                      <label htmlFor={`position-name-${row.key}`} className={labelClass}>
-                        Position
-                      </label>
-                      <input
-                        id={`position-name-${row.key}`}
-                        type="text"
-                        className={inputClass}
-                        maxLength={200}
-                        placeholder="e.g., Chief"
-                        value={row.name}
-                        onChange={(e) =>
-                          updatePositionRows(
-                            positionRows.map((r, i) => (i === index ? { ...r, name: e.target.value } : r))
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <label htmlFor={`position-voters-${row.key}`} className={labelClass}>
-                        Who can vote
-                      </label>
-                      <select
-                        id={`position-voters-${row.key}`}
-                        className={selectClass}
-                        value={row.voterTypes.join(',')}
-                        onChange={(e) =>
-                          updatePositionRows(
-                            positionRows.map((r, i) =>
-                              i === index ? { ...r, voterTypes: e.target.value.split(',') } : r
-                            )
-                          )
-                        }
-                      >
-                        {VOTER_TYPE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-icon justify-self-end"
-                      aria-label={`Remove ${row.name.trim() || 'this position'}`}
-                      onClick={() => updatePositionRows(positionRows.filter((_, i) => i !== index))}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {positionRowsError && (
-                <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-                  {positionRowsError} The list is not saved until this is fixed.
-                </p>
-              )}
-              <button
-                type="button"
-                className="btn-secondary flex items-center gap-2 rounded-md px-3 py-2 text-sm"
-                onClick={() =>
-                  setPositionRows([...positionRows, { key: ++positionRowKey, name: '', voterTypes: ['operational'] }])
-                }
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Add position
-              </button>
-            </section>
+            ) : (
+              <div className="space-y-6">
+                <ToggleRow
+                  checked={annualEligibility !== null}
+                  onChange={(next) => void setAnnualOwnRules(next)}
+                  label="Use different rules at the annual meeting"
+                  description="Elections held at the annual meeting — usually officer elections — can carry stricter or different rules. They start as a copy of the regular-meeting rules."
+                />
+                {annualEligibility ? (
+                  <EligibilityDefaultsEditor
+                    key="annual"
+                    idPrefix="annual-eligibility"
+                    value={annualEligibility}
+                    onChange={(next) => updateEligibility(MeetingKind.ANNUAL, next)}
+                  />
+                ) : (
+                  <p className="text-theme-text-secondary text-sm">
+                    The annual meeting uses the regular business meeting rules.
+                  </p>
+                )}
+              </div>
+            )}
 
             <section aria-labelledby="eligibility-tiers-heading" className="space-y-3">
               <div>
@@ -414,8 +303,8 @@ export const ElectionsSettingsPage: React.FC = () => {
                   Membership tier rules
                 </h3>
                 <p className="text-theme-text-muted text-sm">
-                  Each membership tier carries its own voting rules, which apply alongside the rules above. They are
-                  changed in{' '}
+                  Each membership tier carries its own voting rules, which apply at every meeting alongside the rules
+                  above. They are changed in{' '}
                   <Link to="/members/admin/settings/tiers" className="text-theme-text-primary font-medium underline">
                     membership tier settings
                   </Link>

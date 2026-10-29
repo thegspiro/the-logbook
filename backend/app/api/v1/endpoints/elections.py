@@ -49,7 +49,7 @@ from app.models.election import (
     Vote,
 )
 from app.models.event import Event, EventRSVP, RSVPStatus
-from app.models.meeting import Meeting, MeetingAttendee
+from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.user import Organization, User
 from app.schemas.column_bounds import INT32_MAX
 from app.schemas.election import (
@@ -443,9 +443,6 @@ async def create_election(
     import secrets as _secrets
 
     election_data = election.model_dump()
-    await _apply_eligibility_defaults(
-        db, current_user.organization_id, election, election_data
-    )
     # Validate client-supplied meeting/event links belong to the caller's org
     # before storing them (XC-1).
     try:
@@ -460,6 +457,11 @@ async def create_election(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
+    # After the link check: the meeting kind is read from the linked meeting,
+    # which must be known to be the caller's own first.
+    await _apply_eligibility_defaults(
+        db, current_user.organization_id, election, election_data
+    )
     # Convert UUID objects to strings for JSON-serializable storage
     if election_data.get("eligible_voters"):
         election_data["eligible_voters"] = [
@@ -966,6 +968,10 @@ class ElectionSettingsUpdate(BaseModel):
     )
     # Replaced whole: the settings screen sends the complete object.
     eligibility: Optional[EligibilityDefaults] = None
+    # The annual meeting's own defaults, replaced whole. Unlike
+    # ``eligibility``, null is meaningful: the annual meeting uses the
+    # regular-meeting defaults.
+    annual_eligibility: Optional[EligibilityDefaults] = None
 
     @field_validator(
         "nominations_enabled",
@@ -996,22 +1002,67 @@ def _feature_flag(features: dict, name: str) -> bool:
     return value if isinstance(value, bool) else True
 
 
-def _eligibility_defaults(org_settings: dict) -> EligibilityDefaults:
-    """The department's stored eligibility defaults.
+_REGULAR_ELIGIBILITY_KEY = "election_eligibility"
+_ANNUAL_ELIGIBILITY_KEY = "election_eligibility_annual"
+
+
+def _stored_eligibility(org_settings: dict, key: str) -> Optional[EligibilityDefaults]:
+    """One set of the department's stored eligibility defaults, or None.
 
     The value is validated on every write, but ``organizations.settings`` is
-    free-form JSON, so a stored value that no longer validates falls back to
-    the built-in defaults (no election-wide rules, check-in required on new
-    items) rather than failing every create and settings read.
+    free-form JSON, so a stored value that no longer validates reads as
+    absent rather than failing every create and settings read.
     """
-    raw = org_settings.get("election_eligibility")
+    raw = org_settings.get(key)
     if not isinstance(raw, dict):
-        return EligibilityDefaults()
+        return None
     try:
         return EligibilityDefaults.model_validate(raw)
     except ValidationError:
-        logger.warning("Stored election_eligibility is invalid; using defaults")
-        return EligibilityDefaults()
+        logger.warning("Stored {} is invalid; ignoring it", key)
+        return None
+
+
+def _eligibility_defaults(org_settings: dict) -> EligibilityDefaults:
+    """The regular-meeting defaults, else the built-in ones (no
+    election-wide rules, check-in required on new items)."""
+    return (
+        _stored_eligibility(org_settings, _REGULAR_ELIGIBILITY_KEY)
+        or EligibilityDefaults()
+    )
+
+
+def _defaults_for_kind(org_settings: dict, meeting_kind: str) -> EligibilityDefaults:
+    """The defaults an election held at ``meeting_kind`` copies: the annual
+    meeting's own when the department set them, else the regular ones."""
+    if meeting_kind == "annual":
+        annual = _stored_eligibility(org_settings, _ANNUAL_ELIGIBILITY_KEY)
+        if annual is not None:
+            return annual
+    return _eligibility_defaults(org_settings)
+
+
+def _seeded_position_eligibility(
+    positions: Optional[list], defaults: EligibilityDefaults
+) -> Optional[dict]:
+    """``position_eligibility`` for ``positions`` from the defaults, or None
+    when the defaults restrict none of them.
+
+    Matched without regard to case or surrounding space: "chief" on the
+    election is the "Chief" the secretary configured.
+    """
+    if not positions or not defaults.position_voter_types:
+        return None
+    by_name = {
+        name.strip().casefold(): types
+        for name, types in defaults.position_voter_types.items()
+    }
+    seeded = {
+        position: {"voter_types": list(by_name[position.strip().casefold()])}
+        for position in positions
+        if position.strip().casefold() in by_name
+    }
+    return seeded or None
 
 
 def _tier_voting_rules(org_settings: dict) -> list:
@@ -1060,24 +1111,51 @@ def _active_rules_or_none(rules: Optional[dict]) -> Optional[dict]:
     return rules
 
 
+async def _meeting_kind_of_link(
+    db: AsyncSession, organization_id: Any, meeting_id: Optional[Any]
+) -> str:
+    """``annual`` when the linked meeting record is an annual meeting, else
+    ``regular``. Calendar events carry no annual type, so an election linked
+    to one (or to nothing) is a regular-meeting election unless it says
+    otherwise."""
+    if not meeting_id:
+        return "regular"
+    result = await db.execute(
+        select(Meeting.meeting_type).where(
+            Meeting.id == str(meeting_id),
+            Meeting.organization_id == str(organization_id),
+        )
+    )
+    meeting_type = result.scalar_one_or_none()
+    return "annual" if meeting_type == MeetingType.ANNUAL else "regular"
+
+
 async def _apply_eligibility_defaults(
     db: AsyncSession,
     organization_id: Any,
     election: ElectionCreate,
     election_data: dict,
 ) -> None:
-    """Fill a new election's eligibility from the department's defaults.
+    """Fill a new election's meeting kind and eligibility from the
+    department's defaults for that kind.
 
-    Only what the request left out is filled: an explicit
+    Only what the request left out is filled: an explicit ``meeting_kind``,
     ``eligibility_rules`` (null included, meaning "no rules") or
     ``position_eligibility`` always wins. Defaults are copied, never
     referenced, so a later settings change leaves this election alone.
     """
+    if not election_data.get("meeting_kind"):
+        election_data["meeting_kind"] = await _meeting_kind_of_link(
+            db, organization_id, election_data.get("meeting_id")
+        )
+
     org_result = await db.execute(
         select(Organization).where(Organization.id == str(organization_id))
     )
     org = org_result.scalar_one_or_none()
-    defaults = _eligibility_defaults((org.settings or {}) if org else {})
+    defaults = _defaults_for_kind(
+        (org.settings or {}) if org else {}, election_data["meeting_kind"]
+    )
 
     if "eligibility_rules" in election.model_fields_set:
         election_data["eligibility_rules"] = _active_rules_or_none(
@@ -1088,24 +1166,38 @@ async def _apply_eligibility_defaults(
             defaults.rules.model_dump()
         )
 
-    if (
-        election_data.get("position_eligibility") is None
-        and election_data.get("positions")
-        and defaults.position_voter_types
-    ):
-        # Matched without regard to case or surrounding space: "chief" on
-        # the election is the "Chief" the secretary configured.
-        by_name = {
-            name.strip().casefold(): types
-            for name, types in defaults.position_voter_types.items()
-        }
-        seeded = {
-            position: {"voter_types": list(by_name[position.strip().casefold()])}
-            for position in election_data["positions"]
-            if position.strip().casefold() in by_name
-        }
+    if election_data.get("position_eligibility") is None:
+        seeded = _seeded_position_eligibility(election_data.get("positions"), defaults)
         if seeded:
             election_data["position_eligibility"] = seeded
+
+
+async def _reapply_kind_defaults(
+    db: AsyncSession, election: Election, update_data: dict
+) -> None:
+    """When an update moves an election to the other meeting kind, replace
+    its copied rules with that kind's defaults.
+
+    Only before voting opens (the update endpoint refuses the field after).
+    What the same request sets explicitly wins, as it does on create.
+    ``position_eligibility`` is rebuilt from the new kind's defaults, so a
+    position the regular meeting restricted but the annual meeting does not
+    is opened up rather than left holding the other kind's rule.
+    """
+    new_kind = update_data.get("meeting_kind")
+    if not new_kind or new_kind == (election.meeting_kind or "regular"):
+        return
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == str(election.organization_id))
+    )
+    org = org_result.scalar_one_or_none()
+    defaults = _defaults_for_kind((org.settings or {}) if org else {}, new_kind)
+    if "eligibility_rules" not in update_data:
+        update_data["eligibility_rules"] = defaults.rules.model_dump()
+    if "position_eligibility" not in update_data:
+        update_data["position_eligibility"] = _seeded_position_eligibility(
+            update_data.get("positions", election.positions), defaults
+        )
 
 
 def _settings_response(org_settings: dict) -> dict:
@@ -1138,6 +1230,11 @@ def _settings_response(org_settings: dict) -> dict:
             "paper_ballot_attestations_required", 2
         ),
         "eligibility": _eligibility_defaults(org_settings).model_dump(),
+        "annual_eligibility": (
+            annual.model_dump()
+            if (annual := _stored_eligibility(org_settings, _ANNUAL_ELIGIBILITY_KEY))
+            else None
+        ),
         "tier_voting_rules": _tier_voting_rules(org_settings),
     }
 
@@ -1259,7 +1356,12 @@ async def update_election_settings(
             features[flag] = update_data[flag]
 
     if "eligibility" in update_data:
-        org_settings["election_eligibility"] = update_data["eligibility"]
+        org_settings[_REGULAR_ELIGIBILITY_KEY] = update_data["eligibility"]
+    if "annual_eligibility" in update_data:
+        if update_data["annual_eligibility"] is None:
+            org_settings.pop(_ANNUAL_ELIGIBILITY_KEY, None)
+        else:
+            org_settings[_ANNUAL_ELIGIBILITY_KEY] = update_data["annual_eligibility"]
 
     org_settings["election_defaults"] = election_defaults
     org_settings["proxy_voting"] = proxy_config
@@ -1437,6 +1539,7 @@ async def update_election(
         update_data["eligible_voters"] = [
             str(v) for v in update_data["eligible_voters"]
         ]
+    await _reapply_kind_defaults(db, election, update_data)
     if "eligibility_rules" in update_data:
         update_data["eligibility_rules"] = _active_rules_or_none(
             update_data["eligibility_rules"]
@@ -1456,6 +1559,7 @@ async def update_election(
         # above refuse every field but their own, so a running election's
         # electorate is never redrawn after ballots have gone out.
         "eligibility_rules",
+        "meeting_kind",
         "meeting_date",
         "meeting_id",
         # `event_id` belongs here beside `meeting_id`: the block below

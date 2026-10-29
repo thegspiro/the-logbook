@@ -1,8 +1,9 @@
 /**
- * This election's own election-wide voter rules (attendance, tenure).
+ * This election's own election-wide voter rules (attendance, tenure), and
+ * whether it is held at a regular business meeting or the annual meeting.
  *
- * Copied from the department's defaults when the election was created, and
- * editable here until voting opens — the backend refuses the change on an
+ * The rules are copied from the department's defaults for that meeting kind
+ * when the election is created, and are editable here until voting opens — the backend refuses the change on an
  * open or closed election, because redrawing the electorate after ballots
  * have gone out would change who may vote mid-vote.
  */
@@ -12,9 +13,10 @@ import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../../../services/api';
 import type { Election, ElectionEligibilityRules } from '../../../types/election';
-import { ElectionStatus } from '../../../constants/enums';
+import { ElectionStatus, MeetingKind } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { EMPTY_ELIGIBILITY_RULES, describeEligibilityRules } from '../eligibilityRules';
+import { useConfirm } from '../../../contexts/ConfirmContext';
+import { EMPTY_ELIGIBILITY_RULES, MEETING_KIND_LABELS, describeEligibilityRules } from '../eligibilityRules';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 
 /**
@@ -35,6 +37,31 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
   // Bumped on discard so the editor drops any half-typed number with it.
   const [editorKey, setEditorKey] = useState(0);
   const dirty = JSON.stringify(rules) !== JSON.stringify(rulesOf(election));
+  const { confirm } = useConfirm();
+  const kind = election.meeting_kind ?? MeetingKind.REGULAR;
+
+  const changeKind = async (next: MeetingKind) => {
+    const replace = await confirm({
+      title: `Hold this election at the ${MEETING_KIND_LABELS[next].toLowerCase()}?`,
+      message: `Its voter rules and position voter types will be replaced with the ${MEETING_KIND_LABELS[
+        next
+      ].toLowerCase()} defaults from Election Settings${dirty ? ', and your unsaved changes below will be lost' : ''}.`,
+      confirmLabel: 'Change and replace rules',
+      cancelLabel: 'Keep current rules',
+      variant: 'warning',
+    });
+    if (!replace) return;
+    try {
+      setSaving(true);
+      const updated = await electionService.updateElection(election.id, { meeting_kind: next });
+      onUpdate(updated);
+      toast.success(`Now held at the ${MEETING_KIND_LABELS[next].toLowerCase()}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change the meeting'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = async () => {
     try {
@@ -62,6 +89,24 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
             Copied from the department&apos;s defaults in Election Settings when this election was created. They can be
             changed until voting opens. A voter override still lets a member vote who fails them.
           </p>
+          <div className="mb-5 max-w-xs">
+            <label htmlFor={`election-${election.id}-meeting-kind`} className="form-label">
+              Held at
+            </label>
+            <select
+              id={`election-${election.id}-meeting-kind`}
+              className="form-input"
+              value={kind}
+              disabled={saving}
+              onChange={(e) => void changeKind(e.target.value as MeetingKind)}
+            >
+              {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((option) => (
+                <option key={option} value={option}>
+                  {MEETING_KIND_LABELS[option]}
+                </option>
+              ))}
+            </select>
+          </div>
           <EligibilityRulesEditor
             key={editorKey}
             idPrefix={`election-${election.id}-eligibility`}
@@ -96,7 +141,8 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
       ) : (
         <>
           <p className="text-theme-text-muted mt-1 mb-3 text-sm">
-            Fixed when voting opened. A voter override still lets a member vote who fails them.
+            Held at the {MEETING_KIND_LABELS[kind].toLowerCase()}. Fixed when voting opened. A voter override still lets
+            a member vote who fails them.
           </p>
           {summary.length === 0 ? (
             <p className="text-theme-text-secondary text-sm">No election-wide rules apply to this election.</p>

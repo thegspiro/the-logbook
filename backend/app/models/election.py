@@ -134,6 +134,14 @@ class Election(Base):
         JSON, nullable=True
     )
 
+    # "regular" (a business meeting) or "annual". Decides which of the
+    # department's eligibility defaults the election copies: the annual
+    # meeting may carry its own (organizations.settings
+    # ["election_eligibility_annual"]).
+    meeting_kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="regular", server_default="regular"
+    )
+
     # Email notification tracking
     email_sent: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"

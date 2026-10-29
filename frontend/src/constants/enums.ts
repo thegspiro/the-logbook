@@ -381,6 +381,15 @@ export const AttendanceRuleMode = {
 export type AttendanceRuleMode = (typeof AttendanceRuleMode)[keyof typeof AttendanceRuleMode];
 
 // ============================================
+// Meeting Kind (Election.meeting_kind) — which eligibility defaults it copies
+// ============================================
+export const MeetingKind = {
+  REGULAR: 'regular',
+  ANNUAL: 'annual',
+} as const;
+export type MeetingKind = (typeof MeetingKind)[keyof typeof MeetingKind];
+
+// ============================================
 // Ballot Choice (voter action on a ballot item)
 // ============================================
 export const BallotChoice = {

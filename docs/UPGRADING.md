@@ -647,6 +647,12 @@ What is new:
 - **The election-wide rules apply alongside each membership tier's own voting
   rules**, which are unchanged and still edited under Members → Settings →
   Tiers. A secretary's voter override bypasses both.
+- **The annual meeting can carry its own rules.** Migration `b3d58e0c71a4`
+  adds `elections.meeting_kind` (`regular` or `annual`, not nullable, database
+  default `regular`). Every existing election reads as a regular-meeting
+  election, and the annual meeting uses the regular rules until someone turns
+  on **Use different rules at the annual meeting**. The downgrade drops the
+  column. Elections lose the label, and their copied rules are untouched.
 
 ### A template switched Off now stops its email (2026-10-27)
 

@@ -80,4 +80,19 @@ describe('ElectionEligibilityRulesPanel', () => {
     expect(screen.queryByRole('button', { name: 'Save voter rules' })).not.toBeInTheDocument();
     expect(screen.getByText('Attended at least 6 of their last 12 business meetings')).toBeInTheDocument();
   });
+
+  it('asks before moving the election to the annual meeting, then lets the server re-apply its rules', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderWithRouter(<ElectionEligibilityRulesPanel election={baseElection} onUpdate={onUpdate} />);
+
+    await user.selectOptions(screen.getByLabelText('Held at'), 'annual');
+    await user.click(await screen.findByRole('button', { name: 'Keep current rules' }));
+    expect(updateElection).not.toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByLabelText('Held at'), 'annual');
+    await user.click(await screen.findByRole('button', { name: 'Change and replace rules' }));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(updateElection).toHaveBeenCalledWith('elec-1', { meeting_kind: 'annual' });
+  });
 });

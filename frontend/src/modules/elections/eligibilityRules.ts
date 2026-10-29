@@ -3,8 +3,13 @@
  * election settings and the election screens, so each describes a rule the
  * same way.
  */
-import type { AttendanceRule, EligibilityDefaults, ElectionEligibilityRules } from '../../types/election';
-import { AttendanceRuleMode } from '../../constants/enums';
+import type {
+  AttendanceRule,
+  EligibilityDefaults,
+  ElectionEligibilityRules,
+  ElectionSettings,
+} from '../../types/election';
+import { AttendanceRuleMode, MeetingKind } from '../../constants/enums';
 import { MEETING_TYPE_OPTIONS } from '../minutes/utils/meetingTypes';
 
 // `administrative` and `social` are the member's **class** alone — what kind
@@ -92,3 +97,16 @@ export const describeEligibilityRules = (rules: ElectionEligibilityRules | null 
   }
   return lines;
 };
+
+export const MEETING_KIND_LABELS: Record<MeetingKind, string> = {
+  [MeetingKind.REGULAR]: 'Regular business meeting',
+  [MeetingKind.ANNUAL]: 'Annual meeting',
+};
+
+/**
+ * The defaults an election held at `kind` copies — the backend's
+ * `_defaults_for_kind`: the annual meeting's own set when the department has
+ * one, else the regular set.
+ */
+export const defaultsForKind = (settings: ElectionSettings, kind: MeetingKind): EligibilityDefaults =>
+  (kind === MeetingKind.ANNUAL ? settings.annual_eligibility : null) ?? settings.eligibility ?? DEFAULT_ELIGIBILITY;

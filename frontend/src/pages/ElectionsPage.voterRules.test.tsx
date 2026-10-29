@@ -76,4 +76,28 @@ describe('ElectionsPage create dialog — voter rules', () => {
 
     expect(within(dialog).getByTestId('create-voter-rules')).toHaveTextContent('No election-wide rules.');
   });
+
+  it('shows the annual meeting rules when the election is held there', async () => {
+    mockGetSettings.mockResolvedValue({
+      eligibility: {
+        rules: { attendance: { mode: 'none' }, min_tenure_months: null },
+        default_require_attendance: true,
+        default_voter_types: ['all'],
+        position_voter_types: {},
+      },
+      annual_eligibility: {
+        rules: { attendance: { mode: 'count', min_meetings: 3, of_last_meetings: 4 }, min_tenure_months: 12 },
+        default_require_attendance: true,
+        default_voter_types: ['all'],
+        position_voter_types: {},
+      },
+    });
+    const dialog = await openCreateDialog();
+    const panel = within(dialog).getByTestId('create-voter-rules');
+    await waitFor(() => expect(panel).toHaveTextContent('No election-wide rules.'));
+
+    await userEvent.selectOptions(within(dialog).getByLabelText('Held at'), 'annual');
+    expect(panel).toHaveTextContent('Attended at least 3 of their last 4 meetings');
+    expect(panel).toHaveTextContent('A member for at least 12 months');
+  });
 });
