@@ -261,6 +261,17 @@ would decrypt those answers into plain text.
 Forms "manage" checkbox grants `forms.*`, and a module wildcard covers every
 action under its prefix. Out of the box only the System Owner (`*`) holds it.
 
+### Pre-fill from Applicant _(2026-10-29)_
+
+A field's **Pre-fill from applicant** setting (`form_fields.applicant_field`,
+one of `APPLICANT_FIELDS` in `app/models/forms.py`) only matters when the form
+is sent by a prospective-member **Follow-up Form** stage: the field then opens
+with the applicant record's value, and a changed answer is written back. See
+"Follow-up Form stages" in `docs/PROSPECTIVE_MEMBERS_MODULE.md`.
+
+A field cannot be both Sensitive and pre-filled; adding, creating or updating a
+field into that pair is refused with an explanation.
+
 ### Public Form Protection
 
 | Layer           | Protection                                                                                                              |

@@ -1238,6 +1238,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/application-form/:token',
+    source: 'src/modules/prospective-members/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/admin/public-portal',
     source: 'src/modules/public-portal/routes.tsx',
     coverage: 'ratchet',

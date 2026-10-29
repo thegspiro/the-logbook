@@ -58,6 +58,7 @@ import type { FormField, FormFieldCreate, FormFieldUpdate } from '../../services
 import type { FieldDefinition } from './FieldRenderer';
 import { FieldType } from '../../constants/enums';
 import { useConfirm } from '../../contexts/ConfirmContext';
+import { applicantFieldLabel } from './applicantFields';
 import { getErrorMessage } from '../../utils/errorHandling';
 
 /** Field types that require at least one option to function. */
@@ -184,6 +185,11 @@ const SortableFieldRow = ({
               {field.width}
             </span>
           )}
+          {field.applicant_field && (
+            <span className="bg-theme-surface text-theme-text-secondary rounded-sm px-1.5 py-0.5 text-[10px] font-medium">
+              Pre-fills: {applicantFieldLabel(field.applicant_field) ?? field.applicant_field}
+            </span>
+          )}
           {field.is_sensitive && (
             <span className="bg-theme-surface text-theme-text-secondary flex items-center gap-0.5 rounded-sm px-1.5 py-0.5 text-[10px] font-medium">
               <Lock className="h-2.5 w-2.5" aria-hidden="true" />
@@ -277,6 +283,7 @@ const SortableFieldRow = ({
 
 /** Settings the field editor owns that may be left blank. */
 const CLEARABLE_FIELD_KEYS = [
+  'applicant_field',
   'placeholder',
   'help_text',
   'default_value',
@@ -398,6 +405,7 @@ const FormBuilder = ({
       // Without this the editor opens unticked and its save un-marks the
       // field — or, once answers are sealed, every edit is refused.
       is_sensitive: field.is_sensitive ?? false,
+      applicant_field: field.applicant_field ?? undefined,
     });
     setEditingFieldId(field.id);
     setEditorOpen(true);
@@ -424,6 +432,7 @@ const FormBuilder = ({
       condition_value: field.condition_value ?? undefined,
       width: field.width,
       is_sensitive: field.is_sensitive ?? false,
+      applicant_field: field.applicant_field ?? undefined,
       sort_order: field.sort_order + 1,
     };
 

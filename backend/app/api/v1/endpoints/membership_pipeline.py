@@ -59,6 +59,7 @@ from app.schemas.membership_pipeline import (
     ElectionPackageCreate,
     ElectionPackageResponse,
     ElectionPackageUpdate,
+    FollowUpFormRequestResponse,
     InterviewCreate,
     InterviewResponse,
     InterviewUpdate,
@@ -100,6 +101,7 @@ from app.services.file_storage_service import (
     FileStorageService,
     StorageArea,
 )
+from app.services.follow_up_form_service import FollowUpFormService
 from app.services.membership_pipeline_service import (
     DuplicateApplicantError,
     ElectionStageAmbiguousError,
@@ -772,12 +774,18 @@ async def get_kanban_board(
         )
 
     now = datetime.now(timezone.utc)
+    pending = await FollowUpFormService(db).pending_contact_changes(
+        [str(p.id) for column in board["columns"] for p in column["prospects"]],
+        current_user.organization_id,
+    )
     return KanbanBoardResponse(
         pipeline=board["pipeline"],
         columns=[
             KanbanColumnResponse(
                 step=column["step"],
-                prospects=[_prospect_list_item(p, now) for p in column["prospects"]],
+                prospects=[
+                    _prospect_list_item(p, now, pending) for p in column["prospects"]
+                ],
                 count=column["count"],
             )
             for column in board["columns"]
@@ -924,7 +932,9 @@ async def purge_inactive_prospects(
 # ============================================
 
 
-def _prospect_list_item(prospect, now: datetime) -> ProspectListResponse:
+def _prospect_list_item(
+    prospect, now: datetime, pending_contact_changes: set[str]
+) -> ProspectListResponse:
     """Map a prospect ORM row onto the card/list projection.
 
     Shared by the list and kanban endpoints so a field added to one view
@@ -962,6 +972,7 @@ def _prospect_list_item(prospect, now: datetime) -> ProspectListResponse:
         deactivated_at=prospect.deactivated_at,
         withdrawn_at=prospect.withdrawn_at,
         withdrawal_reason=prospect.withdrawal_reason,
+        contact_change_pending=str(prospect.id) in pending_contact_changes,
     )
 
 
@@ -1075,7 +1086,10 @@ async def list_prospects(
     )
 
     now = datetime.now(timezone.utc)
-    items = [_prospect_list_item(p, now) for p in prospects]
+    pending = await FollowUpFormService(db).pending_contact_changes(
+        [str(p.id) for p in prospects], current_user.organization_id
+    )
+    items = [_prospect_list_item(p, now, pending) for p in prospects]
     return PaginatedProspectListResponse(
         items=items, total=total, limit=limit, offset=offset
     )
@@ -2552,6 +2566,123 @@ def _interview_to_response(interview) -> InterviewResponse:
         created_at=interview.created_at,
         updated_at=interview.updated_at,
     )
+
+
+@router.get(
+    "/prospects/{prospect_id}/follow-up-forms",
+    response_model=list[FollowUpFormRequestResponse],
+)
+async def list_follow_up_forms(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.view", "prospective_members.manage")
+    ),
+):
+    """
+    The follow-up forms sent to an applicant, with progress and any changes
+    their submission made to the applicant record.
+
+    **Requires permission: prospective_members.view or prospective_members.manage**
+    """
+    prospect = await MembershipPipelineService(db).get_prospect(
+        str(prospect_id), current_user.organization_id
+    )
+    if prospect is None:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+    return await FollowUpFormService(db).list_for_prospect(
+        str(prospect_id), current_user.organization_id
+    )
+
+
+@router.post(
+    "/prospects/{prospect_id}/follow-up-forms/{step_id}/send",
+    response_model=FollowUpFormRequestResponse,
+)
+async def send_follow_up_form(
+    prospect_id: UUID,
+    step_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
+):
+    """
+    Send, or resend, a Follow-up Form stage's form to the applicant. A resend
+    repeats the same link, and the applicant's draft is kept.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = FollowUpFormService(db)
+    try:
+        request, sent = await service.send_now(
+            str(prospect_id), str(step_id), current_user.organization_id
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if not sent:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "The email could not be sent. Check the department's email "
+                "settings and try again."
+            ),
+        )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.follow_up_form_sent",
+        event_category="membership",
+        severity="info",
+        event_data={
+            "prospect_id": str(prospect_id),
+            "step_id": str(step_id),
+            "request_id": str(request.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    for row in await service.list_for_prospect(
+        str(prospect_id), current_user.organization_id
+    ):
+        if str(row["id"]) == str(request.id):
+            return row
+    raise HTTPException(status_code=404, detail="Follow-up form not found")
+
+
+@router.post(
+    "/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change",
+    response_model=FollowUpFormRequestResponse,
+)
+async def review_follow_up_contact_change(
+    prospect_id: UUID,
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
+):
+    """
+    Record that a coordinator has reviewed the contact details a follow-up
+    form changed, which clears the flag on the applicant's card.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = FollowUpFormService(db)
+    try:
+        request = await service.mark_contact_change_reviewed(
+            str(prospect_id),
+            str(request_id),
+            current_user.organization_id,
+            str(current_user.id),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if request is None:
+        raise HTTPException(status_code=404, detail="Follow-up form not found")
+    for row in await service.list_for_prospect(
+        str(prospect_id), current_user.organization_id
+    ):
+        if str(row["id"]) == str(request.id):
+            return row
+    raise HTTPException(status_code=404, detail="Follow-up form not found")
 
 
 @router.get(

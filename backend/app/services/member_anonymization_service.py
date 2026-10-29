@@ -55,6 +55,7 @@ from app.models.medical_screening import ScreeningRecord
 from app.models.meeting import MeetingAttendee
 from app.models.membership_pipeline import (
     ProspectDocument,
+    ProspectFormRequest,
     ProspectInterview,
     ProspectiveMember,
     ProspectStepProgress,
@@ -312,6 +313,22 @@ class MemberAnonymizationService:
                     # invisible to the plain JSON column (pitfall #12).
                     progress.action_result = {**action_result, "mapped_data": None}
                     step_progress_scrubbed += 1
+
+            # Follow-up forms: each one's submission is the applicant's own
+            # answers, its draft and change log hold their contact details,
+            # and its link would keep opening the form.
+            requests_result = await self.db.execute(
+                select(ProspectFormRequest).where(
+                    ProspectFormRequest.prospect_id == prospect.id,
+                    ProspectFormRequest.organization_id == user.organization_id,
+                )
+            )
+            for form_request in requests_result.scalars().all():
+                if form_request.submission_id:
+                    submission_ids.add(str(form_request.submission_id))
+                form_request.token = None
+                form_request.draft_data = None
+                form_request.changes = None
 
             if submission_ids:
                 result = await self.db.execute(

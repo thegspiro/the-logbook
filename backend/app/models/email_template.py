@@ -76,6 +76,8 @@ class EmailTemplateType(str, enum.Enum):
     APPLICATION_STEP_COMPLETED = "application_step_completed"
     APPLICATION_STATUS_LINK = "application_status_link"
     APPLICATION_GOING_INACTIVE = "application_going_inactive"
+    APPLICATION_FOLLOW_UP_FORM = "application_follow_up_form"
+    APPLICATION_CONTACT_CHANGED = "application_contact_changed"
     CUSTOM = "custom"
 
 

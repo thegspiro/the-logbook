@@ -183,6 +183,7 @@ export interface FieldDefinition {
   sort_order: number;
   width: string;
   is_sensitive?: boolean | undefined;
+  applicant_field?: string | null | undefined;
 }
 
 export interface FieldRendererProps {

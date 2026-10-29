@@ -462,6 +462,9 @@ ROUTES_OPEN_BY_DESIGN = {
     "/display/:code/events/:eventId/guest": "public kiosk display, no session",
     "/f/:slug": "public form submission; answers /api/public/v1/forms",
     "/application-status/:token": "an applicant checking their own application",
+    "/application-form/:token": (
+        "an applicant completing a follow-up form from their emailed link"
+    ),
     "/locations": "the stand-in served when Facilities is off",
     "/locations/:locationId/check-in": (
         "a room NFC tag's landing; must work in Locations and Facilities mode, "
