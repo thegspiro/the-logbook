@@ -16,7 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch TBD) — Feature 10 (Documents & legal), pass 13.
+**PR [#3816](https://github.com/thegspiro/the-logbook/pull/3816)** (branch
+`claude/security-review-documents-legal-p13`) — Feature 10 (Documents &
+legal), pass 13.
 Watchdog pickup (dedicated `/loop 30m /security-review` session
 `session_011T1ZyyLrD5HagusgK9uDw2` confirmed unreachable via `ListAgents`).
 PR #3813 (Feature 09, Medical screening, pass 13) had already merged with no
