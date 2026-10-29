@@ -312,7 +312,7 @@ describe('IntegrationsPage', () => {
   it('connects a Generic Webhook with the events it should be sent', async () => {
     const user = userEvent.setup();
     const webhook = {
-      ...mockIntegrations[0]!,
+      ...(mockIntegrations[0] ?? {}),
       id: 'wh-1',
       integration_type: 'generic-webhook',
       name: 'Generic Webhooks',
