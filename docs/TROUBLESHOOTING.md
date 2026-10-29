@@ -639,9 +639,11 @@ Scheduling officer duties, Training officer duties, Election administration,
 Membership and store administration) are optional. An officer who has
 **Email Notifications** switched off, or has turned off that duty under **My
 Account → Notifications → Emails you can turn off**, no longer receives them.
-Before the upgrade most of these senders ignored the switch. Quartermaster
-alerts (low stock, shelf audit, retirement, expiring supplies, failed equipment
-checks) have no in-app copy, so the officer hears nothing at all.
+Before the upgrade most of these senders ignored the switch. Since
+2026-10-29 quartermaster alerts (low stock, shelf audit, retirement, expiring
+supplies, automatic reorder requests) and membership and store administration
+notices also leave a bell notice, so an officer who turned the email off still
+sees them in the app. Failed equipment checks always did.
 
 **Solutions**:
 

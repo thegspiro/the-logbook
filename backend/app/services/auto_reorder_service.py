@@ -148,17 +148,20 @@ class AutoReorderService:
         """Email the people who run this item's stock that a request was filed.
 
         Recipients come from the low-stock alert's own audience resolution, so
-        a medical-only officer hears about medical items and never about gear,
-        and anyone who turned off inventory-duty emails is left out. Email
-        only, as with the low-stock alert (CLAUDE.md pitfall #18).
+        a medical-only officer hears about medical items and never about gear.
+        Each of them also gets a bell entry, so an officer who turned off
+        inventory-duty emails still hears; the email goes to the rest. No text,
+        as with the low-stock alert (CLAUDE.md pitfall #18).
         """
         # Imported here: scheduled_tasks imports the services that import
         # this module.
         from app.services.email_policy import department_required_kinds
         from app.services.email_service import EmailService, wrap_email_body
+        from app.services.officer_alert_copies import add_in_app_copies
         from app.services.scheduled_tasks import (
             DOMAIN_GEAR,
             DOMAIN_MEDICAL,
+            _quartermaster_emails,
             _stock_alert_audiences,
         )
 
@@ -172,15 +175,44 @@ class AutoReorderService:
         is_medical = category is not None and category.item_type in MEDICAL_ITEM_TYPES
         domain = DOMAIN_MEDICAL if is_medical else DOMAIN_GEAR
 
-        audiences = await _stock_alert_audiences(
-            self.db, organization_id, department_required_kinds(org)
-        )
+        audiences = {
+            domains: users
+            for domains, users in (
+                await _stock_alert_audiences(self.db, organization_id)
+            ).items()
+            if domain in domains
+        }
+
+        for domains, users in audiences.items():
+            # The reorder queue needs inventory.manage, which is what puts gear
+            # in an audience; a medical-only officer is pointed at the supply
+            # instead (see KNOWN_LIMITATIONS, Medical Supplies).
+            await add_in_app_copies(
+                self.db,
+                organization_id=organization_id,
+                recipient_ids=[str(u.id) for u in users],
+                category="inventory_reorder",
+                subject=f"Reorder requested — {item.name}"[:200],
+                message=(
+                    f"A reorder request for {item.name} was filed automatically: "
+                    f"{on_hand} ready on the shelf, reorder point "
+                    f"{item.reorder_point}, {reorder.quantity_requested} requested."
+                ),
+                action_url=(
+                    "/inventory/admin/reorder"
+                    if DOMAIN_GEAR in domains
+                    else "/medical-supplies"
+                ),
+                metadata={"reorder_request_id": str(reorder.id)},
+            )
+        await self.db.commit()
+
+        required = department_required_kinds(org)
         recipients = sorted(
             {
                 email
-                for domains, emails in audiences.items()
-                if domain in domains
-                for email in emails
+                for users in audiences.values()
+                for email in _quartermaster_emails(users, required)
             }
         )
         if not recipients:

@@ -10,12 +10,14 @@ const mockGetOpenShifts = vi.fn();
 const mockGetShifts = vi.fn();
 const mockSignupForShift = vi.fn();
 const mockGetEligiblePositions = vi.fn();
+const mockCreateAssignment = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args) as unknown,
     getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
     signupForShift: (...args: unknown[]) => mockSignupForShift(...args) as unknown,
+    createAssignment: (...args: unknown[]) => mockCreateAssignment(...args) as unknown,
     withdrawSignup: vi.fn().mockResolvedValue(undefined),
     getEligiblePositions: (...args: unknown[]) => mockGetEligiblePositions(...args) as unknown,
   },
@@ -219,6 +221,44 @@ describe('OpenShiftsTab', () => {
 
     await waitFor(() => {
       expect(mockSignupForShift).toHaveBeenCalledWith('shift-2', { position: 'officer' });
+    });
+  });
+
+  describe('when self-signup is refused', () => {
+    const refuse = () =>
+      mockSignupForShift.mockRejectedValue({
+        isAxiosError: true,
+        response: { status: 403, data: { detail: 'Insufficient permissions' } },
+      });
+
+    const signUp = async () => {
+      const user = userEvent.setup();
+      mockGetEligiblePositions.mockResolvedValue({ positions: ['driver'], is_excluded: false });
+      renderWithRouter(<OpenShiftsTab />);
+      await user.click(nth(await screen.findAllByLabelText(/^Sign up for shift on /), 0));
+      await user.click(await screen.findByRole('button', { name: 'Confirm Sign Up' }));
+      await waitFor(() => expect(mockSignupForShift).toHaveBeenCalled());
+    };
+
+    beforeEach(() => {
+      mockCreateAssignment.mockReset();
+      mockCreateAssignment.mockResolvedValue({});
+    });
+
+    it('falls back to assigning an officer who holds scheduling.assign', async () => {
+      mockPermissions.granted = new Set(['scheduling.assign']);
+      refuse();
+      await signUp();
+      await waitFor(() => expect(mockCreateAssignment).toHaveBeenCalledTimes(1));
+    });
+
+    // scheduling.manage does not imply scheduling.assign, so the assignment
+    // would only earn a second refusal.
+    it('does not try an assignment for a scheduling.manage holder', async () => {
+      mockPermissions.granted = new Set(['scheduling.manage']);
+      refuse();
+      await signUp();
+      expect(mockCreateAssignment).not.toHaveBeenCalled();
     });
   });
 
