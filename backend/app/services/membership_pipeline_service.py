@@ -493,11 +493,12 @@ def _incomplete_required_steps(
 
 
 def _required_steps_refusal(names: List[str]) -> str:
-    listed = ", ".join(f"'{n}'" for n in names)
     noun = "stage is" if len(names) == 1 else "stages are"
-    return (
+    return list_within_detail_limit(
         f"This applicant cannot be converted yet: the required {noun} not "
-        f"complete: {listed}."
+        "complete: ",
+        [f"'{n}'" for n in names],
+        ".",
     )
 
 
