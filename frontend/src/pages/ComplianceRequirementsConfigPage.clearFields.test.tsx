@@ -234,6 +234,7 @@ describe('ComplianceRequirementsConfigPage — clearing a field on update', () =
         name: 'Active Firefighter',
         description: null,
         membership_types: [],
+        role_ids: [],
         required_requirement_ids: [],
         optional_requirement_ids: [],
         compliant_threshold_override: null,

@@ -743,6 +743,113 @@ class TestRoleBasedProfiles:
         assert member["standing"] == "non_compliant"
 
 
+class TestNonOperationalLifeMembers:
+    """Life members who still ride are graded on operational requirements;
+    life members who let their certifications lapse are not, and both keep
+    membership type "life" (and therefore their life-member vote).
+
+    A department tells the two apart with a no-permission position held by the
+    non-riding ones, and a higher-priority profile scoped to life members
+    holding it. The profile's membership type and position are AND'd, so a
+    riding life member without the position is untouched.
+    """
+
+    async def _setup(self, db_session: AsyncSession):
+        org_id = await _insert_org(db_session)
+        riding = await _insert_member(
+            db_session, org_id, last_name="Okafor", membership_type="life"
+        )
+        lapsed = await _insert_member(
+            db_session, org_id, last_name="Lindqvist", membership_type="life"
+        )
+        position_id = await _insert_position(
+            db_session, org_id, name="Life Member Non-Operational"
+        )
+        await db_session.execute(
+            text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
+            {"u": lapsed, "p": position_id},
+        )
+        await _insert_hours_req(
+            db_session,
+            org_id,
+            name="Operational Hours",
+            membership_types=["active", "probationary", "life", "retired"],
+        )
+        meetings = await _insert_hours_req(
+            db_session, org_id, name="Business Meetings", required_hours=6.0
+        )
+        for user_id in (riding, lapsed):
+            await _insert_record(
+                db_session, org_id, user_id, hours=6.0, completion_date=_today()
+            )
+        config_id = await _insert_compliance_config(db_session, org_id)
+        return org_id, config_id, position_id, meetings
+
+    async def _insert_scoped_profile(
+        self, db_session, config_id, position_id, required_ids
+    ) -> None:
+        await db_session.execute(
+            text(
+                "INSERT INTO compliance_profiles "
+                "(id, config_id, name, membership_types, role_ids, "
+                "required_requirement_ids, compliant_threshold_override, "
+                "at_risk_threshold_override, priority, is_active, "
+                "created_at, updated_at) "
+                "VALUES (:id, :cfg, 'Non-operational life', :mt, :roles, :rr, "
+                "NULL, NULL, 10, 1, :now, :now)"
+            ),
+            {
+                "id": _uid(),
+                "cfg": config_id,
+                "mt": json.dumps(["life"]),
+                "roles": json.dumps([position_id]),
+                "rr": json.dumps(required_ids),
+                "now": _NOW,
+            },
+        )
+        await db_session.flush()
+
+    @staticmethod
+    def _by_last_name(payload: dict) -> dict:
+        return {m["member_name"].split(",")[0]: m for m in payload["members"]}
+
+    async def test_without_a_profile_both_are_held_to_operational_requirements(
+        self, db_session: AsyncSession
+    ):
+        org_id, _, _, _ = await self._setup(db_session)
+        members = self._by_last_name(await _call(db_session, org_id))
+        assert members["Lindqvist"]["requirements_total"] == 2
+        assert members["Lindqvist"]["standing"] == "non_compliant"
+
+    async def test_the_profile_releases_only_the_member_holding_the_position(
+        self, db_session: AsyncSession
+    ):
+        org_id, config_id, position_id, meetings = await self._setup(db_session)
+        await self._insert_scoped_profile(
+            db_session, config_id, position_id, [meetings]
+        )
+
+        members = self._by_last_name(await _call(db_session, org_id))
+
+        lapsed = members["Lindqvist"]
+        assert lapsed["requirements_total"] == 1
+        assert lapsed["standing"] == "compliant"
+        riding = members["Okafor"]
+        assert riding["requirements_total"] == 2
+        assert riding["standing"] == "non_compliant"
+
+    async def test_a_profile_requiring_nothing_reads_not_applicable(
+        self, db_session: AsyncSession
+    ):
+        org_id, config_id, position_id, _ = await self._setup(db_session)
+        await self._insert_scoped_profile(db_session, config_id, position_id, [])
+
+        members = self._by_last_name(await _call(db_session, org_id))
+
+        assert members["Lindqvist"]["standing"] == "not_applicable"
+        assert members["Okafor"]["standing"] == "non_compliant"
+
+
 class TestPerCellCutoff:
     async def test_each_cell_reports_the_date_it_was_judged_against(
         self, db_session: AsyncSession
