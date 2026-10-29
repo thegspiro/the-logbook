@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3816](https://github.com/thegspiro/the-logbook/pull/3816)** (branch
+`claude/security-review-documents-legal-p13`) — Feature 10 (Documents &
+legal), pass 13.
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` confirmed unreachable via `ListAgents`).
+PR #3813 (Feature 09, Medical screening, pass 13) had already merged with no
+open rotation PR behind it — confirmed via `list_pull_requests` (state=open),
+0 results. Row 10 confirmed the next `⬜` row on a freshly fetched `main`
+(head `7ac356b4`).
+
+**0 fixed, 0 new findings.** Near-zero delta since this feature's own pass 12
+(merge `d589326f`, PR #3734): only one file in the declared scope changed,
+`services/documents_service.py`, as part of a cross-cutting repo-wide commit
+(`b4d9388a`, 7 services) that rewraps four error messages through a new
+shared `list_within_detail_limit()` helper so a long client-/org-chosen name
+list can no longer push a refusal past `safe_error_detail`'s 300-character
+cap into a content-free generic error — no query, permission, or
+org-scoping change. All 24 routes re-enumerated by AST this pass, unchanged
+set and count from pass 12/11; `Depends(` counts per file also unchanged.
+DOC-31 (`_release_document_references`'s refusal check is a plain `SELECT`,
+not a locking read) re-confirmed OPEN/FLAGGED, unaffected by this pass's one
+touched file — only the message construction changed, not the query. See
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 13** section for
+the full review.
+
+Rotation row 10 → ✅ (pending this PR's merge); next is Feature 11
+(Inventory) — re-check `search_pull_requests`/`list_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 13, PR #3813, merged), preserved for history</summary>
+
 **PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)** (branch
 `claude/security-review-medical-screening-p13`) —
 Feature 09 (Medical screening, PHI), pass 13. Watchdog pickup (dedicated
@@ -45,6 +77,8 @@ decision. See `docs/security-review/MS-09-medical-screening.md`'s
 Rotation row 09 → ✅ (pending this PR's merge); next is Feature 10
 (Documents & legal) — re-check `search_pull_requests`/`list_pull_requests`
 fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 14, PR #3811, merged), preserved for history</summary>
@@ -22992,7 +23026,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |

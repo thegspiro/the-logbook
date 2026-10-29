@@ -1,6 +1,88 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), (this PR) (pass 12)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), (this PR) (pass 13)
+
+---
+
+## Pass 13 (2026-10-29)
+
+**Watchdog pickup.** `list_pull_requests` (state=open) returned 0 results, and
+no Claude session was reachable via `ListAgents` (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). PR #3813 (Feature 09, Medical screening, pass 13) had already
+merged, with no open rotation PR behind it. Rotation row 10 (Documents &
+legal) was the next `⬜`, confirmed by re-reading `PROGRESS.md`'s most recent
+"next is Feature" note.
+
+**Baseline** `d589326f` (PR #3734's merge, pass 12). `git diff --stat` against
+it, across the declared scope (`documents.py`, `station_documents.py`,
+`legal_documents.py`, `documents_service.py`, `print_document_service.py`,
+`legal_service.py`, `document_service.py`, `models/legal.py`,
+`models/document.py`, `schemas/legal.py`, `schemas/documents.py`,
+`admin_only_folder_digest.py`, `DocumentsPage.tsx`, `LegalPage.tsx`, and the
+`documents/` frontend components) found exactly one changed file:
+
+| File                            | +/−     | What changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `services/documents_service.py` | +24/−10 | Part of a cross-cutting, repo-wide fix (`b4d9388a`, "Cap the refusals that join a list from data", 7 services touched) that rewraps four error messages — `release_position_from_folders`'s "only position that opens these folders", `allowed_roles`/`required_permissions` unknown-value refusals, and `_release_document_references`'s two past-draft refusals — through the new shared `list_within_detail_limit()` helper (`app/core/utils.py:75`). Previously a long `', '.join(...)` of client-/org-chosen names could push the message past `safe_error_detail`'s 300-character cap, collapsing it to a content-free "An unexpected error occurred." The helper keeps items in order while they fit and appends "and N more"; wording is byte-identical whenever the list already fit. No new query, no permission or org-scoping change, no behavior change to which refusals fire — only how their message is built. |
+
+No new or changed route (24, re-enumerated this pass **by AST** rather than
+`grep -c` — `documents.py` 15, `station_documents.py` 2, `legal_documents.py`
+7 — identical count and identical set to pass 12) and no feature-specific
+migration. `Depends(` counts per file (32/4/14) also match pass 12 exactly,
+confirming no auth-dependency regression.
+
+### Reviewed in full
+
+- **`list_within_detail_limit()` itself** (`app/core/utils.py:75-105`) —
+  pure string composition, no SQL/HTML/shell context, so there is no
+  injection surface in capping a message; it is also already covered by this
+  repo-wide commit's own tests (shared across the 7 services it touched, not
+  re-derived here).
+- **`_release_document_references`** (`documents_service.py:1500-1580`) —
+  the two queries this pass's diff touches are unchanged except for the
+  message wrapper: still `PurchaseRequest.organization_id == org_id` /
+  `ExpenseReport.organization_id == org_id` filtered selects (XC-3 holds),
+  still plain `SELECT`s with no `.with_for_update()` — i.e. DOC-31, re-read
+  below, is unaffected by this diff.
+- **LIKE escaping / CSV export** — re-grepped rather than assumed: the one
+  search path (`documents_service.py:1700-1702`) still passes
+  `escape=LIKE_ESCAPE_CHAR` on all three `ilike()` calls; no `csv.writer`/
+  `csv.DictWriter` anywhere in this feature's endpoint or service files.
+
+## Findings — 0 fixed, 0 new findings
+
+- **DOC-31 — LOW — FLAGGED — re-confirmed OPEN, unaffected.**
+  `_release_document_references`'s refusal check (`documents_service.py:1524,
+1544`) is still a plain `SELECT`, not `.with_for_update()`, on the
+  referencing `PurchaseRequest`/`ExpenseReport` rows before refusing a
+  receipt-document delete — byte-identical logic to pass 11/12, confirmed by
+  direct read this pass (only the raised message's construction changed, not
+  the query). Already in `docs/KNOWN_LIMITATIONS.md`; no new information.
+
+No other standing OPEN/FLAGGED finding exists for this feature (passes 9-12
+all closed with none besides DOC-31).
+
+## Completion gate
+
+| Check                                                                                                   | Result                                          |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                           | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                                                                    | ✅ 2714 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/`                                                               | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 667 revisions, single head `b74bcce55c11`    |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                       | ✅ 279 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only"`   | ✅ 650 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                      | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                           | ✅ 0 errors, 0 warnings                         |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents src/pages/LegalPage.test.tsx` | ✅ 51 passed (3 files)                          |
+
+No source file needed a fix this pass — only this findings file and
+`PROGRESS.md` were updated.
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
