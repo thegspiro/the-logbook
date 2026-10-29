@@ -30,6 +30,7 @@ import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import { SkeletonText } from '../components/ux/Skeleton';
 import { SchedulingPageHeader } from '../components/scheduling/SchedulingPageHeader';
 import ShiftBoard from './scheduling/board/ShiftBoard';
+import { StatGrid } from '../components/ux/StatGrid';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazyWithRetry(() => import('./scheduling/MyShiftsTab'));
@@ -537,7 +538,7 @@ const SchedulingPage: React.FC = () => {
                 the row appearing with it pushed the board ~180px down. A failed
                 summary drops the row. */}
             {!summaryError && (
-              <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+              <StatGrid columns={4} className="mb-6">
                 {/* Each label names its own window and whose figure it is. Three
                     of these count scheduled shifts over different spans and the
                     fourth sums hours the department actually worked; under
@@ -568,7 +569,7 @@ const SchedulingPage: React.FC = () => {
                     {summary ? summary.hours_worked_this_month : <SkeletonText className="w-10" />}
                   </p>
                 </div>
-              </div>
+              </StatGrid>
             )}
 
             {/* The board: month grid, day panel, and one-tap claim. Replaces

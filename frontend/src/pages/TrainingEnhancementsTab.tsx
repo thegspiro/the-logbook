@@ -64,6 +64,7 @@ import type {
   ParticipatingOrganization,
 } from '../types/training';
 import type { User } from '../types/user';
+import { StatGrid } from '../components/ux/StatGrid';
 
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
 const labelClass = 'form-label';
@@ -1177,7 +1178,7 @@ const EffectivenessSection: React.FC = () => {
         member={evaluatedMember}
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <StatGrid columns={4} gap={4}>
         {KIRKPATRICK_LEVELS.map((item) => {
           const Icon = item.icon;
           const count = countByLevel(item.key);
@@ -1195,7 +1196,7 @@ const EffectivenessSection: React.FC = () => {
             </div>
           );
         })}
-      </div>
+      </StatGrid>
 
       {evaluations.length === 0 ? (
         <EmptyState

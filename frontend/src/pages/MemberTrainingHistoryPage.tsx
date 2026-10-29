@@ -29,6 +29,7 @@ import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
 import { useDialog } from '../hooks/useDialog';
 import { getTrainingStatusLabel } from '../utils/trainingColors';
+import { StatGrid } from '../components/ux/StatGrid';
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -427,14 +428,14 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-6">
+        <StatGrid columns={6} gap={4} className="mb-6">
           <StatCard label="Total Records" value={stats.total} />
           <StatCard label="Completed" value={stats.completed} color="green" />
           <StatCard label="Total Hours" value={stats.totalHours} color="blue" />
           <StatCard label="Scheduled" value={stats.scheduled} color="yellow" />
           <StatCard label="Expiring Soon" value={stats.expiringSoon} color="orange" />
           <StatCard label="Expired" value={stats.expired} color="red" />
-        </div>
+        </StatGrid>
 
         {/* Filters */}
         <div className="card mb-6 p-4">

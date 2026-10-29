@@ -6,6 +6,7 @@ import { Breadcrumbs, SkeletonText } from '../components/ux';
 import { QrCode } from 'lucide-react';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatTime } from '../utils/dateFormatting';
+import { StatGrid } from '../components/ux/StatGrid';
 
 /**
  * Analytics Dashboard
@@ -111,17 +112,17 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     return (
       <div className={`mx-auto min-h-screen max-w-7xl ${shellPadding}`}>
         {header}
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-6">
           <span className="sr-only">Loading analytics...</span>
           {['Total Scans', 'Successful Check-Ins', 'Success Rate', 'Avg Time to Check-In'].map((label) => (
-            <div key={label} className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+            <div key={label} className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
               <div className="text-theme-text-muted mb-1 text-sm font-medium">{label}</div>
-              <div className="text-3xl font-bold">
+              <div className="text-2xl font-bold sm:text-3xl">
                 <SkeletonText className="w-16" />
               </div>
             </div>
           ))}
-        </div>
+        </StatGrid>
       </div>
     );
   }
@@ -152,27 +153,29 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       {header}
 
       {/* Key Metrics */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+      <StatGrid columns={4} gap={4} className="mb-6">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Total Scans</div>
-          <div className="text-3xl font-bold text-blue-600">{metrics.totalScans}</div>
+          <div className="text-2xl font-bold text-blue-600 sm:text-3xl">{metrics.totalScans}</div>
         </div>
 
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Successful Check-Ins</div>
-          <div className="text-3xl font-bold text-green-700 dark:text-green-600">{metrics.successfulCheckIns}</div>
+          <div className="text-2xl font-bold text-green-700 sm:text-3xl dark:text-green-600">
+            {metrics.successfulCheckIns}
+          </div>
         </div>
 
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Success Rate</div>
-          <div className="text-theme-text-primary text-3xl font-bold">{metrics.successRate}%</div>
+          <div className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{metrics.successRate}%</div>
         </div>
 
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Avg Time to Check-In</div>
-          <div className="text-theme-text-primary text-3xl font-bold">{metrics.avgTimeToCheckIn}s</div>
+          <div className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{metrics.avgTimeToCheckIn}s</div>
         </div>
-      </div>
+      </StatGrid>
 
       <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Device Breakdown */}

@@ -30,6 +30,7 @@ import { formatDateTime, formatNumber } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { EmptyState, PromptDialog } from '../components/ux';
 import { useTablist } from '../hooks/useTablist';
+import { StatGrid } from '../components/ux/StatGrid';
 
 type Tab = 'alerts' | 'exports';
 
@@ -205,13 +206,18 @@ const SecurityAlertsPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <StatGrid columns={4} className="mb-6">
         <div className="card p-4">
           <p className="text-theme-text-muted text-xs font-medium uppercase">Open</p>
           <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">{counts.open}</p>
         </div>
         <div className="card p-4">
-          <p className="text-theme-text-muted text-xs font-medium uppercase">Unacknowledged</p>
+          <p className="text-theme-text-muted text-xs font-medium uppercase">
+            {/* A soft hyphen: two tiles share a 320px phone and the word is
+                wider than its tile. `hyphens: auto` needs a dictionary the
+                browser may not have; this break point is always there. */}
+            {'Unacknow\u00ADledged'}
+          </p>
           <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">{counts.unacknowledged}</p>
         </div>
         <div className="card p-4">
@@ -222,7 +228,7 @@ const SecurityAlertsPage: React.FC = () => {
           <p className="text-theme-text-muted text-xs font-medium uppercase">Resolved</p>
           <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">{counts.resolved}</p>
         </div>
-      </div>
+      </StatGrid>
 
       <div className="tab-scroll mb-4" role="tablist" {...tablist} aria-label="Security monitoring views">
         {tabButton('alerts', 'Alerts', <BellRing className="h-4 w-4" aria-hidden="true" />)}

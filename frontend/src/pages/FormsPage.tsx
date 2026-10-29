@@ -51,6 +51,7 @@ import {
   type StarterTemplate,
 } from './formConstants';
 import { useTablist } from '../hooks/useTablist';
+import { StatGrid } from '../components/ux/StatGrid';
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
 
@@ -532,7 +533,7 @@ const FormsPage: React.FC = () => {
             appearing with the figures pushed the tabs and the list ~330px down
             on a phone. A failed summary drops the row and says so below. */}
         {(summary || loading) && (
-          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5" role="region" aria-label="Forms statistics">
+          <StatGrid columns={5} gap={4} className="mb-8" role="region" aria-label="Forms statistics">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Forms</p>
               <p className="text-theme-text-primary mt-1 text-2xl font-bold">
@@ -563,7 +564,7 @@ const FormsPage: React.FC = () => {
                 {summary ? summary.submissions_this_month : <SkeletonText className="w-10" />}
               </p>
             </div>
-          </div>
+          </StatGrid>
         )}
 
         {/* Error Banner */}
