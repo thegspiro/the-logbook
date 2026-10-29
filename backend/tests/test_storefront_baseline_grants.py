@@ -67,7 +67,9 @@ def test_backfill_covers_every_seeded_position_holding_the_grants():
     ``assistant_membership_coordinator`` (2026-09-24) is registered later
     still, and revision ``43e9df281412`` creates it on existing departments
     with the storefront grants already in place. ``compliance_officer``
-    (2026-09-24) likewise, by revision ``3c918c06466d``.
+    (2026-09-24) likewise, by revision ``3c918c06466d``. The four seeded
+    committees (2026-10-29) likewise, by revision ``d8f1a4c27b93``, which
+    inserts each with a copy of the baseline list.
     """
     # Thirteen corporate positions gained the grants in a later revision, which
     # carries its own backfill — they are not this migration's to cover.
@@ -88,7 +90,15 @@ def test_backfill_covers_every_seeded_position_holding_the_grants():
         if slug not in later
         # Registered after this migration — see the docstring.
         and slug
-        not in {"emt", "assistant_membership_coordinator", "compliance_officer"}
+        not in {
+            "emt",
+            "assistant_membership_coordinator",
+            "compliance_officer",
+            "community_outreach_team",
+            "history_committee",
+            "fundraising_committee",
+            "membership_committee",
+        }
         and "storefront.view" in definition["permissions"]
         # A wildcard row already covers the grants and the backfill skips it.
         and "*" not in definition["permissions"]
