@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** (branch `claude/security-review-scheduling-p12`) — Feature 15
+**PR [#3840](https://github.com/thegspiro/the-logbook/pull/3840)** (branch
+`claude/security-review-scheduling-p12`) — Feature 15
 (Scheduling), pass 12, a watchdog pickup. Dedicated `/loop 30m
 /security-review` session remains unreachable, confirmed via `ListAgents`
 ("No reachable agents"). PR #3837 (Feature 14, Equipment check & shifts,
