@@ -149,11 +149,9 @@ export function AdminHubFrame<K extends string>({
   // down when it arrived, on every hub route. A nav the caller cannot build
   // yet is the same. The body is a card row that scrolls its selected card into
   // view on mount, which is why this hides with `visibility`: see
-  // useFirstLoadHold. The wrappers are `display: contents`, so the class sets
-  // visibility on their children directly (`[&>*]:invisible`) rather than on
-  // the wrapper for the children to inherit: a box-less element's inherited
-  // style is the part WebKit has been unreliable at updating, and a hold that
-  // never lifted there would leave the page blank under the header.
+  // useFirstLoadHold. The wrappers are ordinary boxes, not `display: contents`:
+  // a hub card in a box-less wrapper stopped taking clicks in WebKit (the
+  // Mobile Safari job), with or without the hold.
   const [summaryPending, setSummaryPending] = useState(wantsSummary && showAttentionQueue);
   const held = useFirstLoadHold(summaryPending || navPending);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -346,8 +344,9 @@ export function AdminHubFrame<K extends string>({
             declares that scroll as intentional to the mobile overflow check; no
             tabIndex, because a tablist stays out of the tab order (its tabs use
             roving tabindex) and the tabs themselves reach the hidden end. */}
-        {/* `contents`, so the wrapper adds no box and the gap above still applies. */}
-        <div data-held={held || undefined} className={held ? 'contents [&>*]:invisible' : 'contents'}>
+        {/* The column's own gap, so the tabs and nav sit as they would without
+            it; `empty:hidden` keeps a nav that renders nothing from adding one. */}
+        <div data-held={held || undefined} className={`flex flex-col gap-5 empty:hidden ${held ? 'invisible' : ''}`}>
           {cardTabs && activeTab && onTabChange && (
             <AdminHubCardTabs<K>
               tabs={cardTabs}
@@ -399,11 +398,7 @@ export function AdminHubFrame<K extends string>({
       {/* 5 — Body. Free: table, form, calendar, card grid — the module's own.
           Under card tabs it is their tabpanel, so the selected card's
           aria-controls resolves to it. */}
-      <div
-        data-testid="admin-hub-body"
-        data-held={held || undefined}
-        className={held ? 'contents [&>*]:invisible' : 'contents'}
-      >
+      <div data-testid="admin-hub-body" data-held={held || undefined} className={held ? 'invisible' : undefined}>
         {cardTabs && activeTab ? (
           <div
             id={`${idPrefix}-panel-${activeTab}`}
