@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending)** — Feature 13 (Apparatus & NFC), pass 20, a watchdog
+**PR [#3835](https://github.com/thegspiro/the-logbook/pull/3835)** (branch
+`claude/security-review-apparatus-nfc-p20`) — Feature 13 (Apparatus & NFC), pass 20, a watchdog
 pickup. Dedicated `/loop 30m /security-review` session
 `session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
 `ListAgents` ("No reachable agents"). PR #3832 (Feature 12, Facilities,
