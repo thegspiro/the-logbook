@@ -625,6 +625,55 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Election Settings gains a Voter Eligibility section (2026-10-29)
+
+Nothing changes who may vote in any existing election. Migration
+`e1a7c4b2d9f3` adds a nullable `elections.eligibility_rules` column and leaves
+every existing row NULL, which means "no election-wide rules", the behaviour
+every election had before. The downgrade drops the column.
+
+What is new:
+
+- **Election Settings → Voter Eligibility** sets the department's default
+  meeting-attendance rule ("attended N of the last M meetings" or "N% of
+  meetings over M months"), a waiting period per member type, the check-in default
+  for new ballot items, and who votes for named positions. These defaults
+  start empty or match the previous behaviour, so an upgrade changes nothing
+  until someone sets them.
+- **A new election copies the defaults when it is created.** It can change its
+  own copy on its Eligibility tab until voting opens. After that the copy is
+  fixed, and changing the defaults never reaches an election that already
+  exists.
+- **The election-wide rules apply alongside each membership tier's own voting
+  rules**, which are unchanged and still edited under Members → Settings →
+  Tiers. A secretary's voter override bypasses both.
+- **The annual meeting can carry its own rules.** Migration `b3d58e0c71a4`
+  adds `elections.meeting_kind` (`regular` or `annual`, not nullable, database
+  default `regular`). Every existing election reads as a regular-meeting
+  election, and the annual meeting uses the regular rules until someone turns
+  on **Use different rules at the annual meeting**. The downgrade drops the
+  column. Elections lose the label, and their copied rules are untouched.
+- **Waiting periods count from when a member became their type.** For
+  example, administrative members may vote a year after becoming
+  administrative, and probationary members never. Migration `c7e2a91f4d36`
+  adds five columns to `users`:
+  - `member_class_since` and `member_status_since`, stamped from now on
+    whenever a member's class or status changes;
+  - `voting_wait_from`, `voting_wait_waived` (not nullable, default false) and
+    `voting_wait_override_reason`, for a per-member override.
+
+  **Existing members get a best guess** of when they became their type: their
+  last tier change, or else their hire date. Nothing records the real date
+  before this release. No waiting period is set until someone sets one, so this
+  changes nothing on upgrade. Before you add one, check members whose date
+  matters. A secretary corrects the date, or waives the wait, from the
+  member's profile under **Voting eligibility**. The downgrade drops the
+  columns, and the backfilled dates are lost with them.
+
+  A member on one of your department's own tiers (`senior`) gets the waiting
+  period of the built-in status that tier's **Counts as** names, and none at
+  all while it is unset, the same way the tier decides who may vote.
+
 ### Member class and membership status are two controls; four committees appear (2026-10-29)
 
 **Every department gains four positions:** Community Education / Outreach

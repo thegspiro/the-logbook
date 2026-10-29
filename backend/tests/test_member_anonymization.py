@@ -56,6 +56,9 @@ async def _make_departed_member(db, org, **overrides):
         photo_url="data:image/webp;base64,abcd",
         emergency_contacts=[{"name": "Casey", "phone": "555-0102"}],
         status_change_reason="Moved out of state",
+        voting_wait_from=date(2019, 3, 1),
+        voting_wait_waived=True,
+        voting_wait_override_reason="Regular since the March 2019 meeting",
         password_hash="bcrypt$fake",
         deleted_at=datetime.now(UTC),
     )
@@ -123,6 +126,9 @@ class TestAnonymizeMember:
         assert user.photo_url is None
         assert user.emergency_contacts is None
         assert user.status_change_reason is None
+        assert user.voting_wait_override_reason is None
+        # Standing, not personal: kept, as membership_type_changed_at is.
+        assert user.voting_wait_waived is True
         assert user.password_hash is None
 
         assert summary["size_preferences_deleted"] == 1

@@ -307,3 +307,66 @@ def is_operational(member_class: Optional[str]) -> bool:
     if not member_class:
         return False
     return member_class.strip().lower() == MemberClass.OPERATIONAL
+
+
+#: The member types a voting waiting period is set for, keyed by what
+#: ``voter_type_key`` returns. Class first: an administrative or social member
+#: is judged by class whatever their status; every operational member by
+#: status. Prospective members are not members yet and have no key.
+VOTER_TYPE_KEYS = (
+    MemberClass.ADMINISTRATIVE,
+    MemberClass.SOCIAL,
+    MemberStatus.REGULAR,
+    MemberStatus.LIFE,
+    MemberStatus.PROBATIONARY,
+    MemberStatus.RETIRED,
+    MemberStatus.HONORARY,
+    MemberStatus.JUNIOR,
+)
+
+
+#: How each voter type is named to a person, singular adjective form
+#: ("Administrative members ...").
+VOTER_TYPE_LABELS = {
+    MemberClass.ADMINISTRATIVE: "Administrative",
+    MemberClass.SOCIAL: "Social",
+    MemberStatus.REGULAR: "Regular",
+    MemberStatus.LIFE: "Life",
+    MemberStatus.PROBATIONARY: "Probationary",
+    MemberStatus.RETIRED: "Retired",
+    MemberStatus.HONORARY: "Honorary",
+    MemberStatus.JUNIOR: "Junior",
+}
+
+
+def voter_type_key(
+    member_class: Optional[str],
+    member_status: Optional[str],
+    membership_type: Optional[str] = None,
+    ranks_as_by_tier: Optional[Mapping[str, str]] = None,
+) -> Optional[str]:
+    """The member type a voting waiting period is looked up by, or None.
+
+    Reads the columns the way ``_user_has_role_type`` does: a class or status
+    not yet reconciled (only ``membership_type`` written this request) is
+    derived from the legacy value, and a department tier id on the status
+    column counts as the built-in status its "Counts as" names
+    (``status_for_tier``). Keeping that resolution identical is what stops one
+    member being a regular member for who may vote and typeless for the wait.
+    None — a tier that counts as nothing, or a prospective member — means no
+    waiting-period rule applies.
+    """
+    split_class, split_status = split_membership_type(membership_type)
+    klass = (member_class or "").strip().lower() or split_class
+    if klass in (MemberClass.ADMINISTRATIVE, MemberClass.SOCIAL):
+        return klass
+    status = status_for_tier(member_status or split_status, ranks_as_by_tier)
+    if status in VOTER_TYPE_KEYS:
+        return status
+    return None
+
+
+def voter_type_decided_by_class(type_key: str) -> bool:
+    """Whether ``type_key`` is a class (so its wait counts from when the
+    member's class changed) rather than a status."""
+    return type_key in (MemberClass.ADMINISTRATIVE, MemberClass.SOCIAL)

@@ -123,6 +123,26 @@ class Election(Base):
         JSON, nullable=True
     )
 
+    # Election-wide voter rules every voter must meet, copied from the
+    # department's defaults (organizations.settings["election_eligibility"])
+    # when the election is created. NULL means none, which is how every
+    # election behaved before the column existed.
+    # Format: {"attendance": {"mode": "count", "min_meetings": 6,
+    #          "of_last_meetings": 12, "meeting_types": ["business"]},
+    #          "waiting_periods": {"administrative": {"mode": "months",
+    #          "months": 12}, "probationary": {"mode": "never"}}}
+    eligibility_rules: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+
+    # "regular" (a business meeting) or "annual". Decides which of the
+    # department's eligibility defaults the election copies: the annual
+    # meeting may carry its own (organizations.settings
+    # ["election_eligibility_annual"]).
+    meeting_kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="regular", server_default="regular"
+    )
+
     # Email notification tracking
     email_sent: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"

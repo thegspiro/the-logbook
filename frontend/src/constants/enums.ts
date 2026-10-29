@@ -371,6 +371,51 @@ export const VictoryCondition = {
 export type VictoryCondition = (typeof VictoryCondition)[keyof typeof VictoryCondition];
 
 // ============================================
+// Attendance Rule Mode (Election.eligibility_rules.attendance.mode)
+// ============================================
+export const AttendanceRuleMode = {
+  NONE: 'none',
+  COUNT: 'count',
+  PERCENT: 'percent',
+} as const;
+export type AttendanceRuleMode = (typeof AttendanceRuleMode)[keyof typeof AttendanceRuleMode];
+
+// ============================================
+// Waiting Period Mode (ElectionEligibilityRules.waiting_periods[type].mode)
+// ============================================
+export const WaitingPeriodMode = {
+  NONE: 'none',
+  NEVER: 'never',
+  MONTHS: 'months',
+} as const;
+export type WaitingPeriodMode = (typeof WaitingPeriodMode)[keyof typeof WaitingPeriodMode];
+
+// ============================================
+// Member Voter Type — the key a waiting period is set for. Class first
+// (administrative, social), else status. Mirrors backend VOTER_TYPE_KEYS.
+// ============================================
+export const MemberVoterType = {
+  ADMINISTRATIVE: 'administrative',
+  SOCIAL: 'social',
+  REGULAR: 'regular',
+  LIFE: 'life',
+  PROBATIONARY: 'probationary',
+  RETIRED: 'retired',
+  HONORARY: 'honorary',
+  JUNIOR: 'junior',
+} as const;
+export type MemberVoterType = (typeof MemberVoterType)[keyof typeof MemberVoterType];
+
+// ============================================
+// Meeting Kind (Election.meeting_kind) — which eligibility defaults it copies
+// ============================================
+export const MeetingKind = {
+  REGULAR: 'regular',
+  ANNUAL: 'annual',
+} as const;
+export type MeetingKind = (typeof MeetingKind)[keyof typeof MeetingKind];
+
+// ============================================
 // Ballot Choice (voter action on a ballot item)
 // ============================================
 export const BallotChoice = {

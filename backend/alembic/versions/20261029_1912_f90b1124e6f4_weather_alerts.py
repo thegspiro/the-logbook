@@ -1,8 +1,8 @@
 """Weather alerts
 
 Revision ID: f90b1124e6f4
-Revises: 43bebab8401c
-Create Date: 2026-10-29 18:12:00.000000
+Revises: e8a3f5c1b7d2
+Create Date: 2026-10-29 19:12:00.000000
 
 Adds ``weather_alerts``: one row per NWS alert id per department, written by
 the weather polling task (owner decision 2026-10-29, KNOWN_LIMITATIONS
@@ -23,7 +23,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f90b1124e6f4"
-down_revision: Union[str, None] = "43bebab8401c"
+down_revision: Union[str, None] = "e8a3f5c1b7d2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
