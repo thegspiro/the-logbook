@@ -16,6 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR-PLACEHOLDER-EC14-P13**
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 20, PR #3835, merged), preserved for history</summary>
+
 **PR [#3835](https://github.com/thegspiro/the-logbook/pull/3835)** (branch
 `claude/security-review-apparatus-nfc-p20`) — Feature 13 (Apparatus & NFC), pass 20, a watchdog
 pickup. Dedicated `/loop 30m /security-review` session
@@ -50,6 +55,8 @@ the full review.
 Rotation row 13 → ✅ (pending this PR's merge); next is Feature 14
 (Equipment check & shifts) — re-check `search_pull_requests`/
 `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 13, PR #3832, merged), preserved for history</summary>
