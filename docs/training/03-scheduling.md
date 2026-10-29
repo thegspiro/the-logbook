@@ -3804,6 +3804,23 @@ then your department's own.
 > rank. Members of that rank can still be eligible through a qualification,
 > training or an open position.
 
+**Which seats a qualification clears.** A qualification on a member's profile
+clears these seats while it is in force on the day of the shift:
+
+| Qualification               | Seats it clears                |
+| --------------------------- | ------------------------------ |
+| Firefighter I, Firefighter II | Firefighter                  |
+| Driver / Operator           | Driver/Operator                |
+| EMT, Advanced EMT           | EMT                            |
+| Paramedic                   | EMT, Paramedic                 |
+| Officer in Charge           | Officer, Captain, Lieutenant   |
+
+**Officer in Charge** _(2026-10-29)_ is how a member with no officer rank is
+cleared to lead a shift: give it on the profile, with an expiry if your
+clearance has one. A held office such as Quartermaster or Treasurer never
+clears a seat; an office says nothing about what its holder is trained to do
+on a rig.
+
 ![Operational Ranks settings, listing each rank with the shift positions it may fill](./images/03-33-settings-eligibility.png)
 
 **Who Can Fill What** (on the Scheduling Admin hub) shows the result: which

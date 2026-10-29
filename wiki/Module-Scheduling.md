@@ -186,13 +186,17 @@ single shift (`POST /scheduling/shifts/{id}/late-signup`).
    membership type and rank, but not account status).
 3. An excluded membership type gets nothing.
 4. Otherwise the union of: the rank's `eligible_positions`, positions the
-   member is qualified for as of the shift date, positions unlocked by
-   completed training, and org-wide open positions.
+   member is qualified for as of the shift date (`QUALIFICATIONS` in
+   `app/services/qualification_service.py`; `officer_in_charge` clears the
+   three `OFFICER_SEATS`), positions unlocked by completed training, and
+   org-wide open positions. A held RBAC position confers nothing.
 5. With a shift given, the result is intersected with the seats that shift
    actually has.
 
-The ranks × positions matrix is edited under **Settings → Eligibility**;
-**Who Can Fill What** (`/scheduling/admin/positions`) shows the resulting roster.
+The ranks × positions matrix is edited under **Members Administration →
+Settings → Operational Ranks**; **Who Can Fill What**
+(`/scheduling/admin/positions`) shows the resulting roster with the source of
+each clearance (rank, qualification, training or open).
 
 Driver/operator seats are also checked against the apparatus's required **EVOC
 level** (organization-configurable levels, `evoc_levels`; an apparatus names its
