@@ -14,6 +14,7 @@ from app.models.membership_pipeline import (
     MembershipPipelineStep,
     PipelineStepType,
     ProspectDocument,
+    ProspectFormRequest,
     ProspectiveMember,
     ProspectStepProgress,
     StepProgressStatus,
@@ -191,6 +192,50 @@ class TestAnonymizeMember:
 
         assert user_a.email != user_b.email
         assert user_a.username != user_b.username
+
+    async def test_scrubs_follow_up_forms(self, db_session):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        form = Form(organization_id=org.id, name="Background Questionnaire")
+        db_session.add(form)
+        await db_session.flush()
+        submission = FormSubmission(
+            organization_id=org.id,
+            form_id=form.id,
+            data={"street": "1 Main St"},
+            sensitive_data={"history": "Prior conviction"},
+        )
+        db_session.add(submission)
+        await db_session.flush()
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat.follow-up@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        request = ProspectFormRequest(
+            organization_id=org.id,
+            prospect_id=prospect.id,
+            form_id=form.id,
+            token="follow-up-token-" + uuid.uuid4().hex,
+            draft_data={"street": "1 Main St"},
+            changes=[{"field": "phone", "old": "555-0100", "new": "555-0199"}],
+            submission_id=submission.id,
+        )
+        db_session.add(request)
+        await db_session.flush()
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert request.token is None
+        assert request.token_hash is None
+        assert request.draft_data is None
+        assert request.changes is None
+        assert submission.data == {}
+        assert submission.sensitive_data is None
 
     async def test_scrubs_applicant_screening_and_source_form(self, db_session):
         org = await _make_org(db_session)

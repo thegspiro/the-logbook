@@ -110,7 +110,7 @@ The `ApplicantDetailDialog` was decomposed into focused sub-components:
 
 ### Stage Types
 
-The twelve types offered by `StageConfigModal` (`StageType` in
+The thirteen types offered by `StageConfigModal` (`StageType` in
 `frontend/src/constants/enums.ts`; the backend `PipelineStepType` enum also
 keeps the legacy `action`, `checkbox` and `note` types):
 
@@ -128,6 +128,60 @@ keeps the legacy `action`, `checkbox` and `note` types):
 | `interview_requirement` | Interview Requirement | MessageSquare | Require a set number of interviews before advancing         | Interview records                                                                        |
 | `multi_approval`        | Multi-Signer Approval | Users         | Require multiple designated roles to all sign off           | Sign-offs page                                                                           |
 | `medical_screening`     | Medical Screening     | Stethoscope   | Require physical exam or medical clearance before advancing | Medical Screening module                                                                 |
+| `follow_up_form`        | Follow-up Form        | ClipboardPen  | Email the applicant a form, pre-filled with what is on file | Forms module; personal link page `/application-form/:token`                              |
+
+### Follow-up Form stages _(2026-10-29)_
+
+A Follow-up Form stage sends the applicant a form built in the Forms module, so
+the department can confirm what the interest form said and ask more probing
+questions. Everything below is in `app/services/follow_up_form_service.py`.
+
+- **The link.** When an applicant arrives on the stage — however they arrive:
+  advanced, placed, moved back, opened on it, or moved off a deleted stage —
+  they are emailed a personal link to `/application-form/<token>` (template
+  **Application Follow-up Form**). Only the first arrival sends; **Send now /
+  Resend** on the applicant's page sends it again, always the same link. One
+  `prospect_form_requests` row exists per applicant per stage, enforced by a
+  unique index, so a repeated send can never issue a second link.
+- **How long it works.** Until the form is submitted, and only while the
+  application is in progress or on hold. Rejecting, withdrawing, transferring
+  or deactivating the application stops the link; reactivating it brings it
+  back with the draft intact. It is a separate credential from the status-page
+  token, which lapses after 30 days unviewed and can be switched off.
+- **Pre-fill and write-back.** A form field's **Pre-fill from applicant**
+  setting (`form_fields.applicant_field`) names an applicant-record field. The
+  form opens with the record's value, and a changed answer is written back on
+  submission. Each change is kept, encrypted, as old → new on the request and
+  shown on the applicant's page; the activity log records field names only.
+  Values the interest form stored HTML-escaped are unescaped for display and
+  comparison.
+- **Contact changes.** A changed email, phone or mobile raises a **Contact
+  details changed** flag on the applicant's card and page until a coordinator
+  marks it reviewed. An email change is applied, so later pipeline email goes
+  to the new address, and a notice goes to the **old** address (template
+  **Application Contact Details Changed**), naming what changed but never the
+  new value. An email that another open application already uses is **not**
+  applied — it is recorded for the coordinator, and the applicant is not told
+  why, since that would confirm the address belongs to an applicant.
+- **Sensitive questions.** Answers to Sensitive fields are encrypted on the
+  submission as on any form. A Sensitive field cannot also pre-fill: the Forms
+  module refuses the pair, because write-back would copy a restricted answer
+  onto a record every pipeline viewer can read.
+- **Drafts.** The page saves a draft three seconds after the applicant stops
+  typing, and on **Save and finish later**. Drafts are encrypted, and cleared
+  once the form is submitted.
+- **Purging and anonymizing.** Purging an inactive application deletes its
+  follow-up submissions with it (they sit in the Forms module, linked only
+  through the request row). Anonymizing a converted member clears each
+  request's link, draft and change log, and empties its submission.
+- **Completing the stage.** Submitting completes and advances the stage unless
+  **Advance the applicant when they submit the form** is unticked (new stages
+  store it ticked). The form is stored under `config.follow_up_form_id`, never
+  `form_id`: a stage's `form_id` creates an interest-form integration, and a
+  follow-up submission must never file a new applicant.
+
+Reminders, coordinator emails on submission, and showing answers on the
+Interview page and in the election package follow in a second change.
 
 ### Quick Presets (StageConfigModal)
 
@@ -734,6 +788,17 @@ log, not in the coordinator notes.
 | `POST`   | `/prospects/{prospect_id}/interviews` | `prospective_members.manage` | Record interview |
 | `PUT`    | `/interviews/{interview_id}`          | `prospective_members.manage` | Update interview |
 | `DELETE` | `/interviews/{interview_id}`          | `prospective_members.manage` | Delete interview |
+
+### Follow-up Form Endpoints
+
+| Method | Path                                                                          | Permission                   | Description                                    |
+| ------ | ----------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------- |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms`                                    | view                         | Forms sent, progress and record changes        |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{step_id}/send`                     | `prospective_members.manage` | Send or resend a stage's form (same link)      |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change` | `prospective_members.manage` | Clear the contact-change flag                  |
+| `GET`  | `/api/public/v1/follow-up-forms/{token}`                                      | None (link token)            | The form with pre-fill or draft; 409 once sent |
+| `PUT`  | `/api/public/v1/follow-up-forms/{token}/draft`                                | None (link token)            | Save a draft                                   |
+| `POST` | `/api/public/v1/follow-up-forms/{token}/submit`                               | None (link token)            | Submit; 400 names an answer to correct         |
 
 ### Event Link Endpoints
 

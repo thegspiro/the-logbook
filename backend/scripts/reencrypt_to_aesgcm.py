@@ -152,6 +152,7 @@ _PLAIN_COLUMNS = [
     ("inventory_vendor_contacts", "id", ["phone", "email"]),
     ("event_requests", "id", ["contact_phone", "venue_address", "contact_email"]),
     ("form_submissions", "id", ["sensitive_data"]),
+    ("prospect_form_requests", "id", ["token", "draft_data", "changes"]),
     (
         "screening_records",
         "id",

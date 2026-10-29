@@ -36,6 +36,13 @@ vi.mock('../services/api', () => ({
   eventLinkService: {
     getLinkedEvents: (...a: unknown[]) => mocks.getLinkedEvents(...a) as unknown,
   },
+  // The dialog mounts FollowUpFormsSection, which lists on open; an applicant
+  // with no follow-up forms renders nothing, so these tests are unaffected.
+  followUpFormService: {
+    list: () => Promise.resolve([]),
+    send: () => Promise.resolve(null),
+    reviewContactChange: () => Promise.resolve(null),
+  },
 }));
 
 vi.mock('../../../services/api', () => ({

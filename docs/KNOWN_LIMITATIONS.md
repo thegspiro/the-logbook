@@ -1259,6 +1259,27 @@ of `sensitive_answers.view` (see "Sensitive Fields" in
 `sensitive_answers.view` is granted to no seeded position, so a department
 that wants its membership committee to read these answers grants it by hand.
 
+## Prospective Members — Follow-up Form Links (2026-10-29)
+
+**Open, each deliberate.**
+
+- **A forwarded link shows what is pre-filled.** The link needs no sign-in, so
+  anyone the applicant forwards their email to opens the form with the address,
+  phone and date of birth it pre-fills. The token is 256 bits, the page is
+  served no-store and no-referrer, and only the fields the form maps are
+  filled — but the link is the credential, as the status-page link is.
+- **An email change reaches the new address at once.** Later pipeline emails
+  go to it as soon as the form is submitted. The safeguards are the flag on the
+  applicant's card and the notice to the old address; a change is not held for
+  approval (the owner's decision of 2026-10-25).
+- **Applicant names entered on an interest form are stored HTML-escaped.**
+  `FormsService` escapes every answer, and the interest-form mapping copies the
+  escaped text onto the applicant record, so "O'Brien" is stored as
+  `O&#x27;Brien` and the pipeline screens show it that way. Follow-up forms
+  unescape for display and comparison, and write plain text back when the
+  applicant changes a value, but records nobody has edited keep the escaped
+  text. Fixing it needs a decision on a backfill of existing records.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

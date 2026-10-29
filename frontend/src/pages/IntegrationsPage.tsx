@@ -2756,7 +2756,7 @@ const IntegrationsPage: React.FC = () => {
           )}
 
         {delegatedMcpError && !showDelegatedMcpCard && (
-          <div className="alert-error mt-6 flex items-start gap-2" role="alert" data-testid="mcp-delegated-error">
+          <div className="alert-danger mt-6 flex items-start gap-2" role="alert" data-testid="mcp-delegated-error">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm">

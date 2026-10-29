@@ -134,7 +134,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" aria-hidden="true" />
         </div>
       ) : error ? (
-        <div className="alert-error flex items-start gap-2" role="alert">
+        <div className="alert-danger flex items-start gap-2" role="alert">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>{error}</p>
         </div>

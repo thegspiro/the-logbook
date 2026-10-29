@@ -30,6 +30,7 @@ from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
 from app.api.public.event_guest import router as public_event_guest_router
 from app.api.public.finance_approvals import router as finance_approvals_router
+from app.api.public.follow_up_forms import router as public_follow_up_forms_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
@@ -2442,6 +2443,18 @@ app.include_router(
     public_event_guest_router,
     prefix="/api",
     responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
+)
+
+# Include the applicant follow-up form API (no auth — the path's token, emailed
+# by a Follow-up Form stage, is the credential; 409 once a form is submitted).
+app.include_router(
+    public_follow_up_forms_router,
+    prefix="/api",
+    responses={
+        **public_responses.TOKEN_ADDRESSED,
+        **public_responses.BAD_REQUEST,
+        **public_responses.CONFLICT,
+    },
 )
 
 # Include public calendar ICS feeds (no auth — token-protected: the per-member

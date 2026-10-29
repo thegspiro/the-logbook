@@ -378,7 +378,7 @@ const FootersPanel: React.FC = () => {
       </div>
 
       {error && (
-        <div className="alert-error flex items-start gap-3">
+        <div className="alert-danger flex items-start gap-3">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
           <p className="flex-1 text-sm">{error}</p>
           <button onClick={clearError} aria-label="Dismiss error">

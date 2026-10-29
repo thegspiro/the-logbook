@@ -724,7 +724,7 @@ const MyTrainingPage: React.FC = () => {
           {config ? (
             <ConfigEditor config={config} onSave={handleConfigSave} canManageTraining={canManageTraining} />
           ) : (
-            <div className="alert-error" role="alert">
+            <div className="alert-danger" role="alert">
               {configError ?? 'Loading the visibility settings…'}
             </div>
           )}

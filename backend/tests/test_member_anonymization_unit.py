@@ -82,6 +82,7 @@ async def test_scrub_prospect_redacts_mapped_data_and_collects_duplicates():
             _scalars([prospect]),  # prospect lookup
             _rowcount(0),  # screening scrub
             _scalars([progress_with_pii, progress_without_payload]),
+            _scalars([]),  # follow-up form requests
             _rowcount(2),  # form-submission scrub (original + duplicate)
             _rowcount(0),  # interview scrub
             _scalars([]),  # documents
@@ -126,6 +127,7 @@ async def test_prospect_screening_scrub_excludes_user_linked_rows():
             _scalars([prospect]),  # prospect lookup
             _rowcount(1),  # screening scrub (prospect-only rows)
             _scalars([]),  # step progress
+            _scalars([]),  # follow-up form requests
             _rowcount(0),  # interview scrub
             _scalars([]),  # documents
             _rowcount(0),  # document delete
@@ -152,6 +154,7 @@ async def test_submitted_by_cleared_only_for_the_anonymized_member():
             _scalars([prospect]),  # prospect lookup
             _rowcount(0),  # screening scrub
             _scalars([]),  # step progress
+            _scalars([]),  # follow-up form requests
             _rowcount(1),  # form-submission scrub
             _rowcount(0),  # interview scrub
             _scalars([]),  # documents

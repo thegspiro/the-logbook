@@ -269,6 +269,18 @@ export interface MedicalScreeningStageConfig {
   auto_advance?: boolean | undefined;
 }
 
+/**
+ * A Follow-up Form stage. The form is named under its own key, not
+ * `form_id`: the backend turns any stage's `form_id` into an interest-form
+ * integration, and a follow-up submission must never file a new applicant.
+ */
+export interface FollowUpFormStageConfig {
+  follow_up_form_id: string;
+  follow_up_form_name?: string | undefined;
+  custom_message?: string | undefined;
+  auto_advance?: boolean | undefined;
+}
+
 export type StageConfig =
   | FormStageConfig
   | DocumentStageConfig
@@ -281,7 +293,8 @@ export type StageConfig =
   | ChecklistConfig
   | InterviewRequirementConfig
   | MultiApprovalConfig
-  | MedicalScreeningStageConfig;
+  | MedicalScreeningStageConfig
+  | FollowUpFormStageConfig;
 
 /**
  * The config every stage type starts from, and the shape a reader falls back to
@@ -349,6 +362,12 @@ export const DEFAULT_STAGE_CONFIGS: Record<StageType, () => StageConfig> = {
     required_screenings: ['physical_exam'],
     require_all_passed: true,
   }),
+  follow_up_form: () => ({
+    follow_up_form_id: '',
+    follow_up_form_name: '',
+    custom_message: '',
+    auto_advance: true,
+  }),
 };
 
 /** The default config for a stage type, safe for an unknown/legacy value. */
@@ -359,6 +378,81 @@ export function defaultStageConfig(stageType: StageType): StageConfig {
 // =============================================================================
 // Pipeline Stage
 // =============================================================================
+
+// =============================================================================
+// Follow-up Forms
+// =============================================================================
+
+/** One applicant-record value a follow-up submission changed. */
+export interface FollowUpChange {
+  field: string;
+  label: string;
+  old?: string | null | undefined;
+  new?: string | null | undefined;
+  /** False when the record was left as it was (an email another open application uses). */
+  applied: boolean;
+}
+
+/** A field of a follow-up form, as the applicant's page renders it. */
+export interface PublicFollowUpFormField {
+  id: string;
+  label: string;
+  field_type: string;
+  placeholder?: string | null | undefined;
+  help_text?: string | null | undefined;
+  required: boolean;
+  min_length?: number | null | undefined;
+  max_length?: number | null | undefined;
+  min_value?: number | null | undefined;
+  max_value?: number | null | undefined;
+  options?: { value: string; label: string }[] | null | undefined;
+  condition_field_id?: string | null | undefined;
+  condition_operator?: string | null | undefined;
+  condition_value?: string | null | undefined;
+  sort_order: number;
+  width: string;
+  is_sensitive: boolean;
+}
+
+/** What the applicant's link opens: the form, filled with what is known. */
+export interface PublicFollowUpForm {
+  form_name: string;
+  form_description?: string | null | undefined;
+  organization_name?: string | null | undefined;
+  applicant_first_name: string;
+  fields: PublicFollowUpFormField[];
+  /** The saved draft, or what the applicant record holds, by field id. */
+  values: Record<string, string>;
+  draft_saved_at?: string | null | undefined;
+}
+
+export const FollowUpFormStatus = {
+  NOT_SENT: 'not_sent',
+  SENT: 'sent',
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+} as const;
+export type FollowUpFormStatus = (typeof FollowUpFormStatus)[keyof typeof FollowUpFormStatus];
+
+/** A follow-up form sent to an applicant (snake_case, as the API sends it). */
+export interface FollowUpFormRequest {
+  id: string;
+  prospect_id: string;
+  step_id?: string | null | undefined;
+  step_name?: string | null | undefined;
+  form_id?: string | null | undefined;
+  form_name?: string | null | undefined;
+  status: FollowUpFormStatus;
+  first_sent_at?: string | null | undefined;
+  last_sent_at?: string | null | undefined;
+  draft_saved_at?: string | null | undefined;
+  submitted_at?: string | null | undefined;
+  submission_id?: string | null | undefined;
+  changes: FollowUpChange[];
+  contact_changed: boolean;
+  contact_change_reviewed_at?: string | null | undefined;
+  contact_change_reviewed_by_name?: string | null | undefined;
+}
 
 // =============================================================================
 // Report Stage Groups
@@ -628,6 +722,8 @@ export interface ApplicantListItem {
   deactivated_at?: string | undefined;
   withdrawn_at?: string | undefined;
   withdrawal_reason?: string | undefined;
+  /** A follow-up form changed their email or phone, and nobody has reviewed it. */
+  contact_change_pending?: boolean | undefined;
   created_at: string;
 }
 
@@ -1156,6 +1252,7 @@ export interface BackendProspectResponse {
 
 /** Backend prospect list item response (ProspectListResponse schema). */
 export interface BackendProspectListResponse {
+  contact_change_pending?: boolean | undefined;
   target_role_name: string | null;
   deactivated_at: string | null;
   withdrawn_at: string | null;
