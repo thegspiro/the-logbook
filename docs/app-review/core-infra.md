@@ -1,7 +1,62 @@
 # Application Review — Core Infrastructure (Tier B)
 
 **Prefix:** `CI2` · **Iteration:** B24 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-29 (pass 5)
+
+## Pass 5 (2026-10-29) — the shared null-refusal base class had no test of its own (1 gap closed)
+
+This module is foundation code with no endpoints and no update routes, so the
+update-payload method of B18–B22 and the state-machine lens of B23 had nothing to drive.
+The pass looked instead at what the earlier passes of this rotation added to the
+foundation, and at the new pitfalls (#9, #33, #34, #36).
+
+### CI2-1 — LOW — `RefusesNull` was covered only by other modules' integration tests — ✅ FIXED
+
+`RefusesNull` (`schemas/base.py`) is the one place an explicit `null` that a handler
+would acknowledge and ignore, or store and then fail to serialize, becomes a 422. It now
+has 17 subclasses across training, scheduling, roles, users and skills. Nothing under
+`tests/` named it: its behaviour was exercised only through those modules' integration
+files, which do not run in the unit job, and nothing checked that a subclass's
+`null_refused` list names real fields. A typo there refuses nothing and reads as
+protection.
+
+**Closed** with `tests/test_refuses_null.py` (42 tests, marked `unit`, DB-free): the four
+behaviours (a listed field refuses `null` and the error names it, an unlisted field still
+takes `null`, an omitted key is untouched, a value is kept) and a sweep over every
+subclass asserting each listed name is a field and each subclass lists something. The
+sweep found no existing typo. It has teeth: with one name misspelled in `RoleUpdate` it
+fails with "RoleUpdate lists non-fields: ['nmae']", and passes again once restored.
+
+### Checked and left alone
+
+- **`utils/db_retry.py`**: `with_db_retry` and `retry_on_db_error` are used by no
+  application code; only `is_transient_db_error` is (`dependencies.py`, `auth_service.py`).
+  Pitfall #36 names them as an existing mechanism for reads, so they were kept, and their
+  docstring now says what the pitfall does: a `2013 Lost connection` can arrive after the
+  statement committed, so wrapping a write can apply it twice. **OPEN** for the owner:
+  keep them as a documented read helper, or delete them with their 16 tests and the
+  pitfall's table row.
+- **In-memory caches (pitfall #9)**: the six module-level dicts found
+  (`branding_service`, `upload_encryption`, `file_storage_service`, the two OAuth caches)
+  are keyed by a fixed set or an `OrderedDict` with a cap; none grows without bound.
+- **Dependency pins (pitfall #34)**: `requirements.txt` pins every package with `==`
+  except `tzdata>=`, which is deliberate for a data package; `package.json` follows its
+  own caret convention.
+
+### Not done
+
+- The six checklist dimensions other than the above were not re-run; passes 1–4 stand,
+  including **CI-9**, **CI-4**'s full fail-closed decrypt, **CI-11** and the **CI-10**
+  residual, all still gated on ops, config or migration work.
+
+**Completion gate (pass 5):** `flake8 app/ tests/` 0 · `black --check app/ tests/` clean ·
+no frontend change · new `test_refuses_null.py` 42 pass, all collected under the unit
+job's marker expression · 1,007 tests selected by
+`core_|_core|model_updates|refuses|db_retry|encrypt|csv|middleware|config|log_call|logging`
+pass.
+
+---
 
 ## Pass 4 (2026-08-09) — invariants re-verified, no code change
 
