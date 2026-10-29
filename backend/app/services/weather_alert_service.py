@@ -94,7 +94,7 @@ async def active_alerts(
                     WeatherAlert.organization_id == str(organization_id),
                     WeatherAlert.ended_at.is_(None),
                 )
-                .order_by(WeatherAlert.first_seen_at.desc())
+                .order_by(WeatherAlert.created_at.desc())
             )
         )
         .scalars()

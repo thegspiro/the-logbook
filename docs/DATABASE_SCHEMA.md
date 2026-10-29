@@ -5192,7 +5192,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `area_desc` | TEXT | yes |  |  |  |
 | `onset` | DATETIME | yes |  |  |  |
 | `expires` | DATETIME | yes |  |  |  |
-| `first_seen_at` | DATETIME | no |  | `now()` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
 | `ended_at` | DATETIME | yes |  |  |  |
 
 **Indexes**

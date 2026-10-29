@@ -172,7 +172,8 @@ class WeatherAlert(Base):
     expires: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    first_seen_at: Mapped[datetime] = mapped_column(
+    # When the alert was first seen: the row is created then.
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     ended_at: Mapped[Optional[datetime]] = mapped_column(

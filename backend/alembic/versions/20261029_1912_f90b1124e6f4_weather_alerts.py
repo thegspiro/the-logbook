@@ -57,7 +57,7 @@ def upgrade() -> None:
         sa.Column("onset", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "first_seen_at",
+            "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.func.now(),
