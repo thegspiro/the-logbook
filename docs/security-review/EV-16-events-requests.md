@@ -16,9 +16,9 @@ fixed),
 fixed),
 [#3748](https://github.com/thegspiro/the-logbook/pull/3748) (pass 11, 0
 fixed, 0 flagged — new public guest-link surface reviewed clean),
-**PR pending** (pass 12, watchdog pickup, 0 fixed, 0 flagged — two
-authorization-widening commits reviewed clean against all seven checklist
-dimensions)
+[#3841](https://github.com/thegspiro/the-logbook/pull/3841) (pass 12,
+watchdog pickup, 0 fixed, 0 flagged — two authorization-widening commits
+reviewed clean against all seven checklist dimensions)
 
 **Backend:** `api/v1/endpoints/events.py` (61 routes, unchanged — a large
 in-route diff this pass widens who may reach nine existing attendance routes

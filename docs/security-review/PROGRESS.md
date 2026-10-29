@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** (branch `claude/security-review-events-requests-p12`) —
+**PR [#3841](https://github.com/thegspiro/the-logbook/pull/3841)** (branch
+`claude/security-review-events-requests-p12`) —
 Feature 16 (Events & requests), pass 12, a watchdog pickup. Dedicated
 `/loop 30m /security-review` session remains unreachable. PR #3840
 (Feature 15, Scheduling, pass 12) had already merged (`731396b9`).
