@@ -19,7 +19,7 @@ import {
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
-import { Pagination, EmptyState } from '../components/ux';
+import { Pagination, EmptyState, SkeletonText } from '../components/ux';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
@@ -157,29 +157,32 @@ const AuditLogPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Stats */}
-      {stats && (
+      {/* Stats. Drawn while they load, placeholders where the figures go:
+          appearing with them pushed the filters and the log ~190px down. */}
+      {(stats || loading) && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total events</p>
-            <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">{stats.total}</p>
+            <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">
+              {stats ? stats.total : <SkeletonText className="w-10" />}
+            </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Critical</p>
             <p className="mt-1 text-2xl font-bold text-red-700 sm:text-3xl dark:text-red-400">
-              {stats.by_severity.critical ?? 0}
+              {stats ? (stats.by_severity.critical ?? 0) : <SkeletonText className="w-10" />}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Warnings</p>
             <p className="mt-1 text-2xl font-bold text-amber-700 sm:text-3xl dark:text-amber-400">
-              {stats.by_severity.warning ?? 0}
+              {stats ? (stats.by_severity.warning ?? 0) : <SkeletonText className="w-10" />}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Info</p>
             <p className="mt-1 text-2xl font-bold text-blue-700 sm:text-3xl dark:text-blue-400">
-              {stats.by_severity.info ?? 0}
+              {stats ? (stats.by_severity.info ?? 0) : <SkeletonText className="w-10" />}
             </p>
           </div>
         </div>

@@ -15,6 +15,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.audit import log_audit_event
 from app.core.permissions import is_built_in_rank_code, is_seeded_for, label_for
+from app.core.utils import list_within_detail_limit
 from app.models.inventory import InventoryImpactPlan
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode
@@ -544,11 +545,13 @@ class OperationalRankService:
             .all()
         )
         if seats:
-            named = ", ".join(f"'{title}'" for title in seats)
             raise ValueError(
-                f"Cannot delete rank '{rank.display_name}' while org chart seats "
-                f"use it: {named}. Link those seats to another rank or position "
-                "first."
+                list_within_detail_limit(
+                    f"Cannot delete rank '{rank.display_name}' while org chart "
+                    "seats use it: ",
+                    [f"'{title}'" for title in seats],
+                    ". Link those seats to another rank or position first.",
+                )
             )
 
         try:

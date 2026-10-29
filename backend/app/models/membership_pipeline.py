@@ -30,6 +30,7 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 from app.core.encrypted_types import (
     EncryptedDate,
+    EncryptedJSON,
     EncryptedText,
     keep_email_fingerprint,
 )
@@ -61,6 +62,7 @@ class PipelineStepType(str, enum.Enum):
     INTERVIEW_REQUIREMENT = "interview_requirement"
     MULTI_APPROVAL = "multi_approval"
     MEDICAL_SCREENING = "medical_screening"
+    FOLLOW_UP_FORM = "follow_up_form"
 
 
 class ActionType(str, enum.Enum):
@@ -898,6 +900,120 @@ class ProspectEventLink(Base):
             unique=True,
         ),
     )
+
+
+class ProspectFormRequest(Base):
+    """A follow-up form sent to one applicant from one Follow-up Form stage.
+
+    The applicant opens it from an emailed link that needs no sign-in, so the
+    link's token is a bearer credential, stored like the status-page token:
+    ``token_hash`` (SHA-256) is the only column a lookup matches on, and
+    ``token`` is kept encrypted only so a resend can repeat the same link. It
+    is a separate credential from the status-page token on purpose: that one
+    lapses after 30 days without a view and can be switched off per pipeline,
+    and this link must keep working until the form is submitted.
+
+    One row per applicant per stage (``uq_prospect_form_request_step``): the
+    stage-entry send and the coordinator's Send now both resolve to it, so a
+    retried or repeated send repeats the same link and never issues a second
+    one (CLAUDE.md pitfall #36).
+    """
+
+    __tablename__ = "prospect_form_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    prospect_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # SET NULL rather than CASCADE: deleting a stage must not erase what an
+    # applicant already submitted. A request with no stage no longer accepts
+    # answers, and is kept as history.
+    step_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    form_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("forms.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    token: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    first_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Answers saved before submitting, sensitive ones included, so the whole
+    # draft is encrypted rather than split the way a submission is.
+    draft_data: Mapped[Optional[dict[str, Any]]] = mapped_column(EncryptedJSON)
+    draft_saved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    submission_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("form_submissions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # What the submission changed on the applicant record:
+    # [{"field", "old", "new"}]. Encrypted, because the values are the
+    # applicant's own contact and address details.
+    changes: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(EncryptedJSON)
+    # Set when the submission changed the email, phone or mobile on file;
+    # cleared from view once a coordinator records the review.
+    contact_changed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    contact_change_reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    contact_change_reviewed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    prospect: Mapped["ProspectiveMember"] = relationship(
+        "ProspectiveMember", backref="form_requests"
+    )
+    step: Mapped[Optional["MembershipPipelineStep"]] = relationship(
+        "MembershipPipelineStep"
+    )
+
+    __table_args__ = (
+        Index("uq_prospect_form_request_step", "prospect_id", "step_id", unique=True),
+        Index("uq_prospect_form_request_token_hash", "token_hash", unique=True),
+        Index("idx_prospect_form_request_org", "organization_id"),
+    )
+
+    @validates("token")
+    def _sync_token_hash(self, _key: str, token: str | None) -> str | None:
+        self.token_hash = ProspectiveMember.hash_status_token(token) if token else None
+        return token
+
+    @property
+    def is_submitted(self) -> bool:
+        return self.submitted_at is not None
+
+    def __repr__(self):
+        return (
+            f"<ProspectFormRequest(prospect={self.prospect_id}, step={self.step_id})>"
+        )
 
 
 keep_email_fingerprint(ProspectiveMember.email, "email_hash")

@@ -237,7 +237,7 @@ const OrgChartPage: React.FC = () => {
       />
 
       {error ? (
-        <p className="alert-error text-sm" role="alert">
+        <p className="alert-danger text-sm" role="alert">
           {error}
         </p>
       ) : null}

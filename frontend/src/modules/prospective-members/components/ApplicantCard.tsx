@@ -63,6 +63,13 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick
         </div>
       )}
 
+      {applicant.contact_change_pending && (
+        <div className="mb-2 flex items-center gap-1.5 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span>Contact details changed</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-2 flex items-start justify-between">
         <div className="flex items-center gap-2.5">

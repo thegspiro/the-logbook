@@ -1,5 +1,15 @@
 # Screenshot currency
 
+## Queued by the October 28 – 29 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28--29-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 11 | Record a dues payment above the amount owed: **Record the extra as a donation?** with **Record with donation** and **Change the amount** | Create |
+| 08 | `08-94-portal-data-control`: the stats fields' new descriptions | Re-check |
+
 ## Queued by the October 28 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).

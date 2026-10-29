@@ -32,6 +32,17 @@ export const Skeleton: React.FC<SkeletonProps> = ({ className = '', width, heigh
   );
 };
 
+/**
+ * A placeholder for a value inside a line of text — a figure under a stat
+ * label, an event name in a subtitle. A `<span>`, so it is valid inside a
+ * heading or a paragraph, and it sits on the line the real text will occupy:
+ * the parent's font size sets the line height, so the box is the same height
+ * loaded or not and nothing below it moves when the value arrives.
+ */
+export const SkeletonText: React.FC<{ className?: string }> = ({ className = 'w-16' }) => (
+  <span className={`shimmer-skeleton inline-block h-[0.8em] rounded align-middle ${className}`} aria-hidden="true" />
+);
+
 /** Skeleton row for table loading states */
 export const SkeletonRow: React.FC<{ columns?: number }> = ({ columns = 5 }) => (
   <div className="flex items-center gap-4 p-4">

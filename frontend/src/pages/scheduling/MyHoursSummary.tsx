@@ -174,7 +174,7 @@ export const MyHoursSummary: React.FC = () => {
 
   if (error && !history) {
     return (
-      <div className="alert-error flex items-start gap-2" role="alert">
+      <div className="alert-danger flex items-start gap-2" role="alert">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <div>
           <p>{error}</p>

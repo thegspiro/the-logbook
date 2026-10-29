@@ -661,6 +661,43 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             ),
         },
     ],
+    "application_follow_up_form": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "form_name", "description": "Name of the follow-up form"},
+        {
+            "name": "form_url",
+            "description": "The applicant's personal link to the form",
+        },
+        {
+            "name": "custom_message",
+            "description": "The stage's custom message, as written",
+        },
+        {
+            "name": "custom_message_html",
+            "description": (
+                "The stage's custom message as a paragraph, omitted entirely "
+                "when the stage has none"
+            ),
+        },
+        {
+            "name": "custom_message_text",
+            "description": (
+                "The stage's custom message followed by a blank line, omitted "
+                "entirely when the stage has none (for the plain-text body)"
+            ),
+        },
+    ],
+    "application_contact_changed": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "changed_details",
+            "description": (
+                'What changed, in words ("email address"). Never the new value'
+            ),
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1345,6 +1382,26 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "custom_message_text": "Your interview will be scheduled next.\n\n",
         }
     ),
+    "application_follow_up_form": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "form_name": "Background Questionnaire",
+            "form_url": "https://example.com/application-form/sample-token",
+            "custom_message": "Please complete this before your interview.",
+            "custom_message_html": (
+                "<p>Please complete this before your interview.</p>"
+            ),
+            "custom_message_text": "Please complete this before your interview.\n\n",
+        }
+    ),
+    "application_contact_changed": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "changed_details": "email address",
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1594,6 +1651,8 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_step_completed": {"first_name": "first", "applicant_name": "full"},
     "application_status_link": {"first_name": "first", "applicant_name": "full"},
     "application_going_inactive": {"first_name": "first", "applicant_name": "full"},
+    "application_follow_up_form": {"first_name": "first", "applicant_name": "full"},
+    "application_contact_changed": {"first_name": "first", "applicant_name": "full"},
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -2606,6 +2665,72 @@ DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT = (
     "Your application with {{organization_name}} is going inactive"
 )
 
+# Sent by a Follow-up Form stage with the applicant's personal link to the
+# form. The link works until the form is submitted, so the email says nothing
+# about it expiring.
+DEFAULT_APPLICATION_FOLLOW_UP_FORM_HTML = build_shell(
+    "A Form for Your Membership Application",
+    """        <p>Hi {{first_name}},</p>
+        {{custom_message_html}}
+        <p>The next step in your membership application with
+        {{organization_name}} is a short form: <strong>{{form_name}}</strong>.
+        We have filled in what we already know, so please check it and correct
+        anything that has changed. Your answers are saved as you go, so you can
+        finish it later.</p>
+""" + action("{{form_url}}", "Open the Form"),
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_FOLLOW_UP_FORM_TEXT = """A Form for Your Membership Application
+
+Hi {{first_name}},
+
+{{custom_message_text}}The next step in your membership application with
+{{organization_name}} is a short form: {{form_name}}. We have filled in what
+we already know, so please check it and correct anything that has changed.
+Your answers are saved as you go, so you can finish it later.
+
+Open the form: {{form_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_FOLLOW_UP_FORM_SUBJECT = (
+    "{{form_name}}: the next step in your application"
+)
+
+# Sent to the address an applicant's application used to have, after a
+# follow-up form changed it. It names what changed
+# and never the new value: if somebody else changed it, this is how the real
+# applicant finds out, and it must not hand the impostor's details to them or
+# the impostor's address to anyone reading the old mailbox.
+DEFAULT_APPLICATION_CONTACT_CHANGED_HTML = build_shell(
+    "Your Contact Details Were Changed",
+    """        <p>Hi {{first_name}},</p>
+        <p>The {{changed_details}} on your membership application with
+        {{organization_name}} was just changed through a follow-up form.</p>
+        <p>If you made this change, there is nothing more to do. If you did
+        not, please contact the department right away.</p>""",
+    accent=ACCENT_AMBER,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_CONTACT_CHANGED_TEXT = """Your Contact Details Were Changed
+
+Hi {{first_name}},
+
+The {{changed_details}} on your membership application with
+{{organization_name}} was just changed through a follow-up form.
+
+If you made this change, there is nothing more to do. If you did not, please
+contact the department right away.
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_CONTACT_CHANGED_SUBJECT = (
+    "The contact details on your application were changed"
+)
+
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
 # department's control for good, so the text stays in the application. An
@@ -3464,6 +3589,11 @@ ALWAYS_SENT_TYPES: frozenset = frozenset(
         EmailTemplateType.WELCOME,
         EmailTemplateType.BALLOT_NOTIFICATION,
         EmailTemplateType.APPLICATION_STATUS_LINK,
+        # The form link and the old-address notice: the first is the only way
+        # the applicant reaches the form, the second the only warning of an
+        # address taken over through a forwarded link.
+        EmailTemplateType.APPLICATION_FOLLOW_UP_FORM,
+        EmailTemplateType.APPLICATION_CONTACT_CHANGED,
     }
 )
 
@@ -4689,6 +4819,30 @@ class EmailTemplateService:
             "description": (
                 "Sent to an applicant by an Enable Status Page stage, with "
                 "the private link to follow their application online."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_FOLLOW_UP_FORM,
+            "footer": "public",
+            "name": "Application Follow-up Form",
+            "subject": DEFAULT_APPLICATION_FOLLOW_UP_FORM_SUBJECT,
+            "html": DEFAULT_APPLICATION_FOLLOW_UP_FORM_HTML,
+            "text": DEFAULT_APPLICATION_FOLLOW_UP_FORM_TEXT,
+            "description": (
+                "Sent to an applicant by a Follow-up Form stage, with their "
+                "personal link to the form."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_CONTACT_CHANGED,
+            "footer": "public",
+            "name": "Application Contact Details Changed",
+            "subject": DEFAULT_APPLICATION_CONTACT_CHANGED_SUBJECT,
+            "html": DEFAULT_APPLICATION_CONTACT_CHANGED_HTML,
+            "text": DEFAULT_APPLICATION_CONTACT_CHANGED_TEXT,
+            "description": (
+                "Sent to an applicant's previous email address when a "
+                "follow-up form changes it."
             ),
         },
         {

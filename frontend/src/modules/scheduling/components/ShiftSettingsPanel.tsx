@@ -31,6 +31,7 @@ import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
 import { OutsideApparatusSettings } from './OutsideApparatusSettings';
+import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
 
 /**
  * The three ways a department can record call volume.
@@ -123,6 +124,11 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   // `!== false`: the feature ships on, so a response that predates the field
   // (an older backend mid-deploy) reads as on, matching what the server does.
   const preShiftWorkEnabled = feature?.pre_shift_work_enabled !== false;
+  // Four of the General cards are drawn only once these arrive, above the
+  // template and defaults cards, so those wait for the answer rather than
+  // being pushed down by it (see useFirstLoadHold).
+  const [featureSettled, setFeatureSettled] = useState(false);
+  const holdGeneral = useFirstLoadHold(!featureSettled);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -131,6 +137,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         if (!cancelled) setFeature(fs);
       } catch {
         // Non-critical — the panel still renders the local template settings.
+      } finally {
+        if (!cancelled) setFeatureSettled(true);
       }
     })();
     return () => {
@@ -244,7 +252,11 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     <div className="space-y-6">
       {/* ─── General Tab ─── */}
       {activeTab === 'general' && (
-        <div className="space-y-6">
+        // While held, everything after the platoon card — its first child — is invisible.
+        <div
+          data-testid="general-settings"
+          className={`space-y-6 ${holdGeneral ? '[&>*:not(:first-child)]:invisible' : ''}`}
+        >
           <div className="card-secondary p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>

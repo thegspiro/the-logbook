@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Users,
   Stethoscope,
+  ClipboardPen,
 } from 'lucide-react';
 import type { StageType, ApplicantStatus } from './types';
 
@@ -27,6 +28,7 @@ export const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   interview_requirement: MessageSquare,
   multi_approval: Users,
   medical_screening: Stethoscope,
+  follow_up_form: ClipboardPen,
 };
 
 /**
@@ -46,6 +48,7 @@ export const STAGE_TYPE_HUE: Record<StageType, string> = {
   interview_requirement: 'indigo',
   multi_approval: 'lime',
   medical_screening: 'pink',
+  follow_up_form: 'violet',
 };
 
 /** Badge style: text + bg for stage type labels/pills. */
@@ -62,6 +65,7 @@ export const STAGE_TYPE_COLORS: Record<StageType, string> = {
   interview_requirement: 'text-indigo-700 dark:text-indigo-400 bg-indigo-500/10',
   multi_approval: 'text-lime-800 dark:text-lime-400 bg-lime-500/10',
   medical_screening: 'text-pink-700 dark:text-pink-400 bg-pink-500/10',
+  follow_up_form: 'text-violet-700 dark:text-violet-400 bg-violet-500/10',
 };
 
 /** Border-only accent color for kanban column headers. */
@@ -78,6 +82,7 @@ export const STAGE_HEADER_COLORS: Record<StageType, string> = {
   interview_requirement: 'border-indigo-500',
   multi_approval: 'border-lime-500',
   medical_screening: 'border-pink-500',
+  follow_up_form: 'border-violet-500',
 };
 
 /** Stage type human-readable labels. */
@@ -94,6 +99,7 @@ export const STAGE_TYPE_LABELS: Record<StageType, string> = {
   interview_requirement: 'Interview Requirement',
   multi_approval: 'Multi-Signer Approval',
   medical_screening: 'Medical Screening',
+  follow_up_form: 'Follow-up Form',
 };
 
 export const APPLICANT_STATUS_COLORS: Record<ApplicantStatus, string> = {

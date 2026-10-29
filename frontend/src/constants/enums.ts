@@ -497,6 +497,7 @@ export const StageType = {
   INTERVIEW_REQUIREMENT: 'interview_requirement',
   MULTI_APPROVAL: 'multi_approval',
   MEDICAL_SCREENING: 'medical_screening',
+  FOLLOW_UP_FORM: 'follow_up_form',
 } as const;
 export type StageType = (typeof StageType)[keyof typeof StageType];
 

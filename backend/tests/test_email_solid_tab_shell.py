@@ -74,6 +74,8 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.APPLICATION_STEP_COMPLETED.value: "08e6220f2dce",
     EmailTemplateType.APPLICATION_STATUS_LINK.value: "08e6220f2dce",
     EmailTemplateType.APPLICATION_GOING_INACTIVE.value: "0d9897752425",
+    EmailTemplateType.APPLICATION_FOLLOW_UP_FORM.value: "f34e25e2c820",
+    EmailTemplateType.APPLICATION_CONTACT_CHANGED.value: "f34e25e2c820",
 }
 
 

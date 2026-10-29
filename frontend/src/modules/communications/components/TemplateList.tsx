@@ -51,6 +51,7 @@ import {
   PackageCheck,
   BadgeCheck,
   Link2,
+  ClipboardPen,
 } from 'lucide-react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
@@ -102,6 +103,16 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     icon: Link2,
     label: 'Application Status Link',
     color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_follow_up_form: {
+    icon: ClipboardPen,
+    label: 'Application Follow-up Form',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_contact_changed: {
+    icon: ShieldAlert,
+    label: 'Application Contact Details Changed',
+    color: 'text-amber-700 dark:text-amber-600',
   },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
   equipment_request_update: {
@@ -172,6 +183,8 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'application_step_completed',
       'application_status_link',
       'application_going_inactive',
+      'application_follow_up_form',
+      'application_contact_changed',
     ],
   },
   {

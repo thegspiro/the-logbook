@@ -130,7 +130,11 @@ export function AdminHubCardTabs<K extends string>({
             // (Label in Name) — "click Catalog" has to match — and hiding that
             // text with aria-hidden does not help, since what is measured is
             // what is seen. The button's ::after spans the card, so the whole
-            // card still takes the tap.
+            // card still takes the tap. Its visibility is its own, not
+            // inherited: an admin hub draws these cards invisible until its
+            // first summary settles (AdminHubFrame), and WebKit left the
+            // pseudo-element hidden after the card became visible again, so
+            // in Safari a tap on the description fell through to it.
             <div
               key={tab.id}
               role="presentation"
@@ -154,7 +158,7 @@ export function AdminHubCardTabs<K extends string>({
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => onTabChange(tab.id)}
                 onKeyDown={(event) => handleKeyDown(event, tab.id)}
-                className={`flex min-h-11 items-center gap-2 p-2.5 text-left whitespace-nowrap after:absolute after:inset-0 after:rounded-lg focus:outline-hidden sm:flex-col sm:items-start sm:p-3 sm:pb-2 sm:whitespace-normal ${
+                className={`flex min-h-11 items-center gap-2 p-2.5 text-left whitespace-nowrap after:visible after:absolute after:inset-0 after:rounded-lg focus:outline-hidden sm:flex-col sm:items-start sm:p-3 sm:pb-2 sm:whitespace-normal ${
                   count > 0 ? 'pr-11 sm:pr-3' : ''
                 }`}
               >

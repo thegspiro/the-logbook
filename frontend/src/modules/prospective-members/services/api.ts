@@ -68,6 +68,8 @@ import type {
   InactivityAlertLevel,
   CurrentStageAction,
   NextMeeting,
+  FollowUpFormRequest,
+  PublicFollowUpForm,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus, defaultStageConfig } from '../types';
 import { StageType as StageTypeConst } from '../../../constants/enums';
@@ -104,6 +106,8 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
       return { step_type: 'multi_approval' };
     case StageTypeConst.MEDICAL_SCREENING:
       return { step_type: 'medical_screening' };
+    case StageTypeConst.FOLLOW_UP_FORM:
+      return { step_type: 'follow_up_form' };
     case StageTypeConst.MANUAL_APPROVAL:
     default:
       return { step_type: 'manual_approval' };
@@ -153,6 +157,8 @@ function mapStepTypeToFrontend(
       return StageTypeConst.MULTI_APPROVAL;
     case 'medical_screening':
       return StageTypeConst.MEDICAL_SCREENING;
+    case 'follow_up_form':
+      return StageTypeConst.FOLLOW_UP_FORM;
   }
   // Legacy format: step_type='action' with action_type disambiguation
   if (stepType === 'action') {
@@ -422,6 +428,7 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     deactivated_at: data.deactivated_at || undefined,
     withdrawn_at: data.withdrawn_at || undefined,
     withdrawal_reason: data.withdrawal_reason || undefined,
+    contact_change_pending: data.contact_change_pending ?? false,
     created_at: data.created_at,
   };
 }
@@ -1229,6 +1236,34 @@ export const publicStatusService = {
   },
 };
 
+/**
+ * The applicant's follow-up form, reached through the personal link a
+ * Follow-up Form stage emails. Unauthenticated: the token is the credential,
+ * so these use bare axios rather than the signed-in client.
+ */
+export const publicFollowUpFormService = {
+  async getForm(token: string): Promise<PublicFollowUpForm> {
+    const response = await axios.get<PublicFollowUpForm>(`/api/public/v1/follow-up-forms/${encodeURIComponent(token)}`);
+    return response.data;
+  },
+
+  async saveDraft(token: string, data: Record<string, string>): Promise<{ draft_saved_at: string }> {
+    const response = await axios.put<{ draft_saved_at: string }>(
+      `/api/public/v1/follow-up-forms/${encodeURIComponent(token)}/draft`,
+      { data }
+    );
+    return response.data;
+  },
+
+  async submit(token: string, data: Record<string, string>): Promise<{ submitted_at: string; message: string }> {
+    const response = await axios.post<{ submitted_at: string; message: string }>(
+      `/api/public/v1/follow-up-forms/${encodeURIComponent(token)}/submit`,
+      { data }
+    );
+    return response.data;
+  },
+};
+
 // =============================================================================
 // Interview Service
 // =============================================================================
@@ -1257,6 +1292,31 @@ export const interviewService = {
 // =============================================================================
 // Event Link Service
 // =============================================================================
+
+/** Follow-up forms sent to an applicant by Follow-up Form stages. */
+export const followUpFormService = {
+  async list(applicantId: string): Promise<FollowUpFormRequest[]> {
+    const response = await api.get<FollowUpFormRequest[]>(
+      `/prospective-members/prospects/${applicantId}/follow-up-forms`
+    );
+    return asArray(response.data);
+  },
+
+  /** Send, or resend, a stage's form. A resend repeats the same link. */
+  async send(applicantId: string, stepId: string): Promise<FollowUpFormRequest> {
+    const response = await api.post<FollowUpFormRequest>(
+      `/prospective-members/prospects/${applicantId}/follow-up-forms/${stepId}/send`
+    );
+    return response.data;
+  },
+
+  async reviewContactChange(applicantId: string, requestId: string): Promise<FollowUpFormRequest> {
+    const response = await api.post<FollowUpFormRequest>(
+      `/prospective-members/prospects/${applicantId}/follow-up-forms/${requestId}/review-contact-change`
+    );
+    return response.data;
+  },
+};
 
 export const eventLinkService = {
   /**

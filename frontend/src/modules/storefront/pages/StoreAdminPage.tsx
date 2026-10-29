@@ -549,10 +549,19 @@ const StoreAdminPage: React.FC = () => {
               be turned away is worse than no link: it reads as a permission
               problem with the member rather than a module the department chose
               not to run. */}
-          {inventoryOn && (
+          {/* Held in place, invisible, while the lookup is in flight: on a phone
+              it is what wraps the header's actions onto a second row, and
+              arriving afterwards it pushed the whole page down 56px. An
+              invisible link cannot be clicked, so the refusal above still
+              cannot be reached. */}
+          {(inventoryOn || modulesLoading) && (
             <Link
               to="/inventory/admin"
-              className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
+              aria-hidden={modulesLoading || undefined}
+              tabIndex={modulesLoading ? -1 : undefined}
+              className={`text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm ${
+                modulesLoading ? 'invisible' : ''
+              }`}
             >
               <ArrowLeft className="h-4 w-4" />
               Inventory

@@ -229,6 +229,16 @@ class FormsService:
         "un-marked, because that would decrypt those answers into plain text."
     )
 
+    SENSITIVE_PREFILL_REFUSED_ERROR = (
+        "A field marked Sensitive cannot pre-fill from the applicant record: "
+        "the applicant's answer would be written back onto that record, which "
+        "everyone with pipeline access can read."
+    )
+
+    @staticmethod
+    def _prefill_conflict(is_sensitive: Any, applicant_field: Any) -> bool:
+        return bool(is_sensitive) and bool(applicant_field)
+
     SENSITIVE_INTEGRATION_WARNING = (
         "Answers to the fields marked Sensitive ({labels}) are kept only on "
         "the encrypted submission. This form feeds another module, which "
@@ -749,6 +759,11 @@ class FormsService:
                     )
                     if condition_error:
                         return None, condition_error
+                    if self._prefill_conflict(
+                        field_data.get("is_sensitive"),
+                        field_data.get("applicant_field"),
+                    ):
+                        return None, self.SENSITIVE_PREFILL_REFUSED_ERROR
 
             form = Form(
                 organization_id=organization_id, created_by=created_by, **form_data
@@ -1260,6 +1275,10 @@ class FormsService:
             )
             if condition_error:
                 return None, condition_error
+            if self._prefill_conflict(
+                field_data.get("is_sensitive"), field_data.get("applicant_field")
+            ):
+                return None, self.SENSITIVE_PREFILL_REFUSED_ERROR
 
             # Auto-set sort_order if not provided
             if "sort_order" not in field_data or field_data["sort_order"] is None:
@@ -1326,6 +1345,12 @@ class FormsService:
                         "condition_operator": None,
                         "condition_value": None,
                     }
+
+            if self._prefill_conflict(
+                update_data.get("is_sensitive", field.is_sensitive),
+                update_data.get("applicant_field", field.applicant_field),
+            ):
+                return None, self.SENSITIVE_PREFILL_REFUSED_ERROR
 
             if "is_sensitive" in update_data and bool(
                 update_data["is_sensitive"]

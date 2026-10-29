@@ -561,6 +561,9 @@ class ProspectListResponse(UTCResponseBase):
     deactivated_at: Optional[datetime] = None
     withdrawn_at: Optional[datetime] = None
     withdrawal_reason: Optional[str] = None
+    # A follow-up form changed this applicant's email or phone and no
+    # coordinator has marked it reviewed yet.
+    contact_change_pending: bool = False
 
     model_config = _response_config
 
@@ -1100,3 +1103,112 @@ class InterviewResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
+
+
+# --- Follow-up Form Schemas ---
+
+# Bounds for what a public follow-up request may carry. The field-by-field
+# limits are FormsService's; these stop a request large enough to cost memory
+# before those checks run.
+_FOLLOW_UP_MAX_ANSWERS = 500
+
+
+def _bounded_answers(value: Dict[str, Any]) -> Dict[str, Any]:
+    if len(value) > _FOLLOW_UP_MAX_ANSWERS:
+        raise ValueError(f"A form has at most {_FOLLOW_UP_MAX_ANSWERS} answers")
+    return value
+
+
+class FollowUpChange(BaseModel):
+    """One applicant-record value a follow-up submission changed."""
+
+    field: str
+    label: str
+    old: Optional[str] = None
+    new: Optional[str] = None
+    # False when the record was left as it was: an email address another open
+    # application already uses is recorded here for a coordinator instead.
+    applied: bool = True
+
+
+class FollowUpFormRequestResponse(UTCResponseBase):
+    """A follow-up form sent to an applicant, as the pipeline screens show it.
+
+    ``status`` is derived: ``not_sent`` while no email has gone out (mail is
+    off, or the send failed), ``sent`` until a draft is saved, ``draft`` after,
+    ``submitted`` once the applicant submits.
+    """
+
+    id: UUID
+    prospect_id: UUID
+    step_id: Optional[UUID] = None
+    step_name: Optional[str] = None
+    form_id: Optional[UUID] = None
+    form_name: Optional[str] = None
+    status: Literal["not_sent", "sent", "draft", "submitted"]
+    first_sent_at: Optional[datetime] = None
+    last_sent_at: Optional[datetime] = None
+    draft_saved_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+    submission_id: Optional[UUID] = None
+    changes: List[FollowUpChange] = []
+    contact_changed: bool = False
+    contact_change_reviewed_at: Optional[datetime] = None
+    contact_change_reviewed_by_name: Optional[str] = None
+
+
+class PublicFollowUpFormField(BaseModel):
+    """A field of a follow-up form, as the applicant's page renders it."""
+
+    id: UUID
+    label: str
+    field_type: str
+    placeholder: Optional[str] = None
+    help_text: Optional[str] = None
+    required: bool = False
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    options: Optional[List[Dict[str, str]]] = None
+    condition_field_id: Optional[str] = None
+    condition_operator: Optional[str] = None
+    condition_value: Optional[str] = None
+    sort_order: int = 0
+    width: str = "full"
+    is_sensitive: bool = False
+
+    model_config = _response_config
+
+
+class PublicFollowUpFormResponse(UTCResponseBase):
+    """What the applicant's link opens: the form, filled with what is known.
+
+    ``values`` is the saved draft where there is one, and otherwise what the
+    applicant record holds for each pre-filled field.
+    """
+
+    form_name: str
+    form_description: Optional[str] = None
+    organization_name: Optional[str] = None
+    applicant_first_name: str
+    fields: List[PublicFollowUpFormField]
+    values: Dict[str, Any]
+    draft_saved_at: Optional[datetime] = None
+
+
+class PublicFollowUpAnswers(BaseModel):
+    """Answers sent from the applicant's page, as a draft or to submit."""
+
+    data: Dict[str, Any]
+
+    _check_data = field_validator("data")(_bounded_answers)
+
+
+class PublicFollowUpDraftResponse(UTCResponseBase):
+    draft_saved_at: datetime
+
+
+class PublicFollowUpSubmitResponse(UTCResponseBase):
+    submitted_at: datetime
+    message: str = "Thank you. Your answers have been sent to the department."

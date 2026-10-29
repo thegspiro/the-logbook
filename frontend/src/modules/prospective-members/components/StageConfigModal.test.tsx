@@ -1435,3 +1435,51 @@ describe('StageConfigModal — linked email template', () => {
     expect(onSave.mock.calls[0]?.[0]).toMatchObject({ email_template_id: 'tmpl-custom' });
   });
 });
+
+describe('StageConfigModal follow-up form stage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([]);
+    mockGetForms.mockReset();
+    mockGetForms.mockResolvedValue(mockForms);
+    mockGetEvents.mockResolvedValue(mockUpcomingEvents);
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('saves the chosen form under follow_up_form_id, advancing on submit by default', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Follow-up Form'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Background Questionnaire');
+    await user.selectOptions(await screen.findByLabelText('Form'), 'form-2');
+    await user.type(screen.getByLabelText(/message in the link email/i), 'Before your interview, please.');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'follow_up_form',
+        config: expect.objectContaining({
+          follow_up_form_id: 'form-2',
+          custom_message: 'Before your interview, please.',
+          auto_advance: true,
+        }) as unknown,
+      })
+    );
+    const saved = (defaultProps.onSave.mock.calls[0]?.[0] as PipelineStageCreate).config;
+    expect(saved).not.toHaveProperty('form_id');
+  });
+
+  it('refuses to save without a form', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Follow-up Form'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Background Questionnaire');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getByText('Select a form')).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+});
