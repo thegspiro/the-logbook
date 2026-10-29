@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import {
   CheckCircle2,
   Circle,
@@ -16,6 +16,7 @@ import {
   FileText,
   CalendarClock,
   FileSignature,
+  ClipboardPen,
   XCircle,
   MapPin,
   Download,
@@ -27,6 +28,24 @@ import { formatDate, formatDateCustom } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
+
+const FOLLOW_UP_FORM_PATH = /^\/application-form\/[A-Za-z0-9_-]{10,64}$/;
+
+/**
+ * The in-app path of a follow-up form link, or null for anything else. The
+ * backend builds the link from FRONTEND_URL, which need not be the host this
+ * page was opened on, so only the path is followed — and only one shaped like
+ * a form link, so the card can never send the applicant somewhere else.
+ */
+function followUpFormPath(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const { pathname } = new URL(url, window.location.origin);
+    return FOLLOW_UP_FORM_PATH.test(pathname) ? pathname : null;
+  } catch {
+    return null;
+  }
+}
 import { PromptDialog } from '../../../components/ux';
 
 interface StatusData {
@@ -211,7 +230,7 @@ export const ApplicationStatusPage: React.FC = () => {
           )}
         </div>
 
-        {/* Current stage action (self-scheduling / e-signature) */}
+        {/* Current stage action (self-scheduling / e-signature / follow-up form) */}
         {data.current_stage_action && (
           <div className="card mb-4 border-blue-500/30 p-5 shadow-xs">
             {data.current_stage_action.type === 'calcom_scheduling' ? (
@@ -232,6 +251,25 @@ export const ApplicationStatusPage: React.FC = () => {
                       <CalendarClock className="h-4 w-4" aria-hidden="true" />
                       Schedule
                     </a>
+                  )}
+                </div>
+              </div>
+            ) : data.current_stage_action.type === 'follow_up_form' ? (
+              <div className="flex items-start gap-3">
+                <ClipboardPen className="h-6 w-6 shrink-0 text-blue-700 dark:text-blue-400" aria-hidden="true" />
+                <div className="flex-1">
+                  <p className="text-theme-text-primary text-sm font-medium">{data.current_stage_action.label}</p>
+                  {data.current_stage_action.message && (
+                    <p className="text-theme-text-muted mt-0.5 text-xs">{data.current_stage_action.message}</p>
+                  )}
+                  {followUpFormPath(data.current_stage_action.url) && (
+                    <Link
+                      to={followUpFormPath(data.current_stage_action.url) ?? ''}
+                      className="btn-primary mt-3 inline-flex items-center gap-1.5"
+                    >
+                      <ClipboardPen className="h-4 w-4" aria-hidden="true" />
+                      Open the form
+                    </Link>
                   )}
                 </div>
               </div>

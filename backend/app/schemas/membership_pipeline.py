@@ -1151,10 +1151,38 @@ class FollowUpFormRequestResponse(UTCResponseBase):
     draft_saved_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
     submission_id: Optional[UUID] = None
+    reminder_count: int = 0
+    last_reminder_at: Optional[datetime] = None
     changes: List[FollowUpChange] = []
     contact_changed: bool = False
     contact_change_reviewed_at: Optional[datetime] = None
     contact_change_reviewed_by_name: Optional[str] = None
+
+
+class FollowUpAnswer(BaseModel):
+    """One answer of a submitted follow-up form.
+
+    A sensitive answer reaches a client only for a viewer holding
+    ``sensitive_answers.view``; for anyone else ``answer`` is None and
+    ``withheld`` is set.
+    """
+
+    field_id: str
+    label: str
+    answer: Optional[str] = None
+    is_sensitive: bool = False
+    withheld: bool = False
+
+
+class FollowUpAnswersResponse(UTCResponseBase):
+    """A submitted follow-up form's answers, as the Interview page shows them."""
+
+    request_id: UUID
+    step_name: Optional[str] = None
+    form_id: Optional[UUID] = None
+    form_name: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    answers: List[FollowUpAnswer] = []
 
 
 class PublicFollowUpFormField(BaseModel):

@@ -120,6 +120,21 @@ describe('FollowUpFormsSection', () => {
     expect(screen.getByText(/Contact change reviewed by Captain Lopez/)).toBeInTheDocument();
   });
 
+  it('shows how many reminders have gone out', async () => {
+    mockList.mockResolvedValue([request({ reminder_count: 2, last_reminder_at: '2026-10-29T09:05:00Z' })]);
+    render(<FollowUpFormsSection applicant={applicant()} tz="UTC" />);
+
+    expect(await screen.findByText(/2 of 3/)).toBeInTheDocument();
+    expect(screen.getByText('Reminders')).toBeInTheDocument();
+  });
+
+  it('says nothing about reminders before the first one', async () => {
+    render(<FollowUpFormsSection applicant={applicant()} tz="UTC" />);
+
+    await screen.findByText('Sent');
+    expect(screen.queryByText('Reminders')).not.toBeInTheDocument();
+  });
+
   it('offers Send now when the applicant is on a follow-up stage with nothing sent', async () => {
     mockList.mockResolvedValue([]);
     render(<FollowUpFormsSection applicant={applicant()} tz="UTC" />);
