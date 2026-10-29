@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { NARROW, PHONE, ROUTES, signInForRoute } from './mobile-routes';
+import { findSpilledText } from './spilledText';
 import type { SignInState } from './mobile-routes';
 
 /**
@@ -493,6 +494,15 @@ test.describe('mobile accessibility', () => {
 
       if (overflow.length) {
         reflowed.push(`${route.path} at ${NARROW.width}px:\n    ${overflow.join('\n    ')}`);
+      }
+      // Reflow also fails when content stays inside the screen but is drawn
+      // over its neighbours: a word too long for the box it was squeezed into
+      // runs across whatever sits beside it. See spilledText.ts.
+      const spilledAtNarrow = await page.evaluate(findSpilledText);
+      if (spilledAtNarrow.length) {
+        reflowed.push(
+          `${route.path} at ${NARROW.width}px, text outside its box:\n    ${spilledAtNarrow.slice(0, 6).join('\n    ')}`
+        );
       }
       const advisoryBudget = ADVISORY_BUDGET[route.path] ?? 0;
       if (advisoryCount > advisoryBudget) {

@@ -28,7 +28,7 @@ const E2E = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'e2e');
 
 /**
  * Five minutes. It has to sit under the *smallest* @sweep budget, which is
- * mobile-presentation's 720_000 — otherwise this file calls a test ordinary
+ * mobile-dialogs' 900_000 — otherwise this file calls a test ordinary
  * while the workflow treats it as a sweep, and the two halves disagree, which
  * is what the second assertion below exists to catch. Nothing else in the suite
  * declares a budget at all, so ordinary tests sit on Playwright's 30s default,
