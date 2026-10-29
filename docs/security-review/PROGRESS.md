@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)** (branch
+`claude/security-review-medical-screening-p13`) —
+Feature 09 (Medical screening, PHI), pass 13. Watchdog pickup (dedicated
+`/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
+confirmed unreachable via `ListAgents`, "No reachable agents"). PR #3811
+(Feature 08, Membership pipeline, pass 14) had already merged (`af51a42e`)
+with no open rotation PR behind it — confirmed via `list_pull_requests`
+(state=open), 0 results. Row 09 confirmed the next `⬜` row on a freshly
+fetched `main` (head `79e04337`) and by PR #3811's own "Next feature" note.
+
+**0 fixed, 0 new findings.** Near-zero delta since this feature's own pass
+12 (merge `170405c1`, PR #3711): only 2 non-merge commits touched the
+declared scope in the window, neither made through this rotation —
+`8b841ff7` (a correctness fix, already tested: `get_expiring_soon` no
+longer lists a screening record a newer one of the same type has already
+superseded, closing a standing `KNOWN_LIMITATIONS` gap) and `61576727` (a
+repo-wide frontend code-splitting change whose only touch here is lazy-
+loading `MedicalScreeningPage`; the `ProtectedRoute` permission/module gate
+is byte-identical to pass 12's read). Both reviewed end to end rather than
+taken on the commit message. All 16 routes re-enumerated by AST this time
+(not `grep -c`), unchanged from pass 12/11. MS-14 (narrative-PHI read tier)
+and MS-15 (unbounded compliance-roster load, same class as MS-6/FIN-9/
+ELEC-12/USR-5/MP-10/DOC-9) both re-confirmed OPEN/FLAGGED, unchanged, owner
+decision. See `docs/security-review/MS-09-medical-screening.md`'s
+**Pass 13** section for the full review.
+
+Rotation row 09 → ✅ (pending this PR's merge); next is Feature 10
+(Documents & legal) — re-check `search_pull_requests`/`list_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 14, PR #3811, merged), preserved for history</summary>
+
 **PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811)** (branch
 `claude/security-review-membership-pipeline-p14`) — Feature 08 (Membership
 pipeline), pass 14. Watchdog pickup (dedicated `/loop 30m /security-review`
@@ -47,6 +80,8 @@ service. See `docs/security-review/MP-08-membership-pipeline.md`'s
 Rotation row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
 screening, PHI) — re-check `search_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 13, PR #3810, merged), preserved for history</summary>
@@ -22956,7 +22991,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -22989,6 +23024,83 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-28 — Feature 09 (Medical screening, PHI, pass 13) — watchdog pickup, near-zero delta (one non-rotation correctness fix, one non-rotation bundling change, both verified), 0 fixed, 0 new findings; MS-14/MS-15 re-confirmed unchanged
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` confirmed unreachable via `ListAgents`).
+No open security-review PR — confirmed via `list_pull_requests` (state=open),
+0 results, after Feature 08 (Membership pipeline) pass 14's own PR (#3811)
+merged (`af51a42e`). Row 09 confirmed the next `⬜` row by reading the
+rotation table on a freshly fetched `main` (head `79e04337`).
+
+Real delta since pass 12's own merge (`170405c1`, PR #3711): only 2 commits
+touched the declared scope, neither from this rotation. `8b841ff7` fixed a
+real correctness bug — `get_expiring_soon` listed a screening record a newer
+record of the same type had already superseded, so a renewed physical could
+still read "expiring in 10 days" beside a compliance count of zero (Pitfall
+#29's class: a derived list disagreeing with the count it should match) —
+closing a standing `KNOWN_LIMITATIONS` entry, with 3 new tests covering the
+member case, the prospect case, and (the one that proves the join is
+subject-scoped) that another member's newer record does not hide this
+member's own expiring one. `61576727` is a repo-wide frontend bundling change
+whose only touch here is lazy-loading `MedicalScreeningPage`; the
+`ProtectedRoute` permission (`medical_screening.view`) and module gate are
+unchanged. Both commits read in full and verified rather than taken on their
+messages. All 16 routes re-enumerated by AST (not `grep -c`) — unchanged from
+pass 12/11, every permission string and org-scoping check re-read directly.
+Tenant isolation, PHI encryption (`EncryptedText`/`EncryptedJSON`), the
+absence of raw SQL/unescaped LIKE, and snake_case wire casing all
+re-confirmed by direct grep/read, not re-derived. MS-14 (narrative-PHI read
+tier, LOW) and MS-15 (unbounded compliance-roster load, LOW, same class as
+MS-6/FIN-9/ELEC-12/USR-5/MP-10/DOC-9) both re-confirmed OPEN/FLAGGED,
+unaffected by this window's two commits — both remain an owner decision.
+
+Full write-up: `docs/security-review/MS-09-medical-screening.md`'s
+**Pass 13** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 667
+revisions, single head `b74bcce55c11`; scoped backend tests (`-k
+"medical_screening or medical_screen or screening"`) — 171 passed, 1
+pre-existing skip (environment-only `py_vapid`); frontend `npm run
+typecheck`/`npm run lint` — 0 errors, 0 warnings; scoped frontend suite
+(`src/modules/medical-screening`) — 62 passed (11 files).
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `search_pull_requests`/`list_pull_requests` fresh rather
+than trusting this note.
+
+### 2026-10-28 — Feature 08 (Membership pipeline, pass 14) — watchdog pickup, real delta (phone/address encryption at rest, SQL email comparisons rewritten onto HMAC fingerprints, stage-linked email templates, applicant next-meeting `.ics` download, stale-application emails closing a `KNOWN_LIMITATIONS` gap), 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remained unreachable). No open
+security-review PR — confirmed via `search_pull_requests`, 0 `is:open`
+results against `claude/security-review-*` head branches, after Feature 07
+(Users & organizations) pass 13's own PR (#3810) merged (`5e8fa043`). Row 08
+confirmed the next `⬜` row on a freshly fast-forwarded `main`.
+
+Real delta since this feature's own pass 13 (merge `507ae1d0`): 1,209
+insertions/324 deletions across 11 files, from 12 directly-touching
+commits, all reviewed end to end — phone/address encryption at rest, a
+repo-wide rewrite of SQL email comparisons onto HMAC-keyed fingerprints
+(including the applicant self-access guard's own matching predicate in
+`prospect_privacy.py`), stage-linked email templates with an
+injection-safe appendix mechanism, a new applicant-facing next-meeting
+card and `.ics` download (same token/rate-limit/no-store posture as the
+existing status page), and stale-application coordinator/applicant
+emails closing a standing `KNOWN_LIMITATIONS` gap (a config switch that
+had no reader). MP-10 (listing half) and MP-22 both re-confirmed OPEN,
+unchanged (owner-accepted). All 53 routes in `membership_pipeline.py`
+re-enumerated by AST, unchanged from pass 13; the one new public route
+this pass (`next-meeting.ics`) lives in `api/public/portal.py`, outside
+this router.
+
+Full write-up: `docs/security-review/MP-08-membership-pipeline.md`'s
+**Pass 14** section.
+
+Row 08 → ✅ (merged, PR #3811); next was Feature 09 (Medical screening,
+PHI) — see the entry above for its pass 13.
 
 ### 2026-10-28 — Feature 07 (Users & organizations, pass 13) — watchdog pickup, real delta (phone/address/email/leave-reason encryption at rest, passkey admin routes, null-refusal fix, forms-embed origin settings, Gmail delegated service account), 0 fixed, 1 new finding (USR-12, MED, flagged)
 
