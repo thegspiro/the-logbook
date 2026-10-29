@@ -61,6 +61,9 @@ export interface UserWithRoles {
   /** Set while a sign-in lockout is in force; sent to members.manage holders only. */
   locked_until?: string | null | undefined;
   membership_type?: string | undefined;
+  /** The pair `membership_type` fuses: operational/administrative/social, and the ladder standing. */
+  member_class?: string | null | undefined;
+  member_status?: string | null | undefined;
   hire_date?: string | undefined;
   date_of_birth?: string | undefined;
   rank?: string | undefined;

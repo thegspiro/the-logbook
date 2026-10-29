@@ -14,7 +14,10 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import type { CreatedMember } from '../services/userServices';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
-import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, memberClassAndStatusFor } from '../utils/membership';
+import { ADMINISTRATIVE_RANK_HINT } from '../utils/membership';
+import { MemberClass, MemberStatus } from '../constants/enums';
+import { MemberClassificationFields } from '../components/members/MemberClassificationFields';
+import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 
 /** The directories a new member's account can be created in, by integration type. */
 const DIRECTORY_PRODUCTS: ReadonlyArray<readonly [string, string]> = [
@@ -81,7 +84,8 @@ const AddMember: React.FC = () => {
     preferredContact: 'phone',
     joinDate: getTodayLocalDate(tz),
     status: 'active',
-    membershipType: 'probationary',
+    memberClass: MemberClass.OPERATIONAL,
+    memberStatus: MemberStatus.PROBATIONARY,
     rank: '',
     role: '',
     station: '',
@@ -159,12 +163,13 @@ const AddMember: React.FC = () => {
 
   // An administrative member holds no operational rank — the server refuses the
   // pair outright, since a rank carries its own default permissions.
-  const isAdministrative = isAdministrativeMember(undefined, formData.membershipType);
+  const isAdministrative = formData.memberClass === MemberClass.ADMINISTRATIVE;
+  const { tiers } = useMembershipTierOptions();
 
   const handleInputChange = (field: keyof MemberFormData, value: string) => {
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
-      if (field === 'membershipType' && isAdministrativeMember(undefined, value)) {
+      if (field === 'memberClass' && value === MemberClass.ADMINISTRATIVE) {
         next.rank = '';
       }
       return next;
@@ -310,12 +315,11 @@ const AddMember: React.FC = () => {
         ...(formData.secondaryPhone ? { mobile: formData.secondaryPhone } : {}),
         ...(formData.dateOfBirth ? { date_of_birth: formData.dateOfBirth } : {}),
         ...(formData.joinDate ? { hire_date: formData.joinDate } : {}),
-        // The pair, not the fused legacy string: `membershipType` spells the
-        // regular case 'regular', which is a member *status* and not a legal
-        // `membership_type` — and until this was sent at all, every member
-        // added here landed as a plain operational regular whatever the
-        // required-marked dropdown said.
-        ...memberClassAndStatusFor(formData.membershipType),
+        // The pair, not a fused legacy string: it is the only way to state a
+        // standing the legacy vocabulary cannot hold, such as an
+        // administrative life member.
+        member_class: formData.memberClass,
+        member_status: formData.memberStatus,
         ...(formData.rank ? { rank: formData.rank } : {}),
         ...(formData.station ? { station: formData.station } : {}),
         ...(formData.platoon ? { platoon: formData.platoon } : {}),
@@ -831,22 +835,15 @@ const AddMember: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label htmlFor="add-membership-type" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Membership Type <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <select
-                  id="add-membership-type"
-                  value={formData.membershipType}
-                  onChange={(e) => handleInputChange('membershipType', e.target.value)}
-                  className="form-input"
-                >
-                  <option value="probationary">Probationary</option>
-                  <option value="regular">Regular</option>
-                  <option value="life">Life</option>
-                  <option value="administrative">Administrative</option>
-                </select>
-              </div>
+              <MemberClassificationFields
+                idPrefix="add"
+                memberClass={formData.memberClass}
+                memberStatus={formData.memberStatus}
+                onClassChange={(value) => handleInputChange('memberClass', value)}
+                onStatusChange={(value) => handleInputChange('memberStatus', value)}
+                tiers={tiers}
+                required
+              />
 
               <div>
                 <label htmlFor="add-rank" className="text-theme-text-primary mb-2 block text-sm font-medium">

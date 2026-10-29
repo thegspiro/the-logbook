@@ -139,3 +139,73 @@ describe('the rejoin default', () => {
     expect(onSetRejoinServiceCredit).toHaveBeenCalledWith('restart');
   });
 });
+
+describe('"Counts as" on a department tier', () => {
+  it('is offered on a custom rung and reports the chosen status', async () => {
+    const user = userEvent.setup();
+    const onUpdateTier = vi.fn();
+    render(
+      <MembershipTiersSection
+        tiers={[tier(), tier({ id: 'senior', name: 'Senior Member', years_required: 10, sort_order: 1 })]}
+        autoAdvance
+        rejoinServiceCredit="continue"
+        loading={false}
+        saving={false}
+        dirty={false}
+        memberCount={() => 0}
+        onSetAutoAdvance={vi.fn()}
+        onSetRejoinServiceCredit={vi.fn()}
+        onUpdateTier={onUpdateTier}
+        onUpdateBenefits={vi.fn()}
+        onAddTier={vi.fn()}
+        onRemoveTier={vi.fn()}
+        onMoveTier={vi.fn()}
+        onSave={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    // The shipped "active" rung *is* the regular status and gets no control;
+    // the senior rung counts as nothing until the department says otherwise.
+    expect(screen.queryByLabelText('Counts as', { selector: '#ranks-as-active' })).not.toBeInTheDocument();
+    const countsAs = screen.getByLabelText('Counts as', { selector: '#ranks-as-senior' });
+    expect(countsAs).toHaveValue('');
+
+    await user.selectOptions(countsAs, 'regular');
+    expect(onUpdateTier).toHaveBeenCalledWith('senior', { ranks_as: 'regular' });
+  });
+
+  it('clears back to nothing', async () => {
+    const user = userEvent.setup();
+    const onUpdateTier = vi.fn();
+    render(
+      <MembershipTiersSection
+        tiers={[tier({ id: 'senior', name: 'Senior Member', ranks_as: 'regular' })]}
+        autoAdvance
+        rejoinServiceCredit="continue"
+        loading={false}
+        saving={false}
+        dirty={false}
+        memberCount={() => 0}
+        onSetAutoAdvance={vi.fn()}
+        onSetRejoinServiceCredit={vi.fn()}
+        onUpdateTier={onUpdateTier}
+        onUpdateBenefits={vi.fn()}
+        onAddTier={vi.fn()}
+        onRemoveTier={vi.fn()}
+        onMoveTier={vi.fn()}
+        onSave={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+    const countsAs = screen.getByLabelText('Counts as', { selector: '#ranks-as-senior' });
+    expect(countsAs).toHaveValue('regular');
+    await user.selectOptions(countsAs, '');
+    expect(onUpdateTier).toHaveBeenCalledWith('senior', { ranks_as: null });
+  });
+
+  it('explains what the years field sets', () => {
+    renderSection([tier()]);
+    expect(screen.getByText(/credited years to reach this tier/i)).toBeInTheDocument();
+  });
+});

@@ -11125,7 +11125,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `dashboard_pulse` | JSON | yes |  |  |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
-| `member_status` | VARCHAR(20) | yes | IDX |  |  |
+| `member_status` | VARCHAR(50) | yes | IDX |  |  |
 | `membership_type_changed_at` | DATETIME | yes |  |  |  |
 | `status` | ENUM(`active`, `inactive`, `suspended`, `probationary`, `leave`, `retired`, `dropped_voluntary`, `dropped_involuntary`, `archived`) | no | IDX | `active` |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |

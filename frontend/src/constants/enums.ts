@@ -481,6 +481,27 @@ export const MemberStatus = {
 } as const;
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
 
+export const MEMBER_CLASS_LABELS: Record<MemberClass, string> = {
+  operational: 'Operational',
+  administrative: 'Administrative',
+  social: 'Social',
+};
+
+/**
+ * Labels for the built-in ladder statuses. `member_status` also holds the
+ * department's own tier ids (`senior`), whose display name lives in the tier
+ * config; `memberStatusLabel` in `utils/membership.ts` resolves those.
+ */
+export const MEMBER_STATUS_LABELS: Record<MemberStatus, string> = {
+  prospective: 'Prospective',
+  probationary: 'Probationary',
+  regular: 'Regular',
+  life: 'Life',
+  retired: 'Retired',
+  honorary: 'Honorary',
+  junior: 'Junior',
+};
+
 // ============================================
 // Pipeline / Applicant Stage Types
 // ============================================

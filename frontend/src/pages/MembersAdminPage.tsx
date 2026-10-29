@@ -20,8 +20,10 @@
  *   offered or shown here — a rank is set in the Rank field — except that one
  *   a member already holds stays in Manage Positions so it can be taken off.
  * - Rank: the operational rank, with a few default permissions of its own.
- * - Membership Type: the class and ladder standing — probationary, active,
- *   life, administrative. No permissions; the tier ladder advances it.
+ * - Member class: operational, administrative or social. No permissions.
+ * - Membership status: the ladder standing — probationary, regular, life, or
+ *   one of the department's own tiers. No permissions; the tier ladder
+ *   advances it by years of service, and any class can hold any standing.
  * - Status: the account lifecycle — active, on leave, retired, dropped —
  *   changed from the member's profile.
  */
@@ -42,7 +44,14 @@ import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
+import {
+  ADMINISTRATIVE_RANK_HINT,
+  effectiveMemberClass,
+  isAdministrativeMember,
+  memberClassLabel,
+  memberStatusLabel,
+  membershipTypeLabel,
+} from '../utils/membership';
 import { useTimezone } from '../hooks/useTimezone';
 import { OverduePropertyReturnsPanel } from '../components/members/OverduePropertyReturnsPanel';
 import { formatDate, formatTime } from '../utils/dateFormatting';
@@ -60,6 +69,21 @@ interface EditProfileForm {
   membership_number: string;
   rank: string;
   station: string;
+}
+
+/**
+ * "Administrative · Life member", or the legacy label for a row written before
+ * the pair existed. The class is omitted when it only repeats the status.
+ */
+function membershipSummary(user: {
+  member_class?: string | null | undefined;
+  member_status?: string | null | undefined;
+  membership_type?: string | undefined;
+}): string {
+  const cls = memberClassLabel(effectiveMemberClass(user.member_class, user.membership_type));
+  const status = user.member_status ? memberStatusLabel(user.member_status) : '';
+  if (!status) return cls || membershipTypeLabel(user.membership_type) || '-';
+  return cls ? `${cls} · ${status} member` : `${status} member`;
 }
 
 export const MembersAdminPage: React.FC = () => {
@@ -648,7 +672,7 @@ export const MembersAdminPage: React.FC = () => {
                     scope="col"
                     className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
-                    Membership Type
+                    Membership
                   </th>
                   <th
                     scope="col"
@@ -698,10 +722,10 @@ export const MembersAdminPage: React.FC = () => {
                       {formatRank(user.rank) || '-'}
                     </td>
                     <td
-                      data-label="Membership Type"
+                      data-label="Membership"
                       className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap"
                     >
-                      {membershipTypeLabel(user.membership_type) || '-'}
+                      {membershipSummary(user)}
                     </td>
                     <td data-label="Positions" className="px-6 py-4">
                       <div className="flex flex-wrap justify-end gap-1 md:justify-start">

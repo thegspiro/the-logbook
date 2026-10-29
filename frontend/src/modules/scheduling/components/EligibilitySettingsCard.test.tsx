@@ -4,6 +4,11 @@ import userEvent from '@testing-library/user-event';
 
 const mockGetEligibility = vi.fn();
 const mockUpdateEligibility = vi.fn();
+vi.mock('../../../hooks/useMembershipTierOptions', () => ({
+  useMembershipTierOptions: () => ({ tiers: mockTiers(), loaded: true }),
+}));
+const mockTiers = vi.fn(() => [] as { id: string; name: string }[]);
+
 vi.mock('../services/api', () => ({
   schedulingService: {
     getEligibilitySettings: (...a: unknown[]) => mockGetEligibility(...a) as unknown,

@@ -33,7 +33,9 @@ import { SortableHeader } from '../components/ux/SortableHeader';
 import { sortItems } from '../utils/sortItems';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
-import { UserStatus, isActiveAccount } from '../constants/enums';
+import { MEMBER_CLASS_LABELS, MemberClass, UserStatus, isActiveAccount } from '../constants/enums';
+import { canonicalMemberStatus, effectiveMemberClass, statusOptionsFor } from '../utils/membership';
+import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
 
@@ -90,6 +92,14 @@ const Members: React.FC = () => {
   // ago. They stay one filter choice away, under Archived or All Statuses.
   const defaultFilterStatus = canManageMembers ? CURRENT_MEMBERS_FILTER : UserStatus.ACTIVE;
   const [filterStatus, setFilterStatus] = useState<string>(defaultFilterStatus);
+  // Class and membership status are two more axes a coordinator slices the
+  // roster by: "every administrative member", "every life member". 'all' on
+  // each is the default; 'unset' on class finds the members whose class was
+  // never recorded (a tier member backfilled before the class existed), so an
+  // officer can set it from the edit page.
+  const [filterClass, setFilterClass] = useState<string>('all');
+  const [filterMemberStatus, setFilterMemberStatus] = useState<string>('all');
+  const { tiers } = useMembershipTierOptions();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contactInfoEnabled, setContactInfoEnabled] = useState({
@@ -217,7 +227,14 @@ const Members: React.FC = () => {
         (filterStatus === UserStatus.ACTIVE && isActiveAccount(member.status)) ||
         member.status === filterStatus;
 
-      return matchesSearch && matchesFilter;
+      const memberClass = effectiveMemberClass(member.member_class, member.membership_type);
+      const matchesClass =
+        filterClass === 'all' || (filterClass === 'unset' ? memberClass === undefined : memberClass === filterClass);
+
+      const memberStatus = canonicalMemberStatus(member.member_status) ?? canonicalMemberStatus(member.membership_type);
+      const matchesMemberStatus = filterMemberStatus === 'all' || memberStatus === filterMemberStatus;
+
+      return matchesSearch && matchesFilter && matchesClass && matchesMemberStatus;
     });
 
     // Apply sorting (#30)
@@ -237,7 +254,16 @@ const Members: React.FC = () => {
     });
 
     return result;
-  }, [members, searchQuery, filterStatus, sortField, sortDirection, canManageMembers]);
+  }, [members, searchQuery, filterStatus, filterClass, filterMemberStatus, sortField, sortDirection, canManageMembers]);
+
+  const memberStatusOptions = useMemo(
+    () => statusOptionsFor(tiers, members.map((m) => m.member_status ?? m.membership_type ?? '').filter(Boolean)),
+    [tiers, members]
+  );
+  const anyClassUnset = useMemo(
+    () => members.some((m) => effectiveMemberClass(m.member_class, m.membership_type) === undefined),
+    [members]
+  );
 
   // Paginated subset (#11)
   // A column of dashes tells a member nothing when the department has not
@@ -254,13 +280,14 @@ const Members: React.FC = () => {
   // a blank panel rather than a prompt to do something they cannot. An empty
   // result that follows from a search or a status filter is still reported to
   // everyone — that is feedback on what they asked for.
-  const listIsNarrowed = searchQuery !== '' || filterStatus !== defaultFilterStatus;
+  const listIsNarrowed =
+    searchQuery !== '' || filterStatus !== defaultFilterStatus || filterClass !== 'all' || filterMemberStatus !== 'all';
   const showEmptyState = canManageMembers || listIsNarrowed;
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, sortField, sortDirection]);
+  }, [searchQuery, filterStatus, filterClass, filterMemberStatus, sortField, sortDirection]);
 
   const handleSort = (field: string, direction: SortDirection) => {
     setSortField(direction ? field : null);
@@ -445,6 +472,33 @@ const Members: React.FC = () => {
                 <option value="leave">On Leave</option>
                 <option value="retired">Retired</option>
                 {canManageMembers && <option value={UserStatus.ARCHIVED}>Archived</option>}
+              </select>
+              <select
+                aria-label="Filter by member class"
+                value={filterClass}
+                onChange={(e) => setFilterClass(e.target.value)}
+                className="form-input"
+              >
+                <option value="all">All Classes</option>
+                {(Object.values(MemberClass) as MemberClass[]).map((value) => (
+                  <option key={value} value={value}>
+                    {MEMBER_CLASS_LABELS[value]}
+                  </option>
+                ))}
+                {anyClassUnset && <option value="unset">Class not set</option>}
+              </select>
+              <select
+                aria-label="Filter by membership status"
+                value={filterMemberStatus}
+                onChange={(e) => setFilterMemberStatus(e.target.value)}
+                className="form-input"
+              >
+                <option value="all">All Membership Statuses</option>
+                {memberStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
 

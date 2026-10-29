@@ -245,14 +245,69 @@ class TestTheEditorIsToldWhoIsOnEachRung:
         await _member(db_session, org, "active")
         await _member(db_session, org, "active")
         await _member(db_session, org, "administrative")
+        await _member(db_session, org, "honorary")
 
         result = await get_membership_tier_config(db_session, _caller(org))
 
-        assert result["member_counts"]["active"] == 2
-        # The legacy non-tier values are counted too, deliberately: they are
-        # what a member holds, and an editor that hid them would offer to
-        # delete a rung it could not see was occupied.
-        assert result["member_counts"]["administrative"] == 1
+        # Counted by standing, keyed by the ladder's own ids: the ladder is
+        # tenure and every class is on it, so an administrative member in
+        # regular standing stands on the Active rung beside the two
+        # operational ones (owner decision 2026-10-29).
+        assert result["member_counts"]["active"] == 3
+        # A standing no rung claims is still reported under its own name, so
+        # the editor can see who holds it.
+        assert result["member_counts"]["honorary"] == 1
+        assert "administrative" not in result["member_counts"]
+
+    async def test_a_tier_held_by_an_administrative_member_is_occupied(
+        self, db_session: AsyncSession
+    ):
+        """The legacy column derives ``administrative`` for them, so a count
+        keyed on it could not see them standing on the rung."""
+        org = await _org(
+            db_session, [_tier("active", "Active"), _tier("senior", "Senior", 10, 1)]
+        )
+        jane = await _member(db_session, org, "administrative")
+        jane.member_status = "senior"
+        await db_session.flush()
+
+        result = await get_membership_tier_config(db_session, _caller(org))
+        assert result["member_counts"]["senior"] == 1
+
+        with pytest.raises(HTTPException) as exc:
+            await update_membership_tier_config(
+                _config(_tier("active", "Active")), db_session, _caller(org)
+            )
+        assert "'senior' is held by 1 member" in exc.value.detail
+
+    async def test_ranks_as_is_validated_and_stored(self, db_session: AsyncSession):
+        org = await _org(db_session, [_tier("active", "Active")])
+
+        tier = _tier("senior", "Senior", 10, 1)
+        tier["ranks_as"] = "regular"
+        await update_membership_tier_config(
+            _config(_tier("active", "Active"), tier), db_session, _caller(org)
+        )
+        stored = org.settings["membership_tiers"]["tiers"][1]
+        assert stored["ranks_as"] == "regular"
+
+        bad = _tier("cadet", "Cadet", 0, 2)
+        bad["ranks_as"] = "operational"
+        with pytest.raises(HTTPException) as exc:
+            await update_membership_tier_config(
+                _config(_tier("active", "Active"), tier, bad),
+                db_session,
+                _caller(org),
+            )
+        assert "ranks_as" in exc.value.detail
+
+    async def test_the_shipped_senior_tier_counts_as_nothing(self):
+        """Left unset on purpose (owner decision 2026-10-29): widening a
+        department's electorate is the department's call, made in the editor."""
+        from app.schemas.organization import MembershipTierSettings
+
+        senior = next(t for t in MembershipTierSettings().tiers if t.id == "senior")
+        assert senior.ranks_as is None
 
     async def test_a_reported_count_is_not_stored_back(self, db_session: AsyncSession):
         """member_counts is a report, not configuration.

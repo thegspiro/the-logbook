@@ -38,7 +38,13 @@ import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCard
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { withoutRankMirrors } from '../utils/positions';
-import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
+import {
+  effectiveMemberClass,
+  isAdministrativeMember,
+  memberClassLabel,
+  memberStatusLabel,
+  membershipTypeLabel,
+} from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
 import type {
   ContactInfoSettings,
@@ -746,11 +752,15 @@ export const MemberProfilePage: React.FC = () => {
     Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0);
 
   const rankLabel = user
-    ? isAdministrativeMember(undefined, user.membership_type)
+    ? isAdministrativeMember(user.member_class, user.membership_type)
       ? 'Administrative'
       : formatRank(user.rank)
     : '';
-  const memberTypeLabel = user ? membershipTypeLabel(user.membership_type) : '';
+  // Class and status are two facts; a row written before the pair existed
+  // falls back to the fused legacy label.
+  const classLabel = user ? memberClassLabel(effectiveMemberClass(user.member_class, user.membership_type)) : '';
+  const ladderLabel = user?.member_status ? `${memberStatusLabel(user.member_status)} member` : '';
+  const memberTypeLabel = ladderLabel || (user ? membershipTypeLabel(user.membership_type) : '');
   // "Administrative · Administrative" would be the class stated twice.
   const headerSubtitle = [rankLabel, memberTypeLabel === rankLabel ? '' : memberTypeLabel].filter(Boolean).join(' · ');
   // A member who goes by another name is headed by it, so the name on their
@@ -1313,9 +1323,21 @@ export const MemberProfilePage: React.FC = () => {
                     <p className="text-theme-text-primary mt-1 text-sm">{rankLabel}</p>
                   </div>
                 )}
+                {classLabel && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member class</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{classLabel}</p>
+                  </div>
+                )}
+                {!classLabel && user.member_status && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member class</p>
+                    <p className="text-theme-accent-red mt-1 text-sm">Not set — edit the member to choose one</p>
+                  </div>
+                )}
                 {memberTypeLabel && (
                   <div>
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member type</p>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Membership status</p>
                     <p className="text-theme-text-primary mt-1 text-sm">{memberTypeLabel}</p>
                   </div>
                 )}
@@ -1337,7 +1359,7 @@ export const MemberProfilePage: React.FC = () => {
                     <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.hire_date, tz)}</p>
                   </div>
                 )}
-                {!rankLabel && !memberTypeLabel && !user.station && !user.platoon && !user.hire_date && (
+                {!rankLabel && !classLabel && !memberTypeLabel && !user.station && !user.platoon && !user.hire_date && (
                   <p className="text-theme-text-muted text-sm">No membership details on file.</p>
                 )}
                 {canManageMembers && (
