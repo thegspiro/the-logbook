@@ -468,6 +468,18 @@ describe('InventoryBarcodePrintPage', () => {
     expect(mockGenerateLabels.mock.calls[0]?.[0]).toEqual(['it-1']);
   });
 
+  it('puts the preview straight under the controls, not a screen-height below', async () => {
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    // The preview is a sibling after the controls; a full-viewport minimum
+    // height on the controls pushed it below the fold on a desktop screen.
+    const controls = screen.getByTestId('label-print-controls');
+    expect(controls).not.toHaveClass('min-h-screen');
+    expect(within(controls).queryByRole('heading', { name: 'Preview' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Preview' })).toBeInTheDocument();
+  });
+
   it('prints a long name on up to two lines in a sans-serif font', async () => {
     const longName = 'Golf Shirt — XXL — Unisex Short Sleeve Polo';
     mockGetItem.mockResolvedValue(makeItem({ name: longName }));

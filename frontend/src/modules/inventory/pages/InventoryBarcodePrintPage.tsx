@@ -1441,7 +1441,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       </style>
 
       {/* Screen-only controls */}
-      <div className="print-controls min-h-screen">
+      <div className="print-controls" data-testid="label-print-controls">
         <div className="mx-auto max-w-4xl px-4 py-6">
           {/* Inside print-controls, so the trail never reaches the labels. */}
           <Breadcrumbs underHub="/inventory/admin" />
