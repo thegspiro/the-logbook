@@ -50,7 +50,6 @@ import type {
   ComplianceReportGenerate,
 } from '../types/training';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
-import { Breadcrumbs } from '../components/ux';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 
 // Shared form input classes
@@ -493,19 +492,11 @@ export default function ComplianceRequirementsConfigPage() {
     { id: 'reports', label: 'Report History', icon: <FileText className="h-4 w-4" /> },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-6 p-6">
-        <Breadcrumbs underHub="/training/admin" />
-        <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
-          <RefreshCw className="text-theme-text-secondary h-8 w-8 animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+  // The header and the section tabs need no data, so they are drawn while it
+  // loads: a centred spinner in a narrower column was replaced wholesale, and
+  // the tabs landed ~220px from where its box had been.
+  const pageTop = (
+    <>
       <TrainingPageHeader
         icon={Shield}
         title="Compliance Requirements Configuration"
@@ -534,6 +525,23 @@ export default function ComplianceRequirementsConfigPage() {
           </button>
         ))}
       </div>
+    </>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+        {pageTop}
+        <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
+          <RefreshCw className="text-theme-text-secondary h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      {pageTop}
 
       {/* Tab Content */}
       {activeTab === 'thresholds' && (

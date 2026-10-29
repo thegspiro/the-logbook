@@ -3,6 +3,7 @@ import { useLocation } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
 import { adminHubService } from '../../services/adminHubService';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useFirstLoadHold } from '../../hooks/useFirstLoadHold';
 import type { AdminHubSummary } from '../../types/adminHub';
 import { attentionCountsForTabs } from './attentionCounts';
 import AdminAttentionQueue from './AdminAttentionQueue';
@@ -95,6 +96,12 @@ interface AdminHubFrameProps<K extends string> {
   onTabChange?: ((tab: K) => void) | undefined;
   /** Replaces the standard tab bar for a module with its own navigation. */
   nav?: React.ReactNode;
+  /**
+   * The caller's `nav` cannot be drawn yet — Inventory and Scheduling build
+   * theirs from the enabled modules — so what sits under it waits with it, as
+   * it does for the summary.
+   */
+  navPending?: boolean | undefined;
 
   /**
    * Change this to make the frame refetch — a page that resolves an exception
@@ -127,6 +134,7 @@ export function AdminHubFrame<K extends string>({
   activeTab,
   onTabChange,
   nav,
+  navPending = false,
   refreshToken,
   showAttentionQueue = true,
   onSummaryChange,
@@ -135,6 +143,15 @@ export function AdminHubFrame<K extends string>({
   const [summary, setSummary] = useState<AdminHubSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The attention queue exists only when the summary carries items, so until
+  // the first summary settles nothing can know whether it will take ~290px
+  // above the tabs and the body, and drawn in the meantime they were pushed
+  // down when it arrived, on every hub route. A nav the caller cannot build
+  // yet is the same. The body is a card row that scrolls its selected card into
+  // view on mount, which is why this hides with `visibility`: see
+  // useFirstLoadHold.
+  const [summaryPending, setSummaryPending] = useState(wantsSummary && showAttentionQueue);
+  const held = useFirstLoadHold(summaryPending || navPending);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   // Held in a ref so a caller passing an inline callback does not re-run the
   // fetch on every render.
@@ -148,6 +165,7 @@ export function AdminHubFrame<K extends string>({
       setSummary(null);
       setError(null);
       setLoading(false);
+      setSummaryPending(false);
       onSummaryChangeRef.current?.(null);
       return;
     }
@@ -165,6 +183,7 @@ export function AdminHubFrame<K extends string>({
       setError(getErrorMessage(err, 'Could not load this page’s summary.'));
     } finally {
       setLoading(false);
+      setSummaryPending(false);
     }
   }, [moduleKey, wantsSummary]);
 
@@ -290,7 +309,8 @@ export function AdminHubFrame<K extends string>({
           <AdminMetricsRow
             metrics={summary?.metrics ?? []}
             loading={loading && summary === null}
-            className="order-2 sm:order-1"
+            // On a phone the queue is drawn above the metrics, so they wait too.
+            className={`order-2 sm:order-1 ${held ? 'max-sm:invisible' : ''}`}
             queueShown={Boolean(summary) && showAttentionQueue}
           />
           {summary && showAttentionQueue && (
@@ -322,67 +342,72 @@ export function AdminHubFrame<K extends string>({
             declares that scroll as intentional to the mobile overflow check; no
             tabIndex, because a tablist stays out of the tab order (its tabs use
             roving tabindex) and the tabs themselves reach the hidden end. */}
-        {cardTabs && activeTab && onTabChange && (
-          <AdminHubCardTabs<K>
-            tabs={cardTabs}
-            activeTab={activeTab}
-            onTabChange={onTabChange}
-            label={`${title} sections`}
-            idPrefix={idPrefix}
-          />
-        )}
-        {tabs && !cardTabs && !singleDescribedTab && activeTab && onTabChange && (
-          <div className="border-theme-surface-border border-b">
-            <div
-              className="tab-scroll border-b-0"
-              role="tablist"
-              aria-label={`${title} tabs`}
-              data-mobile-scroll-region
-            >
-              {tabs.map((tab) => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    ref={(node) => {
-                      tabRefs.current[tab.id] = node;
-                    }}
-                    role="tab"
-                    type="button"
-                    aria-selected={isActive}
-                    tabIndex={isActive ? 0 : -1}
-                    onClick={() => onTabChange(tab.id)}
-                    onKeyDown={handleTabKeyDown}
-                    className={`focus:ring-theme-focus-ring touch:py-3 border-b-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
-                      isActive
-                        ? 'text-theme-text-primary border-red-500'
-                        : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
+        {/* `contents`, so the wrapper adds no box and the gap above still applies. */}
+        <div className={held ? 'invisible contents' : 'contents'}>
+          {cardTabs && activeTab && onTabChange && (
+            <AdminHubCardTabs<K>
+              tabs={cardTabs}
+              activeTab={activeTab}
+              onTabChange={onTabChange}
+              label={`${title} sections`}
+              idPrefix={idPrefix}
+            />
+          )}
+          {tabs && !cardTabs && !singleDescribedTab && activeTab && onTabChange && (
+            <div className="border-theme-surface-border border-b">
+              <div
+                className="tab-scroll border-b-0"
+                role="tablist"
+                aria-label={`${title} tabs`}
+                data-mobile-scroll-region
+              >
+                {tabs.map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      ref={(node) => {
+                        tabRefs.current[tab.id] = node;
+                      }}
+                      role="tab"
+                      type="button"
+                      aria-selected={isActive}
+                      tabIndex={isActive ? 0 : -1}
+                      onClick={() => onTabChange(tab.id)}
+                      onKeyDown={handleTabKeyDown}
+                      className={`focus:ring-theme-focus-ring touch:py-3 border-b-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+                        isActive
+                          ? 'text-theme-text-primary border-red-500'
+                          : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
-        {nav}
+          )}
+          {nav}
+        </div>
       </div>
 
       {/* 5 — Body. Free: table, form, calendar, card grid — the module's own.
           Under card tabs it is their tabpanel, so the selected card's
           aria-controls resolves to it. */}
-      {cardTabs && activeTab ? (
-        <div
-          id={`${idPrefix}-panel-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`${idPrefix}-tab-${activeTab}-label`}
-        >
-          {children}
-        </div>
-      ) : (
-        children
-      )}
+      <div data-testid="admin-hub-body" className={held ? 'invisible contents' : 'contents'}>
+        {cardTabs && activeTab ? (
+          <div
+            id={`${idPrefix}-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`${idPrefix}-tab-${activeTab}-label`}
+          >
+            {children}
+          </div>
+        ) : (
+          children
+        )}
+      </div>
     </div>
   );
 }

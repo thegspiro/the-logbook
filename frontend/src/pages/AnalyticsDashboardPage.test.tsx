@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AnalyticsDashboardPage from './AnalyticsDashboardPage';
 import { analyticsService } from '../services/analytics';
@@ -45,5 +45,50 @@ describe('AnalyticsDashboardPage', () => {
 
     await waitFor(() => expect(analyticsService.getOverallMetrics).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Total Scans')).toBeInTheDocument();
+  });
+
+  describe('while loading', () => {
+    beforeEach(() => {
+      vi.mocked(analyticsService.getOverallMetrics).mockReset();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('draws the header and the metric cards before the figures arrive', () => {
+      vi.mocked(analyticsService.getOverallMetrics).mockReturnValue(new Promise(() => {}));
+      render(
+        <MemoryRouter>
+          <AnalyticsDashboardPage />
+        </MemoryRouter>
+      );
+
+      expect(screen.getByRole('heading', { name: 'QR Code Analytics' })).toBeInTheDocument();
+      expect(screen.getByText('Total Scans')).toBeInTheDocument();
+      expect(screen.getByText('Avg Time to Check-In')).toBeInTheDocument();
+    });
+
+    // The refresh sets `loading` too, and used to swap the whole page for a
+    // bare "Loading analytics..." every ten seconds.
+    it('keeps the figures on screen through the ten-second refresh', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.mocked(analyticsService.getOverallMetrics)
+        .mockResolvedValueOnce({ ...metrics, totalScans: 42 })
+        .mockReturnValue(new Promise(() => {}));
+      render(
+        <MemoryRouter>
+          <AnalyticsDashboardPage />
+        </MemoryRouter>
+      );
+      expect(await screen.findByText('42')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+
+      expect(analyticsService.getOverallMetrics).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('42')).toBeInTheDocument();
+    });
   });
 });

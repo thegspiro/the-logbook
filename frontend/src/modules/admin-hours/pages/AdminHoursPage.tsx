@@ -28,6 +28,7 @@ import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { addCalendarDays, formatDate, formatTime, getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
 import { useAuthStore } from '../../../stores/authStore';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
@@ -199,6 +200,19 @@ const AdminHoursPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // The clocked-in card is drawn only while a session is open, ~150-230px
+  // above everything else, so the rest waits for this visit's first answer
+  // rather than being pushed down by it (see useFirstLoadHold). The store's
+  // flag is shared and starts false, so the answer is the flag falling after
+  // it rose, not the flag being false.
+  const sessionRequested = useRef(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  useEffect(() => {
+    if (activeSessionLoading) sessionRequested.current = true;
+    else if (sessionRequested.current) setSessionChecked(true);
+  }, [activeSessionLoading]);
+  const held = useFirstLoadHold(!sessionChecked);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -428,7 +442,11 @@ const AdminHoursPage: React.FC = () => {
   const totalPages = Math.ceil(myEntriesTotal / PAGE_SIZE);
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
+    // While held, everything after the header — its first child — is invisible.
+    <div
+      data-testid="admin-hours-page"
+      className={`mx-auto max-w-4xl p-6 ${held ? '[&>*:not(:first-child)]:invisible' : ''}`}
+    >
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>

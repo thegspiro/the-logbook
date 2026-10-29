@@ -5,7 +5,7 @@ import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs } from '../components/ux';
+import { Breadcrumbs, SkeletonText } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
 import { getRSVPStatusLabel } from '../utils/eventHelpers';
@@ -150,12 +150,45 @@ const EventCheckInMonitoringPage: React.FC = () => {
     { label: 'Check-In Monitoring' },
   ];
 
+  // Loading draws the page it will become — the header and the four metric
+  // cards, with placeholders where the figures go. A line of text in a narrower
+  // column was replaced by them wholesale, and the cards landed ~290px lower.
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl p-6">
-        <Breadcrumbs items={trail} />
-        <div className="flex items-center justify-center py-24">
-          <div className="text-theme-text-secondary">Loading monitoring dashboard...</div>
+      <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <EventsPageHeader
+          icon={Activity}
+          title="Check-In Monitoring"
+          parentCrumbs={[{ label: 'Event', path: `/events/${eventId ?? ''}` }]}
+          subtitle={
+            <p className="text-theme-text-secondary text-xl">
+              <SkeletonText className="w-48" />
+            </p>
+          }
+          actions={
+            <div className="sm:text-right">
+              <div className="text-sm">
+                <SkeletonText className="w-36" />
+              </div>
+              <div className="mt-1 inline-flex px-3 py-1 text-sm">
+                <SkeletonText className="w-24" />
+              </div>
+            </div>
+          }
+        />
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <span className="sr-only">Loading monitoring dashboard...</span>
+          {['Checked In', 'Check-In Rate', 'Total RSVPs', 'Avg Check-In Time'].map((label) => (
+            <div key={label} className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+              <div className="text-theme-text-muted mb-1 text-sm font-medium">{label}</div>
+              <div className="text-3xl font-bold">
+                <SkeletonText className="w-16" />
+              </div>
+              <div className="mt-1 text-sm">
+                <SkeletonText className="w-24" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );

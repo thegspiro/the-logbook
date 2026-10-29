@@ -31,6 +31,7 @@ const fetchActiveSession = vi.fn();
 const getUserCompliance = vi.fn<() => Promise<AdminHoursComplianceItem[]>>();
 
 let mySummary: AdminHoursSummary | null;
+let activeSessionLoading = false;
 
 const storeState = () => ({
   categories: [
@@ -41,7 +42,7 @@ const storeState = () => ({
   myEntriesTotal: 0,
   entriesLoading: false,
   activeSession: null,
-  activeSessionLoading: false,
+  activeSessionLoading,
   mySummary,
   mySummaryLoading: false,
   error: null,
@@ -96,6 +97,7 @@ const populatedSummary: AdminHoursSummary = {
 describe('AdminHoursPage', () => {
   beforeEach(() => {
     mySummary = populatedSummary;
+    activeSessionLoading = false;
     vi.clearAllMocks();
     getUserCompliance.mockResolvedValue([]);
   });
@@ -336,5 +338,22 @@ describe('AdminHoursPage manual entry times', () => {
     await openForm();
 
     expect(screen.getByRole('button', { name: '2 hours' })).toBeDisabled();
+  });
+
+  // The clocked-in card is drawn only while a session is open, above
+  // everything else, so the rest waits for the session check rather than
+  // being pushed down by its answer.
+  it('keeps the page under the header invisible until the session check answers', () => {
+    // jsdom applies no stylesheet, so this reads the class that hides every
+    // child of the page after the header, its first.
+    const HIDES_ALL_BUT_HEADER = '[&>*:not(:first-child)]:invisible';
+    activeSessionLoading = true;
+    const { rerender } = renderWithRouter(<AdminHoursPage />);
+    const page = () => screen.getByTestId('admin-hours-page');
+    expect(page()).toHaveClass(HIDES_ALL_BUT_HEADER);
+
+    activeSessionLoading = false;
+    rerender(<AdminHoursPage />);
+    expect(page()).not.toHaveClass(HIDES_ALL_BUT_HEADER);
   });
 });
