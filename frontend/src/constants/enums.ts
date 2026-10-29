@@ -481,6 +481,23 @@ export const MemberStatus = {
 } as const;
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
 
+// ============================================
+// Position Kind
+// ============================================
+// What a position is. Mirrors POSITION_KINDS in backend/app/core/permissions.py.
+export const PositionKind = {
+  OFFICE: 'office',
+  COMMITTEE: 'committee',
+  SYSTEM: 'system',
+} as const;
+export type PositionKind = (typeof PositionKind)[keyof typeof PositionKind];
+
+export const POSITION_KIND_LABELS: Record<PositionKind, string> = {
+  office: 'Office',
+  committee: 'Committee',
+  system: 'System',
+};
+
 export const MEMBER_CLASS_LABELS: Record<MemberClass, string> = {
   operational: 'Operational',
   administrative: 'Administrative',

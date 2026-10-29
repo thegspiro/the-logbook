@@ -118,6 +118,24 @@ describe('MembersAdminPage — the roster names rank, membership type and positi
     expect(screen.getByRole('columnheader', { name: 'Membership' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Roles' })).not.toBeInTheDocument();
   });
+
+  it('marks a committee apart from an office on the roster chips', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      {
+        ...member,
+        roles: [
+          { ...memberRole, id: 'r-treasurer', name: 'Treasurer', slug: 'treasurer', kind: 'office' },
+          { ...memberRole, id: 'r-history', name: 'History Committee', slug: 'history_committee', kind: 'committee' },
+        ],
+      },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    const row = await screen.findByRole('row', { name: /Jordan Avery/ });
+    // The chip is the element whose own text is the name.
+    expect(within(row).getByText('Treasurer')).toHaveAttribute('data-kind', 'office');
+    expect(within(row).getByText('History Committee')).toHaveAttribute('data-kind', 'committee');
+  });
 });
 
 describe('MembersAdminPage — Manage Positions refusals (workflow review W05)', () => {

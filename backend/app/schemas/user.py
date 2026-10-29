@@ -637,6 +637,13 @@ class RoleResponse(BaseModel):
     # is where a rank is set. Defaults False so a dict built without it is
     # still a valid response.
     mirrors_rank: bool = False
+    # office | committee | system; the profile groups a member's positions by it.
+    kind: str = "office"
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _coerce_null_kind(cls, v: object) -> object:
+        return v if v else "office"
 
     @field_validator("permissions", mode="before")
     @classmethod

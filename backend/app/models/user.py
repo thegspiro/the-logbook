@@ -869,6 +869,14 @@ event.listen(User, "before_insert", _reconcile_membership)
 event.listen(User, "before_update", _reconcile_membership)
 
 
+class PositionKind(str, Enum):
+    """What a position is; mirrors ``POSITION_KINDS`` in core/permissions."""
+
+    OFFICE = "office"
+    COMMITTEE = "committee"
+    SYSTEM = "system"
+
+
 class Position(Base):
     """
     Corporate Position model for permission-based access control.
@@ -898,6 +906,16 @@ class Position(Base):
     priority: Mapped[Optional[int]] = mapped_column(
         Integer, default=0
     )  # Higher priority = more powerful
+    # office | committee | system -- see ``PositionKind``. Decides how the
+    # member screens group a held position ("Offices" beside "Committees")
+    # and nothing about permissions, which stay on ``permissions``.
+    kind: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="office",
+        server_default="office",
+        index=True,
+    )
 
     # Per-position UI preferences (e.g. the inventory label printer/size this
     # role uses). Nullable JSON; mutate via copy.deepcopy + reassign.

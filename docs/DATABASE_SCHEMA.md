@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**321 tables · 5306 columns · 1084 foreign keys**
+**321 tables · 5307 columns · 1084 foreign keys**
 
 ---
 
@@ -722,7 +722,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`member_service_periods`](#member_service_periods) | `MemberServicePeriod` | 11 | One continuous stint of membership, for calculating length of service. |
 | [`organizations`](#organizations) | `Organization` | 38 | Organization/Department model |
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
-| [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
+| [`positions`](#positions) | `Position` | 12 | Corporate Position model for permission-based access control. |
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
@@ -10996,6 +10996,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `permissions` | JSON | yes |  | `list()` |  |
 | `is_system` | BOOL | yes |  | `False` |  |
 | `priority` | INTEGER | yes |  | `0` |  |
+| `kind` | VARCHAR(20) | no | IDX | `office` |  |
 | `settings` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -11003,6 +11004,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - UNIQUE `idx_position_org_slug` (`organization_id`, `slug`)
+- `ix_positions_kind` (`kind`)
 
 ### `prospects`
 

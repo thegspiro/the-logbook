@@ -38,7 +38,7 @@ import { useAuthStore } from '../stores/authStore';
 import toast from 'react-hot-toast';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
-import { mirrorsRank, withoutRankMirrors } from '../utils/positions';
+import { isCommittee, mirrorsRank, withoutRankMirrors } from '../utils/positions';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
@@ -340,9 +340,12 @@ export const MembersAdminPage: React.FC = () => {
   // is — but one a member already holds stays listed so it can be taken off.
   // Hidden assignments survive a save untouched: `selectedRoleIds` starts from
   // every position the member holds, and only the offered ones can be toggled.
-  const offeredPositions = roles.filter(
-    (role) => !mirrorsRank(role) || !!selectedUser?.roles.some((held) => held.id === role.id)
-  );
+  // Offices first, then committees, each in the server's priority order, so
+  // the dialog reads as two lists rather than one with committees scattered
+  // through it.
+  const offeredPositions = roles
+    .filter((role) => !mirrorsRank(role) || !!selectedUser?.roles.some((held) => held.id === role.id))
+    .sort((a, b) => Number(isCommittee(a)) - Number(isCommittee(b)));
 
   const handleToggleRole = (roleId: string) => {
     setSelectedRoleIds((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
@@ -735,10 +738,13 @@ export const MembersAdminPage: React.FC = () => {
                           withoutRankMirrors(user.roles).map((role) => (
                             <span
                               key={role.id}
+                              data-kind={isCommittee(role) ? 'committee' : 'office'}
                               className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
-                                role.is_system
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                                  : 'bg-theme-surface text-theme-text-secondary'
+                                isCommittee(role)
+                                  ? 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300'
+                                  : role.is_system
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                    : 'bg-theme-surface text-theme-text-secondary'
                               }`}
                             >
                               {role.name}
@@ -852,6 +858,11 @@ export const MembersAdminPage: React.FC = () => {
                           {role.is_system && (
                             <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                               System
+                            </span>
+                          )}
+                          {isCommittee(role) && (
+                            <span className="inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-900 dark:bg-teal-500/20 dark:text-teal-300">
+                              Committee
                             </span>
                           )}
                         </div>
@@ -1329,6 +1340,11 @@ export const MembersAdminPage: React.FC = () => {
                     {mirrorsRank(role) && (
                       <span className="rounded-sm bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
                         Rank
+                      </span>
+                    )}
+                    {isCommittee(role) && (
+                      <span className="rounded-sm bg-teal-100 px-2 py-0.5 text-xs text-teal-900 dark:bg-teal-500/20 dark:text-teal-300">
+                        Committee
                       </span>
                     )}
                   </div>

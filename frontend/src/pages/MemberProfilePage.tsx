@@ -37,7 +37,7 @@ import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
-import { withoutRankMirrors } from '../utils/positions';
+import { groupPositionsByKind } from '../utils/positions';
 import {
   effectiveMemberClass,
   isAdministrativeMember,
@@ -751,6 +751,7 @@ export const MemberProfilePage: React.FC = () => {
     (inventoryModuleEnabled && canViewTargetInventory) ||
     Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0);
 
+  const heldPositions = groupPositionsByKind(user?.roles || []);
   const rankLabel = user
     ? isAdministrativeMember(user.member_class, user.membership_type)
       ? 'Administrative'
@@ -890,8 +891,14 @@ export const MemberProfilePage: React.FC = () => {
                     @{user.username}
                     {user.membership_number && <> · #{user.membership_number}</>}
                   </p>
+                  {/* Offices and committees apart: a Treasurer who also
+                      serves on the History Committee holds two different
+                      kinds of thing, and one row of chips said otherwise. */}
+                  {heldPositions.committees.length > 0 && heldPositions.offices.length > 0 && (
+                    <p className="text-theme-text-muted mt-2 text-xs font-medium uppercase">Offices</p>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {withoutRankMirrors(user.roles || []).map((role) => (
+                    {heldPositions.offices.map((role) => (
                       <span
                         key={role.id}
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -904,6 +911,21 @@ export const MemberProfilePage: React.FC = () => {
                       </span>
                     ))}
                   </div>
+                  {heldPositions.committees.length > 0 && (
+                    <>
+                      <p className="text-theme-text-muted mt-2 text-xs font-medium uppercase">Committees</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {heldPositions.committees.map((role) => (
+                          <span
+                            key={role.id}
+                            className="inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-900 dark:bg-teal-500/20 dark:text-teal-300"
+                          >
+                            {role.name}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
