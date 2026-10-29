@@ -2365,12 +2365,19 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    members are the exceptions. **Same refusal now extends to pattern
    generation (2026-10-24):** generated seats run the same check, so an
    excluded member is left unseated rather than seated by the pattern.
+   **Resolved (2026-10-29), owner decision: correct the text.** The card now
+   says an excluded type cannot sign up or be assigned, except to a shift
+   opened to all members. No override was added.
 6. **"Manage schedules" sees assign controls the server refuses.**
    `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
    `scheduling.manage` holders, but creating, editing or removing an assignment
    requires `scheduling.assign` or being the shift officer
    (`endpoints/scheduling.py`); `scheduling.manage` does not imply it. The
    officer fills the form and gets "Insufficient permissions".
+   **Resolved (2026-10-29), owner decision: hide the controls.** Both screens
+   now offer assigning only to `scheduling.assign` holders and the shift's own
+   officer; the server's rule is unchanged. A manage-only officer still sees
+   the check-in QR code and the declined/removed list, which are read-only.
 7. **A shift-panel hint points to a tab that no longer exists.**
    `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
    tab". Equipment checks moved to Inventory; the working route is the panel's

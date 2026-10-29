@@ -566,7 +566,8 @@ You need to be able to manage schedules for both of these.
 ## Shift Assignments
 
 **Who can do this:** officers whose position includes **Assign members to
-shifts** or **Manage schedules**, and the shift officer named on that shift.
+shifts**, and the shift officer named on that shift. **Manage schedules** alone
+does not let you assign anyone, and the buttons below are not shown to you.
 
 1. On the calendar, open the shift's **Shift details**.
 2. On an open seat in the crew board, select **Assign someone** (on a narrow
@@ -3840,7 +3841,7 @@ eligibility. Don't confuse the two:
 
 | Setting                       | What it does                                                                                                                         |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Excluded from Self-Signup** | Membership types that cannot sign themselves up for shifts. Unless you change it: Prospective, Retired, Honorary and Administrative |
+| **Excluded from Self-Signup** | Types that can't sign up or be assigned, except to a shift open to all. By default: Prospective, Retired, Honorary, Administrative  |
 | **Open Positions**            | Seats any eligible member can sign up for, whatever their rank or training                                                           |
 | **Members can sign up until** | When a shift stops taking sign-ups: when it starts, or 15 minutes to 1 day before                                                    |
 
@@ -3884,9 +3885,8 @@ Scheduling uses two permissions. On the Role Management screen:
 - With **Assign members to shifts** only, you can fill existing shifts but not
   create or delete them.
 - **Assigning always needs Assign members to shifts** (or being the officer
-  named on that shift). With **Manage schedules** alone, the crew board
-  controls still show, but The Logbook refuses the assignment. Give scheduling
-  officers both.
+  named on that shift). With **Manage schedules** alone, the crew board's
+  assign controls are not shown. Give scheduling officers both.
 - **The officer named on a shift** can manage that shift's crew, attendance,
   calls and close-out without either permission. Editing or deleting the shift
   itself still needs **Manage schedules**.

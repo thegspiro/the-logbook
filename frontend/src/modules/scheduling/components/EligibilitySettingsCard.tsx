@@ -124,8 +124,8 @@ export const EligibilitySettingsCard: React.FC = () => {
           Excluded from Self-Signup
         </h4>
         <p className="text-theme-text-muted mb-3 text-xs">
-          Members with these membership types cannot sign themselves up for shifts. Admins can still assign them
-          manually.
+          Members with these membership types cannot sign themselves up for shifts, and an officer cannot assign them
+          either. The exception is a shift opened to all members.
         </p>
         <div role="group" aria-labelledby="eligibility-excluded-types" className="flex flex-wrap gap-2">
           {ALL_MEMBERSHIP_TYPES.map((type) => {
