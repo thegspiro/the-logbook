@@ -493,11 +493,12 @@ def _incomplete_required_steps(
 
 
 def _required_steps_refusal(names: List[str]) -> str:
-    listed = ", ".join(f"'{n}'" for n in names)
     noun = "stage is" if len(names) == 1 else "stages are"
-    return (
+    return list_within_detail_limit(
         f"This applicant cannot be converted yet: the required {noun} not "
-        f"complete: {listed}."
+        "complete: ",
+        [f"'{n}'" for n in names],
+        ".",
     )
 
 
@@ -7669,6 +7670,19 @@ class MembershipPipelineService:
             snapshot["date_of_birth"] = (
                 str(prospect.date_of_birth) if prospect.date_of_birth else None
             )
+        # Only when the stage asks for it: a stage configured before this
+        # setting existed has no package_fields to say so, and _field_enabled
+        # reads that as "everything" -- which must not start copying answers
+        # into packages that never carried them.
+        if (
+            package_fields is not None
+            and package_fields.get("include_follow_up_answers") is True
+        ):
+            from app.services.follow_up_form_service import FollowUpFormService
+
+            snapshot["follow_up_forms"] = await FollowUpFormService(
+                self.db
+            ).package_answers(str(prospect.id), str(prospect.organization_id))
 
         pkg = ProspectElectionPackage(
             id=generate_uuid(),
@@ -8607,6 +8621,16 @@ class MembershipPipelineService:
             current_stage_action = self._build_current_stage_action(
                 prospect.current_step
             )
+            if (
+                current_stage_action is None
+                and effective_step_type(prospect.current_step)
+                == PipelineStepType.FOLLOW_UP_FORM
+            ):
+                from app.services.follow_up_form_service import FollowUpFormService
+
+                current_stage_action = await FollowUpFormService(
+                    self.db
+                ).status_page_action(prospect)
 
         next_meeting = None
         found = await self._status_page_meeting(prospect, public_step_ids, show_future)

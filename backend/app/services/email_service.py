@@ -2784,6 +2784,114 @@ class EmailService:
         )
         return success_count > 0
 
+    async def send_follow_up_reminder_email(
+        self,
+        to_email: str,
+        first_name: str,
+        applicant_name: str,
+        form_name: str,
+        form_url: str,
+        reminder_number: int,
+        has_draft: bool,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Remind an applicant that a follow-up form is still unsubmitted."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML,
+            DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT,
+            DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT,
+        )
+
+        draft_note = "The answers you have saved so far are still there."
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER,
+            context={
+                "first_name": first_name,
+                "applicant_name": applicant_name,
+                "form_name": form_name,
+                "form_url": form_url,
+                "reminder_number": str(reminder_number),
+                "draft_note_html": f"<p>{draft_note}</p>" if has_draft else "",
+                "draft_note_text": f"{draft_note}\n\n" if has_draft else "",
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT,
+            default_html=DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML,
+            default_text=DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER.value,
+        )
+        return success_count > 0
+
+    async def send_follow_up_submitted_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        form_name: str,
+        stage_name: str,
+        applicant_url: str,
+        contact_changed: bool,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a membership coordinator an applicant submitted a follow-up
+        form. A link only, never the answers."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML,
+            DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT,
+            DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT,
+        )
+
+        contact_note = (
+            "The applicant changed their contact details. Check them on the "
+            "applicant's page."
+        )
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "form_name": form_name,
+                "stage_name": stage_name,
+                "applicant_url": applicant_url,
+                "contact_note_html": (
+                    f"<p><strong>{contact_note}</strong></p>" if contact_changed else ""
+                ),
+                "contact_note_text": (f"{contact_note}\n\n" if contact_changed else ""),
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML,
+            default_text=DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED.value,
+        )
+        return success_count > 0
+
     async def send_inactivity_warning_email(
         self,
         to_email: str,

@@ -104,6 +104,42 @@ describe('ApplicationStatusPage current-stage action', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('opens the applicant’s follow-up form from its card', async () => {
+    const token = 'a'.repeat(43);
+    mockGetApplicationStatus.mockResolvedValue({
+      ...baseStatus,
+      current_stage_action: {
+        type: 'follow_up_form',
+        label: 'Complete your form: Background Questionnaire',
+        url: `https://logbook.example.org/application-form/${token}`,
+        message: 'The department needs a few more details from you.',
+      },
+    });
+
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: /Open the form/i });
+    // Followed in-app by path, whatever host FRONTEND_URL names.
+    expect(link).toHaveAttribute('href', `/application-form/${token}`);
+    expect(screen.getByText('Complete your form: Background Questionnaire')).toBeInTheDocument();
+  });
+
+  it('offers no button for a follow-up link that is not a form link', async () => {
+    mockGetApplicationStatus.mockResolvedValue({
+      ...baseStatus,
+      current_stage_action: {
+        type: 'follow_up_form',
+        label: 'Complete your form: Background Questionnaire',
+        url: 'https://evil.example.com/login',
+      },
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Complete your form: Background Questionnaire')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open the form/i })).not.toBeInTheDocument();
+  });
+
   it('renders no action card when none is present', async () => {
     mockGetApplicationStatus.mockResolvedValue({ ...baseStatus });
 

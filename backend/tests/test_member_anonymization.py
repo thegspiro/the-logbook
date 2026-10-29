@@ -14,6 +14,7 @@ from app.models.membership_pipeline import (
     MembershipPipelineStep,
     PipelineStepType,
     ProspectDocument,
+    ProspectElectionPackage,
     ProspectFormRequest,
     ProspectiveMember,
     ProspectStepProgress,
@@ -236,6 +237,56 @@ class TestAnonymizeMember:
         assert request.changes is None
         assert submission.data == {}
         assert submission.sensitive_data is None
+
+    async def test_scrubs_the_election_package_copy(self, db_session):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Pat",
+            last_name="Firefighter",
+            email="pat.package@example.org",
+            transferred_user_id=user.id,
+        )
+        db_session.add(prospect)
+        await db_session.flush()
+        stages = [{"stage_name": "Interview", "completed_at": "2026-09-01"}]
+        package = ProspectElectionPackage(
+            prospect_id=prospect.id,
+            status="draft",
+            applicant_snapshot={
+                "first_name": "Pat",
+                "last_name": "Firefighter",
+                "email": "pat.package@example.org",
+                "address_street": "1 Main St",
+                "notes": "Lives with her mother",
+                "desired_membership_type": "regular",
+                "stage_history": stages,
+                "follow_up_forms": [
+                    {"answers": [{"label": "Why now?", "answer": "Moved here"}]}
+                ],
+            },
+            coordinator_notes="Pat mentioned a back injury",
+            package_config={
+                "supporting_statement": "Pat has been a great help",
+                "recommended_ballot_item": {"title": "Approve"},
+            },
+        )
+        db_session.add(package)
+        await db_session.flush()
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        snapshot = package.applicant_snapshot
+        assert snapshot["first_name"] == "Former"
+        assert snapshot["last_name"].startswith("Member-")
+        assert snapshot["desired_membership_type"] == "regular"
+        assert snapshot["stage_history"] == stages
+        for gone in ("email", "address_street", "notes", "follow_up_forms"):
+            assert gone not in snapshot
+        assert package.coordinator_notes is None
+        assert "supporting_statement" not in package.package_config
+        assert package.package_config["recommended_ballot_item"] == {"title": "Approve"}
 
     async def test_scrubs_applicant_screening_and_source_form(self, db_session):
         org = await _make_org(db_session)
