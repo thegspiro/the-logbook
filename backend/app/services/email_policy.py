@@ -287,6 +287,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "Shift reminders",
             "Shift assignments",
+            "A shift you were on was cancelled",
             "Shift swap expired",
             "End-of-shift summary",
             "Overdue trainee shift reports",

@@ -2490,6 +2490,9 @@ recorded here rather than built.
    notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
    email the channel of record; whether a cancellation should email, and
    under which member email kind, is a product decision.
+   **Resolved (2026-10-29), owner decision: email under Shift notices.** The
+   crew is now emailed as well as notified in the app, after the cancellation
+   is saved; a member who turned Shift notices off gets the bell entry only.
 7. **The month and week calendars stop at 500 shifts without saying so.**
    `get_month_shifts` and `get_week_shifts` pass `limit=500`, so a department
    running enough units with day and night shifts loses the end of the month

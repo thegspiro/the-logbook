@@ -1493,7 +1493,9 @@ Cancelling:
 
 - keeps the shift for history;
 - marks everyone's assignment cancelled;
-- notifies the assigned crew; and
+- notifies the assigned crew with a bell notice and an email, with the reason
+  if you gave one (the email is under **Shift notices**, so a member who
+  turned those off gets only the bell notice); and
 - removes the shift from the Open Shifts list. It shows a **This shift is
   cancelled** banner.
 

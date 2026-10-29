@@ -2805,7 +2805,7 @@ class SchedulingService:
 
         Preserves the shift record and its history (unlike ``delete_shift``),
         marks all active assignments cancelled, and notifies the assigned
-        crew. A finalized shift cannot be cancelled — its data is locked for
+        crew in the app and by email. A finalized shift cannot be cancelled — its data is locked for
         training-requirement tracking.
         """
         try:
@@ -2841,6 +2841,13 @@ class SchedulingService:
             )
             shift.cancellation_reason = reason or None
 
+            await self.db.commit()
+            await self.db.refresh(shift)
+
+            # After the commit, so a cancellation that fails to save never
+            # emails the crew. The bell entry and the email (Shift notices, on
+            # unless the member turned it off) go out together: a member who
+            # reads only email would otherwise turn up for a shift that is off.
             if recipient_ids:
                 shift_date_str = (
                     shift.shift_date.isoformat()
@@ -2850,6 +2857,13 @@ class SchedulingService:
                 message = f"Your shift on {shift_date_str} has been cancelled."
                 if reason:
                     message += f" Reason: {reason}"
+                org = (
+                    await self.db.execute(
+                        select(Organization).where(
+                            Organization.id == str(organization_id)
+                        )
+                    )
+                ).scalar_one_or_none()
                 await self._send_notification(
                     recipient_ids=recipient_ids,
                     subject="Shift Cancelled",
@@ -2858,10 +2872,12 @@ class SchedulingService:
                     organization_id=organization_id,
                     action_url="/scheduling",
                     notification_metadata={"shift_id": str(shift_id)},
+                    send_email=True,
+                    email_kind=EmailKind.SHIFT_NOTICES,
+                    email_subject=f"Shift cancelled — {shift_date_str}",
+                    org=org,
                 )
-
-            await self.db.commit()
-            await self.db.refresh(shift)
+                await self.db.commit()
             await self._cancel_swaps_for_vacated_seats(
                 organization_id, shift_ids=[shift_id]
             )
