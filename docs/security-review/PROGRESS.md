@@ -16,6 +16,63 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR pending** (branch `claude/security-review-events-requests-p12`) —
+Feature 16 (Events & requests), pass 12, a watchdog pickup. Dedicated
+`/loop 30m /security-review` session remains unreachable. PR #3840
+(Feature 15, Scheduling, pass 12) had already merged (`731396b9`).
+Confirmed no security-review PR open via `list_pull_requests` (state=open)
+— the one open PR at the time (#3839) is unrelated layout work on branch
+`ccr-ba1682dc-g25b70`, not a `claude/security-review-*` head. Row 16
+confirmed as the next feature per PR #3840's own "next feature" note (the
+rotation table's row still read ⬜, as rows 12-15 did after their own
+merges — that table is caught up the iteration _after_ a PR merges, not by
+the PR that does the review; this iteration's own Step 0 ride-along marks
+row 15 ✅ in this same commit).
+
+**0 fixed, 0 new findings.** Baseline `e8e0e075` (PR #3748's merge, pass
+11). 8 non-merge commits touch 6 of 12 declared backend files plus 8 of 13
+declared frontend files, out of 334 non-merge commits repo-wide in the
+window. The two substantive changes are authorization widenings —
+`5764dafd` lets an event's own organizer/alternate and `training.manage`
+run nine existing attendance routes (previously `events.manage`-only), and
+`692b2832` extends the same shape to five existing admin routes
+(edit/finalize/reopen/end/record-times) for `training.manage` on Training
+events only — both re-derived end to end against every checklist
+dimension (org-scoped-fetch-before-decision, separation of duties via
+`_refuse_own_attendance`, a TOCTOU-safe series type-lock checked on the
+rows the update itself locks, detail-only server-decided response flags)
+rather than taken on the commit messages' word, and both found clean with
+no fix needed. The rest of the window's declared-scope touches are a
+guest-QR visibility fix (`9458cb31`, centralizes one window definition,
+not new attack surface), a switched-off-template email skip (`0a7e2a9e`,
+this feature's slice of a repo-wide fix), a repo-wide email-encryption
+migration's slice (`43c11090`/`b48d63f2`, independently re-verified
+`create_all`-tolerant/idempotent/key-gated and confirmed to introduce no
+broken search), and two disclosure-hygiene message-cap commits
+(`b4d9388a`/`530edfc1`). EV-23 and EV-26 both re-confirmed
+resolved/accepted, unchanged. Routes re-enumerated by AST, unchanged
+(`events.py` 61, `event_requests.py` 23, `event_attendance_petitions.py` 7,
+`event_guest.py` 4 — 95 total, no new route). See
+`docs/security-review/EV-16-events-requests.md`'s **Pass 12** section for
+the full review.
+
+Completion gate: `flake8`/`black --check` (pinned 26.10.1, via
+`/usr/local/bin/black`)/`isort --check-only` on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 678 revisions, single head
+`f90b1124e6f4`; `check_route_permissions.py --strict` — 280 routes, 0
+errors; `generate_schema_docs.py --check` — up to date; scoped backend
+tests (`pytest tests/ -k "event or guest or rsvp or attendance"`, via
+`python3.13`) — 2137 passed, 1 pre-existing skip (`pywebpush`); frontend
+`npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Rotation row 16 → ⏳ (awaiting this PR's merge, per the legend — the next
+iteration's Step 0 ride-along turns it ✅); next is Feature 17 (Training
+core) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 12, PR #3840, merged), preserved for history</summary>
+
 **PR [#3840](https://github.com/thegspiro/the-logbook/pull/3840)** (branch
 `claude/security-review-scheduling-p12`) — Feature 15
 (Scheduling), pass 12, a watchdog pickup. Dedicated `/loop 30m
@@ -68,6 +125,8 @@ src/modules/scheduling src/pages/scheduling` — 1051 passed (71 files).
 Rotation row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests) — re-check `search_pull_requests`/`list_pull_requests` fresh
 rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 13, PR #3837, merged), preserved for history</summary>
@@ -23256,8 +23315,8 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⏳     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
@@ -23283,6 +23342,87 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-29 — Feature 16 (Events & requests, pass 12) — watchdog pickup, real delta (8 real commits of 334 in scope), two authorization-widening commits reviewed clean against all seven checklist dimensions, 0 fixed, 0 new findings
+
+Watchdog pickup. PR #3840 (Feature 15, Scheduling, pass 12) had already
+merged (`731396b9`), with no `claude/security-review-*` PR open anywhere
+(`list_pull_requests`, state=open — the one open PR, #3839, is unrelated
+layout work). Row 16 (Events & requests) confirmed the next `⬜` row by
+reading the Rotation table directly on a freshly fetched `main`. Row 15
+marked ✅ in this same commit as the Step 0 ride-along from PR #3840's
+merge.
+
+Baseline `e8e0e075` (PR #3748's merge, pass 11). 334 non-merge commits
+touched the repo in the window; real diff in 6 of 12 declared backend
+files (`events.py` +299/-33, `event_service.py` +14,
+`event_request_service.py` +27/-19, `guest_check_in_service.py` +26/-2,
+`models/event.py` +7/-3, `models/event_request.py` +1/-1) plus 8 of 13
+declared frontend files. The other declared files (`event_requests.py`,
+`event_attendance_petitions.py`, `api/public/event_guest.py`,
+`event_attendance_petition_service.py`, `event_organizer_service.py`,
+`qr_check_in_analytics.py`) are byte-identical to pass 11.
+
+**No scope gap this pass** — route counts unchanged (`events.py` 61,
+`event_requests.py` 23, `event_attendance_petitions.py` 7,
+`event_guest.py` 4), and `git diff --name-status` against the whole window
+found no new file touching "event" beyond the fourteen files reviewed.
+
+**Two authorization-widening commits were the substance of this pass**,
+both reviewed end to end rather than taken on their messages:
+`5764dafd` lets an event's own organizer/alternate, and `training.manage`
+on a Training event, reach nine existing attendance routes that previously
+answered only to `events.manage`; `692b2832` extends the same shape to
+five existing admin routes (edit, finalize, reopen, end, record-times) for
+`training.manage` on Training events only. Both decide the new access
+paths against the event read org-scoped **before** granting anything
+(confirmed by a cross-org 404 test in each), enforce separation of duties
+for the organizer path (`_refuse_own_attendance` — an organizer cannot
+write their own attendance, deliberately not applied to the two
+administrative-grant paths), lock a training manager out of changing an
+event's type or reaching a series occurrence of another type (checked on
+the exact rows the update's own query locks, closing a TOCTOU), and expose
+the decision to the frontend only as detail-endpoint-only, server-decided
+response fields (Pitfall #29) rather than letting the client re-derive the
+gate. `tests/permissionless_route_baseline.txt` is updated with a dated,
+reasoned comment for every route whose dependency moved from
+`require_permission` to a handler-side check, so the baseline test does
+not flag them as an unreviewed regression.
+
+The rest of the window's declared-scope touches: a guest-QR visibility fix
+(`9458cb31`, centralizes one window definition the public endpoints
+already enforced — not new attack surface); a switched-off-template email
+skip (`0a7e2a9e`, this feature's slice of a repo-wide fix); a repo-wide
+email-encryption-at-rest migration (`b8236e29ec44`, via
+`43c11090`/`b48d63f2`) touching `event_requests.contact_email` and
+`event_external_attendees.email`/`.email_hash` — independently
+re-verified `create_all`-tolerant (Pitfall #26), idempotent and key-gated,
+and confirmed by grep to introduce no broken search (neither column is
+ever `.like()`/`.ilike()`/`==`-compared in this feature's code; the one
+place that matches by email already goes through the new
+`email_hash`/`email_fingerprints()` path); and two disclosure-hygiene
+message-cap commits (`b4d9388a`/`530edfc1`, the same cross-cutting
+`list_within_detail_limit` class already reviewed for other features).
+EV-23 and EV-26 both re-confirmed resolved/accepted, unchanged.
+
+Full write-up: `docs/security-review/EV-16-events-requests.md`'s
+**Pass 12** section.
+
+Completion gate: `flake8`/`black --check` (pinned 26.10.1)/`isort
+--check-only` on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 678 revisions, single head `f90b1124e6f4`;
+`check_route_permissions.py --strict` — 280 routes, 0 errors;
+`generate_schema_docs.py --check` — up to date (via `python3.13`, the
+interpreter this sandbox's `pip` actually installs into — `python3`
+resolves to 3.11 with no project dependencies installed, flagged per the
+skill's own rule); `pytest tests/ -k "event or guest or rsvp or
+attendance"` — 2137 passed, 1 pre-existing skip (`pywebpush`); `npm run
+typecheck` — 0 errors; `npm run lint` (`eslint --max-warnings 10`) — 0
+errors, 0 warnings.
+
+Row 16 → ⏳ (awaiting this PR's merge); next is Feature 17 (Training core)
+— re-check `list_pull_requests`/`search_pull_requests` fresh rather than
+trusting this note.
 
 ### 2026-10-28 — Feature 09 (Medical screening, PHI, pass 13) — watchdog pickup, near-zero delta (one non-rotation correctness fix, one non-rotation bundling change, both verified), 0 fixed, 0 new findings; MS-14/MS-15 re-confirmed unchanged
 
