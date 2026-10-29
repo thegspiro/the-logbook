@@ -72,6 +72,13 @@ import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
 
+/** The events a Generic Webhook can be sent (backend WEBHOOK_EVENT_TYPES). */
+const WEBHOOK_EVENT_OPTIONS = [
+  { value: 'event.created', label: 'An event is created' },
+  { value: 'shift.created', label: 'A shift is created' },
+  { value: 'training.recorded', label: 'A training record is added' },
+] as const;
+
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
   'google-calendar': {
@@ -423,6 +430,8 @@ const IntegrationsPage: React.FC = () => {
   const [agencyId, setAgencyId] = useState('');
   const [genericWebhookUrl, setGenericWebhookUrl] = useState('');
   const [genericWebhookSecret, setGenericWebhookSecret] = useState('');
+  /** Events the Generic Webhook is sent; none ticked means all of them. */
+  const [webhookEventTypes, setWebhookEventTypes] = useState<string[]>([]);
   const [importFormat, setImportFormat] = useState('csv');
   const [sfInstanceUrl, setSfInstanceUrl] = useState('');
   const [sfClientId, setSfClientId] = useState('');
@@ -612,6 +621,11 @@ const IntegrationsPage: React.FC = () => {
     setAgencyId('');
     setGenericWebhookUrl('');
     setGenericWebhookSecret('');
+    setWebhookEventTypes(
+      Array.isArray(stored['event_types'])
+        ? stored['event_types'].filter((e): e is string => typeof e === 'string')
+        : []
+    );
     setImportFormat('csv');
     setSfInstanceUrl('');
     setSfClientId('');
@@ -683,7 +697,7 @@ const IntegrationsPage: React.FC = () => {
       case 'nemsis-export':
         return { state_code: stateCode, agency_id: agencyId };
       case 'generic-webhook':
-        return { url: genericWebhookUrl, secret: genericWebhookSecret };
+        return { url: genericWebhookUrl, secret: genericWebhookSecret, event_types: webhookEventTypes };
       case 'epcr-import':
         return { import_format: importFormat };
       case 'documenso':
@@ -1222,6 +1236,33 @@ const IntegrationsPage: React.FC = () => {
                 If set, each request is signed with HMAC-SHA256 in the X-Webhook-Signature header.
               </p>
             </div>
+            <fieldset>
+              <legend className={labelClass}>Send these events</legend>
+              <div className="mt-1 space-y-1">
+                {WEBHOOK_EVENT_OPTIONS.map((option) => (
+                  <label key={option.value} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={webhookEventTypes.includes(option.value)}
+                      onChange={(e) =>
+                        setWebhookEventTypes((current) =>
+                          e.target.checked
+                            ? [...current, option.value]
+                            : current.filter((value) => value !== option.value)
+                        )
+                      }
+                    />
+                    <span className="text-theme-text-primary">{option.label}</span>
+                    <code className="text-theme-text-muted text-xs">{option.value}</code>
+                  </label>
+                ))}
+              </div>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Leave all unticked to send every event. Each request carries the event name in its event_type field and
+                the X-Webhook-Event header.
+              </p>
+            </fieldset>
           </div>
         );
 

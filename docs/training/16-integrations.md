@@ -90,7 +90,7 @@ The page shows:
 | **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                            |
 | **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                           |
 | **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                       |
-| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                  |
+| **Automation**     | Generic Webhooks   | Sends a signed message to a web address when an event, shift or training record is created       |
 | **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                         |
 | **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                              |
 | **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave   |
@@ -835,15 +835,24 @@ A generic webhook sends signed messages to a web address that you choose.
 
 ### Configuration
 
-| Field           | What to enter                                                  |
-| --------------- | -------------------------------------------------------------- |
-| **Webhook URL** | The address of the system that will receive the messages       |
-| **Secret**      | Optional. Lets the receiving system check a message is genuine |
+| Field                 | What to enter                                                  |
+| --------------------- | -------------------------------------------------------------- |
+| **Webhook URL**       | The address of the system that will receive the messages       |
+| **Secret**            | Optional. Lets the receiving system check a message is genuine |
+| **Send these events** | Which events to send. Leave all unticked to send every one     |
 
-> **Important. Only the test message is sent today.** **Test** sends one test
-> message to your address, so you can check your system receives it. The
-> Logbook does not yet send anything when something happens in the app. There
-> is nothing to subscribe to.
+The Logbook sends a message when one of these happens. They are the same
+events Slack, Discord and Teams are told about:
+
+| Event                      | Event name          | Sent when                        |
+| -------------------------- | ------------------- | -------------------------------- |
+| An event is created        | `event.created`     | Someone creates a calendar event |
+| A shift is created         | `shift.created`     | Someone creates a shift          |
+| A training record is added | `training.recorded` | A training record is added       |
+
+**Test** sends one `test.ping` message, so you can check your system receives
+it before anything real happens. A webhook connected before 2026-10-29 has no
+events ticked, so it is sent all of them.
 
 ### When delivery fails
 
@@ -865,12 +874,12 @@ Pass this part to whoever writes the system that receives the messages.
 **What your system receives.** An HTTP `POST` with a JSON body and these
 headers:
 
-| Header                | Value                                             |
-| --------------------- | ------------------------------------------------- |
-| `Content-Type`        | `application/json`                                |
-| `X-Webhook-Event`     | The event name — `test.ping` for the test message |
-| `User-Agent`          | `TheLogbook-Webhook/1.0`                          |
-| `X-Webhook-Signature` | Only when a **Secret** is set — see below         |
+| Header                | Value                                     |
+| --------------------- | ----------------------------------------- |
+| `Content-Type`        | `application/json`                        |
+| `X-Webhook-Event`     | The event name, such as `shift.created`   |
+| `User-Agent`          | `TheLogbook-Webhook/1.0`                  |
+| `X-Webhook-Signature` | Only when a **Secret** is set — see below |
 
 The body of the test message:
 
@@ -885,6 +894,14 @@ The body of the test message:
 ```
 
 `timestamp` is the sending time in whole seconds since 1 January 1970 (UTC).
+
+The other events carry the same three keys, with these fields in `data`:
+
+| Event name          | `data` fields                                              |
+| ------------------- | ---------------------------------------------------------- |
+| `event.created`     | `title`, `event_type`, `start_time` (ISO 8601), `location` |
+| `shift.created`     | `type`, `start_time`, `end_time` (ISO 8601), `crew`        |
+| `training.recorded` | `member_name`, `course_name`, `hours`                      |
 
 Answer with any 2xx status, such as 200 or 204.
 

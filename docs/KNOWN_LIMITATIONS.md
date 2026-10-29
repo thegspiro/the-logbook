@@ -2347,6 +2347,15 @@ settings.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 
+> **Generic Webhooks — resolved (2026-10-29), as the owner chose: build it
+> out.** A connected webhook is now sent `event.created`, `shift.created` and
+> `training.recorded`, the events the chat integrations get, through
+> `dispatch_generic_webhooks` beside the chat dispatch. Its settings pick which
+> (`event_types`, validated against `WEBHOOK_EVENT_TYPES`); none ticked means
+> all, so a webhook connected earlier starts receiving every event. Each
+> delivery is recorded in the integration's run history. Covered by
+> `tests/test_generic_webhook_dispatch.py`.
+
 Both are listed in the integrations catalogue as `available`
 (`app/api/v1/endpoints/integrations.py`), can be connected, and pass their
 **Test** — and that test is the only thing either of them ever does.
