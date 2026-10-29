@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR: to be recorded in a follow-up commit on this same branch once opened.**
+**PR [#3842](https://github.com/thegspiro/the-logbook/pull/3842)** (branch
+`claude/security-review-training-core-p12`) —
 Feature 17 (Training core), pass 12, a watchdog pickup. PR #3841 (Feature 16,
 Events & requests, pass 12) had already merged (`63ecd45c`). Confirmed no
 security-review PR open via `list_pull_requests`/`search_pull_requests`
