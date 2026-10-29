@@ -38,7 +38,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
-from app.core.utils import safe_error_detail
+from app.core.utils import list_within_detail_limit, safe_error_detail
 from app.models.election import (
     BallotSendJobKind,
     Candidate,
@@ -1024,7 +1024,9 @@ class ElectionSettingsUpdate(BaseModel):
         """
         valid = _ELECTION_DEFAULT_CHOICES[info.field_name]
         if value is not None and value not in valid:
-            raise ValueError(f"must be one of: {', '.join(sorted(valid))}")
+            raise ValueError(
+                list_within_detail_limit("must be one of: ", sorted(valid))
+            )
         return value
 
     @field_validator(
