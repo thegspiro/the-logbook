@@ -441,12 +441,57 @@ const DocumentsPage: React.FC = () => {
   // Render
   // -------------------------------------------------------
 
+  // The header is drawn while the folders load: a full-screen centred spinner
+  // was replaced wholesale, and the page landed ~400px above where its box had
+  // been.
+  const pageHeader = (
+    <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center space-x-3">
+        <div className="shrink-0 rounded-lg bg-amber-600 p-2">
+          <FileText className="h-6 w-6 text-white" aria-hidden="true" />
+        </div>
+        <div>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Documents & Files</h1>
+          <p className="text-theme-text-secondary text-sm">
+            SOPs, policies, forms, and other department files in one place
+          </p>
+        </div>
+      </div>
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              // Fresh access settings and no stale error each time it opens.
+              setFolderAccess(EMPTY_FOLDER_ACCESS);
+              setCreateFolderError(null);
+              setShowCreateFolder(true);
+            }}
+            className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+          >
+            <Folder className="h-4 w-4" aria-hidden="true" />
+            <span>New Folder</span>
+          </button>
+          <button
+            onClick={handleOpenUploadModal}
+            className="touch:min-h-11 flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
+          >
+            <Upload className="h-4 w-4" />
+            <span>Upload Document</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   if (foldersLoading && folderPath.length === 0 && !showAllDocuments) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="flex flex-col items-center space-y-4" role="status" aria-live="polite">
-          <Loader2 className="h-10 w-10 animate-spin text-amber-700 dark:text-amber-400" />
-          <p className="text-theme-text-secondary text-sm">Loading documents...</p>
+      <div className="min-h-screen">
+        <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+          {pageHeader}
+          <div className="flex flex-col items-center space-y-4 py-24" role="status" aria-live="polite">
+            <Loader2 className="h-10 w-10 animate-spin text-amber-700 dark:text-amber-400" />
+            <p className="text-theme-text-secondary text-sm">Loading documents...</p>
+          </div>
         </div>
       </div>
     );
@@ -455,43 +500,7 @@ const DocumentsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Page Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="shrink-0 rounded-lg bg-amber-600 p-2">
-              <FileText className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Documents & Files</h1>
-              <p className="text-theme-text-secondary text-sm">
-                SOPs, policies, forms, and other department files in one place
-              </p>
-            </div>
-          </div>
-          {canManage && (
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => {
-                  // Fresh access settings and no stale error each time it opens.
-                  setFolderAccess(EMPTY_FOLDER_ACCESS);
-                  setCreateFolderError(null);
-                  setShowCreateFolder(true);
-                }}
-                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
-              >
-                <Folder className="h-4 w-4" aria-hidden="true" />
-                <span>New Folder</span>
-              </button>
-              <button
-                onClick={handleOpenUploadModal}
-                className="touch:min-h-11 flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
-              >
-                <Upload className="h-4 w-4" />
-                <span>Upload Document</span>
-              </button>
-            </div>
-          )}
-        </div>
+        {pageHeader}
 
         {/* Error Toast */}
         {error && (

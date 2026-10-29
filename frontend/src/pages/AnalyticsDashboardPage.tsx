@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs } from '../components/ux';
+import { Breadcrumbs, SkeletonText } from '../components/ux';
 import { QrCode } from 'lucide-react';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatTime } from '../utils/dateFormatting';
@@ -70,12 +70,57 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       ]
     : undefined;
 
-  if (loading) {
+  const scopeLine = eventId ? 'Check-in scans for this event' : 'Check-in scans across all events';
+  const exportButton = (
+    <button
+      onClick={() => {
+        void exportData();
+      }}
+      className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
+    >
+      Export Data
+    </button>
+  );
+
+  const header = embedded ? (
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        {/* Embedded, the Events hub's section nav already names this page,
+            so the title stays for heading navigation only and the hub
+            keeps the page's one <h1>. */}
+        <h2 className="sr-only">QR Code Analytics</h2>
+        <p className="text-theme-text-secondary">{scopeLine}</p>
+      </div>
+      {exportButton}
+    </div>
+  ) : (
+    <EventsPageHeader
+      icon={QrCode}
+      title="QR Code Analytics"
+      subtitle={scopeLine}
+      parentCrumbs={eventId ? [{ label: 'Event', path: `/events/${eventId}` }] : undefined}
+      actions={exportButton}
+    />
+  );
+
+  // Loading draws the page it will become — header and the four metric cards,
+  // placeholders where the figures go — and only until the first figures
+  // arrive. The ten-second refresh sets `loading` too, and returning a bare
+  // "Loading analytics..." for it replaced the whole page every ten seconds.
+  if (loading && !metrics) {
     return (
-      <div className={`mx-auto max-w-7xl ${shellPadding}`}>
-        {trail && <Breadcrumbs items={trail} />}
-        <div className="flex items-center justify-center py-24">
-          <div className="text-theme-text-secondary">Loading analytics...</div>
+      <div className={`mx-auto min-h-screen max-w-7xl ${shellPadding}`}>
+        {header}
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <span className="sr-only">Loading analytics...</span>
+          {['Total Scans', 'Successful Check-Ins', 'Success Rate', 'Avg Time to Check-In'].map((label) => (
+            <div key={label} className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+              <div className="text-theme-text-muted mb-1 text-sm font-medium">{label}</div>
+              <div className="text-3xl font-bold">
+                <SkeletonText className="w-16" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -102,40 +147,9 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     );
   }
 
-  const scopeLine = eventId ? 'Check-in scans for this event' : 'Check-in scans across all events';
-  const exportButton = (
-    <button
-      onClick={() => {
-        void exportData();
-      }}
-      className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
-    >
-      Export Data
-    </button>
-  );
-
   return (
     <div className={`mx-auto min-h-screen max-w-7xl ${shellPadding}`}>
-      {embedded ? (
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            {/* Embedded, the Events hub's section nav already names this page,
-                so the title stays for heading navigation only and the hub
-                keeps the page's one <h1>. */}
-            <h2 className="sr-only">QR Code Analytics</h2>
-            <p className="text-theme-text-secondary">{scopeLine}</p>
-          </div>
-          {exportButton}
-        </div>
-      ) : (
-        <EventsPageHeader
-          icon={QrCode}
-          title="QR Code Analytics"
-          subtitle={scopeLine}
-          parentCrumbs={eventId ? [{ label: 'Event', path: `/events/${eventId}` }] : undefined}
-          actions={exportButton}
-        />
-      )}
+      {header}
 
       {/* Key Metrics */}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">

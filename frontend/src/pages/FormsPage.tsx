@@ -29,7 +29,7 @@ import {
   ArrowLeft,
   BarChart3,
 } from 'lucide-react';
-import { EmptyState } from '../components/ux';
+import { EmptyState, SkeletonText } from '../components/ux';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -528,28 +528,40 @@ const FormsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats */}
-        {summary && (
+        {/* Stats. Drawn while they load, placeholders where the figures go:
+            appearing with the figures pushed the tabs and the list ~330px down
+            on a phone. A failed summary drops the row and says so below. */}
+        {(summary || loading) && (
           <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5" role="region" aria-label="Forms statistics">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Forms</p>
-              <p className="text-theme-text-primary mt-1 text-2xl font-bold">{summary.total_forms}</p>
+              <p className="text-theme-text-primary mt-1 text-2xl font-bold">
+                {summary ? summary.total_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Published</p>
-              <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">{summary.published_forms}</p>
+              <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
+                {summary ? summary.published_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Drafts</p>
-              <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">{summary.draft_forms}</p>
+              <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+                {summary ? summary.draft_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Public Forms</p>
-              <p className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-400">{summary.public_forms}</p>
+              <p className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-400">
+                {summary ? summary.public_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Submissions This Month</p>
-              <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">{summary.submissions_this_month}</p>
+              <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">
+                {summary ? summary.submissions_this_month : <SkeletonText className="w-10" />}
+              </p>
             </div>
           </div>
         )}

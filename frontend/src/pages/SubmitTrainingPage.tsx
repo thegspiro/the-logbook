@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { ClipboardList, Info, Paperclip, Pencil, Send, Trash2, Users, X } from 'lucide-react';
-import { Breadcrumbs } from '../components/ux';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import {
   AttachmentField,
@@ -1149,14 +1148,27 @@ const SubmitTrainingPage: React.FC = () => {
   // back — not a gray strip buried in a history list.
   const returnedSubmission = submissions.find((submission) => submission.status === 'revision_requested');
 
+  // Loading and failure keep the page's own header: a bare spinner in a
+  // narrower column was replaced wholesale when the form arrived, and the form
+  // landed ~150px below where the spinner's box had been.
+  const header = (
+    <TrainingPageHeader
+      icon={ClipboardList}
+      title="Submit External Training"
+      subtitle="Report training you completed outside the department."
+    />
+  );
+
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
-        <div className="flex items-center justify-center py-24">
-          <div className="text-center">
-            <div className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500" />
-            <p className="text-theme-text-muted mt-4">Loading...</p>
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8 xl:pb-8">
+        {header}
+        <div className="mx-auto max-w-4xl">
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center">
+              <div className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500" />
+              <p className="text-theme-text-muted mt-4">Loading...</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1165,9 +1177,9 @@ const SubmitTrainingPage: React.FC = () => {
 
   if (loadError || !config) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
-        <div className="flex items-center justify-center py-24">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8 xl:pb-8">
+        {header}
+        <div className="mx-auto flex max-w-4xl items-center justify-center py-24">
           <div className="text-center">
             <p className="mb-4 text-red-500">{loadError || 'Unable to load configuration.'}</p>
             <button
@@ -1186,11 +1198,7 @@ const SubmitTrainingPage: React.FC = () => {
 
   return (
     <div data-page-main className="mx-auto max-w-7xl px-4 py-8 pb-40 sm:px-6 lg:px-8 xl:pb-8">
-      <TrainingPageHeader
-        icon={ClipboardList}
-        title="Submit External Training"
-        subtitle="Report training you completed outside the department."
-      />
+      {header}
       {/* The form keeps its reading width under the full-width strip. */}
       <div className="mx-auto max-w-4xl">
         {canRecordCrew && (

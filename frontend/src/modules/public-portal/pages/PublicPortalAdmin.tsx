@@ -14,6 +14,7 @@ import { APIKeysTab } from '../components/APIKeysTab';
 import { AccessLogsTab } from '../components/AccessLogsTab';
 import { UsageStatsTab } from '../components/UsageStatsTab';
 import { DataWhitelistTab } from '../components/DataWhitelistTab';
+import { SkeletonText } from '../../../components/ux';
 
 type TabType = 'config' | 'keys' | 'logs' | 'stats' | 'whitelist';
 
@@ -78,10 +79,40 @@ const PublicPortalAdmin: React.FC = () => {
     }
   };
 
+  const titleBlock = (
+    <div className="flex items-center space-x-3">
+      <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-500/20">
+        <Globe className="h-6 w-6 text-blue-600" />
+      </div>
+      <div>
+        <h1 className="text-theme-text-primary text-2xl font-bold">Public Portal</h1>
+        <p className="text-theme-text-muted text-sm">Manage public API access for external websites</p>
+      </div>
+    </div>
+  );
+
+  // Loading draws the header the page opens with, a placeholder holding the
+  // status and toggle's place, so the page arrives under it rather than
+  // replacing a full-screen spinner and landing ~380px higher.
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
+      <div className="bg-theme-surface-secondary min-h-screen">
+        <div className="bg-theme-surface border-theme-surface-border border-b">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="py-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {titleBlock}
+                <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
+                  <span className="text-sm">
+                    <SkeletonText className="w-28" />
+                  </span>
+                  <span className="btn-md invisible">Enable Portal</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="py-24 text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
           <p className="text-theme-text-secondary mt-4">Loading public portal...</p>
         </div>
@@ -96,15 +127,7 @@ const PublicPortalAdmin: React.FC = () => {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="py-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-500/20">
-                  <Globe className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <h1 className="text-theme-text-primary text-2xl font-bold">Public Portal</h1>
-                  <p className="text-theme-text-muted text-sm">Manage public API access for external websites</p>
-                </div>
-              </div>
+              {titleBlock}
 
               {/* Status Toggle */}
               <div className="flex flex-wrap items-center gap-4">
