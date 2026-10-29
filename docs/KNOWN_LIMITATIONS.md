@@ -7070,22 +7070,45 @@ duplicate route outright — is a product decision, not a drive-by patch.
 Exposure today is narrow: nothing in the frontend calls this route, so it
 reaches only a direct API client holding `training.manage`.
 
-**Still open as of security review TR-17 pass 8 (2026-10-16), and the gap
+**Was open as of security review TR-17 pass 8 (2026-10-16), and the gap
 widened in the interim.** `training_program_service.py`'s `enroll_member` (the
 fixed path) gained prerequisite-program enforcement on 2026-10-14
 (`e3aee773`, "enforce prerequisites on single-member enrollment") — a member
 missing a prerequisite now gets a clean 400 through that path. `training.py`'s
-duplicate was not touched, so `POST /training/enrollments` now also silently
-enrolls a member who has not met a program's prerequisites, in addition to the
-race and the missing `RequirementProgress`/phase/recert/notification behavior
-already recorded above. Every one of this duplicate's defects traces to the
-same root cause — a second, hand-maintained copy of enrollment logic that
-nothing keeps in sync with the one the rest of the codebase fixes — so each
-new fix to the real path is now also a new way for the duplicate to fall
-further behind it. Confirmed the frontend still calls only
-`/training/programs/enrollments`; no owner decision has been recorded yet.
+duplicate was not touched at that point, so `POST /training/enrollments` also
+silently enrolled a member who had not met a program's prerequisites, in
+addition to the race and the missing `RequirementProgress`/phase/recert/
+notification behavior already recorded above.
 
-## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06)
+**The prerequisite gap closed on 2026-10-23** (`94e3d2e0`, "Close the
+remaining pipeline gaps: empty required sets, inactive due dates,
+prerequisite checks on auto and legacy enrollment") — its own message: "The
+legacy POST /training/enrollments now refuses a missing prerequisite with the
+same message as the other manual paths." **Passes 9–11 of TR-17 did not
+notice**: pass 11 reviewed `94e3d2e0` itself (grouped with a sibling commit
+under "inactive-aware completion" in its write-up) but described only its
+pipeline/phase-completion effects, then separately re-asserted "TR7-1 — still
+OPEN/FLAGGED, unchanged" on the stated grounds that neither
+`enroll_member_in_program` nor `enroll_member` appeared among that pass's
+reviewed commits — which was incorrect; `94e3d2e0` touches
+`enroll_member_in_program` directly. Caught and corrected by TR-17 pass 12
+(2026-10-29), which re-read the current function end to end rather than
+trusting the "unchanged" citation.
+
+**Still open: the race and the structural incompleteness.** Confirmed by
+TR-17 pass 12 against the current code — "Check for existing active
+enrollment" is still a plain `SELECT` with no `.with_for_update()` and no
+backing unique constraint on `(user_id, program_id, status)`, and the
+function still never creates `RequirementProgress` rows, determines a
+starting phase, schedules a recert deadline, or sends the enrollment
+notification. Every one of these two remaining defects traces to the same
+root cause — a second, hand-maintained copy of enrollment logic that nothing
+keeps fully in sync with the one the rest of the codebase fixes. Confirmed
+the frontend still calls only `/training/programs/enrollments`; no owner
+decision on delegating, locking in place, or removing the route has been
+recorded yet.
+
+## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
 Found by security review SKT-19 pass 7
 (`docs/security-review/SKT-19-skills-testing.md`, pass 7 cross-feature scope
@@ -7114,13 +7137,23 @@ org-scoped FK validation on the requirement link (XC-1) and a frozen-per-attempt
 paper design, but a self-description in a commit message is exactly what
 this rotation exists to verify independently rather than accept.
 
-**Not reviewed, not fixed.** This is a scope-ownership gap, not a finding
-against any existing feature's code. The rotation should add
-`knowledge_tests.py`/`knowledge_test.py` (model and schema) to Feature 17's
-declared scope — it is the closest sibling (a requirement-credit path,
-like `training_programs.py`'s own enrollment logic) — and give it a first
-full pass before Feature 17 is next due in the rotation, rather than let it
-ride uncovered through another full cycle under Feature 17's existing ✅.
+**Resolved (2026-10-29, security review TR-17 pass 12).** The three files
+(plus `app/schemas/knowledge_test.py`) are now in Feature 17's declared
+scope and received their first full pass against all seven checklist
+dimensions — see `docs/security-review/TR-17-training-core.md`'s **Pass 12**
+section. Clean: every one of the 13 routes carries an auth dependency and the
+correct permission (`training.manage` for every bank write, self/officer
+split for attempts), every query is org-scoped or XC-1-validated, answer
+secrecy holds under direct trace (no path reaches `correct_option_ids` before
+submission), the attempt cap and the start-attempt dedup both lock before
+they read (Pitfall #27), and migration `7c2e9a41b6d3` is `create_all`-
+tolerant with both `SET NULL` columns nullable. No fix was needed. One
+process gap was found and corrected: this surface's own guard tests
+(`tests/test_knowledge_tests.py`, `tests/test_training_knowledge_test_score.py`)
+did not match training-core's scoped completion-gate filter
+(`pytest tests/ -k "training or compliance"`), so they had never actually run
+under that gate; the filter is now `"training or compliance or
+knowledge_test"`.
 
 ## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
 

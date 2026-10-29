@@ -1,23 +1,29 @@
 # Security Review 17 — Training Core
 
 **Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
-2026-10-24 (pass 10), 2026-10-26 (pass 11) · **PR:** see `PROGRESS.md`'s
-**Open PR** row
+2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12) · **PR:** see
+`PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py`,
 `api/v1/endpoints/training_programs.py`,
-`api/v1/endpoints/training_sessions.py`, `services/training_service.py`,
-`services/training_program_service.py`,
+`api/v1/endpoints/training_sessions.py`,
+`api/v1/endpoints/knowledge_tests.py` (added in pass 12 — see that pass's
+scope-correction note; closes the gap `docs/KNOWN_LIMITATIONS.md`'s "Training
+— Online Knowledge Tests Have No Owning Feature" entry flagged),
+`services/training_service.py`, `services/training_program_service.py`,
 `services/training_session_service.py`, `services/training_compliance.py`,
 `services/training_requirement_removal.py`, `services/training_course_names.py`,
 `services/cert_alert_service.py`, `mcp/tools/training.py`,
-`models/training.py`, `schemas/training_program.py` (the last two added to
-the declared list in pass 11 — see that pass's scope-correction note)
+`models/training.py`, `models/knowledge_test.py` (pass 12),
+`schemas/training_program.py`, `schemas/knowledge_test.py` (pass 12)
 **Frontend:** `modules/training`, and the pipeline/program pages under
 `src/pages/` and `src/components/training/` (spot-checked, not read
-line-by-line, in pass 11)
+line-by-line, in pass 11), including the knowledge-test pages
+(`MyKnowledgeTestsPage.tsx`, `KnowledgeTestAttemptPage.tsx`,
+`KnowledgeTestsTab.tsx`, `knowledgeTestService.ts`) added in pass 12
 **Migrations:** `a0195b397bf3` (pass 11, `program_enrollments.
-completion_reason`)
+completion_reason`), `7c2e9a41b6d3` (2026-10-05, the three knowledge-tests
+tables — reviewed for the first time in pass 12)
 
 ---
 
@@ -2622,6 +2628,317 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 12 (2026-10-29) — 0 fixed, 0 new findings; scope gap closed (knowledge-tests given first full pass), TR7-1 corrected (one of its two defects already fixed, unnoticed by pass 11), real delta (6 of 210 commits)
+
+**Watchdog pickup.** PR #3841 (Feature 16, Events & requests, pass 12) had
+already merged (`63ecd45c`). No open PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`/`search_pull_requests`,
+state=open, 0 results — the one open PR, #3839, is unrelated layout work on
+branch `ccr-ba1682dc-g25b70`). Rotation row 17 (Training core) was confirmed
+the next `⬜` by reading the rotation table directly on a freshly fetched
+`main`.
+
+### Scope correction: the knowledge-tests surface is now this feature's, reviewed for the first time
+
+`docs/KNOWN_LIMITATIONS.md`'s "Training — Online Knowledge Tests Have No
+Owning Feature In The Security Rotation" entry (filed 2026-10-06 by SKT-19
+pass 7) flagged that `app/api/v1/endpoints/knowledge_tests.py`,
+`app/models/knowledge_test.py` and `app/schemas/knowledge_test.py` (merged
+2026-10-06, before either Training feature's pass 7 merged) were named in no
+feature's declared scope and asked that Feature 17 add them and give them a
+first full pass before this feature's next turn. This pass does that. The
+three files are added to the header above; `services/knowledge_test_service.py`
+does not exist — the grading/credit logic lives in the endpoint module
+itself, confirmed by `grep -rln "knowledge_test\|KnowledgeTest"
+backend/app/services/` finding no such file.
+
+**Full review against all seven checklist dimensions, read in full (1,153 +
+214 + 219 lines):**
+
+- **1. Authentication coverage.** 13 routes, enumerated by `grep -c
+'^@router\.'` (matches `grep -n "^@router\."` listing every decorator) —
+  every one carries `Depends(get_current_user)` or
+  `Depends(require_permission("training.manage"))`, confirmed by reading each
+  signature (table below). Mounted at `/training/knowledge-tests` behind the
+  same `module_gate("training", "Training")` every other training route sits
+  behind (`api/v1/api.py:201-207`).
+- **2. Authorization & role fit.** Every write to the question bank (create,
+  update, delete a test; add/replace/delete a question) is `training.manage`
+  — correctly matched to sensitivity, since the bank carries
+  `correct_option_ids`. Self-scoped routes: `save_answers`/`submit_attempt`
+  are `owner_only=True` in `_load_attempt` — an officer cannot submit or edit
+  answers for a member's attempt, only read it; `list_attempts` narrows to
+  the caller's own `user_id` unless `_is_officer`. No `require_permission`
+  OR-gate (single permission string throughout, nothing to enumerate
+  alternatives on).
+- **3. Tenant isolation (XC-1/XC-3).** Every query filters
+  `organization_id` or resolves through an org-scoped parent:
+  `_get_test`/`_requirement`/`_load_attempt` all filter
+  `== str(user.organization_id)` directly; `_get_question` additionally
+  scopes to the already-org-resolved `test.id`; `_test_responses`'s
+  requirement-name batch load filters
+  `TrainingRequirement.organization_id == str(user.organization_id)`.
+  `_validate_requirement` is XC-1 by name in its own docstring comment — a
+  requirement linked to a test must belong to the caller's org **and** be
+  `RequirementType.KNOWLEDGE_TEST`, closing the "a quiz satisfies an hours
+  requirement" gap a bare existence check would leave open. No eager-loaded
+  join pulls another org's row (no `selectinload`/`joinedload` anywhere in
+  the file).
+- **4. Injection & untrusted output.** No raw SQL, no `.like()`/`.ilike()`,
+  no CSV export, no upload, no outbound URL. `AnswersUpdate._bounded`
+  rejects malformed answer shapes (oversized ids, too many picks) before
+  `save_answers` ever reaches `questions`; `save_answers` itself re-validates
+  every submitted `(question_id, option_id)` pair against the frozen
+  `questions_snapshot`, not the live bank, so an edited/deleted question
+  cannot be answered retroactively and a client cannot submit an answer for
+  a question it was never given.
+- **5. Data exposure — this is the surface's central design goal, verified
+  directly rather than taken on the docstring's word.** Traced every path
+  that can reach a `correct_option_ids`:
+  - `QuestionDelivered` (sent while an attempt is open) has no field that
+    could carry one — confirmed by reading the schema, not the claim.
+  - `_attempt_response` builds `review` (which does carry
+    `correct_option_ids`) only `if submitted and (attempt.show_correct_answers
+or _is_officer(viewer))` — read literally: before submission, `review` is
+    always `None` regardless of role, so even an officer sees only the
+    delivered questions on an open attempt (`questions=delivered`), not the
+    bank's answers early. The question bank's own answers (`QuestionAdmin`,
+    via `_detail`) are reachable only from `get_knowledge_test`/
+    `create_knowledge_test`/`update_knowledge_test`/`add_question`/
+    `replace_question`/`delete_question`, all `training.manage`-gated or
+    (for the GET) explicitly `if _is_officer(current_user)`-branched.
+  - Guarded by `tests/test_knowledge_tests.py::TestSitting::
+test_answers_are_never_delivered_before_submission` (existing, re-read: it
+    asserts the live property, not a mock).
+  - `/training/knowledge-tests` is already in `UNCACHEABLE_PREFIXES`
+    (`frontend/src/utils/apiCache.ts:83`, with its own comment citing both
+    the answer keys and members' scores) — this predates the pass, not a
+    gap found here.
+  - `safe_error_detail()` is not used directly in this file, but every
+    `HTTPException` here raises a fixed, static `detail` string (no
+    interpolated exception text, no SQL, no path) — confirmed by reading
+    every `raise HTTPException` call site; there is nothing for
+    `safe_error_detail` to sanitize.
+- **6. Abuse resistance.** `list_knowledge_tests`/`list_attempts` are capped
+  at `LIST_MAX = 200`; `add_question` caps a bank at `MAX_QUESTIONS_PER_TEST
+= 500`. The attempt cap (`_assert_attempts_remaining`) takes
+  `lock_attempt_capacity` (the same requirement-row lock
+  `skills_testing_service` uses) **before** counting spent attempts, closing
+  the read-then-write race Pitfall #27 names — the lock is acquired, then the
+  count is read inside the same locked transaction, then (on `start_attempt`)
+  the new attempt is inserted, so two concurrent "start attempt" calls at the
+  cap serialize rather than both squeezing through. `start_attempt` itself
+  locks the test row (`for_update=True`) and the member's own open-attempt
+  row before deciding whether to resume or start fresh, so a double-click
+  cannot create two `IN_PROGRESS` attempts for the same member and test.
+  `_load_attempt` locks the attempt row for every one of
+  `get_attempt`/`save_answers`/`submit_attempt`, so a client racing its own
+  submit against its own late answer-save serializes rather than losing a
+  write.
+- **7. Schema & migration integrity.** Migration `7c2e9a41b6d3` (2026-10-05,
+  already in the repo, now reviewed for the first time under this feature):
+  three new tables, each `create_all`-guarded with `_has_table()` before
+  `op.create_table()` (Pitfall #26), both `requirement_id` columns
+  (`knowledge_tests`, `knowledge_test_attempts`) are `ondelete="SET NULL"`
+  **and** `nullable=True` (Pitfall #2), `downgrade()` drops all three with
+  `DROP TABLE IF EXISTS` (idempotent). Matches the current models exactly —
+  confirmed column-by-column, not assumed. No JSON-column shallow-copy
+  mutation anywhere in the endpoint file (the JSON columns —
+  `options`/`correct_option_ids`/`questions_snapshot`/`answers` — are always
+  replaced with a freshly-built value, never read-mutate-reassigned in
+  place). `update_knowledge_test` uses `apply_updates(..., skip={"id",
+"organization_id", "created_by"})`, so an explicit `null` on an optional
+  field clears it and a protected column cannot be overwritten — the correct
+  pattern per Pitfall #1's update-path rule.
+
+**One gap found in how this surface has been tested, not in the surface
+itself: it was invisible to every prior pass's own completion-gate command.**
+Every training-core pass's scoped test run has been `pytest tests/ -k
+"training or compliance[...]"`. `tests/test_knowledge_tests.py` (14 tests,
+`pytest.mark.integration`, exercises the live property above against a real
+database) and `tests/test_training_knowledge_test_score.py` (4 tests, DB-mocked)
+do not match that `-k` expression — confirmed by `pytest tests/
+test_knowledge_tests.py -k "training or compliance" --collect-only -q`, which
+deselects all 14. Every prior pass that reported "training or compliance"
+green was, correctly, never running this surface's own guard tests — not a
+false report, since the surface was out of scope until this pass, but a trap
+for whoever widens the scope next without widening the `-k` filter too. This
+pass's own completion gate below uses `-k "training or compliance or
+knowledge_test"`, and that filter should be the one future training-core
+passes copy.
+
+### Commits reviewed (training's three original files)
+
+Baseline `5d7fdf96` (PR #3754's merge, pass 11). Of 210 non-merge commits
+repo-wide in the window, 6 touch the three originally-declared files (none
+touch `knowledge_tests.py`/`knowledge_test.py`/`schemas/knowledge_test.py`,
+which is why that surface needed its own first-principles review above
+rather than a diff against a prior pass):
+
+- **`4e6c1c81`** (member-class filter) — `GET /training/compliance-matrix`'s
+  `MemberComplianceRow` gains an additive `member_class` field computed by
+  the existing, shared `effective_member_class()` (`app/utils/membership.py`
+  — not new logic, confirmed by reading its one other call site). No new
+  query, no permission change (`get_compliance_matrix` is still
+  `training.manage`-gated, confirmed at its signature), no new by-id surface.
+  A pure response-field addition.
+- **`4dde59aa`, `b48d63f2`, `327849d0`/`3ab6886d`** (repo-wide
+  encryption-at-rest sweep) — `models/training.py`'s
+  `TrainingWaiver.reason` and `ExternalUserMapping.external_email` move to
+  `EncryptedText`; `XAPIStatement.actor_email` does too, and its now-useless
+  `idx_xapi_actor` index is dropped. Confirmed by `grep -rn "actor_email"
+backend/app/` that nothing filters/compares `XAPIStatement.actor_email`
+  directly (the one live use, `training_enhancement_service.py:963`, matches
+  an xAPI actor's email against `User.email_hash` via
+  `email_fingerprints()`, not against this column) — so the dropped index
+  introduces no broken search, and this feature's slice of the repo-wide
+  migration needs no independent re-derivation beyond that check.
+- **`1ff282b9`** (template-routed emails) — touches `training.py` only
+  incidentally (cert-expiry email wording moved to render through
+  `EmailTemplateService`); re-read the cert-alert sender's call site and
+  confirmed it is still gated the same way and still escapes through the
+  renderer — no tenancy or auth change in scope here, the substantive review
+  of this cross-cutting change belongs to whichever feature owns
+  `email_service.py`/`cert_alert_service.py`'s templates end to end.
+
+### Route inventory — `knowledge_tests.py` (new to this feature's table)
+
+| Method | Path                                 | Auth dependency                         | Permission             | Org-scoped                                                              | Notes                                                                     |
+| ------ | ------------------------------------ | --------------------------------------- | ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| GET    | `/attempts/{attempt_id}`             | `get_current_user`                      | none (self or officer) | `_load_attempt` filters org                                             | owner or `training.manage`                                                |
+| PUT    | `/attempts/{attempt_id}/answers`     | `get_current_user`                      | none (self only)       | `_load_attempt` filters org, `owner_only=True`                          | member only, refused once submitted/expired                               |
+| POST   | `/attempts/{attempt_id}/submit`      | `get_current_user`                      | none (self only)       | `_load_attempt` filters org, `owner_only=True`                          | member only, idempotent                                                   |
+| GET    | `` (list tests)                      | `get_current_user`                      | none (role-branched)   | `KnowledgeTest.organization_id` filter                                  | officer sees all statuses, member sees published only                     |
+| POST   | `` (create test)                     | `require_permission("training.manage")` | `training.manage`      | stamped from `current_user.organization_id`                             | draft only                                                                |
+| GET    | `/{test_id}`                         | `get_current_user`                      | none (role-branched)   | `_get_test` filters org                                                 | member sees published only (404 otherwise), no questions                  |
+| PATCH  | `/{test_id}`                         | `require_permission("training.manage")` | `training.manage`      | `_get_test(..., for_update=True)`                                       | `apply_updates`; publish re-checks `_assert_publishable`                  |
+| DELETE | `/{test_id}`                         | `require_permission("training.manage")` | `training.manage`      | `_get_test(..., for_update=True)`                                       | 409 if any attempt exists                                                 |
+| POST   | `/{test_id}/questions`               | `require_permission("training.manage")` | `training.manage`      | via locked, org-resolved `test`                                         | caps bank at 500                                                          |
+| PUT    | `/{test_id}/questions/{question_id}` | `require_permission("training.manage")` | `training.manage`      | `_get_question` scoped to org-resolved `test.id`/`organization_id`      | attempts in progress keep their snapshot                                  |
+| DELETE | `/{test_id}/questions/{question_id}` | `require_permission("training.manage")` | `training.manage`      | as above                                                                | attempts in progress keep their snapshot                                  |
+| POST   | `/{test_id}/attempts`                | `get_current_user`                      | none (any member)      | `_get_test(..., for_update=True)`                                       | published only; resumes an open, unexpired attempt instead of duplicating |
+| GET    | `/{test_id}/attempts`                | `get_current_user`                      | none (role-branched)   | `_get_test` filters org + `KnowledgeTestAttempt.organization_id` filter | officer sees all, member sees own                                         |
+
+### Re-verified standing items
+
+- **TR7-1 — correction: one of its two defects is already fixed, and pass
+  11 reviewed the fixing commit without noticing.** Re-read
+  `enroll_member_in_program` (`training.py:2368-2480`) in full rather than
+  trusting "zero diff" from either this pass's own 6-commit list or pass
+  11's. It is unchanged **in this pass's window** (not among the 6 commits
+  above), but it is **not** unchanged from pass 8's original citation: it now
+  contains a prerequisite-enforcement block (`training.py:2403-2423`) that
+  pass 8/9/10/11 all described as missing. Traced this to commit `94e3d2e0`
+  ("Close the remaining pipeline gaps: empty required sets, inactive due
+  dates, prerequisite checks on auto and legacy enrollment", 2026-10-23) —
+  which pass 11's own "Commits reviewed" list **names** (grouped with
+  `e411a100` under "inactive-aware completion") and reviews for its
+  pipeline/phase-completion effects, but never mentions that the same commit
+  also added `missing_prerequisites()`/`prerequisite_refusal()` to this exact
+  function, and its message says so explicitly: "The legacy POST
+  /training/enrollments now refuses a missing prerequisite with the same
+  message as the other manual paths." Pass 11's "TR7-1 — still OPEN/FLAGGED,
+  unchanged" verdict and its supporting claim ("neither function appears
+  among the 9 in-scope commits above") are both wrong for the prerequisite
+  half of the finding — `94e3d2e0` **is** among its 9 commits, and the fix is
+  real and already live. **The other two defects TR7-1 named are confirmed
+  still open by direct re-read of the current function:**
+  - _The race:_ "Check for existing active enrollment" (`:2426-2436`) is
+    still a plain `select()` with no `.with_for_update()`, checked, then
+    `db.add(enrollment); await db.commit()` (`:2449-2450`) — no lock, and
+    `ProgramEnrollment` still carries no unique constraint on
+    `(user_id, program_id, status)` (confirmed: no `__table_args__`/`Index`/
+    `UniqueConstraint` in its class body). Two concurrent calls still produce
+    two ACTIVE rows.
+  - _The incompleteness:_ the function still ends at `return {...}` with no
+    `RequirementProgress` creation, no phase assignment, no recert deadline,
+    no notification — confirmed by reading to the function's end
+    (`:2473-2480`); `TrainingProgramService.enroll_member`
+    (`training_program_service.py`, confirmed byte-identical to pass 11 by
+    the 6-commit list above not naming it) remains the only path that does
+    any of that.
+
+  **Disposition unchanged: OPEN, FLAGGED, not fixed here.** The reasoning
+  pass 7 gave for reserving the choice to the owner — delegate vs. add a bare
+  lock vs. remove the route, each with different response-shape/audit-event/
+  behavioral consequences — still applies to the two remaining defects, and
+  closing one third of the finding does not change that calculus for the
+  other two. `docs/KNOWN_LIMITATIONS.md`'s entry is corrected below to stop
+  describing the prerequisite gap as open.
+
+- TR-4's `year`-default semantics (owner-decision, acknowledged) — unchanged.
+- `training_requirement_removal.py`'s reference-count list already includes
+  `KnowledgeTest.requirement_id`/`KnowledgeTestAttempt.requirement_id`
+  (confirmed at `training_requirement_removal.py:43-44`) — this was added
+  when the knowledge-tests feature first merged, predating this pass, and is
+  consistent with the already-reviewed `LocationService.remove_location`
+  reasoning pass 10 verified for the rest of that list.
+
+### Verified good ✅ (pass 12 additions)
+
+- **Knowledge-tests' answer secrecy holds under direct trace, not just the
+  module's own docstring claim** — see Data exposure above; no path, officer
+  or member, reaches `correct_option_ids` before an attempt is submitted.
+- **The attempt cap and the start-attempt dedup both lock before they read**,
+  closing the Pitfall #27 shape in both directions (capacity check, and
+  duplicate-open-attempt prevention).
+- **The knowledge-tests migration is `create_all`-tolerant, both `SET NULL`
+  columns are nullable, and the downgrade is idempotent** — read directly,
+  not assumed from its docstring.
+- **No new unbounded query, no CSV export, no `.like()`/`.ilike()` usage, no
+  JSON-column shallow-copy mutation, no route missing an auth dependency** in
+  `knowledge_tests.py`.
+- **`member_class`'s addition to the compliance matrix is a pure, additive
+  response field** with no new query shape and no permission change.
+- **The repo-wide encryption sweep's slice of `models/training.py` introduces
+  no broken search** — the one live reader of `XAPIStatement.actor_email`
+  matches through `User.email_hash`, never through the column the index was
+  dropped from.
+
+## Schema & migration notes (pass 12)
+
+No new migration in this window. Migration `7c2e9a41b6d3`
+(`knowledge_tests`/`knowledge_test_questions`/`knowledge_test_attempts`,
+2026-10-05) is reviewed above for the first time as part of closing the
+scope gap — clean, no fix needed.
+
+## Guard tests added (pass 12)
+
+None new. No fixable finding this pass; the existing
+`tests/test_knowledge_tests.py` and `tests/test_training_knowledge_test_score.py`
+already guard every property this pass verified, and are now correctly
+exercised by the completion gate's widened `-k` filter (see below) rather
+than silently skipped.
+
+## Completion gate (pass 12)
+
+| Check                                                                               | Result                                            |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (pinned 7.4.1)                                        | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/` (pinned 26.10.1, via `/usr/local/bin/black`)   | ✅ clean (2743 files unchanged)                   |
+| `isort --check-only app/ tests/ alembic/` (pinned 9.0.2)                            | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                                   | ✅ single head `f90b1124e6f4`, 678 revisions      |
+| `python3 scripts/check_route_permissions.py --strict`                               | ✅ 280 routes, 0 errors, 0 warnings               |
+| `python3 scripts/generate_schema_docs.py --check`                                   | ✅ up to date                                     |
+| `pytest tests/ -q -k "training or compliance or knowledge_test"` (via `python3.13`) | ✅ 2428 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck`                                                                 | ✅ 0 errors                                       |
+| `npm run lint`                                                                      | ✅ clean (`--max-warnings 10`, exit 0)            |
+
+**Environment note, not a code finding:** this sandbox's `frontend/node_modules`
+did not exist at the start of this pass (fresh worktree, no prior `npm ci`).
+`npm run typecheck` failed with 33 `TS2307: Cannot find module
+'react-hot-toast'` errors across unrelated files (scheduling and training
+pages) before a plain `npm ci` from the repo root (no lockfile change —
+`git status` on `package-lock.json` clean before and after) populated
+`node_modules`; both `npm run typecheck` and `npm run lint` then passed
+clean, matching pass 8's same note for the same underlying cause (an
+uninitialized sandbox, not the code).
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended).
 
 ---
 

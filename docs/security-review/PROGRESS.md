@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3842](https://github.com/thegspiro/the-logbook/pull/3842)** (branch
+`claude/security-review-training-core-p12`) —
+Feature 17 (Training core), pass 12, a watchdog pickup. PR #3841 (Feature 16,
+Events & requests, pass 12) had already merged (`63ecd45c`). Confirmed no
+security-review PR open via `list_pull_requests`/`search_pull_requests`
+(state=open, head `claude/security-review-*`) — 0 results; the one open PR at
+the time (#3839) is unrelated layout work on branch `ccr-ba1682dc-g25b70`. Row
+16 marked ✅ as the Step 0 ride-along from PR #3841's merge. Row 17 confirmed
+the next feature by reading the rotation table directly on a freshly fetched
+`main`.
+
+See the Log entry above (2026-10-29, Feature 17 pass 12) and
+`docs/security-review/TR-17-training-core.md`'s **Pass 12** section for the
+full review: the knowledge-tests scope gap closed with a first full pass (0
+fix needed), and TR7-1 corrected (one of its two remaining original defects
+was already fixed by an earlier commit pass 11 reviewed but mis-attributed;
+the race and the structural incompleteness remain OPEN/FLAGGED).
+
+Rotation row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
+extended) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 12, PR #3841, merged), preserved for history</summary>
+
 **PR [#3841](https://github.com/thegspiro/the-logbook/pull/3841)** (branch
 `claude/security-review-events-requests-p12`) —
 Feature 16 (Events & requests), pass 12, a watchdog pickup. Dedicated
@@ -66,10 +91,11 @@ tests (`pytest tests/ -k "event or guest or rsvp or attendance"`, via
 `python3.13`) — 2137 passed, 1 pre-existing skip (`pywebpush`); frontend
 `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
 
-Rotation row 16 → ⏳ (awaiting this PR's merge, per the legend — the next
-iteration's Step 0 ride-along turns it ✅); next is Feature 17 (Training
+Rotation row 16 → ✅ (merged as `63ecd45c`); next is Feature 17 (Training
 core) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
 than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 12, PR #3840, merged), preserved for history</summary>
@@ -23317,8 +23343,8 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⏳     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
@@ -23343,6 +23369,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-29 — Feature 17 (Training core, pass 12) — watchdog pickup, scope gap closed (knowledge-tests given first full pass), TR7-1 corrected (one of its two defects already fixed, unnoticed by pass 11), 0 fixed, 0 new findings
+
+Watchdog pickup. PR #3841 (Feature 16, Events & requests, pass 12) had
+already merged (`63ecd45c`), with no `claude/security-review-*` PR open
+anywhere (`list_pull_requests`/`search_pull_requests`, state=open — the one
+open PR, #3839, is unrelated layout work). Row 16 marked ✅ as the Step 0
+ride-along from PR #3841's merge. Row 17 (Training core) confirmed the next
+`⬜` row by reading the Rotation table directly on a freshly fetched `main`.
+
+Per `docs/KNOWN_LIMITATIONS.md`'s "Training — Online Knowledge Tests Have No
+Owning Feature" entry (filed 2026-10-06), added `knowledge_tests.py`,
+`models/knowledge_test.py` and `schemas/knowledge_test.py` to Feature 17's
+declared scope and gave that surface (1,153 + 214 + 219 lines, 13 routes)
+its first full pass against all seven checklist dimensions. Clean: every
+route auth-gated and permission-matched, every query org-scoped or
+XC-1-validated, answer secrecy holds under direct trace, attempt cap and
+start-attempt dedup both lock before they read, migration `7c2e9a41b6d3`
+`create_all`-tolerant with both `SET NULL` columns nullable. No fix needed.
+Found and corrected a process gap: this surface's guard tests
+(`test_knowledge_tests.py`, `test_training_knowledge_test_score.py`) never
+matched training-core's scoped `-k "training or compliance"` test filter, so
+they had silently never run under any prior pass's completion gate; widened
+to `-k "training or compliance or knowledge_test"`.
+
+Separately, re-reading the standing TR7-1 finding (duplicate, racy,
+structurally incomplete `POST /training/enrollments`) found that commit
+`94e3d2e0` (2026-10-23, pre-dating pass 11) already fixed one of its three
+original defects — the missing prerequisite check — and that pass 11
+reviewed that exact commit (for its other effects) without noticing, then
+incorrectly re-asserted "still OPEN/FLAGGED, unchanged" on the stated
+grounds that the function appeared in no reviewed commit, which was false.
+The race and the structural incompleteness (no `RequirementProgress`/phase/
+recert/notification) are confirmed still open by direct re-read of the
+current function. `docs/KNOWN_LIMITATIONS.md`'s TR7-1 entry is corrected
+accordingly. Disposition unchanged: OPEN, FLAGGED — the owner decision
+(delegate / lock in place / remove the route) pass 7 reserved still applies
+to the two remaining defects.
+
+Full write-up: `docs/security-review/TR-17-training-core.md`'s **Pass 12**
+section.
+
+Completion gate: `flake8`/`black --check` (pinned 26.10.1, via
+`/usr/local/bin/black`)/`isort --check-only` on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 678 revisions, single head
+`f90b1124e6f4`; `check_route_permissions.py --strict` — 280 routes, 0
+errors; `generate_schema_docs.py --check` — up to date; scoped backend tests
+(`pytest tests/ -k "training or compliance or knowledge_test"`, via
+`python3.13`) — 2428 passed, 1 pre-existing skip (`pywebpush`); frontend
+`npm run typecheck`/`npm run lint` — 0 errors, 0 warnings (after a plain
+`npm ci` from the repo root populated this fresh worktree's empty
+`node_modules`; no lockfile change).
+
+Rotation row 17 → ✅ (pending this PR's merge); next is Feature 18
+(Training extended) — re-check `list_pull_requests`/`search_pull_requests`
+fresh rather than trusting this note.
 
 ### 2026-10-29 — Feature 16 (Events & requests, pass 12) — watchdog pickup, real delta (8 real commits of 334 in scope), two authorization-widening commits reviewed clean against all seven checklist dimensions, 0 fixed, 0 new findings
 
