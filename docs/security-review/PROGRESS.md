@@ -16,7 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending)** — Feature 12 (Facilities), pass 13, a watchdog pickup.
+**PR [#3832](https://github.com/thegspiro/the-logbook/pull/3832)** (branch
+`claude/security-review-facilities-p13`) — Feature 12 (Facilities), pass
+13, a watchdog pickup.
 Dedicated `/loop 30m /security-review` session
 `session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
 `ListAgents` ("No reachable agents"). PR #3823 (Feature 11, Inventory, pass 13) had already merged (`d65ad33f`), and this pickup followed promptly
