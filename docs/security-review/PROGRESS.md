@@ -16,7 +16,49 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR-PLACEHOLDER-EC14-P13**
+**PR [#3837](https://github.com/thegspiro/the-logbook/pull/3837)** (branch
+`claude/security-review-equipment-check-shifts-p13`) — Feature 14
+(Equipment check & shifts), pass 13, a watchdog pickup. Dedicated
+`/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
+remains unreachable, confirmed via `ListAgents` ("No reachable agents").
+PR #3835 (Feature 13, Apparatus & NFC, pass 20) had already merged
+(`1884c171`), and this pickup followed promptly rather than waiting for
+the next scheduled tick. Confirmed no security-review PR open via
+`list_pull_requests` (state=open) — the 3 open PRs at the time were all
+unrelated feature work, none with a `claude/security-review-` head
+branch. Row 14 confirmed the next `⬜` row, matching PR #3835's own
+"next feature" note.
+
+**0 fixed, 0 new findings.** Baseline `58525287` (PR #3741's merge, pass
+12). `git diff --stat` against it, across the full declared scope, found
+2 files, +53/−4 — both endpoint files are byte-identical; the delta is
+confined to the two service files. The only substantive change is commit
+`f53f766a`, the fix for pass 12's own flagged EC-17 (a non-draft shift
+report stayed editable by its filing officer with no re-review) —
+re-verified end to end this pass (read in full, org-scoped fetch
+confirmed unchanged, training-credit timing confirmed unaffected) rather
+than taken on the commit message's word, and its four dedicated
+regression tests re-run directly and pass. The remaining change is the
+cross-cutting `list_within_detail_limit` refusal-message-capping helper,
+already independently reviewed for Documents & legal (PR #3816),
+Facilities (PR #3832) and Apparatus & NFC (PR #3835). Routes
+re-enumerated by AST, unchanged (`equipment_check.py` 54,
+`shift_completion.py` 21). EC-17 status updated FLAGGED → FIXED; all
+other prior-pass findings re-confirmed unchanged (EC-16, EC-6, EC-13
+intact; EC-8 still open/owner-accepted; EC-7/EC-11 remain resolved). See
+`docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 13**
+section for the full review.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 672
+revisions, single head `43bebab8401c`; scoped backend tests (`-k
+"equipment or shift"`, both halves) — 1283 + 780 passed, 1 pre-existing
+skip (`pywebpush`) in each half; frontend `npm run typecheck`/`npm run
+lint` — 0 errors, 0 warnings (no dedicated frontend module).
+
+Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
+(Scheduling) — re-check `search_pull_requests`/`list_pull_requests` fresh
+rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 20, PR #3835, merged), preserved for history</summary>
