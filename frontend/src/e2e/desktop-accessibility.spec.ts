@@ -52,6 +52,10 @@ const open = async (page: Page, path: string, viewport: { width: number; height:
   await signInForRoute(page, route, null);
   await page.goto(path);
   await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+  // An admin hub keeps its tabs and body invisible until its first summary
+  // settles (useFirstLoadHold). axe skips invisible content and an invisible
+  // card takes no click, so wait for the hold to lift before either.
+  await page.waitForFunction(() => !document.querySelector('[data-testid="admin-hub-body"][data-held]'));
   await page.waitForTimeout(400);
 };
 

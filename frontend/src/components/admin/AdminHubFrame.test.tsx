@@ -322,17 +322,17 @@ describe('AdminHubFrame', () => {
       mockGetSummary.mockReturnValue(new Promise<AdminHubSummary>((resolve) => (settle = resolve)));
       renderFrame();
 
-      expect(body()).toHaveClass('invisible');
+      expect(body()).toHaveAttribute('data-held');
       settle(summary);
       await screen.findByRole('link', { name: 'Review queue' });
-      expect(body()).not.toHaveClass('invisible');
+      expect(body()).not.toHaveAttribute('data-held');
     });
 
     it('shows the body once a failed summary settles', async () => {
       mockGetSummary.mockRejectedValue(new Error('down'));
       renderFrame();
 
-      await waitFor(() => expect(body()).not.toHaveClass('invisible'));
+      await waitFor(() => expect(body()).not.toHaveAttribute('data-held'));
     });
 
     it('stops waiting for a slow summary after a moment', async () => {
@@ -340,21 +340,21 @@ describe('AdminHubFrame', () => {
       mockGetSummary.mockReturnValue(new Promise<AdminHubSummary>(() => {}));
       renderFrame();
 
-      expect(body()).toHaveClass('invisible');
+      expect(body()).toHaveAttribute('data-held');
       await act(async () => {
         await vi.advanceTimersByTimeAsync(FIRST_LOAD_HOLD_MS);
       });
-      expect(body()).not.toHaveClass('invisible');
+      expect(body()).not.toHaveAttribute('data-held');
     });
 
     it('does not hide anything when there is no queue to wait for', () => {
       mockGetSummary.mockReturnValue(new Promise<AdminHubSummary>(() => {}));
       const { unmount } = renderFrame({ showAttentionQueue: false });
-      expect(body()).not.toHaveClass('invisible');
+      expect(body()).not.toHaveAttribute('data-held');
       unmount();
 
       renderFrame({ summary: false });
-      expect(body()).not.toHaveClass('invisible');
+      expect(body()).not.toHaveAttribute('data-held');
     });
 
     it('waits for a nav the caller has not built yet', () => {
@@ -371,10 +371,10 @@ describe('AdminHubFrame', () => {
         </AdminHubFrame>
       );
       const { rerender } = renderWithRouter(frame(true));
-      expect(body()).toHaveClass('invisible');
+      expect(body()).toHaveAttribute('data-held');
 
       rerender(frame(false));
-      expect(body()).not.toHaveClass('invisible');
+      expect(body()).not.toHaveAttribute('data-held');
     });
 
     it('keeps the page on screen through a refresh', async () => {
@@ -394,7 +394,7 @@ describe('AdminHubFrame', () => {
       );
 
       await waitFor(() => expect(mockGetSummary).toHaveBeenCalledTimes(2));
-      expect(body()).not.toHaveClass('invisible');
+      expect(body()).not.toHaveAttribute('data-held');
     });
   });
 });

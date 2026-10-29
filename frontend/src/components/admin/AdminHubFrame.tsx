@@ -149,7 +149,11 @@ export function AdminHubFrame<K extends string>({
   // down when it arrived, on every hub route. A nav the caller cannot build
   // yet is the same. The body is a card row that scrolls its selected card into
   // view on mount, which is why this hides with `visibility`: see
-  // useFirstLoadHold.
+  // useFirstLoadHold. The wrappers are `display: contents`, so the class sets
+  // visibility on their children directly (`[&>*]:invisible`) rather than on
+  // the wrapper for the children to inherit: a box-less element's inherited
+  // style is the part WebKit has been unreliable at updating, and a hold that
+  // never lifted there would leave the page blank under the header.
   const [summaryPending, setSummaryPending] = useState(wantsSummary && showAttentionQueue);
   const held = useFirstLoadHold(summaryPending || navPending);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -343,7 +347,7 @@ export function AdminHubFrame<K extends string>({
             tabIndex, because a tablist stays out of the tab order (its tabs use
             roving tabindex) and the tabs themselves reach the hidden end. */}
         {/* `contents`, so the wrapper adds no box and the gap above still applies. */}
-        <div className={held ? 'invisible contents' : 'contents'}>
+        <div data-held={held || undefined} className={held ? 'contents [&>*]:invisible' : 'contents'}>
           {cardTabs && activeTab && onTabChange && (
             <AdminHubCardTabs<K>
               tabs={cardTabs}
@@ -395,7 +399,11 @@ export function AdminHubFrame<K extends string>({
       {/* 5 — Body. Free: table, form, calendar, card grid — the module's own.
           Under card tabs it is their tabpanel, so the selected card's
           aria-controls resolves to it. */}
-      <div data-testid="admin-hub-body" className={held ? 'invisible contents' : 'contents'}>
+      <div
+        data-testid="admin-hub-body"
+        data-held={held || undefined}
+        className={held ? 'contents [&>*]:invisible' : 'contents'}
+      >
         {cardTabs && activeTab ? (
           <div
             id={`${idPrefix}-panel-${activeTab}`}
