@@ -336,6 +336,26 @@ describe('IntegrationsPage', () => {
     });
   });
 
+  it('connects NWS Weather Alerts with the channels the department chose', async () => {
+    const user = userEvent.setup();
+    mockConnectIntegration.mockResolvedValue({ ...mockIntegrations[1], status: 'connected', enabled: true });
+
+    renderPage();
+    await screen.findByText('NWS Weather Alerts');
+    await user.click(within(screen.getByTestId('integration-card-nws-weather')).getByText('Connect'));
+    await user.type(screen.getByLabelText('NWS Zone ID'), 'vaz054');
+    await user.click(screen.getByRole('checkbox', { name: /Bell notice when an alert is issued/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Email when an alert is issued/ }));
+    await user.click(screen.getByTestId('connect-submit'));
+
+    expect(mockConnectIntegration).toHaveBeenCalledWith('int-2', {
+      zone_id: 'VAZ054',
+      notify_banner: true,
+      notify_bell: false,
+      notify_email: true,
+    });
+  });
+
   it('hides manage buttons when user lacks permission', async () => {
     mockCheckPermission.mockReturnValue(false);
     renderPage();

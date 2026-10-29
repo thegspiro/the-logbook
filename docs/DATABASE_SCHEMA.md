@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**322 tables · 5329 columns · 1090 foreign keys**
+**323 tables · 5343 columns · 1091 foreign keys**
 
 ---
 
@@ -330,6 +330,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`calendar_sync_mappings`](#calendar_sync_mappings) | `CalendarSyncMapping` | 14 | One department event as published to an external calendar. |
 | [`integration_sync_logs`](#integration_sync_logs) | `IntegrationSyncLog` | 12 | One run of an integration: a sync, a connection check, a chat delivery. |
 | [`integrations`](#integrations) | `Integration` | 18 | Stores integration configurations per organization |
+| [`weather_alerts`](#weather_alerts) | `WeatherAlert` | 14 | An NWS alert the department's weather integration has seen. |
 
 ### Inventory
 
@@ -5168,6 +5169,37 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - UNIQUE `ix_integrations_org_type` (`organization_id`, `integration_type`)
+
+### `weather_alerts`
+
+**WeatherAlert** · `app/models/integration.py`
+
+> An NWS alert the department's weather integration has seen. One row per NWS alert id per department: the unique key is what makes a second poll of the same alert a no-op, so members are told about each alert once however often the zone is polled. ``ended_at`` is set when the alert stops appearing in the zone's active list before it expires (NWS cancelled or replaced it). Only Severe and Extreme alerts are stored (owner decision 2026-10-29). The text is NWS's public bulletin, not member data.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `nws_id` | VARCHAR(255) | no |  |  |  |
+| `event` | VARCHAR(255) | no |  |  |  |
+| `severity` | VARCHAR(32) | no |  |  |  |
+| `urgency` | VARCHAR(32) | yes |  |  |  |
+| `headline` | VARCHAR(500) | yes |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `instruction` | TEXT | yes |  |  |  |
+| `area_desc` | TEXT | yes |  |  |  |
+| `onset` | DATETIME | yes |  |  |  |
+| `expires` | DATETIME | yes |  |  |  |
+| `first_seen_at` | DATETIME | no |  | `now()` |  |
+| `ended_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_weather_alerts_org_ended` (`organization_id`, `ended_at`)
+
+**Constraints**
+
+- UNIQUE `uq_weather_alerts_org_nws_id` (`organization_id`, `nws_id`)
 
 ## Inventory
 
@@ -11620,7 +11652,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (264 references)
+### → `organizations` (265 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11887,6 +11919,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `user_passkeys` | `organization_id` | CASCADE | no |
 | `users` | `organization_id` | CASCADE | no |
 | `voting_tokens` | `organization_id` | CASCADE | no |
+| `weather_alerts` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
 ### → `inventory_items` (22 references)

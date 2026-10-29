@@ -2355,6 +2355,18 @@ settings.
 > all, so a webhook connected earlier starts receiving every event. Each
 > delivery is recorded in the integration's run history. Covered by
 > `tests/test_generic_webhook_dispatch.py`.
+>
+> **NWS Weather Alerts — resolved (2026-10-29), as the owner chose: build it
+> out.** `weather_alert_poll` checks each department's zone every 15 minutes
+> and keeps Severe and Extreme alerts (real ones, not tests) in the new
+> `weather_alerts` table, unique on department and NWS alert id, so each alert
+> is announced once. The department picks the channels in the integration's
+> settings: a dashboard banner while the alert is active
+> (`GET /integrations/weather/active-alerts`), a bell notice to every current
+> member, and an email under the new optional **Severe weather alerts** kind;
+> banner and bell default on, email off. The row is committed before anyone is
+> told, so a crash in between loses that alert's notices rather than repeating
+> them to the department. Covered by `tests/test_weather_alerts.py`.
 
 Both are listed in the integrations catalogue as `available`
 (`app/api/v1/endpoints/integrations.py`), can be connected, and pass their

@@ -425,6 +425,10 @@ const IntegrationsPage: React.FC = () => {
   // Config form state
   const [webhookUrl, setWebhookUrl] = useState('');
   const [zoneId, setZoneId] = useState('');
+  // How members hear about a weather alert; the department chooses.
+  const [weatherBanner, setWeatherBanner] = useState(true);
+  const [weatherBell, setWeatherBell] = useState(true);
+  const [weatherEmail, setWeatherEmail] = useState(false);
   const [stateCode, setStateCode] = useState('');
   const [fdid, setFdid] = useState('');
   const [agencyId, setAgencyId] = useState('');
@@ -615,7 +619,11 @@ const IntegrationsPage: React.FC = () => {
   const resetFormState = (integration?: IntegrationConfig) => {
     const stored = integration?.config ?? {};
     setWebhookUrl('');
-    setZoneId('');
+    // Seeded from what is stored: a blank zone would fail its pattern on save.
+    setZoneId(typeof stored['zone_id'] === 'string' ? stored['zone_id'] : '');
+    setWeatherBanner(stored['notify_banner'] !== false);
+    setWeatherBell(stored['notify_bell'] !== false);
+    setWeatherEmail(stored['notify_email'] === true);
     setStateCode('');
     setFdid('');
     setAgencyId('');
@@ -691,7 +699,12 @@ const IntegrationsPage: React.FC = () => {
     }
     switch (integrationType) {
       case 'nws-weather':
-        return { zone_id: zoneId };
+        return {
+          zone_id: zoneId,
+          notify_banner: weatherBanner,
+          notify_bell: weatherBell,
+          notify_email: weatherEmail,
+        };
       case 'nfirs-export':
         return { state_code: stateCode, state_fdid: fdid };
       case 'nemsis-export':
@@ -1128,6 +1141,38 @@ const IntegrationsPage: React.FC = () => {
                 Find your zone at weather.gov. Format: state code + C/Z + 3 digits (e.g., NYZ072, CAC006).
               </p>
             </div>
+            <fieldset>
+              <legend className={labelClass}>Tell members about severe weather</legend>
+              <p className="text-theme-text-muted text-xs">
+                The zone is checked every 15 minutes. Only Severe and Extreme alerts count, such as tornado, severe
+                thunderstorm and flash flood warnings.
+              </p>
+              <div className="mt-2 space-y-1">
+                {[
+                  {
+                    label: 'Dashboard banner while the alert is active',
+                    checked: weatherBanner,
+                    set: setWeatherBanner,
+                  },
+                  { label: 'Bell notice when an alert is issued', checked: weatherBell, set: setWeatherBell },
+                  {
+                    label: 'Email when an alert is issued (members can turn these emails off)',
+                    checked: weatherEmail,
+                    set: setWeatherEmail,
+                  },
+                ].map((option) => (
+                  <label key={option.label} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={option.checked}
+                      onChange={(e) => option.set(e.target.checked)}
+                    />
+                    <span className="text-theme-text-primary">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
         );
 

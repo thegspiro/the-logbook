@@ -7,7 +7,7 @@ Includes per-integration-type config schemas with strict validation.
 
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -75,6 +75,12 @@ class NWSWeatherConfig(BaseModel):
 
     zone_id: str = Field(pattern=r"^[A-Z]{2}[CZ]\d{3}$")
     alert_types: List[str] = Field(default_factory=list)
+    # How members hear about a Severe or Extreme alert; the department chooses
+    # (owner decision 2026-10-29). A dashboard banner while it is active, a
+    # bell notice when it is issued, and an email when it is issued.
+    notify_banner: bool = True
+    notify_bell: bool = True
+    notify_email: bool = False
 
 
 class NFIRSConfig(BaseModel):
@@ -586,12 +592,29 @@ SECRET_CONFIG_KEYS = frozenset(
 # ============================================
 
 
+class ActiveWeatherAlertResponse(BaseModel):
+    """An active alert as the dashboard banner shows it."""
+
+    id: str
+    event: str
+    severity: str
+    headline: Optional[str] = None
+    instruction: Optional[str] = None
+    area_desc: Optional[str] = None
+    onset: Optional[datetime] = None
+    expires: Optional[datetime] = None
+
+
 class WeatherAlertResponse(BaseModel):
     """Validated NWS weather alert — only trusted fields."""
 
     model_config = ConfigDict(extra="ignore")
 
+    # NWS's own identifier for the alert; the dedupe key.
+    id: str = ""
     event: str
+    # "Actual" for a real alert; "Exercise", "System", "Test" or "Draft" else.
+    status: str = ""
     severity: str = ""
     urgency: str = ""
     headline: str = ""

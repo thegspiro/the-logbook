@@ -264,4 +264,5 @@ export type {
   CalcomBooking,
   GoogleWorkspaceLinkResult,
   GoogleWorkspaceAttentionItem,
+  ActiveWeatherAlert,
 } from './adminServices';

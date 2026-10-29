@@ -172,6 +172,10 @@ app/api/v1/endpoints/forms.py::member_lookup
 app/api/v1/endpoints/forms.py::submit_form
 
 app/api/v1/endpoints/integrations.py::list_connected_integration_status
+# Weather banner (2026-10-29): read by every member's dashboard. Filtered to
+# the caller's organization, and returns only the National Weather Service's
+# public bulletin for the department's zone — no member data.
+app/api/v1/endpoints/integrations.py::list_active_weather_alerts
 
 app/api/v1/endpoints/inventory.py::check_member_allowance
 app/api/v1/endpoints/inventory.py::create_equipment_request

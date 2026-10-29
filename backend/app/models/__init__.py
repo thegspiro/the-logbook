@@ -217,6 +217,7 @@ from app.models.integration import (
     CalendarSyncMapping,
     Integration,
     IntegrationSyncLog,
+    WeatherAlert,
 )
 from app.models.inventory import (
     AssignmentType,
@@ -550,6 +551,7 @@ __all__ = [
     "DirectoryProvider",
     "Integration",
     "IntegrationSyncLog",
+    "WeatherAlert",
     "CalendarSyncMapping",
     "McpServiceKey",
     "UserPasskey",
