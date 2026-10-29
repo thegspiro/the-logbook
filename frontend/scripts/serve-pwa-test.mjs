@@ -30,6 +30,16 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // Test-only stand-in for a department's own website embedding a public
+  // form. Requested as http://localhost so the iframe below is cross-site.
+  if (request.method === 'GET' && url.pathname === '/__pwa-test/embedding-site') {
+    response.writeHead(200, { 'Content-Type': 'text/html' });
+    response.end(
+      `<!doctype html><title>Department</title><iframe src="http://127.0.0.1:${port}/embed/f/abcdef123456"></iframe>`
+    );
+    return;
+  }
+
   let relativePath = decodeURIComponent(url.pathname).replace(/^\/+/, '');
   if (!relativePath) relativePath = 'index.html';
   let file = path.resolve(root, relativePath);

@@ -208,7 +208,11 @@ export default defineConfig({
         // policy is written per request by nginx, and the precached
         // index.html carries DENY, so serving that copy would block the
         // embed with nothing in the console naming why.
-        navigateFallbackDenylist: [/^\/api/, /^\/embed\//],
+        //
+        // /.well-known/ is the backend's (security.txt, OAuth discovery);
+        // answering it with the app shell hides the real document from anyone
+        // opening it in a browser where the app is installed.
+        navigateFallbackDenylist: [/^\/api/, /^\/embed\//, /^\/\.well-known\//],
         runtimeCaching: [
           {
             urlPattern: /^.*\/api\/.*/,
