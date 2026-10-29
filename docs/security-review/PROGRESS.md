@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending)** — Feature 13 (Apparatus & NFC), pass 20, a watchdog
+pickup. Dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` ("No reachable agents"). PR #3832 (Feature 12, Facilities,
+pass 13) had already merged (`3949326e`), and this pickup followed
+promptly rather than waiting for the next scheduled tick. Confirmed no
+security-review PR open via `list_pull_requests` (state=open) — the 4 open
+PRs at the time were all unrelated feature work, none with a
+`claude/security-review-` head branch. Row 13 confirmed the next `⬜` row
+on a freshly fetched `main` (head `3949326e`), matching PR #3832's own
+"Next feature" note.
+
+**0 fixed, 0 new findings.** Near-zero delta since this feature's own pass
+19 (merge `1dfe6f47`, PR #3740): exactly one non-merge commit (`4cac9ff2`)
+touches the declared scope, and its only in-scope change is a one-line
+refusal-message reword in `evoc_level_service.py::delete_evoc_level`
+(avoids tripping `safe_error_detail`'s `DELETE ... FROM` SQL-sniff
+pattern) — no query, permission, or org-scoping change, and a different
+method from the one AP2-4 concerns. This is the same cross-cutting
+refusal-message-capping commit already independently reviewed for
+Documents & legal (PR #3816) and Facilities (PR #3832). All other scope
+files (`apparatus.py`, `nfc_tags.py`, `nfc_tag_service.py`,
+`nfc_card_admin_service.py`, `nfc_card_status_sync.py`,
+`mcp/tools/apparatus.py`, `models/nfc_tag.py`, `schemas/nfc_tag.py`,
+`frontend/src/modules/apparatus`) are byte-identical to pass 19. Both
+routers re-enumerated by AST, unchanged (`apparatus.py` 94, `nfc_tags.py`
+11). AP2-4 re-confirmed FLAGGED/unchanged (owner-accepted). See
+`docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 20** section for
+the full review.
+
+Rotation row 13 → ✅ (pending this PR's merge); next is Feature 14
+(Equipment check & shifts) — re-check `search_pull_requests`/
+`list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 13, PR #3832, merged), preserved for history</summary>
+
 **PR [#3832](https://github.com/thegspiro/the-logbook/pull/3832)** (branch
 `claude/security-review-facilities-p13`) — Feature 12 (Facilities), pass
 13, a watchdog pickup.
@@ -51,6 +88,8 @@ full review.
 Rotation row 12 → ✅ (pending this PR's merge); next is Feature 13
 (Apparatus & NFC) — re-check `search_pull_requests`/`list_pull_requests`
 fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 13, PR #3823, merged), preserved for history</summary>
