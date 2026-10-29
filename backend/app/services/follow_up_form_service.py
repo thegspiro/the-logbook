@@ -1208,13 +1208,15 @@ class FollowUpFormService:
                     await self.db.get(Organization, organization_id)
                 )
             local_now = now.astimezone(zones[organization_id])
-            outcome = await self._remind_one(request_id, local_now, now)
+            outcome = await self._remind_one(
+                request_id, organization_id, local_now, now
+            )
             if outcome is not None:
                 counts["sent" if outcome else "failed"] += 1
         return counts
 
     async def _remind_one(
-        self, request_id: str, local_now: datetime, now: datetime
+        self, request_id: str, organization_id: str, local_now: datetime, now: datetime
     ) -> Optional[bool]:
         """Remind for one request. None when nothing was due, else whether the
         email went out. Commits or rolls back, so each row stands alone."""
@@ -1227,7 +1229,10 @@ class FollowUpFormService:
             request = (
                 await self.db.execute(
                     select(ProspectFormRequest)
-                    .where(ProspectFormRequest.id == request_id)
+                    .where(
+                        ProspectFormRequest.id == request_id,
+                        ProspectFormRequest.organization_id == organization_id,
+                    )
                     .with_for_update()
                 )
             ).scalar_one_or_none()
