@@ -978,6 +978,15 @@ class TestShiftRemaining:
         with pytest.raises(ValueError, match="must not be zero"):
             CohortShiftRequest(days=0)
 
+    @pytest.mark.parametrize("days", [14, -14, 1, -1])
+    async def test_a_shift_of_up_to_two_weeks_either_way_is_accepted(self, days):
+        assert CohortShiftRequest(days=days).days == days
+
+    @pytest.mark.parametrize("days", [15, -15, 365, -365, 2**31])
+    async def test_a_shift_of_more_than_two_weeks_is_rejected_by_the_schema(self, days):
+        with pytest.raises(ValueError, match="14"):
+            CohortShiftRequest(days=days)
+
     async def test_a_shift_across_the_dst_change_keeps_the_local_class_time(
         self, monkeypatch
     ):
