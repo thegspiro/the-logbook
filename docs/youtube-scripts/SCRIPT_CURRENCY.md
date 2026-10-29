@@ -1,5 +1,15 @@
 # Script currency
 
+## Flagged by the 2026-10-28 → 10-29 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28--29-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script               | Beat                      | Was                         | Now                                                                |
+| -------------------- | ------------------------- | --------------------------- | ------------------------------------------------------------------ |
+| **Any finance beat** | Recording dues            | An overpayment was all dues | The extra can be recorded as a donation from the member            |
+| **03** (IT)          | Connecting an integration | Connected with blank keys   | PayPal, Documenso, Cal.com and Salesforce ask for their keys first |
+
 ## Flagged by the 2026-10-28 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).

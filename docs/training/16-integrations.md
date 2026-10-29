@@ -150,6 +150,12 @@ that leads to a private network, such as a station computer or a home router.
 This applies to every address you give an integration: Slack, Discord, Teams,
 webhooks, Cal.com and Documenso. Use the service's public web address.
 
+**Keys are needed before it connects** _(2026-10-28)_. PayPal, Documenso,
+Cal.com and Salesforce refuse to connect until their keys are filled in, with a
+message naming what is missing, such as "PayPal needs: client_id,
+client_secret". Before, they connected with blank keys and showed as connected
+until a test failed.
+
 > **What if a test fails with a general message?** When something unexpected
 > goes wrong, the message reads "An unexpected error occurred. Please try
 > again." The details are written to the system log for your IT

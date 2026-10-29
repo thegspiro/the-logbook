@@ -1155,6 +1155,12 @@ tabs:
 - **Data Control** — which fields the portal shares. Every field is listed and
   off until you turn it on. Fields holding personal information carry a **PII**
   badge.
+  The three statistics that used to come back empty now carry figures
+  _(2026-10-28)_: stations counts the Fire Station facilities that are not
+  archived, calls counts calls in call tracking since 1 January, and volunteer
+  hours totals this calendar year's approved admin hours, completed training and
+  shift and event attendance, each hour counted once. Both yearly figures follow
+  the department's time zone.
 
 **Nothing is shared until all three are done:** the portal enabled, a key
 created, and the fields turned on under Data Control.
