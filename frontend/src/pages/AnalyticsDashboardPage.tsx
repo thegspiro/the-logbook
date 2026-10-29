@@ -156,7 +156,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       <StatGrid columns={4} gap={4} className="mb-6">
         <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Total Scans</div>
-          <div className="text-2xl font-bold text-blue-600 sm:text-3xl">{metrics.totalScans}</div>
+          <div className="text-2xl font-bold text-blue-600 sm:text-3xl dark:text-blue-400">{metrics.totalScans}</div>
         </div>
 
         <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
@@ -233,7 +233,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 .map(([errorType, count]) => (
                   <div key={errorType} className="flex items-center justify-between">
                     <span className="text-theme-text-secondary flex-1 truncate text-sm">{errorType}</span>
-                    <span className="ml-2 rounded-sm bg-red-100 px-2 py-1 text-xs font-semibold text-red-800 dark:bg-red-500/20 dark:text-red-400">
+                    <span className="ml-2 rounded-sm bg-red-100 px-2 py-1 text-xs font-semibold text-red-900 dark:bg-red-500/20 dark:text-red-300">
                       {count}
                     </span>
                   </div>
