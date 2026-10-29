@@ -36,6 +36,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getInitials } from '../utils';
+import FollowUpAnswersPanel from '../components/FollowUpAnswersPanel';
 import { blankToNull } from '../../../utils/formValues';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
 import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS, StepProgressStatus } from '../types';
@@ -626,6 +627,7 @@ export const InterviewPage: React.FC = () => {
         <div className="space-y-4 lg:col-span-1">
           <ApplicantInfoSection applicant={currentApplicant} timezone={timezone} />
           <PipelineProgressSection applicant={currentApplicant} timezone={timezone} />
+          <FollowUpAnswersPanel applicantId={currentApplicant.id} timezone={timezone} />
 
           {/* Recommendation summary */}
           {Object.keys(recommendationSummary).length > 0 && (

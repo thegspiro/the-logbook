@@ -130,3 +130,9 @@ export const APPLICANT_STATUS_LABELS: Record<ApplicantStatus, string> = {
  * endpoint accepts; past that the board reports what it is not showing.
  */
 export const KANBAN_PAGE_SIZE = 200;
+
+/**
+ * Reminders a follow-up form is sent while unsubmitted, every seven days.
+ * Mirrors MAX_REMINDERS in backend app/services/follow_up_form_service.py.
+ */
+export const FOLLOW_UP_MAX_REMINDERS = 3;

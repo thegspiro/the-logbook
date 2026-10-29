@@ -318,6 +318,14 @@ For each field you can set:
 - **Conditional Visibility** — show the field only when another question has a
   certain answer;
 - **Sensitive** — keep the answers encrypted and restricted (see below).
+- **Pre-fill from applicant (follow-up forms)** _(2026-10-29)_ — pick a detail
+  from the applicant's record, such as **Phone** or **Street address**, or
+  leave it on Don't pre-fill. It only matters when a prospective-members
+  **Follow-up Form** stage sends the form. The field then opens with what the
+  record holds, and a changed answer updates the record. The builder shows a
+  "Pre-fills: …" badge on the field. A field cannot be both **Sensitive** and
+  pre-filled: each setting is unavailable while the other is on. See
+  [Prospective Members → Follow-up Forms](./15-prospective-members.md#follow-up-forms-2026-10-29).
 
 ### Sensitive fields _(2026-10-26)_
 
