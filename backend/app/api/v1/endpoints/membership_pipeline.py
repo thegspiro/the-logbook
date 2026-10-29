@@ -41,6 +41,7 @@ from app.api.v1.endpoints.users import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.permissions import SENSITIVE_ANSWERS_VIEW
 from app.core.security_middleware import get_client_ip
 from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.event import Event
@@ -59,6 +60,7 @@ from app.schemas.membership_pipeline import (
     ElectionPackageCreate,
     ElectionPackageResponse,
     ElectionPackageUpdate,
+    FollowUpAnswersResponse,
     FollowUpFormRequestResponse,
     InterviewCreate,
     InterviewResponse,
@@ -2683,6 +2685,62 @@ async def review_follow_up_contact_change(
         if str(row["id"]) == str(request.id):
             return row
     raise HTTPException(status_code=404, detail="Follow-up form not found")
+
+
+@router.get(
+    "/prospects/{prospect_id}/follow-up-forms/{request_id}/answers",
+    response_model=FollowUpAnswersResponse,
+)
+async def get_follow_up_form_answers(
+    prospect_id: UUID,
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.view", "prospective_members.manage")
+    ),
+):
+    """
+    A submitted follow-up form's answers. Sensitive answers are included only
+    for a viewer holding ``sensitive_answers.view``, and each such reveal is
+    audit-logged; anyone else sees them marked as withheld.
+
+    **Requires permission: prospective_members.view or prospective_members.manage**
+    """
+    try:
+        result = await FollowUpFormService(db).submitted_answers(
+            str(prospect_id), str(request_id), current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Follow-up form not found")
+
+    reveal = user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name)
+    revealed = False
+    for answer in result["answers"]:
+        if answer["is_sensitive"]:
+            if reveal:
+                revealed = True
+            else:
+                answer["answer"] = None
+                answer["withheld"] = True
+    if revealed:
+        # Same event the Forms module records for a reveal, so one audit
+        # search finds every place a sensitive answer was read.
+        await log_audit_event(
+            db=db,
+            event_type="form_sensitive_answers_viewed",
+            event_category="forms",
+            severity="info",
+            event_data={
+                "form_id": str(result["form_id"]) if result["form_id"] else None,
+                "follow_up_request_id": str(request_id),
+                "prospect_id": str(prospect_id),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return result
 
 
 @router.get(

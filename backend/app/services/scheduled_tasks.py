@@ -612,6 +612,19 @@ SCHEDULE = {
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
     },
+    "prospect_follow_up_reminders": {
+        "description": (
+            "Remind applicants about an unsubmitted follow-up form every seven "
+            "days, up to three times, while they are still on its stage. Sent "
+            "between 09:00 and 20:00 in the department's timezone, so the task "
+            "runs hourly and each reminder goes out in the first run after "
+            "09:00 on its day (once per request and reminder — safe to run "
+            "more than once an hour)"
+        ),
+        "frequency": "hourly",
+        "recommended_time": "0 * * * *",
+        "cron": "0 * * * *",
+    },
     "admin_hours_auto_close": {
         "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
         "frequency": "every 30 minutes",
@@ -7425,6 +7438,19 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_prospect_follow_up_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Send the follow-up form reminders that are due.
+
+    The rules live in FollowUpFormService.send_due_reminders, which commits or
+    rolls back each request on its own, so one failure cannot discard the
+    reminders already recorded.
+    """
+    from app.services.follow_up_form_service import FollowUpFormService
+
+    counts = await FollowUpFormService(db).send_due_reminders()
+    return {"task": "prospect_follow_up_reminders", **counts}
+
+
 async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     """Auto-close admin-hours sessions that exceeded their category limit.
 
@@ -7931,6 +7957,7 @@ TASK_RUNNERS = {
     "officer_directory_sync": run_officer_directory_sync,
     "event_request_reminders": run_event_request_reminders,
     "prospect_attendance_advance": run_prospect_attendance_advance,
+    "prospect_follow_up_reminders": run_prospect_follow_up_reminders,
     "budget_request_reminders": run_budget_request_reminders,
     "grant_reminders": run_grant_reminders,
 }
@@ -8022,6 +8049,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "officer_directory_sync": 86400,
     "event_request_reminders": 86400,
     "prospect_attendance_advance": 86400,
+    # Hourly, so a reminder lands soon after 09:00 department time; each
+    # request is reminded at most once a day (FollowUpFormService.reminder_due).
+    "prospect_follow_up_reminders": 3600,
     # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
     "budget_request_reminders": 86400,
     # Daily; idempotent per (item, due date, reminder, member) through a sent-log.
