@@ -22992,7 +22992,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -23024,6 +23024,14 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-29 — Feature 10 (Documents & legal, pass 13) — watchdog pickup, 0 fixed, 0 new findings; DOC-31 re-confirmed
+
+PR #3813 (Feature 09, pass 13) merged docs-only; only its row was cleared. One
+commit since pass 12: `b4d9388af` caps list-joining refusals in
+`documents_service.py` with `list_within_detail_limit`. Wording only; verified
+the cap holds and nothing new is disclosed. DOC-31 unchanged. See
+`DOC-10-documents-legal.md`'s **Pass 13**.
 
 ### 2026-10-28 — Feature 09 (Medical screening, PHI, pass 13) — watchdog pickup, near-zero delta (one non-rotation correctness fix, one non-rotation bundling change, both verified), 0 fixed, 0 new findings; MS-14/MS-15 re-confirmed unchanged
 

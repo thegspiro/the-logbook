@@ -1,6 +1,68 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), (this PR) (pass 12)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), (this PR) (pass 12)
+
+---
+
+## Pass 13 (2026-10-29)
+
+**Watchdog pickup.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0. PR #3813 (Feature 09, Medical screening, pass 13) had merged
+docs-only, so only its row needed clearing. The rotation had wrapped on `main`
+(rows 00–09 done), so row 10 was the first `⬜`.
+
+**Scope.** Baseline `f8d0a41f9` (pass 11's merge; pass 12 found only the
+`609e04d21` NOT NULL sweep on `models/document.py`, already read). One commit
+has touched the declared scope since: `b4d9388af` ("Cap the refusals that join
+a list from data", 2026-10-28), read as a diff. The three endpoint files are 24
+routes (documents 15, station_documents 2, legal_documents 7), enumerated
+mechanically, each carrying `require_permission` or `get_current_user`;
+unchanged from pass 12.
+
+**Verified good (mechanisms).**
+
+- **`b4d9388af` changes wording, not authorization.** In `documents_service.py`
+  it rebuilds five refusals (unknown permission, unknown position, the sole
+  position that opens a folder, and the purchase-request and expense-report
+  receipt refusals) with `list_within_detail_limit` from `app/core/utils.py`.
+  The helper keeps items in order while the composed message fits
+  `MAX_ERROR_DETAIL_LENGTH`, counts the rest ("and N more") and clips a single
+  item too long to fit alone. The final message is never longer than the last
+  candidate it accepted, because that candidate was composed with the same hidden
+  count, so the cap holds. Before this, a long list made `safe_error_detail`
+  replace the refusal with "An unexpected error occurred". Nothing new is
+  disclosed: the unknown permission and position strings are the caller's own
+  input, and the folder, request and report names are ones the caller can already
+  list. `tests/test_refusal_detail_sweep.py` now fails any refusal that joins a
+  list the source does not show to be fixed in size.
+- **DOC-31 (LOW, FLAGGED) re-confirmed unchanged.** `_release_document_references`
+  still reads the referencing `PurchaseRequest` / `ExpenseReport` rows with a
+  plain `SELECT`, not `.with_for_update()`, before refusing a receipt delete; the
+  commit above edits only the text of its two refusals. Already in
+  `docs/KNOWN_LIMITATIONS.md`.
+
+**Environment note.** The sandbox lacked two dependencies `main` now declares:
+`webauthn==3.0.1` (checked against PyPI: Duo Labs `py_webauthn`) and
+`@simplewebauthn/browser@14.0.0` (checked against npm: the SimpleWebAuthn
+project, published since 2020). Both are pinned in `requirements.txt` and the
+lockfile; they were installed from those pins (`pip install`, then `npm ci`).
+Typecheck failed with TS2307 until then, which was the stale install and not a
+code error.
+
+### Completion gate (pass 13)
+
+| Check                                                                                                                           | Result                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1 + flake8-pytest-style 2.2.0)                                                               | ✅ 0 violations                                                                           |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                  | ✅ clean                                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                               | ✅ clean                                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                               | ✅ single head `b74bcce55c11`                                                             |
+| `python3 scripts/check_route_permissions.py --strict`                                                                           | ✅ 0 errors, 0 warnings                                                                   |
+| `pytest -k "document or legal or folder or refusal or safe_error_detail or print_document or file_storage or module_documents"` | ✅ 862 passed, 1 skipped (`py_vapid`)                                                     |
+| `cd frontend && npm run typecheck`                                                                                              | ✅ exit 0 (after `npm ci`)                                                                |
+| `cd frontend && npm run lint`                                                                                                   | ✅ exit 0, no errors or warnings (NODE_OPTIONS=--max-old-space-size=6144; after `npm ci`) |
+
+No source file needed a fix this pass.
 
 ---
 
