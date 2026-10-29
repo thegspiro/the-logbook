@@ -25,8 +25,10 @@ What the sweep can and cannot see:
   on any ``.join`` in a refusal whose list the source does not show is fixed
   in size: a constant, an enum, a slice with a fixed end, or a local built only
   from those. Build such a message with ``list_within_detail_limit``, which
-  keeps it under the cap however long the list gets. A join assembled into a
-  variable before the ``raise`` is not followed.
+  keeps it under the cap however long the list gets. Names the message reads
+  are followed back to what they were bound to in the same function or the
+  module, so a join assembled into a variable before the ``raise`` is read
+  too; one that crosses into another function is not.
 * A message produced by a call (a helper, ``str(exc)``) is not text the sweep
   can read, and is skipped.
 * A raise that never reaches ``safe_error_detail`` is still checked. That is
@@ -325,6 +327,30 @@ def _is_bounded(node, scopes, seen=frozenset()):
     return False
 
 
+def _message_expressions(argument, scopes):
+    """The message expression, plus every value bound to a name it reads.
+
+    Followed transitively, so a join that builds ``shown`` two assignments
+    before ``raise ValueError(f"Unknown: {shown}")`` is read as part of the
+    message. A name is looked up in the innermost scope that binds it; a
+    binding whose value cannot be read (a parameter, a loop target) adds
+    nothing.
+    """
+    expressions, pending, followed = [], [argument], set()
+    while pending:
+        expression = pending.pop()
+        expressions.append(expression)
+        for node in ast.walk(expression):
+            if not (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)):
+                continue
+            if node.id in followed:
+                continue
+            followed.add(node.id)
+            scope = next((scope for scope in scopes if node.id in scope), {})
+            pending.extend(value for value in scope.get(node.id, ()) if value)
+    return expressions
+
+
 def _unbounded_joins(tree, sites):
     """Yield ``(lineno, joined source)`` for each join of data into a refusal."""
     top_level = [
@@ -339,15 +365,16 @@ def _unbounded_joins(tree, sites):
             if function not in function_scopes:
                 function_scopes[function] = _assignments(function)
             scopes = (function_scopes[function], module_scope)
-        for node in ast.walk(argument):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "join"
-                and node.args
-                and not _is_bounded(node.args[0], scopes)
-            ):
-                yield lineno, ast.unparse(node.args[0])
+        for expression in _message_expressions(argument, scopes):
+            for node in ast.walk(expression):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "join"
+                    and node.args
+                    and not _is_bounded(node.args[0], scopes)
+                ):
+                    yield lineno, ast.unparse(node.args[0])
 
 
 def _sent_to_client(text):
@@ -443,6 +470,9 @@ BOUNDED_JOINS = {
     ("app/services/event_service.py", "sorted(sensitive)"): (
         "an attendance-lock refusal: attendance_lock_http_error sends it without "
         "the length cap, and it lists field names"
+    ),
+    ("app/services/file_storage_service.py", "remote_storage.labels().values()"): (
+        "the remote storage platforms registered in code"
     ),
     ("app/services/minutes_record_service.py", "failed"): (
         "SuggestionApplyConflict has its own 409 handler, which sends the message "
@@ -549,6 +579,36 @@ def test_the_join_check_flags_lists_that_come_from_data():
         "    def __init__(self, ids):\n"
         '        super().__init__("Taken: " + ", ".join(ids))'
     ) == ["ids"]
+
+
+def test_the_join_check_follows_variables_built_before_the_raise():
+    assert _joins(
+        "def f(ids):\n"
+        '    shown = ", ".join(ids)\n'
+        '    raise ValueError(f"Unknown: {shown}")'
+    ) == ["ids"]
+    # Through a second variable, and when the message itself is a variable.
+    assert _joins(
+        "def f(rows):\n"
+        "    names = [r.name for r in rows]\n"
+        '    shown = ", ".join(names)\n'
+        '    message = "Blocked: " + shown\n'
+        "    raise ValueError(message)"
+    ) == ["names"]
+    # A capped variable is still capped.
+    assert (
+        _joins(
+            "def f(ids):\n"
+            '    shown = ", ".join(ids[:3])\n'
+            '    raise ValueError(f"Unknown: {shown}")'
+        )
+        == []
+    )
+    # A name bound twice in a cycle is followed once.
+    assert (
+        _joins("def f(a):\n" "    b = a\n" "    a = b\n" '    raise ValueError(f"{a}")')
+        == []
+    )
 
 
 def test_the_join_check_leaves_fixed_lists_alone():
