@@ -64,11 +64,12 @@ answers for a seeded slug. The member profile groups a member's positions by
 it, and the positions editor asks for it when a position is created. A client
 may create or change a position as `office` or `committee`; `system` is
 reserved and refused, and a seeded position keeps the kind the registry gives
-it. Four committees are seeded to every agency type with an empty permission
-list — `community_outreach_team`, `history_committee`,
-`fundraising_committee`, `membership_committee` — because every member already
-holds `member`, and copying its list would be a second place to maintain the
-baseline (CLAUDE.md pitfall #23).
+it. Four committees are seeded to every agency type — `community_outreach_team`,
+`history_committee`, `fundraising_committee`, `membership_committee` — each
+carrying a _copy_ of the baseline `member` list (never the same list object:
+CLAUDE.md pitfall #23), so a member whose only position is a committee still
+reaches the member screens; `tests/test_baseline_member_grants.py` holds the
+four to the baseline.
 
 | Position (slug)                                                           | Priority | What it manages beyond the baseline                                                                                                                                                       |
 | ------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

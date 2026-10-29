@@ -2710,10 +2710,13 @@ DEFAULT_POSITIONS: dict[str, dict] = {
     },
     # Committees and teams. A committee is a position so membership of it is
     # recorded, shown on the profile and the roster, and assignable from the
-    # same Manage Positions dialog as an office -- but it is not an office:
-    # it carries no permissions of its own, because every member already holds
-    # the baseline `member` position and a copy of that list here would be a
-    # second place to maintain the baseline (pitfall #23's shape). The
+    # same Manage Positions dialog as an office -- but it is not an office: it
+    # grants nothing beyond the baseline every member holds. Its permission
+    # list is a *copy* of the `member` position's, settled below the dict
+    # (the baseline is defined last), so a member whose only position is a
+    # committee still reaches the store and the rest of the member screens
+    # (`tests/test_corporate_storefront_grants.py`), and
+    # `tests/test_baseline_member_grants.py` holds it to the baseline. The
     # existing officer positions these sit beside -- `public_outreach`,
     # `historian`, `fundraising_chair`, `membership_coordinator` -- are the
     # chairs, with the permissions the chair's work needs.
@@ -2876,6 +2879,13 @@ for _slug, _definition in DEFAULT_POSITIONS.items():
             if _slug in SYSTEM_POSITION_SLUGS
             else POSITION_KIND_OFFICE
         ),
+    )
+
+# A committee carries the baseline, as a copy (never the `member` list object:
+# pitfall #23 is what sharing it would reintroduce).
+for _slug in COMMITTEE_POSITION_SLUGS:
+    DEFAULT_POSITIONS[_slug]["permissions"] = list(
+        DEFAULT_POSITIONS["member"]["permissions"]
     )
 
 

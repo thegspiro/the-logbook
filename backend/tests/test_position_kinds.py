@@ -47,9 +47,13 @@ class TestTheRegistryStatesEveryKind:
         }
 
     @pytest.mark.parametrize("slug", sorted(COMMITTEE_POSITION_SLUGS))
-    def test_a_committee_grants_nothing_and_cannot_be_deleted(self, slug):
+    def test_a_committee_carries_the_baseline_as_a_copy(self, slug):
+        """Nothing beyond what every member holds, and never the same list
+        object as the member position (pitfall #23)."""
         definition = DEFAULT_POSITIONS[slug]
-        assert definition["permissions"] == []
+        baseline = DEFAULT_POSITIONS["member"]["permissions"]
+        assert definition["permissions"] == baseline
+        assert definition["permissions"] is not baseline
         assert definition["is_system"] is True
         assert definition["kind"] == "committee"
 

@@ -631,8 +631,9 @@ should not have to discover by being surprised.
 Team, History Committee, Fundraising Committee and Membership Committee.
 Migration `d8f1a4c27b93` inserts them for every organization that does not
 already have a position under those slugs. They are committees — a new
-`positions.kind` column, `office` / `committee` / `system` — and grant no
-permissions of their own. They can be assigned from Manage Positions like any
+`positions.kind` column, `office` / `committee` / `system` — and grant nothing
+beyond the baseline every member already holds (they carry a copy of the
+Member position's list). They can be assigned from Manage Positions like any
 office; a department that does not want one can simply leave it unassigned
 (seeded positions cannot be deleted). The onboarding wizard offers the same
 four to new installations.

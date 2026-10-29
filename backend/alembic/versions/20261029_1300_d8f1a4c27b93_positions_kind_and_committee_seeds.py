@@ -14,7 +14,8 @@ settles every row that exists (pitfall #35); then the seeded system slugs are
 marked ``system`` -- only where ``is_system`` is set, because a department's
 own position that happens to be called ``captain`` is its own office -- and
 the four committee rows are inserted for every organization that does not
-already have one under that slug. Running twice inserts nothing twice.
+already have one under that slug, each carrying a copy of the baseline
+``member`` permission list. Running twice inserts nothing twice.
 
 The committee slugs, names and the system-slug list are inlined rather than
 imported (pitfall #20): a migration keeps doing what it did the day it ran.
@@ -29,6 +30,7 @@ Create Date: 2026-10-29 13:00:00.000000
 
 """
 
+import json
 from typing import Sequence, Union
 from uuid import uuid4
 
@@ -52,6 +54,29 @@ _SYSTEM_SLUGS = (
     "member",
     "it_manager",
 )
+
+# The baseline `member` position's permission list as of this revision, which
+# a committee carries as its own copy so a member whose only position is a
+# committee reaches the member screens. Frozen here (pitfall #20).
+_BASELINE_PERMISSIONS = [
+    "members.view",
+    "organization.view",
+    "training.view",
+    "scheduling.view",
+    "scheduling.swap",
+    "inventory.check_submit",
+    "inventory.view",
+    "storefront.view",
+    "storefront.order",
+    "meetings.view",
+    "elections.view",
+    "events.view",
+    "forms.view",
+    "minutes.view",
+    "documents.view",
+    "locations.view",
+    "finance.request",
+]
 
 # slug -> (name, description)
 _COMMITTEES = {
@@ -146,7 +171,7 @@ def upgrade() -> None:
                     "name": name,
                     "slug": slug,
                     "description": description,
-                    "permissions": "[]",
+                    "permissions": json.dumps(_BASELINE_PERMISSIONS),
                 },
             )
 

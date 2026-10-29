@@ -131,6 +131,15 @@ def test_upgrade_tags_kinds_and_seeds_every_organization(engine):
         for slug in COMMITTEES:
             assert (org, slug) in by_key, f"{org} is missing {slug}"
             assert by_key[(org, slug)][1] == "committee"
+    with engine.connect() as conn:
+        inserted = conn.execute(
+            sa.text(
+                "SELECT permissions FROM positions WHERE organization_id = 'A' "
+                "AND slug = 'fundraising_committee'"
+            )
+        ).scalar_one()
+    assert "storefront.view" in inserted
+    assert "storefront.order" in inserted
     assert (
         sum(1 for (_o, slug, _k, _s) in rows.values() if slug == "history_committee")
         == 2
