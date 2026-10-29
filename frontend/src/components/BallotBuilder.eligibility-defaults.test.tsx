@@ -35,7 +35,7 @@ const election = {
 } as unknown as Election;
 
 const defaults: EligibilityDefaults = {
-  rules: { attendance: { mode: 'none' }, min_tenure_months: null },
+  rules: { attendance: { mode: 'none' }, waiting_periods: {} },
   default_require_attendance: false,
   default_voter_types: ['regular', 'life'],
   position_voter_types: { chief: ['operational'] },

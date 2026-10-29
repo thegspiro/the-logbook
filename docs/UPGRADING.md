@@ -636,7 +636,7 @@ What is new:
 
 - **Election Settings → Voter Eligibility** sets the department's default
   meeting-attendance rule ("attended N of the last M meetings" or "N% of
-  meetings over M months"), a minimum membership tenure, the check-in default
+  meetings over M months"), a waiting period per member type, the check-in default
   for new ballot items, and who votes for named positions. These defaults
   start empty or match the previous behaviour, so an upgrade changes nothing
   until someone sets them.
@@ -653,6 +653,22 @@ What is new:
   election, and the annual meeting uses the regular rules until someone turns
   on **Use different rules at the annual meeting**. The downgrade drops the
   column. Elections lose the label, and their copied rules are untouched.
+- **Waiting periods count from when a member became their type.** For
+  example, administrative members may vote a year after becoming
+  administrative, and probationary members never. Migration `c7e2a91f4d36`
+  adds five columns to `users`:
+  - `member_class_since` and `member_status_since`, stamped from now on
+    whenever a member's class or status changes;
+  - `voting_wait_from`, `voting_wait_waived` (not nullable, default false) and
+    `voting_wait_override_reason`, for a per-member override.
+
+  **Existing members get a best guess** of when they became their type: their
+  last tier change, or else their hire date. Nothing records the real date
+  before this release. No waiting period is set until someone sets one, so this
+  changes nothing on upgrade. Before you add one, check members whose date
+  matters. A secretary corrects the date, or waives the wait, from the
+  member's profile under **Voting eligibility**. The downgrade drops the
+  columns, and the backfilled dates are lost with them.
 
 ### A template switched Off now stops its email (2026-10-27)
 

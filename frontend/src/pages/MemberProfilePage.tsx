@@ -69,6 +69,7 @@ import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
 import { StatusChangeReason } from '../components/member-profile/StatusChangeReason';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
+import { VotingEligibilitySection } from '../components/member-profile/VotingEligibilitySection';
 import { UndoDropControl } from '../components/member-profile/UndoDropControl';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
@@ -331,6 +332,7 @@ export const MemberProfilePage: React.FC = () => {
   }, [userId, inventoryModuleEnabled, canViewTargetInventory, fetchInventoryItems]);
 
   const canManageMembers = checkPermission('members.manage');
+  const canManageElections = checkPermission('elections.manage');
 
   // Rank codes are stored on the member; the display name lives on the org's
   // operational ranks, readable by any signed-in member.
@@ -1401,6 +1403,12 @@ export const MemberProfilePage: React.FC = () => {
                 it. members.manage only, matching the endpoint. */}
             {userId && canManageMembers && (
               <QualificationsSection userId={userId} memberName={displayNameOf(user)} tz={tz} />
+            )}
+
+            {/* The member's voting waiting period and the secretary's
+                override of it. elections.manage only, matching the endpoint. */}
+            {userId && canManageElections && (
+              <VotingEligibilitySection userId={userId} memberName={displayNameOf(user)} />
             )}
 
             {/* Quick Stats — only when the viewer can see at least one of the

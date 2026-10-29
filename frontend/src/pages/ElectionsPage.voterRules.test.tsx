@@ -56,7 +56,7 @@ describe('ElectionsPage create dialog — voter rules', () => {
       eligibility: {
         rules: {
           attendance: { mode: 'count', min_meetings: 6, of_last_meetings: 12 },
-          min_tenure_months: 6,
+          waiting_periods: { administrative: { mode: 'months', months: 6 }, probationary: { mode: 'never' } },
         },
         default_require_attendance: true,
         default_voter_types: ['all'],
@@ -67,7 +67,8 @@ describe('ElectionsPage create dialog — voter rules', () => {
     const panel = within(dialog).getByTestId('create-voter-rules');
 
     await waitFor(() => expect(panel).toHaveTextContent('Attended at least 6 of their last 12 meetings'));
-    expect(panel).toHaveTextContent('A member for at least 6 months');
+    expect(panel).toHaveTextContent('Administrative members may vote 6 months after becoming administrative');
+    expect(panel).toHaveTextContent('Probationary members may not vote');
   });
 
   it('says so when there are none', async () => {
@@ -80,13 +81,16 @@ describe('ElectionsPage create dialog — voter rules', () => {
   it('shows the annual meeting rules when the election is held there', async () => {
     mockGetSettings.mockResolvedValue({
       eligibility: {
-        rules: { attendance: { mode: 'none' }, min_tenure_months: null },
+        rules: { attendance: { mode: 'none' }, waiting_periods: {} },
         default_require_attendance: true,
         default_voter_types: ['all'],
         position_voter_types: {},
       },
       annual_eligibility: {
-        rules: { attendance: { mode: 'count', min_meetings: 3, of_last_meetings: 4 }, min_tenure_months: 12 },
+        rules: {
+          attendance: { mode: 'count', min_meetings: 3, of_last_meetings: 4 },
+          waiting_periods: { administrative: { mode: 'months', months: 12 } },
+        },
         default_require_attendance: true,
         default_voter_types: ['all'],
         position_voter_types: {},
@@ -98,6 +102,6 @@ describe('ElectionsPage create dialog — voter rules', () => {
 
     await userEvent.selectOptions(within(dialog).getByLabelText('Held at'), 'annual');
     expect(panel).toHaveTextContent('Attended at least 3 of their last 4 meetings');
-    expect(panel).toHaveTextContent('A member for at least 12 months');
+    expect(panel).toHaveTextContent('Administrative members may vote 12 months after becoming administrative');
   });
 });

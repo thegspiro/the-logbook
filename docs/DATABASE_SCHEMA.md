@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**322 tables · 5328 columns · 1090 foreign keys**
+**322 tables · 5333 columns · 1090 foreign keys**
 
 ---
 
@@ -727,7 +727,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 65 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 70 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -11165,6 +11165,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
 | `member_status` | VARCHAR(20) | yes | IDX |  |  |
+| `member_class_since` | DATETIME | yes |  |  |  |
+| `member_status_since` | DATETIME | yes |  |  |  |
+| `voting_wait_from` | DATE | yes |  |  |  |
+| `voting_wait_waived` | BOOL | no |  | `0` |  |
+| `voting_wait_override_reason` | VARCHAR(500) | yes |  |  |  |
 | `membership_type_changed_at` | DATETIME | yes |  |  |  |
 | `status` | ENUM(`active`, `inactive`, `suspended`, `probationary`, `leave`, `retired`, `dropped_voluntary`, `dropped_involuntary`, `archived`) | no | IDX | `active` |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |

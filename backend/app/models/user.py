@@ -481,8 +481,37 @@ class User(Base):
     # not plain operational regulars. NULL means "nobody has set this", and a
     # reader derives from `membership_type` when it sees one. ORM writes never
     # leave it NULL — `_reconcile_membership` below fills both.
-    member_class: Mapped[Optional[str]] = mapped_column(String(20), index=True)
-    member_status: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    # active_history: the previous value is loaded on assignment, so
+    # `_reconcile_membership` can tell a real change from a re-save of the
+    # same value when it stamps the `*_since` columns below.
+    member_class: Mapped[Optional[str]] = mapped_column(
+        String(20), index=True, active_history=True
+    )
+    member_status: Mapped[Optional[str]] = mapped_column(
+        String(20), index=True, active_history=True
+    )
+    # When the member's class / status became what it is now. Stamped by
+    # `_reconcile_membership` on every write path, and read as the start of a
+    # voting waiting period ("administrative members may vote a year after
+    # becoming administrative"). Rows that predate the columns hold a backfilled
+    # best guess; a secretary corrects one with `voting_wait_from`.
+    member_class_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    member_status_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # A secretary's per-member override of the voting waiting period: the
+    # date the wait counts from instead of the `*_since` stamp, and/or a
+    # waiver of the wait. Neither lifts a "never eligible" type or an
+    # attendance requirement. The reason is required whenever either is set.
+    voting_wait_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    voting_wait_waived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    voting_wait_override_reason: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
     membership_type_changed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )  # When membership tier last changed
@@ -766,6 +795,45 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
     # every later save of an unrelated field.
     if class_written or legacy_written:
         sync_account_status_with_membership(target)
+
+    _stamp_membership_since(state, target)
+
+
+def _stamp_membership_since(state: Any, target: "User") -> None:
+    """Record when the member's class / status became what it now is.
+
+    Runs after reconciliation, so whichever field a caller wrote, the stamp
+    follows the reconciled value. A re-save of the same value is not a change:
+    ``active_history`` on both columns puts the previous value in the history,
+    so a profile save that sends the member's unchanged status leaves the date
+    alone.
+
+    A real change also clears ``voting_wait_from``: that date was a
+    secretary's correction of when the member became their *previous* type,
+    and carried over it would start the new type's wait in the past.
+    """
+    now = datetime.now(timezone.utc)
+    inserting = not state.has_identity
+    changed = False
+    for field, stamp in (
+        ("member_class", "member_class_since"),
+        ("member_status", "member_status_since"),
+    ):
+        value = getattr(target, field)
+        if value is None:
+            continue
+        if inserting:
+            if getattr(target, stamp) is None:
+                setattr(target, stamp, now)
+            continue
+        history = state.attrs[field].history
+        if history.added and value not in (history.deleted or ()):
+            setattr(target, stamp, now)
+            changed = True
+    if changed and target.voting_wait_from is not None:
+        target.voting_wait_from = None
+        if not target.voting_wait_waived:
+            target.voting_wait_override_reason = None
 
 
 #: The one membership type with an account status of its own. Compared on the

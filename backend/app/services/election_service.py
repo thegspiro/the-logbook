@@ -12,7 +12,7 @@ import os
 import re
 import secrets
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
 from typing import (
@@ -669,6 +669,9 @@ class ElectionService:
         # paths (roster, item annotation, ineligibility reason), and each
         # evaluation is a handful of attendance queries.
         self._election_rule_reasons: Dict[Tuple[str, str], Optional[str]] = {}
+        # The department's today, per organization, for the same reason: a
+        # roster asks it once per member.
+        self._org_today: Dict[str, date] = {}
 
     @overload
     @staticmethod
@@ -1110,32 +1113,45 @@ class ElectionService:
         key = (str(election.id), str(user.id))
         if key in self._election_rule_reasons:
             return self._election_rule_reasons[key]
-        reason = await self._evaluate_election_rules(
-            str(user.id), str(organization_id), rules
-        )
+        reason = await self._evaluate_election_rules(user, str(organization_id), rules)
         self._election_rule_reasons[key] = reason
         return reason
 
     async def _evaluate_election_rules(
-        self, user_id: str, organization_id: str, rules: Dict[str, Any]
+        self, user: "User", organization_id: str, rules: Dict[str, Any]
     ) -> Optional[str]:
         from app.services.membership_tier_service import (
             MembershipTierService,
+            evaluate_wait,
             required_recent_meetings,
+            wait_ineligibility_reason,
         )
+        from app.utils.membership import voter_type_key
+        from app.utils.org_timezone import resolve_org_today
 
         tier_svc = MembershipTierService(self.db)
+        user_id = str(user.id)
 
-        min_tenure = _positive_int(rules.get("min_tenure_months"))
-        if min_tenure is not None:
-            # A member with no recorded start date passes: missing data is
-            # not evidence that they joined recently.
-            months = await tier_svc.get_tenure_months(user_id, organization_id)
-            if months is not None and months < min_tenure:
-                return (
-                    f"Requires at least {min_tenure} months of membership; "
-                    f"member has {months}"
-                )
+        # Waiting period for the member's type. The start date is only looked
+        # up when their type has a timed wait: "never" and "no rule" need none.
+        type_key = voter_type_key(
+            getattr(user, "member_class", None),
+            getattr(user, "member_status", None),
+            getattr(user, "membership_type", None),
+        )
+        waiting_periods = rules.get("waiting_periods")
+        waived = bool(getattr(user, "voting_wait_waived", False))
+        today = self._org_today.get(organization_id)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+            self._org_today[organization_id] = today
+        outcome = evaluate_wait(waiting_periods, type_key, None, waived, today)
+        if outcome.state == "eligible" and outcome.months is not None:
+            start = await tier_svc.get_type_wait_start(user, organization_id)
+            outcome = evaluate_wait(waiting_periods, type_key, start, waived, today)
+        wait_reason = wait_ineligibility_reason(outcome)
+        if wait_reason:
+            return wait_reason
 
         attendance = rules.get("attendance")
         if not isinstance(attendance, dict):
@@ -1191,7 +1207,8 @@ class ElectionService:
         if not isinstance(rules, dict):
             return False
         attendance = rules.get("attendance")
-        return _positive_int(rules.get("min_tenure_months")) is not None or (
+        waiting_periods = rules.get("waiting_periods")
+        return bool(isinstance(waiting_periods, dict) and waiting_periods) or (
             isinstance(attendance, dict)
             and attendance.get("mode") in ("count", "percent")
         )

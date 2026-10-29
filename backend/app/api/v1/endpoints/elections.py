@@ -94,6 +94,9 @@ from app.schemas.election import (
     ManualBallotsResponse,
     MemberBallotResponse,
     MemberBallotSubmission,
+    MemberVotingEligibilityResponse,
+    MemberVotingEligibilityUpdate,
+    MemberWaitOutcome,
     MergeWriteInsRequest,
     MergeWriteInsResponse,
     MyProxyAuthorizationsResponse,
@@ -149,7 +152,19 @@ from app.services.election_service import (
     office_ineligible_message,
     position_ballot_items,
 )
+from app.services.membership_tier_service import (
+    MembershipTierService,
+    evaluate_wait,
+    wait_ineligibility_reason,
+)
+from app.utils.membership import (
+    VOTER_TYPE_LABELS,
+    voter_type_decided_by_class,
+    voter_type_key,
+)
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
+from app.utils.org_timezone import local_date, resolve_scheduling_timezone, today_in
 
 router = APIRouter()
 
@@ -1106,7 +1121,7 @@ def _active_rules_or_none(rules: Optional[dict]) -> Optional[dict]:
     if not rules:
         return None
     attendance = rules.get("attendance") or {}
-    if attendance.get("mode", "none") == "none" and not rules.get("min_tenure_months"):
+    if attendance.get("mode", "none") == "none" and not rules.get("waiting_periods"):
         return None
     return rules
 
@@ -1381,6 +1396,179 @@ async def update_election_settings(
 
     # Return the full updated settings in the same flat shape as GET
     return _settings_response(org_settings)
+
+
+async def _member_voting_eligibility(
+    db: AsyncSession, member: User, org_settings: dict
+) -> MemberVotingEligibilityResponse:
+    """A member's waiting-period standing under each meeting kind's current
+    defaults, judged by the same helpers the ballot check uses, so the
+    profile card cannot disagree with the ballot (pitfall #29)."""
+    tier_svc = MembershipTierService(db)
+    organization_id = str(member.organization_id)
+    type_key = voter_type_key(
+        member.member_class, member.member_status, member.membership_type
+    )
+    tz = await resolve_scheduling_timezone(db, organization_id)
+    today = today_in(tz)
+    stamp = (
+        member.member_class_since
+        if type_key and voter_type_decided_by_class(type_key)
+        else member.member_status_since
+    )
+    wait_starts = await tier_svc.get_type_wait_start(member, organization_id)
+    outcomes = []
+    for kind in ("regular", "annual"):
+        rules = _defaults_for_kind(org_settings, kind).rules.model_dump()
+        outcome = evaluate_wait(
+            rules.get("waiting_periods"),
+            type_key,
+            wait_starts,
+            bool(member.voting_wait_waived),
+            today,
+        )
+        outcomes.append(
+            MemberWaitOutcome(
+                meeting_kind=kind,
+                state=outcome.state,
+                months=outcome.months,
+                eligible_from=outcome.eligible_from,
+                reason=wait_ineligibility_reason(outcome),
+            )
+        )
+    return MemberVotingEligibilityResponse(
+        user_id=str(member.id),
+        member_type=type_key,
+        member_type_label=VOTER_TYPE_LABELS.get(type_key) if type_key else None,
+        type_since=local_date(stamp, tz) if stamp is not None else None,
+        wait_starts=wait_starts,
+        voting_wait_from=member.voting_wait_from,
+        voting_wait_waived=bool(member.voting_wait_waived),
+        voting_wait_override_reason=member.voting_wait_override_reason,
+        outcomes=outcomes,
+    )
+
+
+async def _org_member(db: AsyncSession, user_id: UUID, organization_id: Any) -> User:
+    """The member, resolved inside the caller's organization (pitfall #14)."""
+    result = await db.execute(
+        select(User).where(
+            User.id == str(user_id),
+            User.organization_id == str(organization_id),
+            User.deleted_at.is_(None),
+        )
+    )
+    member = result.scalar_one_or_none()
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
+    return member
+
+
+@router.get(
+    "/members/{user_id}/voting-eligibility",
+    response_model=MemberVotingEligibilityResponse,
+)
+async def get_member_voting_eligibility(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    A member's voting waiting period: their type, when they became it, any
+    override, and where they stand under each meeting kind's defaults.
+
+    **Requires permission: elections.manage**
+    """
+    member = await _org_member(db, user_id, current_user.organization_id)
+    org = await db.get(Organization, str(current_user.organization_id))
+    return await _member_voting_eligibility(
+        db, member, (org.settings or {}) if org else {}
+    )
+
+
+@router.put(
+    "/members/{user_id}/voting-eligibility",
+    response_model=MemberVotingEligibilityResponse,
+)
+async def update_member_voting_eligibility(
+    user_id: UUID,
+    override: MemberVotingEligibilityUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Set or clear a member's voting-wait override: the date their wait counts
+    from, and/or a waiver of the wait. A waiver never lifts a type the
+    department made ineligible, nor an attendance requirement. Takes effect
+    for elections not yet open; an open election keeps its frozen roll.
+
+    **Requires permission: elections.manage**
+    """
+    member = await _org_member(db, user_id, current_user.organization_id)
+    changes = override.model_dump(exclude_unset=True)
+    reason = changes.pop("reason", None)
+    before = {
+        "voting_wait_from": (
+            member.voting_wait_from.isoformat() if member.voting_wait_from else None
+        ),
+        "voting_wait_waived": bool(member.voting_wait_waived),
+    }
+    # A reason is owed for setting an override, not for clearing one.
+    sets_override = (
+        changes.get("voting_wait_from") is not None
+        or changes.get("voting_wait_waived") is True
+    )
+    if sets_override and not reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A reason is required to override a member's waiting period",
+        )
+    try:
+        apply_updates(member, changes)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    overridden = member.voting_wait_from is not None or bool(member.voting_wait_waived)
+    if not overridden:
+        member.voting_wait_override_reason = None
+    elif reason:
+        member.voting_wait_override_reason = reason
+
+    await db.commit()
+    await db.refresh(member)
+
+    await log_audit_event(
+        db=db,
+        event_type="member_voting_wait_override_changed",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "member_id": str(member.id),
+            "before": before,
+            "after": {
+                "voting_wait_from": (
+                    member.voting_wait_from.isoformat()
+                    if member.voting_wait_from
+                    else None
+                ),
+                "voting_wait_waived": bool(member.voting_wait_waived),
+            },
+            "reason": member.voting_wait_override_reason,
+        },
+        user_id=str(current_user.id),
+    )
+    logger.info(
+        "Voting wait override changed | member={} by={}", member.id, current_user.id
+    )
+
+    org = await db.get(Organization, str(current_user.organization_id))
+    return await _member_voting_eligibility(
+        db, member, (org.settings or {}) if org else {}
+    )
 
 
 # ============================================

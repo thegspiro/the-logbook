@@ -14,6 +14,8 @@ import type {
   BallotSendJobKind,
   AttendanceRuleMode,
   MeetingKind,
+  MemberVoterType,
+  WaitingPeriodMode,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -59,10 +61,48 @@ export interface AttendanceRule {
   meeting_types?: string[] | null;
 }
 
+/** How long a member of one type waits before they may vote (backend `WaitingPeriod`). */
+export interface WaitingPeriod {
+  mode: WaitingPeriodMode;
+  months?: number | null;
+}
+
 /** Election-wide voter rules, stored on the election (backend `ElectionEligibilityRules`). */
 export interface ElectionEligibilityRules {
   attendance: AttendanceRule;
-  min_tenure_months?: number | null;
+  /** Per member type; a type not listed has no waiting period. */
+  waiting_periods?: Partial<Record<MemberVoterType, WaitingPeriod>>;
+}
+
+/** Where a member stands against one meeting kind's waiting period. */
+export interface MemberWaitOutcome {
+  meeting_kind: MeetingKind;
+  state: 'no_rule' | 'never' | 'waived' | 'eligible' | 'waiting';
+  months?: number | null;
+  eligible_from?: string | null;
+  reason?: string | null;
+}
+
+/** GET/PUT /elections/members/{id}/voting-eligibility (snake_case, as the module). */
+export interface MemberVotingEligibility {
+  user_id: string;
+  member_type?: MemberVoterType | null;
+  member_type_label?: string | null;
+  /** When the member became their type, as recorded. */
+  type_since?: string | null;
+  /** The date the wait actually counts from. */
+  wait_starts?: string | null;
+  voting_wait_from?: string | null;
+  voting_wait_waived: boolean;
+  voting_wait_override_reason?: string | null;
+  outcomes: MemberWaitOutcome[];
+}
+
+/** Omit a field to leave it; `voting_wait_from: null` clears the date. */
+export interface MemberVotingEligibilityUpdate {
+  voting_wait_from?: string | null | undefined;
+  voting_wait_waived?: boolean | undefined;
+  reason?: string | undefined;
 }
 
 /** The department's default voter eligibility (backend `EligibilityDefaults`). */

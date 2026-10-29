@@ -28,7 +28,7 @@ const baseElection = {
   status: 'draft',
   eligibility_rules: {
     attendance: { mode: 'count', min_meetings: 6, of_last_meetings: 12, meeting_types: ['business'] },
-    min_tenure_months: null,
+    waiting_periods: {},
   },
 } as unknown as Election;
 
@@ -48,15 +48,14 @@ describe('ElectionEligibilityRulesPanel', () => {
     const save = screen.getByRole('button', { name: 'Save voter rules' });
     expect(save).toBeDisabled();
 
-    const tenure = screen.getByLabelText('Minimum months of membership');
-    await user.type(tenure, '6');
+    await user.selectOptions(screen.getByLabelText('Administrative members'), 'months');
     await user.click(save);
 
     await waitFor(() => expect(onUpdate).toHaveBeenCalled());
     expect(updateElection).toHaveBeenCalledWith('elec-1', {
       eligibility_rules: {
         attendance: { mode: 'count', min_meetings: 6, of_last_meetings: 12, meeting_types: ['business'] },
-        min_tenure_months: 6,
+        waiting_periods: { administrative: { mode: 'months', months: 12 } },
       },
     });
   });

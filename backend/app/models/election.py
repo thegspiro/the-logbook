@@ -129,7 +129,8 @@ class Election(Base):
     # election behaved before the column existed.
     # Format: {"attendance": {"mode": "count", "min_meetings": 6,
     #          "of_last_meetings": 12, "meeting_types": ["business"]},
-    #          "min_tenure_months": 6}
+    #          "waiting_periods": {"administrative": {"mode": "months",
+    #          "months": 12}, "probationary": {"mode": "never"}}}
     eligibility_rules: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )

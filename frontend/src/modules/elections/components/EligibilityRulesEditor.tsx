@@ -1,7 +1,8 @@
 /**
- * Election-wide voter rules: a meeting-attendance requirement and a minimum
- * membership tenure. Used for the department's defaults on Election Settings
- * and for one election's own copy of them on the election screen.
+ * Election-wide voter rules: a meeting-attendance requirement and, per member
+ * type, how long a member waits after becoming that type before they may vote.
+ * Used for the department's defaults on Election Settings and for one
+ * election's own copy of them on the election screen.
  *
  * A number that is not yet valid stays in its box and nothing is reported up
  * until it is — the same draft pattern the Max Proxies field uses (W50-49) —
@@ -9,20 +10,22 @@
  */
 
 import React, { useState } from 'react';
-import type { AttendanceRule, ElectionEligibilityRules } from '../../../types/election';
-import { AttendanceRuleMode } from '../../../constants/enums';
+import type { AttendanceRule, ElectionEligibilityRules, WaitingPeriod } from '../../../types/election';
+import { AttendanceRuleMode, WaitingPeriodMode, type MemberVoterType } from '../../../constants/enums';
 import { MEETING_TYPE_OPTIONS } from '../../minutes/utils/meetingTypes';
-import { ATTENDANCE_RULE_STARTERS, ELIGIBILITY_BOUNDS } from '../eligibilityRules';
+import { ATTENDANCE_RULE_STARTERS, ELIGIBILITY_BOUNDS, MEMBER_VOTER_TYPES } from '../eligibilityRules';
 
-type NumberField = keyof typeof ELIGIBILITY_BOUNDS;
+type NumberField = 'min_meetings' | 'of_last_meetings' | 'min_pct' | 'period_months';
 
 const FIELD_LABELS: Record<NumberField, string> = {
   min_meetings: 'Meetings attended',
   of_last_meetings: 'Out of the last',
   min_pct: 'Minimum attendance (%)',
   period_months: 'Over the last (months)',
-  min_tenure_months: 'Minimum months of membership',
 };
+
+/** Months offered when a type is first given a timed wait. */
+const DEFAULT_WAIT_MONTHS = 12;
 
 interface EligibilityRulesEditorProps {
   value: ElectionEligibilityRules;
@@ -32,7 +35,7 @@ interface EligibilityRulesEditorProps {
   disabled?: boolean;
 }
 
-const parseBounded = (field: NumberField, raw: string): number | null => {
+const parseBounded = (field: keyof typeof ELIGIBILITY_BOUNDS, raw: string): number | null => {
   const bounds = ELIGIBILITY_BOUNDS[field];
   const pattern = bounds.integer ? /^\d+$/ : /^\d+(\.\d+)?$/;
   if (!pattern.test(raw.trim())) return null;
@@ -49,7 +52,7 @@ const withoutDrafts = (drafts: Drafts, ...fields: NumberField[]): Drafts =>
   Object.fromEntries(Object.entries(drafts).filter(([key]) => !fields.includes(key as NumberField)));
 
 const savedNumber = (rules: ElectionEligibilityRules, field: NumberField): number | null | undefined =>
-  field === 'min_tenure_months' ? rules.min_tenure_months : rules.attendance[field];
+  rules.attendance[field];
 
 export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
   value,
@@ -61,6 +64,8 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
   const [drafts, setDrafts] = useState<Drafts>({});
   /** Why the current drafts cannot be saved as a whole, when they each parse. */
   const [ruleError, setRuleError] = useState<string | null>(null);
+  /** A waiting-period months box that is not (yet) a valid number, per type. */
+  const [waitDrafts, setWaitDrafts] = useState<Partial<Record<MemberVoterType, string>>>({});
 
   const attendance = value.attendance;
   const id = (field: string) => `${idPrefix}-${field}`;
@@ -89,12 +94,6 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
   };
 
   const setNumber = (field: NumberField, raw: string) => {
-    // The tenure box may be emptied: no tenure requirement.
-    if (field === 'min_tenure_months' && raw.trim() === '') {
-      setDrafts((prev) => withoutDrafts(prev, field));
-      onChange({ ...value, min_tenure_months: null });
-      return;
-    }
     const parsed = parseBounded(field, raw);
     if (parsed === null) {
       setDrafts((prev) => ({ ...prev, [field]: raw }));
@@ -109,8 +108,7 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
       const otherParsed = otherDraft === undefined ? null : parseBounded(other, otherDraft);
       if (otherParsed !== null) patch[other] = otherParsed;
     }
-    const next: ElectionEligibilityRules =
-      field === 'min_tenure_months' ? { ...value, min_tenure_months: parsed } : withAttendance(patch);
+    const next = withAttendance(patch);
     const nextAtt = next.attendance;
     if (
       nextAtt.mode === AttendanceRuleMode.COUNT &&
@@ -171,6 +169,38 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
         )}
       </div>
     );
+  };
+
+  const waitingPeriods = value.waiting_periods ?? {};
+
+  const setWaitingPeriod = (type: MemberVoterType, period: WaitingPeriod | null) => {
+    const next = { ...waitingPeriods };
+    // "No waiting period" is what a missing type means, so it is removed
+    // rather than stored as a second spelling of the same rule.
+    if (period === null) delete next[type];
+    else next[type] = period;
+    onChange({ ...value, waiting_periods: next });
+  };
+
+  const setWaitMode = (type: MemberVoterType, mode: WaitingPeriod['mode']) => {
+    setWaitDrafts(({ [type]: _dropped, ...rest }) => rest);
+    if (mode === WaitingPeriodMode.MONTHS) {
+      setWaitingPeriod(type, { mode, months: waitingPeriods[type]?.months ?? DEFAULT_WAIT_MONTHS });
+    } else if (mode === WaitingPeriodMode.NEVER) {
+      setWaitingPeriod(type, { mode });
+    } else {
+      setWaitingPeriod(type, null);
+    }
+  };
+
+  const setWaitMonths = (type: MemberVoterType, raw: string) => {
+    const parsed = parseBounded('waiting_months', raw);
+    if (parsed === null) {
+      setWaitDrafts((prev) => ({ ...prev, [type]: raw }));
+      return;
+    }
+    setWaitDrafts(({ [type]: _dropped, ...rest }) => rest);
+    setWaitingPeriod(type, { mode: WaitingPeriodMode.MONTHS, months: parsed });
   };
 
   const selectedTypes = attendance.meeting_types ?? [];
@@ -250,12 +280,67 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
         )}
       </fieldset>
 
-      <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="text-theme-text-primary text-sm font-medium">Membership tenure</legend>
-        {numberInput('min_tenure_months', 'months')}
+      <fieldset className="space-y-3" disabled={disabled}>
+        <legend className="text-theme-text-primary text-sm font-medium">Waiting period before a member may vote</legend>
         <p className="text-theme-text-muted text-xs">
-          Counted from the start of the member&apos;s current period of membership. Leave empty for no requirement.
+          Counted from when the member became that type, and never from before their current period of membership.
+          Administrative and social members follow their class whatever their status. A secretary can correct the start
+          date or waive the wait for one member on their profile.
         </p>
+        <ul className="divide-theme-surface-border divide-y">
+          {MEMBER_VOTER_TYPES.map((type) => {
+            const period = waitingPeriods[type.value];
+            const mode = period?.mode ?? WaitingPeriodMode.NONE;
+            const draft = waitDrafts[type.value];
+            const errorId = id(`wait-${type.value}-error`);
+            return (
+              // Stacked on a phone; a row from `sm:` up.
+              <li key={type.value} className="grid gap-2 py-2 sm:grid-cols-[13rem_1fr] sm:items-start">
+                <label htmlFor={id(`wait-${type.value}`)} className="text-theme-text-primary pt-2 text-sm font-medium">
+                  {type.label} members
+                </label>
+                <div className="flex flex-wrap items-start gap-3">
+                  <select
+                    id={id(`wait-${type.value}`)}
+                    className="form-input w-auto"
+                    value={mode}
+                    onChange={(e) => setWaitMode(type.value, e.target.value as WaitingPeriod['mode'])}
+                  >
+                    <option value={WaitingPeriodMode.NONE}>No waiting period</option>
+                    <option value={WaitingPeriodMode.MONTHS}>Wait a number of months</option>
+                    <option value={WaitingPeriodMode.NEVER}>Never eligible to vote</option>
+                  </select>
+                  {mode === WaitingPeriodMode.MONTHS && (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          aria-label={`${type.label} members: months to wait`}
+                          className="form-input w-24"
+                          min={ELIGIBILITY_BOUNDS.waiting_months.min}
+                          max={ELIGIBILITY_BOUNDS.waiting_months.max}
+                          step={1}
+                          value={draft ?? String(period?.months ?? '')}
+                          onChange={(e) => setWaitMonths(type.value, e.target.value)}
+                          aria-invalid={draft !== undefined}
+                          aria-describedby={draft !== undefined ? errorId : undefined}
+                        />
+                        <span className="text-theme-text-secondary text-sm">months</span>
+                      </div>
+                      {draft !== undefined && (
+                        <p id={errorId} role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                          Enter a whole number from {ELIGIBILITY_BOUNDS.waiting_months.min} to{' '}
+                          {ELIGIBILITY_BOUNDS.waiting_months.max}. It is still saved as {period?.months}.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </fieldset>
     </div>
   );

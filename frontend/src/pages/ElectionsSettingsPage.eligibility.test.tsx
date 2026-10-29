@@ -31,7 +31,7 @@ vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() 
 import { ElectionsSettingsPage } from './ElectionsSettingsPage';
 
 const eligibility: EligibilityDefaults = {
-  rules: { attendance: { mode: 'none' }, min_tenure_months: null },
+  rules: { attendance: { mode: 'none' }, waiting_periods: {} },
   default_require_attendance: true,
   default_voter_types: ['all'],
   position_voter_types: { Chief: ['operational'] },
@@ -111,7 +111,7 @@ describe('ElectionsSettingsPage — voter eligibility', () => {
       ...structuredClone(stored),
       eligibility: {
         ...eligibility,
-        rules: { attendance: { mode: 'count', min_meetings: 6, of_last_meetings: 12 }, min_tenure_months: null },
+        rules: { attendance: { mode: 'count', min_meetings: 6, of_last_meetings: 12 }, waiting_periods: {} },
       },
     });
     renderWithRouter(<ElectionsSettingsPage />);
@@ -229,10 +229,16 @@ describe('ElectionsSettingsPage — annual meeting eligibility', () => {
     renderWithRouter(<ElectionsSettingsPage />);
 
     await user.click(await screen.findByRole('button', { name: 'Annual meeting' }));
-    await user.type(screen.getByLabelText('Minimum months of membership'), '12');
+    await user.selectOptions(screen.getByLabelText('Administrative members'), 'months');
 
-    await waitFor(() => expect(lastSent().annual_eligibility?.rules.min_tenure_months).toBe(12), SETTLE);
-    expect(lastSent().eligibility?.rules.min_tenure_months).toBeNull();
+    await waitFor(
+      () =>
+        expect(lastSent().annual_eligibility?.rules.waiting_periods).toEqual({
+          administrative: { mode: 'months', months: 12 },
+        }),
+      SETTLE
+    );
+    expect(lastSent().eligibility?.rules.waiting_periods).toEqual({});
   });
 
   it('asks before discarding the annual rules', async () => {
@@ -248,5 +254,69 @@ describe('ElectionsSettingsPage — annual meeting eligibility', () => {
     await user.click(screen.getByRole('switch', { name: 'Use different rules at the annual meeting' }));
     await user.click(await screen.findByRole('button', { name: 'Discard annual rules' }));
     await waitFor(() => expect(lastSent().annual_eligibility).toBeNull(), SETTLE);
+  });
+});
+
+describe('ElectionsSettingsPage — waiting periods by member type', () => {
+  beforeEach(() => {
+    mockGetSettings.mockReset();
+    mockGetElections.mockReset();
+    mockUpdateSettings.mockReset();
+    mockGetSettings.mockResolvedValue(structuredClone(stored));
+    mockGetElections.mockResolvedValue([]);
+    mockUpdateSettings.mockImplementation((data: unknown) => Promise.resolve(data));
+    window.history.pushState({}, '', '/elections/settings?tab=eligibility');
+  });
+
+  it('saves "never" for probationary members and a wait for administrative ones', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.selectOptions(await screen.findByLabelText('Probationary members'), 'never');
+    await user.selectOptions(screen.getByLabelText('Administrative members'), 'months');
+    const months = screen.getByLabelText('Administrative members: months to wait');
+    expect(months).toHaveValue(12);
+
+    await waitFor(
+      () =>
+        expect(lastSentEligibility().rules.waiting_periods).toEqual({
+          probationary: { mode: 'never' },
+          administrative: { mode: 'months', months: 12 },
+        }),
+      SETTLE
+    );
+  });
+
+  it('removes a type set back to no waiting period', async () => {
+    const user = userEvent.setup();
+    mockGetSettings.mockResolvedValue({
+      ...structuredClone(stored),
+      eligibility: {
+        ...eligibility,
+        rules: { ...eligibility.rules, waiting_periods: { life: { mode: 'months', months: 3 } } },
+      },
+    });
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.selectOptions(await screen.findByLabelText('Life members'), 'none');
+    await waitFor(() => expect(lastSentEligibility().rules.waiting_periods).toEqual({}), SETTLE);
+  });
+
+  it('holds an out-of-range month count in its box', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.selectOptions(await screen.findByLabelText('Administrative members'), 'months');
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalled(), SETTLE);
+    mockUpdateSettings.mockClear();
+
+    const months = screen.getByLabelText('Administrative members: months to wait');
+    await user.clear(months);
+    await user.type(months, '0');
+
+    expect(months).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a whole number from 1 to 600. It is still saved as 12.');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 900)));
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
   });
 });

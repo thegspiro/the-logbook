@@ -5,7 +5,7 @@ Request and response schemas for election-related endpoints.
 """
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import AbstractSet, Any, Dict, List, Optional, Sequence, TypeVar
 from uuid import UUID
 
@@ -20,6 +20,7 @@ from pydantic import (
 
 from app.schemas.base import UTCResponseBase, as_utc
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
+from app.utils.membership import VOTER_TYPE_KEYS
 
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
@@ -342,7 +343,8 @@ VALID_MEETING_TYPES = {
 }
 MAX_ATTENDANCE_LOOKBACK_MEETINGS = 60
 MAX_ATTENDANCE_PERIOD_MONTHS = 60
-MAX_TENURE_MONTHS = 600
+MAX_WAITING_PERIOD_MONTHS = 600
+VALID_WAITING_PERIOD_MODES = {"none", "never", "months"}
 
 
 class AttendanceRule(BaseModel):
@@ -414,6 +416,34 @@ class AttendanceRule(BaseModel):
         return self
 
 
+class WaitingPeriod(BaseModel):
+    """How long a member of one type waits before they may vote.
+
+    ``none``: no wait. ``never``: members of this type may not vote at all.
+    ``months``: they may vote ``months`` after becoming that type, counted from
+    ``users.member_class_since`` / ``member_status_since`` (or a secretary's
+    ``voting_wait_from``) and never from before their current stint.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str = Field(default="none")
+    months: Optional[int] = Field(default=None, ge=1, le=MAX_WAITING_PERIOD_MONTHS)
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        return _validate_choice(v, VALID_WAITING_PERIOD_MODES, "waiting period mode")
+
+    @model_validator(mode="after")
+    def validate_months(self) -> "WaitingPeriod":
+        if self.mode == "months" and self.months is None:
+            raise ValueError("A waiting period in months needs the number of months")
+        if self.mode != "months":
+            self.months = None
+        return self
+
+
 class ElectionEligibilityRules(BaseModel):
     """Election-wide voter rules, stored on ``elections.eligibility_rules``.
 
@@ -425,12 +455,40 @@ class ElectionEligibilityRules(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     attendance: AttendanceRule = Field(default_factory=AttendanceRule)
-    min_tenure_months: Optional[int] = Field(
-        default=None,
-        ge=1,
-        le=MAX_TENURE_MONTHS,
-        description="Months of membership in the member's current stint",
+    waiting_periods: Dict[str, WaitingPeriod] = Field(
+        default_factory=dict,
+        description=(
+            "Per member type (see app.utils.membership.VOTER_TYPE_KEYS): how "
+            "long after becoming that type a member may vote. A type not "
+            "listed has no waiting period"
+        ),
     )
+
+    @field_validator("waiting_periods")
+    @classmethod
+    def validate_waiting_periods(
+        cls, v: Dict[str, WaitingPeriod]
+    ) -> Dict[str, WaitingPeriod]:
+        unknown = sorted(set(v) - set(VOTER_TYPE_KEYS))
+        if unknown:
+            raise ValueError(
+                f"Unknown member type(s) {', '.join(unknown)}. Must be one of: "
+                f"{', '.join(VOTER_TYPE_KEYS)}"
+            )
+        # "none" is what an absent key already means; storing it would make
+        # two spellings of one rule.
+        return {k: p for k, p in v.items() if p.mode != "none"}
+
+
+class ElectionEligibilityRulesRead(ElectionEligibilityRules):
+    """The rules as read back from a stored election.
+
+    Ignores keys the write model no longer knows, so a row written by an
+    earlier build of this feature (one carrying ``min_tenure_months``) reads
+    rather than failing response validation with a 500.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class EligibilityDefaults(BaseModel):
@@ -885,7 +943,7 @@ class ElectionResponse(UTCResponseBase):
     positions: Optional[List[str]] = None
     ballot_items: Optional[List[BallotItem]] = None
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
-    eligibility_rules: Optional[ElectionEligibilityRules] = None
+    eligibility_rules: Optional[ElectionEligibilityRulesRead] = None
     meeting_kind: str = "regular"
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
@@ -2030,6 +2088,61 @@ class ElectionSettingsResponse(BaseModel):
     # edited on the membership tier settings and apply alongside these.
     tier_voting_rules: List[TierVotingRule] = Field(default_factory=list)
     security: Optional[Dict[str, Any]] = None
+
+
+class MemberWaitOutcome(BaseModel):
+    """Where a member stands against one meeting kind's waiting period."""
+
+    meeting_kind: str
+    state: str = Field(..., description="no_rule, never, waived, eligible or waiting")
+    months: Optional[int] = None
+    eligible_from: Optional[date] = None
+    reason: Optional[str] = None
+
+
+class MemberVotingEligibilityResponse(BaseModel):
+    """A member's voting waiting period, for their profile."""
+
+    user_id: str
+    member_type: Optional[str] = None
+    member_type_label: Optional[str] = None
+    # When the member became their type, as recorded (before any override).
+    type_since: Optional[date] = None
+    # The date the wait actually counts from (override, else type_since
+    # clamped to the current stint).
+    wait_starts: Optional[date] = None
+    voting_wait_from: Optional[date] = None
+    voting_wait_waived: bool = False
+    voting_wait_override_reason: Optional[str] = None
+    # One per meeting kind, under the department's current defaults.
+    outcomes: List[MemberWaitOutcome] = Field(default_factory=list)
+
+
+class MemberVotingEligibilityUpdate(BaseModel):
+    """A secretary's per-member override of the voting waiting period.
+
+    Omit a field to leave it alone; ``voting_wait_from: null`` clears the
+    date. ``reason`` is required whenever the result leaves an override in
+    place, and is cleared with the last of them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    voting_wait_from: Optional[date] = None
+    voting_wait_waived: Optional[bool] = None
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("voting_wait_waived", mode="before")
+    @classmethod
+    def waived_must_be_boolean(cls, value):
+        if value is None:
+            raise ValueError("voting_wait_waived must be true or false")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
 
 
 class NonVoterRecord(BaseModel):

@@ -9,7 +9,7 @@ import type {
   ElectionEligibilityRules,
   ElectionSettings,
 } from '../../types/election';
-import { AttendanceRuleMode, MeetingKind } from '../../constants/enums';
+import { AttendanceRuleMode, MeetingKind, MemberVoterType, WaitingPeriodMode } from '../../constants/enums';
 import { MEETING_TYPE_OPTIONS } from '../minutes/utils/meetingTypes';
 
 // `administrative` and `social` are the member's **class** alone — what kind
@@ -49,8 +49,20 @@ export const ELIGIBILITY_BOUNDS = {
   of_last_meetings: { min: 1, max: 60, integer: true },
   min_pct: { min: 1, max: 100, integer: false },
   period_months: { min: 1, max: 60, integer: true },
-  min_tenure_months: { min: 1, max: 600, integer: true },
+  waiting_months: { min: 1, max: 600, integer: true },
 } as const;
+
+/** The member types a waiting period is set for, in the order the table lists them. */
+export const MEMBER_VOTER_TYPES: { value: MemberVoterType; label: string; decidedBy: 'class' | 'status' }[] = [
+  { value: MemberVoterType.REGULAR, label: 'Regular', decidedBy: 'status' },
+  { value: MemberVoterType.LIFE, label: 'Life', decidedBy: 'status' },
+  { value: MemberVoterType.PROBATIONARY, label: 'Probationary', decidedBy: 'status' },
+  { value: MemberVoterType.JUNIOR, label: 'Junior', decidedBy: 'status' },
+  { value: MemberVoterType.RETIRED, label: 'Retired', decidedBy: 'status' },
+  { value: MemberVoterType.HONORARY, label: 'Honorary', decidedBy: 'status' },
+  { value: MemberVoterType.ADMINISTRATIVE, label: 'Administrative', decidedBy: 'class' },
+  { value: MemberVoterType.SOCIAL, label: 'Social', decidedBy: 'class' },
+];
 
 /** Starting values offered when a secretary switches the attendance rule on. */
 export const ATTENDANCE_RULE_STARTERS: Record<'count' | 'percent', Partial<AttendanceRule>> = {
@@ -60,7 +72,7 @@ export const ATTENDANCE_RULE_STARTERS: Record<'count' | 'percent', Partial<Atten
 
 export const EMPTY_ELIGIBILITY_RULES: ElectionEligibilityRules = {
   attendance: { mode: AttendanceRuleMode.NONE },
-  min_tenure_months: null,
+  waiting_periods: {},
 };
 
 /** What the backend applies when the department has saved nothing. */
@@ -92,8 +104,13 @@ export const describeEligibilityRules = (rules: ElectionEligibilityRules | null 
   } else if (att.mode === AttendanceRuleMode.PERCENT && att.min_pct && att.period_months) {
     lines.push(`Attended at least ${att.min_pct}% of ${meetings} in the last ${att.period_months} months`);
   }
-  if (rules.min_tenure_months) {
-    lines.push(`A member for at least ${rules.min_tenure_months} months`);
+  for (const type of MEMBER_VOTER_TYPES) {
+    const period = rules.waiting_periods?.[type.value];
+    if (period?.mode === WaitingPeriodMode.NEVER) {
+      lines.push(`${type.label} members may not vote`);
+    } else if (period?.mode === WaitingPeriodMode.MONTHS && period.months) {
+      lines.push(`${type.label} members may vote ${period.months} months after becoming ${type.label.toLowerCase()}`);
+    }
   }
   return lines;
 };

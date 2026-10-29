@@ -48,7 +48,7 @@ from app.utils.org_timezone import org_today
 
 COUNT_2_OF_3 = {
     "attendance": {"mode": "count", "min_meetings": 2, "of_last_meetings": 3},
-    "min_tenure_months": None,
+    "waiting_periods": {},
 }
 
 
@@ -169,7 +169,7 @@ class TestEligibilityDefaultsSchema:
         assert defaults.default_voter_types == ["all"]
         assert defaults.position_voter_types == {}
         assert defaults.rules.attendance.mode == "none"
-        assert defaults.rules.min_tenure_months is None
+        assert defaults.rules.waiting_periods == {}
 
     def test_position_names_are_trimmed(self):
         defaults = EligibilityDefaults(
@@ -200,8 +200,11 @@ class TestStoredValues:
 
     def test_active_rules_are_kept(self):
         assert _active_rules_or_none(COUNT_2_OF_3) == COUNT_2_OF_3
-        tenure_only = {"attendance": {"mode": "none"}, "min_tenure_months": 6}
-        assert _active_rules_or_none(tenure_only) == tenure_only
+        wait_only = {
+            "attendance": {"mode": "none"},
+            "waiting_periods": {"probationary": {"mode": "never"}},
+        }
+        assert _active_rules_or_none(wait_only) == wait_only
 
     def test_invalid_stored_defaults_fall_back_rather_than_fail(self):
         stored = {"election_eligibility": {"rules": {"attendance": {"mode": "?"}}}}
@@ -582,38 +585,200 @@ class TestAttendancePercentRule:
         )
 
 
+def _waits(**periods):
+    return {"attendance": {"mode": "none"}, "waiting_periods": periods}
+
+
+ADMIN_A_YEAR = {"mode": "months", "months": 12}
+NEVER = {"mode": "never"}
+
+
+async def _typed_member(db, org, tag, member_class, member_status, since=None):
+    """A member of one type who became it ``since`` (a datetime)."""
+    user = await _member(db, org, tag, date(2010, 1, 1))
+    user.member_class = member_class
+    user.member_status = member_status
+    await db.flush()
+    if since is not None:
+        # Written after the type, so the stamp is the backdated value rather
+        # than the flush time.
+        user.member_class_since = since
+        user.member_status_since = since
+        await db.flush()
+    return user
+
+
+def _ago(**kw):
+    return datetime.now(timezone.utc) - relativedelta(**kw)
+
+
 @pytest.mark.integration
-class TestTenureRule:
-    async def test_a_recent_joiner_is_held_back(self, db_session):
-        org = await _org(db_session)
-        today = org_today(org)
-        veteran = await _member(db_session, org, "veteran", date(2010, 1, 1))
-        recruit = await _member(
-            db_session, org, "recruit", today - relativedelta(months=2)
+class TestWaitingPeriods:
+    async def _check(self, db, member, election, org):
+        return await ElectionService(db).check_voter_eligibility(
+            member.id, election.id, org.id
         )
-        unknown = await _member(db_session, org, "unknown", None)
+
+    async def test_a_type_that_may_never_vote_is_refused(self, db_session):
+        org = await _org(db_session)
+        probie = await _typed_member(
+            db_session, org, "probie", "operational", "probationary", _ago(years=3)
+        )
+        election = await _election(db_session, org, probie, _waits(probationary=NEVER))
+
+        result = await self._check(db_session, probie, election, org)
+        assert result.is_eligible is False
+        assert result.reason == "Probationary members are not eligible to vote"
+
+    async def test_a_wait_counts_from_becoming_the_type(self, db_session):
+        org = await _org(db_session)
+        recent = await _typed_member(
+            db_session, org, "recent", "administrative", "regular", _ago(months=2)
+        )
+        settled = await _typed_member(
+            db_session, org, "settled", "administrative", "regular", _ago(months=13)
+        )
+        election = await _election(
+            db_session, org, settled, _waits(administrative=ADMIN_A_YEAR)
+        )
+
+        assert (await self._check(db_session, settled, election, org)).is_eligible
+        result = await self._check(db_session, recent, election, org)
+        assert result.is_eligible is False
+        assert result.reason.startswith(
+            "Administrative members may vote 12 months after becoming "
+            "administrative; eligible from "
+        )
+
+    async def test_class_decides_before_status(self, db_session):
+        # An administrative probationer is judged by the administrative rule.
+        org = await _org(db_session)
+        member = await _typed_member(
+            db_session,
+            org,
+            "adminprobie",
+            "administrative",
+            "probationary",
+            _ago(years=2),
+        )
         election = await _election(
             db_session,
             org,
-            veteran,
-            {"attendance": {"mode": "none"}, "min_tenure_months": 6},
+            member,
+            _waits(administrative=ADMIN_A_YEAR, probationary=NEVER),
         )
-        service = ElectionService(db_session)
+        assert (await self._check(db_session, member, election, org)).is_eligible
 
-        assert (
-            await service.check_voter_eligibility(veteran.id, election.id, org.id)
-        ).is_eligible is True
-        recruit_result = await service.check_voter_eligibility(
-            recruit.id, election.id, org.id
+    async def test_types_without_a_rule_are_unaffected(self, db_session):
+        org = await _org(db_session)
+        lifer = await _typed_member(
+            db_session, org, "lifer", "operational", "life", _ago(days=1)
         )
-        assert recruit_result.is_eligible is False
-        assert recruit_result.reason == (
-            "Requires at least 6 months of membership; member has 2"
+        election = await _election(
+            db_session, org, lifer, _waits(administrative=ADMIN_A_YEAR)
         )
-        # No recorded start date is not evidence of a recent join.
-        assert (
-            await service.check_voter_eligibility(unknown.id, election.id, org.id)
-        ).is_eligible is True
+        assert (await self._check(db_session, lifer, election, org)).is_eligible
+
+    async def test_a_corrected_start_date_moves_the_wait(self, db_session):
+        org = await _org(db_session)
+        member = await _typed_member(
+            db_session, org, "corrected", "administrative", "regular", _ago(months=1)
+        )
+        member.voting_wait_from = date.today() - relativedelta(years=2)
+        member.voting_wait_override_reason = "Administrative since 2024 per minutes"
+        await db_session.flush()
+        election = await _election(
+            db_session, org, member, _waits(administrative=ADMIN_A_YEAR)
+        )
+        assert (await self._check(db_session, member, election, org)).is_eligible
+
+    async def test_a_waiver_lifts_the_wait_but_not_never(self, db_session):
+        org = await _org(db_session)
+        admin = await _typed_member(
+            db_session, org, "waivedadmin", "administrative", "regular", _ago(days=3)
+        )
+        probie = await _typed_member(
+            db_session, org, "waivedprobie", "operational", "probationary"
+        )
+        for member in (admin, probie):
+            member.voting_wait_waived = True
+            member.voting_wait_override_reason = "Board vote 2026-10-01"
+        await db_session.flush()
+        election = await _election(
+            db_session,
+            org,
+            admin,
+            _waits(administrative=ADMIN_A_YEAR, probationary=NEVER),
+        )
+        assert (await self._check(db_session, admin, election, org)).is_eligible
+        assert not (await self._check(db_session, probie, election, org)).is_eligible
+
+    async def test_a_waiver_does_not_lift_attendance(self, db_session):
+        org = await _org(db_session)
+        today = org_today(org)
+        admin = await _typed_member(
+            db_session, org, "waivedabsent", "administrative", "regular", _ago(days=3)
+        )
+        admin.voting_wait_waived = True
+        admin.voting_wait_override_reason = "Board vote"
+        await _meetings(
+            db_session, org, [today - relativedelta(months=k) for k in (3, 2, 1)]
+        )
+        await db_session.flush()
+        election = await _election(
+            db_session,
+            org,
+            admin,
+            {**COUNT_2_OF_3, "waiting_periods": {"administrative": ADMIN_A_YEAR}},
+        )
+        result = await self._check(db_session, admin, election, org)
+        assert result.is_eligible is False
+        assert result.reason.startswith("Attended 0 of the last 3 meetings")
+
+    async def test_the_wait_never_reaches_back_before_a_rejoin(self, db_session):
+        org = await _org(db_session)
+        member = await _typed_member(
+            db_session, org, "rejoined", "administrative", "regular", _ago(years=5)
+        )
+        member.hire_date = date.today() - relativedelta(months=3)
+        await db_session.flush()
+        election = await _election(
+            db_session, org, member, _waits(administrative=ADMIN_A_YEAR)
+        )
+        assert not (await self._check(db_session, member, election, org)).is_eligible
+
+    async def test_no_recorded_date_is_not_a_reason_to_refuse(self, db_session):
+        org = await _org(db_session)
+        member = await _typed_member(
+            db_session, org, "undated", "administrative", "regular"
+        )
+        member.hire_date = None
+        member.member_class_since = None
+        member.member_status_since = None
+        await db_session.flush()
+        election = await _election(
+            db_session, org, member, _waits(administrative=ADMIN_A_YEAR)
+        )
+        assert (await self._check(db_session, member, election, org)).is_eligible
+
+    async def test_the_roster_agrees_with_the_ballot_check(self, db_session):
+        org = await _org(db_session)
+        recent = await _typed_member(
+            db_session, org, "rosterrecent", "administrative", "regular", _ago(days=5)
+        )
+        election = await _election(
+            db_session,
+            org,
+            recent,
+            _waits(administrative=ADMIN_A_YEAR),
+            status=ElectionStatus.DRAFT,
+        )
+        roster = await ElectionService(db_session).get_eligibility_roster(
+            election.id, org.id
+        )
+        row = next(r for r in roster["roster"] if r["user_id"] == str(recent.id))
+        assert row["will_receive_ballot"] is False
+        assert row["ineligibility_reason"].startswith("Administrative members may vote")
 
 
 @pytest.mark.integration
@@ -658,7 +823,7 @@ class TestCreateAndUpdate:
                 "period_months": None,
                 "meeting_types": None,
             },
-            "min_tenure_months": None,
+            "waiting_periods": {},
         }
         # "chief" matches the configured "Chief"; Secretary is not configured.
         assert {k: v.voter_types for k, v in response.position_eligibility.items()} == {
@@ -713,14 +878,16 @@ class TestCreateAndUpdate:
                 {
                     "eligibility_rules": {
                         "attendance": {"mode": "none"},
-                        "min_tenure_months": 12,
+                        "waiting_periods": {
+                            "administrative": {"mode": "months", "months": 12}
+                        },
                     }
                 }
             ),
             db=db_session,
             current_user=admin,
         )
-        assert response.eligibility_rules.min_tenure_months == 12
+        assert response.eligibility_rules.waiting_periods["administrative"].months == 12
 
     async def test_an_open_election_cannot_change_its_rules(self, db_session):
         org, admin = await self._admin_org(db_session)
@@ -745,7 +912,7 @@ class TestCreateAndUpdate:
 ANNUAL_DEFAULTS = {
     "rules": {
         "attendance": {"mode": "count", "min_meetings": 3, "of_last_meetings": 3},
-        "min_tenure_months": 12,
+        "waiting_periods": {"administrative": {"mode": "months", "months": 12}},
     },
     "default_require_attendance": True,
     "default_voter_types": ["all"],
@@ -782,8 +949,8 @@ class TestAnnualSettings:
         )
         assert (
             organization.settings["election_eligibility_annual"]["rules"][
-                "min_tenure_months"
-            ]
+                "waiting_periods"
+            ]["administrative"]["months"]
             == 12
         )
         assert response["annual_eligibility"]["position_voter_types"] == {
@@ -845,7 +1012,7 @@ class TestMeetingKind:
         response = await self._create(db_session, admin, meeting_kind="annual")
 
         assert response.meeting_kind == "annual"
-        assert response.eligibility_rules.min_tenure_months == 12
+        assert response.eligibility_rules.waiting_periods["administrative"].months == 12
         assert response.eligibility_rules.attendance.min_meetings == 3
         assert {k: v.voter_types for k, v in response.position_eligibility.items()} == {
             "Secretary": ["regular", "life"]
@@ -868,7 +1035,7 @@ class TestMeetingKind:
             db_session, admin, meeting_id=str(annual_meeting.id)
         )
         assert response.meeting_kind == "annual"
-        assert response.eligibility_rules.min_tenure_months == 12
+        assert response.eligibility_rules.waiting_periods["administrative"].months == 12
 
     async def test_an_explicit_kind_wins_over_the_linked_meeting(self, db_session):
         org, admin = await self._org_with(db_session)
@@ -903,7 +1070,7 @@ class TestMeetingKind:
             current_user=admin,
         )
         assert response.meeting_kind == "annual"
-        assert response.eligibility_rules.min_tenure_months == 12
+        assert response.eligibility_rules.waiting_periods["administrative"].months == 12
         # The regular meeting's Chief rule does not survive the move.
         assert set(response.position_eligibility) == {"Secretary"}
 
