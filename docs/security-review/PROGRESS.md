@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #3813** (branch `claude/security-review-medical-screening-p13`) —
+**PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)** (branch
+`claude/security-review-medical-screening-p13`) —
 Feature 09 (Medical screening, PHI), pass 13. Watchdog pickup (dedicated
 `/loop 30m /security-review` session `session_011T1ZyyLrD5HagusgK9uDw2`
 confirmed unreachable via `ListAgents`, "No reachable agents"). PR #3811
