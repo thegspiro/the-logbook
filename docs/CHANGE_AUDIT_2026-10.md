@@ -5,6 +5,27 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 28 – 29, 2026
+
+Merged to `main` since `7c0162c0` (2026-10-28 12:02 UTC) through `7ac356b4`
+(2026-10-29 03:12 UTC), 9 merges. Security-review passes (finance-approvals,
+elections-ballots, users-organizations with USR-13 fixed, membership-pipeline,
+medical-screening) are in `docs/security-review/PROGRESS.md`. Two documentation
+passes (#3798, and the October 28 top-up #3808) merged in this window. `CHANGELOG.md`
+stays closed.
+
+| Change                                                                                                                                                  | Guide                         | Disposition                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------- |
+| Dues: a payment above what is owed asks **Record the extra as a donation?**; confirming records the rest as a donation in Fundraising (#3806)           | 11                            | Written with the change; screenshot queued                            |
+| Integrations: PayPal, Documenso, Cal.com and Salesforce refuse to connect without their keys ("_name_ needs: …") (#3806)                                | 16                            | Added                                                                 |
+| Public portal: stations, calls this year and volunteer hours this year now carry figures instead of empty values; Data Control describes each (#3806)   | 08, `PUBLIC_PORTAL_MODULE.md` | Added to 08's Data Control bullet; module doc written with the change |
+| USR-13: changing sign-in or file-storage settings through the general settings route now asks for the same re-verification as their own screens (#3810) | none                          | Backend; the screens already used the gated routes                    |
+| Date fields no longer overlap the next field on an iPad (#3812)                                                                                         | none                          | Visual only                                                           |
+
+**Screenshots to create:** the dues **Record the extra as a donation?** dialog.
+**Re-check:** `08-94-portal-data-control` (stats field descriptions). See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 28, 2026
 
 A top-up of the October 26 – 27 section below, which merged first and covers
