@@ -15,6 +15,7 @@ import { AccessLogsTab } from '../components/AccessLogsTab';
 import { UsageStatsTab } from '../components/UsageStatsTab';
 import { DataWhitelistTab } from '../components/DataWhitelistTab';
 import { SkeletonText } from '../../../components/ux';
+import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
 
 type TabType = 'config' | 'keys' | 'logs' | 'stats' | 'whitelist';
 
@@ -91,34 +92,12 @@ const PublicPortalAdmin: React.FC = () => {
     </div>
   );
 
-  // Loading draws the header the page opens with, a placeholder holding the
-  // status and toggle's place, so the page arrives under it rather than
-  // replacing a full-screen spinner and landing ~380px higher.
-  if (loading) {
-    return (
-      <div className="bg-theme-surface-secondary min-h-screen">
-        <div className="bg-theme-surface border-theme-surface-border border-b">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="py-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                {titleBlock}
-                <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
-                  <span className="text-sm">
-                    <SkeletonText className="w-28" />
-                  </span>
-                  <span className="btn-md invisible">Enable Portal</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="py-24 text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="text-theme-text-secondary mt-4">Loading public portal...</p>
-        </div>
-      </div>
-    );
-  }
+  // The disabled-portal banner and the tab strip sit between the title and the
+  // body, ~200px on a phone, and whether the banner is drawn depends on the
+  // config. Everything below the title waits, laid out but invisible, for the
+  // first answer rather than being pushed down by it (see useFirstLoadHold).
+  const held = useFirstLoadHold(loading);
+  const holdClass = held ? 'invisible' : '';
 
   return (
     <div className="bg-theme-surface-secondary min-h-screen">
@@ -130,37 +109,46 @@ const PublicPortalAdmin: React.FC = () => {
               {titleBlock}
 
               {/* Status Toggle */}
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center space-x-2">
-                  {config?.enabled ? (
-                    <>
-                      <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-500" />
-                      <span className="text-sm font-medium text-green-700 dark:text-green-400">Portal Enabled</span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="text-theme-text-muted h-5 w-5" />
-                      <span className="text-theme-text-muted text-sm font-medium">Portal Disabled</span>
-                    </>
-                  )}
+              {loading ? (
+                <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
+                  <span className="text-sm">
+                    <SkeletonText className="w-28" />
+                  </span>
+                  <span className="btn-md invisible">Enable Portal</span>
                 </div>
-                <button
-                  onClick={() => {
-                    void handleToggleEnabled();
-                  }}
-                  className={`btn-md font-medium transition-colors ${
-                    config?.enabled
-                      ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
-                      : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
-                  }`}
-                >
-                  {config?.enabled ? 'Disable Portal' : 'Enable Portal'}
-                </button>
-              </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center space-x-2">
+                    {config?.enabled ? (
+                      <>
+                        <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-500" />
+                        <span className="text-sm font-medium text-green-700 dark:text-green-400">Portal Enabled</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="text-theme-text-muted h-5 w-5" />
+                        <span className="text-theme-text-muted text-sm font-medium">Portal Disabled</span>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      void handleToggleEnabled();
+                    }}
+                    className={`btn-md font-medium transition-colors ${
+                      config?.enabled
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
+                        : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
+                    }`}
+                  >
+                    {config?.enabled ? 'Disable Portal' : 'Enable Portal'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Warning Banner */}
-            {!config?.enabled && (
+            {!loading && !config?.enabled && (
               <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
                 <div className="flex">
                   <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-600" />
@@ -180,7 +168,7 @@ const PublicPortalAdmin: React.FC = () => {
               The marker declares the strip scrollable rather than broken; its
               buttons are focusable, so it needs no tabIndex of its own. */}
           <div
-            className="border-theme-surface-border hscroll flex space-x-1 border-b"
+            className={`border-theme-surface-border hscroll flex space-x-1 border-b ${holdClass}`}
             data-mobile-scroll-region
             aria-label="Public portal sections"
           >
@@ -212,7 +200,7 @@ const PublicPortalAdmin: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${holdClass}`}>
         {activeTab === 'config' && <ConfigurationTab />}
         {activeTab === 'keys' && <APIKeysTab />}
         {activeTab === 'logs' && <AccessLogsTab />}

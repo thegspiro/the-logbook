@@ -44,14 +44,20 @@ interface KpiCardProps {
 
 const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon, iconBgClass, linkTo }) => {
   const content = (
-    <div className="card p-4 transition-shadow hover:shadow-md">
-      <div className="flex items-center gap-3">
+    <div className="card relative p-4 transition-shadow hover:shadow-md">
+      {/* Two tiles share a phone's width, and side by side the icon and chevron
+          left the label ~30px at 320px, so "Budgeted" ran under the chevron.
+          Under sm the icon stacks above the label and the chevron pins to the
+          corner, giving the label the tile's full width. */}
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
         <div className={`rounded-lg p-2 ${iconBgClass}`}>{icon}</div>
         <div className="min-w-0 flex-1">
           <p className="text-theme-text-secondary text-sm leading-snug">{label}</p>
           <p className="text-theme-text-primary text-xl font-bold">{value}</p>
         </div>
-        {linkTo && <ChevronRight className="text-theme-text-secondary h-4 w-4 shrink-0" />}
+        {linkTo && (
+          <ChevronRight className="text-theme-text-secondary absolute top-4 right-4 h-4 w-4 shrink-0 sm:static" />
+        )}
       </div>
     </div>
   );
