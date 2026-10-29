@@ -2500,12 +2500,18 @@ recorded here rather than built.
    Surfacing it (a notification to schedulers, or a badge on the pattern) is
    open.
 3. **Editing an approved shift report does not restate its training
-   credit.** The filing officer can no longer change a submitted report's
-   status, but can still edit an approved report's hours, calls and skills,
-   and the credit already applied keeps the old figures, so the report and the
-   pipeline disagree. Locking content edits after approval would remove
-   behaviour existing call-type provenance tests depend on; restating the
-   credit on edit is the alternative. Either is the owner's choice.
+   credit — narrowed 2026-10-27 (EC-17), still open where review is off.**
+   An edit to an approved report now sends it back to `pending_review` in any
+   org that requires review, which is also the only path to that credit being
+   restated (whoever re-approves the revised report re-triggers
+   `_trigger_deferred_progress` with the edited figures). Where the
+   department's `report_review_required` setting is off, the report stays
+   `approved` after the edit and the credit already applied keeps the old
+   figures, so the report and the pipeline still disagree for those orgs. See
+   `docs/security-review/SCH-15-scheduling.md` pass 12 and
+   `EC-14-equipment-check-shifts.md`'s EC-17 for the mechanism. Restating the
+   credit in place for the review-off case, rather than relying on a
+   re-review to do it, is still the owner's choice.
 4. **Sign-offs recorded before 2026-10-24 can still duplicate on
    re-approval.** Re-approving a report no longer adds a second skill sign-off
    for the same skill, keyed on the report id now stored in

@@ -16,6 +16,62 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3840](https://github.com/thegspiro/the-logbook/pull/3840)** (branch
+`claude/security-review-scheduling-p12`) — Feature 15
+(Scheduling), pass 12, a watchdog pickup. Dedicated `/loop 30m
+/security-review` session remains unreachable, confirmed via `ListAgents`
+("No reachable agents"). PR #3837 (Feature 14, Equipment check & shifts,
+pass 13) had already merged. Confirmed no security-review PR open via
+`search_pull_requests`/`list_pull_requests` (state=open, head
+`claude/security-review-*`) — 0 results; the 2 open PRs at the time were
+unrelated feature work. Row 15 confirmed as the next feature per PR #3837's
+own "next feature" note (the rotation table's row still reads ⬜, as rows
+12-14 do after their own merges — that table is caught up the iteration
+_after_ a PR merges, not by the PR that does the review).
+
+**0 fixed in Scheduling itself, 0 new findings.** Baseline `1157a464` (PR
+#3744's merge, pass 11). 8 non-merge commits touch 2 of 18 declared backend
+files plus part of the frontend module, out of 212 non-merge commits
+repo-wide in the window. The one substantive backend change,
+`shift_completion_service.py`'s `f53f766a`, is EC-17's fix (Feature 14's own
+finding, in a file the two features share) — re-derived end to end from
+Scheduling's own read (field-comparison order, training-credit gate
+ordering, regression tests) rather than taken on Feature 14's word; confirmed
+FIXED, not merely narrowed, and already recorded as such in
+`EC-14-equipment-check-shifts.md`'s own pass 13. The rest of the window's
+declared-scope touches are a disclosure-hygiene message cap
+(`bdf73eba`, same `list_within_detail_limit` class already used elsewhere in
+this file), a switched-off-template email skip (`0a7e2a9e`, catching up to
+an existing `email_service.py` convention), and four frontend-only fixes
+(stop offering Assign to manage-only officers per KNOWN_LIMITATIONS items
+5/6, a CSS class rename, three CLS loading-skeleton fixes, and two small
+cross-feature touches reviewed opportunistically). All standing findings
+re-confirmed: SCH-9/10/13/18 fixed and unchanged; SCH-15/17 scope-boundary
+groups still zero-diff (six passes running); SCH-16 accepted TOCTOU
+unchanged; SCH-19 still OPEN (no dict/list-length cap). Routes re-enumerated
+by AST, unchanged (`scheduling.py` 108, `scheduling_module_config.py` 3,
+`calcom_sync.py` 1 — 112 total, all auth-gated). See
+`docs/security-review/SCH-15-scheduling.md`'s **Pass 12** section for the
+full review.
+
+Completion gate: `flake8`/`black --check` (pinned 26.10.1, via
+`/usr/local/bin/black` — `PATH` otherwise resolves an unpinned uv-tool
+26.5.1)/`isort --check-only` on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 677 revisions, single head
+`e8a3f5c1b7d2`; `check_route_permissions.py --strict` — 280 routes, 0
+errors; `generate_schema_docs.py --check` — up to date; scoped backend
+tests (`-k` list in the skill) — 2812 passed, 1 pre-existing skip
+(`pywebpush`); tenancy/security guard tests — 713 passed; frontend `npm run
+typecheck`/`npm run lint` — 0 errors, 0 warnings; `npx vitest run
+src/modules/scheduling src/pages/scheduling` — 1051 passed (71 files).
+
+Rotation row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `search_pull_requests`/`list_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 13, PR #3837, merged), preserved for history</summary>
+
 **PR [#3837](https://github.com/thegspiro/the-logbook/pull/3837)** (branch
 `claude/security-review-equipment-check-shifts-p13`) — Feature 14
 (Equipment check & shifts), pass 13, a watchdog pickup. Dedicated
@@ -59,6 +115,8 @@ lint` — 0 errors, 0 warnings (no dedicated frontend module).
 Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
 (Scheduling) — re-check `search_pull_requests`/`list_pull_requests` fresh
 rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 20, PR #3835, merged), preserved for history</summary>
