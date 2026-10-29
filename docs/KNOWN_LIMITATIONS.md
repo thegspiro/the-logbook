@@ -6325,6 +6325,18 @@ lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 
+> ✅ **Resolved (2026-10-29), as the owner chose: wire a reader.** Election
+> Settings has a **Defaults** section again, and the **Create Election** form
+> starts from the saved values; with nothing saved it starts where it always
+> did. The PATCH now refuses an unknown voting method, victory condition or
+> quorum type, and the GET reads a value stored before that check (or a null)
+> as the built-in. A default quorum, which the form has no control for, is
+> shown on the form as a read-only line. Accepted limit: only the form reads
+> the defaults, so an election created directly through the API still takes
+> the schema's own. Covered by `tests/test_election_defaults.py`,
+> `ElectionsPage.defaults.test.tsx`, `ElectionsSettingsPage.test.tsx` and
+> `utils/electionDefaults.test.ts`. The history below is kept as the record.
+
 `PATCH /elections/settings` accepts `default_voting_method`,
 `default_victory_condition`, `default_victory_percentage`,
 `default_anonymous_voting`, `default_allow_write_ins`, `default_quorum_type` and
