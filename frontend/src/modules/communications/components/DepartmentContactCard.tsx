@@ -233,7 +233,7 @@ const DepartmentContactCard: React.FC<DepartmentContactCardProps> = ({ onSaved }
           Loading contact details…
         </p>
       ) : loadError ? (
-        <p className="alert-error text-sm" role="alert">
+        <p className="alert-danger text-sm" role="alert">
           {loadError}
         </p>
       ) : (

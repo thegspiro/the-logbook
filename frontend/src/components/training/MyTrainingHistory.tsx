@@ -78,7 +78,7 @@ const YearGroup: React.FC<{
       {open && (
         <div id={panelId} className="px-5 pb-5">
           {rows?.error && (
-            <div className="alert-error" role="alert">
+            <div className="alert-danger" role="alert">
               {rows.error}
             </div>
           )}
@@ -382,7 +382,7 @@ export const MyTrainingHistory: React.FC<{
       )}
 
       {error && (
-        <div className="alert-error" role="alert">
+        <div className="alert-danger" role="alert">
           {error}
         </div>
       )}
