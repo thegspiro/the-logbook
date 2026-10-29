@@ -6224,6 +6224,24 @@ was not meant to; each is a definition or a trade-off.
 
 ## Member Emails — An Opted-Out Officer or Nominee Hears Nothing for Email-Only Alerts (2026-09-30)
 
+> ✅ **Resolved (2026-10-29), as the owner chose: give them in-app copies.**
+> `app/services/officer_alert_copies.py` writes a bell entry for every officer
+> each alert is about, whether or not they receive the email: low stock, the
+> shelf-audit digest, NFPA retirement, Supplies to Replace and the automatic
+> reorder request; member archived, the property return summary, a new store
+> order, the directory-accounts digest, and an applicant withdrawing, going
+> inactive or coming up for auto-purge. A recurring digest refreshes an unread
+> entry instead of adding one per run. Two of the original items needed
+> nothing: failed equipment checks already wrote a bell entry for every
+> recipient, and the third-party nominee's accept-or-decline request already
+> had one (`_record_nominee_bell_notice`). Behaviour that changed with it: an
+> auto-purge warning, the shelf-audit digest and a withdrawal now count as given
+> when every coordinator or manager has turned the email off, because the bell
+> entries are the notice. Still open: there is no administrator view of who has
+> opted out of what. Covered by `tests/test_officer_alert_copies.py` and
+> `tests/test_prospect_auto_purge_warning.py`. The history below is kept as the
+> record.
+
 **Open (owner decision).** Since 2026-09-28 every member email is either always
 sent or optional (`app/services/email_policy.py`), and a member's **Email
 Notifications** switch, or their own switch for one optional email, stops it.
