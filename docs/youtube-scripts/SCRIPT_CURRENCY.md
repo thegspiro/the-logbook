@@ -1,5 +1,15 @@
 # Script currency
 
+## Flagged by the 2026-10-29 second-pass changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026-second-pass).
+Rows are **Open**; nothing was re-recorded.
+
+| Script             | Beat                                    | Was                | Now                                                                                             |
+| ------------------ | --------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| **14**             | Shift remaining and the roster (8:00)   | Any number of days | Limited to 14 days either way; the form explains a refusal. Mention it after "seven days, done" |
+| **07** (Secretary) | Prospective-member pipeline, if covered | Twelve stage types | A thirteenth, **Follow-up Form**, emails the applicant a pre-filled form; worth a short beat    |
+
 ## Flagged by the 2026-10-28 → 10-29 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28--29-2026).
