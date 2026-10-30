@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (to be recorded)** — Feature 27 (Integrations), pass 11, a watchdog
-pickup.
+**PR [#3853](https://github.com/thegspiro/the-logbook/pull/3853)** (branch
+`claude/security-review-integrations-p11`) — Feature 27 (Integrations),
+pass 11, a watchdog pickup.
 See `docs/security-review/INT-27-integrations.md`'s **Pass 11** section for
 the full review: a real delta since pass 10 — two new sub-features the
 owner chose to build out on 2026-10-29 (NWS Weather Alerts, now polled every
