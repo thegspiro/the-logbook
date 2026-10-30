@@ -1279,7 +1279,8 @@ from or waive the wait. Both need a reason and are audit-logged. Waiving never
 lifts **Never eligible to vote** or an attendance rule; a per-election voter
 override still lifts everything.
 
-![Election Settings, Voter Eligibility section](./images/14-20-election-settings-eligibility.png)
+> **Screenshot to create:** `14-20-election-settings-eligibility`, Election
+> Settings with the Voter Eligibility section open.
 
 ### Proxy Voting
 
