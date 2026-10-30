@@ -325,7 +325,7 @@ member in without showing their card.
 | **Contact Information** | Email, personal email, phone, mobile                                                     | Depends on the department setting and the member's own choices (see below)                |
 | **Address**             | Home address                                                                             | Where visible                                                                             |
 | **Emergency Contacts**  | The member's emergency contacts                                                          | **Only the member and officers who can manage members.** No setting can show it to others |
-| **Membership**          | Rank, member type, station, platoon and "Member since"                                   | Everyone; officers also see the status here                                               |
+| **Membership**          | Rank, member class and membership status, station, platoon and "Member since"            | Everyone; officers also see the status here                                               |
 | **Service History**     | Credited and earlier length of service, stint by stint                                   | The member, and officers who can manage members                                           |
 | **Qualifications**      | What the member is certified to do (EMT, Paramedic, Driver / Operator, Firefighter I/II) | Officers who can manage members only                                                      |
 | **Quick Stats**         | Training, hours and equipment counts                                                     | Only the counts you are allowed to see                                                    |
@@ -1800,13 +1800,15 @@ You change a member's account status from their profile page.
 5. Select **Update Status**. The button stays greyed out until you pick a
    status different from the current one.
 
-**Membership type and status move together for two statuses.** Setting a
-member's **Membership Type** to **Probationary** puts an Active account on
-**Probationary**, and any other type (including a custom tier and the monthly
-tier advance) moves a Probationary account back to **Active**. Inactive,
+**Membership status and account status move together for two statuses.**
+Setting a member's **Membership status** to **Probationary** (or to a
+department tier that **Counts as** probationary) puts an Active account on
+**Probationary**, and any other membership status (including the monthly tier
+advance) moves a Probationary account back to **Active**. The member's class
+does not affect this _(2026-10-29)_. Inactive,
 Suspended, Leave, Retired, Dropped and Archived are never touched. The status
 history records the move with the reason "Follows membership type". A status
-you set by hand in this dialog holds until the membership type is next
+you set by hand in this dialog holds until the membership status is next
 changed.
 
 **Archived is not in the list.** A dropped member is archived automatically
@@ -2196,7 +2198,8 @@ Life rungs are the built-in statuses themselves and need nothing here.
 > it yet. Ask your administrator if it needs changing.
 
 **Changing one member's tier.** Open **Members Admin → Member Management**,
-select **Edit** beside the member, and change the **Membership Type** field.
+select **Edit** beside the member, and change the **Membership status** field
+_(2026-10-29; it was the single **Membership Type** field)_.
 This is separate from the member's status on their profile.
 
 > **What if no tiers are saved?** Then The Logbook does not check membership
@@ -2217,7 +2220,7 @@ of its own choosing.
 Auto-advancement follows three rules:
 
 - **Only up, never down.** Nobody is moved to a lower tier.
-- **Only along the ladder.** A member whose current membership type is not one
+- **Only along the ladder.** A member whose current membership status is not one
   of your tiers is skipped. Set a starting tier for them by hand.
 - **Only Active or Probationary members.** Members with any other status are
   not moved.
@@ -2598,7 +2601,7 @@ lost or revoked stays as it is.
 | An email fails with a connection error                         | Ask your administrator to check the email settings. Gmail and Office 365 use port 587; some self-hosted mail servers use port 465.                                                                                                                                                                                                               |
 | A dropped member still shows as active                         | The status change may not have saved. Check it on the member's profile.                                                                                                                                                                                                                                                                          |
 | No property return report is produced                          | The member must have equipment assigned. With none assigned, there is nothing to report.                                                                                                                                                                                                                                                         |
-| A member's tier did not go up                                  | Check that **Advance members automatically by years of service** is on; that the member is Active or Probationary; that their current membership type is one of your tiers; and that their hire date or Service History gives enough credited years. Advancement happens on the 1st of each month.                                               |
+| A member's tier did not go up                                  | Check that **Advance members automatically by years of service** is on; that the member is Active or Probationary; that their current membership status is one of your tiers; and that their hire date or Service History gives enough credited years. Advancement happens on the 1st of each month.                                             |
 | A leave of absence did not adjust training                     | On Waiver Management, look at the leave's **Applies to** column. **Meetings & Shifts** means training was left out. Create a separate training waiver on the same page.                                                                                                                                                                          |
 | A rank shows as not recognised                                 | The member's rank must exactly match a rank your department has set up, including capitals and spaces. Edit the member's rank, or add it under **Members Admin → Settings → Operational Ranks**.                                                                                                                                                 |
 | A member's audit history is empty                              | The history only holds changes made since the feature was turned on. Older changes do not appear.                                                                                                                                                                                                                                                |

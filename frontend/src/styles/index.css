@@ -752,6 +752,41 @@
   }
 }
 
+/* --- Split row ---
+   The same wrapping rule as page-header, for a row inside a card or a list:
+   content on the left, an aside (actions, a badge, a status) on the right,
+   stacked on a phone. The main column keeps 12rem rather than 16rem because
+   these rows sit in cards and list items, not across the page.
+
+   `flex-col sm:flex-row sm:justify-between` with an aside that could not
+   shrink was written ~90 times. From `sm` it is a row that never wraps, so in
+   a card beside the 256px sidebar the aside squeezed the content column — the
+   same failure as the page headers, one level down. Display, wrapping, gap,
+   alignment and margins stay with the call site. */
+@utility split-row {
+  display: flex;
+  flex-direction: column;
+  @media (min-width: 640px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@utility split-row-main {
+  min-width: 0;
+  @media (min-width: 640px) {
+    flex: 1 0 12rem;
+  }
+}
+
+@utility split-row-aside {
+  min-width: 0;
+  @media (min-width: 640px) {
+    margin-left: auto;
+  }
+}
+
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
   /* red-800, not red-600. White on red-600 measures 4.83:1 — AA for large

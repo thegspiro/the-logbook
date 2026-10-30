@@ -1911,12 +1911,12 @@ The dashboard, the matrix, the compliance reports and the annual report all use
 the same rules, so their figures agree:
 
 - **A member's percentage counts only the requirements asked of them.** A
-  member excused from a requirement by their membership type can still reach
+  member a requirement's **Member Categories** leave out can still reach
   100%. The figure is shown alongside as met / total.
 - **A certification that is valid today is met today.** A card expiring in 26
   days counts as met; the orange **Due soon** mark is a renewal warning.
 - **A member nothing grades is _Not applicable_, not compliant.** If no
-  requirement applies to someone — none matches their rank or membership type,
+  requirement applies to someone — none matches their rank or member category,
   a compliance profile selects none, or every requirement is still inside their
   catch-up period — they sit in their own **Not applicable** group on the
   matrix. Reports and CSVs show **N/A**. They are left out of the percentage
@@ -1933,7 +1933,7 @@ the same rules, so their figures agree:
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
   profile card, the competency matrix and the annual report. The Shift
-  Compliance report also respects the requirement's membership types.
+  Compliance report also respects the requirement's member categories.
 - **A Certification requirement is credited through the course picked on it,
   the training type or the registry code.** It does not match a course just
   because the course's name _contains_ the requirement's name (a "CPR
@@ -1954,6 +1954,68 @@ the same rules, so their figures agree:
 > Each requirement can also move its own cut-off (see
 > [Evaluation Period](#evaluation-period-current-vs-prior-month)), and the
 > matrix shows the date each figure was judged on.
+
+### Scoping a Compliance Profile by Position _(2026-10-29)_
+
+**Who can do this:** officers who can change the department's settings, or who
+hold "Manage compliance records".
+
+A compliance profile can be limited to the members who hold a particular
+position, not only to membership types. Use it when two groups share a class
+and status but owe different training — for example, life members who still
+ride and life members who have stopped.
+
+1. Open **Training Admin → Compliance Reporting** and select **Configure**.
+2. Open the **Profiles** tab and select **Add Profile** (or **Edit** on an
+   existing profile).
+3. Under **Applies to Members Holding a Position**, tick one or more positions.
+   Leave them all unticked to apply the profile regardless of position.
+4. Select **Create Profile** or **Update Profile**.
+
+The profile's card then lists **Positions:** beside **Types:**. The rest of
+the form is described in
+[Creating Compliance Profiles](./08-admin-reports.md#creating-compliance-profiles).
+
+**How a member matches a profile:**
+
+| The profile names           | A member matches when                                               |
+| --------------------------- | ------------------------------------------------------------------- |
+| Neither types nor positions | Always — the profile applies to everyone                            |
+| Membership types only       | Their membership type is one of those ticked                        |
+| Positions only              | They hold **any one** of the ticked positions                       |
+| Both types and positions    | Their type is ticked **and** they hold at least one ticked position |
+
+The membership types on a profile are worked out from the member's **Member
+class** and **Membership status**: **life** means an operational member with
+life status, while **administrative** covers every administrative member and
+**honorary** every social member, whatever their status.
+
+**When a member matches more than one profile**, only the one with the highest
+**Priority** grades them; the others are ignored, not combined. Give each
+overlapping profile a different priority. A member who matches no active
+profile is graded against every requirement that applies to them, at the
+department's thresholds.
+
+**Example: life members who no longer ride.** Their member class stays
+Operational and their status stays Life, so nothing else about them changes
+(ballots, for instance, still read their class).
+
+1. Create a position with no permissions, such as "Life Member –
+   Non-Operational", and assign it to those members.
+2. Add a profile with **life** ticked under **Applies to Membership Types** and
+   that position ticked under **Applies to Members Holding a Position**.
+3. Tick only the requirements they still owe under **Required Training
+   Requirements**, or none. With none ticked, they read **Not applicable**.
+4. Set its **Priority** higher than any other profile a riding life member
+   matches.
+
+Taking the position off a member returns them to the profile every other life
+member is graded by.
+
+> **The list shows every position the department has.** A compliance officer
+> does not need permission to view positions to pick from it. A position
+> deleted after it was ticked shows as **Deleted position** until you untick it
+> and save.
 
 ### Leave of Absence Adjustments
 
@@ -3362,18 +3424,18 @@ Configuration**).
 
 ### Compliance Calculation
 
-| What happened                                                  | What it means                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The member's membership type is exempt from training           | The member is exempt from all training requirements and shows green whatever their hours.                                                                                                                                                                                             |
-| The membership type is exempt from some training types         | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                           |
-| The membership type's settings cannot be read                  | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the membership type's settings.                                                                                                         |
-| A **Courses** requirement with no courses picked               | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                       |
-| A **Certification** requirement                                | Credited through a course linked on the requirement, the training type, or the registry code in the certification number. Older requirements also match by course name, but only for records completed before they were upgraded. If nothing matches, the member shows non-compliant. |
-| An **Every 2 Years** requirement with an expired certification | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                        |
-| The member joined before an **Exempt existing members** cutoff | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                               |
-| The same, with a catch-up deadline not yet passed              | Shown as catching up, due on the deadline. It counts neither for nor against the member until the deadline passes; then it counts normally.                                                                                                                                           |
-| The department has no requirements                             | Department compliance reads **Not set up** / "no requirements set up yet", not 100%.                                                                                                                                                                                                  |
-| A **One Time** requirement                                     | No date window: every training record the member has ever had counts. (**Every 2 Years** counts the requirement's year and the year before.)                                                                                                                                          |
+| What happened                                                                 | What it means                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The member's membership tier has **Exempt from training requirements** ticked | The member is exempt from all training requirements and shows green whatever their hours. _(2026-10-29)_ The tier is found from the member's **Membership status** only for operational members; an administrative or social member is looked up as Administrative or Honorary, whatever their status, so a Life tier's exemption does not reach them. |
+| The membership tier is exempt from some training types                        | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                                                                                            |
+| The membership tier's settings cannot be read                                 | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the tier under **Members Admin → Settings → Membership Tiers**.                                                                                                                                          |
+| A **Courses** requirement with no courses picked                              | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                                                                                        |
+| A **Certification** requirement                                               | Credited through a course linked on the requirement, the training type, or the registry code in the certification number. Older requirements also match by course name, but only for records completed before they were upgraded. If nothing matches, the member shows non-compliant.                                                                  |
+| An **Every 2 Years** requirement with an expired certification                | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                                                                                         |
+| The member joined before an **Exempt existing members** cutoff                | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                                                                                                |
+| The same, with a catch-up deadline not yet passed                             | Shown as catching up, due on the deadline. It counts neither for nor against the member until the deadline passes; then it counts normally.                                                                                                                                                                                                            |
+| The department has no requirements                                            | Department compliance reads **Not set up** / "no requirements set up yet", not 100%.                                                                                                                                                                                                                                                                   |
+| A **One Time** requirement                                                    | No date window: every training record the member has ever had counts. (**Every 2 Years** counts the requirement's year and the year before.)                                                                                                                                                                                                           |
 
 ### Waiver Behavior
 
@@ -3932,9 +3994,10 @@ her work across all phases, and marks the sign-off requirement complete.
 | Total Hours      | 98.5                               |
 | Duration         | March 25 – September 12 (171 days) |
 
-Alex can now be moved from **Probationary** to **Active** membership (see
-[Membership Management](./01-membership.md)). The Compliance Matrix shows her
-green on every requirement.
+Alex's **Membership status** can now be moved from **Probationary** to
+regular — **Active Member** on the shipped tier ladder (see
+[Member Class and Member Status](./01-membership.md#member-class-and-member-status)).
+The Compliance Matrix shows her green on every requirement.
 
 > **A finished program leaves the dashboard.** The enrollment card on My
 > Training lists only **active** enrollments, so a program drops off when it is

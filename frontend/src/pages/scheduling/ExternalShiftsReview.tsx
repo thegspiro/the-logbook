@@ -102,8 +102,8 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
 
   return (
     <section className="mt-8" aria-labelledby="external-shifts-review-heading">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <div className="split-row mb-3 gap-3 sm:items-end">
+        <div className="split-row-main">
           <h2 id="external-shifts-review-heading" className="text-theme-text-primary text-lg font-semibold">
             Shifts with other departments
           </h2>
@@ -112,7 +112,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
             logged{canManage ? '; reject one to take it out of the totals.' : '.'}
           </p>
         </div>
-        <div>
+        <div className="split-row-aside">
           <label htmlFor="external-shifts-status" className="form-label">
             Show
           </label>

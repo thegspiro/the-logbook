@@ -108,8 +108,8 @@ const TestCard: React.FC<{
       {/* On a phone the score and actions take their own row under the title:
           beside it they left the template name a few characters before it
           truncated, and stacked every badge one per line. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-1 items-start">
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main flex items-start">
           {selectable && (
             // Stops the row's own click handler: ticking a box must not also open
             // the scorecard underneath it.
@@ -144,7 +144,7 @@ const TestCard: React.FC<{
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3 sm:ml-auto sm:pl-4">
+        <div className="split-row-aside flex flex-wrap items-center gap-3 sm:ml-auto sm:pl-4">
           <div className="mr-auto sm:mr-0 sm:text-right">
             {test.overall_score != null && (
               <p className="text-theme-text-primary text-lg font-bold">{formatScore(test.overall_score)}</p>

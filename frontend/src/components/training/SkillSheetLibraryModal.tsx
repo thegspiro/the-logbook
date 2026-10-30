@@ -90,9 +90,9 @@ export const SkillSheetLibraryModal: React.FC<SkillSheetLibraryModalProps> = ({ 
             {sheets.map((sheet) => (
               <li
                 key={sheet.slug}
-                className="border-theme-surface-border flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="split-row border-theme-surface-border gap-3 rounded-lg border p-3 sm:items-center"
               >
-                <div className="min-w-0">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary font-medium">{sheet.name}</p>
                   {sheet.description && <p className="text-theme-text-muted mt-0.5 text-sm">{sheet.description}</p>}
                   <div className="text-theme-text-muted mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

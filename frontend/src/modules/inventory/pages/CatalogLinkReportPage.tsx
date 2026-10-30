@@ -211,8 +211,8 @@ const GroupRow: React.FC<GroupRowProps> = ({
 
   return (
     <li className="card space-y-3 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+      <div className="split-row gap-3 sm:items-start">
+        <div className="split-row-main">
           <p className="text-theme-text-primary font-medium break-words">{group.name}</p>
           <button
             type="button"
@@ -226,7 +226,7 @@ const GroupRow: React.FC<GroupRowProps> = ({
           </button>
         </div>
 
-        <div className="w-full sm:w-80">
+        <div className="split-row-aside w-full sm:w-80">
           <select
             className="form-input"
             aria-label={`Catalog item for ${group.name}`}

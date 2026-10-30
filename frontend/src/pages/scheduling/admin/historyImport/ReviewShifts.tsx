@@ -58,8 +58,8 @@ const AttendanceLine: React.FC<{
   const seed = att.row_ids[0] ?? '';
   return (
     <li className="py-2">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 text-sm">
+      <div className="split-row gap-2 sm:items-start">
+        <div className="split-row-main text-sm">
           <span className="text-theme-text-primary font-medium">{memberLabel(analysis, att.member_ref)}</span>
           <span className="text-theme-text-secondary">
             {showUnit ? ` · ${attendanceUnitLabel(analysis, att)}` : ''}
@@ -88,29 +88,40 @@ const AttendanceLine: React.FC<{
             )}
           </div>
         </div>
-        {att.joined && (
-          <button
-            type="button"
-            className="btn-secondary shrink-0"
-            disabled={busy}
-            onClick={() => onSplit(att.row_ids.slice(1))}
-          >
-            Split apart
-          </button>
-        )}
-        {att.needs_confirmation && (
-          <div className="flex shrink-0 gap-2">
-            <button type="button" className="btn-primary" disabled={busy} onClick={() => onRowDecision(seed, 'accept')}>
-              Same shift
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={busy}
-              onClick={() => onRowDecision(seed, 'separate')}
-            >
-              Keep separate
-            </button>
+        {/* One aside for both, so the pair right-aligns together when the
+            row wraps rather than splitting the free space between them. */}
+        {(att.joined || att.needs_confirmation) && (
+          <div className="split-row-aside flex flex-wrap gap-2">
+            {att.joined && (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => onSplit(att.row_ids.slice(1))}
+              >
+                Split apart
+              </button>
+            )}
+            {att.needs_confirmation && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={busy}
+                  onClick={() => onRowDecision(seed, 'accept')}
+                >
+                  Same shift
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={busy}
+                  onClick={() => onRowDecision(seed, 'separate')}
+                >
+                  Keep separate
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

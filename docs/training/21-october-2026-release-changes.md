@@ -1,3 +1,20 @@
+# October 29–30, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                        | Now in                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Member class and membership status; tier Counts as           | [01 — Membership](./01-membership.md), [08 — Admin & Reports](./08-admin-reports.md) |
+| Voter Eligibility settings; a member's voting waiting period | [14 — Elections](./14-elections.md)                                                  |
+| Follow-up form reminders, coordinator notice, answers        | [15 — Prospective Members](./15-prospective-members.md)                              |
+| Compliance profiles scoped by position                       | [02 — Training](./02-training.md), [08 — Admin & Reports](./08-admin-reports.md)     |
+| Class and status operator notes                              | Operator-facing: [`UPGRADING.md`](../UPGRADING.md)                                   |
+
+---
+
 # October 29, 2026 workflow updates
 
 Index for the latest window. Audit:
@@ -482,4 +499,3 @@ Screenshots to create or replace are in
 | Minutes: closed election's result filed automatically; Medical Supplies lot recall and truck links | [04](./04-events-meetings.md), [05](./05-inventory.md) (written with the change)                               |
 | Session lifetime, probationary members as current, Pillow / follow-redirects bumps                 | Operator-facing: [`UPGRADING.md`](../UPGRADING.md), wiki Security pages                                        |
 | Create Training Session no longer shows an apparatus picker (it was never saved)                   | Nothing in a guide named it                                                                                    |
-| Election Settings: Voter Eligibility (attendance, waiting period per member type, annual meeting)  | [14 — Elections](./14-elections.md)                                                                            |

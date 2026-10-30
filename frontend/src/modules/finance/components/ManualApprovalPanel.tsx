@@ -110,8 +110,8 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
 
   return (
     <div className="card p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
+      <div className="split-row gap-4 sm:items-center">
+        <div className="split-row-main flex items-start gap-3">
           <Info className="text-theme-text-secondary mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-theme-text-primary text-sm font-medium">
@@ -133,7 +133,7 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
             )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="split-row-aside flex flex-wrap items-center gap-2">
           {!isRequester && !approvedAlready && (
             <button
               type="button"

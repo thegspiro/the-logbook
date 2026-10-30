@@ -132,11 +132,8 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
     const reviewer = petition.reviewed_by_name || 'the event organizer';
     if (petition.status === AttendancePetitionStatus.PENDING) {
       return (
-        <div
-          className="alert-info flex flex-col gap-3 rounded-lg p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
-          role="status"
-        >
-          <span>
+        <div className="split-row alert-info gap-3 rounded-lg p-4 text-sm sm:items-center" role="status">
+          <span className="split-row-main">
             You asked to be marked present on {formatDateTime(petition.created_at, timezone)}. The event organizer has
             been notified and will confirm or decline it.
             {/* The server caps withdrawals, so a request cannot be cycled to
@@ -178,14 +175,14 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
 
   return (
     <>
-      <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-theme-text-secondary text-sm">
+      <div className="split-row card gap-3 p-4 sm:items-center">
+        <p className="split-row-main text-theme-text-secondary text-sm">
           Were you at this event but never checked in? Ask the organizer to mark you present.
         </p>
         <button
           type="button"
           onClick={openForm}
-          className="btn-secondary inline-flex shrink-0 items-center gap-2 text-sm font-medium"
+          className="split-row-aside btn-secondary inline-flex shrink-0 items-center gap-2 text-sm font-medium"
         >
           <Hand className="h-4 w-4" aria-hidden="true" />I was there
         </button>

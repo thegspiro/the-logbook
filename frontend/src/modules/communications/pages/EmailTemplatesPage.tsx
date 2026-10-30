@@ -630,8 +630,8 @@ const EmailTemplatesPage: React.FC = () => {
                   className={`${editorView === 'edit' ? 'block' : 'hidden'} card lg:col-start-2 lg:row-start-1 lg:block`}
                 >
                   {/* Template meta bar */}
-                  <div className="border-theme-surface-border flex flex-col gap-3 border-b px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
+                  <div className="split-row border-theme-surface-border gap-3 border-b px-5 pt-5 pb-4 sm:items-center">
+                    <div className="split-row-main">
                       <p className="text-theme-text-primary truncate text-base font-semibold">
                         {selectedTemplate.name}
                       </p>
@@ -639,7 +639,7 @@ const EmailTemplatesPage: React.FC = () => {
                         {selectedTemplate.description || 'No description'}
                       </p>
                     </div>
-                    <div className="flex shrink-0 items-center space-x-3">
+                    <div className="split-row-aside flex flex-wrap items-center gap-3">
                       <button
                         onClick={() => setShowResetConfirm(true)}
                         disabled={isResetting}

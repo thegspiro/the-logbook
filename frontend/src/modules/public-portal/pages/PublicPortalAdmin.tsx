@@ -81,7 +81,7 @@ const PublicPortalAdmin: React.FC = () => {
   };
 
   const titleBlock = (
-    <div className="flex items-center space-x-3">
+    <div className="page-header-title flex items-center space-x-3">
       <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-500/20">
         <Globe className="h-6 w-6 text-blue-600" />
       </div>
@@ -105,19 +105,19 @@ const PublicPortalAdmin: React.FC = () => {
       <div className="bg-theme-surface border-theme-surface-border border-b">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="py-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="page-header gap-3 sm:items-center">
               {titleBlock}
 
               {/* Status Toggle */}
               {loading ? (
-                <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
+                <div className="page-header-actions flex flex-wrap items-center gap-4" aria-hidden="true">
                   <span className="text-sm">
                     <SkeletonText className="w-28" />
                   </span>
                   <span className="btn-md invisible">Enable Portal</span>
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="page-header-actions flex flex-wrap items-center gap-4">
                   <div className="flex items-center space-x-2">
                     {config?.enabled ? (
                       <>

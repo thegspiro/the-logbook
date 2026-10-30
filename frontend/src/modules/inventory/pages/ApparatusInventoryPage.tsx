@@ -310,8 +310,8 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
       <li key={item.templateItemId} className="border-theme-surface-border border-t px-3 py-3 first:border-t-0">
         {/* Stacked on a phone: side by side, the controls took a fixed width
             and squeezed the name and its details into a column one word wide. */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
+        <div className="split-row gap-2 sm:items-start">
+          <div className="split-row-main">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-theme-text-primary text-sm font-medium">{item.itemName}</span>
               {item.isExpired && (
@@ -362,7 +362,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="split-row-aside flex flex-wrap items-center gap-x-3 gap-y-1">
             {busy && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
             {item.deployedLots.length > 0 ? (
               <button

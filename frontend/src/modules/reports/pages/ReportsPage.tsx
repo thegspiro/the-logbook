@@ -657,8 +657,8 @@ export const ReportsPage: React.FC = () => {
               >
                 {/* Modal header */}
                 <div className="px-6 pt-5 pb-4">
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-center space-x-3">
+                  <div className="split-row mb-4 gap-3 sm:items-start">
+                    <div className="split-row-main flex items-center space-x-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600/20">
                         {React.createElement(ICON_MAP[activeCard.icon] ?? FileText, {
                           className: 'w-5 h-5 text-red-500',
@@ -682,7 +682,7 @@ export const ReportsPage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="split-row-aside flex flex-wrap items-center gap-2">
                       {/* Export Controls */}
                       {exportData && (
                         <ExportControls
@@ -719,15 +719,15 @@ export const ReportsPage: React.FC = () => {
                   {/* Comparison section */}
                   {comparisonData && comparisonPeriod && (
                     <div className="border-theme-surface-border mt-6 border-t pt-6">
-                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                      <div className="split-row mb-3 gap-3 sm:items-center">
+                        <h3 className="split-row-main text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                           <GitCompareArrows className="h-4 w-4" />
                           Previous Period: {comparisonPeriod.start} — {comparisonPeriod.end}
                         </h3>
                         <button
                           type="button"
                           onClick={clearComparison}
-                          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 text-xs"
+                          className="split-row-aside text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 text-xs"
                         >
                           Remove comparison
                         </button>
