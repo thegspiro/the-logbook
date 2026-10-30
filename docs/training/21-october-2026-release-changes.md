@@ -482,3 +482,4 @@ Screenshots to create or replace are in
 | Minutes: closed election's result filed automatically; Medical Supplies lot recall and truck links | [04](./04-events-meetings.md), [05](./05-inventory.md) (written with the change)                               |
 | Session lifetime, probationary members as current, Pillow / follow-redirects bumps                 | Operator-facing: [`UPGRADING.md`](../UPGRADING.md), wiki Security pages                                        |
 | Create Training Session no longer shows an apparatus picker (it was never saved)                   | Nothing in a guide named it                                                                                    |
+| Election Settings: Voter Eligibility (attendance, waiting period per member type, annual meeting)  | [14 — Elections](./14-elections.md)                                                                            |

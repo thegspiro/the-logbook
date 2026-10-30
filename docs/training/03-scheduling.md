@@ -102,7 +102,8 @@ that has turned shift reports off, you land on **Schedule** instead.
 The **Schedule** tab shows shifts on a calendar. Choose **Month** or **Week**
 at the top. Use the arrows to move back or forward, and **Today** to come back
 to the current date. On a phone you get the month view, with a coloured bar
-for each shift.
+for each shift. Both views list every shift in the range; a busy month is no
+longer cut off after 500 shifts.
 
 _(2026-10-18)_ An empty week or month looks up the first shift after it and offers
 **Go to the next shift**, so a member is not told nothing is published when next

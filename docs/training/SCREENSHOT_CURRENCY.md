@@ -1,5 +1,15 @@
 # Screenshot currency
 
+## Queued by the October 30 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-30-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 14 | `14-20-election-settings-eligibility`: Voter Eligibility with **Use different rules at the annual meeting** on | Create |
+| any | Page headers and stat tiles at tablet width; phone bars in landscape | Re-check |
+
 ## Queued by the October 29 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).

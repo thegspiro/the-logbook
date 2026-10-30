@@ -5,6 +5,21 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 30, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-30-2026).
+
+- **Election Settings has a Voter Eligibility section.** Set the default
+  attendance rule and how long each member type waits before voting. The
+  annual meeting can carry its own rules. A manager can adjust one member's
+  wait on their profile, with a reason.
+- **The week and month calendars show every shift.** A busy month is no longer
+  cut off.
+- **Page headers, stat tiles and phone bars fit better** on tablets and on a
+  phone held sideways.
+- Security reviews of fifteen areas found nothing new to fix.
+
 ## Recent changes: October 29, 2026
 
 The engineering audit is

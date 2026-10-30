@@ -1243,8 +1243,43 @@ report, it is your full defence if the result is disputed.
 
 **Who can do this:** roles that can manage elections.
 
-Open **Elections** and select the gear button. Election Settings has five
-sections.
+Open **Elections** and select the gear button. Election Settings has six
+sections. The first, **Voter Eligibility**, is described below; the others follow it.
+
+### Voter Eligibility
+
+This section holds the department's default voter rules. Each new election
+starts with a copy, so changing the defaults never alters an election that
+already exists.
+
+- **Meeting attendance.** Choose **No attendance requirement**, **Attended a
+  number of recent meetings** (for example 6 of the last 12), or **Attended a
+  percentage of meetings**. A member with fewer eligible meetings than the
+  look-back is held to the same proportion, rounded up.
+- **Waiting period before a member may vote**, set for each member type:
+  **No waiting period**, **Wait a number of months**, or **Never eligible to
+  vote**. Administrative and social members follow their class. Every
+  operational member follows their status (regular, life, probationary,
+  junior, retired, honorary). The wait counts from when the member became
+  that type, not from before. A member with no recorded date is not held back.
+- **Use different rules at the annual meeting.** Turn this on to give elections
+  held at the annual meeting (usually officer races) their own rules. They
+  start as a copy of the regular set. Turn it off and annual elections copy the
+  regular rules again.
+
+The rules on an election can be changed while it is a draft or taking
+nominations, and not once voting opens. An election's **meeting kind** (regular
+or annual) is set when it is created: linking an annual meeting picks annual
+automatically. Changing it before voting opens asks whether to **Change and
+replace rules** or **Keep current rules**.
+
+**One member's exception.** An officer who manages elections can, on the
+member's profile under **Voting eligibility**, change the date their wait counts
+from or waive the wait. Both need a reason and are audit-logged. Waiving never
+lifts **Never eligible to vote** or an attendance rule; a per-election voter
+override still lifts everything.
+
+![Election Settings, Voter Eligibility section](./images/14-20-election-settings-eligibility.png)
 
 ### Proxy Voting
 

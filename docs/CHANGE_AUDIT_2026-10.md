@@ -5,6 +5,30 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 30, 2026
+
+Merged to `main` since `723356a0` (2026-10-29 14:01 UTC) through `6bf6ba32`
+(2026-10-30 12:40 UTC). Fifteen security-review passes (scheduling,
+events-requests, training-core, training-extended, skills-testing, compliance,
+admin-hours, grants-fundraising, medical-supplies, meetings-minutes,
+messaging-notifications, forms, integrations, security-audit-ip,
+reports-analytics, onboarding) found nothing new; their records are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                               | Guide  | Disposition                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| **Voter Eligibility** in Election Settings: default attendance rule and a waiting period per member type, a separate set for the annual meeting, per-member override | 14     | Added; guide 14 had only the per-election overrides. Wiki `Module-Elections` was written with the change |
+| Week and month calendars no longer stop at 500 shifts                                                                                                                | 03     | Added one sentence                                                                                       |
+| Required trainee report blocks close-out; cancelled shift emails its crew (Shift notices); NWS weather alerts; Generic Webhooks get chat events                      | 03, 16 | Already written with each change                                                                         |
+| Members: class, status, rank, offices, committees, seat qualifications as five facts; a position is an office, a committee or the platform's own                     | 01, 03 | Already written (#3833)                                                                                  |
+| Page headers wrap on their content, stat tiles size by their row, phone bars compact when held sideways, dark-theme contrast at tablet width                         | none   | Visual only                                                                                              |
+| Embedded forms no longer offer to install the PWA on the embedding site                                                                                              | none   | Behaviour only an embedding site sees                                                                    |
+
+**Screenshots to create:** `14-20-election-settings-eligibility` (the Voter
+Eligibility section with the annual-meeting switch on). **Re-check:** every
+page-header and stat-tile shot at tablet width, and phone shots in landscape
+(the bars are shorter). See `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 29, 2026
 
 Merged to `main` since `7ac356b4` (2026-10-29 03:12 UTC) through `2aac367a`
