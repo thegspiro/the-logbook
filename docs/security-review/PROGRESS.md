@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-cross-cutting-baseline-p14`)
-— Feature 00 (Cross-cutting baseline), pass 14, a watchdog pickup (the
+**PR [#3869](https://github.com/thegspiro/the-logbook/pull/3869)** (branch
+`claude/security-review-cross-cutting-baseline-p14`) — Feature 00
+(Cross-cutting baseline), pass 14, a watchdog pickup (the
 dedicated `/loop 30m /security-review` session,
 `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). Step 0 (re-verified
 fresh, not trusted from a prior note) found 0 open `claude/security-review-*`
@@ -23970,7 +23971,7 @@ errors, 0 warnings; the 10-file cross-cutting guard suite — 215 passed; the
 `npm run lint` — 0 errors (`--max-warnings 10`); the 6-file frontend
 structural-guard suite — 32 passed.
 
-PR: see the Open PR row above (branch
+PR: [#3869](https://github.com/thegspiro/the-logbook/pull/3869) (branch
 `claude/security-review-cross-cutting-baseline-p14`).
 
 ### 2026-10-30 — Feature 34 (Frontend shared, pass 13) — watchdog pickup, closes a shared-device cart leak proactively, 0 fixed, 0 new findings
