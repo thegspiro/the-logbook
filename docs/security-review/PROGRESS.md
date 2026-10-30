@@ -26,6 +26,21 @@ never in its declared scope — one of them, `training_submission.py`, was
 actively misattributed to Feature 17 in pass 10 — both now reviewed clean
 across all seven checklist dimensions), 0 fixes, 0 new security findings.
 
+**Tend commit added 2026-10-30:** a concurrent watchdog session independently
+picked this same feature at the same time (branch-name collision on
+`claude/security-review-training-extended-p12`, discovered when that
+session's own push was rejected with "fetch first" after this PR's branch
+already existed remotely). Rather than open a competing PR, that session
+found and fixed a real tracker bug while tending this one: rows 12-14
+(Facilities, Apparatus & NFC, Equipment check & shifts) read ⬜ in this PR's
+own `## Rotation` table even though all three had already been reviewed and
+merged (PRs #3832/#3835/#3837) — each of those three iterations' commits had
+edited only the Open PR narrative and the Log, never the table's own
+checkbox cell for its row, so "Row N → ✅" was written in prose but never
+applied. Confirmed via `git show <sha> -- docs/security-review/PROGRESS.md`
+on each of the three merged commits. Fixed in this tend commit; no other
+change.
+
 Rotation row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills
 testing) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
 than trusting this note.
@@ -23357,9 +23372,9 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ✅     |
