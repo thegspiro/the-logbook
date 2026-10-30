@@ -16,7 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-core-infra-p12`) —
+**PR (this PR)** (branch `claude/security-review-frontend-shared-p13`) —
+Feature 34 (Frontend shared), pass 13, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). See `docs/security-review/FE13-34-frontend-shared.md`
+for the full review: none of the core shared-infrastructure files
+(`apiCache.ts`, `apiClient.ts`, `createApiClient.ts`, `errorHandling.ts`,
+`errorTracking.ts`, the global `services/api.ts` barrel, `ProtectedRoute.tsx`,
+`authStore.ts`) changed since pass 12. The one genuine new surface — a
+per-member saved department-store cart in `localStorage`
+(`modules/storefront/utils/savedCart.ts`) — correctly scopes every key to
+member + order window, rebuilds prices from the current catalog on restore
+rather than trusting a stale saved price, and is wired into the existing
+shared-device purge (`purgeLocalMemberData.ts`) so it cannot survive logout
+on a shared station computer — closing exactly the class of risk
+`FE3-34-1`/`FE3-34-5` found elsewhere. The two changed module clients
+(`prospective-members`, `scheduling`) added only typed wrappers through
+their existing, already-audited clients; the one new PII-bearing endpoint
+they call is already covered by the existing `/prospective-members/` cache
+exclusion. 0 fixes needed, 0 new findings. `FE5-34-1` (the standing
+inventory-caching product trade-off) re-confirmed unchanged.
+
+**Ride-along:** this commit also carries the Step 0 record of PR #3867's
+merge (Feature 33, Core infrastructure, pass 12), which this same watchdog
+iteration merged after finding it green and zero-finding, immediately
+before starting this feature's review.
+
+Rotation row 34 → ✅ (pending this PR's merge). Every feature is now ✅ —
+the next iteration resets all rows to ⬜ for a fresh pass (per Step 1),
+starting again from Feature 00. Re-check `list_pull_requests`/
+`search_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 12, PR #3867, merged), preserved for history</summary>
+
+**PR [#3867](https://github.com/thegspiro/the-logbook/pull/3867)** (branch
+`claude/security-review-core-infra-p12`) —
 Feature 33 (Core infrastructure), pass 12, a watchdog pickup. See
 `docs/security-review/CI12-33-core-infra.md` for the full review: a
 zero-delta pass — all three tracked files plus the two adjacent crypto files
@@ -36,9 +71,9 @@ head, no fork.
 merge (Feature 32, Locations & kiosk, pass 11), which merged before this
 iteration started.
 
-Rotation row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
-shared) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
-than trusting this note.
+Rotation row 33 → ✅ (merged); next was Feature 34 (Frontend shared).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 11, PR #3865, merged), preserved for history</summary>
@@ -23794,7 +23829,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -23802,6 +23837,56 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 34 (Frontend shared, pass 13) — watchdog pickup, closes a shared-device cart leak proactively, 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` — "No reachable agents"). PR #3867 (Feature 33, Core
+infrastructure, pass 12) was open at the start of this iteration, green on
+every CI check with `mergeable_state: clean` and 0 fixes/0 findings; this
+iteration's Step 0 merged it (`04bd78e6`) before continuing, rather than
+leaving a ready PR to wait for the next tick. `list_pull_requests`
+immediately afterward returned no `claude/security-review-*` head, leaving
+Feature 34 (Frontend shared) as the sole remaining `⬜` row.
+
+Baseline: `579501ee` (FE12-34's own merge). None of the core
+shared-infrastructure files — `apiCache.ts`, `apiClient.ts`,
+`createApiClient.ts`, `errorHandling.ts`, `errorTracking.ts`, the global
+`services/api.ts` barrel, `ProtectedRoute.tsx`, `authStore.ts` itself —
+changed since pass 12, despite 300 files changing repo-wide. The one real
+new surface, a per-member saved department-store cart persisted in
+`localStorage` (`modules/storefront/utils/savedCart.ts`, new), was read in
+full: it scopes every key to member + order window, rebuilds prices from
+the current catalog on restore (never trusting a stale saved price), and is
+wired into the existing shared-device purge (`purgeLocalMemberData.ts`) so
+it cannot outlive logout on a shared station computer — correctly closing,
+by construction, the exact class of risk `FE3-34-1`/`FE3-34-5` found
+elsewhere in this feature's earlier passes. The repo-wide sweep for new
+`axios.create`/`createApiClient` call sites, new `localStorage`/
+`sessionStorage.setItem` sites outside tests, hardcoded secrets, and XSS
+sinks returned nothing else. The two changed module clients
+(`prospective-members`, `scheduling`) added only typed wrappers through
+their existing, already-audited instances; the one new PII-bearing endpoint
+they call (`get_follow_up_form_answers`, Feature 08's own scope) is already
+covered by the existing `/prospective-members/` cache-exclusion prefix, and
+was spot-checked as permission-gated and org-scoped on the backend side.
+0 fixes needed, 0 new findings. `FE5-34-1` (the standing inventory-caching
+product trade-off) re-confirmed unchanged in `KNOWN_LIMITATIONS.md`.
+
+Full write-up: `docs/security-review/FE13-34-frontend-shared.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 678
+revisions, single head `f90b1124e6f4`; frontend `npm run typecheck`/
+`npm run lint` — 0 errors, 0 warnings; scoped frontend suite (8 files
+covering the reviewed delta plus the feature's core shared files) — 244
+passed.
+
+Row 34 → ✅ (pending this PR's merge). Every feature in the rotation is now
+✅ — the next iteration's Step 1 resets every row to ⬜ and restarts from
+Feature 00, riding that reset along with this PR's own merge record rather
+than opening a docs-only PR for it.
 
 ### 2026-10-30 — Feature 32 (Locations & kiosk, pass 11) — watchdog pickup, near-zero delta, 0 fixed, 0 new findings
 
