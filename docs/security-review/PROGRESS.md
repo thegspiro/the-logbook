@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (to be recorded)** — Feature 30 (Onboarding), pass 11, a watchdog
+pickup. See `docs/security-review/ONB5-30-onboarding.md`'s **Pass 11**
+section for the full review: a near-zero-delta pass — only two commits
+touched this feature's declared scope since pass 10 (a different feature's
+position-`kind` column reaching `save_session_roles` through a pure,
+fixed-enum lookup function that cannot be steered by client input; and the
+same repo-wide error-message-length cap already reviewed clean on three
+other features this rotation), plus a cosmetic bundle-splitting change to
+`routes.tsx` and a generated test-fixture regen. 0 fixes needed, 0 new
+findings. This pass independently re-read, rather than re-cited, the
+bootstrap-security mechanisms most central to this feature's risk
+(session-token randomness, the post-owner re-authentication guard shared by
+`/start` and `/reset`, and the documented per-session-not-per-request rate
+limiting on `/session/*`) and found all unchanged and correct. ONB-7 and the
+`ITTeamMemberRequest.email` typing note stay open, unchanged. Route surface
+re-enumerated by AST at 26, unchanged.
+
+Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31
+(Scheduled tasks) — re-check `list_pull_requests`/`search_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 13, PR #3855, merged), preserved for history</summary>
+
 **PR [#3855](https://github.com/thegspiro/the-logbook/pull/3855)** (branch
 `claude/security-review-reports-analytics-p13`) — Feature 29 (Reports &
 analytics), pass 13, a watchdog pickup. See `docs/security-review/RPT6-29-reports-analytics.md`'s
@@ -34,9 +58,10 @@ the same underlying library on the same value). 0 fixes needed, 0 new
 findings. LBL-29-2, LBL-29-4, RPT-5c/6/7 and DASH-2 stay open, unchanged.
 Route surface re-enumerated by AST at 35, unchanged.
 
-Rotation row 29 → ✅ (pending this PR's merge); next is Feature 30
-(Onboarding) — re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 29 → ✅ (merged as `37270a94`); next was Feature 30
+(Onboarding).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 11, PR #3854, merged), preserved for history</summary>
@@ -23679,7 +23704,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -23691,6 +23716,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 30 (Onboarding, pass 11) — watchdog pickup, near-zero delta, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3855 (Feature 29, Reports &
+analytics, pass 13) had already merged (`37270a94`), and a fresh
+`search_pull_requests` for `head:claude/security-review-` returned zero
+open results both before starting and again right before this push, so
+Feature 30 (Onboarding) was confirmed as the next `⬜` row read directly off
+a freshly fetched `main`.
+
+Diffing this feature's full declared file list against pass 10's merge
+(`eb3e1a50`, PR #3785) found exactly two commits with any touch on an
+in-scope file, both already correct: `4bff9d6d` (a different rotation
+feature's position-`kind` column) adds one call each to
+`onboarding.py`/`services/onboarding.py` through a pure lookup
+(`position_kind_for`) that is gated to a fixed three-value enum regardless
+of the client-supplied slug it's given — read in full, no injection or
+escalation surface; `b4d9388a` (the repo-wide error-message-length-cap
+sweep, already reviewed clean on three other features this rotation) caps
+one `ValueError`'s message in `configure_modules`'s module-validation path.
+A third commit regenerated a frontend test-fixture config file with four
+new data entries (no runtime code), and a fourth converted
+`modules/onboarding/routes.tsx`'s page imports to `lazyWithRetry` for
+bundle-size reasons, with no route or guard change.
+
+Because this feature's own bootstrap-security code carried zero diff, this
+pass's independent verification effort went into re-reading — not
+re-citing — the three mechanisms its risk concentrates in: session-token
+randomness (`secrets.token_urlsafe(32)` + `secrets.compare_digest`,
+unchanged), the post-owner re-authentication guard
+(`_require_owner_authority`) shared by `/start`'s resume path and `/reset`'s
+destructive path (confirmed a half-provisioned or completed install cannot
+be hijacked or re-claimed by mere possession of an onboarding session once
+a System Owner exists), and the documented per-session-not-per-request
+rate-limiting shape on `/session/*` (gated by a heavily rate-limited
+`/start`, bounded by per-field payload caps rather than a request-rate
+limiter — settled design since pass 2, re-confirmed against current code
+rather than assumed). Routes re-enumerated by AST at 26, unchanged. ONB-7
+and the `ITTeamMemberRequest.email` typing note remain open, unchanged;
+0 new findings.
 
 ### 2026-10-30 — Feature 29 (Reports & analytics, pass 13) — watchdog pickup, zero-delta backend, closes a frontend scope gap, 0 fixed, 0 new findings
 
