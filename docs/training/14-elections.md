@@ -569,7 +569,8 @@ whose tier was set wrongly, or one who arrived after voting opened.
    Members who already have an override are not listed.
 4. Enter a **Reason** of at least 10 characters, and select **Add Override**.
 
-The member may now vote whatever their membership type, attendance or group.
+The member may now vote whatever their member class, membership status,
+attendance or group.
 It also lifts the election-wide rules, including a waiting period.
 The override is listed by name.
 
