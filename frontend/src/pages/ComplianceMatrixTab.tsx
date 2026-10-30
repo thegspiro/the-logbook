@@ -464,8 +464,8 @@ const ComplianceMatrixTab: React.FC = () => {
     <div className="py-6">
       <div className="card overflow-hidden">
         {/* Header — what this is, and which way round it is being read */}
-        <div className="border-theme-surface-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <div className="split-row border-theme-surface-border gap-3 border-b p-4 sm:items-center">
+          <div className="split-row-main flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="text-theme-text-primary text-lg font-bold">Compliance</h2>
             <p className="text-theme-text-muted text-sm">
               {evaluated.length} tracked{' '}
@@ -475,7 +475,7 @@ const ComplianceMatrixTab: React.FC = () => {
               {notApplicable > 0 ? `, ${notApplicable} not applicable` : ''}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="split-row-aside flex flex-wrap items-center gap-2">
             {showClassFilter && (
               <div className="segmented-group-secondary hscroll flex" role="group" aria-label="Member class">
                 {(['all', ...classOptions] as const).map((value) => (
@@ -726,8 +726,8 @@ const ComplianceMatrixTab: React.FC = () => {
               </div>
             ) : (
               <div className="p-4 sm:p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
+                <div className="split-row gap-3 sm:items-start">
+                  <div className="split-row-main">
                     <p className="text-theme-text-muted text-[11px] font-bold tracking-widest uppercase">
                       {activeMember
                         ? [activeMember.member.membership_type, 'member'].filter(Boolean).join(' ')

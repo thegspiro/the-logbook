@@ -294,15 +294,15 @@ const ITTeamBackupAccess: React.FC = () => {
           >
             {/* IT Team Section */}
             <div className="card p-6">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center space-x-3">
+              <div className="split-row mb-4 gap-3 sm:items-center">
+                <div className="split-row-main flex items-center space-x-3">
                   <Users aria-hidden="true" className="text-theme-accent-cyan h-6 w-6 shrink-0" />
                   <h3 className="text-theme-text-primary text-xl font-bold">IT Team Contacts</h3>
                 </div>
                 <button
                   type="button"
                   onClick={addITMember}
-                  className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-800 sm:self-auto"
+                  className="split-row-aside flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-800 sm:self-auto"
                 >
                   <Plus aria-hidden="true" className="h-4 w-4" />
                   <span>Add Member</span>

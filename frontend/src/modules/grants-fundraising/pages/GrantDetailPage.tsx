@@ -933,8 +933,8 @@ export const GrantDetailPage: React.FC = () => {
         {/* ---------------------------------------------------------------- */}
         {activeTab === 'expenditures' && (
           <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-theme-text-primary text-lg font-semibold">Expenditures</h3>
+            <div className="split-row gap-3 sm:items-center">
+              <h3 className="split-row-main text-theme-text-primary text-lg font-semibold">Expenditures</h3>
               {canManage && (
                 <button
                   type="button"
@@ -1045,8 +1045,10 @@ export const GrantDetailPage: React.FC = () => {
         {/* ---------------------------------------------------------------- */}
         {activeTab === 'compliance' && (
           <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-theme-text-primary text-lg font-semibold">Compliance & Follow-Up Tasks</h3>
+            <div className="split-row gap-3 sm:items-center">
+              <h3 className="split-row-main text-theme-text-primary text-lg font-semibold">
+                Compliance & Follow-Up Tasks
+              </h3>
               {canManage && (
                 <button
                   type="button"

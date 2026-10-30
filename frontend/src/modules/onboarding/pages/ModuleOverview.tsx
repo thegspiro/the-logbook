@@ -169,8 +169,8 @@ const ModuleOverview: React.FC = () => {
           </div>
 
           {/* Stats Banner */}
-          <div className="card mb-6 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="split-row card mb-6 gap-3 p-4 sm:items-center">
+            <div className="split-row-main flex items-center space-x-4">
               <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{enabledCount}</span>
                 <span className="text-theme-text-muted ml-2">modules enabled</span>

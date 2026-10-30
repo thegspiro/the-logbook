@@ -85,12 +85,13 @@ const IssuesPanel: React.FC<{ analysis: HistoryImportAnalysis; onGo: (tab: TabId
       ) : (
         <ul className="card divide-theme-surface-border divide-y">
           {blocking.slice(0, 300).map((issue, index) => (
-            <li
-              key={`${issue.code}-${issue.ref ?? ''}-${index}`}
-              className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <span className="text-theme-text-primary text-sm">{issue.message}</span>
-              <button type="button" className="btn-secondary shrink-0" onClick={() => onGo(issueTab(issue.code))}>
+            <li key={`${issue.code}-${issue.ref ?? ''}-${index}`} className="split-row gap-2 p-3 sm:items-center">
+              <span className="split-row-main text-theme-text-primary text-sm">{issue.message}</span>
+              <button
+                type="button"
+                className="split-row-aside btn-secondary shrink-0"
+                onClick={() => onGo(issueTab(issue.code))}
+              >
                 Resolve
               </button>
             </li>
@@ -299,14 +300,14 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
   return shell(
     <div className="space-y-6">
       <section className="card space-y-4 p-4" aria-label="Import summary">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-theme-text-secondary text-sm">
+        <div className="split-row gap-3 sm:items-center">
+          <p className="split-row-main text-theme-text-secondary text-sm">
             {analysis.counts.rows} rows · times read in {zoneLabel(summary.timezone)} ·{' '}
             {analysis.blocking_issue_count === 0
               ? 'ready to commit'
               : `${analysis.blocking_issue_count} issue${analysis.blocking_issue_count === 1 ? '' : 's'} to resolve`}
           </p>
-          <div className="flex gap-2">
+          <div className="split-row-aside flex flex-wrap gap-2">
             <button type="button" className="btn-secondary" disabled={busy} onClick={() => void handleDiscard()}>
               Discard draft
             </button>

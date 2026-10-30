@@ -469,9 +469,9 @@ export const MyChecklistsPage: React.FC = () => {
                 {selectedCheck.items.map((item) => (
                   <div
                     key={item.id}
-                    className="border-theme-surface-border flex flex-col gap-1 rounded border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2"
+                    className="split-row border-theme-surface-border gap-1 rounded border px-3 py-2 text-sm sm:items-center sm:gap-2"
                   >
-                    <div className="min-w-0">
+                    <div className="split-row-main">
                       <span className="text-theme-text-primary font-medium">{item.itemName}</span>
                       <span className="text-theme-text-muted ml-2">{item.compartmentName || 'On the checklist'}</span>
                       {item.quantityFound != null && (

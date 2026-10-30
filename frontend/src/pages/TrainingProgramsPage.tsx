@@ -335,8 +335,8 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
             the hub's own header and nav, where a second title and a trail back
             to the hub would sit inside the very page they point at. */}
         {embedded ? (
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-theme-text-muted text-sm">
+          <div className="split-row mb-6 gap-4 sm:items-center">
+            <p className="split-row-main text-theme-text-muted text-sm">
               Build programs, import requirements, and track member progress
             </p>
             {headerActions}

@@ -308,11 +308,11 @@ const DuesManagementPage: React.FC = () => {
             ))}
           </div>
           {canManage && selectedSchedule && (
-            <div className="border-theme-surface-border flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-theme-text-secondary text-sm">
+            <div className="split-row border-theme-surface-border gap-3 border-t pt-3 sm:items-center">
+              <p className="split-row-main text-theme-text-secondary text-sm">
                 {formatCurrency(selectedSchedule.amount)} per member, due {formatDate(selectedSchedule.dueDate, tz)}
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="split-row-aside flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void handleGenerate(selectedSchedule)}

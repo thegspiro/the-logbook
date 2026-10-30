@@ -576,8 +576,8 @@ export const PipelineSettingsPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                  <div className="split-row gap-3 sm:items-center">
+                    <div className="split-row-main">
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-theme-text-primary text-lg font-bold">{currentPipeline.name}</h2>
                         <span
@@ -600,7 +600,7 @@ export const PipelineSettingsPage: React.FC = () => {
                         <p className="text-theme-text-muted mt-1 text-sm">{currentPipeline.description}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="split-row-aside flex flex-wrap items-center gap-1">
                       <button
                         onClick={() => setEditingPipelineName(true)}
                         className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors"
