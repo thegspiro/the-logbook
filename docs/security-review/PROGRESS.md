@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3845](https://github.com/thegspiro/the-logbook/pull/3845)** (branch
+`claude/security-review-compliance-p12`) — Feature 20
+(Compliance), pass 12, a watchdog pickup. See
+`docs/security-review/CMP-20-compliance.md`'s **Pass 12** section for the
+full review: a real delta since pass 11 — a new org-scoped, FK-validated
+`GET /compliance/config/positions` endpoint (position-scoped compliance
+profiles), a cross-cutting encryption sweep touching two of this feature's
+JSON columns (now `EncryptedJSON`, correctly nullable and migrated), and a
+cosmetic layout-shift fix. 0 fixes needed (the delta was already correct), 0
+new findings, 1 documentation correction — `docs/module-audit/compliance-skills.md`'s
+own CS-8 section had a stale "Still OPEN" bullet under a header that already
+said FIXED; corrected to match. All standing items (CS-8 original/dual
+control, `grace_period_days`, both by design) re-verified unchanged. Route
+surface 21/21 (up from 20, the one new sub-resource route),
+`check_route_permissions.py` 280 routes / 0 errors (unchanged — not a new
+top-level page).
+
+Rotation row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin
+hours) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 12, PR #3844, merged), preserved for history</summary>
+
 **PR [#3844](https://github.com/thegspiro/the-logbook/pull/3844)** (branch
 `claude/security-review-skills-testing-p12`) — Feature 19
 (Skills testing), pass 12, a watchdog pickup. See
@@ -28,9 +52,10 @@ features or are cosmetic (confirmed by reading each diff directly). 0 fixes,
 at current citations; route surface still 29/29, `check_route_permissions.py`
 280 routes / 0 errors.
 
-Rotation row 19 → ✅ (pending this PR's merge); next is Feature 20
-(Compliance) — re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 19 → ✅ (merged as `ec634030`); next was Feature 20
+(Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 12, PR #3843, merged), preserved for history</summary>
@@ -23400,7 +23425,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
@@ -23422,6 +23447,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 20 (Compliance, pass 12) — watchdog pickup, real delta, 0 fixed (none needed), 0 new findings, 1 doc correction
+
+Watchdog pickup. `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results; PR #3844 (Feature 19, Skills testing, pass 12) had just
+merged (`ec634030`). Row 20 (Compliance) confirmed the next pending feature
+on a freshly fetched `main`. This worktree's own branch was one merge behind
+`origin/main` (missing `ec634030`) at the start; fast-forwarded before
+starting.
+
+Per this iteration's task framing, started from the open items the Skills
+testing rotation's audit docs named as belonging to Compliance: CS-8
+attestation, monthly-windowing, recipient allow-list. All three were
+re-verified against current code rather than assumed: monthly-windowing and
+the recipient allow-list were both already fixed well before this pass
+(2026-10-04 and 2026-08-09 respectively — this rotation's own pass 7 already
+recorded both closed); CS-8 attestation's self-attested-percentage half was
+also already fixed (2026-10-05, server-computed `compliance_as_of`); only the
+narrower, separate "no update/delete route for an attestation" point (dual
+control via immutability) remains open, and it is open by design, per the
+owner's accepted trade-off. One genuine finding from this re-check:
+`docs/module-audit/compliance-skills.md`'s own CS-8 section had gone stale —
+its header said FIXED but the bullet underneath still read "Still OPEN,"
+unedited for over two months. Corrected in place.
+
+Real delta since pass 11 (`be884b71`): three commits across four files. A
+genuine feature commit (`be6b9554`) adds `GET /compliance/config/positions`
+so compliance profiles can be scoped by position as well as membership type
+— org-scoped, gated on the same permission pair as its sibling endpoint, and
+the client-supplied `role_ids` it lets an officer set were already validated
+in-org by the pre-existing `_validate_profile_fks` (CS-3). A repo-wide
+encryption sweep (`b48d63f2`) switches two of this feature's JSON columns
+(`report_email_recipients`, `emailed_to`) to `EncryptedJSON` — correctly
+nullable, migration backfills existing rows and refuses without an
+encryption key. A third commit (`f2ea7ba5`) is a pure layout-shift fix with
+no security surface. All standing CMP/CS findings re-verified unchanged at
+their current citations.
+
+Full completion gate run and green: `flake8`/`black`/`isort` clean against
+CI's pinned versions; `validate_migrations.py --strict` (678 revisions,
+single head); `generate_schema_docs.py --check` clean; `check_route_permissions.py
+--strict` (280 routes, 0 errors — route count unchanged since the one new
+route is a sub-resource, not a new page); `pytest -k "compliance or
+attestation"` (676 passed, 1 pre-existing skip, up from pass 11's 667); the
+ten-file targeted compliance suite (312 passed, unchanged) plus this pass's
+own delta's three test files (65 passed); frontend `typecheck`/`lint` both
+clean (after `npm ci` — this worktree had no `node_modules` installed going
+in); 8 compliance-scoped frontend test files (59 passed, up from pass 11's
+55). See `docs/security-review/CMP-20-compliance.md`'s **Pass 12** section
+for the full write-up.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours).
 
 ### 2026-10-30 — Feature 19 (Skills testing, pass 12) — watchdog pickup, true zero delta, 0 fixed, 0 new findings
 
