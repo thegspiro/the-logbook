@@ -87,7 +87,7 @@ python-magic==0.4.27
 python-docx==1.2.0
 openpyxl==3.1.5
 reportlab==5.1.0
-pypdf==6.21.3  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870; 6.21.0 is vulnerable: CVE-2026-113786; 6.21.1 is vulnerable: CVE-2026-115572, CVE-2026-115580, CVE-2026-115585; 6.21.2 is vulnerable: CVE-2026-119206, CVE-2026-119207, CVE-2026-119208, CVE-2026-119209
+pypdf==6.21.4  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870; 6.21.0 is vulnerable: CVE-2026-113786; 6.21.1 is vulnerable: CVE-2026-115572, CVE-2026-115580, CVE-2026-115585; 6.21.2 is vulnerable: CVE-2026-119206, CVE-2026-119207, CVE-2026-119208, CVE-2026-119209; 6.21.3 is vulnerable: CVE-2026-119203, CVE-2026-119204, CVE-2026-119205
 Pillow==13.0.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 nh3==0.3.7  # Allowlist HTML sanitizer for rich-text minutes sections (app/utils/rich_text.py)
