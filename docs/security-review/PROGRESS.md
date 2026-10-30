@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD** (branch `claude/security-review-skills-testing-p12`) — Feature 19
+**PR [#3844](https://github.com/thegspiro/the-logbook/pull/3844)** (branch
+`claude/security-review-skills-testing-p12`) — Feature 19
 (Skills testing), pass 12, a watchdog pickup. See
 `docs/security-review/SKT-19-skills-testing.md`'s **Pass 12** section for the
 full review: a true zero-delta pass — no commit touched any of the four
