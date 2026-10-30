@@ -1,10 +1,267 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12") · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12"), 2026-10-30 (pass 14, watchdog pickup, opens rotation lap "pass 13") · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`, pass 14 PR recorded in `PROGRESS.md`
 
 Passes are recorded in this one file rather than a new `SEC<n>-00-*.md` per
 lap — the sweeps are cumulative and a reader needs the earlier method beside
 the later result to tell a re-verification from a first run. Newest pass first.
+
+---
+
+## Pass 14 (2026-10-30, watchdog pickup) — delta re-sweep of all 13 established sweep classes against 259 commits (169 non-merge), 1 new finding (SEC14-1, LOW, fixed, pre-existing — a re-sweep catch, not introduced by this delta), 0 tooling findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (confirmed via
+`ListAgents` by the orchestrating session immediately before this iteration:
+no reachable agents at all). Step 0 (re-verified fresh in this iteration via
+`search_pull_requests` for `head:claude/security-review-` `is:open`) found 0
+open security-review PRs: PR #3868 (Feature 34, Frontend shared, pass 13) had
+already merged (`baf80bf7`), and that was the last `⬜` row — every row of
+the rotation table was at `✅` for the sixth time since pass 7 opened. Per
+`PROGRESS.md`'s Step 1, the table is reset to `⬜` for this new lap ("pass 13"
+of the rotation) and the rotation wraps to Feature 00, continuing in the same
+iteration per the "rides along in the first feature PR of the next pass,
+together with the reset" rule.
+
+**Note on the pass number:** the task briefing that started this iteration
+asserted Feature 00's last recorded pass was "Pass 5," making this "Pass 6."
+That was wrong — re-reading this file directly (rather than trusting the
+briefing) found Pass 13 already on record (2026-10-28, the watchdog pickup
+immediately before this one), so this is **Pass 14**. Recorded here per this
+file's own "re-verify rather than re-derive" rule in `PROGRESS.md`'s Step 2,
+and because a wrong pass number would make a future reader's "re-verify prior
+findings" step look for Pass 6's open items instead of Pass 13's.
+
+**Baseline:** `579501ee` (pass 13's own head, PR #3791's merge — pass 13
+itself reviewed the window ending there). **Head:** `baf80bf7` (PR #3868's
+merge). Repository was shallow (`git rev-parse --is-shallow-repository` →
+`true`) and was unshallowed (`git fetch --unshallow`) before trusting any
+commit count, per the standing Pitfall #24 risk note. 259 commits between
+baseline and head, 169 non-merge, 76 backend `.py` files touched (546 files
+total) — this window is a full rotation lap (30 security-review PRs,
+Features 00 and 01–34, `#3800`–`#3868`), reflecting every feature's own
+pass plus a new NWS Weather Alerts polling integration, Generic Webhooks
+gaining the same event feed as chat integrations, a check-then-write race fix
+on IP-exception approve/reject/revoke, and routine dependency work. Routes
+checked against `APPLICATION_PAGES.md`: **280** (up from 279, 17 redirects
+skipped), 0 errors, 0 warnings. Alembic revisions: **678** (up from 666),
+single head `f90b1124e6f4`, confirmed via `validate_migrations.py --strict`.
+
+### Re-verified standing sweeps (all 13 classes from passes 1–13)
+
+| #   | Class swept                                           | Result                                                                                                                                                                                                                                               |
+| --- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports (Pitfall #15)            | **clean** — `grep -E "csv\.(writer\|DictWriter)\("` over `app/` and `scripts/` outside `csv_export.py`: 0 hits; `tests/test_csv_writer_sweep.py` passes                                                                                              |
+| 2   | `SET NULL` on `NOT NULL` columns (Pitfall #2)         | **clean** — `test_database_schema.py::TestForeignKeyIntegrity::test_set_null_fks_are_nullable` passes                                                                                                                                                |
+| 3   | Proxy-IP attribution                                  | **clean** — same 3 `request.client.host` hits as every prior pass, same shape (`audit.py:1394`, `security_middleware.py:955` — both documenting comments — and the deliberate direct-IP fallback at `security_middleware.py:1273`)                   |
+| 4   | Alembic chain integrity                               | **clean** — `validate_migrations.py --strict`: 678 revisions, single head `f90b1124e6f4`                                                                                                                                                             |
+| 5   | LIKE-wildcard handling (Pitfall #25)                  | **clean** — `tests/test_like_escaping.py` passes                                                                                                                                                                                                     |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)               | **clean** — 0 imports, 0 subclasses; every `grep` hit in `security_middleware.py` / `app/mcp/transport.py` is a documenting comment                                                                                                                  |
+| 7   | Unbounded in-memory trackers (Pitfall #9)             | **clean, 0 new unbounded trackers** — see below (an AST pass over all 76 changed backend files found one new candidate, a static validation set, not a tracker)                                                                                      |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)       | **clean** — `grep -rn "window\.\(confirm\|alert\|prompt\)("` over `frontend/src/`: 0 hits                                                                                                                                                            |
+| 9   | JSON shallow-copy-then-nested-mutate (Pitfall #12)    | **clean** — `tests/test_json_column_ast_sweep.py` passes                                                                                                                                                                                             |
+| 10  | Org-scoping / IDOR ratchet (Pitfall #14)              | **clean** — `tests/test_org_scoping_ratchet.py` passes                                                                                                                                                                                               |
+| 11  | Capacity-check locking (Pitfall #27)                  | **clean** — `tests/test_capacity_locking.py` passes; a genuinely new check-then-write lock was added this delta (`ip_security_service.py`'s exception approve/reject/revoke, now `.with_for_update()`), reviewed below, not this class's own finding |
+| 12  | Route auth coverage                                   | **clean** — `check_route_permissions.py --strict`: 280 routes, 0 errors, 0 warnings; `tests/test_endpoint_auth_coverage.py` passes                                                                                                                   |
+| 13  | Raw exception text reaching the client (checklist §5) | **1 new finding** — see SEC14-1 below. Fresh AST walk of every bound broad `except` handler (`Exception`/`BaseException`/bare, bound to a name): 768 handlers (up from 758). All but SEC14-1 compose their own message or are already safe.          |
+
+Also re-ran: `tests/test_api_cache_pii_exclusions.py` and
+`tests/test_baseline_member_grants.py` (both pass), and the frontend
+structural guards (`dialogScrollIntegrity`, `dialogDismissIntegrity`,
+`testingRegistry`, `primaryFillContrast`, `touchTargetIntegrity`,
+`hoverRevealIntegrity`) — **32/32** across 6 files (up from 30, new tests from
+other features' passes), unchanged disposition from pass 13.
+
+Outbound-transport checks: raw SQL by string interpolation is still the same
+2 sites (`scheduling_service.py`, `enum_normalization.py`), same disposition
+as every prior pass. Direct `httpx.AsyncClient(`/`Client(` construction is
+unchanged at the same 7 files as pass 13 (`breached_password.py`,
+`captcha.py`, `email_service.py`, `external_training_service.py`,
+`integration_services/base.py`, `oauth_service.py`, `gmail_api_sender.py`).
+`SSRFSafeAsyncTransport(` direct construction is unchanged (2 files).
+`assert_outbound_url_safe(` call sites are unchanged at **7** files
+(`documenso_service.py`, `teams_service.py`, `webhook_service.py`,
+`slack_service.py`, `discord_service.py`, `calcom_service.py`,
+`s3_storage.py`) — none of the lines flagged by a bare `grep` in `base.py` /
+`ssrf_transport.py` are call sites; they are comments and docstrings
+referencing the function by name, confirmed by reading each.
+
+### New outbound-capable surfaces this delta: both reviewed, both clean
+
+- **`app/services/integration_services/weather_service.py`** (new) —
+  `fetch_active_alerts(zone_id)` for the new NWS Weather Alerts integration.
+  Its destination is a hardcoded constant (`NWS_API_BASE =
+"https://api.weather.gov"`), never admin-configurable; the admin-chosen
+  `zone_id` reaches the request only as an `httpx` `params=` value (safely
+  encoded, never concatenated into the URL), and the call goes through the
+  existing hardened `create_integration_client()`. No SSRF surface — matches
+  pass 12's disposition for `google_drive_storage.py`'s equally-hardcoded
+  endpoint.
+- **`app/services/integration_services/notification_dispatch.py`**'s new
+  `dispatch_generic_webhooks()` — extends the existing per-entity
+  chat-notification fan-out (`notify_entity_created`) to also deliver to the
+  department's Generic Webhook integration, with the same payload chat
+  integrations already receive. It calls the existing, already-SSRF-safe
+  `send_webhook()` (`webhook_service.py`'s `assert_outbound_url_safe()` +
+  `create_integration_client()` pair, re-validated at send time per
+  checklist §4) rather than constructing its own transport — no new
+  DNS-rebinding surface, and no new data-exposure surface beyond what the
+  chat-notification path already sends to the same destinations' class of
+  recipient (an admin-configured endpoint).
+
+### Class 7 (unbounded in-memory trackers): delta check against the changed files
+
+76 backend `.py` files changed in this delta. An AST pass (module-level
+assignments and `self.x` assignments inside `__init__`, restricted to
+dict/set/list literals and bare `dict()`/`list()`/`set()`/`OrderedDict()`/
+`defaultdict()` calls — the shape a tracker starts from) found no new
+unbounded, attacker-reachable cache. The handful of non-empty module-level
+dict/set/list assignments in the changed files (`DEFAULT_POSITIONS`,
+`ALL_PERMISSIONS`, `WEBHOOK_EVENT_TYPES`, `ONBOARDING_CORE_MODULES`, and
+similar) are fixed configuration/enumeration constants, not caches that grow
+over the process's life, and were excluded by requiring an **empty** or
+bare-constructor initializer. The two matches that did start empty:
+
+- `app/schemas/forms.py:38` — `_APPLICANT_FIELDS = set(APPLICANT_FIELDS)`.
+  Seeded once, at import time, from a fixed list imported from
+  `app.models.forms`; used only as a Pydantic field-validator's allow-list
+  (the same pattern as the four `_FORM_CATEGORIES`/`_FORM_STATUSES`/
+  `_FIELD_TYPES`/`_INTEGRATION_TARGETS`/`_INTEGRATION_TYPES` sets immediately
+  above it in the same file). Never written to again. Not a tracker.
+- `app/services/equipment_check_service.py:122` (`self._counted_inventory_ids:
+Set[str] = set()`) and `app/services/scheduling_service.py:443-445`
+  (`self.last_assignment_warnings`/`last_generation_warnings`/
+  `last_generation_seat_warnings`) — both re-flagged by this delta's diff
+  only because other parts of the same files changed; both pre-date baseline
+  `579501ee` unchanged at the flagged lines (confirmed with
+  `git show 579501ee:<file> | sed -n '<line>p'`) and were already reviewed
+  clean under pass 12's equivalent check (per-instance, request-scoped
+  services, not module-level).
+
+No genuinely new outbound-HTTP-capable or tracker-shaped surface beyond the
+items above.
+
+### Also reviewed: a new check-then-write lock on the IP-exception approve/reject/revoke path
+
+`app/services/ip_security_service.py`'s `approve_exception` /
+`reject_exception` / `revoke_exception` (lines ~210–400) each gained a
+`.with_for_update()` on the exception row's fetch, with a comment explaining
+why: two administrators acting on the same exception at once could otherwise
+both pass the status check and leave the row approved with a rejection's
+audit trail attached, or vice versa. This is the same class of fix Pitfall
+#27 and `tests/test_capacity_locking.py` exist for, applied correctly here to
+a check-then-write rather than a capacity count; `tests/test_capacity_locking.py`
+itself doesn't cover this file (it is a different endpoint's own fix, not a
+cross-cutting-class regression), so it is noted here as reviewed-and-correct
+rather than claimed under that guard test's coverage.
+
+## Findings
+
+### SEC14-1 — LOW — a third write site for the same `import_error` leak class SEC13-1 fixed, in the service layer's own matched-member repair pass — FIXED
+
+**File:** `backend/app/services/external_training_service.py:2246` (inside
+`import_pending_for_matched_members`, now at line 2246 after this fix's
+import addition — originally reported at the pre-fix line 2245).
+
+**Scenario:** SEC13-1 (pass 13) fixed two call sites in
+`app/api/v1/endpoints/external_training.py` where a failed import stored
+`str(e)` — raw exception text — directly into `ExternalTrainingImport
+.import_error`, a column `ExternalTrainingImportResponse` serializes back to
+the client on every later GET of `/providers/{id}/imports` or
+`/imports/{id}`. This pass's fresh AST walk of all 768 broad-except handlers
+found a **third** writer of the same column with the same bug, in the
+service layer rather than the endpoint layer:
+`import_pending_for_matched_members` (the "repair" pass that credits a
+member's already-staged completions once they are mapped — called both from
+the user-mapping endpoint, `external_training.py:1377`, and from its own
+"Import matched" button endpoint, `external_training.py:1609`) catches its
+own call to `self.import_single_record(...)` and ran
+`import_record.import_error = str(exc)`. A duplicate-key `IntegrityError`, a
+transient driver error, or any other exception from that call persisted its
+full driver/SQL text (table/index names, the `INSERT` statement, a file
+path) onto the row, exactly `safe_error_detail()` exists to prevent and
+exactly the pattern SEC13-1 already fixed two call-sites away.
+
+**Why this wasn't caught by SEC13-1 (pass 13):** this line pre-dates pass
+13's own baseline (`git log -S` traces it to `cf07b12bf`, 2026-10-21, four
+days before pass 13's `e007f1f5` baseline on 2026-10-25, and a week before
+pass 13's own 2026-10-28 review) — pass 13's "fresh AST walk ... all but
+SEC13-1 compose their own message or are already safe" claim was a miss, not
+a regression introduced by this delta. Recorded here as a re-sweep catch
+rather than attributed to any commit in this pass's own review window.
+
+**Fix:** imported `safe_error_detail` from `app.core.utils` (already used
+for exactly this column two call-sites away, in the endpoint file) and
+changed the one site to `import_record.import_error = safe_error_detail(exc)`.
+Same semantics as SEC13-1's fix: `ValueError`/`PermissionError` messages pass
+through unless they match an unsafe pattern, everything else gets a generic
+fallback, and the real exception is still logged server-side at ERROR level
+via the existing `logger.exception(...)` call immediately above.
+
+**Guard test:**
+`tests/test_external_training_course_mapping.py::TestImportButtonsShareTheImport::test_matched_member_import_failure_does_not_persist_the_raw_exception_text`
+patches `ExternalTrainingSyncService.import_single_record` to raise a
+`RuntimeError` carrying SQL/path text, stages an import already assigned to
+a member (the precondition `import_pending_for_matched_members` selects on),
+drives the repair pass, and asserts the persisted `import_error` contains
+neither the driver text, the `INSERT` statement, nor a path. Seen to fail
+first against the unfixed code (`AssertionError` on
+`"sqlalchemy" not in failed.import_error.lower()`, with the raw driver text
+asserted against — confirmed by reverting the one-line fix, running the new
+test, observing the red failure, then reapplying the fix), per Pitfall #37,
+then re-run green after the fix (`75 passed` across this file plus its two
+sibling external-training test files).
+
+**Severity:** LOW — identical reasoning to SEC13-1: an internal-schema
+information disclosure (index/table names, not PII/PHI or credentials) to an
+already-authenticated, already-permitted (`training.manage`) user, not a
+tenant-isolation or auth-bypass issue.
+
+**Disposition:** FIXED.
+
+**0 other application-security findings this pass.** All 13 classes
+re-verified clean against head and diffed against the pass-13 baseline tree.
+
+### Re-verified open items from prior passes
+
+- **SEC12-1 (LOW/MED, S3/MinIO DNS-rebinding TOCTOU) — still OPEN/FLAGGED,
+  unchanged.** `backend/app/services/s3_storage.py` did not change in this
+  delta (confirmed: `git diff 579501ee..baf80bf7 -- backend/app/services/s3_storage.py`
+  is empty), so the gap described in pass 12 — `boto3`'s own HTTP stack
+  resolves the endpoint independently on every call, outside
+  `SSRFSafeAsyncTransport`'s pinning — is unchanged. No new information to
+  add; `docs/KNOWN_LIMITATIONS.md`'s corrected entry from pass 12 still
+  describes it accurately.
+- **The standing egress-proxy TOCTOU item** (`docs/KNOWN_LIMITATIONS.md`,
+  "Outbound Integration Requests") — remains open, unchanged. Not
+  re-investigated this pass: `create_integration_client()` and
+  `SSRFSafeAsyncTransport` (`app/services/integration_services/base.py`,
+  `app/utils/ssrf_transport.py`) did not change in this delta.
+- **The MFA-recovery-codes and `REGISTRATION_REQUIRES_APPROVAL` stale
+  carry-forwards** that pass 12 already corrected (removed from this file's
+  active tracking) — nothing in this delta reopens either; not re-litigated.
+
+**0 security-tooling findings this pass.**
+
+## Guard tests added
+
+`test_matched_member_import_failure_does_not_persist_the_raw_exception_text`
+(above).
+
+## Completion gate
+
+| Check                                                                                                                                                                 | Result                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                       | ✅ 0 violations                     |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                              | ✅ clean, 2744 files unchanged      |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                           | ✅ clean                            |
+| `validate_migrations.py --strict`                                                                                                                                     | ✅ 678 revisions, single head       |
+| `check_route_permissions.py --strict`                                                                                                                                 | ✅ 280 routes, 0 errors, 0 warnings |
+| Cross-cutting guard suite (10 files: json/like/org-scoping/capacity/auth-coverage/csv/schema/api-cache/baseline-grants/create-all)                                    | ✅ 215 passed                       |
+| `pytest tests/test_external_training_course_mapping.py tests/test_external_training_credit_hours.py tests/test_external_training_report_upload.py`                    | ✅ 75 passed                        |
+| `cd frontend && npm run typecheck`                                                                                                                                    | ✅ 0 errors                         |
+| `cd frontend && npm run lint`                                                                                                                                         | ✅ 0 errors (`--max-warnings 10`)   |
+| Frontend structural guards (6 files: dialogScrollIntegrity, dialogDismissIntegrity, testingRegistry, primaryFillContrast, touchTargetIntegrity, hoverRevealIntegrity) | ✅ 32 passed                        |
 
 ---
 
