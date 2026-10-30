@@ -2064,8 +2064,9 @@ percentage.
 
 **The member's window** runs from the later of:
 
-- the start of the look-back period (the membership type's attendance period,
-  in calendar months), and
+- the start of the look-back period, in calendar months — the **Period** you
+  chose here, or, for the voting check, **Over the last (months)** on the
+  member's membership tier _(2026-10-29)_ — and
 - the start of the member's current service — their latest service period,
   otherwise their hire date —
 
