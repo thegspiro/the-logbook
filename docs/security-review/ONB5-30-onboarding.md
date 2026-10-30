@@ -1,15 +1,16 @@
-# Security Review — Feature 30: Onboarding (passes 7–10)
+# Security Review — Feature 30: Onboarding (passes 7–11)
 
-**Prefix:** `ONB5` · **Rotation pass:** 10 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 11 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
 #2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996,
 pass 7 — PR #3381, pass 8 — PR #3517 (both `docs/security-review/ONB4-30-onboarding.md`
 and this file), pass 9 — PR #3658 + recovery PR #3686 (ONB6-30-1/2/3, both this
-file)) · **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8),
+file), pass 10 — PR #3785) · **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8),
 2026-10-24 (pass 9, watchdog pickup), 2026-10-25 (pass 9 recovery),
-2026-10-27 (pass 10, watchdog pickup, this PR)
+2026-10-27 (pass 10, watchdog pickup), 2026-10-30 (pass 11, watchdog pickup,
+this PR)
 
 **Backend:** `backend/app/api/v1/onboarding.py` (now 3,200 L, 26
 unauthenticated bootstrap routes — unchanged count from pass 7/8, re-enumerated
@@ -42,6 +43,161 @@ diffs in `pages/ApparatusSetup.tsx`, `pages/OnboardingCheck.tsx`,
 `pages/RoleSetup.tsx`, `pages/SetupComplete.tsx`.
 **Migrations:** none in this pass's window (last onboarding-owned migration
 remains `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7).
+
+---
+
+## Pass 11 (2026-10-30) — watchdog pickup, 0 fixed, 0 new findings
+
+**Step 0.** The dedicated loop session for this rotation
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). `search_pull_requests` for
+`head:claude/security-review-` returned zero open results, both before
+starting and again right before this push. PR #3855 (Feature 29, Reports &
+analytics, pass 13) had already merged (`37270a94`). Row 30 (Onboarding) was
+the first `⬜` in the rotation table on a freshly-pulled `main`.
+
+**Scope check.** Pass 10's own review landed as PR #3785, merged `eb3e1a50`.
+`git log eb3e1a50..HEAD`, restricted to this feature's full declared file
+list (backend + frontend, as pass 7–10 defined it), found exactly two
+commits with any touch on an in-scope file:
+
+- **`4bff9d6d`** ("a position is an office, a committee or the platform's
+  own") — a different rotation feature's (Permissions & roles) change, whose
+  diff passes through two of this feature's own files because the onboarding
+  wizard mints positions through the same code the authenticated app does.
+  `onboarding.py:save_session_roles` now tags each newly-created role with
+  `kind=position_kind_for(role_data.id)`; `services/onboarding.py`'s seed
+  path mirrors it with `role_data.get("kind", "office")`. Read
+  `position_kind_for` (`core/permissions.py:2859-2868`) in full: it is a pure
+  lookup against the fixed `DEFAULT_POSITIONS` dict and the fixed
+  `SYSTEM_POSITION_SLUGS` set, gated by `definition.get("kind") in
+POSITION_KINDS`, and falls back to the literal `"office"` for any slug it
+  doesn't recognize — so a client-supplied `role_data.id` from the onboarding
+  wizard's unauthenticated payload cannot make this function return anything
+  outside the fixed three-value enum, whatever string is submitted. No
+  injection, escalation, or new by-id query. The matching frontend file
+  (`modules/onboarding/pages/positionTemplates.ts`) only adds the four new
+  committee template entries' own `kind: 'committee'` literal — no new logic.
+  **Verified good, no finding.**
+- **`b4d9388a`** ("Cap the refusals that join a list from data") — the same
+  repo-wide error-message-length sweep already reviewed as "already
+  correct" by three other features this rotation (Meetings & minutes,
+  Messaging & notifications, Forms). This feature's slice is
+  `configure_modules`'s `invalid_modules` `ValueError` in
+  `services/onboarding.py:1510-1514`, now built with
+  `list_within_detail_limit` instead of a bare `', '.join(...)`. The message
+  still passes through `safe_error_detail()` unchanged on its way to the
+  client; no new user-controlled input reaches it (`invalid_modules` is
+  computed from the client's own submitted `enabled_modules` list against a
+  fixed `available_modules` set, same as before). **Verified good, no
+  finding.**
+
+A third commit (`90925caa`) touches only
+`modules/onboarding/config/seededPositionGrants.ts`, a generated
+test-fixture-adjacent config file regenerated to include the four new
+committee slugs — no runtime code, confirmed by reading the diff (60 lines,
+all data entries matching the shape of the existing ones).
+
+**Everything else in the window** (`61576727`, the bundle-splitting/
+lazy-loading sweep) touches `frontend/src/modules/onboarding/routes.tsx`
+only to convert eager page imports to `lazyWithRetry(() => import(...))` —
+read the diff in full: the same eighteen pages, the same `gated()` wrapper
+applied below (unchanged by this diff), no route added, removed, or
+re-ordered, and no auth/guard logic touched. Purely a performance change
+(first-load bundle size), consistent with the identical pattern CLAUDE.md
+documents for every other module's `routes.tsx`.
+
+**Onboarding's own three files most central to the bootstrap-security
+model — `onboarding.py`, `services/onboarding.py`'s `validate_session`/
+`_require_owner_authority`/session-minting code, and the frontend
+`OnboardingGate` — carry no diff beyond the two lines above**, so this
+pass's independent re-verification (rather than re-citing pass 10) focused
+on re-reading those mechanisms directly against current code:
+
+- **Session tokens are cryptographically random and not vulnerable to
+  replay forgery — verified good.** `secrets.token_urlsafe(32)` (256 bits)
+  mints both the session id (`onboarding.py:881`) and the CSRF token
+  (`onboarding.py:984`); CSRF comparison uses `secrets.compare_digest`
+  (`onboarding.py:967`), not `==`. `validate_session` (`onboarding.py:897`)
+  looks the session up by exact `session_id` equality, checks a 30-minute
+  sliding expiry and a 24-hour hard expiry, and 401s on missing/invalid/
+  expired — unchanged from pass 2's original review.
+- **A half-provisioned or completed install cannot be hijacked or replayed
+  into by an unauthenticated caller — verified good, re-read in full.**
+  `_require_owner_authority` (`onboarding.py:784-817`) is called from both
+  `/start` (the resume path) and `/reset` (the destructive path): once a
+  System Owner exists (identified by the wildcard-grant position, not
+  creation-timestamp ordering), any caller who is not authenticated _as that
+  exact user_ is refused with 403 — mere possession of a still-valid
+  onboarding session cookie/id is not enough. `/start` additionally refuses
+  outright with 400 if `needs_onboarding()` is already false (fully
+  completed), before `_require_owner_authority` is even reached. Fails
+  closed if users exist but none carries the owner grant (a damaged-row
+  case), rather than promoting an arbitrary first user. This directly
+  answers this pass's own "can `/complete` or `/start` be replayed to
+  re-claim an already-provisioned org" question: no — re-running `/start`
+  past completion is refused by the first check, and re-running it on a
+  half-finished install requires the real owner's authenticated session,
+  not the onboarding session alone.
+- **`/reset` remains bounded correctly — verified good, re-read in full.**
+  Refuses if `onboarding_status.is_completed`; requires a valid
+  `validate_session`; requires owner authority per above; writes a durable
+  audit record in its own committed transaction _before_ any row is
+  deleted (and refuses the reset outright if that audit write fails) —
+  unchanged from pass 4/5's fix, still rate-limited via
+  `_rate_limit_onboarding_reset`.
+- **The `/session/*` data-entry routes' lack of a per-route rate limiter is
+  a long-settled, documented design, not an oversight — re-confirmed, not a
+  new finding.** Every `/session/*` route requires `validate_session`,
+  which requires a session id that can only be minted by the heavily
+  rate-limited `/start`; within a session, per-field caps bound payload size
+  (`it-team` 50, `stations` 50, `apparatus` 100, `roles` outer 200/
+  per-role-permissions 50) rather than request _rate_. This shape has stood
+  unchanged and been independently re-reviewed at passes 2–10; re-verified
+  here against current code rather than re-deriving from scratch. The one
+  still-open item in this family, **ONB-7** (no documented numeric rate cap
+  specifically on `/session/roles` beyond the count cap), remains OPEN,
+  unchanged.
+
+**Route inventory re-enumerated by AST from source** (not carried forward
+from pass 10's count): walked every `@router.{get,post,put,patch,delete}`
+decorator in `onboarding.py` directly — **26 routes**, identical method/
+path/function set to passes 7–10. No route gained, lost, or changed its auth
+posture. `check_route_permissions.py --strict`: 280 routes, 0 errors/
+warnings (repo-wide, unchanged).
+
+**Still OPEN (by design), unchanged:** `ITTeamMemberRequest.email`
+(`onboarding.py:509`) is still `str`, not `EmailStr` (ONB-7's sibling note,
+intentionally loose to match `create_it_team_users`'s skip-if-invalid
+behavior). **ONB-7** (above) also unchanged.
+
+**Schema & migration:** no onboarding-owned migration in this pass's
+window. `validate_migrations.py --strict`: 678 revisions, single head
+`f90b1124e6f4`, clean.
+
+**Guard tests:** none added — nothing here is a new defect to close.
+`tests/test_agency_position_seeding.py` (the other feature's own guard for
+the `kind` column, run directly: 37 passed) exercised as part of this pass's
+verification that `position_kind_for`'s fixed-enum behavior holds.
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                                                                                 | Result                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (7.4.1, CI-pinned)                                                                                                                                        | ✅ 0 violations                                |
+| `python3.13 -m black --check app/ tests/ alembic/` (26.10.1, CI-pinned)                                                                                                                               | ✅ clean, 2,743 files unchanged                |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.2, CI-pinned)                                                                                                                            | ✅ clean                                       |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                  | ✅ 678 revisions, single head `f90b1124e6f4`   |
+| `python3.13 scripts/check_route_permissions.py --strict`                                                                                                                                              | ✅ 280 routes, 0 errors/warnings               |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices or gmail_service_account or email_provider or encrypt_email or position_kind or position_seeding"` | ✅ 695 passed, 1 skipped (pywebpush, env-only) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                    | ✅ 0 errors                                    |
+| `cd frontend && npm run lint` (`--max-warnings 10`)                                                                                                                                                   | ✅ 0 errors/warnings                           |
+| `npx vitest run src/modules/onboarding`                                                                                                                                                               | ✅ 457 passed (34 files)                       |
+
+Rotation row 30 → ✅ (pending this PR's merge). Next: Feature 31 (Scheduled
+tasks) — unless a later watchdog pass already advanced further; check
+`search_pull_requests`/`list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 
