@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD** (branch `claude/security-review-admin-hours-p12`) — Feature 21
+(Admin hours), pass 12, a watchdog pickup (a second watchdog, since the
+dedicated `/loop 30m /security-review` session remained unreachable). See
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 12** section for the
+full review: a true zero-delta pass on the backend (byte-identical to pass
+11's merge) — the only real movement is a cosmetic frontend layout-shift
+hold (`AdminHoursPage.tsx`) and a new, out-of-scope public-stats reader of
+`AdminHoursEntry` (`public_stats_service.py`, Feature 03's file, reviewed
+and found correctly org-scoped). 0 fixes needed in this feature's own code,
+0 new findings. One documentation finding while reading prior art (Step 2):
+`docs/app-review/admin-hours.md`'s pass-2 LOW item (a malformed
+`start_date`/`end_date` reaching the client as a `500` instead of a `400`)
+was marked "unchanged" through pass 5 even though the fix had already landed
+three days before pass 5 ran; corrected the doc and added the regression
+test (`TestParseOptionalDate`) the original fix shipped without. Route
+surface 30/30, unchanged since pass 9; `check_route_permissions.py` 280
+routes / 0 errors (unchanged).
+
+Rotation row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests`/`search_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 12, PR #3845, merged), preserved for history</summary>
+
 **PR [#3845](https://github.com/thegspiro/the-logbook/pull/3845)** (branch
 `claude/security-review-compliance-p12`) — Feature 20
 (Compliance), pass 12, a watchdog pickup. See
@@ -36,6 +61,8 @@ top-level page).
 Rotation row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin
 hours) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
 than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 12, PR #3844, merged), preserved for history</summary>
@@ -23426,7 +23453,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
@@ -23447,6 +23474,78 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 21 (Admin hours, pass 12) — watchdog pickup, zero-delta backend, 0 fixed in scope, 1 doc-staleness item fixed, 0 new findings
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`).
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results; PR #3845 (Feature 20, Compliance, pass 12) had just
+merged (`c9d8be24`). Row 21 (Admin hours) confirmed the next pending feature
+on a freshly fetched `main`. Applied the Step 0 ride-along for PR #3845's
+merge (clear the Open PR row, confirm row 20 ✅ — already set by that PR's
+own commit) uncommitted, then continued straight to this feature's review
+per the skill.
+
+**Baseline `03729af8`** (pass 11's merge, PR #3764). Per-file `git log
+03729af8..HEAD` across every declared scope file (`endpoints/admin_hours.py`,
+`admin_hours_service.py`, `models/admin_hours.py`, `schemas/admin_hours.py`,
+`utils/admin_hours_settings.py`, `core/seed_admin_hours.py`, the
+`admin-hours` frontend module) found exactly one commit, touching two
+frontend files only — `git diff --stat` confirmed all six backend files
+byte-identical to pass 11's merge.
+
+The one real frontend change (`f2ea7ba5`, a repo-wide layout-shift sweep)
+adds a `useFirstLoadHold` hold on `AdminHoursPage.tsx`'s clocked-in card so
+the rest of the page doesn't jump once the active-session check answers —
+cosmetic, no new request, no handler change. A new out-of-scope file,
+`backend/app/services/public_stats_service.py` (Feature 03's own surface),
+started reading `AdminHoursEntry` to compute a public portal's
+`total_volunteer_hours`; reviewed because it touches this feature's model
+and found correctly org-scoped on the authenticated API key's own
+organization, publishing only a rounded aggregate behind the portal's
+existing whitelist gate — not a finding, not this feature's fix to make.
+
+Route inventory re-enumerated by AST: **30 routes**, byte-identical to pass
+11 (17 `require_permission("admin_hours.manage")`, 13 self-scoped on
+`get_current_user` alone — every one re-confirmed to filter the caller's own
+id or org-wide reference data). `check_route_permissions.py --strict`: 280
+routes, 0 errors/warnings, unchanged.
+
+**One documentation finding, found reading prior art (Step 2), not this
+feature's own diff:** `docs/app-review/admin-hours.md`'s pass 2
+(2026-08-08) flagged LOW that `start_date`/`end_date` query params on four
+endpoints were parsed with a bare `datetime.fromisoformat` outside any
+`try`/`except`, so a malformed value reached the client as an unhandled 500.
+That doc's pass 5 (2026-10-20) re-listed the item as "unchanged," but the
+fix (`admin_hours.py`'s `_parse_optional_date` helper) had already landed
+three days earlier (2026-10-17) with no guard test of its own. Corrected
+the doc and added `TestParseOptionalDate` (3 cases) to
+`tests/test_admin_hours_endpoint_permission_scope.py`, confirming first that
+an unwrapped `datetime.fromisoformat("not-a-date")` does raise `ValueError`
+(so the regression the test guards against is real, not vacuous). This is a
+doc correction with test backfill — no endpoint, schema, or permission
+changed.
+
+No open or flagged finding carries forward: everything in passes 1–11 was
+already closed, by fix or owner decision, and nothing in this pass's delta
+touches any of it. `KNOWN_LIMITATIONS.md`'s two admin-hours rows re-read and
+still match the code; no edit needed.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` against
+`app/ tests/ alembic/` (flake8 7.4.1, black 26.10.1, isort 9.0.2 — CI's
+pins) — clean after formatting the one new test file with `black`;
+`validate_migrations.py --strict` — 678 revisions, single head; `pytest -k
+admin_hours` — 174 passed (171 pre-existing + 3 new), 1 pre-existing skip
+(`py_vapid`); `check_route_permissions.py --strict` — 280/0/0; frontend
+`typecheck`/`lint` — clean; `vitest run src/modules/admin-hours` — 122/122.
+
+See `docs/security-review/AH-21-admin-hours.md`'s **Pass 12** section for
+the full review.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ### 2026-10-30 — Feature 20 (Compliance, pass 12) — watchdog pickup, real delta, 0 fixed (none needed), 0 new findings, 1 doc correction
 
