@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this iteration's own, number assigned at push time)** (branch
+**PR [#3850](https://github.com/thegspiro/the-logbook/pull/3850)** (branch
 `claude/security-review-messaging-notifications-p11`) — Feature 25
 (Messaging & notifications), pass 11, a watchdog pickup. See
 `docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 11**
