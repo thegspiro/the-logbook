@@ -1827,8 +1827,8 @@ const Dashboard: React.FC = () => {
             figure with no way to see what it was made of. */}
         <div className="mb-5 sm:mb-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{greeting}</h1>
+            <div className="page-header-title">
+              <h1 className="text-theme-text-primary text-2xl font-bold break-words sm:text-3xl">{greeting}</h1>
               <p className="text-theme-text-muted mt-0.5 text-sm sm:text-base">
                 {formatDateCustom(new Date(), { weekday: 'long', month: 'long', day: 'numeric' }, tz)}
                 <span className="hidden sm:inline">{' · ' + departmentName}</span>
@@ -1937,62 +1937,62 @@ const Dashboard: React.FC = () => {
                   shift and clocking in are as common as logging training.
                   On a phone they sit *below* the week: at 2am the thumb
                   reaches the bottom third, and the week is what you read. */}
-              <div
-                className={`order-3 grid grid-cols-2 gap-3 sm:order-1 ${showTakeShift ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
-              >
-                <button
-                  onClick={() => void navigate('/training/submit')}
-                  className={`focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:col-span-1 sm:min-h-[88px] ${showTakeShift ? 'col-span-2' : 'col-span-1'}`}
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
-                    <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-base font-bold">Log Training</span>
-                    <span className="mt-0.5 block truncate text-[13px] text-red-100">Record a course or hours</span>
-                  </span>
-                </button>
-
-                {showTakeShift && (
+              <div className="@container order-3 sm:order-1">
+                <div className={`grid grid-cols-2 gap-3 ${showTakeShift ? '@[32rem]:grid-cols-3' : ''}`}>
                   <button
-                    onClick={() => void navigate('/scheduling')}
-                    className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                    onClick={() => void navigate('/training/submit')}
+                    className={`focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:min-h-[88px] @[32rem]:col-span-1 ${showTakeShift ? 'col-span-2' : 'col-span-1'}`}
                   >
-                    <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
-                      <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
+                      <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />
                     </span>
                     <span className="min-w-0">
-                      <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">
-                        Take a Shift
+                      <span className="block text-base font-bold">Log Training</span>
+                      <span className="mt-0.5 block truncate text-[13px] text-red-100">Record a course or hours</span>
+                    </span>
+                  </button>
+
+                  {showTakeShift && (
+                    <button
+                      onClick={() => void navigate('/scheduling')}
+                      className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                    >
+                      <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
+                        <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
                       </span>
+                      <span className="min-w-0">
+                        <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">
+                          Take a Shift
+                        </span>
+                        <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
+                          {openShiftsError ? (
+                            'Open shifts unavailable'
+                          ) : (
+                            <>
+                              <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
+                              {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
+                            </>
+                          )}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => void navigate('/admin-hours')}
+                    className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  >
+                    <span className="bg-theme-accent-purple-muted text-theme-accent-purple flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
+                      <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">Clock In</span>
                       <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                        {openShiftsError ? (
-                          'Open shifts unavailable'
-                        ) : (
-                          <>
-                            <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
-                            {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
-                          </>
-                        )}
+                        Administrative hours
                       </span>
                     </span>
                   </button>
-                )}
-
-                <button
-                  onClick={() => void navigate('/admin-hours')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
-                >
-                  <span className="bg-theme-accent-purple-muted text-theme-accent-purple flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
-                    <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">Clock In</span>
-                    <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      Administrative hours
-                    </span>
-                  </span>
-                </button>
+                </div>
               </div>
 
               {/* One time list: my shifts, open slots and events, merged */}

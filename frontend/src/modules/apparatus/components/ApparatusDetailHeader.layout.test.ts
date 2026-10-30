@@ -13,6 +13,7 @@ import { join } from 'node:path';
 
 const source = readFileSync(join(__dirname, 'ApparatusDetailHeader.tsx'), 'utf8');
 const sharedHeader = readFileSync(join(__dirname, '../../../components/layout/SectionPageHeader.tsx'), 'utf8');
+const stylesheet = readFileSync(join(__dirname, '../../../styles/index.css'), 'utf8');
 
 describe('ApparatusDetailHeader layout', () => {
   // The title row and the action row now belong to the shared Operations
@@ -21,10 +22,12 @@ describe('ApparatusDetailHeader layout', () => {
   // badges beside the unit number wrap inside the title.
   it('draws through the shared header, whose title and action rows wrap', () => {
     expect(source).toContain('<OperationsPageHeader');
-    expect(sharedHeader).toContain('flex flex-col gap-4 sm:flex-row');
-    expect(sharedHeader).toContain(
-      'className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-[0_1_auto] sm:justify-end"'
-    );
+    // The row is the shared `page-header` utility: a column on a phone, a
+    // wrapping row from sm. The actions group wraps its own buttons.
+    expect(sharedHeader).toContain('className="page-header mb-8 gap-4 sm:items-center"');
+    expect(sharedHeader).toContain('className="page-header-title"');
+    expect(sharedHeader).toContain('className="page-header-actions flex flex-wrap items-center gap-2 sm:justify-end"');
+    expect(stylesheet).toMatch(/@utility page-header \{\s*display: flex;\s*flex-direction: column;/);
   });
 
   it('lets the unit number and its badges wrap', () => {

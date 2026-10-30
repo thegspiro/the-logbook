@@ -250,8 +250,8 @@ const CheckRequestDetailPage: React.FC = () => {
       )}
 
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="page-header mb-4 gap-3 sm:items-center">
+          <div className="page-header-title">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-theme-text-primary text-xl font-bold">{cr.payeeName}</h1>
               <span
@@ -267,7 +267,7 @@ const CheckRequestDetailPage: React.FC = () => {
             </div>
             <p className="text-theme-text-secondary mt-1 text-sm">{cr.requestNumber}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             {canSubmit && (
               <button
                 type="button"

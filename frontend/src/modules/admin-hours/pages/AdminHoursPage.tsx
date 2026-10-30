@@ -447,8 +447,8 @@ const AdminHoursPage: React.FC = () => {
       data-testid="admin-hours-page"
       className={`mx-auto max-w-4xl p-6 ${held ? '[&>*:not(:first-child)]:invisible' : ''}`}
     >
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="page-header mb-6 gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
           <p className="text-theme-text-secondary mt-1">Log your administrative hours and see what has been approved</p>
         </div>

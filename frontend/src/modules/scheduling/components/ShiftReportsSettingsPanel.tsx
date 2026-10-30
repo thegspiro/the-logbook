@@ -960,7 +960,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     'Failed to update'
                   );
                 }}
-                className="form-input-sm w-64 rounded-lg"
+                className="form-input-sm w-full max-w-64 rounded-lg"
               />
             </div>
 
@@ -1064,7 +1064,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6 md:flex-row">
+    <div className="flex flex-col gap-6 lg:flex-row">
       {/* Mobile: horizontal scrollable tabs.
           Eight sections do not fit 375px and are not meant to — the strip
           scrolls. `data-mobile-scroll-region` declares that intent to the mobile
@@ -1079,7 +1079,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
           would only add a stop that lands on nothing. The container takes
           `tabIndex={0}` in the other case — a wide table or a chart, where there
           is nothing inside to tab to at all. */}
-      <nav className="border-theme-surface-border -mx-4 border-b px-4 md:hidden">
+      <nav className="border-theme-surface-border -mx-4 border-b px-4 lg:hidden">
         <div
           className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2"
           aria-label="Shift report settings sections"
@@ -1106,9 +1106,11 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         </div>
       </nav>
 
-      {/* Desktop: sidebar */}
-      <nav className="hidden shrink-0 md:block md:w-52" aria-label="Shift report settings sections">
-        <div className="space-y-1 md:sticky md:top-24">
+      {/* Desktop: sidebar. From lg, not md: the app's own navigation is open
+          from md, so at 768px this 13rem column left the section ~167px and
+          the rating-scale field ran off the screen. */}
+      <nav className="hidden shrink-0 lg:block lg:w-52" aria-label="Shift report settings sections">
+        <div className="space-y-1 lg:sticky lg:top-24">
           {SECTIONS.map(({ key, label, icon: Icon, description }) => {
             const isActive = activeSection === key;
             return (
@@ -1125,8 +1127,11 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{label}</p>
+                  {/* Full violet-400, not /70: the dimmed tint measured 3.89:1 on
+                      the high-contrast theme, under AA. Dark-mode hierarchy
+                      comes from size here, as it does elsewhere. */}
                   <p
-                    className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-400/70' : 'text-theme-text-muted'}`}
+                    className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-muted'}`}
                   >
                     {description}
                   </p>

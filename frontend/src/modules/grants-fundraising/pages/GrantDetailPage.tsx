@@ -525,8 +525,8 @@ export const GrantDetailPage: React.FC = () => {
             Back to Applications
           </button>
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+          <div className="page-header gap-4 sm:items-start">
+            <div className="page-header-title">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-theme-text-primary text-2xl font-bold">{application.grantProgramName}</h1>
                 <span

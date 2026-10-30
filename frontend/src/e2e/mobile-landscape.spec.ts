@@ -157,3 +157,43 @@ test.describe('Shift calendar day cells', () => {
     });
   }
 });
+
+// A phone whose width keeps the phone layout (under 768px) held sideways: an
+// iPhone SE is 568x320. The 64px top bar and 56px bottom bar left it 198px of
+// page. On a screen this short both bars drop to 48px, which keeps every label
+// and the 44px touch minimum; a portrait phone keeps its usual bars.
+test.describe('Bars on a small phone held sideways', () => {
+  const bars = async (page: Page) =>
+    page.evaluate(() => {
+      const header = document.querySelector('header[role="banner"]')?.getBoundingClientRect();
+      const bottom = document.querySelector('nav[aria-label="Primary"]')?.getBoundingClientRect();
+      const offset = document.querySelector('.mobile-header-offset');
+      return {
+        header: Math.round(header?.height ?? 0),
+        tabs: [...document.querySelectorAll('nav[aria-label="Primary"] li > :is(a, button)')].map((el) =>
+          Math.round(el.getBoundingClientRect().height)
+        ),
+        room: Math.round((bottom?.top ?? 0) - (header?.bottom ?? 0)),
+        offset: offset ? parseFloat(getComputedStyle(offset).paddingTop) : 0,
+      };
+    });
+
+  test('568x320 gets compact bars and the page offset follows them', async ({ page }) => {
+    await open(page, '/events', { width: 568, height: 320 });
+    const m = await bars(page);
+    // The header box includes its 1px bottom border.
+    expect(m.header, 'top bar height').toBe(49);
+    expect(m.offset, 'content offset below the top bar').toBe(48);
+    expect(m.tabs.length, 'bottom bar tabs').toBeGreaterThan(0);
+    for (const height of m.tabs) expect(height, 'bottom bar tab height').toBe(48);
+    expect(m.room, 'page between the bars').toBeGreaterThanOrEqual(220);
+  });
+
+  test('390x844 keeps the full-size bars', async ({ page }) => {
+    await open(page, '/events', PORTRAIT);
+    const m = await bars(page);
+    expect(m.header).toBe(65);
+    expect(m.offset).toBe(64);
+    for (const height of m.tabs) expect(height).toBe(56);
+  });
+});
