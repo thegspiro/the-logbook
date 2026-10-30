@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (to be recorded)** — Feature 28 (Security, audit & IP), pass 11, a
-watchdog pickup. See `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**PR [#3854](https://github.com/thegspiro/the-logbook/pull/3854)** (branch
+`claude/security-review-security-audit-ip-p11`) — Feature 28 (Security,
+audit & IP), pass 11, a watchdog pickup.
+See `docs/security-review/SEC2-28-security-audit-ip.md`'s
 **Pass 11** section for the full review: a small real delta since pass 10 —
 the three IP-exception state-transition methods
 (`approve_exception`/`reject_exception`/`revoke_exception`) now read the row
