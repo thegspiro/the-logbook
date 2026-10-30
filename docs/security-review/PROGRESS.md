@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 25 (Messaging & notifications), pass 11, a watchdog pickup — PR not
-yet opened; this section is updated with its number in a second commit on the
-same branch, per Step 8.** See
+**PR [#3851](https://github.com/thegspiro/the-logbook/pull/3851)** (branch
+`claude/security-review-messaging-notifications-p11`) — Feature 25
+(Messaging & notifications), pass 11, a watchdog pickup. See
 `docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 11** section
 for the full review: a real delta since pass 10's merge (`02bdfb59`, PR
 #3768) — four in-scope files changed (`message_history.py`'s recipient
