@@ -4,7 +4,7 @@
 #1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4, and a
 pass-4 addendum, PR #2515), 2026-10-04 (pass 5), 2026-10-07 (pass 6),
 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27
-(pass 10) · **PR:** #1911 (pass 1)
+(pass 10), 2026-10-30 (pass 11) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -1965,6 +1965,125 @@ changed this pass.
 | `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                 | PASSED — 663 revisions, single head `c616fa1bd492` |
 | `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                 | 279 routes, 0 errors/warnings                      |
 | backend tests, scope (`-k "audit or security_monitoring or security_middleware or ip_security or ip_allowlist or ip_exception or error_log or suspicious_ip or signing_key_cutover or security_alert or mfa_policy or geoip or health_detailed or w50_audit or w74 or separation_of_duties or weekly_report or weekly_security"`) | 841 passed, 1 pre-existing skip (`pywebpush`)      |
+| frontend `npm run typecheck`                                                                                                                                                                                                                                                                                                      | 0 errors                                           |
+| frontend `npm run lint`                                                                                                                                                                                                                                                                                                           | clean, exit 0                                      |
+| frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`)                                                                                                                                                                                                                                          | 63 passed (5 files)                                |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+---
+
+## Pass 11 (2026-10-30) — watchdog pickup, small real delta (IP-exception approval locking), 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`).
+PR #3853 (Feature 27, Integrations, pass 11) had already merged
+(`ddac7b66`); `search_pull_requests` for `head:claude/security-review-`
+returned zero open results both before starting and again right before this
+push. Row 28 was the next `⬜` row on a freshly fetched `main`.
+
+### Baseline and diff method
+
+Pass 10 merged as `115bd921` (PR #3783). Diffed each of this doc's nine
+backend files, plus the frontend surfaces (`modules/ip-security/`,
+`AuditLogPage.tsx`, `ErrorMonitoringPage.tsx`), directly against that commit
+by content (`git diff --stat 115bd921..HEAD -- <file>`), not by path-filtered
+`git log`, per the history-quirk workaround passes 7/9/10 already document.
+
+Eight of the nine backend files are byte-identical to pass 10
+(`security_monitoring.py` endpoint and service, `ip_security.py` endpoint,
+`audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/security_middleware.py`, `core/geoip.py` — every `git diff --stat`
+empty). `ErrorMonitoringPage.tsx` and the `ip-security` frontend module are
+also byte-identical. Two files carry a real diff:
+
+- **`app/services/ip_security_service.py`** — `approve_exception`,
+  `reject_exception` and `revoke_exception` now read the `IPException` row
+  with `.with_for_update()` instead of a plain `select()`, closing a
+  check-then-write race (CLAUDE.md Pitfall #27's shape, applied to an
+  approval decision rather than a capacity count): two administrators
+  acting on the same pending request at once previously could both pass the
+  "is this still pending" check, so an approval and a rejection could each
+  land, leaving the row `APPROVED` with a rejection's reason/actor attached.
+  Landed via `5101c124` (from the app-review track, not this rotation), with
+  its own guard test (`tests/test_ip_exception_state_locking.py`, 66 lines,
+  asserts the locking read and that the race fails for all three state
+  transitions with the fix stashed) and its own write-up in
+  `docs/app-review/security-audit-ip.md`. Read the full diff and the three
+  call sites directly: the lock is taken after the org-scoped lookup
+  (`IPException.id == exception_id, IPException.organization_id ==
+str(organization_id)` — tenant isolation unchanged) and before the
+  pending/approved-status check each method makes, matching the pattern the
+  alert acknowledge/resolve path already used. **Verified good, no new
+  finding** — already fixed and shipped by a different review track; this
+  pass independently re-verified rather than re-deriving.
+- **`frontend/src/pages/AuditLogPage.tsx`** — the repo-wide layout-shift
+  (CLS) sweep (`f2ea7ba5`) adds a loading-skeleton hold on the four stats
+  tiles so they don't jump in once `stats` resolves. No data flow, auth, or
+  permission change — purely cosmetic, confirmed by reading the diff in
+  full (`SkeletonText` placeholders substituted for the four numeric
+  values, same conditional rendering shape).
+
+No other commit touches any of the nine backend files or the three frontend
+surfaces since pass 10 — confirmed by `git diff --stat 115bd921..HEAD --
+<each file>` individually, each empty except the two above.
+
+### Re-verified — every open finding re-checked against current code
+
+- **SEC2-28-6** (LOW, flagged — TOCTOU race in the IP-exception
+  duplicate-request check) — still open, unchanged. Re-read
+  `request_ip_exception` at `ip_security_service.py:102-118`: the
+  "does a pending/approved exception already exist for this user+IP" check
+  is still a plain `select()` with no `.with_for_update()` and no DB-level
+  unique constraint, immediately followed by an `INSERT`. This pass's fix
+  (above) locks the three state-_transition_ methods, not the initial
+  _creation_ check — a different code path, so it does not narrow this
+  finding. Still not a security bypass (approval is still required), still
+  proportionate to leave as an admin-UX nicety rather than fix.
+- **Dead detector code** (pass 3, flagged) — re-grepped `analyze_request`,
+  `_check_rate_limit`, `_check_injection_patterns` across all of
+  `backend/app` outside `services/security_monitoring.py`: still zero
+  production callers. `docs/module-audit/security-audit-ip.md`'s own
+  write-up of this (IP #5, same section as the companion
+  `get_all_active_allowed_ips` dead-code note) already reflects this
+  correctly — no doc correction needed.
+- **All previously-FIXED/RESOLVED items** (SEC-1 through SEC-9, SEC2-28-1
+  through SEC2-28-11, pass 9's and pass 10's fixes): no commit since pass 10
+  touches their mechanisms beyond the one call reviewed above.
+
+### Route inventory — re-enumerated by AST, 37 routes, unchanged from pass 10
+
+Counted every `@router.<method>` decorator in the four endpoint files
+directly (not trusted from pass 10's count): 16 in `security_monitoring.py`,
+12 in `ip_security.py`, 3 in `audit_logs.py`, 6 in `error_logs.py` = **37**,
+identical to pass 10. No route added, removed, or re-gated — consistent with
+all four endpoint files being byte-identical to pass 10. Checked all 37 for
+a `Depends(...)`-bearing auth dependency by AST (not spot-checked): none
+bare.
+
+### No new findings this pass
+
+**0 fixes applied, 0 new findings.** The one real change in scope
+(IP-exception approval locking) was already fixed and shipped by the
+app-review track, with its own guard test; this pass's job was independent
+re-verification against current code, which is what the "Verified good"
+entry above records. SEC2-28-6 and the dead-detector-code note remain open,
+unchanged, still awaiting their respective owner/product decision rather
+than a drive-by fix. No `KNOWN_LIMITATIONS.md` change needed — neither open
+item's status changed this pass, and both module-audit/app-review docs
+already match current code.
+
+### Completion gate (Pass 11)
+
+| Check                                                                                                                                                                                                                                                                                                                             | Result                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                                                                                                                                                                                                                                                                   | clean                                              |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                                                                                                                                                                                                                                                                           | clean, 2743 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                                                                                                                                                                                                                                                                        | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                 | PASSED — 678 revisions, single head `f90b1124e6f4` |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                 | 280 routes, 0 errors/warnings                      |
+| backend tests, scope (`-k "audit or security_monitoring or security_middleware or ip_security or ip_allowlist or ip_exception or error_log or suspicious_ip or signing_key_cutover or security_alert or mfa_policy or geoip or health_detailed or w50_audit or w74 or separation_of_duties or weekly_report or weekly_security"`) | 849 passed, 1 pre-existing skip (`pywebpush`)      |
 | frontend `npm run typecheck`                                                                                                                                                                                                                                                                                                      | 0 errors                                           |
 | frontend `npm run lint`                                                                                                                                                                                                                                                                                                           | clean, exit 0                                      |
 | frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`)                                                                                                                                                                                                                                          | 63 passed (5 files)                                |

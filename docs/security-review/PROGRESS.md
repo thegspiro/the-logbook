@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (to be recorded)** — Feature 28 (Security, audit & IP), pass 11, a
+watchdog pickup. See `docs/security-review/SEC2-28-security-audit-ip.md`'s
+**Pass 11** section for the full review: a small real delta since pass 10 —
+the three IP-exception state-transition methods
+(`approve_exception`/`reject_exception`/`revoke_exception`) now read the row
+under `.with_for_update()`, closing a check-then-write race where two
+admins acting on the same request at once could both pass the pending-status
+check. Already fixed and shipped by the app-review track (`5101c124`), with
+its own guard test; this pass independently re-verified it rather than
+re-deriving. 0 fixes needed, 0 new findings. SEC2-28-6 (the unrelated
+duplicate-request TOCTOU) and the dead-detector-code note remain open,
+unchanged. Route surface re-enumerated by AST at 37, unchanged.
+
+Rotation row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports
+& analytics) — re-check `list_pull_requests`/`search_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 11, PR #3853, merged), preserved for history</summary>
+
 **PR [#3853](https://github.com/thegspiro/the-logbook/pull/3853)** (branch
 `claude/security-review-integrations-p11`) — Feature 27 (Integrations),
 pass 11, a watchdog pickup.
@@ -35,9 +55,9 @@ route (`GET /integrations/weather/active-alerts`) deliberately
 member-readable and recorded in the permissionless-route baseline. INT-5
 remains the only open item, unchanged by-design.
 
-Rotation row 27 → ✅ (pending this PR's merge); next is Feature 28
-(Security, audit & IP) — re-check `list_pull_requests`/`search_pull_requests`
-fresh rather than trusting this note.
+Rotation row 27 → ✅ (merged); next was Feature 28 (Security, audit & IP).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 11, PR #3852, merged), preserved for history</summary>
@@ -23630,7 +23650,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -23644,6 +23664,38 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 28 (Security, audit & IP, pass 11) — watchdog pickup, small real delta (IP-exception approval locking), 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3853 (Feature 27, Integrations,
+pass 11) had already merged (`ddac7b66`), and a fresh `search_pull_requests`
+for `head:claude/security-review-` returned zero open results both before
+starting and again right before this push, so Feature 28 (Security, audit &
+IP) was confirmed as the next `⬜` row read directly off a freshly fetched
+`main`.
+
+Diffing all nine of this feature's declared backend files plus its three
+frontend surfaces against pass 10's merge (`115bd921`, PR #3783) by content
+found only two real changes: `ip_security_service.py`'s
+`approve_exception`/`reject_exception`/`revoke_exception` now take
+`.with_for_update()` on the `IPException` row before checking its pending
+status, closing a check-then-write race where two admins acting on one
+request at once could both pass the check (already fixed and shipped by the
+app-review track, `5101c124`, with its own guard test — this pass
+independently re-verified it); and a cosmetic loading-skeleton fix in
+`AuditLogPage.tsx` from the repo-wide layout-shift sweep. Every other file —
+both `security_monitoring.py` files, `ip_security.py`'s endpoint,
+`audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/security_middleware.py`, `core/geoip.py`, and the rest of the frontend
+— confirmed byte-identical to pass 10. Routes re-enumerated by AST at 37,
+unchanged. SEC2-28-6 (LOW, flagged) and the dead-detector-code note remain
+open, unchanged, both re-verified against current code rather than
+re-cited. 0 fixes needed, 0 new findings. Full completion gate green: 849
+backend tests passed (scoped), frontend typecheck/lint clean, 63 frontend
+tests passed (5 files). See
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 11** section.
 
 ### 2026-10-30 — Feature 27 (Integrations, pass 11) — watchdog pickup, real delta (two sub-features built out), 0 fixed, 0 new findings
 
