@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** (branch `claude/security-review-locations-kiosk-p11`) —
+Feature 32 (Locations & kiosk), pass 11, a watchdog pickup. See
+`docs/security-review/LOC11-32-locations-kiosk.md` for the full review: a
+near-zero-delta pass — of six commits since pass 10, only one touched this
+feature's own files, and it belongs to Feature 16 (Events & requests)
+reaching into `display.py`/`guest_check_in_service.py` to consolidate two
+existing checks (`check_in_window_state` + `attendance_is_finalized`) into
+one shared classmethod, `guest_sign_in_state`, verified behavior-preserving;
+the other five are layout-only (`AdminHubFrame.tsx`'s load-flash fix, two
+page-header utility-class swaps). 0 fixes needed, 0 new findings. Route
+surface re-enumerated by AST at 17, unchanged since pass 10. LOC10-2, LOC8-2
+and LOC10-4 re-confirmed OPEN/FLAGGED, unchanged.
+
+**Ride-along:** this commit also carries the Step 0 record of PR #3857's
+merge (Feature 31, Scheduled tasks, pass 11), which merged before this
+iteration started.
+
+Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
+infrastructure) — re-check `list_pull_requests`/`search_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 11, PR #3857, merged), preserved for history</summary>
+
 **PR [#3857](https://github.com/thegspiro/the-logbook/pull/3857)** (branch
 `claude/security-review-scheduled-tasks-p11`) — Feature 31 (Scheduled
 tasks), pass 11, a watchdog pickup. See `docs/security-review/CRON11-31-scheduled-tasks.md`'s **Pass 11**
@@ -41,9 +65,10 @@ Redis-fails-open item re-confirmed OPEN, unchanged.
 merge (Feature 30, Onboarding, pass 11), which merged immediately before
 this iteration started.
 
-Rotation row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations
-& kiosk) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
-than trusting this note.
+Rotation row 31 → ✅ (pending this PR's merge); next was Feature 32 (Locations
+& kiosk).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 11, PR #3856, merged), preserved for history</summary>
@@ -23739,7 +23764,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -23749,6 +23774,53 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 32 (Locations & kiosk, pass 11) — watchdog pickup, near-zero delta, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3857 (Feature 31, Scheduled tasks,
+pass 11) had already merged into `main`, itself a prior watchdog pickup for
+the same reason; a fresh `search_pull_requests` for `is:pr is:open
+head:claude/security-review-` returned zero results, checked immediately
+before starting. Feature 32 (Locations & kiosk) was confirmed as the next
+`⬜` row read directly off a freshly fetched `main` (`8ecf004b`).
+
+A path-scoped `git log` since pass 10's merge (`6c27ea21`, PR #3787) found 6
+commits touching this feature's declared frontend/backend files or their
+shared dependencies — only one carried any logic change. `9458cb31` (Events
+& requests' own change, outside this feature) consolidated
+`_assert_guest_sign_in_open`'s two inline checks
+(`check_in_window_state`/`attendance_is_finalized`) into one new
+classmethod, `GuestCheckInService.guest_sign_in_state`, and repointed this
+feature's `display.py` at it; read in full and confirmed behavior-preserving
+— same two checks, same order, same short-circuit, same exceptions. The new
+`GuestCheckInLinkResponse` fields it adds are populated and consumed
+entirely inside Feature 16's own authenticated endpoint, never by this
+feature's public routes. The other five commits are layout-only
+(`AdminHubFrame.tsx`'s load-time-jump fix across three commits, two
+`page-header`/`whitespace-nowrap` utility-class swaps on `LocationsPage.tsx`
+and `RoomQRCodesPage.tsx`'s headers) — no data, auth or permission surface.
+
+No new migration touches `locations`, `admin_hub`, or any FK to
+`locations.id`: 12 new revisions since pass 10, checked by path grep, none
+altering a table this feature declares. Route surface re-enumerated by AST
+at 17, unchanged since pass 10, same auth dependencies and permission
+strings. FK `nullable=True` count on `SET NULL` columns re-derived from
+`Base.metadata` at 9, unchanged (model files didn't change in this window).
+
+0 fixes needed, 0 new findings. LOC10-2 (guest-confirm token comparison),
+LOC8-2 (hard-delete nulls 9 kinds of records, owner decision) and LOC10-4
+(cross-feature email-logging gap, flagged for Membership pipeline) all
+re-confirmed OPEN/FLAGGED, unchanged. Completion gate: flake8/black/isort
+clean; `validate_migrations.py --strict` passed (678 revisions, single head
+`f90b1124e6f4`); `check_route_permissions.py --strict` 280 routes, 0
+errors/warnings; scoped pytest 1020 passed, 1 skipped (optional
+`pywebpush`); `npm run typecheck` 0 errors; `npm run lint` 0
+errors/warnings.
+
+Rotation row 32 → ✅ (pending PR merge). Next: Feature 33 (Core
+infrastructure).
 
 ### 2026-10-30 — Feature 31 (Scheduled tasks, pass 11) — watchdog pickup, small real delta, 0 fixed, 0 new findings
 
