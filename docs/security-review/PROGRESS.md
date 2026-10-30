@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (to be recorded)** — Feature 27 (Integrations), pass 11, a watchdog
+pickup.
+See `docs/security-review/INT-27-integrations.md`'s **Pass 11** section for
+the full review: a real delta since pass 10 — two new sub-features the
+owner chose to build out on 2026-10-29 (NWS Weather Alerts, now polled every
+15 minutes with a dashboard banner/bell/email per department choice, and
+Generic Webhooks, now sent the same events chat integrations get), a
+credential-required-to-connect fix for PayPal/Documenso/Cal.com/Salesforce
+(INT2-3), plus the repo-wide email-fingerprint and CSS-class sweeps' narrow
+share of this feature. All four already fixed/correct by the commits that
+introduced them; this pass independently re-verified each one (org-scoping,
+the outbound-URL guard reused unweakened, Pitfall #36 at-most-once,
+HTML-escaping of NWS free text) rather than re-deriving. 0 fixes needed, 0
+new findings. Route surface re-enumerated by AST at 39 (was 38), the one new
+route (`GET /integrations/weather/active-alerts`) deliberately
+member-readable and recorded in the permissionless-route baseline. INT-5
+remains the only open item, unchanged by-design.
+
+Rotation row 27 → ✅ (pending this PR's merge); next is Feature 28
+(Security, audit & IP) — re-check `list_pull_requests`/`search_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 11, PR #3852, merged), preserved for history</summary>
+
 **PR [#3852](https://github.com/thegspiro/the-logbook/pull/3852)** (branch
 `claude/security-review-forms-p11`) — Feature 26 (Forms), pass 11, a
 watchdog pickup.
@@ -36,9 +61,10 @@ notifications, pass 11) — row 25 was already marked ✅ by that PR's own
 commit, so the only ride-along here is clearing this section to describe
 the current PR instead.
 
-Rotation row 26 → ✅ (pending this PR's merge); next is Feature 27
-(Integrations) — re-check `list_pull_requests`/`search_pull_requests`
-fresh rather than trusting this note.
+Rotation row 26 → ✅ (pending this PR's merge); next was Feature 27
+(Integrations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 11, PR #3850, merged), preserved for history</summary>
@@ -23602,7 +23628,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -23617,6 +23643,53 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 27 (Integrations, pass 11) — watchdog pickup, real delta (two sub-features built out), 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3852 (Feature 26, Forms, pass 11)
+had already merged (`a41ff44d`), and a fresh `search_pull_requests` for
+`head:claude/security-review-` returned zero open results both before
+starting and again right before this push, so Feature 27 (Integrations) was
+confirmed as the next `⬜` row read directly off a freshly fetched `main`.
+
+Diffing every file this feature has accumulated into scope across passes
+1-10 against pass 10's merge (`d9d9d59b`, PR #3782) found four in-scope
+commits out of 253 non-merge commits on `main` since that baseline, all
+already reviewed and fixed/correct, none requiring a fix this pass:
+**`86d80fe3`** (PayPal/Documenso/Cal.com/Salesforce now require their
+credentials to connect, INT2-3, owner decision 2026-10-27 — a blank-string
+default is treated as missing, a value already in the encrypted secret
+column satisfies a reconnect); **`de9aade2`** (NWS Weather Alerts polled
+every 15 minutes into a new `weather_alerts` table unique on
+`(organization_id, nws_id)`, with a dashboard banner/bell/email per
+department choice — committed before notifying, matching Pitfall #36's
+at-most-once, every query org-scoped, NWS free text HTML-escaped in the
+email, the new member-readable route registered before `/{integration_id}`
+so the literal path wins); its same-window follow-up **`0664a29e`** (renamed
+the migration's timestamp column to `created_at` after a schema-naming test
+caught it); and **`e392f355`** (Generic Webhooks now sent the same three
+events chat integrations get, gated by a validated `event_types` allowlist,
+delivered through the pre-existing `send_webhook` which still calls
+`assert_outbound_url_safe` unweakened). Three further commits touch this
+feature's files only as a repo-wide sweep's narrow share (the
+email-fingerprint sweep in `directory_account_service.py`/
+`salesforce_sync_service.py`, both keeping their pre-existing
+`organization_id` filter; a bell-notice addition to
+`google_workspace_attention_digest.py` reusing its existing org-scoped
+`_administrators` call; and a cosmetic Tailwind class fix), each confirmed
+unaffected. Route surface re-enumerated by AST at 39 (was 38 at pass 10),
+`check_route_permissions.py --strict` 280 routes/0 errors (up from 279 —
+the one net-new application route). INT-5 remains the only standing open
+item, confirmed unchanged (file byte-identical to pass 10). Full gate
+green: flake8/black/isort clean against CI's pinned versions;
+`validate_migrations.py --strict` 678 revisions/single head; scoped pytest
+8989 passed/22 skipped (environment-only)/0 failed, plus the two new
+feature test files (16 passed); frontend typecheck/lint clean; the three
+touched frontend test files (215 tests) passed. See
+`docs/security-review/INT-27-integrations.md`'s **Pass 11** section for the
+full review.
 
 ### 2026-10-30 — Feature 26 (Forms, pass 11) — watchdog pickup, small additive delta, 0 fixed, 0 new findings
 
