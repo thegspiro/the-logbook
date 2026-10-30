@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this iteration's own, number assigned at push time)** (branch
+`claude/security-review-medical-supplies-p18`) — Feature 23 (Medical
+supplies), pass 18, a watchdog pickup. See
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 18** section for
+the full review: a true zero-delta pass on the feature's own domain code —
+`git log` restricted to this feature's files found only two commits since
+pass 17, both in files shared with other features and neither touching
+medical-supplies-domain logic (`InventoryVendorContact.email` encrypted
+at rest as part of a repo-wide sweep; `equipment_check_service.py`'s
+submission-validation error messages capped via `list_within_detail_limit`,
+already applied by another pass). Route surface re-enumerated by AST at 29
+(unchanged); all 29 carry `require_permission`. 0 fixes needed, 0 new
+findings. MSUP-4 and MSUP-11 (no row cap on two list endpoints) remain the
+only open items, both owner-accepted in `docs/KNOWN_LIMITATIONS.md`,
+unchanged. This PR also carries the ride-along edits for PR #3847's merge
+(Feature 22, Grants & fundraising, pass 12) — row 22 was already marked ✅
+by that PR's own commit, so the only ride-along here is clearing this
+section to describe the current PR instead.
+
+Rotation row 23 → ✅ (pending this PR's merge); next is Feature 24
+(Meetings & minutes) — re-check `list_pull_requests`/`search_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 12, PR #3847, merged), preserved for history</summary>
+
 **PR [#3847](https://github.com/thegspiro/the-logbook/pull/3847)** (branch
 `claude/security-review-grants-fundraising-p12`) —
 Feature 22 (Grants & fundraising), pass 12, a watchdog pickup. See
@@ -40,9 +66,10 @@ stale docs were corrected to match it. Route surface 45/45, unchanged;
 `check_route_permissions.py` 280 routes / 0 errors (unchanged — neither
 `grants.py` nor its schemas appear in this window's diff).
 
-Rotation row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
-supplies) — re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 22 → ✅ (merged as `f16fd9cb`); next was Feature 23 (Medical
+supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 12, PR #3846, merged), preserved for history</summary>
@@ -23488,7 +23515,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -23507,6 +23534,49 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 23 (Medical supplies, pass 18) — watchdog pickup, zero-delta, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`). `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results, confirming no security-review PR was open after PR #3847
+(Feature 22, Grants & fundraising, pass 12) merged (`f16fd9cb`). That merge's
+own commit had already marked row 22 ✅ and recorded its Open PR note, so the
+only ride-along edit here is clearing that note to describe this iteration's
+own PR instead. Row 23 (Medical supplies) confirmed as the first ⬜ row on a
+freshly fetched `main`.
+
+**Baseline `69963418`** (pass 17's merge, PR #3766). `git log` restricted to
+this feature's declared scope (`medical_supplies.py`, `inventory_service.py`,
+`equipment_check_service.py`, `models/inventory.py`, `schemas/inventory.py`,
+`schemas/equipment_check.py`, `app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`, `scheduled_tasks.py`) found two
+non-merge commits, both outside the medical-supplies domain itself: an email
+column encrypted at rest on the shared `InventoryVendorContact` model (a
+repo-wide sweep), and an error-message length cap in
+`equipment_check_service.py`'s submission validation (a different pass's
+fix, in a method this feature does not call). Routes re-enumerated by AST at
+29 (unchanged from pass 17); all 29 carry `require_permission`, each checked
+individually against its handler's read/write sensitivity. Tenant isolation,
+LIKE escaping, `SafeCsvWriter` usage, the pass-17 recall routes'
+locking/migration shape, and the MCP tools' read-only org-scoping were all
+re-read directly from current code rather than cited from prior passes. 0
+fixes needed, 0 new findings. MSUP-4 and MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) remain the only open items, both
+owner-accepted and unchanged. Full writeup:
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 18** section.
+
+Completion gate: flake8/black/isort (all at CI's pinned versions, against
+`app/`, `tests/`, `alembic/`) clean; `validate_migrations.py --strict` — 678
+revisions, single head; scoped pytest (`-k "medical_supplies or
+medical_supply or lot_recall"`) — 216 passed, 1 pre-existing unrelated skip;
+`check_route_permissions.py --strict` — 280 routes, 0 errors; frontend
+`typecheck` and `lint` both clean; `vitest run src/modules/medical-supplies`
+— 190 passed.
+
+Rotation row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings
+& minutes).
 
 ### 2026-10-30 — Feature 22 (Grants & fundraising, pass 12) — watchdog pickup, real delta (email encryption), 0 fixed in scope, 3 stale-doc corrections, 0 new findings
 
