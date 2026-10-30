@@ -1690,8 +1690,10 @@ switch between them.
 - **Prospective Members** holds the emails applicants receive — **Application
   Step Completed**, **Application Status Link**, **Application Going
   Inactive**, **Application Withdrawn**, **Duplicate Application Notice**,
-  **Application Follow-up Form** and **Application Contact Details Changed**
-  _(2026-10-29)_ — and the coordinators' **Prospect Inactivity Warning**.
+  **Application Follow-up Form**, **Application Contact Details Changed** and
+  **Application Follow-up Form Reminder** _(2026-10-29)_ — and the
+  coordinators' **Prospect Inactivity Warning** and **Application Follow-up
+  Form Submitted** _(2026-10-29)_.
   _(2026-10-26)_ When
   each is sent, and its variables, is in
   [Prospective Members → Emails to Applicants](./15-prospective-members.md#emails-to-applicants).
