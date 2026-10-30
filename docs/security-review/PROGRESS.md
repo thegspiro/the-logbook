@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (to be recorded)** — Feature 31 (Scheduled tasks), pass 11, a watchdog
+pickup. See `docs/security-review/CRON11-31-scheduled-tasks.md`'s **Pass 11**
+section for the full review: a small, real delta since pass 10 — two new
+registered tasks (`weather_alert_poll`, `prospect_follow_up_reminders`), both
+delegating to other features' own already-reviewed code, reviewed here only
+for the scheduler-wiring angle (org-loop placement, interval registration,
+and whether each delegate's own idempotency/locking actually closes this
+layer's two failure modes — a crashed run, and a second worker racing the
+same run). Also a new shared helper, `officer_alert_copies.add_in_app_copies`,
+reaching four existing runners to add a bell-notice copy alongside their
+pre-existing email, verified org-scoped by construction and safe against
+double-runs (`replace_unread` + dedupe key against unread rows only), with no
+reintroduction of the `MissingGreenlet` class pass 2 fixed (CRON-31-2) since
+`expire_on_commit=False` means only a rollback — not the mid-function commits
+this diff adds — expires already-loaded rows. 0 fixes needed, 0 new findings.
+`SCHEDULE`/`TASK_RUNNERS` re-verified by AST at 70/70 (up from 68), both
+dicts' key sets identical. Route surface re-enumerated by AST at 2,
+unchanged since pass 4. CRON4-31-2 and the app-review track's CRON-4 and
+Redis-fails-open item re-confirmed OPEN, unchanged.
+
+**Ride-along:** this commit also carries the Step 0 record of PR #3856's
+merge (Feature 30, Onboarding, pass 11), which merged immediately before
+this iteration started.
+
+Rotation row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations
+& kiosk) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 11, PR #3856, merged), preserved for history</summary>
+
 **PR [#3856](https://github.com/thegspiro/the-logbook/pull/3856)** (branch
 `claude/security-review-onboarding-p11`) — Feature 30 (Onboarding), pass 11,
 a watchdog pickup. See `docs/security-review/ONB5-30-onboarding.md`'s **Pass 11**
@@ -34,9 +65,9 @@ limiting on `/session/*`) and found all unchanged and correct. ONB-7 and the
 `ITTeamMemberRequest.email` typing note stay open, unchanged. Route surface
 re-enumerated by AST at 26, unchanged.
 
-Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31
-(Scheduled tasks) — re-check `list_pull_requests`/`search_pull_requests`
-fresh rather than trusting this note.
+Rotation row 30 → ✅ (merged); next was Feature 31 (Scheduled tasks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 13, PR #3855, merged), preserved for history</summary>
@@ -23706,7 +23737,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
@@ -23717,6 +23748,68 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 31 (Scheduled tasks, pass 11) — watchdog pickup, small real delta, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3856 (Feature 30, Onboarding, pass 11) had already merged (`6bf6ba32`), and a fresh `search_pull_requests` for
+`head:claude/security-review-` returned zero open results both before
+starting and again right before this push, so Feature 31 (Scheduled tasks)
+was confirmed as the next `⬜` row read directly off a freshly fetched `main`.
+
+A path-scoped `git log` since pass 10's merge (`8213ae8f`, PR #3786) found
+exactly 3 commits touching `scheduled.py`/`scheduled_tasks.py`: `scheduled.py`
+itself unchanged (0 diff, still 82 lines, 2 routes, same two permission
+strings); `scheduled_tasks.py`'s 239-line diff read in full registers two new
+tasks, `weather_alert_poll` (Integrations' NWS alert polling, owner decision
+2026-10-29) and `prospect_follow_up_reminders` (Membership pipeline's
+follow-up-form reminders), and adds a new shared helper
+(`officer_alert_copies.add_in_app_copies`) to four existing inventory-alert
+runners so officers who turned off an alert's email still get a bell notice —
+the same "a switch with no reader" shape CLAUDE.md Pitfall #19 names, closed
+here on the delivery side rather than the config side.
+
+Both new tasks delegate to other features' own already-reviewed code
+(Integrations pass 11, PR #3853; Membership pipeline) and were reviewed here
+only from this layer's own angle: org-loop placement (`weather_alert_poll`
+goes through the existing `_for_each_org`; `prospect_follow_up_reminders`
+correctly does not, since its service already does its own per-row locked
+read-then-write, a stronger isolation unit), interval registration matching
+each SCHEDULE entry, and confirming neither delegate's internals needed to be
+re-derived from scratch since each already closes its own idempotency/locking
+case. `add_in_app_copies` was read in full and is org-scoped by construction
+(every call site passes the loop's own `org.id` and recipients from an
+already org-scoped query) and safe against a rerun or a racing second worker
+(`replace_unread` + a dedupe key matched only against unread rows). The new
+mid-function commits these four runners add do not reintroduce the
+`MissingGreenlet` class pass 2 fixed (CRON-31-2): `expire_on_commit=False` at
+the session-factory level means only a `rollback()` — not a successful
+`commit()` — expires already-loaded rows, and the rows these functions render
+after their new commits were all loaded before them.
+
+`SCHEDULE`/`TASK_RUNNERS` re-verified by AST at 70/70 (up from 68), both
+dicts' key sets identical to each other — not assumed from a prior pass's
+count. Route surface re-enumerated by AST at 2, unchanged since pass 4.
+CRON4-31-2 (no per-task lock on `POST /run-task`), the app-review track's
+CRON-4 (raw `str(e)` reaching the trigger caller) and its "Redis-down fails
+open" item all re-confirmed OPEN, unchanged, none touched by this window's
+diff. The app-review track's CRON-40 (the scheduler's own claim-renewal race,
+HIGH, ✅ fixed 2026-10-04) was re-confirmed unaffected: neither new task nor
+the new helper touches `main.py` or `app/core/background_claim.py`. See
+`docs/security-review/CRON11-31-scheduled-tasks.md`'s **Pass 11** section for
+the full review.
+
+Completion gate: flake8/black/isort clean at CI's pinned versions;
+`validate_migrations.py --strict` — 678 revisions, single head;
+`check_route_permissions.py --strict` — 280 routes, 0 errors, unchanged;
+scoped pytest — 259 passed, 1 pre-existing skip, 0 failed. No frontend files
+in this feature's own scope (owner-accepted, `KNOWN_LIMITATIONS.md`'s "Admin
+— No Scheduled Tasks Page"), so `typecheck`/`lint` are n/a, not merely
+unrun.
+
+Rotation row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations
+& kiosk).
 
 ### 2026-10-30 — Feature 30 (Onboarding, pass 11) — watchdog pickup, near-zero delta, 0 fixed, 0 new findings
 
