@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (to be recorded)** — Feature 31 (Scheduled tasks), pass 11, a watchdog
-pickup. See `docs/security-review/CRON11-31-scheduled-tasks.md`'s **Pass 11**
+**PR [#3857](https://github.com/thegspiro/the-logbook/pull/3857)** (branch
+`claude/security-review-scheduled-tasks-p11`) — Feature 31 (Scheduled
+tasks), pass 11, a watchdog pickup. See `docs/security-review/CRON11-31-scheduled-tasks.md`'s **Pass 11**
 section for the full review: a small, real delta since pass 10 — two new
 registered tasks (`weather_alert_poll`, `prospect_follow_up_reminders`), both
 delegating to other features' own already-reviewed code, reviewed here only
