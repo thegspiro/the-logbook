@@ -90,9 +90,9 @@ referencing the function by name, confirmed by reading each.
 
 - **`app/services/integration_services/weather_service.py`** (new) —
   `fetch_active_alerts(zone_id)` for the new NWS Weather Alerts integration.
-  Its destination is a hardcoded constant (`NWS_API_BASE =
-"https://api.weather.gov"`), never admin-configurable; the admin-chosen
-  `zone_id` reaches the request only as an `httpx` `params=` value (safely
+  Its destination is a hardcoded constant
+  (`NWS_API_BASE = "https://api.weather.gov"`), never admin-configurable;
+  the admin-chosen `zone_id` reaches the request only as an `httpx` `params=` value (safely
   encoded, never concatenated into the URL), and the call goes through the
   existing hardened `create_integration_client()`. No SSRF surface — matches
   pass 12's disposition for `google_drive_storage.py`'s equally-hardcoded
@@ -128,8 +128,9 @@ bare-constructor initializer. The two matches that did start empty:
   (the same pattern as the four `_FORM_CATEGORIES`/`_FORM_STATUSES`/
   `_FIELD_TYPES`/`_INTEGRATION_TARGETS`/`_INTEGRATION_TYPES` sets immediately
   above it in the same file). Never written to again. Not a tracker.
-- `app/services/equipment_check_service.py:122` (`self._counted_inventory_ids:
-Set[str] = set()`) and `app/services/scheduling_service.py:443-445`
+- `app/services/equipment_check_service.py:122`
+  (`self._counted_inventory_ids: Set[str] = set()`) and
+  `app/services/scheduling_service.py:443-445`
   (`self.last_assignment_warnings`/`last_generation_warnings`/
   `last_generation_seat_warnings`) — both re-flagged by this delta's diff
   only because other parts of the same files changed; both pre-date baseline
