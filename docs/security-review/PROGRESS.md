@@ -16,7 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-locations-kiosk-p11`) —
+**PR (this PR)** (branch `claude/security-review-core-infra-p12`) —
+Feature 33 (Core infrastructure), pass 12, a watchdog pickup. See
+`docs/security-review/CI12-33-core-infra.md` for the full review: a
+zero-delta pass — all three tracked files plus the two adjacent crypto files
+and the two excluded-but-diff-checked files this feature tracks are
+byte-identical to pass 11's merge, despite 256 non-merge commits landing on
+`main` in between. 0 fixes needed, 0 new findings. Also corrects two stale
+carry-forwards this pass found while re-verifying prior findings: the
+"MFA recovery codes 40-bit unsalted SHA-256" residual item describes a
+pre-#2722 state (the code is 80 bits today, in a file outside this
+feature's scope) and should stop being carried as a Core Infrastructure
+item; and CI3-33-3 (`REGISTRATION_REQUIRES_APPROVAL` with no reader) is
+resolved — the setting was retired into `RETIRED_SETTINGS`, just never
+marked as such in its own write-up. Alembic chain: 678 revisions, single
+head, no fork.
+
+**Ride-along:** this commit also carries the Step 0 record of PR #3865's
+merge (Feature 32, Locations & kiosk, pass 11), which merged before this
+iteration started.
+
+Rotation row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
+shared) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 11, PR #3865, merged), preserved for history</summary>
+
+**PR [#3865](https://github.com/thegspiro/the-logbook/pull/3865)** (branch
+`claude/security-review-locations-kiosk-p11`) —
 Feature 32 (Locations & kiosk), pass 11, a watchdog pickup. See
 `docs/security-review/LOC11-32-locations-kiosk.md` for the full review: a
 near-zero-delta pass — of six commits since pass 10, only one touched this
@@ -29,13 +57,13 @@ page-header utility-class swaps). 0 fixes needed, 0 new findings. Route
 surface re-enumerated by AST at 17, unchanged since pass 10. LOC10-2, LOC8-2
 and LOC10-4 re-confirmed OPEN/FLAGGED, unchanged.
 
-**Ride-along:** this commit also carries the Step 0 record of PR #3857's
-merge (Feature 31, Scheduled tasks, pass 11), which merged before this
+**Ride-along:** this commit also carried the Step 0 record of PR #3857's
+merge (Feature 31, Scheduled tasks, pass 11), which merged before that
 iteration started.
 
-Rotation row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
-infrastructure) — re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 32 → ✅ (merged); next was Feature 33 (Core infrastructure).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 11, PR #3857, merged), preserved for history</summary>
@@ -23765,7 +23793,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -43986,4 +44014,54 @@ suite (`src/modules/facilities`) — 147 passed (19 files).
 
 Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
 NFC) — re-check `search_pull_requests`/`list_pull_requests` fresh rather
+than trusting this note.
+
+### 2026-10-30 — Feature 33 (Core infrastructure, pass 12) — watchdog pickup, zero diff across every tracked file, 2 stale carry-forwards corrected, 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` — "No reachable agents"). No open security-review PR —
+confirmed via `list_pull_requests` (state=open), which returned exactly one
+open PR, unrelated to this rotation. PR #3865 (Feature 32, Locations &
+kiosk, pass 11) had already merged; this pickup followed promptly rather
+than waiting for the next scheduled tick. Row 33 confirmed the next `⬜`
+row by reading the rotation table on a freshly fetched `main`, matching
+PR #3865's own "Next feature" note.
+
+Real delta since pass 11's own merge (`4a4eb2fd`, PR #3790): zero diff
+across all three tracked files (`security_middleware.py`, `database.py`,
+`config.py`) and the adjacent files this feature tracks by location
+(`security.py`, `encrypted_types.py`, `cache.py`, `websocket_manager.py`)
+— confirmed by `git diff 4a4eb2fd..HEAD --stat` against all seven returning
+nothing, despite 256 non-merge commits landing on `main` in between.
+`rate_limit_passkey`'s reader set (5 routes in `auth.py`) and
+`security_middleware.py`'s 7 rate-limit scopes are unchanged. While
+re-verifying historical findings this pass found two stale carry-forwards
+and corrected them: (1) "MFA recovery codes 40-bit unsalted SHA-256" has
+been repeated as a Core Infrastructure residual item since CI9-33, but the
+hashing lives in `app/services/mfa_service.py` — a file outside this
+feature's scope — and that file's `_RECOVERY_CODE_BYTES = 10` (80 bits) was
+already raised in CI-10 itself (#2722); the "40-bit" figure describes the
+pre-fix state and should stop being carried forward here. (2) CI3-33-3
+(HIGH, flagged at the time: `REGISTRATION_REQUIRES_APPROVAL` had no
+reader) is resolved — the setting is now in `config.py`'s
+`RETIRED_SETTINGS`, just never marked resolved in its own write-up. Both
+owner-accepted items (Redis `CERT_NONE` without a CA, no cache tenant
+namespacing) and the deliberate WS `accept()`-before-auth design
+re-verified unchanged. Alembic chain: 678 revisions (up from 666), single
+head, no fork.
+
+Full write-up: `docs/security-review/CI12-33-core-infra.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (resolved via `/usr/bin/python3`, the
+3.13 interpreter matching `requirements.txt`'s pins — a bare `pip install`
+or `/usr/local/bin/python3` lands on a different, unpinned Python 3.11 with
+nothing installed); `validate_migrations.py --strict` — 678 revisions,
+single head `f90b1124e6f4`; feature-scoped backend tests (17 files) — 609
+passed, 1 pre-existing skip; cross-cutting guard tests (11 files) — 242
+passed; frontend typecheck/lint — n/a, no frontend file in scope changed.
+
+Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
+shared) — re-check `search_pull_requests`/`list_pull_requests` fresh rather
 than trusting this note.
