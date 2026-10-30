@@ -1,6 +1,118 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 11 (2026-10-30) — a small additive feature (follow-up form pre-fill) plus the email-encryption sweep's share; 0 fixed, 0 new findings (watchdog pickup)
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-10) before touching code. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`, "No
+reachable agents"). `search_pull_requests` (`is:open head:claude/security-review`)
+returned zero results both before starting and again right before this push;
+PR #3850 (Feature 25, Messaging & notifications, pass 11) had already merged
+(`957aa630`).
+
+**Ride-along:** this commit also carries the Step 0 record of PR #3850's merge,
+which merged immediately before this iteration started.
+
+Baseline: pass 10's merge (`3665a893`, PR #3775). `git log 3665a893..HEAD` on
+the five backend scope files plus `app/utils/embed_origins.py` and the
+frontend forms/embed surface found four non-merge commits, two of which are
+repo-wide-sweep touches rather than feature work on this module:
+
+- **`27a363f1` ("Add the Follow-up Form pipeline stage")** — Feature 08's
+  (Membership pipeline) own feature, but it extends three of Forms' own
+  declared files: `models/forms.py` (+22 L — a new `FormField.applicant_field`
+  column, naming the `ProspectiveMember` column a follow-up-form field may
+  pre-fill from and write back to), `schemas/forms.py` (+13 L), and
+  `forms_service.py` (+25 L). Reviewed the diff to all three in full (not
+  sampled): `applicant_field` is validated on both create and update against
+  `_APPLICANT_FIELDS`, a `set` built from the model's own `APPLICANT_FIELDS`
+  tuple — a client cannot name an arbitrary `ProspectiveMember` attribute,
+  closing what would otherwise be an attribute-injection surface the moment
+  the write-back code (`follow_up_form_service.py`, Feature 08's own file)
+  reads this column to decide what to `setattr`. A field cannot be both
+  `is_sensitive` and carry an `applicant_field` — `_prefill_conflict` rejects
+  the combination on create and update with
+  `SENSITIVE_PREFILL_REFUSED_ERROR` — which is the right rule: a sensitive
+  field's answer is deliberately never written back onto a record every
+  pipeline-access holder can read. The new public token-scoped surface this
+  feature adds (`api/public/follow_up_forms.py`,
+  `services/follow_up_form_service.py`) is Feature 08's own scope, not
+  Forms', so it is not reviewed line-by-line here, but it was read enough to
+  confirm it does not weaken anything Forms owns: the token is resolved by
+  `ProspectFormRequest.token_hash == ProspectiveMember.hash_status_token(token)`
+  (a hashed-column lookup, never a raw-token scan or Python string compare),
+  every route calls `validate_ip_rate_limit` before any DB work, and every
+  response sets `Cache-Control: no-store, private` / `Referrer-Policy:
+no-referrer` / `X-Robots-Tag: noindex` — the same dimension-1 shape
+  `CHECKLIST.md` asks of a public, unauthenticated, token-scoped route.
+  Feature 08's own future pass will own this file's full review.
+- **`b48d63f2`** — the repo-wide email-encryption-at-rest sweep's share of
+  this feature: `Form.notification_emails` and `FormSubmission.submitter_email`
+  moved from plain `JSON`/`String(255)` to `EncryptedJSON`/`EncryptedText`. A
+  narrowing, not a regression.
+- **`43c11090`** — the same sweep's fingerprint-matching half:
+  `FormsService.search_members`' optional email matcher (gated on
+  `contact_policy.show_email and not contact_policy.honor_member_choice`,
+  unchanged) switched from `User.email.ilike(...)` to
+  `User.email_hash.in_(email_fingerprints(query))`, since the column is now
+  encrypted and can no longer support a partial `LIKE` scan. Read
+  `search_members` in full, not just the diff line: the new matcher is still
+  one entry in an `or_(*matchers)` list built inside a query already filtered
+  on `User.organization_id == str(organization_id)` and
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (Pitfall #32-compliant, unchanged
+  from prior passes) — it can only narrow which of the caller's own org's
+  members match, never widen the result past that org or past active
+  accounts.
+- `7d499893` is a `main`-merge commit with no content of its own in this
+  feature's scope.
+
+### Route inventory (re-enumerated by AST, not diffed)
+
+Both endpoint files confirmed **byte-identical** to pass 10's baseline
+(`git diff 3665a893 HEAD -- backend/app/api/v1/endpoints/forms.py
+backend/app/api/public/forms.py`: empty). Re-ran the AST walk anyway rather
+than trusting that diff alone: **22** routes in `endpoints/forms.py` + **3**
+in `public/forms.py` = **25 total**, same count and same per-route dependency
+set as pass 10 — `forms.view` ×3, `forms.manage` ×17, bare
+`get_current_user`/`get_optional_current_user` ×2 (`member_lookup`,
+`submit_form`/`submit_public_form`), all unchanged.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-4** (form-definition text stored unescaped, flagged defense-in-depth
+  by design) — re-grepped `dangerouslySetInnerHTML` under
+  `frontend/src/components/forms/`, `pages/PublicFormPage.tsx`,
+  `modules/forms/`: zero matches, unchanged.
+- **FORM-12** (three submission endpoints ignore the `form_id` path segment)
+  — correctness-only API-shape gap, not a security boundary; unchanged.
+- **BXC-1**, sensitive-field sealing/row-locking, the embed `allow_embed`/
+  origin-allowlist machinery, the member-lookup contact-policy gate, LIKE
+  escaping, and the admin CSV export (still a frontend `Blob` download with
+  its own `escapeCsvCell`, not a backend `csv.writer` — n/a for Pitfall #15)
+  — none of this pass's four commits touch a line any of these findings
+  concern; nothing regressed.
+
+No new route, no permission string changed, no by-id query added without an
+org filter, no LIKE call added without `escape=LIKE_ESCAPE_CHAR`.
+
+### Completion gate (pass 11)
+
+| Check                                                                       | Result                                                      |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                               | ✅ 0 violations                                             |
+| `black --check app/ tests/ alembic/`                                        | ✅ clean, 2743 files unchanged (`black==26.10.1`, CI's pin) |
+| `isort --check-only app/ tests/ alembic/`                                   | ✅ clean (`isort==9.0.2`, CI's pin)                         |
+| `python3 scripts/validate_migrations.py --strict`                           | ✅ PASSED — 678 revisions, single head `f90b1124e6f4`       |
+| `pytest tests/ -q -k "form or applicant_field or sensitive_field or embed"` | ✅ 1067 passed, 1 pre-existing skip (`pywebpush`)           |
+| `scripts/check_route_permissions.py --strict`                               | ✅ 280 routes checked, 0 errors, 0 warnings                 |
+| `cd frontend && npm run typecheck`                                          | ✅ 0 errors                                                 |
+| `cd frontend && npm run lint`                                               | ✅ exit 0                                                   |
+| `npx vitest run` (forms/embed/sensitive test files)                         | ✅ 15 files, 75 tests passed                                |
 
 ---
 

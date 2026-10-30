@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3852](https://github.com/thegspiro/the-logbook/pull/3852)** (branch
+`claude/security-review-forms-p11`) — Feature 26 (Forms), pass 11, a
+watchdog pickup.
+See `docs/security-review/FORM-26-forms.md`'s **Pass 11** section for the
+full review: a small additive feature since pass 10 — Feature 08's
+(Membership pipeline) Follow-up Form stage extends three of Forms' own
+declared files with a new `FormField.applicant_field` column, validated
+against a fixed allowlist and refused in combination with `is_sensitive` —
+plus the email-encryption sweep's share of this feature
+(`Form.notification_emails`/`FormSubmission.submitter_email` now
+encrypted at rest; the member-lookup email matcher switched from a `LIKE`
+scan to an exact fingerprint match, still org-scoped). 0 fixes needed, 0
+new findings. Route surface re-enumerated by AST at 25 (22 + 3),
+byte-identical to pass 10. FORM-4 and FORM-12 remain the only open items,
+both unchanged by-design/correctness notes. This PR also carries the
+ride-along edits for PR #3850's merge (Feature 25, Messaging &
+notifications, pass 11) — row 25 was already marked ✅ by that PR's own
+commit, so the only ride-along here is clearing this section to describe
+the current PR instead.
+
+Rotation row 26 → ✅ (pending this PR's merge); next is Feature 27
+(Integrations) — re-check `list_pull_requests`/`search_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 11, PR #3850, merged), preserved for history</summary>
+
 **PR [#3850](https://github.com/thegspiro/the-logbook/pull/3850)** (branch
 `claude/security-review-messaging-notifications-p11`) — Feature 25
 (Messaging & notifications), pass 11, a watchdog pickup. See
@@ -38,9 +65,9 @@ PR #3849's merge (Feature 24, Meetings & minutes, pass 11) — row 24 was
 already marked ✅ by that PR's own commit, so the only ride-along here is
 clearing this section to describe the current PR instead.
 
-Rotation row 25 → ✅ (pending this PR's merge); next is Feature 26
-(Forms) — re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 25 → ✅ (merged as `957aa630`); next was Feature 26 (Forms).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 11, PR #3849, merged), preserved for history</summary>
@@ -23574,7 +23601,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -23590,6 +23617,40 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 26 (Forms, pass 11) — watchdog pickup, small additive delta, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3850 (Feature 25, Messaging &
+notifications, pass 11) had already merged (`957aa630`), and a fresh
+`search_pull_requests` for `head:claude/security-review-` returned zero
+open results both before starting and again right before this push, so
+Feature 26 (Forms) was confirmed as the next `⬜` row read directly off a
+freshly fetched `main`.
+
+`git log` restricted to this feature's declared scope (`endpoints/forms.py`,
+`public/forms.py`, `forms_service.py`, `models/forms.py`, `schemas/forms.py`,
+`utils/embed_origins.py`, plus the frontend forms/embed surface) since pass
+10's merge (`3665a893`, PR #3775) found 4 non-merge commits, 2 of which are
+repo-wide-sweep touches (the email-encryption sweep narrowing
+`Form.notification_emails`/`FormSubmission.submitter_email` to encrypted
+columns and switching the member-lookup email matcher to a fingerprint
+match, still org-scoped) and 1 of which is Feature 08's own Follow-up Form
+pipeline stage, reviewed here only for the slice that touches Forms' own
+files: a new `FormField.applicant_field` column, validated against a fixed
+allowlist on both create and update, and refused in combination with
+`is_sensitive`. Both endpoint files (`forms.py`, `public/forms.py`)
+confirmed byte-identical to pass 10; routes re-enumerated by AST at 25,
+unchanged. 0 fixes needed, 0 new findings. FORM-4 and FORM-12 remain the
+only open items, both unchanged by-design/correctness notes. Full gate
+green: flake8/black/isort clean against CI's pinned versions;
+`validate_migrations.py --strict` 678 revisions/single head; scoped pytest
+1067 passed/1 pre-existing skip; `check_route_permissions.py --strict` 280
+routes/0 errors; frontend typecheck/lint clean; forms/embed/sensitive
+vitest suite 15 files/75 tests passed. See
+`docs/security-review/FORM-26-forms.md`'s **Pass 11** section for the full
+review.
 
 ### 2026-10-30 — Feature 25 (Messaging & notifications, pass 11) — watchdog pickup, real delta, 0 fixed, 0 new findings
 
