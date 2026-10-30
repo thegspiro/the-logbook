@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this iteration's own, number assigned at push time)** (branch
+`claude/security-review-meetings-minutes-p11`) — Feature 24 (Meetings &
+minutes), pass 11, a watchdog pickup. See
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 11** section for
+the full review: a true zero-delta pass — of 181 non-merge commits on
+`main` since pass 10's merge, exactly one touched this feature's declared
+scope (`b4d9388a`, a repo-wide error-message length cap applied to
+`minute_service.py`'s `submit_minutes`; message-formatting only, no auth,
+tenancy, injection or exposure surface). Route surface re-enumerated by AST
+at 81 (17 + 32 + 30 + 2, unchanged); all four endpoint files byte-identical
+to pass 10. 0 fixes needed, 0 new findings. MM5-4 (no `ETag`/`updated_at`
+precondition on minutes updates) and the deferred `minutes.view_executive`
+tier remain the only open items, both unchanged product/correctness
+decisions, not security gaps under this checklist. This PR also carries the
+ride-along edits for PR #3848's merge (Feature 23, Medical supplies, pass 18) — row 23 was already marked ✅ by that PR's own commit, so the only
+ride-along here is clearing this section to describe the current PR
+instead.
+
+Rotation row 24 → ✅ (pending this PR's merge); next is Feature 25
+(Messaging & notifications) — re-check `list_pull_requests`/`search_pull_requests`
+fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 18, PR #3848, merged), preserved for history</summary>
+
 **PR [#3848](https://github.com/thegspiro/the-logbook/pull/3848)** (branch
 `claude/security-review-medical-supplies-p18`) — Feature 23 (Medical
 supplies), pass 18, a watchdog pickup. See
@@ -35,9 +60,10 @@ unchanged. This PR also carries the ride-along edits for PR #3847's merge
 by that PR's own commit, so the only ride-along here is clearing this
 section to describe the current PR instead.
 
-Rotation row 23 → ✅ (pending this PR's merge); next is Feature 24
-(Meetings & minutes) — re-check `list_pull_requests`/`search_pull_requests`
-fresh rather than trusting this note.
+Rotation row 23 → ✅ (merged as `3ec28222`); next was Feature 24 (Meetings &
+minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 12, PR #3847, merged), preserved for history</summary>
@@ -23516,7 +23542,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -23534,6 +23560,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 24 (Meetings & minutes, pass 11) — watchdog pickup, zero-delta, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3848 (Feature 23, Medical
+supplies, pass 18) had already merged (`3ec28222`), and a fresh
+`search_pull_requests` for `head:claude/security-review-` returned zero
+open results both before starting and again right before this push, so
+Feature 24 (Meetings & minutes) was confirmed as the next `⬜` row read
+directly off a freshly fetched `main`.
+
+`git log` restricted to this feature's full declared scope (`meetings.py`,
+`minutes.py`, `minutes_records.py`, `api/public/minutes.py`,
+`api/attendance_lock.py`, `app/mcp/tools/meetings.py`, every
+`meetings`/`minute`/`quorum`/`attendance_dashboard` model, schema and
+service file, and `frontend/src/modules/minutes`) across 181 non-merge
+commits since pass 10's merge (`8a2d8760`, PR #3767) found exactly **one**
+commit in scope: `b4d9388a`, a repo-wide sweep capping error messages built
+from a data-derived list so they can't exceed `safe_error_detail`'s
+300-character limit. This feature's slice is `minute_service.py`'s
+`submit_minutes` — the "sections required by the outline" message now uses
+`list_within_detail_limit` instead of a bare join. Read at the diff level:
+no new user-controlled input, same `ValueError` → `safe_error_detail()`
+path as before. No auth, tenancy, injection or exposure surface. Not a
+security finding.
+
+Routes re-enumerated by AST at 81 (17 `meetings.py` + 32 `minutes.py` + 30
+`minutes_records.py` + 2 `api/public/minutes.py`), unchanged from pass 10;
+all four endpoint files confirmed byte-identical to the pass 10 baseline, so
+every route's auth dependency and permission string is unchanged from pass
+10's already-verified state. `check_route_permissions.py --strict`: 280
+routes, 0 errors. FK-validation call sites (module-audit MM-4, XC-1)
+re-verified present at current line numbers in `meetings_service.py`,
+`minute_service.py` and `minutes_record_service.py`. 0 fixes needed, 0 new
+findings. MM5-4 (no `ETag`/`updated_at` precondition on
+`PUT /minutes/{minutes_id}`) and the deferred `minutes.view_executive` tier
+remain the only open items — both unchanged, product/correctness decisions
+rather than security gaps under this checklist's seven dimensions. Full
+writeup: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 11**
+section.
+
+Completion gate: flake8/black/isort (all at CI's pinned versions, against
+`app/`, `tests/`, `alembic/`) clean; `validate_migrations.py --strict` — 678
+revisions, single head; scoped pytest (`-k "meeting or minute or quorum or
+attendance_dashboard or motion"`) — 1,273 passed, 1 pre-existing unrelated
+skip; `check_route_permissions.py --strict` — 280 routes, 0 errors; frontend
+`typecheck` and `lint` both clean.
+
+Rotation row 24 → ✅ (pending this PR's merge); next is Feature 25
+(Messaging & notifications).
 
 ### 2026-10-30 — Feature 23 (Medical supplies, pass 18) — watchdog pickup, zero-delta, 0 fixed, 0 new findings
 
