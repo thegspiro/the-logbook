@@ -1076,3 +1076,128 @@ in-scope file has actually been read, not assumed byte-identical.
 Findings for the addendum: 0 fixes (nothing needed), 1 documentation
 completeness correction (RPT6-29-4). Combined with the rest of pass 12
 above: 0 fixes, 0 new unfixed findings, 1 completeness correction.
+
+## Pass 13 (2026-10-30) — watchdog pickup, zero-delta on all declared backend/frontend files; closes a frontend scope gap, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`,
+"No reachable agents"). PR #3854 (Feature 28, Security, audit & IP, pass 11)
+had already merged (`6e5ba65f`); `search_pull_requests` for
+`head:claude/security-review-` returned zero open results both before
+starting and again right before this push.
+
+**Baseline:** pass 12 + its addendum's merge, `65b566ee` (PR #3784).
+
+**Zero delta on every backend file and declared service.** Each of the
+thirteen backend files this rotation has carried since pass 12's addendum
+(`reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`,
+`labels.py`, `reports_service.py`, `dashboard_widget_service.py`,
+`attendance_dashboard_service.py`, `label_service.py`,
+`label_printer_service.py`, `schemas/reports.py`, `saved_report_schedule.py`,
+`external_recipients.py`) diffed individually against `65b566ee` with `git
+diff --stat` — all thirteen empty, despite 219 non-merge commits landing on
+`main` in that window. `frontend/src/modules/reports` is likewise empty.
+
+**The declared frontend scope was itself incomplete, and this pass closes
+that gap rather than carrying it forward unread.** Every prior pass's header
+line reads "Frontend: `modules/reports`" — but `dashboard.py` and
+`dashboard_widget_service.py` render through `frontend/src/pages/Dashboard.tsx`,
+`analytics.py`/`platform_analytics.py` render through
+`frontend/src/pages/AnalyticsDashboardPage.tsx` and
+`frontend/src/pages/PlatformAnalyticsPage.tsx`, and `labels.py` renders
+through the shared `frontend/src/components/labels/` tree (used by
+Apparatus/Facilities/Inventory/Prospective-members' own label-print pages,
+which wrap it) — none of which is under `modules/reports`. This is the same
+root cause as RPT6-29-4 (pass 12's own addendum): a declared scope line that
+undercounts the feature's real surface, left unnoticed because nothing in it
+had changed across the passes that would have caught it. Checked this pass,
+not deferred:
+
+- **`frontend/src/pages/Dashboard.tsx`** (+2/-0 since `65b566ee`) — adds one
+  `<WeatherAlertBanner />` render inside the page body. That component and
+  its backing route are Feature 27's (Integrations) own pass-11 scope,
+  already reviewed there (org-scoped NWS data, HTML-escaped free text); this
+  is a one-line inclusion, not a new finding here.
+- **`frontend/src/pages/AnalyticsDashboardPage.tsx`** (+90/-54) — a
+  loading-skeleton restructure (the repo-wide layout-shift sweep's shape:
+  `loading && !metrics` replaces a bare `loading` guard so the 10-second
+  auto-refresh no longer blanks the whole page each cycle; header and
+  export-button JSX hoisted into a `const` reused by both the loading and
+  loaded branches). No new request, no new field read, no change to
+  `analyticsService` calls. Cosmetic. **Verified good, no new finding.**
+- **`frontend/src/components/labels/LabelPrintPage.tsx`** (+30/-24 net) and
+  new **`frontend/src/components/labels/barcodeGeometry.ts`** (122 lines) —
+  replaces a direct `JsBarcode(svgRef.current, value, {...})` call with
+  `drawCode128ForPrinter(svg, value, style, availableWidthIn, dpi)`, a
+  wrapper that still calls the same `JsBarcode(svg, value, {...})`
+  internally (read in full: `barcodeGeometry.ts:87-99`) but renders twice to
+  snap the module width to a whole number of printer dots before fixing the
+  SVG's physical `width`/`height` attributes in inches. `value` (the encoded
+  label text) reaches `JsBarcode` exactly as it did before this refactor —
+  same library, same call shape, no new escaping surface introduced or
+  removed. Purely a print-fidelity fix (bar width was rounding differently at
+  203 dpi than at 96 CSS px, a scanner-readability bug, not a security one).
+  **Verified good, no new finding.**
+- **`frontend/src/pages/PlatformAnalyticsPage.tsx`** — confirmed unchanged
+  (`git diff --stat` empty).
+
+**For future passes, the frontend scope line above now reads correctly** (see
+the updated header); this does not change what any future pass must
+re-review, since all four files were read here, but it means the next pass's
+"byte-identical to pass N" claim can legitimately include them instead of
+silently omitting them the way "Frontend: `modules/reports`" did for twelve
+passes running.
+
+### Route inventory — re-enumerated by AST from source, 35 routes, unchanged from pass 12
+
+Counted every `@router.<method>(...)` decorator directly, not trusted from
+the prior table: 7 (`reports.py`) + 3 (`analytics.py`) + 1
+(`platform_analytics.py`) + 12 (`dashboard.py`) + 12 (`labels.py`) = **35**,
+identical to pass 12. Every route's auth dependency grepped individually
+(`require_permission(...)`, `get_current_user`, or `get_current_active_user`)
+— none bare. `list_label_printers` (`labels.py`) is the one route on
+`get_current_user` alone among the label-printer CRUD set — this is LBL-29-2
+below, unchanged. `print_labels`/`preview_labels`/`generate_labels` on
+`get_current_user` alone is the feature's established self-serve pattern
+(any authenticated member may render/print a label from data already visible
+to them), consistent with every prior pass's gate table, which this pass's
+route list reproduces exactly.
+
+### Still flagged — every open item re-checked against current code, not the doc
+
+- **LBL-29-2 (LOW/policy)** — `list_label_printers` still carries only
+  `get_current_user`, no permission string; re-grepped this pass, unchanged
+  (deliberate: LAN host/port/location only, no credentials).
+- **LBL-29-4 (Informational)** — `LabelService.generate()` still has no
+  count cap of its own, unlike `LabelPrinterService.MAX_LABELS_PER_JOB = 500`;
+  `label_service.py` has zero diff since pass 12, so unchanged by definition.
+- **RPT-5c / RPT-6 / RPT-7** — `reports_service.py` has zero diff since pass
+  12; all three unchanged by definition, not independently re-executed
+  beyond that diff check.
+- **DASH-2 (LOW)** — `grep -rn "dashboardService\.getStats" frontend/src/`
+  — 0 hits, re-checked this pass. Still zero callers.
+
+### No new findings this pass
+
+**0 fixes applied, 0 new security findings.** The only correction is the
+scope-line fix described above, which has no behavior change. No
+`KNOWN_LIMITATIONS.md` change needed — none of the four open items' status
+changed this pass.
+
+### Completion gate (Pass 13)
+
+| Check                                                                                                                                                                                                   | Result                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin)                                                                                                                                               | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, via `python3.13 -m`, CI's pin)                                                                                                                  | ✅ 2743 files unchanged                           |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, via `python3.13 -m`, CI's pin)                                                                                                               | ✅ clean                                          |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                    | ✅ 678 revisions, single head `f90b1124e6f4`      |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                    | ✅ 280 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report"`                       | ✅ 1513 passed, 1 pre-existing skip (`pywebpush`) |
+| `pytest tests/test_platform_analytics_w78.py tests/test_admin_monitoring_w75.py tests/test_saved_report_delivery.py tests/test_external_recipient_audit.py`                                             | ✅ 48 passed                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                                                      | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                                                                                                                                                                           | ✅ 0 errors/warnings                              |
+| `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts` | ✅ 236 passed (13 files)                          |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).
