@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD** (branch `claude/security-review-admin-hours-p12`) — Feature 21
+**PR [#3846](https://github.com/thegspiro/the-logbook/pull/3846)** (branch
+`claude/security-review-admin-hours-p12`) — Feature 21
 (Admin hours), pass 12, a watchdog pickup (a second watchdog, since the
 dedicated `/loop 30m /security-review` session remained unreachable). See
 `docs/security-review/AH-21-admin-hours.md`'s **Pass 12** section for the
