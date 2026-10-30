@@ -28,6 +28,14 @@ vi.mock('../utils/purgeLocalMemberData', () => ({
   purgeLocalMemberData: () => mockPurgeLocalMemberData(),
 }));
 
+const mockReleaseDevicePush = vi.fn(() => Promise.resolve());
+const mockResyncDevicePush = vi.fn(() => Promise.resolve());
+
+vi.mock('../utils/devicePushSubscription', () => ({
+  releaseDevicePushSubscription: () => mockReleaseDevicePush(),
+  resyncDevicePushSubscription: () => mockResyncDevicePush(),
+}));
+
 vi.mock('../services/apiClient', () => ({
   markLoginComplete: (...args: unknown[]) => mockMarkLoginComplete(...args) as unknown,
   clearTempAccessToken: (...args: unknown[]) => mockClearTempAccessToken(...args) as unknown,
@@ -819,6 +827,41 @@ describe('authStore', () => {
 
       expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
       expect(localStorage.getItem('device_member_id')).toBe('u1');
+    });
+
+    it('revokes the previous member’s push subscription when a different member signs in', async () => {
+      // The server files a subscription under whoever registered it, so the
+      // last member's notifications kept reaching this device after they left.
+      localStorage.setItem('device_member_id', 'someone-else');
+
+      await signIn();
+
+      expect(mockReleaseDevicePush).toHaveBeenCalledExactlyOnceWith();
+      expect(mockResyncDevicePush).not.toHaveBeenCalled();
+    });
+
+    it('re-registers a member’s own push subscription when they sign back in', async () => {
+      localStorage.setItem('device_member_id', 'u1');
+
+      await signIn();
+
+      expect(mockResyncDevicePush).toHaveBeenCalledExactlyOnceWith();
+      expect(mockReleaseDevicePush).not.toHaveBeenCalled();
+    });
+
+    it('leaves push alone across a page reload of a live session', async () => {
+      // A reload is not a sign-in: re-registering on every load would write
+      // an audit event each time for nothing.
+      localStorage.setItem('has_session', '1');
+      localStorage.setItem('device_member_id', 'u1');
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockReleaseDevicePush).not.toHaveBeenCalled();
+      expect(mockResyncDevicePush).not.toHaveBeenCalled();
     });
 
     it('purges on a reload when the recorded owner is a different member', async () => {
