@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this iteration's own, number assigned at push time)** (branch
+**PR [#3849](https://github.com/thegspiro/the-logbook/pull/3849)** (branch
 `claude/security-review-meetings-minutes-p11`) — Feature 24 (Meetings &
 minutes), pass 11, a watchdog pickup. See
 `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 11** section for
