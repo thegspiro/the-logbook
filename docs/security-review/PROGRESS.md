@@ -16,7 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (to be recorded)** — Feature 26 (Forms), pass 11, a watchdog pickup.
+**PR [#3852](https://github.com/thegspiro/the-logbook/pull/3852)** (branch
+`claude/security-review-forms-p11`) — Feature 26 (Forms), pass 11, a
+watchdog pickup.
 See `docs/security-review/FORM-26-forms.md`'s **Pass 11** section for the
 full review: a small additive feature since pass 10 — Feature 08's
 (Membership pipeline) Follow-up Form stage extends three of Forms' own
