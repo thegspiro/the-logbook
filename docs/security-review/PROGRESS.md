@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD** (branch `claude/security-review-skills-testing-p12`) — Feature 19
+(Skills testing), pass 12, a watchdog pickup. See
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 12** section for the
+full review: a true zero-delta pass — no commit touched any of the four
+declared backend scope files since pass 11's merge (`e0deb09d`), and the four
+frontend files a broadened substring sweep surfaced all belong to other
+features or are cosmetic (confirmed by reading each diff directly). 0 fixes,
+0 new findings. All standing fixes (SKT-1 through SKT5-1) re-verified present
+at current citations; route surface still 29/29, `check_route_permissions.py`
+280 routes / 0 errors.
+
+Rotation row 19 → ✅ (pending this PR's merge); next is Feature 20
+(Compliance) — re-check `list_pull_requests`/`search_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 12, PR #3843, merged), preserved for history</summary>
+
 **PR [#3843](https://github.com/thegspiro/the-logbook/pull/3843)** (branch
 `claude/security-review-training-extended-p12`) — Feature 18 (Training
 extended), pass 12, a watchdog pickup. See
@@ -41,9 +59,10 @@ applied. Confirmed via `git show <sha> -- docs/security-review/PROGRESS.md`
 on each of the three merged commits. Fixed in this tend commit; no other
 change.
 
-Rotation row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills
-testing) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
-than trusting this note.
+Rotation row 18 → ✅ (merged as `28c7d924`); next was Feature 19 (Skills
+testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 12, PR #3842, merged), preserved for history</summary>
@@ -23379,7 +23398,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -23402,6 +23421,43 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 19 (Skills testing, pass 12) — watchdog pickup, true zero delta, 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session remains
+unreachable). No open security-review PR — confirmed via both
+`list_pull_requests` (state=open) and `search_pull_requests`
+(`is:open head:claude/security-review-`): 0 results each; the one open PR at
+the time (#3839) is unrelated layout work on branch `ccr-ba1682dc-g25b70`. PR
+#3843 (Feature 18, Training extended, pass 12) had already merged
+(`28c7d924`), and its own tend commit had already fixed the rows-12-14
+stale-checkbox bug, so rows 12-18 all correctly read ✅ in the rotation table
+before this pass started — nothing left to ride along at Step 0. Row 19
+confirmed the next pending feature by reading the rotation table on a
+freshly fetched `main`.
+
+Zero backend delta since pass 11 (`e0deb09d`): all four declared scope files
+(`skills_testing.py`, `skills_testing_service.py`, `schemas/skills_testing.py`,
+`models/skills_testing.py`) byte-identical. A broadened frontend substring
+sweep (54 candidate files, up from pass 11's 28) surfaced only 4 changed
+files, every one traced to another feature (Compliance, a shared type
+re-export) or purely cosmetic (a CSS class rename, a settings-panel label
+reword) — no genuine skills-testing frontend file changed. Every standing fix
+(SKT-1 through SKT5-1) re-verified present by direct grep at current line
+citations. Route surface re-enumerated via a fresh AST walk: 29/29 routes,
+unchanged; `check_route_permissions.py --strict` reports 280 routes / 0
+errors (up from pass 11's 279, other features' merges in the interim).
+
+Full completion gate run and green: `flake8`/`black`/`isort` all clean against
+CI's pinned versions (`black==26.10.1` installed this pass after the ambient
+`black` on `PATH` resolved to `26.5.1`); `validate_migrations.py --strict`
+(678 revisions, single head); `pytest -k "skill or skt"` (635 passed, 1
+skipped); frontend `typecheck`/`lint` both clean (after `npm ci` from the
+repo root — this worktree had no `node_modules` installed at all going in).
+See `docs/security-review/SKT-19-skills-testing.md`'s **Pass 12** section for
+the full write-up.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance).
 
 ### 2026-10-30 — Feature 18 (Training extended, pass 12) — watchdog pickup, scope gap closed (two schema files given first full pass, one corrects a pass-10 misattribution), 0 fixed, 0 new findings
 
