@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3843](https://github.com/thegspiro/the-logbook/pull/3843)** (branch
+`claude/security-review-training-extended-p12`) — Feature 18 (Training
+extended), pass 12, a watchdog pickup. See
+`docs/security-review/TRX-18-training-extended.md`'s **Pass 12** section for
+the full review: closes a standing scope gap (`schemas/course_cohort.py` and
+`schemas/training_submission.py` back this feature's own endpoints but were
+never in its declared scope — one of them, `training_submission.py`, was
+actively misattributed to Feature 17 in pass 10 — both now reviewed clean
+across all seven checklist dimensions), 0 fixes, 0 new security findings.
+
+**Tend commit added 2026-10-30:** a concurrent watchdog session independently
+picked this same feature at the same time (branch-name collision on
+`claude/security-review-training-extended-p12`, discovered when that
+session's own push was rejected with "fetch first" after this PR's branch
+already existed remotely). Rather than open a competing PR, that session
+found and fixed a real tracker bug while tending this one: rows 12-14
+(Facilities, Apparatus & NFC, Equipment check & shifts) read ⬜ in this PR's
+own `## Rotation` table even though all three had already been reviewed and
+merged (PRs #3832/#3835/#3837) — each of those three iterations' commits had
+edited only the Open PR narrative and the Log, never the table's own
+checkbox cell for its row, so "Row N → ✅" was written in prose but never
+applied. Confirmed via `git show <sha> -- docs/security-review/PROGRESS.md`
+on each of the three merged commits. Fixed in this tend commit; no other
+change.
+
+Rotation row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills
+testing) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 12, PR #3842, merged), preserved for history</summary>
+
 **PR [#3842](https://github.com/thegspiro/the-logbook/pull/3842)** (branch
 `claude/security-review-training-core-p12`) —
 Feature 17 (Training core), pass 12, a watchdog pickup. PR #3841 (Feature 16,
@@ -34,9 +66,10 @@ fix needed), and TR7-1 corrected (one of its two remaining original defects
 was already fixed by an earlier commit pass 11 reviewed but mis-attributed;
 the race and the structural incompleteness remain OPEN/FLAGGED).
 
-Rotation row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
-extended) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
-than trusting this note.
+Rotation row 17 → ✅ (merged as `15f0983a`); next was Feature 18 (Training
+extended).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 12, PR #3841, merged), preserved for history</summary>
@@ -23339,13 +23372,13 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
@@ -23369,6 +23402,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 18 (Training extended, pass 12) — watchdog pickup, scope gap closed (two schema files given first full pass, one corrects a pass-10 misattribution), 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable, confirmed via
+`ListAgents` — "No reachable agents"). No open security-review PR —
+confirmed via `list_pull_requests`/`search_pull_requests` (state=open,
+head `claude/security-review-*`): 0 results; the one open PR at the time
+(#3839) is unrelated layout work on branch `ccr-ba1682dc-g25b70`. PR #3842
+(Feature 17, Training core, pass 12) had already merged (`15f0983a`). Row
+18 confirmed the next pending feature by reading the rotation table on a
+freshly fetched `main`, matching PR #3842's own "next feature" note.
+
+Found and closed a scope-ownership gap: `schemas/course_cohort.py` and
+`schemas/training_submission.py` are imported only by this feature's own
+endpoint files (confirmed by grepping every importer repo-wide) but had
+never appeared in this feature's declared `Backend:` scope across eleven
+prior passes — and pass 10's scope-check note actively misattributed
+`schemas/training_submission.py` to Feature 17 (Training core) on the
+strength of a name-based glob match, without checking who actually imports
+it. Both files are now in Feature 18's declared scope and received a
+first full pass against all seven checklist dimensions: every
+client-supplied foreign key either schema declares was traced to its
+service-layer `assert_in_org`/org-scoped-join validation site rather than
+assumed covered, and both are clean. The window's real delta beyond that
+is two already-reviewed cross-cutting sweeps (`safe_error_detail()`
+disclosure hygiene, email-fingerprint matching) and one independently
+re-verified cross-cutting encryption migration
+(`training_waivers.reason` → `EncryptedText`, `create_all`-tolerant,
+idempotent, key-gated, no broken search). Two frontend changes, both
+layout/UX, read in full and confirmed non-functional to security. Every
+standing TRX finding re-verified unchanged; no OPEN or FLAGGED item exists
+after this pass. All 100 routes re-enumerated by AST, unchanged from pass
+11; `check_route_permissions.py --strict` — 280 routes, 0 errors (up from
+279, other features merging in the interim).
+
+Full write-up: `docs/security-review/TRX-18-training-extended.md`'s
+**Pass 12** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 678
+revisions, single head `f90b1124e6f4`; `check_route_permissions.py
+--strict` — 280 routes, 0 errors; scoped backend tests (`pytest tests/ -k
+"training or cohort or syllabus or waiver or external or enhancement or
+submission or xapi or crew"`, via `python3.13`) — 2517 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck`/`npm run
+lint` — 0 errors, 0 warnings.
+
+Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing)
+— re-check `list_pull_requests`/`search_pull_requests` fresh rather than
+trusting this note.
 
 ### 2026-10-29 — Feature 17 (Training core, pass 12) — watchdog pickup, scope gap closed (knowledge-tests given first full pass), TR7-1 corrected (one of its two defects already fixed, unnoticed by pass 11), 0 fixed, 0 new findings
 
