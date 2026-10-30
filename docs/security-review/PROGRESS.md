@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD** (branch `claude/security-review-grants-fundraising-p12`) —
+**PR [#3847](https://github.com/thegspiro/the-logbook/pull/3847)** (branch
+`claude/security-review-grants-fundraising-p12`) —
 Feature 22 (Grants & fundraising), pass 12, a watchdog pickup. See
 `docs/security-review/GF-22-grants-fundraising.md`'s **Pass 12** section for
 the full review: a real, narrow delta since pass 11 — a repo-wide
