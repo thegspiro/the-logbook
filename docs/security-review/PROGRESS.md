@@ -16,10 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Pending.** Feature 18 (Training extended), pass 12, a watchdog pickup, is
-reviewed and gate-clean on branch `claude/security-review-training-extended-p12`;
-its PR number and link will be recorded here in a follow-up commit on that
-same branch once it is opened, per the "never as a PR of its own" rule. See
+**PR [#3843](https://github.com/thegspiro/the-logbook/pull/3843)** (branch
+`claude/security-review-training-extended-p12`) — Feature 18 (Training
+extended), pass 12, a watchdog pickup. See
 `docs/security-review/TRX-18-training-extended.md`'s **Pass 12** section for
 the full review: closes a standing scope gap (`schemas/course_cohort.py` and
 `schemas/training_submission.py` back this feature's own endpoints but were
