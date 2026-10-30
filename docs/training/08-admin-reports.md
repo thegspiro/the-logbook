@@ -455,7 +455,10 @@ through and what each one gives:
 - whether they can vote;
 - whether they may hold elected office;
 - whether a meeting-attendance threshold applies before they may vote;
-- whether they are excused from training.
+- whether they are excused from training;
+- for a tier your department added, which built-in status it **Counts as**
+  _(2026-10-29)_. It is unset after an upgrade; see
+  [Member class and member status](./01-membership.md#member-class-and-member-status).
 
 Automatic advancement is **on by default**, and a monthly job acts on it. Turn
 it off if your department promotes by vote, by application, or on its own
@@ -1690,8 +1693,10 @@ switch between them.
 - **Prospective Members** holds the emails applicants receive — **Application
   Step Completed**, **Application Status Link**, **Application Going
   Inactive**, **Application Withdrawn**, **Duplicate Application Notice**,
-  **Application Follow-up Form** and **Application Contact Details Changed**
-  _(2026-10-29)_ — and the coordinators' **Prospect Inactivity Warning**.
+  **Application Follow-up Form**, **Application Contact Details Changed** and
+  **Application Follow-up Form Reminder** _(2026-10-29)_ — and the
+  coordinators' **Prospect Inactivity Warning** and **Application Follow-up
+  Form Submitted** _(2026-10-29)_.
   _(2026-10-26)_ When
   each is sent, and its variables, is in
   [Prospective Members → Emails to Applicants](./15-prospective-members.md#emails-to-applicants).
@@ -2598,11 +2603,13 @@ Profiles let different groups be held to different standards.
 
 1. Select **Add Profile**.
 2. Fill in:
-   - **Name** — for example "Line Officers" or "Probationary Members";
+   - **Profile Name** — for example "Line Officers" or "Probationary Members";
    - **Priority** — when a member matches more than one profile, the highest
      priority applies;
    - **Description**;
    - **Applies to Membership Types**;
+   - **Applies to Members Holding a Position** _(2026-10-29)_ — see
+     [Scoping a Compliance Profile by Position](./02-training.md#scoping-a-compliance-profile-by-position-2026-10-29);
    - optional **threshold overrides** for this group;
    - **Required Training Requirements** — what must be met;
    - **Optional/Tracked Requirements** — tracked, but not needed for

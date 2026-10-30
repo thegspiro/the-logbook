@@ -1444,10 +1444,11 @@ A dues schedule defines the terms of a recurring fee:
 | **Active**    | Whether the schedule is in use. Shown on Edit only; an inactive schedule cannot generate dues  |
 | **Notes**     | Optional notes about the schedule                                                              |
 
-> **No grace period, late fee or membership-type filter.** None of these can be
+> **No grace period, late fee or member filter.** None of these can be
 > set. No late fee is ever charged. Dues with nothing paid show as Overdue the
 > day after the due date; part-paid dues stay Partial. **Generate dues** bills
-> every active member, whatever their membership type.
+> every active member, whatever their member class or membership status
+> _(2026-10-29)_.
 
 ### Frequencies
 
@@ -1629,7 +1630,7 @@ Selecting a schedule narrows the summary to that schedule.
 | Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is erased and not copied to the audit log      |
 | Waiving dues that are already waived                               | Refused: "These dues are already waived." The first waiver's officer, date and reason stay. Reverse it first to record a new one                          |
 | Partial payment followed by waiver                                 | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision                                       |
-| Which members Generate Dues bills                                  | All active users in the organization. No membership-type filter is applied                                                                                |
+| Which members Generate Dues bills                                  | All active users in the organization. No member class or membership status filter is applied                                                              |
 | Changing the dues amount on a schedule                             | Only affects dues generated afterwards. Existing dues keep their original amount                                                                          |
 | Member status changes to inactive                                  | Existing dues records are not automatically waived or cancelled. An officer should manually waive them if appropriate                                     |
 | Late fees                                                          | Not available -- nothing charges or records a late fee                                                                                                    |

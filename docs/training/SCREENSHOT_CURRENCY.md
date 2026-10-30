@@ -1,5 +1,21 @@
 # Screenshot currency
 
+## Queued by the October 29 – 30 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 14 | Election Settings → **Voter Eligibility**, with **Use different rules at the annual meeting** | Create |
+| 14 | A member profile's **Voting eligibility** card | Create |
+| 14 | Election Settings with all six sections in the sidebar | Replace |
+| 15 | The Interview page's **Follow-up Forms** panel; the status page's **Open the form** card | Create |
+| 15 | Election Vote stage with **Include follow-up form answers** | Create |
+| 02 | Compliance profile form with **Applies to Members Holding a Position** | Create |
+| 01 | Member edit page with **Member class** and **Membership status** | Create |
+| 17 | `17-05-dropped-member-anonymize`: the profile now shows class and status | Replace |
+
 ## Queued by the October 29 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).

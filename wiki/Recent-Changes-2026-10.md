@@ -5,6 +5,24 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 29 – 30, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+
+- **Member class and membership status are now separate.** The single
+  Membership Type field is gone; four committees appear. Check the Senior
+  tier's new **Counts as** setting (`docs/UPGRADING.md`).
+- **Voter eligibility** has its own section in Election Settings: attendance
+  and waiting-period rules, check-in, and who votes on what. A member's
+  waiting period can be corrected or waived on their profile.
+- **Follow-up forms** now send reminders, tell coordinators when a form comes
+  in, and show the answers on the Interview page.
+- **Compliance profiles** can apply to the holders of chosen positions.
+- **Weather alerts, generic webhooks, required trainee reports** and several
+  other known limitations were closed.
+- Screenshots to create are in `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 29, 2026
 
 The engineering audit is

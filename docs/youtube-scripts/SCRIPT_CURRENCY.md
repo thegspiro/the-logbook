@@ -1,5 +1,17 @@
 # Script currency
 
+## Flagged by the 2026-10-29 → 10-30 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                   | Beat                | Was                         | Now                                                                                |
+| ------------------------ | ------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| **Any membership beat**  | Editing a member    | One **Membership Type**     | **Member class** and **Membership status**                                         |
+| **Any elections beat**   | Who may vote        | Per-ballot eligibility only | Election Settings → **Voter Eligibility** sets attendance and waiting-period rules |
+| **Any recruitment beat** | Follow-up forms     | Link only                   | Reminders, a coordinator notice, answers on the Interview page                     |
+| **Any training beat**    | Compliance profiles | By membership type          | Also by position held                                                              |
+
 ## Flagged by the 2026-10-29 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
