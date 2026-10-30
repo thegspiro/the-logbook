@@ -7,11 +7,13 @@ Includes per-integration-type config schemas with strict validation.
 
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
+
+from app.core.utils import list_within_detail_limit
 
 # ============================================
 # Shared response config (camelCase)
@@ -73,6 +75,12 @@ class NWSWeatherConfig(BaseModel):
 
     zone_id: str = Field(pattern=r"^[A-Z]{2}[CZ]\d{3}$")
     alert_types: List[str] = Field(default_factory=list)
+    # How members hear about a Severe or Extreme alert; the department chooses
+    # (owner decision 2026-10-29). A dashboard banner while it is active, a
+    # bell notice when it is issued, and an email when it is issued.
+    notify_banner: bool = True
+    notify_bell: bool = True
+    notify_email: bool = False
 
 
 class NFIRSConfig(BaseModel):
@@ -90,12 +98,34 @@ class NEMSISConfig(BaseModel):
     nemsis_version: str = "3.5.0"
 
 
+# The events a Generic Webhook can be sent, keyed by the chat dispatch ``kind``
+# that raises each one (notification_dispatch). Owner decision 2026-10-29: the
+# same three the chat integrations receive, each one pickable in the webhook's
+# settings.
+WEBHOOK_EVENT_TYPES: Dict[str, str] = {
+    "event": "event.created",
+    "shift": "shift.created",
+    "training": "training.recorded",
+}
+
+
 class GenericWebhookConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str
     secret: str = ""
+    # Which events the webhook is sent; empty means all of them.
     event_types: List[str] = Field(default_factory=list)
+
+    @field_validator("event_types")
+    @classmethod
+    def known_event_types(cls, value: List[str]) -> List[str]:
+        unknown = sorted(set(value) - set(WEBHOOK_EVENT_TYPES.values()))
+        if unknown:
+            raise ValueError(
+                list_within_detail_limit("Unknown webhook event type(s): ", unknown)
+            )
+        return list(dict.fromkeys(value))
 
 
 class EPCRImportConfig(BaseModel):
@@ -562,12 +592,29 @@ SECRET_CONFIG_KEYS = frozenset(
 # ============================================
 
 
+class ActiveWeatherAlertResponse(BaseModel):
+    """An active alert as the dashboard banner shows it."""
+
+    id: str
+    event: str
+    severity: str
+    headline: Optional[str] = None
+    instruction: Optional[str] = None
+    area_desc: Optional[str] = None
+    onset: Optional[datetime] = None
+    expires: Optional[datetime] = None
+
+
 class WeatherAlertResponse(BaseModel):
     """Validated NWS weather alert — only trusted fields."""
 
     model_config = ConfigDict(extra="ignore")
 
+    # NWS's own identifier for the alert; the dedupe key.
+    id: str = ""
     event: str
+    # "Actual" for a real alert; "Exercise", "System", "Test" or "Draft" else.
+    status: str = ""
     severity: str = ""
     urgency: str = ""
     headline: str = ""

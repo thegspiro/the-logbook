@@ -51,6 +51,7 @@ import {
   type StarterTemplate,
 } from './formConstants';
 import { useTablist } from '../hooks/useTablist';
+import { StatGrid } from '../components/ux/StatGrid';
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
 
@@ -497,8 +498,8 @@ const FormsPage: React.FC = () => {
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Page Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="page-header mb-8 gap-3 sm:items-center">
+          <div className="page-header-title flex items-center space-x-3">
             <div className="shrink-0 rounded-lg bg-red-800 p-2">
               <FormInput className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
@@ -509,7 +510,7 @@ const FormsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 void loadData();
@@ -532,7 +533,7 @@ const FormsPage: React.FC = () => {
             appearing with the figures pushed the tabs and the list ~330px down
             on a phone. A failed summary drops the row and says so below. */}
         {(summary || loading) && (
-          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5" role="region" aria-label="Forms statistics">
+          <StatGrid columns={5} gap={4} className="mb-8" role="region" aria-label="Forms statistics">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Forms</p>
               <p className="text-theme-text-primary mt-1 text-2xl font-bold">
@@ -563,7 +564,7 @@ const FormsPage: React.FC = () => {
                 {summary ? summary.submissions_this_month : <SkeletonText className="w-10" />}
               </p>
             </div>
-          </div>
+          </StatGrid>
         )}
 
         {/* Error Banner */}

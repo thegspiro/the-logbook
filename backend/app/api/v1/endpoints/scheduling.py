@@ -128,6 +128,7 @@ from app.schemas.scheduling import (
     StandingShiftPreviewResponse,
     StandingShiftResponse,
     TradeCandidateResponse,
+    TraineeReportRequirementResponse,
 )
 from app.services.call_tracking_service import CallTrackingService
 from app.services.event_request_service import (
@@ -998,6 +999,15 @@ async def finalize_shift(
     await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.manage"
     )
+    # A shift officer may close out their own shift, but closing it without
+    # the trainee reports the department requires is a scheduling admin's call.
+    if body.override_missing_reports and not user_has_permission(
+        current_user, "scheduling.manage"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a scheduling admin can close out without the trainee reports",
+        )
     manual = None
     if body.manual_hours:
         manual = [
@@ -1022,11 +1032,26 @@ async def finalize_shift(
         attach_call_ids=(
             [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
         ),
+        override_missing_reports=body.override_missing_reports,
     )
     if not shift:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to finalize shift.", error),
+        )
+    if body.override_missing_reports:
+        await log_audit_event(
+            db=db,
+            event_type="shift_finalized_report_override",
+            event_category="scheduling",
+            severity="WARNING",
+            event_data={
+                "organization_id": str(current_user.organization_id),
+                "shift_id": str(shift_id),
+                "reason": (body.report_override_reason or "").strip(),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
     if body.override_incomplete_checks:
         await log_audit_event(
@@ -1046,6 +1071,43 @@ async def finalize_shift(
     # prompt itself, so every finalize path clears it — not just this endpoint.
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
+
+
+@router.get(
+    "/shifts/{shift_id}/trainee-reports",
+    response_model=TraineeReportRequirementResponse,
+)
+async def get_shift_trainee_report_requirement(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Which trainee reports close-out still needs, when the department requires them.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    org = (
+        await db.execute(
+            select(Organization).where(
+                Organization.id == str(current_user.organization_id)
+            )
+        )
+    ).scalar_one_or_none()
+    required = service.trainee_reports_required(org)
+    missing = (
+        await service.missing_trainee_reports(shift_id, current_user.organization_id)
+        if required
+        else []
+    )
+    return {
+        "required": required,
+        "missing": [{"user_id": uid, "name": name} for uid, name in missing],
+        "can_override": user_has_permission(current_user, "scheduling.manage"),
+    }
 
 
 @router.get("/shifts/{shift_id}/closeout", response_model=CloseoutStateResponse)

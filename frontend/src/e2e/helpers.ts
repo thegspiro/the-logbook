@@ -386,7 +386,56 @@ export interface MockOptions {
    * pass over those would otherwise measure the error panel under their names.
    */
   memberRecord?: boolean;
+  /**
+   * Lengthen every display string the fixtures serve: names, titles, labels,
+   * descriptions, messages.
+   *
+   * The fixtures are written with short, tidy values — "Engine 1", "Alex
+   * Tester" — and a layout that fits those says little about a department
+   * called "Greater Northfield-Oakville Township Volunteer Fire & Rescue". Long
+   * text is where headers, tiles and table cells overflow. Opt-in because
+   * several specs assert on the exact fixture strings.
+   */
+  longText?: boolean;
 }
+
+/** Keys whose string values a person reads; anything else may be an id, enum or date. */
+const DISPLAY_KEYS = new Set([
+  'name',
+  'title',
+  'label',
+  'description',
+  'subject',
+  'message',
+  'first_name',
+  'last_name',
+  'full_name',
+  'display_name',
+  'shift_officer_name',
+  'apparatus_unit_number',
+  'storeName',
+  'tagline',
+  'location',
+  'location_name',
+  'category_name',
+  'program_name',
+]);
+
+const LONG_SUFFIX = ' of the Greater Northfield-Oakville Township Volunteer Fire & Rescue Department';
+const LONG_NAME_SUFFIX = '-Montgomery-Fitzgerald';
+
+const lengthen = (value: unknown, key = ''): unknown => {
+  if (Array.isArray(value)) return value.map((item) => lengthen(item));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, lengthen(v, k)]));
+  }
+  if (typeof value === 'string' && value.trim() && DISPLAY_KEYS.has(key)) {
+    return key.endsWith('_name') && key !== 'location_name' && key !== 'category_name' && key !== 'program_name'
+      ? `${value}${LONG_NAME_SUFFIX}`
+      : `${value}${LONG_SUFFIX}`;
+  }
+  return value;
+};
 
 /**
  * Route glob → response body. Ordered least to most specific; `mockApi`
@@ -489,6 +538,30 @@ const routes = ({
     }),
   ],
   ['**/api/v1/security/download-activity**', () => ({ exports: [] })],
+
+  // Both pages print these numbers straight into stat tiles, so the catch-all
+  // `{}` rendered "NaN MB" and a bare "%" — screenshots of a broken page that
+  // the real API, whose schemas make every field required, never produces.
+  [
+    '**/api/v1/documents/stats/summary**',
+    () => ({ total_documents: 48, total_folders: 6, total_size_bytes: 157_286_400, documents_this_month: 5 }),
+  ],
+  [
+    '**/api/v1/analytics/metrics**',
+    () => ({
+      total_scans: 1_284,
+      successful_check_ins: 1_197,
+      failed_check_ins: 87,
+      success_rate: 93.2,
+      avg_time_to_check_in: 14,
+      device_breakdown: { mobile: 1_032, desktop: 141, tablet: 98, unknown: 13 },
+      error_breakdown: { expired_qr: 52, outside_window: 35 },
+      hourly_activity: Array.from({ length: 24 }, (_, hour) => ({
+        hour,
+        count: hour >= 7 && hour <= 20 ? 40 + hour : 2,
+      })),
+    }),
+  ],
 
   ['**/api/v1/medical-supplies/lots/expiring**', () => []],
   ['**/api/v1/medical-supplies/categories**', () => []],
@@ -806,7 +879,7 @@ const memberRecordRoutes = (): [string, () => unknown][] => [
 export async function mockApi(page: Page, options: MockOptions = {}): Promise<void> {
   for (const [glob, body] of routes(options)) {
     await page.route(glob, (route) => {
-      void route.fulfill(json(body()));
+      void route.fulfill(json(options.longText ? lengthen(body()) : body()));
     });
   }
 }

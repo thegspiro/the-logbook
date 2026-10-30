@@ -1,3 +1,18 @@
+# October 29, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                              | Now in                                                                                         |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Follow-up Form stage: sending, drafts, write-back, contact changes | [15 — Prospective Members](./15-prospective-members.md), [01 — Membership](./01-membership.md) |
+| Pre-fill from applicant on a form field                            | [07 — Documents & Forms](./07-documents-forms.md)                                              |
+| Shift remaining is limited to 14 days                              | [02 — Training](./02-training.md)                                                              |
+
+---
+
 # October 28–29, 2026 workflow updates
 
 Index for the latest window. Audit:

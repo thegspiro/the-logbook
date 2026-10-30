@@ -93,13 +93,18 @@ def _mail(success=True):
 
 
 async def _warn(db_session, org, sender, recipients=("coord@fd.test",)):
-    users = [SimpleNamespace(email=e) for e in recipients]
+    users = [
+        SimpleNamespace(id=f"coord-{i}", email=e) for i, e in enumerate(recipients)
+    ]
     with (
         patch.object(
             MembershipPipelineService,
             "_withdrawal_notice_recipients",
             AsyncMock(return_value=users),
         ),
+        # The bell copy is covered in test_officer_alert_copies; these stand-ins
+        # are not rows a notification could point at.
+        patch("app.services.officer_alert_copies.add_in_app_copies", AsyncMock()),
         patch(f"{SERVICE}.recipients_for", lambda users, *_a: users),
         patch("app.services.email_service.EmailService", return_value=sender),
     ):
@@ -193,6 +198,38 @@ class TestWarnUpcomingAutoPurges:
         assert await _warn(db_session, org, _mail(success=False)) == 0
         assert await _warned_ids(db_session, org) == set()
         assert await _warn(db_session, org, _mail()) == 1
+
+    async def test_coordinators_who_turned_email_off_are_still_warned(self, db_session):
+        """With nobody to email, the bell entries are the warning, so the
+        application counts as warned and the email is not attempted."""
+        org = await _org(db_session)
+        pipeline = await _pipeline(
+            db_session,
+            org,
+            {"auto_purge_enabled": True, "purge_days_after_inactive": 30},
+        )
+        due = await _prospect(db_session, org, pipeline, "Due", 25)
+        sender = _mail()
+        bell = AsyncMock(return_value=1)
+
+        with (
+            patch.object(
+                MembershipPipelineService,
+                "_withdrawal_notice_recipients",
+                AsyncMock(return_value=[SimpleNamespace(id="coord-0", email="c@x")]),
+            ),
+            patch(f"{SERVICE}.recipients_for", return_value=[]),
+            patch("app.services.officer_alert_copies.add_in_app_copies", bell),
+            patch("app.services.email_service.EmailService", return_value=sender),
+        ):
+            warned = await MembershipPipelineService(
+                db_session
+            ).warn_upcoming_auto_purges(org.id, now=NOW)
+
+        assert warned == 1
+        sender.send_email.assert_not_awaited()
+        assert bell.await_args.kwargs["recipient_ids"] == ["coord-0"]
+        assert await _warned_ids(db_session, org) == {str(due.id)}
 
     async def test_no_coordinator_means_no_email(self, db_session):
         org = await _org(db_session)

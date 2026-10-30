@@ -2165,6 +2165,13 @@ export const complianceConfigService = {
     return response.data;
   },
 
+  async getAvailablePositions(): Promise<{ positions: import('../types/training').AvailablePosition[] }> {
+    const response = await api.get<{ positions: import('../types/training').AvailablePosition[] }>(
+      '/compliance/config/positions'
+    );
+    return response.data;
+  },
+
   async createProfile(
     data: import('../types/training').ComplianceProfileCreate
   ): Promise<import('../types/training').ComplianceProfile> {

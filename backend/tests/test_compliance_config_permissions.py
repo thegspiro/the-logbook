@@ -65,7 +65,12 @@ def test_compliance_writes_accept_compliance_manage(handler_name):
 
 
 @pytest.mark.parametrize(
-    "handler_name", ["get_compliance_config", "get_available_requirements"]
+    "handler_name",
+    [
+        "get_compliance_config",
+        "get_available_requirements",
+        "get_available_positions",
+    ],
 )
 def test_compliance_reads_accept_manage_permissions(handler_name):
     # compliance.manage is listed on the reads too: manage does not imply view

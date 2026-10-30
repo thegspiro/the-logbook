@@ -142,6 +142,8 @@ export interface ElectionPackageFieldConfig {
   include_date_of_birth: boolean;
   include_documents: boolean;
   include_stage_history: boolean;
+  /** Non-sensitive follow-up form answers; sensitive answers are never packaged. */
+  include_follow_up_answers?: boolean | undefined;
   custom_note_prompt?: string | undefined; // prompt shown to coordinator when packaging
 }
 
@@ -448,10 +450,43 @@ export interface FollowUpFormRequest {
   draft_saved_at?: string | null | undefined;
   submitted_at?: string | null | undefined;
   submission_id?: string | null | undefined;
+  /** Reminders the daily task has sent, at most three. */
+  reminder_count?: number | undefined;
+  last_reminder_at?: string | null | undefined;
   changes: FollowUpChange[];
   contact_changed: boolean;
   contact_change_reviewed_at?: string | null | undefined;
   contact_change_reviewed_by_name?: string | null | undefined;
+}
+
+/**
+ * One answer of a submitted follow-up form. A sensitive answer comes back as
+ * null with `withheld` set unless the viewer holds sensitive_answers.view.
+ */
+export interface FollowUpAnswer {
+  field_id: string;
+  label: string;
+  answer?: string | null | undefined;
+  is_sensitive: boolean;
+  withheld: boolean;
+}
+
+/** A submitted follow-up form's answers, as the Interview page shows them. */
+export interface FollowUpAnswers {
+  request_id: string;
+  step_name?: string | null | undefined;
+  form_id?: string | null | undefined;
+  form_name?: string | null | undefined;
+  submitted_at?: string | null | undefined;
+  answers: FollowUpAnswer[];
+}
+
+/** A follow-up form's non-sensitive answers, as an election package carries them. */
+export interface PackageFollowUpForm {
+  form_name?: string | null | undefined;
+  stage_name?: string | null | undefined;
+  submitted_at?: string | null | undefined;
+  answers: { label: string; answer: string }[];
 }
 
 // =============================================================================
@@ -919,7 +954,7 @@ export interface SignOffResult {
  * documents will be sent for e-signature via Documenso).
  */
 export interface CurrentStageAction {
-  type: 'calcom_scheduling' | 'documenso_signature';
+  type: 'calcom_scheduling' | 'documenso_signature' | 'follow_up_form';
   label: string;
   url?: string | undefined;
   message?: string | undefined;
@@ -1081,6 +1116,8 @@ export interface ElectionPackage {
   documents?: { name: string; url: string }[] | undefined;
   stage_summary?: { stage_name: string; completed_at?: string | undefined }[] | undefined;
   custom_fields?: Record<string, string> | undefined;
+  /** Present only when the election stage's package settings include them. */
+  follow_up_forms?: PackageFollowUpForm[] | undefined;
 
   // Recommended ballot item configuration (from stage config)
   recommended_ballot_item?:
@@ -1307,6 +1344,7 @@ export interface BackendElectionPackageResponse {
     created_at?: string;
     documents?: { name: string; document_type: string }[];
     stage_history?: { stage_name: string; completed_at?: string }[];
+    follow_up_forms?: PackageFollowUpForm[];
   } | null;
   coordinator_notes: string | null;
   package_config: {

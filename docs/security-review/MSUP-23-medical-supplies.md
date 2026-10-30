@@ -5,7 +5,121 @@
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
 #2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, PR #2981),
 2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, PR #3455),
-2026-10-24 (pass 16, PR #3635), 2026-10-27 (pass 17, this PR)
+2026-10-24 (pass 16, PR #3635), 2026-10-27 (pass 17, PR #3766),
+2026-10-30 (pass 18, this PR)
+
+## Pass 18 (2026-10-30) — 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`). `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results — no security-review PR was open. PR #3847 (Feature 22,
+Grants & fundraising, pass 12) had merged since the prior iteration; its own
+commit already recorded row 22 and cleared the Open PR note, so nothing rides
+along here beyond that already-committed state. Row 23 (Medical supplies)
+confirmed as the first `⬜` row in `PROGRESS.md`'s rotation table on a freshly
+fetched `main` (head `f16fd9cb`).
+
+**Scope check — re-enumerated by AST, not diffed.** **29 routes** in
+`medical_supplies.py`, unchanged from pass 17's 29 (full list re-derived by
+walking the module's route decorators, not read off the prior pass's table).
+All 29 carry `Depends(require_permission(...))` — 29 occurrences for 29
+decorators, each checked individually against its handler's sensitivity
+(view-permission gates on every read route, manage-permission gates on every
+write route and both CSV exports — `export_medical_items_csv` and
+`export_medical_lots_csv` require `inventory.manage_medical`/`inventory.manage`,
+not merely `.view`, matching the rest of this router's convention).
+
+`git log 69963418..origin/main` (pass 17's own merge commit) restricted to
+this feature's files (`medical_supplies.py`, `inventory_service.py`,
+`equipment_check_service.py`, `models/inventory.py`, `schemas/inventory.py`,
+`schemas/equipment_check.py`, `app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`, `scheduled_tasks.py`) found **two**
+non-merge commits touching any of those paths, both outside this feature's own
+domain logic:
+
+- `b48d63f2` ("Encrypt email columns and add fingerprint columns to the
+  models") — widens `InventoryVendorContact.email` from `String(255)` to
+  `EncryptedText`, part of a repo-wide email-encryption-at-rest sweep. Vendor
+  contacts are shared between the medical and gear sides of inventory; the
+  column already sat beside an `EncryptedText` `phone` column, so this is a
+  deliberate narrowing (less exposure, not more) and not specific to the
+  medical-supplies domain. Re-verified: `InventoryVendorContact` carries no
+  `organization_id` of its own and is reached only through an
+  already-org-scoped `InventoryItem`/vendor lookup, unchanged by this edit.
+- `b4d9388a` ("Cap the refusals that join a list from data") — in
+  `equipment_check_service.py` (shared with gear equipment checks), replaces
+  two f-string `ValueError` messages that joined an unbounded,
+  client-influenced id list (`', '.join(sorted(unknown))`) with
+  `list_within_detail_limit(...)`, which truncates and appends "and N more".
+  This is itself a checklist §5 ("error responses… no SQL, paths, or
+  tracebacks") hardening applied by another pass, already landed and tested;
+  re-confirmed here only because the file is shared with this feature's own
+  `apparatus_expiring_stock`/recall-lookup code, which this commit does not
+  touch (`git show b4d9388a` — a 6-line, 2-hunk diff, both hunks inside
+  `_validate_submitted_items`, unrelated to the medical-supplies-domain
+  methods this review covers).
+
+No other commit in range touches any of this feature's files. This is a true
+zero-delta pass on the medical-supplies domain itself.
+
+**Re-verified directly against current code, not re-cited from pass 17's
+prose:**
+
+- **Tenant isolation (§3):** `InventoryService.find_lots_by_number` (backs
+  `GET /lots/search`) filters `InventoryLot.organization_id == organization_id`
+  directly and builds its `ilike` pattern with
+  `like_pattern(needle), escape=LIKE_ESCAPE_CHAR` — re-read at
+  `inventory_service.py:10092-10135`, unchanged since pass 3.
+- **CSV safety (§4):** all three CSV endpoints (`/items/export`, `/lots/export`,
+  and the import-template download) still construct their writer via
+  `SafeCsvWriter(buffer)`/`SafeCsvWriter(output)` (`medical_supplies.py:1034,
+1171, 1200`) — no bare `csv.writer` introduced.
+- **Recall routes (pass 17's own addition):** `GET /recalls`, `POST /recalls`,
+  `POST /recalls/{recall_id}/lift` unchanged since pass 17 — same permissions,
+  same row-locking (`with_for_update()`) ahead of the duplicate-active-recall
+  and already-lifted checks, same migration (`3d67883cd461`, `_has_table()`
+  guarded, `SET NULL` columns `nullable=True`). No new commit touches
+  `inventory_lot_recalls` or its service methods in this window.
+- **MCP tools (`app/mcp/tools/medical_supplies.py`):** no commits in range;
+  re-read in full regardless — all four tools (`get_medical_supply_summary`,
+  `list_medical_supply_items`, `list_low_stock_medical_supplies`,
+  `list_expiring_medical_lots`) are read-only, gated on
+  `VIEW_PERMISSIONS = ("inventory.view_medical", "inventory.view")`, and every
+  query is scoped by `org_uuid(principal)`/`principal.organization_id` and
+  pinned to `MEDICAL_ITEM_TYPES` — a reorder/mutation tool does not exist for
+  this domain, matching the module docstring's stated design ("Read-only — a
+  reorder request for a medical item is refused whatever the switch says").
+- **Frontend (HIPAA/PII, §5):** `medicalSuppliesService.ts`'s own header
+  comment states, and `frontend/src/utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES`
+  confirms, that `/medical-supplies/` is deliberately **not** excluded from
+  caching — this endpoint carries department stock data (item names, lot
+  numbers, quantities), not member PHI; the similarly-named
+  `/medical-screening/` (a different feature, Feature 14) remains excluded.
+  Re-confirmed by reading both files directly, not assumed from the comment
+  alone. `MedicalSuppliesPage.tsx` uses `useConfirm()` (Pitfall #16), not
+  `window.confirm`/`window.prompt` — `grep -rn "window\.\(confirm\|alert\|prompt\)("`
+  over `frontend/src/modules/medical-supplies/`: 0 hits.
+
+**0 new findings.** MSUP-1 through MSUP-27 all re-verified intact (no code
+changed in the domain's own files). MSUP-4 and MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) remain the only open items, both
+owner-accepted (2026-10-05, `docs/KNOWN_LIMITATIONS.md`) and unchanged at
+their current signatures.
+
+### Completion gate (pass 18)
+
+| Check                                                                                  | Result                                                                 |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pinned version)                      | ✅ clean                                                               |
+| `black --check app/ tests/ alembic/` (black 26.10.1, CI's pinned version)              | ✅ clean — 2743 files unchanged                                        |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2, CI's pinned version)           | ✅ clean                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 678 revisions, single head `f90b1124e6f4`                           |
+| `python3.13 -m pytest tests/ -q -k "medical_supplies or medical_supply or lot_recall"` | ✅ 216 passed, 1 pre-existing skip (`pywebpush`/`py_vapid`, unrelated) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                      | ✅ 280 routes, 0 errors, 0 warnings                                    |
+| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors                                                            |
+| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                |
+| `npx vitest run src/modules/medical-supplies`                                          | ✅ 190 passed (10 files)                                               |
 
 ## Pass 17 (2026-10-27) — 0 fixed, 0 new findings (watchdog pickup)
 

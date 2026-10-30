@@ -28,39 +28,9 @@ import {
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
+import { KpiTile } from '@/components/ux/KpiTile';
 import { useAuthStore } from '@/stores/authStore';
-
-// =============================================================================
-// KPI Card Component
-// =============================================================================
-
-interface KpiCardProps {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  iconBgClass: string;
-  linkTo?: string;
-}
-
-const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon, iconBgClass, linkTo }) => {
-  const content = (
-    <div className="card p-4 transition-shadow hover:shadow-md">
-      <div className="flex items-center gap-3">
-        <div className={`rounded-lg p-2 ${iconBgClass}`}>{icon}</div>
-        <div className="min-w-0 flex-1">
-          <p className="text-theme-text-secondary text-sm leading-snug">{label}</p>
-          <p className="text-theme-text-primary text-xl font-bold">{value}</p>
-        </div>
-        {linkTo && <ChevronRight className="text-theme-text-secondary h-4 w-4 shrink-0" />}
-      </div>
-    </div>
-  );
-
-  if (linkTo) {
-    return <Link to={linkTo}>{content}</Link>;
-  }
-  return content;
-};
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // =============================================================================
 // Budget Health Gauge Component
@@ -123,7 +93,7 @@ const QuickLinkCard: React.FC<QuickLinkProps> = ({ to, icon, title, description 
 const DashboardSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading dashboard" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <StatGrid columns={4}>
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={`kpi-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
@@ -135,7 +105,7 @@ const DashboardSkeleton: React.FC = () => (
           </div>
         </div>
       ))}
-    </div>
+    </StatGrid>
     <div className="card p-6">
       <Skeleton className="mb-4 h-5 w-32" />
       <div className="space-y-4">
@@ -209,36 +179,36 @@ const FinanceDashboardPage: React.FC = () => {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
+      <StatGrid columns={4}>
+        <KpiTile
           label="Total Budgeted"
           value={formatCurrencyWhole(totalBudgeted)}
           icon={<DollarSign className="h-5 w-5 text-green-700 dark:text-green-600" />}
           iconBgClass="bg-green-100 dark:bg-green-500/20"
           linkTo="/finance/budgets"
         />
-        <KpiCard
+        <KpiTile
           label="Total Spent"
           value={formatCurrencyWhole(totalSpent)}
           icon={<CreditCard className="h-5 w-5 text-blue-600" />}
           iconBgClass="bg-blue-100 dark:bg-blue-500/20"
           linkTo="/finance/budgets"
         />
-        <KpiCard
+        <KpiTile
           label="Pending Approvals"
           value={String(dashboard?.pendingApprovalsCount ?? 0)}
           icon={<Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-600" />}
           iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
           {...(canApprove ? { linkTo: '/finance/approvals' } : {})}
         />
-        <KpiCard
+        <KpiTile
           label="Dues Collection"
           value={`${String(Math.round(dashboard?.duesCollectionRate ?? 0))}%`}
           icon={<Users className="h-5 w-5 text-purple-600" />}
           iconBgClass="bg-purple-100 dark:bg-purple-500/20"
           linkTo="/finance/dues"
         />
-      </div>
+      </StatGrid>
 
       {/* Budget Health Gauges */}
       <div className="card p-6">

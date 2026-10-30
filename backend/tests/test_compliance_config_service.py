@@ -233,6 +233,18 @@ class TestConfigService:
             }
         ]
 
+    async def test_get_available_positions_returns_only_id_and_name(self):
+        # The picker needs nothing more, and a compliance officer without
+        # positions.view must not be able to read a position's permissions here.
+        position = SimpleNamespace(
+            id="pos-1",
+            name="Life Member - Non-Operational",
+            permissions=["settings.manage"],
+        )
+        db = _db([_all([position])])
+        out = await ComplianceConfigService(db).get_available_positions("org-1")
+        assert out == [{"id": "pos-1", "name": "Life Member - Non-Operational"}]
+
 
 class TestCreateOrUpdateConfig:
     async def test_update_branch_applies_fields_via_apply_updates(self):

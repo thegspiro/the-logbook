@@ -35,6 +35,8 @@ export type { SortDirection } from './SortableHeader';
 export { DateRangePicker } from './DateRangePicker';
 export { FileDropzone } from './FileDropzone';
 export { InlineEdit } from './InlineEdit';
+export { KpiTile } from './KpiTile';
+export { StatGrid } from './StatGrid';
 
 // Mobile-first Components
 export { MobileItemCard } from './MobileItemCard';

@@ -45,23 +45,56 @@ describe('ElectionsSettingsPage', () => {
     window.history.pushState({}, '', '/elections/settings');
   });
 
-  // election_defaults are stored but neither the create form nor the backend
-  // create path reads them, so a Defaults section only claimed an effect it
-  // did not have (pitfall #19).
-  it('offers no Defaults section and opens on Proxy Voting', async () => {
+  it('opens on Proxy Voting', async () => {
     renderWithRouter(<ElectionsSettingsPage />);
 
     expect(await screen.findByRole('switch', { name: 'Allow proxy voting' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Defaults/ })).not.toBeInTheDocument();
-    expect(screen.queryByText('Default Election Settings')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Default Voting Method')).not.toBeInTheDocument();
   });
 
-  it('falls back to Proxy Voting for an old ?tab=defaults link', async () => {
+  // ELEC2-9: the create-election form now starts from these, so they have
+  // controls of their own.
+  it('shows the stored defaults under ?tab=defaults', async () => {
     window.history.pushState({}, '', '/elections/settings?tab=defaults');
     renderWithRouter(<ElectionsSettingsPage />);
 
-    expect(await screen.findByRole('switch', { name: 'Allow proxy voting' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('How is the winner determined?')).toHaveValue('ranked_choice|majority');
+    expect(screen.getByRole('switch', { name: 'Anonymous voting' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', { name: 'Allow write-in candidates' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Quorum')).toHaveValue('percentage');
+    expect(screen.getByLabelText('Percentage who must vote')).toHaveValue(40);
+  });
+
+  it('saves a winner rule as its method and condition, and clears the percentage', async () => {
+    const user = userEvent.setup();
+    window.history.pushState({}, '', '/elections/settings?tab=defaults');
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.selectOptions(
+      await screen.findByLabelText('How is the winner determined?'),
+      'simple_majority|supermajority'
+    );
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSettings).toHaveBeenCalledWith({
+      ...stored,
+      default_voting_method: 'simple_majority',
+      default_victory_condition: 'supermajority',
+      default_victory_percentage: null,
+    });
+  });
+
+  it('clears a count over 100 when the quorum becomes a percentage', async () => {
+    const user = userEvent.setup();
+    mockGetSettings.mockResolvedValue({ ...stored, default_quorum_type: 'count', default_quorum_value: 150 });
+    window.history.pushState({}, '', '/elections/settings?tab=defaults');
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.selectOptions(await screen.findByLabelText('Quorum'), 'percentage');
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ default_quorum_type: 'percentage', default_quorum_value: null })
+    );
   });
 
   it('saving another section leaves the stored defaults as they were', async () => {

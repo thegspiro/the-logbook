@@ -173,15 +173,51 @@ questions. Everything below is in `app/services/follow_up_form_service.py`.
 - **Purging and anonymizing.** Purging an inactive application deletes its
   follow-up submissions with it (they sit in the Forms module, linked only
   through the request row). Anonymizing a converted member clears each
-  request's link, draft and change log, and empties its submission.
+  request's link, draft and change log, and empties its submission. It also
+  reduces each election package's applicant copy to the anonymized name, the
+  membership type and the stage list, and clears the package's coordinator
+  notes and supporting statement; the ballot item is an election record and
+  is kept.
 - **Completing the stage.** Submitting completes and advances the stage unless
   **Advance the applicant when they submit the form** is unticked (new stages
   store it ticked). The form is stored under `config.follow_up_form_id`, never
   `form_id`: a stage's `form_id` creates an interest-form integration, and a
   follow-up submission must never file a new applicant.
 
-Reminders, coordinator emails on submission, and showing answers on the
-Interview page and in the election package follow in a second change.
+- **Reminders.** The hourly task `prospect_follow_up_reminders` emails the
+  same link (template **Application Follow-up Form Reminder**) seven days
+  after the last contact, up to three times. The last contact is the latest of
+  the link email, a reminder and a saved draft, so a resend or a draft saved
+  this week moves the next reminder back; a resend never restarts the count of
+  three. Days are counted on the department's calendar and a reminder goes out
+  only between 09:00 and 20:00 in its timezone, so it lands soon after 09:00.
+  Reminders stop once the applicant moves off the stage, the application
+  closes (on hold still counts as open), or the form is submitted. Each row is
+  locked and re-checked before sending; the reminder is sent and then stamped,
+  so a crash between the two can repeat one reminder but never skip one. A
+  failed send is retried on the next run. The applicant's page shows
+  **Reminders: 2 of 3**.
+- **Coordinator notice.** A submission emails the membership coordinators
+  (template **Application Follow-up Form Submitted**), the same people the
+  withdrawal notice reaches. It carries a link to the applicant's Interview
+  page and says when their contact details changed. It never carries an
+  answer. It is sent after the submission commits, and a mail failure does not
+  undo the submission.
+- **On the Interview page.** A **Follow-up Forms** panel lists each submitted
+  form's answers, in the form's order, with choices shown by their labels.
+  A sensitive answer is shown only to holders of `sensitive_answers.view`, and
+  each such view is audit-logged as `form_sensitive_answers_viewed` (the event
+  the Forms module records); anyone else sees that it was withheld.
+- **In the election package.** An Election / Vote stage's **Include
+  follow-up form answers** package setting (`include_follow_up_answers`, off
+  by default, and off for a stage saved before the setting existed) copies the
+  submitted forms into the package. Sensitive answers are never copied: the
+  package snapshot is stored unencrypted.
+- **On the status page.** While the applicant is on the stage and has not
+  submitted, their status page shows **Complete your form**, with a button
+  that opens the same link, and a note when a draft is saved. The card follows
+  the status page's own rules: it appears only when the stage is shown to the
+  public.
 
 ### Quick Presets (StageConfigModal)
 
@@ -796,6 +832,7 @@ log, not in the coordinator notes.
 | `GET`  | `/prospects/{prospect_id}/follow-up-forms`                                    | view                         | Forms sent, progress and record changes        |
 | `POST` | `/prospects/{prospect_id}/follow-up-forms/{step_id}/send`                     | `prospective_members.manage` | Send or resend a stage's form (same link)      |
 | `POST` | `/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change` | `prospective_members.manage` | Clear the contact-change flag                  |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms/{request_id}/answers`               | view                         | A submitted form's answers; 409 before submit  |
 | `GET`  | `/api/public/v1/follow-up-forms/{token}`                                      | None (link token)            | The form with pre-fill or draft; 409 once sent |
 | `PUT`  | `/api/public/v1/follow-up-forms/{token}/draft`                                | None (link token)            | Save a draft                                   |
 | `POST` | `/api/public/v1/follow-up-forms/{token}/submit`                               | None (link token)            | Submit; 400 names an answer to correct         |

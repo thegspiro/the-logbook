@@ -63,6 +63,7 @@ from app.services.integration_services.microsoft_365_service import (
     client_secret_days_left,
     client_secret_warning_level,
 )
+from app.services.officer_alert_copies import add_in_app_copies
 from app.utils.org_timezone import org_today
 
 # Stored under the Google-era key whichever directory is connected: renaming it
@@ -305,8 +306,9 @@ def _body(info: DirectoryProviderInfo, items: list[AttentionItem]) -> str:
 async def send_google_workspace_attention_digest(
     db: AsyncSession, organization: Organization
 ) -> int:
-    """Email this department's administrators the overdue directory accounts,
-    at most once a day. Returns the number of emails sent.
+    """Tell this department's administrators about the overdue directory
+    accounts, at most once a day: a bell entry for each, and the email for
+    those who receive it. Returns the number of emails sent.
 
     Nothing is recorded unless at least one email went out, so a department
     whose mail is failing is tried again on the next run.
@@ -337,8 +339,34 @@ async def send_google_workspace_attention_digest(
     if not overdue and not reactivated and not long_suspended:
         if secret_warned is None:
             return 0
+    administrators = await _administrators(db, org_id)
+    count = len(overdue) + len(reactivated) + len(long_suspended)
+    subject = (
+        f"{count} {info.product} account(s) need attention"
+        if count
+        else f"{info.product} client secret needs replacing"
+    )
+    # Every administrator gets a bell entry, emailed or not. Refreshed in
+    # place while unread, so the daily retry after a failed send (nothing is
+    # recorded then) does not stack them.
+    await add_in_app_copies(
+        db,
+        organization_id=org_id,
+        recipient_ids=[str(m.id) for m in administrators],
+        category="directory_accounts",
+        subject=subject,
+        message=(
+            f"{subject}. Each member's profile shows the reason and a Retry."
+            if count
+            else f"{subject} before it expires."
+        ),
+        action_url="/integrations",
+        replace_unread=True,
+        dedupe_key=info.audit_prefix,
+    )
+    await db.commit()
     recipients = recipients_for(
-        await _administrators(db, org_id),
+        administrators,
         EmailKind.MEMBERSHIP_ADMIN,
         department_required_kinds(organization),
     )
@@ -356,12 +384,6 @@ async def send_google_workspace_attention_digest(
         + action(html.escape(f"{base}/integrations"), "Open Integrations"),
         header_color=ACCENT_AMBER,
         chip=info.product,
-    )
-    count = len(overdue) + len(reactivated) + len(long_suspended)
-    subject = (
-        f"{count} {info.product} account(s) need attention"
-        if count
-        else f"{info.product} client secret needs replacing"
     )
     sent_total = 0
     for member in recipients:

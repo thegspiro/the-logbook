@@ -58,7 +58,9 @@ export interface Member {
   // Department Info
   joinDate: string;
   status: 'active' | 'inactive' | 'leave' | 'retired';
-  membershipType?: 'prospective' | 'probationary' | 'regular' | 'life' | 'administrative';
+  memberClass?: 'operational' | 'administrative' | 'social';
+  /** A built-in ladder status or one of the department's tier ids. */
+  memberStatus?: string;
   rank?: string;
   role?: string;
   station?: string;
@@ -97,7 +99,9 @@ export interface MemberFormData {
   joinDate: string;
   /** Initial account status (W08-1); the create endpoint accepts these three. */
   status: 'active' | 'inactive' | 'leave';
-  membershipType: 'prospective' | 'probationary' | 'regular' | 'life' | 'administrative';
+  memberClass: 'operational' | 'administrative' | 'social';
+  /** A built-in ladder status or one of the department's tier ids. */
+  memberStatus: string;
   rank: string;
   role: string;
   station: string;
@@ -135,6 +139,10 @@ export interface CSVMemberRow {
   status?: string | undefined;
   /** One of the membership types the Add Member form offers; blank imports as a regular member. */
   membershipType?: string | undefined;
+  /** operational | administrative | social; overrides what `membershipType` implies when given. */
+  memberClass?: string | undefined;
+  /** A built-in ladder status or one of the department's tier ids; overrides `membershipType` when given. */
+  memberStatus?: string | undefined;
   rank?: string | undefined;
   role?: string | undefined;
   station?: string | undefined;

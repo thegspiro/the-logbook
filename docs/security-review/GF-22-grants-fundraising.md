@@ -3,14 +3,165 @@
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
-2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11) · **PR:**
+2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30
+(pass 12) · **PR:**
 [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
 6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
 pass 8 merged as PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339),
 pass 9 merged as PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454),
 pass 10 merged as PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633),
-pass 11 (this PR)
+pass 11 merged as PR [#3765](https://github.com/thegspiro/the-logbook/pull/3765),
+pass 12 (this PR)
+
+---
+
+## Pass 12 (2026-10-30) — watchdog pickup, real delta (email encryption), 0 fixed by this pass itself, 3 stale-doc corrections across two other review tracks, 0 new findings
+
+**Watchdog pickup.** This scheduled check confirmed via `ListAgents` that the
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) has no reachable agent. PR #3846
+(Feature 21, Admin hours, pass 12) had already merged (`06da5fc4`) with no
+open PR whose head branch starts with `claude/security-review-`
+(`list_pull_requests`, state=open — 0 results; the one open PR, #3839, is
+unrelated layout work on branch `ccr-ba1682dc-g25b70`). Row 21 confirmed ✅ and
+row 22 (Grants & fundraising) confirmed the next `⬜` by reading the rotation
+table on a freshly fast-forwarded `main`.
+
+**Backend (declared scope):** `app/api/v1/endpoints/grants.py`,
+`app/services/grant_service.py`, `app/services/fundraising_service.py`,
+`app/models/grant.py`, `app/schemas/grant.py`. **Frontend:**
+`frontend/src/modules/grants-fundraising/`.
+
+### Diff-scoping methodology
+
+Baseline `fdfa0d83` (PR #3765's merge, pass 11; confirmed an ancestor of
+`HEAD` via `git merge-base --is-ancestor`). `git diff fdfa0d83..HEAD --stat`
+against the declared scope found a real, narrow delta: 2 backend files (12
+insertions, 6 deletions in `models/grant.py`; 6/2 in
+`services/fundraising_service.py`), 0 frontend files. `git log` attributes it
+to three non-rotation commits (`b48d63f2`, `43c11090`, `f19ff577`), all dated
+2026-10-26/27, none from this rotation. Each read in full against the current
+code, not trusted from its own commit message:
+
+1. **`b48d63f2` + `43c11090` — a repo-wide email-encryption-at-rest sweep's
+   share of this feature.** `Donor.email` and `Donation.donor_email` moved
+   from plain `String` to `EncryptedText` (AES-256-GCM); `Donor` gained an
+   `email_hash` column (a keyed HMAC-SHA256 fingerprint,
+   `app.core.security.email_fingerprint`, normalized case/whitespace before
+   hashing) kept in sync by a SQLAlchemy `"set"` event listener
+   (`keep_email_fingerprint`, `app/core/encrypted_types.py:163`) so every ORM
+   write — including the model constructor — recomputes it; confirmed no code
+   path does a bulk `update().values(email=...)` on `Donor`/`Donation` that
+   would bypass that listener (`grep` across `app/`, only hit is an unrelated
+   column on a different model). The donor-search `search_contact` path
+   (`FundraisingService.search_donors`, `fundraising_service.py:218-222`)
+   switched from `Donor.email.ilike(pattern, escape=...)` to
+   `Donor.email_hash.in_(email_fingerprints(search))` — `email_fingerprints`
+   (plural) checks the current key plus any legacy key, so a value fingerprinted
+   before a key rotation still matches. This is a deliberate, documented
+   narrowing (a full-address match only, no substring) rather than a
+   regression — encrypted text cannot support `LIKE`, and the comment at the
+   call site says so. `Donation.donor_email` has no fingerprint column and
+   none is needed: grepped every `.ilike(`/`.filter(` touching `donor_email`
+   in this feature's backend files — none exists; it is read/write only on
+   schemas, never searched. Neither `email` nor `email_hash` is present in
+   `DonorResponse`/`DonorBase` beyond the existing `email` field (confirmed by
+   reading `schemas/grant.py`), so the new hash column cannot leak through any
+   response. `donor_privacy.py`'s masking (GF-9's contact-field gate) operates
+   on the response object's `email` attribute by name, unaffected by the
+   storage-layer change underneath it — confirmed via
+   `git diff fdfa0d83..HEAD -- app/services/donor_privacy.py` (empty).
+   Migration `b8236e29ec44` (repo-wide, not scoped to this feature alone) is
+   `create_all`-tolerant (`_has_table`), idempotent (checks the ciphertext
+   prefix before re-encrypting), pages the backfill (500 rows at a time
+   rather than loading a table at once), and refuses outright when there are
+   rows to encrypt and no `ENCRYPTION_KEY` — reviewed in full, matching
+   CLAUDE.md Pitfall #35's "settle existing rows, require the key" shape.
+2. **`f19ff577` — out-of-scope commit, one incidental line in this feature's
+   service.** Mainly a new public-portal stats endpoint (Feature 03's
+   surface, already ✅); its only touch here is
+   `FundraisingService.create_donation`'s `user_id` parameter widening from
+   `str` to `Optional[str]` — a pure type-signature correction matching the
+   `recorded_by` column it fills (already nullable), for an existing
+   dues-overpayment call site that records a donation with no attributable
+   user. Read the method body in full: `donor_id`/`campaign_id` are still
+   validated in-org before use (`_entity_in_org`, `_campaign_assignable`,
+   unchanged), and the parent-locking order (GF-15) is unchanged. Not a
+   security-relevant change to this feature.
+
+### Route surface — re-enumerated from scratch, unchanged
+
+45 `@router.` decorators, 45 `require_permission(...)` calls (27
+`fundraising.manage`, 18 `fundraising.view`) — identical counts to pass 11;
+neither `grants.py` nor `schemas/grant.py` appears in this window's diff at
+all. `scripts/check_route_permissions.py --strict`: 280 routes repo-wide
+(up from 279 at pass 11 — Feature 20's new
+`GET /compliance/config/positions`, not this feature's route), 0 errors, 0
+warnings.
+
+### Three stale findings, found reading prior art (Step 2), not this feature's own diff
+
+Re-reading `docs/app-review/grants-fundraising.md` and
+`docs/module-audit/grants-fundraising.md` (per Step 2) against
+`docs/KNOWN_LIMITATIONS.md`'s own GF-7/GF-8/GF-9 rows — which already
+correctly state all three resolved, with full citations — found both other
+docs still marked GF-7 and GF-8 "🚩 FLAGGED"/"Still open" (resolved
+2026-10-11, and re-confirmed FIXED by this rotation's own pass 8 on
+2026-10-16) and GF-9's remaining two-thirds as "stand as before" (resolved
+2026-10-21, re-confirmed fully resolved by this rotation's own pass 10 on
+2026-10-24). The same staleness pattern as PR #3845's CS-8 correction and PR
+#3846's AH2-2 correction — a fix landing in one review track without its
+sibling tracks' open-item docs being updated to match. Corrected both files
+in place, each citing the fix's location and the `KNOWN_LIMITATIONS.md` row;
+no behavior changed, no new test needed (the existing guard tests —
+`test_grant_lifecycle.py`, `test_anonymous_donations.py`,
+`test_grant_money_bounds.py`, `test_donor_contact_privacy.py` — already cover
+each fix and were re-run as part of this pass's gate).
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-6** (cross-org FK validation) — all six helpers unchanged
+  in logic; this window's two in-scope commits touch neither.
+- **GF-7/GF-8/GF-9/GF-14/GF-15/GF-24a/GF-27a/GF-33/GF-35/GF-36** — all
+  unchanged since pass 11 (see the stale-doc correction above for why this
+  pass's own finding is about two _other_ docs, not a code regression).
+- **LIKE escaping** — every remaining `.ilike()` call site (opportunity
+  search, donor name/company search) still carries `escape=LIKE_ESCAPE_CHAR`
+  via `like_pattern()`; the one call site that stopped using `ilike` (donor
+  email) did so because the column can no longer support it, not because the
+  escaping was removed.
+- **CSV export** — still n/a; no export exists anywhere in this module.
+- **JSON-column mutation (Pitfall #12)** — no new `dict(obj.json_column)`
+  shallow-copy-then-mutate shape introduced this window.
+
+**No new findings.**
+
+### Schema & migration notes
+
+One migration in scope this window, `b8236e29ec44` (reviewed above), shared
+with 19 other tables repo-wide. Chain re-validated: 678 revisions, single
+head `f90b1124e6f4`, no duplicate ids.
+
+### Completion gate (pass 12)
+
+| Check                                                      | Result                              |
+| ---------------------------------------------------------- | ----------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)            | ✅ 0 violations                     |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)    | ✅ 2743 files unchanged             |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`) | ✅ clean                            |
+| `python3 scripts/validate_migrations.py --strict`          | ✅ 678 revisions, single head       |
+| `pytest tests/ -q -k "grant or fundraising or donor"`      | ✅ 1284 passed, 1 pre-existing skip |
+| `python3 scripts/check_route_permissions.py --strict`      | ✅ 280 routes, 0 errors, 0 warnings |
+
+No frontend file is in this pass's diff (confirmed by the `--stat` above), so
+`npm run typecheck`/`npm run lint`/`npx vitest run src/modules/grants-fundraising`
+are unchanged from pass 11's green result and were not independently
+re-run. This pass's own diff modifies three documentation files (this file,
+`docs/app-review/grants-fundraising.md`, `docs/module-audit/grants-fundraising.md`)
+plus `PROGRESS.md` — no source file. Every fixable item in this window's real
+delta (the email-encryption sweep) had already landed correctly via a
+non-rotation commit before this pass began.
 
 ---
 

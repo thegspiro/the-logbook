@@ -385,6 +385,24 @@ describe('mapElectionPackageResponse', () => {
     expect(result.election_end_date).toBeUndefined();
     expect(result.election_status).toBeUndefined();
   });
+
+  it('carries the follow-up answers a package was assembled with', () => {
+    const forms = [
+      { form_name: 'Background', stage_name: 'Background', answers: [{ label: 'Why?', answer: 'Moved' }] },
+    ];
+
+    const result = mapElectionPackageResponse(
+      makeElectionPackageResponse({
+        applicant_snapshot: { first_name: 'Devon', last_name: 'Marsh', follow_up_forms: forms },
+      })
+    );
+
+    expect(result.follow_up_forms).toEqual(forms);
+  });
+
+  it('leaves follow-up answers out of a package assembled without them', () => {
+    expect(mapElectionPackageResponse(makeElectionPackageResponse()).follow_up_forms).toBeUndefined();
+  });
 });
 
 describe('mapProspectToApplicant — target role and lifecycle stamps', () => {

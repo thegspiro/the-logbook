@@ -48,7 +48,12 @@ from app.services.member_shift_release_service import (
     release_future_shift_commitments,
 )
 from app.services.nfc_card_status_sync import sync_cards_with_member_status
-from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
+from app.utils.membership import (
+    LEGACY_MEMBERSHIP_TYPES,
+    canonical_member_status,
+    is_administrative,
+    split_membership_type,
+)
 from app.utils.org_timezone import (
     resolve_org_today,
     resolve_scheduling_timezone,
@@ -1381,8 +1386,17 @@ async def change_membership_type(
         cleared_rank = previous_rank
 
     # Applied here as well as at flush so the audit entry below can say what
-    # moved. The flush listener finds nothing left to do.
-    status_change = sync_account_status_with_membership(member, now=now)
+    # moved. The flush listener finds nothing left to do. The standing is
+    # passed explicitly because the ladder column is filled at flush, so the
+    # stored one is still the rung the member is leaving.
+    from app.services.membership_tier_service import MembershipTierService
+
+    status_change = sync_account_status_with_membership(
+        member,
+        now=now,
+        member_status=canonical_member_status(request.membership_type),
+        ranks_as_by_tier=MembershipTierService.ranks_as_by_tier(organization),
+    )
 
     await db.commit()
 
@@ -1523,14 +1537,46 @@ async def get_membership_tier_config(
         # rather than left to the client to work out: `membership_type` also
         # holds the legacy non-tier values, and counting them as tiers is how
         # you get an editor that offers to delete "administrative".
-        "member_counts": await _tier_member_counts(
-            db, str(current_user.organization_id)
+        "member_counts": _counts_by_tier_id(
+            await _tier_member_counts(db, str(current_user.organization_id)),
+            [t.get("id") for t in tier_config.get("tiers", []) if t.get("id")],
         ),
     }
 
 
+def _counts_by_tier_id(
+    counts_by_standing: dict[str, int], tier_ids: list[str]
+) -> dict[str, int]:
+    """Re-key an occupancy count by the ladder's own tier ids.
+
+    The editor reads ``member_counts[tier.id]``, and the shipped ladder spells
+    its second rung ``active`` where the column stores ``regular``. Standings
+    no rung claims (``honorary``, ``retired``) are reported under their own
+    name so the editor can still see them.
+    """
+    by_tier: dict[str, int] = {}
+    claimed: set[str] = set()
+    for tier_id in tier_ids:
+        standing = canonical_member_status(tier_id)
+        if standing is None:
+            continue
+        by_tier[str(tier_id)] = counts_by_standing.get(standing, 0)
+        claimed.add(standing)
+    for standing, count in counts_by_standing.items():
+        if standing not in claimed:
+            by_tier[standing] = count
+    return by_tier
+
+
 async def _tier_member_counts(db: AsyncSession, organization_id: str) -> dict[str, int]:
-    """Members per stored ``membership_type``, for the whole roster.
+    """Members per ladder standing, in canonical spelling, for the whole roster.
+
+    Keyed on ``member_status`` because that is where a tier id lives for every
+    class of member: an administrative member on the ``senior`` rung derives a
+    legacy ``membership_type`` of ``administrative``, and a count keyed on the
+    legacy column could not see them standing on the rung about to be removed.
+    A row written before the ladder column existed is counted by the standing
+    fused into its legacy value.
 
     Deleted members are excluded; every other status is counted. A retired or
     archived member still holds a tier, and removing the rung out from under
@@ -1550,15 +1596,24 @@ async def _tier_member_counts(db: AsyncSession, organization_id: str) -> dict[st
     writers that lock a member first.
     """
     result = await db.execute(
-        select(User.membership_type, func.count(User.id))
+        select(User.member_status, User.membership_type, func.count(User.id))
         .where(
             User.organization_id == organization_id,
             User.deleted_at.is_(None),
-            User.membership_type.is_not(None),
         )
-        .group_by(User.membership_type)
+        .group_by(User.member_status, User.membership_type)
     )
-    return {str(tier_id): int(count) for tier_id, count in result.all()}
+    counts: dict[str, int] = {}
+    for member_status, membership_type, count in result.all():
+        standing = canonical_member_status(member_status)
+        if standing is None:
+            standing = split_membership_type(membership_type)[1]
+        if standing is None:
+            standing = canonical_member_status(membership_type)
+        if standing is None:
+            continue
+        counts[standing] = counts.get(standing, 0) + int(count)
+    return counts
 
 
 @router.put("/membership-tiers/config")
@@ -1698,12 +1753,16 @@ async def update_membership_tier_config(
     occupied_and_gone = sorted(
         tier_id
         for tier_id in existing_ids - submitted_ids
-        if counts.get(tier_id, 0) > 0
+        if counts.get(canonical_member_status(tier_id) or "", 0) > 0
     )
     if occupied_and_gone:
+        held = {
+            tier_id: counts[canonical_member_status(tier_id) or ""]
+            for tier_id in occupied_and_gone
+        }
         detail = "; ".join(
-            f"'{tier_id}' is held by {counts[tier_id]} "
-            f"{'member' if counts[tier_id] == 1 else 'members'}"
+            f"'{tier_id}' is held by {held[tier_id]} "
+            f"{'member' if held[tier_id] == 1 else 'members'}"
             for tier_id in occupied_and_gone
         )
         raise HTTPException(

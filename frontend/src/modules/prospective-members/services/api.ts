@@ -68,6 +68,7 @@ import type {
   InactivityAlertLevel,
   CurrentStageAction,
   NextMeeting,
+  FollowUpAnswers,
   FollowUpFormRequest,
   PublicFollowUpForm,
 } from '../types';
@@ -464,6 +465,7 @@ export function mapElectionPackageResponse(data: BackendElectionPackageResponse)
     documents: config.documents ?? (snapshotDocs.length > 0 ? snapshotDocs : undefined),
     stage_summary: config.stage_summary ?? (snapshotStages.length > 0 ? snapshotStages : undefined),
     custom_fields: config.custom_fields,
+    follow_up_forms: snapshot.follow_up_forms?.length ? snapshot.follow_up_forms : undefined,
     recommended_ballot_item: config.recommended_ballot_item,
     status: data.status,
     election_id: data.election_id || undefined,
@@ -1315,6 +1317,14 @@ export const followUpFormService = {
       `/prospective-members/prospects/${applicantId}/follow-up-forms/${requestId}/review-contact-change`
     );
     return response.data;
+  },
+
+  /** A submitted form's answers; sensitive ones are withheld from a viewer without the permission. */
+  async getAnswers(applicantId: string, requestId: string): Promise<FollowUpAnswers> {
+    const response = await api.get<FollowUpAnswers>(
+      `/prospective-members/prospects/${applicantId}/follow-up-forms/${requestId}/answers`
+    );
+    return { ...response.data, answers: asArray(response.data.answers) };
   },
 };
 

@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.base import RefusesNull, UTCResponseBase
-from app.utils.membership import MemberClass, MemberStatus
+from app.utils.membership import MemberClass, MemberStatus, canonical_member_status
 from app.utils.phone_numbers import validate_member_phone
 
 _response_config = ConfigDict(from_attributes=True)
@@ -229,6 +229,11 @@ class UserCreate(UserBase):
         return validate_member_phone(v)
 
 
+#: What a ``member_status`` may look like before the organization's tier list
+#: is consulted: the shape ``MembershipTier.id`` is validated to, lowercased.
+MEMBER_STATUS_SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,49}")
+
+
 class MembershipClassificationFields(BaseModel):
     """The two independent facts ``membership_type`` used to fuse.
 
@@ -277,13 +282,24 @@ class MembershipClassificationFields(BaseModel):
     @field_validator("member_status")
     @classmethod
     def _known_member_status(cls, value: Optional[str]) -> Optional[str]:
+        """Shape only. The full check is the organization's.
+
+        ``member_status`` holds a built-in status *or* one of the department's
+        own membership tier ids (``senior``), and the schema cannot see the
+        organization. It settles the spelling and refuses anything that is
+        not a slug; the endpoint checks the value against
+        ``accepted_member_statuses`` for the caller's organization.
+        """
         if value is None:
             return None
-        normalised = value.strip().lower()
-        if normalised not in MemberStatus.ALL:
+        normalised = canonical_member_status(value)
+        if normalised is None:
+            return None
+        if not MEMBER_STATUS_SLUG.fullmatch(normalised):
             raise ValueError(
-                f"Unknown member_status '{value}'. "
-                f"Expected one of: {', '.join(MemberStatus.ALL)}."
+                f"Unknown member_status '{value}'. Expected one of "
+                f"{', '.join(MemberStatus.ALL)} or one of the organization's "
+                "membership tier ids."
             )
         return normalised
 
@@ -621,6 +637,13 @@ class RoleResponse(BaseModel):
     # is where a rank is set. Defaults False so a dict built without it is
     # still a valid response.
     mirrors_rank: bool = False
+    # office | committee | system; the profile groups a member's positions by it.
+    kind: str = "office"
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _coerce_null_kind(cls, v: object) -> object:
+        return v if v else "office"
 
     @field_validator("permissions", mode="before")
     @classmethod

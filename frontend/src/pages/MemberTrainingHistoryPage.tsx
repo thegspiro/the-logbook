@@ -29,6 +29,7 @@ import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
 import { useDialog } from '../hooks/useDialog';
 import { getTrainingStatusLabel } from '../utils/trainingColors';
+import { StatGrid } from '../components/ux/StatGrid';
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -377,12 +378,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             ]}
           />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+          <div className="page-header gap-3 sm:items-center">
+            <div className="page-header-title">
               <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Training History</h1>
               <p className="text-theme-text-muted mt-1">{user.full_name || user.username}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="page-header-actions flex flex-wrap items-center gap-2 print:hidden">
               <select
                 aria-label="Export period"
                 value={exportPeriod}
@@ -427,14 +428,14 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-6">
+        <StatGrid columns={6} gap={4} className="mb-6">
           <StatCard label="Total Records" value={stats.total} />
           <StatCard label="Completed" value={stats.completed} color="green" />
           <StatCard label="Total Hours" value={stats.totalHours} color="blue" />
           <StatCard label="Scheduled" value={stats.scheduled} color="yellow" />
           <StatCard label="Expiring Soon" value={stats.expiringSoon} color="orange" />
           <StatCard label="Expired" value={stats.expired} color="red" />
-        </div>
+        </StatGrid>
 
         {/* Filters */}
         <div className="card mb-6 p-4">

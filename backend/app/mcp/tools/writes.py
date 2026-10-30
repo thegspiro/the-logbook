@@ -15,6 +15,7 @@ from uuid import UUID
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import list_within_detail_limit
 from app.mcp.principal import McpPrincipal
 from app.mcp.registry import logbook_tool
 from app.mcp.tools._common import (
@@ -41,9 +42,13 @@ MCP_ACTION_ITEM_SOURCE = "mcp"
 
 def _validation_message(exc: ValidationError) -> str:
     """A request schema's errors as one line naming each field."""
-    return "; ".join(
-        f"{'.'.join(str(p) for p in err['loc']) or 'input'}: {err['msg']}"
-        for err in exc.errors()
+    return list_within_detail_limit(
+        "",
+        [
+            f"{'.'.join(str(p) for p in err['loc']) or 'input'}: {err['msg']}"
+            for err in exc.errors()
+        ],
+        separator="; ",
     )
 
 

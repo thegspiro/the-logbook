@@ -1051,6 +1051,25 @@ describe('StageConfigModal', () => {
     );
   });
 
+  it('saves the follow-up answers choice with the package fields', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+    await user.click(screen.getByText('Membership Vote'));
+
+    const toggle = screen.getByRole('checkbox', { name: /Include follow-up form answers/ });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          package_fields: expect.objectContaining({ include_follow_up_answers: true }) as unknown,
+        }) as unknown,
+      })
+    );
+  });
+
   it('does not inject package_fields defaults when editing an existing election-vote stage that never had them', async () => {
     const user = userEvent.setup();
     const editingStage: PipelineStage = {

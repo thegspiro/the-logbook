@@ -493,11 +493,12 @@ def _incomplete_required_steps(
 
 
 def _required_steps_refusal(names: List[str]) -> str:
-    listed = ", ".join(f"'{n}'" for n in names)
     noun = "stage is" if len(names) == 1 else "stages are"
-    return (
+    return list_within_detail_limit(
         f"This applicant cannot be converted yet: the required {noun} not "
-        f"complete: {listed}."
+        "complete: ",
+        [f"'{n}'" for n in names],
+        ".",
     )
 
 
@@ -6967,10 +6968,11 @@ class MembershipPipelineService:
         date it acts on.
 
         Recipients are the members the withdrawal notice goes to (Membership
-        Coordinator / Assistant, else whoever can manage prospective members),
-        filtered by their email preferences. Nothing is marked as warned
-        unless the email was accepted, so a failed send is retried next run.
-        Returns how many applications were included in a sent warning.
+        Coordinator / Assistant, else whoever can manage prospective members).
+        Each gets a bell entry; those whose email preferences allow it also get
+        the email. When there is an email to send, nothing is marked as warned
+        unless it was accepted, so a failed send is retried next run. Returns
+        how many applications were included in the warning.
         """
         import html as _html
 
@@ -7047,18 +7049,19 @@ class MembershipPipelineService:
         ).scalar_one_or_none()
         if org is None:
             return 0
-        recipients = recipients_for(
-            await self._withdrawal_notice_recipients(organization_id),
-            EmailKind.MEMBERSHIP_ADMIN,
-            department_required_kinds(org),
-        )
-        if not recipients:
+        coordinators = await self._withdrawal_notice_recipients(organization_id)
+        if not coordinators:
             logger.warning(
                 f"Auto-purge warning: {len(due)} application(s) in org "
                 f"{organization_id} are due for purge and no coordinator can be "
-                "emailed; the purge will still run"
+                "told; the purge will still run"
             )
             return 0
+        recipients = recipients_for(
+            coordinators,
+            EmailKind.MEMBERSHIP_ADMIN,
+            department_required_kinds(org),
+        )
 
         from app.core.config import settings as app_settings
         from app.services.email_service import EmailService, build_email_logo_html
@@ -7098,19 +7101,43 @@ class MembershipPipelineService:
 </div>"""
         text_body = f"{explain}\n\n{items_text}\n\n{queue_url}\n"
 
-        success, _ = await EmailService(org).send_email(
-            to_emails=[u.email for u in recipients],
+        # Every coordinator gets a bell entry, emailed or not. Refreshed in
+        # place while unread, so a retry after a failed send adds no second one.
+        from app.services.officer_alert_copies import add_in_app_copies
+
+        shown = [f"{name} ({_on(purge_at)})" for _, name, _, purge_at in due[:5]]
+        await add_in_app_copies(
+            self.db,
+            organization_id=str(organization_id),
+            recipient_ids=[str(u.id) for u in coordinators],
+            category="prospect_auto_purge",
             subject=subject,
-            html_body=html_body,
-            text_body=text_body,
-            db=self.db,
+            message=(
+                "These inactive applications will be permanently deleted unless "
+                "reactivated first: "
+                + ", ".join(shown)
+                + (f", and {count - len(shown)} more" if count > len(shown) else "")
+                + "."
+            ),
+            action_url="/prospective-members?status=inactive",
+            replace_unread=True,
         )
-        if not success:
-            logger.warning(
-                f"Auto-purge warning email for org {organization_id} was not "
-                "sent; it will be retried on the next run"
+        await self.db.commit()
+
+        if recipients:
+            success, _ = await EmailService(org).send_email(
+                to_emails=[u.email for u in recipients],
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                db=self.db,
             )
-            return 0
+            if not success:
+                logger.warning(
+                    f"Auto-purge warning email for org {organization_id} was not "
+                    "sent; it will be retried on the next run"
+                )
+                return 0
 
         for prospect_id, _, _, purge_at in due:
             await self._log_activity(
@@ -7119,6 +7146,7 @@ class MembershipPipelineService:
                 details={
                     "purge_on": purge_at.isoformat(),
                     "recipient_count": len(recipients),
+                    "in_app_count": len(coordinators),
                 },
             )
         await self.db.commit()
@@ -7669,6 +7697,19 @@ class MembershipPipelineService:
             snapshot["date_of_birth"] = (
                 str(prospect.date_of_birth) if prospect.date_of_birth else None
             )
+        # Only when the stage asks for it: a stage configured before this
+        # setting existed has no package_fields to say so, and _field_enabled
+        # reads that as "everything" -- which must not start copying answers
+        # into packages that never carried them.
+        if (
+            package_fields is not None
+            and package_fields.get("include_follow_up_answers") is True
+        ):
+            from app.services.follow_up_form_service import FollowUpFormService
+
+            snapshot["follow_up_forms"] = await FollowUpFormService(
+                self.db
+            ).package_answers(str(prospect.id), str(prospect.organization_id))
 
         pkg = ProspectElectionPackage(
             id=generate_uuid(),
@@ -8219,7 +8260,8 @@ class MembershipPipelineService:
     async def _notify_coordinators_of_withdrawal(
         self, prospect: ProspectiveMember, reason: Optional[str]
     ) -> None:
-        """Email the membership coordinators that an applicant withdrew.
+        """Tell the membership coordinators that an applicant withdrew: a bell
+        entry for each, and the email for those who receive it.
 
         Best-effort and after the withdrawal has committed: the applicant's
         decision stands whether or not the email goes out, so a mail failure is
@@ -8235,12 +8277,10 @@ class MembershipPipelineService:
             if not org:
                 return
 
-            recipients = recipients_for(
-                await self._withdrawal_notice_recipients(str(prospect.organization_id)),
-                EmailKind.MEMBERSHIP_ADMIN,
-                department_required_kinds(org),
+            coordinators = await self._withdrawal_notice_recipients(
+                str(prospect.organization_id)
             )
-            if not recipients:
+            if not coordinators:
                 logger.warning(
                     f"No coordinator to notify of withdrawal by prospect "
                     f"{prospect.id} in org {prospect.organization_id}"
@@ -8249,6 +8289,7 @@ class MembershipPipelineService:
 
             from app.core.config import settings as app_settings
             from app.services.email_service import EmailService, build_email_logo_html
+            from app.services.officer_alert_copies import add_in_app_copies
 
             applicant_name = f"{prospect.first_name} {prospect.last_name}".strip()
             pipeline_name = prospect.pipeline.name if prospect.pipeline else None
@@ -8257,6 +8298,39 @@ class MembershipPipelineService:
             pipeline_url = f"{frontend_url}/prospective-members"
 
             subject = f"Application withdrawn: {applicant_name}"
+
+            # Every coordinator gets a bell entry, emailed or not: the email is
+            # optional, and nothing else tells the department.
+            await add_in_app_copies(
+                self.db,
+                organization_id=str(prospect.organization_id),
+                recipient_ids=[str(u.id) for u in coordinators],
+                category="prospect_withdrawn",
+                subject=subject,
+                message=(
+                    f"{applicant_name} withdrew their application. It is in the "
+                    "Withdrawn tab and can be reactivated there."
+                ),
+                action_url="/prospective-members",
+                metadata={"prospect_id": str(prospect.id)},
+            )
+            recipients = recipients_for(
+                coordinators,
+                EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
+            )
+            if not recipients:
+                await self._log_activity(
+                    prospect_id=str(prospect.id),
+                    action="withdrawal_notice_sent",
+                    details={
+                        "recipient_count": 0,
+                        "in_app_count": len(coordinators),
+                        "delivered": 0,
+                    },
+                )
+                await self.db.commit()
+                return
 
             e_name = _html.escape(applicant_name)
             rows = [f"<li><strong>Applicant:</strong> {e_name}</li>"]
@@ -8306,7 +8380,11 @@ class MembershipPipelineService:
             await self._log_activity(
                 prospect_id=str(prospect.id),
                 action="withdrawal_notice_sent",
-                details={"recipient_count": len(recipients), "delivered": success},
+                details={
+                    "recipient_count": len(recipients),
+                    "in_app_count": len(coordinators),
+                    "delivered": success,
+                },
             )
             await self.db.commit()
         except Exception as e:
@@ -8607,6 +8685,16 @@ class MembershipPipelineService:
             current_stage_action = self._build_current_stage_action(
                 prospect.current_step
             )
+            if (
+                current_stage_action is None
+                and effective_step_type(prospect.current_step)
+                == PipelineStepType.FOLLOW_UP_FORM
+            ):
+                from app.services.follow_up_form_service import FollowUpFormService
+
+                current_stage_action = await FollowUpFormService(
+                    self.db
+                ).status_page_action(prospect)
 
         next_meeting = None
         found = await self._status_page_meeting(prospect, public_step_ids, show_future)
@@ -8832,7 +8920,8 @@ class MembershipPipelineService:
     async def _email_inactivity_warnings(
         self, organization_id: str, warnings: List[Dict[str, Any]], now: datetime
     ) -> None:
-        """Email this run's inactivity warnings, as each pipeline is set to.
+        """Send this run's inactivity warnings, as each pipeline is set to:
+        a bell entry for each coordinator, and the email for those who receive it.
 
         Best-effort: a mail failure is logged and the sweep carries on, since
         the activity entry and the inactive marking are the record.
@@ -8841,6 +8930,7 @@ class MembershipPipelineService:
 
         from app.core.config import settings as app_settings
         from app.services.email_service import EmailService
+        from app.services.officer_alert_copies import add_in_app_copies
 
         try:
             org = (
@@ -8857,15 +8947,40 @@ class MembershipPipelineService:
                 "/prospective-members"
             )
 
-            coordinators: Optional[List[User]] = None
+            all_coordinators: Optional[List[User]] = None
+            coordinators: List[User] = []
             for w in warnings:
                 if w.get("notify_coordinator"):
-                    if coordinators is None:
+                    if all_coordinators is None:
+                        all_coordinators = await self._withdrawal_notice_recipients(
+                            organization_id
+                        )
                         coordinators = recipients_for(
-                            await self._withdrawal_notice_recipients(organization_id),
+                            all_coordinators,
                             EmailKind.MEMBERSHIP_ADMIN,
                             department_required_kinds(org),
                         )
+                    # A bell entry for every coordinator, emailed or not;
+                    # committed with the sweep's activity entries. Refreshed
+                    # while unread, so next week's warning for the same
+                    # applicant does not stack a second one.
+                    prospect_name = w.get("prospect_name") or "An applicant"
+                    await add_in_app_copies(
+                        self.db,
+                        organization_id=str(organization_id),
+                        recipient_ids=[str(u.id) for u in all_coordinators],
+                        category="prospect_inactivity",
+                        subject=f"Application going inactive: {prospect_name}",
+                        message=(
+                            f"{prospect_name} has had no activity for "
+                            f"{w['days_inactive']} days and will be marked "
+                            f"inactive at {w['timeout_days']}."
+                        ),
+                        action_url="/prospective-members",
+                        metadata={"prospect_id": str(w.get("prospect_id"))},
+                        replace_unread=True,
+                        dedupe_key=str(w.get("prospect_id")),
+                    )
                     for coordinator in coordinators:
                         await email_svc.send_inactivity_warning_email(
                             to_email=coordinator.email,

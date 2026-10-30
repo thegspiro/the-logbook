@@ -24,6 +24,7 @@ const shift = {
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getShiftAssignments: vi.fn().mockResolvedValue([]),
+    getTraineeReportRequirement: vi.fn().mockResolvedValue({ required: false, missing: [], can_override: false }),
     getShiftPreShiftWork: vi.fn().mockResolvedValue([]),
     getMyAttendance: vi.fn().mockResolvedValue(null),
     getShiftAttendance: vi.fn().mockResolvedValue([]),
@@ -507,6 +508,51 @@ describe('ShiftDetailPanel assign controls past the grace', () => {
 
     await screen.findByText('Signup is closed for this shift');
     expect(screen.queryByRole('button', { name: /Assign someone/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel "Assign someone" and the assign grant', () => {
+  beforeEach(() => {
+    vi.mocked(schedulingService.getEligiblePositions).mockReset();
+    vi.mocked(schedulingService.getEligiblePositions).mockResolvedValue({
+      positions: ['firefighter'],
+      is_excluded: false,
+    });
+  });
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  const upcoming = {
+    ...shift,
+    shift_officer_id: 'someone-else',
+    shift_date: '2099-01-01',
+    start_time: '2099-01-01T08:00:00Z',
+    end_time: '2099-01-01T16:00:00Z',
+  };
+
+  it('is offered to a holder of scheduling.assign', async () => {
+    grantedPermissions.current = ['scheduling.assign'];
+    renderWithRouter(<ShiftDetailPanel shift={upcoming as never} onClose={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: /Assign someone/ })).toBeInTheDocument();
+  });
+
+  // Creating an assignment needs scheduling.assign or being the shift's
+  // officer, and scheduling.manage implies neither.
+  it('is not offered to a scheduling.manage holder without it', async () => {
+    grantedPermissions.current = ['scheduling.manage'];
+    renderWithRouter(<ShiftDetailPanel shift={upcoming as never} onClose={vi.fn()} />);
+    await screen.findByText('Crew Roster');
+    expect(screen.queryByRole('button', { name: /Assign someone/ })).not.toBeInTheDocument();
+  });
+
+  it("is offered to the shift's own officer", async () => {
+    grantedPermissions.current = [];
+    renderWithRouter(
+      <ShiftDetailPanel shift={{ ...upcoming, shift_officer_id: 'user-1' } as never} onClose={vi.fn()} />
+    );
+    expect(await screen.findByRole('button', { name: /Assign someone/ })).toBeInTheDocument();
   });
 });
 

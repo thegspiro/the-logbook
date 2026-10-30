@@ -42,6 +42,8 @@ vi.mock('../services/api', () => ({
   memberStatusService: {
     reactivateMember: (...args: unknown[]) => mockReactivateMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => mockGetServiceHistory(...args) as unknown,
+    // The class/status filters offer the department's tiers; none here.
+    getTierConfig: () => Promise.resolve({ auto_advance: true, tiers: [] }),
   },
 }));
 
@@ -643,5 +645,77 @@ describe('Members roster — preferred names', () => {
 
     expect(await within(table()).findByText('Terry Heather')).toBeInTheDocument();
     expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+  });
+});
+
+describe('Members roster — class and membership-status filters', () => {
+  const renderRoster = async () => {
+    renderWithRouter(<Members />);
+    await waitFor(() => expect(mockRoster).toHaveBeenCalled());
+    // Both layouts render the roster, so the name appears twice.
+    await screen.findAllByText('Laura Adams');
+  };
+  const table = () => screen.getByRole('table');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCheckPermission.mockReturnValue(false);
+    mockCheckContactInfoEnabled.mockResolvedValue({ enabled: false, fields: [] });
+    mockRoster.mockResolvedValue([
+      makeMember({
+        id: 'u1',
+        first_name: 'Laura',
+        last_name: 'Adams',
+        member_class: 'operational',
+        member_status: 'regular',
+      }),
+      makeMember({
+        id: 'u2',
+        username: 'jdoe',
+        email: 'jdoe@example.org',
+        first_name: 'Jane',
+        last_name: 'Doe',
+        member_class: 'administrative',
+        member_status: 'life',
+      }),
+      makeMember({
+        id: 'u3',
+        username: 'sold',
+        email: 'sold@example.org',
+        first_name: 'Sam',
+        last_name: 'Senior',
+        membership_type: 'senior',
+        member_class: null,
+        member_status: 'senior',
+      }),
+    ]);
+  });
+
+  it('narrows by class, and finds the members whose class was never set', async () => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    await user.selectOptions(screen.getByLabelText('Filter by member class'), 'administrative');
+    expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+    expect(within(table()).getByText('Jane Doe')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Filter by member class'), 'unset');
+    expect(within(table()).getByText('Sam Senior')).toBeInTheDocument();
+    expect(within(table()).queryByText('Jane Doe')).not.toBeInTheDocument();
+  });
+
+  it('narrows by membership status, offering a stored tier id beside the built-ins', async () => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    const filter = screen.getByLabelText('Filter by membership status');
+    expect(within(filter).getByRole('option', { name: 'Senior' })).toHaveValue('senior');
+
+    await user.selectOptions(filter, 'life');
+    expect(within(table()).getByText('Jane Doe')).toBeInTheDocument();
+    expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+
+    await user.selectOptions(filter, 'senior');
+    expect(within(table()).getByText('Sam Senior')).toBeInTheDocument();
   });
 });

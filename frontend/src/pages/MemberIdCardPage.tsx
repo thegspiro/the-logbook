@@ -198,7 +198,7 @@ export const MemberIdCardPage: React.FC = () => {
   const displayName = displayNameOf(member) || member.username;
   const initials = (givenName(member)[0] ?? member.username?.[0] ?? '?').toUpperCase();
   const qrValue = badgeCode ?? '';
-  const isAdministrative = isAdministrativeMember(undefined, member.membership_type);
+  const isAdministrative = isAdministrativeMember(member.member_class, member.membership_type);
 
   return (
     <div className="flex min-h-screen flex-col items-center px-4 py-8 print:min-h-0 print:px-0 print:py-0">

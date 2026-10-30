@@ -17,6 +17,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ApplicantStatus, StageType } from '../../../constants/enums';
 import { useAuthStore } from '../../../stores/authStore';
+import { FOLLOW_UP_MAX_REMINDERS } from '../constants';
 
 interface FollowUpFormsSectionProps {
   applicant: Applicant;
@@ -161,6 +162,15 @@ const FollowUpFormsSection: React.FC<FollowUpFormsSectionProps> = ({ applicant, 
                     <>
                       <dt>Last sent</dt>
                       <dd>{formatDateTime(request.last_sent_at, tz)}</dd>
+                    </>
+                  )}
+                  {(request.reminder_count ?? 0) > 0 && request.status !== FollowUpFormStatus.SUBMITTED && (
+                    <>
+                      <dt>Reminders</dt>
+                      <dd>
+                        {request.reminder_count} of {FOLLOW_UP_MAX_REMINDERS}
+                        {request.last_reminder_at ? `, last ${formatDateTime(request.last_reminder_at, tz)}` : ''}
+                      </dd>
                     </>
                   )}
                   {request.draft_saved_at && request.status === FollowUpFormStatus.DRAFT && (

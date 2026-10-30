@@ -226,8 +226,8 @@ const DuesManagementPage: React.FC = () => {
   };
 
   const header = (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
+    <div className="page-header gap-4 sm:items-center">
+      <div className="page-header-title">
         <h1 className="text-theme-text-primary text-2xl font-bold">Dues</h1>
         <p className="text-theme-text-secondary mt-1 text-sm">What members owe and have paid, by dues schedule</p>
       </div>

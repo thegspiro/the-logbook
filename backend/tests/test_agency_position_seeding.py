@@ -75,18 +75,28 @@ _ADMINISTRATIVE = (
     "member",
 )
 
+# Committees are seeded to every agency type: a group a member serves on,
+# recorded as a position so the profile and the roster show it, carrying no
+# permissions of its own (the baseline `member` already grants those).
+_COMMITTEES = (
+    "community_outreach_team",
+    "history_committee",
+    "fundraising_committee",
+    "membership_committee",
+)
+
 # EMT is a discipline of every agency type — an EMS service has no fire line,
 # but a fire department does run EMTs, and the rank registry has always said so.
 # The position mirroring it was missing until 2026-09-05, which is what sent the
 # setup wizard's EMT through the create-from-checkboxes path.
 GOLDEN_POSITIONS = {
     "fire_department": set(
-        _OFFICERS + _ADMINISTRATIVE + ("engineer", "firefighter", "emt")
+        _OFFICERS + _ADMINISTRATIVE + _COMMITTEES + ("engineer", "firefighter", "emt")
     ),
     "fire_ems_combined": set(
-        _OFFICERS + _ADMINISTRATIVE + ("engineer", "firefighter", "emt")
+        _OFFICERS + _ADMINISTRATIVE + _COMMITTEES + ("engineer", "firefighter", "emt")
     ),
-    "ems_only": set(_OFFICERS + _ADMINISTRATIVE + ("engineer", "emt")),
+    "ems_only": set(_OFFICERS + _ADMINISTRATIVE + _COMMITTEES + ("engineer", "emt")),
 }
 
 

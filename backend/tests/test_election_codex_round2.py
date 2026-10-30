@@ -84,23 +84,55 @@ def _make_service() -> ElectionService:
 
 
 class TestCustomTierDoesNotInheritStaleEligibility:
-    async def test_custom_tier_with_preserved_operational_class_is_ineligible(self):
-        """`_reconcile_membership` deliberately preserves member_class /
-        member_status from before a switch onto an org-configured custom
-        tier (e.g. "senior") so shift eligibility still recognizes a member
-        who rides. Election eligibility must not inherit that carryover: a
-        custom tier is documented (split_membership_type's own docstring)
-        to match no built-in voter category."""
+    async def test_custom_tier_without_ranks_as_is_ineligible(self):
+        """A member on an org-configured custom tier ("senior") carries the
+        tier id on the ladder column. Without a "Counts as" setting on the
+        tier it matches no built-in voter category -- what such a member
+        matched before the setting existed -- so a ballot restricted to
+        regular members does not quietly widen."""
         service = _make_service()
         user = SimpleNamespace(
+            organization_id="org-1",
             member_class="operational",
-            member_status="regular",
-            membership_type="senior",  # live value is the unrecognized tier
+            member_status="senior",
+            membership_type="senior",
             roles=[],
+        )
+        # The organization read behind ranks_as: a ladder with no "Counts as".
+        service.db.execute.return_value = _result_returning(
+            scalar=SimpleNamespace(
+                settings={"membership_tiers": {"tiers": [{"id": "senior"}]}}
+            )
         )
 
         assert not await service._user_has_role_type(user, ["operational"])
         assert not await service._user_has_role_type(user, ["regular"])
+
+    async def test_custom_tier_counts_as_what_the_ladder_says(self):
+        """Senior counts as Regular once the department says so."""
+        service = _make_service()
+        user = SimpleNamespace(
+            organization_id="org-1",
+            member_class="operational",
+            member_status="senior",
+            membership_type="senior",
+            roles=[],
+        )
+        service.db.execute.return_value = _result_returning(
+            scalar=SimpleNamespace(
+                settings={
+                    "membership_tiers": {
+                        "tiers": [{"id": "senior", "ranks_as": "regular"}]
+                    }
+                }
+            )
+        )
+
+        assert await service._user_has_role_type(user, ["operational"])
+        assert await service._user_has_role_type(user, ["regular"])
+        assert not await service._user_has_role_type(user, ["life"])
+        # One organization read for the whole request, not one per check.
+        assert service.db.execute.await_count == 1
 
     async def test_recognized_legacy_membership_type_is_unaffected(self):
         """A member whose membership_type is one of the seven known legacy

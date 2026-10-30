@@ -20,21 +20,14 @@ import type { Location } from '../services/api';
 import type { UserWithRoles } from '../types/role';
 import type { UserProfileUpdate, EmergencyContact } from '../types/user';
 import { useRanks } from '../hooks/useRanks';
-import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
+import { ADMINISTRATIVE_RANK_HINT, canonicalMemberStatus, effectiveMemberClass } from '../utils/membership';
 import { blankToNull } from '../utils/formValues';
 import { formatMemberName } from '../utils/memberName';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs } from '../components/ux';
-
-const MEMBERSHIP_TYPE_OPTIONS = [
-  { value: 'prospective', label: 'Prospective' },
-  { value: 'probationary', label: 'Probationary' },
-  { value: 'active', label: 'Active' },
-  { value: 'life', label: 'Life' },
-  { value: 'retired', label: 'Retired' },
-  { value: 'honorary', label: 'Honorary' },
-  { value: 'administrative', label: 'Administrative' },
-];
+import { MemberClassificationFields } from '../components/members/MemberClassificationFields';
+import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
+import { MemberClass, MemberStatus } from '../constants/enums';
 
 interface FormData {
   first_name: string;
@@ -48,7 +41,8 @@ interface FormData {
   station: string;
   platoon: string;
   hire_date: string;
-  membership_type: string;
+  member_class: string;
+  member_status: string;
   compliance_exempt: boolean;
   email: string;
   phone: string;
@@ -76,7 +70,13 @@ function buildInitialForm(
     station: user.station || '',
     platoon: user.platoon || '',
     hire_date: user.hire_date || '',
-    membership_type: user.membership_type || '',
+    // The pair, derived from the legacy value for a row written before it
+    // existed. A member on a department tier whose class was never recorded
+    // reads as operational here and is written as such on save -- an officer
+    // opening this page to set the class is the intended way out.
+    member_class: effectiveMemberClass(user.member_class, user.membership_type) ?? MemberClass.OPERATIONAL,
+    member_status:
+      canonicalMemberStatus(user.member_status) ?? canonicalMemberStatus(user.membership_type) ?? MemberStatus.REGULAR,
     compliance_exempt: user.compliance_exempt || false,
     email: user.email || '',
     phone: user.phone || '',
@@ -170,7 +170,8 @@ export const MemberAdminEditPage: React.FC = () => {
   // omits it entirely and the rank survives a failed class change. On success
   // the membership-type endpoint clears it in the same transaction, and the
   // re-fetch below brings the cleared value back.
-  const isAdministrative = isAdministrativeMember(undefined, form?.membership_type);
+  const isAdministrative = form?.member_class === MemberClass.ADMINISTRATIVE;
+  const { tiers } = useMembershipTierOptions();
 
   const handleFieldChange = (field: keyof Omit<FormData, 'emergency_contacts'>, value: string) => {
     if (!form) return;
@@ -321,13 +322,23 @@ export const MemberAdminEditPage: React.FC = () => {
         hasProfileChanges = true;
       }
 
-      // Check if membership_type changed
-      const membershipTypeChanged = form.membership_type !== initialForm.membership_type;
+      // Class and status travel together, always both: the backend reads a
+      // write to either as a statement about the pair, and a status sent
+      // alone against a member on a department tier would have it invent a
+      // class. One request with the rest of the profile, so a refused pair
+      // (an unknown tier) leaves the rank and everything else untouched too.
+      const classificationChanged =
+        form.member_class !== initialForm.member_class || form.member_status !== initialForm.member_status;
+      if (classificationChanged) {
+        profileUpdate.member_class = form.member_class as MemberClass;
+        profileUpdate.member_status = form.member_status;
+        hasProfileChanges = true;
+      }
 
       // Check if compliance_exempt changed
       const complianceExemptChanged = form.compliance_exempt !== initialForm.compliance_exempt;
 
-      if (!hasProfileChanges && !membershipTypeChanged && !complianceExemptChanged) {
+      if (!hasProfileChanges && !complianceExemptChanged) {
         setSuccessMessage('No changes to save.');
         return;
       }
@@ -335,11 +346,6 @@ export const MemberAdminEditPage: React.FC = () => {
       // Save profile fields
       if (hasProfileChanges) {
         await userService.updateUserProfile(userId, profileUpdate);
-      }
-
-      // Save membership type separately if changed
-      if (membershipTypeChanged && form.membership_type) {
-        await userService.changeMembershipType(userId, form.membership_type);
       }
 
       // Save compliance exemption separately if changed
@@ -681,28 +687,24 @@ export const MemberAdminEditPage: React.FC = () => {
                   This field is typically set once. Changes are logged.
                 </p>
               </div>
-              <div>
-                <label
-                  htmlFor="member-membership-type"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Membership Type
-                </label>
-                <select
-                  id="member-membership-type"
-                  value={form.membership_type}
-                  onChange={(e) => handleFieldChange('membership_type', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                >
-                  <option value="">Select Type</option>
-                  {MEMBERSHIP_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <MemberClassificationFields
+                idPrefix="edit"
+                memberClass={form.member_class}
+                memberStatus={form.member_status}
+                onClassChange={(value) => {
+                  handleFieldChange('member_class', value);
+                  // The server clears a stranded rank on a move to
+                  // administrative; mirror it so the form shows what will
+                  // be saved rather than a disabled control holding a value.
+                  if (value === MemberClass.ADMINISTRATIVE) handleFieldChange('rank', '');
+                }}
+                onStatusChange={(value) => handleFieldChange('member_status', value)}
+                tiers={tiers}
+                currentStatus={form.member_status}
+                disabled={saving}
+                labelClassName="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                selectClassName="form-input bg-theme-surface-secondary px-3 text-sm"
+              />
             </div>
 
             {/* Compliance Exemption */}

@@ -72,6 +72,13 @@ import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
 
+/** The events a Generic Webhook can be sent (backend WEBHOOK_EVENT_TYPES). */
+const WEBHOOK_EVENT_OPTIONS = [
+  { value: 'event.created', label: 'An event is created' },
+  { value: 'shift.created', label: 'A shift is created' },
+  { value: 'training.recorded', label: 'A training record is added' },
+] as const;
+
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
   'google-calendar': {
@@ -418,11 +425,17 @@ const IntegrationsPage: React.FC = () => {
   // Config form state
   const [webhookUrl, setWebhookUrl] = useState('');
   const [zoneId, setZoneId] = useState('');
+  // How members hear about a weather alert; the department chooses.
+  const [weatherBanner, setWeatherBanner] = useState(true);
+  const [weatherBell, setWeatherBell] = useState(true);
+  const [weatherEmail, setWeatherEmail] = useState(false);
   const [stateCode, setStateCode] = useState('');
   const [fdid, setFdid] = useState('');
   const [agencyId, setAgencyId] = useState('');
   const [genericWebhookUrl, setGenericWebhookUrl] = useState('');
   const [genericWebhookSecret, setGenericWebhookSecret] = useState('');
+  /** Events the Generic Webhook is sent; none ticked means all of them. */
+  const [webhookEventTypes, setWebhookEventTypes] = useState<string[]>([]);
   const [importFormat, setImportFormat] = useState('csv');
   const [sfInstanceUrl, setSfInstanceUrl] = useState('');
   const [sfClientId, setSfClientId] = useState('');
@@ -606,12 +619,21 @@ const IntegrationsPage: React.FC = () => {
   const resetFormState = (integration?: IntegrationConfig) => {
     const stored = integration?.config ?? {};
     setWebhookUrl('');
-    setZoneId('');
+    // Seeded from what is stored: a blank zone would fail its pattern on save.
+    setZoneId(typeof stored['zone_id'] === 'string' ? stored['zone_id'] : '');
+    setWeatherBanner(stored['notify_banner'] !== false);
+    setWeatherBell(stored['notify_bell'] !== false);
+    setWeatherEmail(stored['notify_email'] === true);
     setStateCode('');
     setFdid('');
     setAgencyId('');
     setGenericWebhookUrl('');
     setGenericWebhookSecret('');
+    setWebhookEventTypes(
+      Array.isArray(stored['event_types'])
+        ? stored['event_types'].filter((e): e is string => typeof e === 'string')
+        : []
+    );
     setImportFormat('csv');
     setSfInstanceUrl('');
     setSfClientId('');
@@ -677,13 +699,18 @@ const IntegrationsPage: React.FC = () => {
     }
     switch (integrationType) {
       case 'nws-weather':
-        return { zone_id: zoneId };
+        return {
+          zone_id: zoneId,
+          notify_banner: weatherBanner,
+          notify_bell: weatherBell,
+          notify_email: weatherEmail,
+        };
       case 'nfirs-export':
         return { state_code: stateCode, state_fdid: fdid };
       case 'nemsis-export':
         return { state_code: stateCode, agency_id: agencyId };
       case 'generic-webhook':
-        return { url: genericWebhookUrl, secret: genericWebhookSecret };
+        return { url: genericWebhookUrl, secret: genericWebhookSecret, event_types: webhookEventTypes };
       case 'epcr-import':
         return { import_format: importFormat };
       case 'documenso':
@@ -1114,6 +1141,38 @@ const IntegrationsPage: React.FC = () => {
                 Find your zone at weather.gov. Format: state code + C/Z + 3 digits (e.g., NYZ072, CAC006).
               </p>
             </div>
+            <fieldset>
+              <legend className={labelClass}>Tell members about severe weather</legend>
+              <p className="text-theme-text-muted text-xs">
+                The zone is checked every 15 minutes. Only Severe and Extreme alerts count, such as tornado, severe
+                thunderstorm and flash flood warnings.
+              </p>
+              <div className="mt-2 space-y-1">
+                {[
+                  {
+                    label: 'Dashboard banner while the alert is active',
+                    checked: weatherBanner,
+                    set: setWeatherBanner,
+                  },
+                  { label: 'Bell notice when an alert is issued', checked: weatherBell, set: setWeatherBell },
+                  {
+                    label: 'Email when an alert is issued (members can turn these emails off)',
+                    checked: weatherEmail,
+                    set: setWeatherEmail,
+                  },
+                ].map((option) => (
+                  <label key={option.label} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={option.checked}
+                      onChange={(e) => option.set(e.target.checked)}
+                    />
+                    <span className="text-theme-text-primary">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
         );
 
@@ -1222,6 +1281,33 @@ const IntegrationsPage: React.FC = () => {
                 If set, each request is signed with HMAC-SHA256 in the X-Webhook-Signature header.
               </p>
             </div>
+            <fieldset>
+              <legend className={labelClass}>Send these events</legend>
+              <div className="mt-1 space-y-1">
+                {WEBHOOK_EVENT_OPTIONS.map((option) => (
+                  <label key={option.value} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={webhookEventTypes.includes(option.value)}
+                      onChange={(e) =>
+                        setWebhookEventTypes((current) =>
+                          e.target.checked
+                            ? [...current, option.value]
+                            : current.filter((value) => value !== option.value)
+                        )
+                      }
+                    />
+                    <span className="text-theme-text-primary">{option.label}</span>
+                    <code className="text-theme-text-muted text-xs">{option.value}</code>
+                  </label>
+                ))}
+              </div>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Leave all unticked to send every event. Each request carries the event name in its event_type field and
+                the X-Webhook-Event header.
+              </p>
+            </fieldset>
           </div>
         );
 

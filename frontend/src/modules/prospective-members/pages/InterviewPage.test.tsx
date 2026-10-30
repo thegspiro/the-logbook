@@ -31,6 +31,15 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+// The page mounts FollowUpAnswersPanel, which lists the applicant's
+// follow-up forms; none are submitted here, so it renders nothing.
+vi.mock('../services/api', () => ({
+  followUpFormService: {
+    list: () => Promise.resolve([]),
+    getAnswers: () => Promise.resolve(null),
+  },
+}));
+
 import { InterviewPage } from './InterviewPage';
 
 const applicant = {

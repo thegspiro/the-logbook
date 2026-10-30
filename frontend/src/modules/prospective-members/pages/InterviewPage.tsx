@@ -36,6 +36,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getInitials } from '../utils';
+import FollowUpAnswersPanel from '../components/FollowUpAnswersPanel';
 import { blankToNull } from '../../../utils/formValues';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
 import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS, StepProgressStatus } from '../types';
@@ -584,8 +585,8 @@ export const InterviewPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="page-header mb-6 gap-3 sm:items-center">
+        <div className="page-header-title flex items-center gap-3">
           <button
             type="button"
             onClick={() => void navigate('/prospective-members')}
@@ -626,6 +627,7 @@ export const InterviewPage: React.FC = () => {
         <div className="space-y-4 lg:col-span-1">
           <ApplicantInfoSection applicant={currentApplicant} timezone={timezone} />
           <PipelineProgressSection applicant={currentApplicant} timezone={timezone} />
+          <FollowUpAnswersPanel applicantId={currentApplicant.id} timezone={timezone} />
 
           {/* Recommendation summary */}
           {Object.keys(recommendationSummary).length > 0 && (

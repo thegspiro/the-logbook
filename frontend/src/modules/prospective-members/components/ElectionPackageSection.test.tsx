@@ -130,3 +130,37 @@ describe('ElectionPackageSection with no package', () => {
     expect(screen.getByRole('button', { name: /create package/i })).toBeEnabled();
   });
 });
+
+describe('ElectionPackageSection with packaged follow-up answers', () => {
+  beforeEach(() => {
+    for (const m of Object.values(mocks)) m.mockReset();
+    mocks.getElectionPackage.mockResolvedValue({
+      ...draft,
+      follow_up_forms: [
+        {
+          form_name: 'Background Questionnaire',
+          stage_name: 'Background',
+          submitted_at: '2026-10-29T14:00:00Z',
+          answers: [
+            { label: 'Why now?', answer: 'I moved to the district.' },
+            { label: 'Prior service', answer: '' },
+          ],
+        },
+      ],
+    });
+    useProspectiveMembersStore.setState({
+      currentElectionPackage: null,
+      isLoadingElectionPackage: false,
+      error: null,
+    });
+  });
+
+  it('lists each packaged answer under the form it came from', async () => {
+    renderSection();
+
+    expect(await screen.findByText('I moved to the district.')).toBeInTheDocument();
+    expect(screen.getByText('Background Questionnaire:')).toBeInTheDocument();
+    expect(screen.getByText('Why now?')).toBeInTheDocument();
+    expect(screen.getByText('(no answer)')).toBeInTheDocument();
+  });
+});

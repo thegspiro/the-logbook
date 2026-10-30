@@ -32,6 +32,11 @@ vi.mock('../store/schedulingStore', () => ({
 
 const mockUpdateFeatureSettings = vi.fn();
 
+vi.mock('../../../hooks/useMembershipTierOptions', () => ({
+  useMembershipTierOptions: () => ({ tiers: mockTiers(), loaded: true }),
+}));
+const mockTiers = vi.fn(() => [] as { id: string; name: string }[]);
+
 vi.mock('../services/api', () => ({
   schedulingService: {
     getFeatureSettings: vi.fn().mockResolvedValue({

@@ -296,8 +296,8 @@ const ExpenseReportDetailPage: React.FC = () => {
       )}
 
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="page-header mb-4 gap-3 sm:items-center">
+          <div className="page-header-title">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-theme-text-primary text-xl font-bold">{er.title}</h1>
               <span
@@ -308,7 +308,7 @@ const ExpenseReportDetailPage: React.FC = () => {
             </div>
             <p className="text-theme-text-secondary mt-1 text-sm">{er.reportNumber}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             {canSubmit && missingReceipts > 0 && (
               <p id="expense-receipts-needed" className="text-xs text-amber-800 dark:text-amber-300">
                 Attach a receipt to {missingReceipts === 1 ? 'the remaining line' : `${String(missingReceipts)} lines`}{' '}

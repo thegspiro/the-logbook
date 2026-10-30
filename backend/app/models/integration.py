@@ -141,6 +141,53 @@ class Integration(Base):
             return {}
 
 
+class WeatherAlert(Base):
+    """An NWS alert the department's weather integration has seen.
+
+    One row per NWS alert id per department: the unique key is what makes a
+    second poll of the same alert a no-op, so members are told about each alert
+    once however often the zone is polled. ``ended_at`` is set when the alert
+    stops appearing in the zone's active list before it expires (NWS cancelled
+    or replaced it). Only Severe and Extreme alerts are stored (owner decision
+    2026-10-29). The text is NWS's public bulletin, not member data.
+    """
+
+    __tablename__ = "weather_alerts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    nws_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    event: Mapped[str] = mapped_column(String(255), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    urgency: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    headline: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    instruction: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    area_desc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    onset: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When the alert was first seen: the row is created then.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    ended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "nws_id", name="uq_weather_alerts_org_nws_id"
+        ),
+        Index("ix_weather_alerts_org_ended", "organization_id", "ended_at"),
+    )
+
+
 class IntegrationSyncLog(Base):
     """One run of an integration: a sync, a connection check, a chat delivery.
 

@@ -45,6 +45,32 @@ BASELINE_SOURCES = (
     ("firefighter rank", OPERATIONAL_RANKS, "firefighter", "default_permissions"),
     ("emt rank", OPERATIONAL_RANKS, "emt", "default_permissions"),
     ("emt position", DEFAULT_POSITIONS, "emt", "permissions"),
+    # The seeded committees carry the baseline as a copy, so they are held to
+    # it here: a grant withdrawn from `member` must leave them too.
+    (
+        "outreach team position",
+        DEFAULT_POSITIONS,
+        "community_outreach_team",
+        "permissions",
+    ),
+    (
+        "history committee position",
+        DEFAULT_POSITIONS,
+        "history_committee",
+        "permissions",
+    ),
+    (
+        "fundraising committee position",
+        DEFAULT_POSITIONS,
+        "fundraising_committee",
+        "permissions",
+    ),
+    (
+        "membership committee position",
+        DEFAULT_POSITIONS,
+        "membership_committee",
+        "permissions",
+    ),
 )
 
 

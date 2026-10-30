@@ -3191,6 +3191,12 @@ export interface AvailableRequirement {
   frequency: string | null;
 }
 
+/** A position a compliance profile can be scoped to (`role_ids` holds these ids). */
+export interface AvailablePosition {
+  id: string;
+  name: string;
+}
+
 export interface ComplianceReportGenerate {
   report_type: string;
   year: number;

@@ -164,6 +164,10 @@ Beyond standing, a member may also be restricted by:
   to be checked in as present at the meeting (`require_attendance`). The roll
   is frozen at open, so a member checked in after opening is recorded present
   but cannot vote without an override
+- **Election-wide rules** — `elections.eligibility_rules` holds a
+  meeting-attendance requirement and a waiting period per member type that
+  every voter in that election must meet, whatever the ballot item. See
+  [Election-Wide Voter Rules](#election-wide-voter-rules)
 - **Restricted voter list** — An election can be limited to a specific
   `eligible_voters` list. An empty list is stored as `NULL` (no restriction)
 - **Secretary overrides** — The secretary can grant eligibility overrides for
@@ -172,6 +176,82 @@ Beyond standing, a member may also be restricted by:
   On an election restricted to an `eligible_voters` list, an override
   **extends** the list: the member votes in the app, is sent a ballot email
   and counts in the eligible total, as the roster shows
+
+### Election-Wide Voter Rules
+
+`elections.eligibility_rules` (`ElectionEligibilityRules`) is copied from
+the department's defaults (`org.settings.election_eligibility.rules`, set on
+**Election Settings → Voter Eligibility**) when the election is created. An
+explicit value on the create request, `null` included, wins. It can be changed
+while the election is a draft or taking nominations; the update endpoint
+refuses it once the election is open. `NULL` means no rules, which is what
+every election created before the column existed carries.
+
+- **Attendance, count mode**: the member attended at least `min_meetings` of
+  their last `of_last_meetings` eligible meetings. A member who has had fewer
+  eligible meetings than the look-back is held to the same proportion, rounded
+  up, so 6 of 12 becomes 2 of 4 (`required_recent_meetings`).
+- **Attendance, percent mode**: `min_pct` of the meetings in the last
+  `period_months`. This is the same calculation as the tier rule.
+- **`meeting_types`**: limits which meeting types count. `null` counts every
+  meeting.
+- **`waiting_periods`**: per member type, whether that type may vote. See
+  [Waiting Periods by Member Type](#waiting-periods-by-member-type).
+
+Both attendance modes judge the same eligible meetings as the tier rule (see
+[Voting Attendance Window](#voting-attendance-window)): meetings since the
+current stint began, up to the department's today, excluding waived meetings
+and leave.
+
+The rules are part of the universal gate (`ElectionService._universal_gate`),
+together with the tier's `voting_eligible`. That gate is used by the in-app
+ballot check, per-item annotation, the eligibility roster, the roll frozen at
+open, emailed-ballot snapshots and the turnout denominator, so they cannot
+disagree. A voter override bypasses the rules. Runoffs and clones copy them.
+
+### Waiting Periods by Member Type
+
+`waiting_periods` maps a member type to one of three settings:
+
+- **No waiting period** (`none`), which is also what an unlisted type means.
+- **Never eligible to vote** (`never`).
+- **Wait a number of months** (`months`, 1–600).
+
+**Which type a member is.** The class decides first: an administrative or
+social member follows that class's setting whatever their status. Every
+operational member follows their status: regular, life, probationary, junior,
+retired or honorary (`voter_type_key` in `app/utils/membership.py`). A
+prospective member, or one on a custom tier that implies no class, gets no
+setting.
+
+**When the wait starts.**
+
+- The wait counts from **when the member became that type**. That is
+  `users.member_class_since` for a class-decided type and
+  `users.member_status_since` otherwise.
+- `_reconcile_membership` stamps both on every write path. A re-save of the
+  same value does not move them.
+- The count never starts before the member's current stint, so a member who
+  rejoined is not credited with time from before they left.
+- With no stamp, the start of the stint stands in. With neither, the member
+  is not held back, because a missing record is not evidence of a recent
+  change.
+- Members who existed before migration `c7e2a91f4d36` have a best-guess date:
+  the last tier change, or else the hire date.
+
+**Per-member override.** It is set on the member's profile, in the **Voting
+eligibility** card (`elections.manage`), and every change is audit-logged as
+`member_voting_wait_override_changed`.
+
+- **Count the wait from** (`voting_wait_from`) replaces the recorded date
+  outright, and is not clamped to the stint. A later change to the member's
+  class or status clears it, since it described their previous type.
+- **Waive the waiting period** (`voting_wait_waived`) lifts a timed wait. It
+  never lifts **Never eligible to vote**, nor an attendance requirement. A
+  per-election voter override still lifts everything.
+- Setting either one requires a reason. Clearing both removes the reason.
+- Changes reach every election whose roll is not yet frozen. An open election
+  keeps the roll it froze.
 
 ### Voter-Roll Freeze
 
@@ -699,18 +779,67 @@ with status badges and links.
 
 ## Election Settings
 
-`/elections/settings` (`elections.manage`) has four sections:
+`/elections/settings` (`elections.manage`) has six sections:
 
-| Section          | Contents                                                       |
-| ---------------- | -------------------------------------------------------------- |
-| **Proxy Voting** | Enable/disable proxy voting; **Max Proxies Per Person** (1–10) |
-| **Features**     | Per-department feature toggles (below)                         |
-| **Test Ballot**  | **Send Test Ballot** to preview the voting experience          |
-| **Security**     | The integrity guarantees in force                              |
+| Section               | Contents                                                       |
+| --------------------- | -------------------------------------------------------------- |
+| **Proxy Voting**      | Enable/disable proxy voting; **Max Proxies Per Person** (1–10) |
+| **Voter Eligibility** | Default voter rules for new elections (below)                  |
+| **Features**          | Per-department feature toggles (below)                         |
+| **Defaults**          | Where a new election's form starts (below)                     |
+| **Test Ballot**       | **Send Test Ballot** to preview the voting experience          |
+| **Security**          | The integrity guarantees in force                              |
 
-Every election's voting options (method, victory condition, anonymity,
-write-ins, results visibility, runoffs) are chosen on its own create form;
-there are no organization-wide election defaults.
+### Voter Eligibility Defaults
+
+Stored in `org.settings.election_eligibility` (`EligibilityDefaults`). Each
+part has a reader, and none of them changes an existing election:
+
+- **Rules every voter must meet** (attendance, waiting periods) are copied onto each new
+  election. See [Election-Wide Voter Rules](#election-wide-voter-rules).
+- **New ballot items**: the check-in requirement and **Who can vote** that new
+  and custom items start with in the ballot builder. Built-in templates keep
+  their own per-template voter types.
+- **Who votes for each position**: position name → voter types. A new
+  election's `position_eligibility` is seeded for the positions it names,
+  matched without regard to case, and a custom ballot item takes the mapped
+  voter types when its position is chosen.
+- **Membership tier rules** are shown read-only (`tier_voting_rules`) with a
+  link to the tier settings where they are edited.
+
+#### Regular Business Meetings and the Annual Meeting
+
+Every election records where it is held, in `elections.meeting_kind`: either
+`regular` (a business meeting) or `annual`. The section keeps two sets of the
+defaults above, and an election copies the set for its kind:
+
+- **Regular business meetings** use `org.settings.election_eligibility`.
+- **The annual meeting** uses `org.settings.election_eligibility_annual` when
+  **Use different rules at the annual meeting** is on. It starts as a copy of
+  the regular set, so only what differs needs changing. When the toggle is
+  off, the setting is `null` and the annual meeting uses the regular set.
+- **On the create form**, **Held at** sets the kind. Linking a meeting record
+  whose type is annual selects **Annual meeting**. Calendar events carry no
+  annual type. A request that omits the kind gets `annual` from a linked annual
+  meeting, and `regular` otherwise.
+- **Changing an election's kind** on its Eligibility tab replaces its rules and
+  `position_eligibility` with that kind's defaults, after a confirmation. This
+  is allowed until voting opens. Rules sent in the same request win.
+- **Runoffs and clones** keep the kind.
+
+The membership tier rules apply at both kinds of meeting.
+
+### Defaults
+
+The **Create Election** form starts from the department's defaults (since
+2026-10-29, ELEC2-9): the winner rule and its percentage, anonymous voting,
+write-ins, and the quorum. An officer can change any of them on one election,
+and elections already created are unaffected. With nothing saved, the form
+starts where it always did: most votes wins, anonymous, no write-ins, no
+quorum. The form has no quorum control of its own, so a default quorum shows
+there as a read-only line. Only the form reads these: an election created
+directly through the API takes the schema's own defaults. Runoffs and results
+visibility have no default and are set on each election.
 
 ### Feature Toggles
 

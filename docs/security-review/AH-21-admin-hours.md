@@ -1,6 +1,154 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), pass 11 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), pass 12 (this PR)
+
+## Pass 12 (2026-10-30) — 0 fixed by the rotation's own scope, 1 fixed-and-tested doc-staleness item (AH2-2), 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`). `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results — PR #3845 (Feature 20, Compliance, pass 12) had just
+merged (`c9d8be24`). Row 21 (Admin hours) was the first `⬜` in `PROGRESS.md`'s
+table.
+
+**Baseline `03729af8`** (pass 11's merge, PR #3764). Per-file `git log
+03729af8..HEAD` across every file this feature declares in scope
+(`endpoints/admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`,
+`core/seed_admin_hours.py`, the `admin-hours` frontend module) finds exactly
+one commit, `f2ea7ba5` (a repo-wide layout-shift sweep), touching two frontend
+files. `git diff --stat` confirms **zero** diff in all six backend files —
+byte-identical to pass 11's merge.
+
+### The frontend delta, read in full
+
+`AdminHoursPage.tsx` gains a `useFirstLoadHold` hold on the clocked-in card
+(drawn only while a session is open, ~150-230px above the rest of the page)
+so the rest of the page doesn't visibly jump once the active-session check
+answers — a Cumulative-Layout-Shift fix, not a behavior change. While held,
+everything after the page header is `invisible` (never `hidden`), capped at
+one second and first-load only; invisible content cannot be clicked, so this
+cannot hide an affordance behind a tap that does nothing. No new request, no
+change to which data is fetched, no change to any `onClick`/form handler.
+Swept the diff for `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`,
+`innerHTML`, a new `fetch(`/`axios` import, `localStorage`/`sessionStorage`,
+and the banned `.toLocale*`/`date-fns` imports: zero hits. The paired test
+file only adds coverage for the new hold state.
+
+### A new external caller of `AdminHoursEntry`, read because it touches this feature's model
+
+`public_stats_service.py` is new (149 lines, `git diff --stat
+03729af8..HEAD -- backend/app/` shows it `+149`/`-0`) and reads
+`AdminHoursEntry` to compute `total_volunteer_hours` for
+`GET /api/public/v1/organization/stats` (`api/public/portal.py:428`). Not
+this feature's fix to make — it belongs to Feature 03 (Public surface &
+webhooks), already ✅ — but reviewed in full since it is a new reader of this
+feature's table:
+
+- **Org scoping.** `volunteer_hours_ytd(db, organization, ...)` takes
+  `organization: Organization`, resolved by the caller from
+  `api_key.organization_id` (the authenticated public-portal API key's own
+  org — never a client-supplied id; `portal.py:396-399`), and every sub-query
+  (`AdminHoursEntry.organization_id`, `TrainingRecord.organization_id`,
+  `Shift.organization_id` via join, `Event.organization_id` via join) filters
+  on `str(organization.id)` consistently. The one correlated `EXISTS`
+  subquery (`counted_as_admin_hours`, avoiding double-counting an event
+  check-in that also produced an admin-hours entry) carries no org filter of
+  its own, but it is bound by `source_rsvp_id == EventRSVP.id` to rows the
+  outer, already org-filtered `EventRSVP`/`Event` join has already selected —
+  it narrows an org-scoped result set, it does not widen it.
+- **Data exposure.** The published figure is a single rounded integer
+  (whole hours this calendar year), not a row list — no member name, no entry
+  description, no category. It is also gated by the endpoint's existing
+  `filter_data_by_whitelist(...)` (`portal.py:437`), so it reaches an
+  anonymous caller only if the organization opted the `stats` object in at
+  all; this function being newly non-null does not change who can ask.
+- **Abuse resistance.** One aggregate query per call (no N+1); the endpoint's
+  own docstring states a 100 requests/hour per-API-key rate limit, enforced
+  inside `authenticate_api_key` ahead of this call — unchanged by this
+  addition.
+- **Date handling.** Uses `scheduling_timezone(organization)` /
+  `year_to_date()` to bound "this calendar year" in the department's own
+  zone rather than the server's, consistent with CLAUDE.md's "a derived date
+  is a value" rule — not a finding, recorded because it's exactly the shape
+  pass 6's own AH fix (`resolve_org_today`) established for this feature.
+
+No finding. Verified good, not merely read.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 11's count)
+
+A Python `ast` walk over every `@router.*` decorator in `admin_hours.py`
+finds **30 routes**, byte-identical to pass 11 (confirmed by the zero-diff
+above, not independently meaningful, but re-run rather than assumed). Depends
+extracted the same way, per route: **17** carry
+`Depends(require_permission("admin_hours.manage"))`; **13** carry
+`Depends(get_current_user)` alone; 17 + 13 = 30, no route with zero auth
+dependency. Full per-route table matches pass 11's and is not repeated here.
+
+### A stale finding found while reading prior art (Step 2), not this feature's own diff
+
+`docs/app-review/admin-hours.md` (Tier B, a different rotation) pass 2
+(2026-08-08) flagged **LOW**: the `start_date`/`end_date` query params on
+`list_my_entries`, `list_all_entries`, `export_entries` and `get_summary`
+were `datetime.fromisoformat`-parsed with no `try`/`except`, so a malformed
+value reached the client as an unhandled `500` instead of a `400`. That
+doc's pass 5 (2026-10-20) revisited the module for an unrelated fix and
+re-listed this item as "unchanged" — but the fix had already landed three
+days earlier (`1b3ca32f` et al., 2026-10-17): `admin_hours.py:58-72` now
+defines `_parse_optional_date`, which every one of the four named endpoints
+calls, and which wraps `datetime.fromisoformat` in `try`/`except ValueError`
+and raises `HTTPException(400, ...)` — read directly at its current lines,
+not inferred from a commit message. The fix shipped with no guard test of
+its own.
+
+**AH2-2 — LOW — stale "still open" doc note on an already-fixed 500→400 gap — ✅ FIXED (doc) + test added this pass**
+
+Disposition: the code was already correct; this pass (1) corrected
+`docs/app-review/admin-hours.md`'s pass-2 entry to say so, citing the fix's
+location and date, and (2) added the regression coverage that landed commit
+never shipped — `TestParseOptionalDate` in
+`tests/test_admin_hours_endpoint_permission_scope.py` (3 tests: missing
+value → `None`, valid ISO string parses, malformed string → `HTTPException`
+with `status_code == 400`, not an unhandled `ValueError`/500). Confirmed the
+malformed-input case would raise an uncaught `ValueError` without the
+wrapper (`datetime.fromisoformat("not-a-date")` raises directly — verified
+in isolation, not assumed), so the new test is not vacuous. This is a
+documentation correction with test backfill, not a behavior change — no
+endpoint, schema, or permission touched.
+
+### Standing findings
+
+No open or flagged finding carries forward from passes 1–11 — all were
+already closed (by fix or owner decision) as of pass 11, and nothing in this
+pass's delta (a frontend layout-shift hold, a new out-of-scope public-stats
+reader, and the doc correction above) touches any of them.
+`KNOWN_LIMITATIONS.md`'s two admin-hours rows were re-read and still match
+the current code exactly — no edit needed.
+
+### Completion gate (pass 12)
+
+| Check                                                                | Result                                                                     |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pin)               | ✅ 0 violations                                                            |
+| `black --check app/ tests/ alembic/` (black 26.10.1)                 | ✅ 2743 files unchanged (after formatting the new test, below)             |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2)              | ✅ clean                                                                   |
+| `python3 scripts/validate_migrations.py --strict`                    | ✅ 678 revisions, single head `f90b1124e6f4`                               |
+| `python3.13 -m pytest tests/ -q -k "admin_hours"`                    | ✅ 174 passed (171 pre-existing + 3 new), 1 pre-existing skip (`py_vapid`) |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root) | ✅ 280 routes, 0 errors, 0 warnings                                        |
+| `cd frontend && npm run typecheck`                                   | ✅ 0 errors                                                                |
+| `cd frontend && npm run lint`                                        | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                              |
+| `npx vitest run src/modules/admin-hours`                             | ✅ 122/122 (13 files)                                                      |
+
+`black --check` initially flagged the new test file (one reformat needed,
+caught before commit); `black` (no `--check`) was run once and the recheck
+above is clean. No backend route, schema, model, or permission changed —
+the only source-level change this pass made is the 31-line regression test
+above; the frontend delta (`f2ea7ba5`) and the new `public_stats_service.py`
+reader both pre-date this pass and were reviewed, not written, here.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ## Pass 11 (2026-10-27) — 0 fixed, 0 new findings; feature remains at zero open findings
 

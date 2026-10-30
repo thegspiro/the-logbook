@@ -4,12 +4,12 @@
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26
-(pass 12) · **PR:**
+(pass 12), 2026-10-29 (pass 13) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), pass 12 PR recorded in `PROGRESS.md`
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), pass 13 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
 pass 10), `api/v1/endpoints/shift_completion.py` (21 routes),
@@ -20,6 +20,104 @@ pass 10), `api/v1/endpoints/shift_completion.py` (21 routes),
 tables)
 
 ---
+
+## Pass 13 (2026-10-29) — watchdog pickup, EC-17's fix merged and re-verified, 0 fixed, 0 new findings
+
+**Watchdog pickup.** Dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) confirmed unreachable via `ListAgents`
+("No reachable agents"). No open security-review PR — confirmed via
+`list_pull_requests` (state=open), 0 results among `claude/security-review-`
+head branches (the 3 open PRs at the time were all unrelated feature work).
+PR #3835 (Feature 13, Apparatus & NFC, pass 20) had already merged
+(`1884c171`). Rotation row 14 (Equipment check & shifts) was confirmed the
+next `⬜` by reading the rotation table and the prior Open PR note's own
+"next feature" pointer.
+
+**Baseline** `58525287` (PR #3741's merge, pass 12). `git diff --stat`
+against it, across the full declared scope, found **2 files, +53/−4** —
+both endpoint files (`equipment_check.py`, `shift_completion.py`) are
+byte-identical; the delta is confined to the two service files.
+
+### `shift_completion_service.py` — the EC-17 fix itself, read in full
+
+The single non-trivial change is commit `f53f766a`, "Shift reports: an edit
+to a reviewed report sends it back to review" — exactly pass 12's flagged
+EC-17 (a non-draft report's substantive fields stayed editable by its filing
+officer indefinitely, with no re-review). `update_report` now computes
+`content_changed` by comparing every `UPDATABLE_FIELDS` value (excluding
+`review_status` itself) against the row already loaded, **before** the
+write loop applies `updates`, so the comparison is against the pre-edit
+value rather than something already overwritten. When the report was not a
+draft and something besides `review_status` actually changed,
+`_return_edited_report_to_review` runs: a `flagged` report always returns to
+`pending_review`; an `approved` one returns only when
+`TrainingModuleConfigService.get_config(organization_id).report_review_required`
+is true, otherwise it stays approved (matching how a freshly-submitted
+report would be routed under the same setting). `reviewed_by`/`reviewed_at`
+are cleared (they vouched for text that no longer exists); `reviewer_notes`
+is left (a flag's reason is what the revision answers). The org-scoped fetch
+this function relies on is unchanged — `update_report`'s `self.db.execute`
+at the top of the method still filters `ShiftCompletionReport.organization_id
+== str(organization_id)` before any of this runs, so no new XC-3 surface.
+Training-credit timing is untouched: credit is still gated on
+`not was_released and report.review_status == "approved"`, so a report sent
+back to review and re-approved cannot double-credit (re-confirmed against
+`TestReapprovalSignsOffOnce`, unaffected by this change).
+
+**Owner decision, dated 2026-10-27**, recorded in the commit message and
+mirrored to `docs/KNOWN_LIMITATIONS.md`'s `EC-17` entry (now headed
+"resolved 2026-10-27"): any edit sends the report back; the app's own
+screens edit only drafts, so this governs the API path specifically.
+
+**Test coverage verified, not merely present.** Ran
+`TestAnEditedReportGoesBackToReview` and the neighboring classes directly:
+`test_an_approved_report_returns_where_review_is_required`,
+`test_an_approved_report_stays_approved_where_review_is_off`,
+`test_a_revised_flagged_report_returns_to_the_reviewer` (parametrized both
+ways on `report_review_required`), and
+`test_resaving_the_same_values_keeps_the_approval` (the no-op-resubmit case,
+which is exactly what the `content_changed` pre-write comparison exists to
+get right — a form that resubmits every field on every save must not trip
+the demotion just because the fields were present in `updates`). All four
+pass, and `test_resaving_the_same_values_keeps_the_approval` is the one that
+would have caught a regression to comparing post-write state.
+
+### `equipment_check_service.py` — cosmetic, cross-cutting, already reviewed
+
+The only change is `_validate_item_fks`'s two `ValueError` messages switching
+from a bare `', '.join(...)` to `list_within_detail_limit(...)` (`app/core/
+utils.py`) — the same refusal-message-capping helper already independently
+reviewed for Documents & legal (PR #3816), Facilities (PR #3832) and
+Apparatus & NFC (PR #3835). Confirmed the import (`from app.core.utils
+import generate_uuid, list_within_detail_limit`) and call shape match the
+other three sites; no behavior change beyond capping an already-raised
+`ValueError`'s message length.
+
+**Routes re-enumerated by AST** (not grep, to match the earlier passes'
+method): `equipment_check.py` 54, `shift_completion.py` 21 — both unchanged
+from pass 12. **All prior-pass findings re-confirmed unchanged**: EC-16
+(SAVEPOINT duplicate-report guard) intact; EC-6/EC-13 (in-org FK validation)
+untouched; EC-8 (changelog-only by-id reads, no org filter) still
+open/owner-accepted, not touched this pass; EC-7/EC-11 remain resolved per
+the 2026-10-11 owner decision. EC-17 is the only status change this pass —
+from FLAGGED to **FIXED**, verified above rather than taken on the commit
+message's word.
+
+**0 fixed by this pass** (the fix was already applied and merged by other
+work before this watchdog pickup began; this pass's job was verifying it),
+**0 new findings**.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 672
+revisions, single head `43bebab8401c`; scoped backend tests (`-k "equipment
+or shift"`, both the no-database and `integration`-marked halves) — 1283 +
+780 passed, 1 pre-existing skip (`pywebpush`) in each half; frontend `npm
+run typecheck`/`npm run lint` — 0 errors, 0 warnings (this feature has no
+dedicated frontend module).
+
+Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
+(Scheduling) — re-check `search_pull_requests`/`list_pull_requests` fresh
+rather than trusting this note.
 
 ## Pass 12 (2026-10-26) — real delta (trainee-visibility data-integrity fix, future-date rejection, submit-routing hardening on `update_report`), 0 fixed, 1 new finding flagged (EC-17, MED, pre-existing)
 

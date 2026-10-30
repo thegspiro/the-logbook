@@ -606,11 +606,30 @@ SCHEDULE = {
         "recommended_time": "07:35",
         "cron": "35 7 * * *",
     },
+    "weather_alert_poll": {
+        "description": "Check each department's NWS weather zone for severe and extreme alerts, and show or send new ones as the department chose (dashboard banner, bell, email)",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
+    },
     "google_workspace_suspension_sync": {
         "description": "Finish Google Workspace and Microsoft 365 suspensions (and their lifting) that a member's departure or return left unsettled, retry failed ones, and retry taking departed members out of their groups and passing on name changes",
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
+    },
+    "prospect_follow_up_reminders": {
+        "description": (
+            "Remind applicants about an unsubmitted follow-up form every seven "
+            "days, up to three times, while they are still on its stage. Sent "
+            "between 09:00 and 20:00 in the department's timezone, so the task "
+            "runs hourly and each reminder goes out in the first run after "
+            "09:00 on its day (once per request and reminder — safe to run "
+            "more than once an hour)"
+        ),
+        "frequency": "hourly",
+        "recommended_time": "0 * * * *",
+        "cron": "0 * * * *",
     },
     "admin_hours_auto_close": {
         "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
@@ -671,9 +690,8 @@ DOMAIN_MEDICAL = "medical"
 async def _stock_alert_audiences(
     db_session: AsyncSession,
     organization_id: str,
-    department_required: DepartmentRequired,
-) -> Dict[frozenset, List[str]]:
-    """Group recipient emails by the stock domains each may actually see.
+) -> Dict[frozenset, List[User]]:
+    """Group the officers by the stock domains each may actually see.
 
     An alert that spans both domains cannot simply widen its recipient list:
     the body is one rendered table, so adding medical-only officers to a
@@ -685,8 +703,9 @@ async def _stock_alert_audiences(
     [...]}`` so a caller can render one message per audience containing only
     that audience's rows. Someone holding both grants appears once, in the
     two-domain group, and so receives a single complete email rather than two
-    partial ones. Officers who turned off quartermaster duty emails are left
-    out; these alerts have no in-app copy for them to miss.
+    partial ones. Every officer is returned, whatever their email choices:
+    the bell copy reaches them all, and ``_quartermaster_emails`` picks out
+    who also receives the email.
     """
     from sqlalchemy.orm import selectinload
 
@@ -696,11 +715,10 @@ async def _stock_alert_audiences(
         select(User)
         .where(User.organization_id == organization_id)
         .where(User.is_active == True)  # noqa: E712
-        .where(User.email.isnot(None))
         .options(selectinload(User.roles))
     )
 
-    audiences: Dict[frozenset, List[str]] = {}
+    audiences: Dict[frozenset, List[User]] = {}
     for user in result.scalars().all():
         granted: set[str] = set()
         for role in user.roles or []:
@@ -715,22 +733,31 @@ async def _stock_alert_audiences(
             domains.add(DOMAIN_MEDICAL)
         if not domains:
             continue
-        if not member_receives_email(
+
+        audiences.setdefault(frozenset(domains), []).append(user)
+
+    return audiences
+
+
+def _quartermaster_emails(
+    users: List[User], department_required: DepartmentRequired
+) -> List[str]:
+    """The addresses among ``users`` that receive quartermaster duty email."""
+    return [
+        user.email
+        for user in users
+        if user.email
+        and member_receives_email(
             user.notification_preferences,
             EmailKind.INVENTORY_DUTIES,
             department_required,
-        ):
-            continue
-
-        audiences.setdefault(frozenset(domains), []).append(user.email)
-
-    return audiences
+        )
+    ]
 
 
 async def _stock_alert_recipients(
     db_session: AsyncSession,
     organization_id: str,
-    department_required: DepartmentRequired,
     permissions: tuple[str, ...] = GEAR_STOCK_PERMISSIONS,
 ) -> list[User]:
     """The members this department put in charge of the stock being alerted on.
@@ -753,8 +780,8 @@ async def _stock_alert_recipients(
     guard in ``_for_each_org``, which logged it and moved on. The alerts were
     silently undelivered rather than visibly broken.
 
-    Every caller only emails the result, so officers who turned off
-    quartermaster duty emails are left out here.
+    Every officer is returned, whatever their email choices: callers give
+    them all a bell copy and email only those ``_quartermaster_emails`` keeps.
     """
     from sqlalchemy.orm import selectinload
 
@@ -764,7 +791,6 @@ async def _stock_alert_recipients(
         select(User)
         .where(User.organization_id == organization_id)
         .where(User.is_active == True)  # noqa: E712
-        .where(User.email.isnot(None))
         .options(selectinload(User.roles))
     )
     recipients: list[User] = []
@@ -772,11 +798,7 @@ async def _stock_alert_recipients(
         granted: set[str] = set()
         for role in user.roles or []:
             granted.update(role.permissions or [])
-        if permission_matches_any(permissions, granted) and member_receives_email(
-            user.notification_preferences,
-            EmailKind.INVENTORY_DUTIES,
-            department_required,
-        ):
+        if permission_matches_any(permissions, granted):
             recipients.append(user)
     return recipients
 
@@ -5003,13 +5025,15 @@ async def run_paypal_capture_backfill(db: AsyncSession) -> Dict[str, Any]:
 
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
-    Send email alerts to admins when inventory items drop below reorder point.
-    Daily at 07:00.
+    Alert inventory officers when items drop below their reorder point.
+    Daily at 07:00: a bell entry for each officer, and the email to those who
+    receive quartermaster duty email.
     """
     from app.core.config import settings
     from app.services.email_service import EmailService
     from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
+    from app.services.officer_alert_copies import add_in_app_copies
 
     def _row_domain(item) -> str:
         """Which stock domain a low-stock row belongs to."""
@@ -5078,9 +5102,36 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         for row in low_stock:
             by_domain[_row_domain(row[0])].append(row)
 
-        audiences = await _stock_alert_audiences(
-            db_session, str(org.id), department_required_kinds(org)
-        )
+        audiences = await _stock_alert_audiences(db_session, str(org.id))
+        required = department_required_kinds(org)
+
+        # A bell entry for every officer in each audience, emailed or not: the
+        # email can be turned off and this alert had no other copy. Counted per
+        # audience, for the same disclosure reason as the emails below.
+        for domains, users in audiences.items():
+            count = sum(len(by_domain[d]) for d in domains)
+            if not count:
+                continue
+            gear_rows = DOMAIN_GEAR in domains and bool(by_domain[DOMAIN_GEAR])
+            await add_in_app_copies(
+                db_session,
+                organization_id=str(org.id),
+                recipient_ids=[str(u.id) for u in users],
+                category="inventory_low_stock",
+                subject=f"Low stock — {count} item(s) at or below reorder point",
+                message=(
+                    f"{count} item(s) are at or below their reorder point. "
+                    "Review and reorder as needed."
+                ),
+                action_url=(
+                    "/inventory/admin/items?low_stock=true"
+                    if gear_rows
+                    else "/medical-supplies?tab=low"
+                ),
+                replace_unread=True,
+                dedupe_key="+".join(sorted(domains)),
+            )
+        await db_session.commit()
 
         alerts_sent = 0
         email_svc = EmailService(organization=org)
@@ -5088,8 +5139,9 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         # single mixed table sent to everyone would put gear item names and
         # counts in front of a medical-only officer, who cannot reach them
         # through the API — mailing the data is the same disclosure.
-        for domains, emails in audiences.items():
+        for domains, users in audiences.items():
             rows = [r for d in sorted(domains) for r in by_domain[d]]
+            emails = _quartermaster_emails(users, required)
             if not rows or not emails:
                 continue
 
@@ -5165,7 +5217,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if success_count > 0:
                 alerts_sent += 1
 
-        # Email only, deliberately. Reordering is a purchasing decision a
+        # No text, deliberately. Reordering is a purchasing decision a
         # quartermaster makes during business hours against the itemised,
         # audience-scoped table above — a text can carry neither the item list
         # nor the quantities, so it adds nothing but an out-of-hours
@@ -5188,9 +5240,11 @@ AUDIT_DIGEST_ROWS_SHOWN = 50
 
 async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
     """
-    Email inventory managers the shelves overdue for an NFC shelf audit.
+    Tell inventory managers the shelves overdue for an NFC shelf audit.
 
-    Runs daily but sends at most once a week per organization: the in-process
+    Each manager gets a bell entry, and those who receive quartermaster duty
+    email also get the list by email. Runs daily but sends at most once a week
+    per organization: the in-process
     scheduler forgets its last run on every restart, so the week is measured
     from the last ``inventory_nfc_audit_digests`` row instead. Nothing is sent
     when nothing is overdue, when NFC tracking is switched off (an audit cannot
@@ -5202,6 +5256,7 @@ async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
     from app.services.inventory_audit_schedule_service import (
         InventoryAuditScheduleService,
     )
+    from app.services.officer_alert_copies import add_in_app_copies
     from app.utils.inventory_nfc import nfc_tracking_enabled_in
     from app.utils.org_timezone import scheduling_timezone
 
@@ -5231,14 +5286,37 @@ async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
             return 0
 
         recipients = await _stock_alert_recipients(
-            db_session,
-            org_id,
-            department_required_kinds(org),
-            permissions=GEAR_STOCK_PERMISSIONS,
+            db_session, org_id, permissions=GEAR_STOCK_PERMISSIONS
         )
-        emails = [u.email for u in recipients if u.email]
-        if not emails:
+        if not recipients:
             return 0
+        emails = _quartermaster_emails(recipients, department_required_kinds(org))
+
+        # Refreshed in place while unread, so a retry after a failed send
+        # (below) does not add a second entry.
+        await add_in_app_copies(
+            db_session,
+            organization_id=org_id,
+            recipient_ids=[str(u.id) for u in recipients],
+            category="inventory_shelf_audit",
+            subject=f"Shelf audits overdue — {len(due)} storage area(s)",
+            message=f"{len(due)} storage area(s) are due an NFC shelf audit.",
+            action_url="/inventory/shelf-audit",
+            replace_unread=True,
+        )
+        if not emails:
+            # Nobody to email; the bell entries are this week's digest.
+            db_session.add(
+                InventoryNfcAuditDigest(
+                    organization_id=org_id,
+                    sent_at=now,
+                    overdue_count=len(due),
+                    recipient_count=0,
+                )
+            )
+            await db_session.commit()
+            return 1
+        await db_session.commit()
 
         tz = scheduling_timezone(org)
         cell = "padding:6px 12px;border-bottom:1px solid #eee;"
@@ -5408,13 +5486,15 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
 async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
-    Send email alerts for PPE approaching NFPA 10-year retirement.
+    Alert gear officers to PPE approaching NFPA 10-year retirement: a bell
+    entry for each, and the itemised email for those who receive it.
     Weekly on Mondays at 08:00.
     Tiers: 180 days, 90 days, 30 days, past due.
     """
     from app.services.email_service import EmailService
     from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
+    from app.services.officer_alert_copies import add_in_app_copies
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         service = InventoryService(db_session)
@@ -5486,12 +5566,25 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         # NFPA 1851 retirement is structural firefighting PPE, which is
         # the gear officer's ledger and not the EMS supply officer's.
         admins = await _stock_alert_recipients(
-            db_session,
-            str(org.id),
-            department_required_kinds(org),
-            permissions=GEAR_STOCK_PERMISSIONS,
+            db_session, str(org.id), permissions=GEAR_STOCK_PERMISSIONS
         )
-        admin_emails = [a.email for a in admins if a.email]
+        await add_in_app_copies(
+            db_session,
+            organization_id=str(org.id),
+            recipient_ids=[str(a.id) for a in admins],
+            category="inventory_ppe_retirement",
+            subject=f"NFPA retirement — {len(items_due)} PPE item(s)",
+            message=(
+                f"{len(items_due)} PPE item(s) are approaching or past their NFPA "
+                "retirement date"
+                + (f", {len(past_due)} of them past due" if past_due else "")
+                + "."
+            ),
+            action_url="/inventory/admin/items",
+            replace_unread=True,
+        )
+        await db_session.commit()
+        admin_emails = _quartermaster_emails(admins, department_required_kinds(org))
 
         if admin_emails:
             email_svc = EmailService(organization=org)
@@ -5517,6 +5610,21 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         return 0
 
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
+
+
+async def run_weather_alert_poll(db: AsyncSession) -> Dict[str, Any]:
+    """Poll each department's NWS zone for Severe and Extreme alerts.
+
+    Every 15 minutes. A department without an enabled NWS Weather Alerts
+    integration costs one query. New alerts are announced as the department
+    chose; see app/services/weather_alert_service.
+    """
+    from app.services.weather_alert_service import poll_department
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        return await poll_department(db_session, org)
+
+    return await _for_each_org(db, "weather_alert_poll", process)
 
 
 def _supply_summary(
@@ -5561,6 +5669,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
     from app.services.email_service import EmailService, wrap_email_body
     from app.services.equipment_check_service import EquipmentCheckService
     from app.services.inventory_service import InventoryService
+    from app.services.officer_alert_copies import add_in_app_copies
 
     window_days = 30
 
@@ -5800,11 +5909,10 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
-        audiences = await _stock_alert_audiences(
-            db_session, str(org.id), department_required_kinds(org)
-        )
+        audiences = await _stock_alert_audiences(db_session, str(org.id))
         if not audiences:
             return 0
+        required = department_required_kinds(org)
 
         email_svc = EmailService(organization=org)
         sent_any = False
@@ -5812,11 +5920,11 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         # checklist content, governed by equipment_check.* rather than by the
         # inventory domain, so every recipient sees them; the shelf-lot table
         # is inventory data and is filtered to the domains that audience holds.
-        for domains, emails in audiences.items():
+        for domains, users in audiences.items():
             rows = list(medical_lots) if DOMAIN_MEDICAL in domains else []
             if DOMAIN_GEAR in domains:
                 rows = list(gear_lots) + rows
-            if not emails or (not deployed and not rows):
+            if not deployed and not rows:
                 continue
             # Medical stock figures, so for the audiences that manage them,
             # as the shelf-lot table is.
@@ -5825,6 +5933,23 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             summary = _supply_summary(
                 expiring_count, restock_count, len(rows), len(unseen)
             )
+            # Every officer in the audience, emailed or not; the summary is
+            # the same audience-scoped one the email opens with.
+            await add_in_app_copies(
+                db_session,
+                organization_id=str(org.id),
+                recipient_ids=[str(u.id) for u in users],
+                category="inventory_supply_expiration",
+                subject="Supplies to replace",
+                message=f"{summary} (expiring means within {window_days} days).",
+                action_url="/medical-supplies",
+                replace_unread=True,
+                dedupe_key="+".join(sorted(domains)),
+            )
+            await db_session.commit()
+            emails = _quartermaster_emails(users, required)
+            if not emails:
+                continue
             html_body = wrap_email_body(
                 org,
                 "Supplies to Replace",
@@ -7425,6 +7550,19 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_prospect_follow_up_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Send the follow-up form reminders that are due.
+
+    The rules live in FollowUpFormService.send_due_reminders, which commits or
+    rolls back each request on its own, so one failure cannot discard the
+    reminders already recorded.
+    """
+    from app.services.follow_up_form_service import FollowUpFormService
+
+    counts = await FollowUpFormService(db).send_due_reminders()
+    return {"task": "prospect_follow_up_reminders", **counts}
+
+
 async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     """Auto-close admin-hours sessions that exceeded their category limit.
 
@@ -7901,6 +8039,7 @@ TASK_RUNNERS = {
     "nfc_card_tap_purge": run_nfc_card_tap_purge,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
+    "weather_alert_poll": run_weather_alert_poll,
     "compliance_auto_reports": run_compliance_auto_reports,
     "compliance_member_notices": run_compliance_member_notices,
     "saved_report_delivery": run_saved_report_delivery,
@@ -7931,6 +8070,7 @@ TASK_RUNNERS = {
     "officer_directory_sync": run_officer_directory_sync,
     "event_request_reminders": run_event_request_reminders,
     "prospect_attendance_advance": run_prospect_attendance_advance,
+    "prospect_follow_up_reminders": run_prospect_follow_up_reminders,
     "budget_request_reminders": run_budget_request_reminders,
     "grant_reminders": run_grant_reminders,
 }
@@ -7961,6 +8101,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "shift_auto_checkout": 900,
     "publish_scheduled_messages": 900,
     "storefront_window_lifecycle": 900,
+    # Idempotent per (department, NWS alert id); see weather_alert_service.
+    "weather_alert_poll": 900,
     # Every 30 minutes
     "event_reminders": 1800,
     "post_event_validation": 1800,
@@ -8022,6 +8164,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "officer_directory_sync": 86400,
     "event_request_reminders": 86400,
     "prospect_attendance_advance": 86400,
+    # Hourly, so a reminder lands soon after 09:00 department time; each
+    # request is reminded at most once a day (FollowUpFormService.reminder_due).
+    "prospect_follow_up_reminders": 3600,
     # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
     "budget_request_reminders": 86400,
     # Daily; idempotent per (item, due date, reminder, member) through a sent-log.

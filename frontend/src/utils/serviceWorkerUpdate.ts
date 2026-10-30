@@ -38,6 +38,13 @@ const ACTIVATE_TIMEOUT_MS = 4_000;
 export function registerServiceWorker(): void {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
 
+  // An embedded public form runs in an iframe on a department's own website,
+  // so every visitor to that site loads it. Registering there would install
+  // the whole intranet's precache (~2.6 MB over the wire) in the visitor's
+  // browser for a form they may never fill in. The /embed/ check covers the
+  // same page opened on its own; framed covers anything else put in a frame.
+  if (window.self !== window.top || window.location.pathname.startsWith('/embed/')) return;
+
   const doRegister = () => {
     navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {
       // Registration failure leaves this load uncontrolled — the next page

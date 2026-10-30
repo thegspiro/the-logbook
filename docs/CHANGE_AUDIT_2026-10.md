@@ -5,6 +5,33 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 29, 2026
+
+Merged to `main` since `7ac356b4` (2026-10-29 03:12 UTC) through `2aac367a`
+(2026-10-29 11:29 UTC), 8 merges. The documents-legal security-review pass
+(#3816) is in `docs/security-review/PROGRESS.md`; the October 28 – 29
+documentation pass (#3814) merged in this window. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                         | Guide          | Disposition                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Follow-up Form** pipeline stage: a personal link to a form pre-filled from the applicant record, drafts, write-back, a **Contact details changed** flag, **Send now / Resend**; two new templates that are always sent; **Pre-fill from applicant (follow-up forms)** on form fields (#3820) | 15, 07, 08, 01 | Added. Corrected "twelve stage types" (15, 01), "five emails cannot be switched off" (08, now seven), and 15's claim that Application Status Link can be switched off; 15's card description now names the flag. Developer docs written with the change |
+| **Shift remaining** on a cohort moves classes at most 14 days either way (#3819)                                                                                                                                                                                                               | 02             | Added; `KNOWN_LIMITATIONS` written with the change                                                                                                                                                                                                      |
+| Label print page: the preview sits under the controls instead of a screen below (#3817)                                                                                                                                                                                                        | none           | Guide 05 did not describe the position                                                                                                                                                                                                                  |
+| Pages no longer jump while they load (#3821)                                                                                                                                                                                                                                                   | none           | Visual only                                                                                                                                                                                                                                             |
+| Refusals that list names (an event request's roles, inactive budget lines, org-chart seats on a rank) keep as many as fit and add "and _N_ more", instead of growing past the length limit and reaching the user as no message at all (#3815); medical-supplies tests across midnight (#3818)  | none           | Backend and tests                                                                                                                                                                                                                                       |
+| `alert-error` replaced by `alert-danger` on twelve screens, so their error boxes show the danger styling (#3820)                                                                                                                                                                               | none           | Visual only                                                                                                                                                                                                                                             |
+
+**Screenshots to create:** the Follow-up Form stage settings, the applicant
+drawer's **Follow-up Forms** section, the applicant's form page with **Save and
+finish later**, and a card with **Contact details changed**. **Replace:**
+`01-27-stage-type-picker` (a thirteenth tile). **Re-check:**
+`05-69-label-print-page` and `05-33-label-printing` (the preview now sits under
+the controls), the cohort **Shift remaining** dialog, and any shot showing a red
+error box on one of the twelve screens. See
+`docs/training/SCREENSHOT_CURRENCY.md`. The second pass over this window (#3831)
+merged into this section: it added the guide 05 preview note and a guide 02
+row for a refused shift.
+
 ## Change audit: October 28 – 29, 2026
 
 Merged to `main` since `7c0162c0` (2026-10-28 12:02 UTC) through `7ac356b4`

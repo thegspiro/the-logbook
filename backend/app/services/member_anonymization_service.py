@@ -29,7 +29,9 @@ docs/COMPLIANCE.md):
   prospect-linked medical results, every linked source form submission
   (including later duplicate applications referenced only from step
   progress), and the mapped_data applicant copies that form-driven
-  pipeline steps store in prospect_step_progress.action_result.
+  pipeline steps store in prospect_step_progress.action_result, the
+  follow-up forms they were sent, and the applicant copy each election
+  package took (its ballot item, an official election record, is retained).
 
 What is deliberately NOT touched:
 - audit_logs — append-only and hash-chained; rewriting them is tampering.
@@ -41,6 +43,7 @@ Preconditions: the member must already be departed (soft-deleted or in a
 departed/archived status). Anonymization is irreversible by design.
 """
 
+import copy
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -55,6 +58,7 @@ from app.models.medical_screening import ScreeningRecord
 from app.models.meeting import MeetingAttendee
 from app.models.membership_pipeline import (
     ProspectDocument,
+    ProspectElectionPackage,
     ProspectFormRequest,
     ProspectInterview,
     ProspectiveMember,
@@ -145,6 +149,10 @@ class MemberAnonymizationService:
         user.emergency_contacts = None
         user.notification_preferences = None
         user.status_change_reason = None
+        # Free text a secretary wrote about the member when overriding their
+        # voting waiting period; the dates and the waiver flag beside it are
+        # standing, not personal, and are kept.
+        user.voting_wait_override_reason = None
         user.password_hash = None
         user.oauth_provider = None
         user.oauth_subject = None
@@ -378,6 +386,40 @@ class MemberAnonymizationService:
                 .where(ProspectInterview.prospect_id == prospect.id)
                 .values(notes=None, recommendation_notes=None)
             )
+            # An election package keeps its own copy of the applicant's
+            # details -- contact details, notes, follow-up answers -- taken
+            # when it was assembled. Keep only what the package's ballot item
+            # and stage list need, under the anonymized name.
+            packages_result = await self.db.execute(
+                select(ProspectElectionPackage).where(
+                    ProspectElectionPackage.prospect_id == prospect.id
+                )
+            )
+            for package in packages_result.scalars().all():
+                old_snapshot = (
+                    package.applicant_snapshot
+                    if isinstance(package.applicant_snapshot, dict)
+                    else {}
+                )
+                package.applicant_snapshot = {
+                    "first_name": prospect.first_name,
+                    "last_name": prospect.last_name,
+                    "desired_membership_type": old_snapshot.get(
+                        "desired_membership_type"
+                    ),
+                    "stage_history": copy.deepcopy(
+                        old_snapshot.get("stage_history") or []
+                    ),
+                }
+                package.coordinator_notes = None
+                config = copy.deepcopy(
+                    package.package_config
+                    if isinstance(package.package_config, dict)
+                    else {}
+                )
+                for key in ("supporting_statement", "custom_fields", "documents"):
+                    config.pop(key, None)
+                package.package_config = config
             # Uploaded applicant documents (ID photos, background checks)
             # are pure PII: remove the files best-effort, then the rows.
             docs_result = await self.db.execute(

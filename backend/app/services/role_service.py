@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.core.permissions import (
+    POSITION_KINDS,
     default_positions_for,
     describe_invalid_permission_grants,
     get_rank_default_permissions,
@@ -112,6 +113,7 @@ class RoleManagementService:
                 "is_system": role.is_system,
                 "priority": role.priority,
                 "mirrors_rank": role.mirrors_rank,
+                "kind": role.kind or "office",
                 "created_at": role.created_at,
                 "updated_at": role.updated_at,
             }
@@ -169,6 +171,7 @@ class RoleManagementService:
         description: Optional[str] = None,
         priority: int = 0,
         is_system: bool = False,
+        kind: str = "office",
         audit_username: Optional[str] = None,
         audit_ip_address: Optional[str] = None,
         audit_user_agent: Optional[str] = None,
@@ -211,6 +214,11 @@ class RoleManagementService:
         if invalid:
             raise ValueError(describe_invalid_permission_grants(invalid))
 
+        if kind not in POSITION_KINDS:
+            raise ValueError(
+                f"Unknown position kind '{kind}'. Expected one of: {', '.join(POSITION_KINDS)}."
+            )
+
         # Create role
         role = Role(
             id=str(uuid4()),
@@ -221,6 +229,7 @@ class RoleManagementService:
             permissions=permissions,
             is_system=is_system,
             priority=priority,
+            kind=kind,
         )
 
         db.add(role)
@@ -300,6 +309,7 @@ class RoleManagementService:
         description: Optional[str] = None,
         permissions: Optional[List[str]] = None,
         priority: Optional[int] = None,
+        kind: Optional[str] = None,
         audit_username: Optional[str] = None,
         audit_ip_address: Optional[str] = None,
         audit_user_agent: Optional[str] = None,
@@ -346,6 +356,10 @@ class RoleManagementService:
         # Its stable slug remains the identifier used for baseline assignment and
         # permission resolution.
         if role.is_system:
+            if kind is not None and kind != role.kind:
+                # A seeded committee stays a committee and a rank mirror stays
+                # the platform's: the kind is what the registry says it is.
+                raise ValueError("Cannot change the kind of a system position")
             if name is not None:
                 if role.slug != "member":
                     raise ValueError("Cannot rename this system position")
@@ -400,6 +414,14 @@ class RoleManagementService:
             if priority is not None:
                 changes["priority"] = {"old": role.priority, "new": priority}
                 role.priority = priority
+            if kind is not None and kind != role.kind:
+                if kind not in POSITION_KINDS or kind == "system":
+                    raise ValueError(
+                        "A position is an office or a committee; 'system' is "
+                        "reserved for the platform's own."
+                    )
+                changes["kind"] = {"old": role.kind, "new": kind}
+                role.kind = kind
 
         if changes:
             try:
@@ -572,6 +594,9 @@ class RoleManagementService:
             description=new_description or f"Clone of {source.name}",
             priority=source.priority or 0,
             is_system=False,  # Cloned roles are never system roles
+            # A copy of a committee is a committee; a copy of anything the
+            # platform owns is an ordinary office.
+            kind=source.kind if source.kind == "committee" else "office",
         )
 
     # ============================================
@@ -999,6 +1024,7 @@ class RoleManagementService:
                 permissions=role_def["permissions"],
                 is_system=role_def["is_system"],
                 priority=role_def["priority"],
+                kind=role_def.get("kind", "office"),
             )
 
             db.add(role)

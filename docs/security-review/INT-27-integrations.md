@@ -1,6 +1,234 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-27 (pass 10, this PR), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 10); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-30 (pass 11, this PR), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 11); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 11 (2026-10-30) — watchdog pickup; weather alerts and generic webhooks built out, credential-required connect; 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents` — no reachable agents). PR #3852 (Feature 26, Forms, pass 11)
+had already merged (`a41ff44d`); `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned zero results both
+before starting and again right before this push. Row 27 (Integrations)
+confirmed as the first `⬜` row in `PROGRESS.md`'s rotation table on a
+freshly fetched `main`.
+
+**Baseline `d9d9d59b`** (pass 10's merge, PR #3782). Diffing every file this
+feature has accumulated into scope across passes 1–10 — all ten route files,
+every file under `services/integration_services/`, the directory-account and
+Google Workspace services, `models/integration.py`,
+`schemas/integration.py`, `utils/ssrf_transport.py`, `mcp/keys.py`, and
+`frontend/src/pages/IntegrationsPage.tsx` — against `d9d9d59b` finds **four**
+in-scope commits (of 253 non-merge commits on `main` since that baseline).
+Confirmed byte-identical, not sampled: `salesforce_sync.py`, `calcom_sync.py`,
+`mcp_keys.py`, `google_workspace.py`, `google_calendar_oauth.py`,
+`outlook_calendar_oauth.py`, `api/public/calendar.py`,
+`api/public/integrations_webhook.py`, `api/public/salesforce_webhook.py`,
+`mcp/keys.py`, `utils/ssrf_transport.py` (the DNS-rebinding SSRF guard),
+`models/directory_account_departure.py`, `services/integration_health.py`,
+and `services/paypal_backfill_service.py`.
+
+### What changed in-scope since pass 10 (reviewed, no fix needed)
+
+- **`86d80fe3`** ("PayPal, Documenso, Cal.com and Salesforce need their
+  credentials to connect") — INT2-3, an app-review finding, owner decision
+  2026-10-27: these four accepted `POST /{id}/connect` with no credential and
+  showed connected/enabled until `test-connection` failed. `integrations.py`'s
+  `_missing_required_fields` now also checks a per-type
+  `_CREDENTIALS_REQUIRED_TO_CONNECT` list, treating a blank string as absent
+  (these schemas default each credential to `""` so a partial `PATCH`
+  validates against the same schema) and accepting a value already stored
+  (so a reconnect that sends nothing still passes). Read the full diff: the
+  check only _adds_ names to `missing`, never removes one the schema-level
+  check already found, and a reconnect's "already stored" branch reads
+  `integration.get_secret(name)` — the encrypted column, not the plaintext
+  `config` dict — so it can't be satisfied by a value that was only ever in
+  the request body. Covered by
+  `tests/test_integration_connect_required_fields.py` (new, 75 lines).
+- **`de9aade2`** ("NWS weather alerts are polled and shown as the department
+  chose") — a full new sub-feature, owner decision 2026-10-29, closing the
+  KNOWN_LIMITATIONS "Do Nothing After Their Test" item's weather half. Read
+  in full, not sampled:
+  - New table `weather_alerts` (migration `f90b1124e6f4`, corrected in a
+    same-window follow-up commit before merging — see below). `create_table`
+    guarded by `_has_table`, so a second run is a no-op; `organization_id` is
+    `ForeignKey(..., ondelete="CASCADE")` and `nullable=False` (not a `SET
+NULL` column, so Pitfall #2 doesn't apply); unique on
+    `(organization_id, nws_id)`, which is what makes a second poll of the
+    same alert a no-op rather than a repeat notification.
+  - `weather_alert_service.poll_zone` commits the new/updated rows **before**
+    `announce()` sends anything (CLAUDE.md Pitfall #36, at-most-once): a crash
+    between the two loses that alert's notice rather than repeating it to the
+    whole department on the next 15-minute poll. An `IntegrityError` on the
+    commit (another worker recorded the same alert first) is caught, rolled
+    back, and returns no fresh alerts rather than re-raising or double-firing.
+  - Every query in the new service filters `organization_id` (`weather_integration`,
+    `active_alerts`, `poll_zone`'s `stored` lookup, `_members`) — no by-id
+    query takes a client-supplied id at all; the only parameter is the
+    caller's own `organization_id` from `current_user`.
+  - New route `GET /integrations/weather/active-alerts` is deliberately
+    member-readable (`get_current_user` only, no permission gate) — it is NWS's
+    own public bulletin, filtered to the caller's org, not member data — and
+    is listed in `tests/permissionless_route_baseline.txt:178` with that
+    scoping. It is registered **before** `/{integration_id}` in the file
+    (line 1008 vs. line 1046 after this change), which is what stops FastAPI
+    from matching `"weather"` as a path-parameter `integration_id` on a
+    literal-vs-wildcard route — confirmed by reading route registration
+    order directly, not assumed.
+  - Free text from NWS (`headline`, `area_desc`, `instruction`) is
+    `html.escape()`d before going into the alert email's HTML body
+    (`_email`); the dashboard banner renders the same fields as JSX text
+    content, which React escapes by default. One email per member in the
+    recipient loop (never a shared `to` list), and `recipients_for(...,
+EmailKind.WEATHER_ALERTS, ...)` respects the member's own notification
+    preference the same way every other `EmailKind` does.
+  - The bell notice (`add_in_app_copies`) and the email path are each wrapped
+    in their own `try/except`, logged and swallowed — a failure in one
+    channel cannot take out the alert record or the other channel, and
+    `announce()` itself is documented to "never raise".
+  - **Follow-up fix in the same window, `0664a29e`** ("name the creation
+    stamp `created_at`"): the unpublished migration's timestamp column was
+    renamed from `first_seen_at` to `created_at` before this feature's own
+    pass 10 merge closed, because `test_timestamp_columns_exist_on_tracked_tables`
+    caught the non-standard name. Confirmed the migration file, model and
+    service were all updated together (no stale reference to the old name
+    anywhere in the current tree).
+- **`e392f355`** ("Generic Webhooks are sent the events chat integrations
+  get") — the other half of the same KNOWN_LIMITATIONS item, owner decision
+  2026-10-29. `dispatch_generic_webhooks` (new, in this feature's own
+  `integration_services/notification_dispatch.py`) runs beside the existing
+  chat dispatch from `notify_entity_created`. Read in full:
+  - Its own `Integration` query filters `organization_id == str(organization_id)`
+    — the `organization_id` is the background task's own parameter, passed
+    down from the HTTP request that triggered the notification, not a
+    client-supplied id on this path.
+  - `event_types` is validated against a fixed `WEBHOOK_EVENT_TYPES` map
+    (`schemas/integration.py`, `field_validator`, raises `ValueError` → 422 on
+    an unknown value, using `list_within_detail_limit` per the repo-wide
+    error-message-length sweep) — a client cannot pick an arbitrary string to
+    gate deliveries on; an empty list means "all events" so a webhook
+    connected before this feature existed starts receiving everything rather
+    than silently nothing.
+  - The actual delivery still goes through the pre-existing
+    `webhook_service.send_webhook`, confirmed byte-identical to pass 10 —
+    which still calls `assert_outbound_url_safe(url)` immediately before the
+    request (the DNS-rebinding TOCTOU guard, checklist §4) and still HMAC-signs
+    the payload. This commit adds a second _caller_ of that function; it does
+    not touch the function itself, so the guard this feature already earned
+    credit for in prior passes is unweakened.
+  - Each delivery attempt — success or failure — is recorded via
+    `record_integration_run`, matching the existing pattern for every other
+    connector's outbound call in this feature.
+  - This file was also read, from the opposite direction, by Feature 25
+    (Messaging & notifications)'s own pass 11 — `notification_dispatch.py`
+    physically lives under this feature's `integration_services/` directory
+    but is also a shared dispatch entry point messaging passes through. Per
+    Pitfall #29, this pass did not re-derive Feature 25's conclusion; it
+    independently re-read the same diff from this feature's own angle
+    (outbound-URL guard, org-scoping, event-type allowlist) and reaches the
+    same result.
+- **`9af732d9`** ("Use `alert-danger` where `alert-error` was written") — a
+  one-line CSS class fix in `IntegrationsPage.tsx` (an undefined Tailwind
+  utility rendering with no colour/border/padding). Cosmetic; no security
+  surface.
+
+Three other commits in the window (`31f39cf6`, `43c11090`, `b48d63f2`) touch
+this feature's files only as a share of a repo-wide sweep, reviewed for this
+feature's slice only:
+
+- **`31f39cf6`** ("officer alerts whose email can be turned off also leave a
+  bell entry") adds a bell notice to `google_workspace_attention_digest.py`'s
+  existing `send_google_workspace_attention_digest`. It reuses the function's
+  own already-org-scoped `_administrators(db, org_id)` call — no new query —
+  and the bell message is a generic subject/count with a fixed `/integrations`
+  action URL; no PII in the notice body.
+- **`43c11090`** (the repo-wide email-fingerprint sweep) swaps
+  `func.lower(User.email).in_(...)`/`func.lower(User.email) == ...` for
+  `User.email_hash.in_(email_fingerprints(...))` in
+  `directory_account_service.py` and `salesforce_sync_service.py`. Both call
+  sites keep their pre-existing `organization_id` filter in the same
+  `where()` clause — the change only narrows how the email half of the match
+  is expressed, not the tenant boundary.
+- **`b48d63f2`** (the repo-wide email-encryption sweep) touches this
+  feature's `models/integration.py` only via the unrelated `WeatherAlert`
+  class landing in the same file in the same window (confirmed by `git show
+b48d63f2 -- backend/app/models/integration.py` returning empty) — no
+  encryption-sweep edit actually lands in this feature's own tables.
+
+### Route inventory re-enumerated by AST — 39 routes (was 38 at pass 10)
+
+A Python `ast` walk (not a text grep) over every `@router.*` decorator in all
+ten route files: `integrations.py` 12 (was 11, +1 — the new weather route),
+`salesforce_sync.py` 9, `calcom_sync.py` 1, `mcp_keys.py` 4,
+`google_workspace.py` 4, `google_calendar_oauth.py` 2,
+`outlook_calendar_oauth.py` 2, `api/public/calendar.py` 2,
+`api/public/integrations_webhook.py` 2, `api/public/salesforce_webhook.py` 1.
+`check_route_permissions.py --strict`: 280 routes, 0 errors/warnings (up
+from pass 10's 279 — the one net-new application route).
+
+### Migrations since pass 10
+
+One new migration belongs to this feature: `f90b1124e6f4` (`weather_alerts`,
+reviewed above). `validate_migrations.py --strict`: 678 revisions (up from
+pass 10's 663), single head, PASSED.
+
+### Standing findings — all re-verified, none changed
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist,
+  `app/utils/url_validator.py`): file confirmed byte-identical to pass 10.
+  Still an explicit owner decision. **OPEN.**
+- **INT-6** (connector-exception sanitization, `sanitize_connector_error`):
+  unaffected — no connector's `test_connection`/`check_readiness` path
+  changed this window. **FIXED, unchanged.**
+- INT-2, INT-3, INT-4, INT-8, INT-9 and the rest of the standing "Verified
+  good" list (SOQL injection defense, instance-URL domain pinning, secret
+  handling, webhook replay dedup, module gating, the SSRF transport pin, the
+  wall-clock deadline, Google Calendar's response-size cap, Retry Sync's
+  lock-then-read ordering, the PayPal backfill's idempotency): every file
+  carrying them is either confirmed byte-identical above or, for
+  `notification_dispatch.py`'s `send_webhook` call, confirmed to reuse the
+  unchanged guard rather than route around it.
+- **`docs/KNOWN_LIMITATIONS.md`**: the "Integrations — Weather Alerts and
+  Generic Webhooks Do Nothing After Their Test" entry already carries both
+  "resolved (2026-10-29)" notices (added by `de9aade2`/`e392f355` themselves)
+  describing exactly what pass 11 independently verified; the older prose
+  below each notice is kept as the historical record of what the limitation
+  was, matching this file's established convention (e.g. the Medical
+  Screening MS-13 entry) rather than being stale. No edit needed.
+
+## Guard tests added
+
+None by this pass — every new-feature test (`test_weather_alerts.py`,
+`test_generic_webhook_dispatch.py`, `test_integration_connect_required_fields.py`)
+was authored by the commits that introduced the behavior, already proven to
+fail on the old code per their own commit messages, and re-run as part of
+this pass's scoped suite below rather than re-written.
+
+## Completion gate (pass 11)
+
+| Check                                                                                                                                                                                                                                       | Result                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1)                                                                                                                                                                                                | ✅ 0 violations                                                                                             |
+| `black --check app/ tests/ alembic/` (black 26.10.1, `python3.13 -m`)                                                                                                                                                                       | ✅ 2743 files unchanged                                                                                     |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2, `python3.13 -m`)                                                                                                                                                                    | ✅ clean                                                                                                    |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                        | ✅ 678 revisions, single head `f90b1124e6f4`, PASSED                                                        |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                        | ✅ 280 routes, 0 errors, 0 warnings                                                                         |
+| backend tests, scope (`-k "weather or integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or outlook or directory_account or microsoft_365 or directory"`) | ✅ 8989 passed, 22 skipped (environment-only — Docker daemon/registry, opt-in API-contract suite), 0 failed |
+| backend tests, `test_weather_alerts.py` + `test_generic_webhook_dispatch.py`                                                                                                                                                                | ✅ 16 passed                                                                                                |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                          | ✅ 0 errors                                                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                                                               | ✅ exit 0, 0 warnings                                                                                       |
+| `npx vitest run` (`WeatherAlertBanner.test.tsx` + `IntegrationsPage.test.tsx` + `Dashboard.test.tsx`)                                                                                                                                       | ✅ 3 files, 215 tests passed                                                                                |
+
+No backend or frontend source file was modified by this pass itself — every
+finding this pass reviewed was already fixed by the commits that introduced
+it (`86d80fe3`, `de9aade2`, `0664a29e`, `e392f355`), each already carrying
+its own guard test. This pass's contribution is independently re-verifying
+all four against the current code and re-enumerating the route inventory by
+AST.
+
+Next: Feature 28 (Security, audit & IP).
 
 ---
 

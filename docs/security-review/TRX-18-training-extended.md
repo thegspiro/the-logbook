@@ -16,7 +16,9 @@
 `services/course_cohort_service.py` (1,517 L → 1,545 L),
 `services/course_syllabus_service.py` (363 L),
 `services/training_program_service.py` (one org-scoping fix, out of this
-iteration's file list — see TRX-1)
+iteration's file list — see TRX-1),
+`schemas/course_cohort.py` (625 L) and `schemas/training_submission.py`
+(382 L) — **added to this feature's declared scope at pass 12**, see below
 **Migrations:** none this iteration (no schema change)
 
 ---
@@ -3267,3 +3269,254 @@ security surface. Every standing TRX finding re-verified unchanged.
 | `python3 scripts/check_route_permissions.py --strict` (repo root)                                                         | ✅ 279 routes, 0 errors, 0 warnings                                    |
 | `cd frontend && npm run typecheck`                                                                                        | ✅ 0 errors                                                            |
 | `cd frontend && npm run lint`                                                                                             | ✅ 0 errors, 0 warnings                                                |
+
+## Pass 12 (2026-10-30) — watchdog pickup, closes a schema scope gap, 0 fixed, 0 new security findings
+
+**Prefix:** `TRX12` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`/`list_pull_requests`,
+state=open — 0 matches among `claude/security-review-*` heads; the one open
+PR at the time, #3839, is unrelated layout work on branch
+`ccr-ba1682dc-g25b70`). PR #3842 (Feature 17, Training core, pass 12) had
+already merged (`15f0983a`). The dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via
+`ListAgents` ("No reachable agents"). Rotation row 18 (Training extended)
+was confirmed the next pending feature by reading the rotation table
+directly on a freshly fetched `main`, matching PR #3842's own "next
+feature" note.
+
+### Scope gap found and closed — two schema files never added to this feature's declared list
+
+`schemas/course_cohort.py` (625 L) and `schemas/training_submission.py`
+(382 L) are imported **only** by this feature's own endpoint files
+(`course_cohorts.py`/`course_syllabus.py` and `training_submissions.py`
+respectively — confirmed by grepping every `.py` file under `backend/app/`
+for `schemas.course_cohort`/`schemas.training_submission`: one importer
+each, both this feature's own). Neither file has ever appeared in this
+feature's declared `Backend:` list across eleven prior passes, and pass 10
+actively misattributed `schemas/training_submission.py` to Feature 17
+(Training core) — its scope-check note read "all ten are Feature 17's
+(Training core) own files," grouping it with nine other name-matched files
+that genuinely were Feature 17's, on the strength of the glob match alone
+rather than checking who actually imports it. That misattribution stood
+uncorrected through pass 11. This pass checked importers directly instead
+of trusting the name-based glob pattern the rotation has used since pass
+10, and both files resolve to this feature.
+
+Both get their **first full pass** against all seven checklist dimensions
+here, rather than the incidental, single-finding reads prior passes gave
+them (e.g. pass 4's TRX4-1, which read one constraint in
+`training_submission.py` without reviewing the file):
+
+- **Bounds (dimension 4/6):** every numeric and list field is bounded —
+  `CohortMemberAdd.user_ids` capped at 200, `CrewTrainingCreate.member_ids`
+  capped at `CREW_MAX_MEMBERS` (100) and deduped, `CohortShiftRequest.days`
+  bounded to `±MAX_COHORT_SHIFT_DAYS` (14, matching the backend-defined
+  constant the frontend's `cohortShift.ts` mirrors — the
+  `CohortDetailPage.tsx` diff in this pass's own scope-check below adds
+  client-side validation against the same already-existing backend bound,
+  not a new one), hours/credit-hours fields bounded to `FLOAT32_MAX`,
+  `day_offset`/`duration_minutes`/`sequence` all bounded. No unbounded
+  numeric or list field in either file.
+- **Data exposure (dimension 5):** `SubmissionAttachment` in
+  `training_submission.py` declares only client-safe metadata
+  (name/type/size/index) — the stored dict's server file path is
+  deliberately omitted from the model so it can never reach a response,
+  and `sanitize_attachments()` strips it on the way out even for a
+  dict read straight from the JSON column. No secret or path field in
+  either schema file.
+- **Tenant isolation / XC-1 (dimension 3):** neither schema file enforces
+  org-scoping itself (Pydantic has no DB access) — by design, every
+  client-supplied FK they declare (`category_id`, `requirement_id`,
+  `phase_id`, `instructor_id`, `location_id`, `class_course_id`,
+  `program_id`, `member_user_ids`/`member_ids`, `shift_id`,
+  `apply_to_program_id`/`apply_to_requirement_id`) is validated at the
+  service layer. Traced every one to its validation site rather than
+  assuming the service layer covers it: `course_cohort_service.py`'s
+  `_validate_references`/inlined `assert_in_org` loops (course_syllabus_
+  service.py has the identical pattern) cover instructor/location/
+  category/requirement directly and resolve `phase_id` through its parent
+  `TrainingProgram` (`ProgramPhase` carries no `organization_id` of its
+  own); `create_cohort` validates `program_id` before use and `_add_members`
+  filters `member_user_ids` to `User.organization_id == organization_id`
+  before adding anyone to the roster (a foreign id is silently dropped from
+  the roster, never written); `training_submission_service.py`'s
+  `create_crew_submissions` validates `category_id`/`shift_id` via
+  `assert_in_org` and filters `member_ids` the same way
+  `_add_members` does; `apply_to_program_id`/`apply_to_requirement_id`
+  (from `SubmissionReviewRequest`) resolve through
+  `TrainingProgramService._resolve_apply_target`, which joins
+  `ProgramEnrollment` to `TrainingProgram.organization_id` and then
+  `RequirementProgress` to that already-org-scoped enrollment's own id —
+  a cross-org `requirement_id` cannot match and fails closed with "That
+  requirement is not part of this member's enrollment." No unvalidated FK
+  found.
+- **Authentication/authorization (dimensions 1-2):** schema files declare
+  no routes or permission strings — n/a, correctly the endpoint files'
+  concern (already covered by the route re-enumeration below).
+- **Injection (dimension 4):** no raw SQL, no `.like()`/`.ilike()` in
+  either file — n/a.
+- **Schema & migration integrity (dimension 7):** no model or migration in
+  either file — n/a; see the migration check below for this pass's one
+  migration in this feature's actual model surface.
+
+**Correction to the record, not a new finding:** this pass corrects pass
+10's misattribution. `schemas/training_submission.py` is, and has always
+been, Feature 18's own file; grouping it with Feature 17's files in pass
+10's scope-check note was a glob-matching error, not a scope decision.
+
+### Scope check — real delta since pass 11
+
+Baseline: `2d24c255` (PR #3759's merge, pass 11). 322 non-merge/merge
+commits landed in the window. Across the fifteen-file declared scope
+(twelve feature files, `training_program_service.py`, and — as of this
+pass — the two newly-added schema files) three files changed:
+`external_training.py` (2 lines), `external_training_service.py` (2
+lines), `training_enhancement_service.py` (2 lines). Both schema files
+(`schemas/course_cohort.py`, `schemas/training_submission.py`) are
+unchanged in the window — their only modification timestamp is from the
+general tree checkout, not a real diff (confirmed by `git diff --stat`
+against the baseline returning nothing for either path).
+
+Read both real (non-merge) commits touching the three changed files in
+full via `git show`:
+
+- **`9c2a5bff`** (PR #3800, SEC-00 pass 13, a cross-cutting-baseline
+  watchdog pickup, already reviewed and merged under that feature's own
+  rotation slot) — `external_training.py`'s `import_single_record` and
+  `bulk_import_records` switch `ext_import.import_error = str(e)` to
+  `safe_error_detail(e)` in two except blocks. Disclosure-hygiene fix
+  (CLAUDE.md's `safe_error_detail()` pattern), not a new vulnerability;
+  this feature's own files were in scope for that pass's own fix, not
+  this one's.
+- **`43c11090`** ("Match emails by fingerprint...", the repo-wide email
+  encryption/fingerprint sweep already independently re-verified by
+  several other features this same week — e.g. PR #3841's review of its
+  slice of `events.py`) — its slice of this feature's two files switches
+  `external_training_service.py`'s provider-sync email match and
+  `training_enhancement_service.py`'s xAPI actor-email match from
+  `func.lower(func.trim(User.email)) == email` /
+  `User.email == actor_email` to `User.email_hash.in_(email_fingerprints(email))`.
+  Both lookups already filtered `User.organization_id == organization_id`
+  before this change and still do after it — confirmed by reading both
+  `select()` calls directly rather than trusting the diff context lines.
+  Re-verified the mechanism rather than taking the commit message's word:
+  `email_fingerprints()` returns every fingerprint a legacy key rotation
+  could have produced for that address, so the lookup matches a complete
+  address exactly as the plaintext comparison did, with no partial-match
+  widening. No finding.
+
+One migration landed in this feature's actual model surface this window:
+`b74bcce55c11` ("Encrypt leave and training-waiver reasons at rest"),
+which switches `training_waivers.reason` (model: `backend/app/models/
+training.py`'s `TrainingWaiver`) from plaintext `TEXT` to `EncryptedText`.
+Not made through this feature's own rotation slot, so independently
+re-verified rather than taken on trust: read the migration in full —
+`_has_column` guards every table it touches against `create_all`
+(CLAUDE.md Pitfall #26), `_is_ciphertext` makes `upgrade()` idempotent (a
+value already carrying the `$gcm1$`/`$gcm2$` prefix is skipped), it
+refuses to run against non-empty data without `ENCRYPTION_KEY` set, and
+`downgrade()` decrypts symmetrically. Grepped `training_waivers.py` and
+`training_waiver_service.py` for any `.filter()`/`.ilike()`/`.order_by()`/
+`.where()` against `reason`: zero hits — the column is written and
+displayed, never queried on, so the encryption introduces no broken search
+or sort. No finding; TRX-6 (waiver FK validation via `assert_all_in_org`)
+re-read directly at its current line and unchanged by this commit.
+
+### Frontend surface
+
+Diffed all ten established frontend files plus `apiCache.ts` against
+`2d24c255`: two changed, both pure layout/UX, read in full rather than
+trusted from the diffstat —
+
+- **`SubmitTrainingPage.tsx`** — consolidates the loading/error/success
+  returns onto one shared `header` element (a `TrainingPageHeader` built
+  once and reused) and widens the loading/error containers from
+  `max-w-4xl` to the page's own `max-w-7xl` with `data-page-main`, so the
+  three return paths share one landmark and one header position instead of
+  the loading/error paths rendering a narrower column with their own
+  `<Breadcrumbs />`. No new data flow, no new API call.
+- **`CohortDetailPage.tsx`** — adds client-side bounds checking
+  (`shiftDaysError()`, `min`/`max`/`step` on the `<input type="number">`)
+  against `MAX_COHORT_SHIFT_DAYS` (14) before calling
+  `courseCohortService.shiftClasses`. This mirrors, rather than
+  introduces, a bound: `CohortShiftRequest.days` in `schemas/
+course_cohort.py` already enforces `ge=-14, le=14` server-side (reviewed
+  above as part of this pass's own schema-file read), so the backend was
+  never relying on this client check — it only improves the error a
+  member sees before the round trip. No finding.
+
+`apiCache.ts`/`apiCache.test.ts`: zero diff against `2d24c255` — confirmed
+by `git diff --stat`, not merely absent from the file list above.
+
+Grep-swept both changed frontend files (plus a re-sweep of the eight
+unchanged ones) for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`, a `date-fns` import, and
+direct `fetch(`: zero hits.
+
+### Route re-enumeration
+
+AST-walked every `@router.get/post/put/patch/delete` across all six
+endpoint files directly: **100 routes** (22 + 5 + 30 + 20 + 17 + 6) —
+unchanged from pass 11, matching the zero in-file diff on these six files
+this window. Every one carries a `Depends(...)` callable, verified by
+walking each decorated function's parameter defaults for a `Depends(` call
+rather than counting decorators alone.
+`python3 scripts/check_route_permissions.py --strict` (repo root):
+**280 total application routes, 0 errors, 0 warnings** — up from pass 11's
+279 from other features in the rotation merging in the interim, confirming
+no new top-level page from this feature (Pitfall #30a n/a).
+
+### Standing findings re-verified at their current citation
+
+TRX-1 through TRX-10, TRX3-1, TRX4-1/TRX4-2, and TRX7-1 re-read directly at
+their current file/line, matching pass 11's re-verification exactly (no
+file in this pass's three-file diff overlaps any of their citations):
+`training_program_service.py`'s batch `User` lookup in the prerequisite-gate
+error path still filters `organization_id` (TRX-1); `update_provider`,
+`CourseCohortService.update_cohort`, `CourseSyllabusService.update_class`
+still route through `apply_updates` (TRX-2/5/5b); `get_effectiveness_evaluations`
+still confines non-officers via `can_view_officer_training_data` (TRX-3);
+`_get_cohort_class` still takes `cohort_id` before any write (TRX-4);
+`training_waivers.py` still calls `assert_all_in_org` (TRX-6);
+`training_submission_service.py` still calls `assert_in_org` on
+`category_id` (TRX-7); the `_validate_references` methods on
+`RecertificationService`/`MultiAgencyService` are unchanged (TRX-8/9);
+`XAPIService`'s `_provider_validated` flag and batch-once validation are
+unchanged (TRX-10, and its one touched line this pass — the email-fingerprint
+swap above — does not touch this flag or its validation path); the
+SSRF-pinned transport (TRX3-1) and the instructor-qualification permission
+gate (TRX4-2) are both unchanged. No OPEN or FLAGGED item existed as of
+pass 11; none is reopened by this pass's three-file diff or by the two
+newly-scoped schema files' first full review.
+
+### Findings
+
+**0 new security findings.** One scope-ownership gap closed (two schema
+files that have always backed this feature's own endpoints, never on its
+declared list, one of them actively misattributed to a different feature
+in pass 10) — both given a first full pass against all seven checklist
+dimensions and found clean, every client-supplied FK they declare traced
+to its service-layer validation site rather than assumed covered. The
+window's real delta is two already-reviewed cross-cutting sweeps
+(disclosure-hygiene `safe_error_detail()`, email-fingerprint matching) and
+one independently-re-verified cross-cutting encryption migration
+(`training_waivers.reason`), none of which touch tenancy, authorization,
+injection, or data-exposure in this feature's surface. Two frontend
+changes, both layout/UX, read in full and confirmed non-functional to
+security. Every standing TRX finding re-verified unchanged; no OPEN or
+FLAGGED item exists after this pass.
+
+## Completion gate (pass 12)
+
+| Check                                                                                                                                        | Result                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/`                                                                                                         | ✅ 2743 files unchanged                           |
+| `isort --check-only app/ tests/ alembic/`                                                                                                    | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                            | ✅ 678 revisions, single head `f90b1124e6f4`      |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or crew"` (via `python3.13`) | ✅ 2517 passed, 1 pre-existing skip (`pywebpush`) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                            | ✅ 280 routes, 0 errors, 0 warnings               |
+| `cd frontend && npm run typecheck`                                                                                                           | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                                                                                                                | ✅ 0 errors, 0 warnings (`--max-warnings 10`)     |

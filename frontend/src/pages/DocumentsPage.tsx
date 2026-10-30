@@ -445,8 +445,8 @@ const DocumentsPage: React.FC = () => {
   // was replaced wholesale, and the page landed ~400px above where its box had
   // been.
   const pageHeader = (
-    <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center space-x-3">
+    <div className="page-header mb-8 gap-3 sm:items-center">
+      <div className="page-header-title flex items-center space-x-3">
         <div className="shrink-0 rounded-lg bg-amber-600 p-2">
           <FileText className="h-6 w-6 text-white" aria-hidden="true" />
         </div>

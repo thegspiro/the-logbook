@@ -165,6 +165,19 @@ def _orgs_result():
     return result
 
 
+def _session(*answers):
+    """A session answering ``answers`` in order; any later select is the bell
+    copy looking for an unread entry to refresh, and finds none."""
+    queue = iter(answers)
+    no_unread = MagicMock()
+    no_unread.scalars.return_value = iter(())
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=lambda *_a, **_k: next(queue, no_unread))
+    db.rollback = AsyncMock()
+    db.commit = AsyncMock()
+    return db
+
+
 def _officer():
     return SimpleNamespace(
         id="qm1",
@@ -179,9 +192,7 @@ class TestLowStockTable:
         _CaptureEmail.sent = []
         users = MagicMock()
         users.scalars.return_value.all.return_value = [_officer()]
-        db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_orgs_result(), users])
-        db.rollback = AsyncMock()
+        db = _session(_orgs_result(), users)
         item = SimpleNamespace(
             name="Gloves <L>",
             reorder_point=10,
@@ -203,9 +214,7 @@ class TestLowStockTable:
 class TestNfpaRetirementTable:
     async def test_identifier_moves_under_the_item(self):
         _CaptureEmail.sent = []
-        db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_orgs_result()])
-        db.rollback = AsyncMock()
+        db = _session(_orgs_result())
         today = org_today(None)
         due = [
             {

@@ -609,12 +609,12 @@ export const GrantApplicationsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
         {/* Page header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="page-header gap-4 sm:items-center">
+          <div className="page-header-title">
             <h1 className="text-theme-text-primary text-2xl font-bold">Grant Applications</h1>
             <p className="text-theme-text-secondary mt-1 text-sm">Track each application from research to closeout</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="page-header-actions flex flex-wrap items-center gap-3">
             {/* View toggle */}
             <div className="card flex p-0.5">
               <button

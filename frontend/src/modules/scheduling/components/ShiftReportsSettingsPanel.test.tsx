@@ -187,16 +187,16 @@ describe('ShiftReportsSettingsPanel — call types', () => {
  * so the screen labels them rather than promising an effect.
  */
 describe('ShiftReportsSettingsPanel — settings that are not in effect yet', () => {
-  it('says a shift can still be closed out without the required report', async () => {
+  // Close-out enforces it since 2026-10-29, so the box says what it blocks.
+  it('says the required report blocks close-out, and who can override', async () => {
     const user = userEvent.setup();
     renderWithRouter(<ShiftReportsSettingsPanel />);
     const tabs = await screen.findAllByRole('button', { name: /Filing & Validation/ });
     await user.click(tabs[0] as HTMLElement);
 
     expect(await screen.findByText(/Require officer shift completion report/)).toBeInTheDocument();
-    expect(
-      screen.getByText('Not in effect yet — a shift can still be closed out without a report.')
-    ).toBeInTheDocument();
+    expect(screen.getByText(/needs a shift completion report for the shift before it can be/)).toBeInTheDocument();
+    expect(screen.queryByText(/a shift can still be closed out without a report/)).not.toBeInTheDocument();
   });
 
   it('says the reviewer role does not limit who can review', async () => {

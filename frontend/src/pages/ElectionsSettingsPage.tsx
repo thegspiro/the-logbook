@@ -1,42 +1,67 @@
 /**
  * Elections Settings Page
  *
- * Centralised configuration for proxy voting, optional election features,
- * test ballots, and security posture.
+ * Centralised configuration for voter eligibility, proxy voting, optional
+ * election features, test ballots, and security posture.
  * Requires `elections.manage` permission.
  *
- * There is deliberately no "Defaults" section. `election_defaults` (voting
- * method, victory condition, quorum, anonymity, write-ins) is stored by
- * PATCH /elections/settings, but neither the create-election form nor the
- * backend create path reads it, so a control for it would claim an effect it
- * does not have (CLAUDE.md pitfall #19). Every write sends the settings object
- * as loaded, so the stored values still round-trip unchanged.
+ * Voter Eligibility holds the department's defaults, as one set for regular
+ * business meetings and, optionally, a second for the annual meeting. Each
+ * has a reader: the election-wide rules and position voter types are copied
+ * onto an election when it is created (backend `create_election`, choosing
+ * the set by the election's meeting kind), and the ballot-item defaults seed
+ * new items in the ballot builder. Nothing here changes an election that
+ * already exists.
+ *
+ * Defaults are the values the create-election form starts from (ELEC2-9).
+ * Only that form reads them: an election created straight through the API
+ * still takes the schema's own defaults.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Loader2, Settings as SettingsIcon, UserCheck, ToggleRight, Send, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router';
+import {
+  Loader2,
+  Settings as SettingsIcon,
+  UserCheck,
+  ToggleRight,
+  Send,
+  ShieldCheck,
+  SlidersHorizontal,
+  Vote,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
-import type { ElectionSettings, ElectionListItem } from '../types/election';
+import type { ElectionSettings, ElectionListItem, EligibilityDefaults } from '../types/election';
+import { MeetingKind } from '../constants/enums';
+import { DEFAULT_ELIGIBILITY, MEETING_KIND_LABELS } from '../modules/elections/eligibilityRules';
+import { EligibilityDefaultsEditor } from '../modules/elections/components/EligibilityDefaultsEditor';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
+import { ElectionDefaultsSection } from '../modules/elections/components/ElectionDefaultsSection';
 
-type SectionKey = 'proxy' | 'features' | 'test' | 'security';
+type SectionKey = 'proxy' | 'eligibility' | 'features' | 'defaults' | 'test' | 'security';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'proxy', label: 'Proxy Voting', icon: UserCheck, description: 'Voting on behalf of an absent member' },
+  { key: 'eligibility', label: 'Voter Eligibility', icon: Vote, description: 'Who may vote, by default' },
   { key: 'features', label: 'Features', icon: ToggleRight, description: 'Optional election workflows' },
+  { key: 'defaults', label: 'Defaults', icon: SlidersHorizontal, description: 'Where a new election starts' },
   { key: 'test', label: 'Test Ballot', icon: Send, description: 'Preview the voting experience' },
   { key: 'security', label: 'Security', icon: ShieldCheck, description: 'Integrity guarantees in force' },
 ];
 
 const isSectionKey = (value: string | null): value is SectionKey =>
   value !== null && SECTIONS.some((section) => section.key === value);
+
+/** The section a bare /elections/settings opens on, and so carries no ?tab=. */
+const DEFAULT_SECTION: SectionKey = 'proxy';
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -94,6 +119,9 @@ export const ElectionsSettingsPage: React.FC = () => {
    * stays in the box and nothing is sent until it is valid.
    */
   const [maxProxiesDraft, setMaxProxiesDraft] = useState<string | null>(null);
+  /** Which set of eligibility defaults the section is showing. */
+  const [eligibilityKind, setEligibilityKind] = useState<MeetingKind>(MeetingKind.REGULAR);
+  const { confirm } = useConfirm();
 
   const loadData = useCallback(async () => {
     try {
@@ -152,9 +180,11 @@ export const ElectionsSettingsPage: React.FC = () => {
   const updateField = <K extends keyof ElectionSettings>(
     key: K,
     value: ElectionSettings[K],
-    { immediate = true }: { immediate?: boolean } = {}
-  ) => {
-    const next = { ...settingsRef.current, [key]: value };
+    options: { immediate?: boolean } = {}
+  ) => updateFields({ [key]: value }, options);
+
+  function updateFields(patch: Partial<ElectionSettings>, { immediate = true }: { immediate?: boolean } = {}) {
+    const next = { ...settingsRef.current, ...patch };
     settingsRef.current = next;
     setSettings(next);
     const write = () => electionService.updateSettings(settingsRef.current);
@@ -163,14 +193,39 @@ export const ElectionsSettingsPage: React.FC = () => {
     } else {
       saveDebounced('election-settings', write, { errorMessage: 'Failed to save settings' });
     }
-  };
+  }
 
   const activeSection: SectionKey = isSectionKey(searchParams.get('tab'))
     ? (searchParams.get('tab') as SectionKey)
-    : 'proxy';
+    : DEFAULT_SECTION;
 
   const switchSection = (key: SectionKey) => {
-    setSearchParams(key === 'proxy' ? {} : { tab: key }, { replace: true });
+    setSearchParams(key === DEFAULT_SECTION ? {} : { tab: key }, { replace: true });
+  };
+
+  const eligibility: EligibilityDefaults = settings.eligibility ?? DEFAULT_ELIGIBILITY;
+
+  // Debounced: the rule editor reports each valid keystroke, and the
+  // position names are typed. One write lands once the typing stops.
+  const updateEligibility = (kind: MeetingKind, next: EligibilityDefaults) => {
+    updateField(kind === MeetingKind.ANNUAL ? 'annual_eligibility' : 'eligibility', next, { immediate: false });
+  };
+
+  const setAnnualOwnRules = async (own: boolean) => {
+    if (own) {
+      // Starts as a copy, so only what differs at the annual meeting needs changing.
+      updateField('annual_eligibility', structuredClone(settingsRef.current.eligibility ?? DEFAULT_ELIGIBILITY));
+      return;
+    }
+    const discard = await confirm({
+      title: 'Use the regular rules at the annual meeting?',
+      message:
+        "The annual meeting's own rules will be discarded, and annual-meeting elections created from now on will copy the regular-meeting rules. Elections that already exist keep the rules they have.",
+      confirmLabel: 'Discard annual rules',
+      cancelLabel: 'Keep them',
+      variant: 'warning',
+    });
+    if (discard) updateField('annual_eligibility', null);
   };
 
   const renderContent = () => {
@@ -183,6 +238,141 @@ export const ElectionsSettingsPage: React.FC = () => {
     }
 
     switch (activeSection) {
+      case 'eligibility': {
+        const tierRules = settings.tier_voting_rules ?? [];
+        const annualEligibility = settings.annual_eligibility ?? null;
+        return (
+          <div className="space-y-8">
+            <div>
+              <SettingsPanelHead
+                title="Voter Eligibility"
+                description="The department's default rules for who may vote. They are copied onto each election when it is created, where they can still be changed until voting opens. Changing them here does not change an election that already exists."
+              />
+              <p className="text-theme-text-muted text-sm">
+                A secretary&apos;s voter override on an election still lets a member vote who fails these rules.
+              </p>
+            </div>
+
+            <div role="group" aria-label="Which meetings these rules are for" className="flex flex-wrap gap-2">
+              {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={eligibilityKind === kind}
+                  onClick={() => setEligibilityKind(kind)}
+                  className={
+                    eligibilityKind === kind
+                      ? 'btn-primary rounded-md px-3 py-2 text-sm'
+                      : 'btn-secondary rounded-md px-3 py-2 text-sm'
+                  }
+                >
+                  {MEETING_KIND_LABELS[kind]}
+                </button>
+              ))}
+            </div>
+
+            {eligibilityKind === MeetingKind.REGULAR ? (
+              <div className="space-y-2">
+                <p className="text-theme-text-muted text-sm">
+                  Used by every election held at a regular business meeting
+                  {annualEligibility ? '.' : ', and at the annual meeting until it is given rules of its own.'}
+                </p>
+                <EligibilityDefaultsEditor
+                  key="regular"
+                  idPrefix="regular-eligibility"
+                  value={eligibility}
+                  onChange={(next) => updateEligibility(MeetingKind.REGULAR, next)}
+                />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <ToggleRow
+                  checked={annualEligibility !== null}
+                  onChange={(next) => void setAnnualOwnRules(next)}
+                  label="Use different rules at the annual meeting"
+                  description="Elections held at the annual meeting — usually officer elections — can carry stricter or different rules. They start as a copy of the regular-meeting rules."
+                />
+                {annualEligibility ? (
+                  <EligibilityDefaultsEditor
+                    key="annual"
+                    idPrefix="annual-eligibility"
+                    value={annualEligibility}
+                    onChange={(next) => updateEligibility(MeetingKind.ANNUAL, next)}
+                  />
+                ) : (
+                  <p className="text-theme-text-secondary text-sm">
+                    The annual meeting uses the regular business meeting rules.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <section aria-labelledby="eligibility-tiers-heading" className="space-y-3">
+              <div>
+                <h3 id="eligibility-tiers-heading" className="text-theme-text-primary text-base font-semibold">
+                  Membership tier rules
+                </h3>
+                <p className="text-theme-text-muted text-sm">
+                  Each membership tier carries its own voting rules, which apply at every meeting alongside the rules
+                  above. They are changed in{' '}
+                  <Link to="/members/admin/settings/tiers" className="text-theme-text-primary font-medium underline">
+                    membership tier settings
+                  </Link>
+                  .
+                </p>
+              </div>
+              {tierRules.length === 0 ? (
+                <p className="text-theme-text-secondary text-sm">No membership tiers are configured.</p>
+              ) : (
+                <table className="rwd-table w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-theme-text-secondary">
+                      <th scope="col" className="py-2 pr-4 font-medium">
+                        Tier
+                      </th>
+                      <th scope="col" className="py-2 pr-4 font-medium">
+                        May vote
+                      </th>
+                      <th scope="col" className="py-2 font-medium">
+                        Tier attendance rule
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tierRules.map((tier) => (
+                      <tr key={tier.tier_id} className="border-theme-surface-border border-t">
+                        <td data-label="Tier" className="text-theme-text-primary py-2 pr-4">
+                          {tier.name}
+                        </td>
+                        <td data-label="May vote" className="text-theme-text-primary py-2 pr-4">
+                          {tier.voting_eligible ? 'Yes' : 'No'}
+                        </td>
+                        <td data-label="Tier attendance rule" className="text-theme-text-primary py-2">
+                          {tier.voting_eligible && tier.requires_meeting_attendance && tier.min_attendance_pct > 0
+                            ? `${tier.min_attendance_pct}% of meetings over ${tier.attendance_period_months} months`
+                            : 'None'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          </div>
+        );
+      }
+
+      case 'defaults':
+        return (
+          <div>
+            <SettingsPanelHead
+              title="Defaults"
+              description="Where the Create Election form starts. Officers can still change any of these for one election, and elections already created are not affected."
+            />
+            <ElectionDefaultsSection settings={settings} onChange={updateFields} />
+          </div>
+        );
+
       case 'proxy':
         return (
           <div>
@@ -415,7 +605,7 @@ export const ElectionsSettingsPage: React.FC = () => {
       onSectionChange={switchSection}
       navLabel="Election settings sections"
       title="Election Settings"
-      subtitle="Proxy voting, election features, and ballot integrity"
+      subtitle="Voter eligibility, proxy voting, election features, and ballot integrity"
       saveState={saveState}
       onRetrySave={retry}
       pageHeader={(controls) => (
@@ -423,7 +613,7 @@ export const ElectionsSettingsPage: React.FC = () => {
           icon={SettingsIcon}
           title="Election Settings"
           breadcrumbLabel="Settings"
-          subtitle="Proxy voting, election features, and ballot integrity"
+          subtitle="Voter eligibility, proxy voting, election features, and ballot integrity"
           actions={controls}
         />
       )}

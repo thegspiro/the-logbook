@@ -12,6 +12,10 @@ import type {
   QuorumType,
   BallotSendJobStatus,
   BallotSendJobKind,
+  AttendanceRuleMode,
+  MeetingKind,
+  MemberVoterType,
+  WaitingPeriodMode,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -41,6 +45,84 @@ export interface PositionEligibility {
 
 // VotingMethod and VictoryCondition are now defined in constants/enums.ts
 
+/**
+ * Meeting-attendance requirement every voter in an election must meet.
+ * Mirrors backend `AttendanceRule`: `count` = attended `min_meetings` of the
+ * member's last `of_last_meetings` meetings; `percent` = attended `min_pct`%
+ * of the meetings in the last `period_months`. Waived meetings and leave are
+ * not counted. `meeting_types` null counts every meeting.
+ */
+export interface AttendanceRule {
+  mode: AttendanceRuleMode;
+  min_meetings?: number | null;
+  of_last_meetings?: number | null;
+  min_pct?: number | null;
+  period_months?: number | null;
+  meeting_types?: string[] | null;
+}
+
+/** How long a member of one type waits before they may vote (backend `WaitingPeriod`). */
+export interface WaitingPeriod {
+  mode: WaitingPeriodMode;
+  months?: number | null;
+}
+
+/** Election-wide voter rules, stored on the election (backend `ElectionEligibilityRules`). */
+export interface ElectionEligibilityRules {
+  attendance: AttendanceRule;
+  /** Per member type; a type not listed has no waiting period. */
+  waiting_periods?: Partial<Record<MemberVoterType, WaitingPeriod>>;
+}
+
+/** Where a member stands against one meeting kind's waiting period. */
+export interface MemberWaitOutcome {
+  meeting_kind: MeetingKind;
+  state: 'no_rule' | 'never' | 'waived' | 'eligible' | 'waiting';
+  months?: number | null;
+  eligible_from?: string | null;
+  reason?: string | null;
+}
+
+/** GET/PUT /elections/members/{id}/voting-eligibility (snake_case, as the module). */
+export interface MemberVotingEligibility {
+  user_id: string;
+  member_type?: MemberVoterType | null;
+  member_type_label?: string | null;
+  /** When the member became their type, as recorded. */
+  type_since?: string | null;
+  /** The date the wait actually counts from. */
+  wait_starts?: string | null;
+  voting_wait_from?: string | null;
+  voting_wait_waived: boolean;
+  voting_wait_override_reason?: string | null;
+  outcomes: MemberWaitOutcome[];
+}
+
+/** Omit a field to leave it; `voting_wait_from: null` clears the date. */
+export interface MemberVotingEligibilityUpdate {
+  voting_wait_from?: string | null | undefined;
+  voting_wait_waived?: boolean | undefined;
+  reason?: string | undefined;
+}
+
+/** The department's default voter eligibility (backend `EligibilityDefaults`). */
+export interface EligibilityDefaults {
+  rules: ElectionEligibilityRules;
+  default_require_attendance: boolean;
+  default_voter_types: string[];
+  position_voter_types: Record<string, string[]>;
+}
+
+/** One membership tier's own voting rules, reported read-only. */
+export interface TierVotingRule {
+  tier_id: string;
+  name: string;
+  voting_eligible: boolean;
+  requires_meeting_attendance: boolean;
+  min_attendance_pct: number;
+  attendance_period_months: number;
+}
+
 export interface Election {
   id: string;
   organization_id: string;
@@ -50,6 +132,8 @@ export interface Election {
   positions?: string[];
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
+  eligibility_rules?: ElectionEligibilityRules | null;
+  meeting_kind?: MeetingKind;
   meeting_date?: string;
   meeting_id?: string;
   meeting_title?: string;
@@ -206,6 +290,8 @@ export interface ElectionCreate {
   positions?: string[] | undefined;
   ballot_items?: BallotItem[] | undefined;
   position_eligibility?: { [position: string]: PositionEligibility } | undefined;
+  // Omitted, the server derives it from the linked meeting's type.
+  meeting_kind?: MeetingKind | undefined;
   meeting_date?: string | undefined;
   meeting_id?: string | undefined;
   event_id?: string | undefined;
@@ -228,6 +314,8 @@ export interface ElectionCreate {
   reminder_hours_before_close?: number | undefined;
   nomination_deadline?: string | undefined;
   tie_policy?: TiePolicy | undefined;
+  quorum_type?: QuorumType | undefined;
+  quorum_value?: number | undefined;
 }
 
 export interface ElectionUpdate {
@@ -237,6 +325,11 @@ export interface ElectionUpdate {
   positions?: string[];
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
+  // null removes every election-wide rule; an omitted key leaves them alone
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  // Changing it replaces the election's rules with that kind's defaults,
+  // unless the same request sends eligibility_rules / position_eligibility.
+  meeting_kind?: MeetingKind | undefined;
   // null clears the link on PATCH (exclude_unset); an omitted key leaves it alone
   meeting_date?: string | null | undefined;
   meeting_id?: string | null | undefined;
@@ -712,11 +805,11 @@ export interface ProxyVoteCreate {
 export interface ElectionSettings {
   default_voting_method?: VotingMethod;
   default_victory_condition?: VictoryCondition;
-  default_victory_percentage?: number;
+  default_victory_percentage?: number | null;
   default_anonymous_voting?: boolean;
   default_allow_write_ins?: boolean;
-  default_quorum_type?: string;
-  default_quorum_value?: number;
+  default_quorum_type?: QuorumType;
+  default_quorum_value?: number | null;
   proxy_voting_enabled?: boolean;
   max_proxies_per_person?: number;
   // Per-department feature toggles (all default ON)
@@ -727,6 +820,15 @@ export interface ElectionSettings {
   // Officers (other than the recorder) who must attest a paper-ballot
   // batch before its votes count. 0 disables attestation. Default 2.
   paper_ballot_attestations_required?: number;
+  /** Default voter eligibility, copied onto each election created afterwards. */
+  eligibility?: EligibilityDefaults;
+  /**
+   * The annual meeting's own defaults; null means it uses `eligibility`.
+   * Unlike `eligibility`, null is a value PATCH accepts.
+   */
+  annual_eligibility?: EligibilityDefaults | null;
+  /** Read-only: each membership tier's own voting rules, edited on the tier settings. */
+  tier_voting_rules?: TierVotingRule[];
   /**
    * Read-only posture reported by GET /elections/settings. `security` is not
    * an `ElectionSettingsUpdate` field, so echoing it back on PATCH is ignored.

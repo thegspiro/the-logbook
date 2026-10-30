@@ -1274,7 +1274,10 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
 - Each person gets only the rows they may see. Gear rows go to officers who
   manage gear; medical rows to those who manage medical supplies. Someone with
   both gets one complete email.
-- An officer who has turned off their quartermaster duty emails is left out.
+- Every one of those officers also gets a bell notice, **Low stock — _N_
+  item(s) at or below reorder point**, linking to the same list. An officer who
+  turned off their quartermaster duty emails gets the bell notice and no email.
+  While it is unread, the next day's run updates it rather than adding another.
 - When the email lists gear or uniform rows it ends with **View low-stock gear
   and uniforms**. The link opens **Inventory Items** already narrowed to items at
   or below their reorder point, with a notice **Showing only items at or below
@@ -1286,6 +1289,13 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
   cannot hold.
 
 ### Other inventory alert emails
+
+Each of these also leaves a bell notice for every officer it goes to, so an
+officer who turned off quartermaster duty emails is still told. The shelf-audit
+digest, the NFPA retirement alert and **Supplies to Replace** update an unread
+notice rather than adding another each time. A reorder request filed
+automatically after a swap does the same, pointing an officer who manages gear
+at the reorder queue and a medical-only officer at Medical Supplies.
 
 | Email                                                      | What it shows                                                                                                                                       |
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1985,6 +1995,8 @@ and for this part of The Logbook. See
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
 ![The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
+
+_(2026-10-29)_ The preview now sits directly under the controls instead of a screen below them, so a change to size or copies is visible without scrolling.
 
 ![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
 

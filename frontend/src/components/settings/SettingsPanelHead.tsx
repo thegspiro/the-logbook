@@ -24,12 +24,15 @@ interface SettingsPanelHeadProps {
 }
 
 export const SettingsPanelHead: React.FC<SettingsPanelHeadProps> = ({ title, description, meta }) => (
-  <div className="mb-5 flex items-baseline justify-between gap-3">
-    <div className="min-w-0">
+  // Wraps rather than squeezing: the fact beside the title cannot shrink, and
+  // on a 320px phone it narrowed "Department Profile" until the word ran out
+  // of its heading. The title keeps 12rem; past that the fact takes a line.
+  <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+    <div className="min-w-0 flex-[1_1_12rem]">
       <h2 className="text-theme-text-primary text-lg leading-7 font-semibold">{title}</h2>
       {description ? <p className="text-theme-text-muted mt-1 text-sm">{description}</p> : null}
     </div>
-    {meta ? <span className="text-theme-text-muted shrink-0 text-xs whitespace-nowrap">{meta}</span> : null}
+    {meta ? <span className="text-theme-text-muted ml-auto shrink-0 text-xs whitespace-nowrap">{meta}</span> : null}
   </div>
 );
 

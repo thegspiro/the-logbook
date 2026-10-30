@@ -1,5 +1,38 @@
 # Known Limitations & Open Decisions
 
+## Members — Class, Status, Tiers and Committees (2026-10-29)
+
+The member standing rework (class and status as two controls, tiers as
+statuses, committee positions) leaves these for the owner:
+
+- **A tier member's missing class is not guessed.** Members moved onto a
+  department tier before `member_class` existed carry no class. Migration
+  `c4d7e2a91b60` settles their status to the tier and leaves the class NULL
+  (owner decision 2026-10-29: flag, do not guess). They show **Not set** on the
+  profile and under the roster's **Class not set** filter, and are treated as
+  neither operational nor administrative until an officer sets the class.
+- **The shipped Senior tier counts as nothing until set.** `ranks_as` is left
+  unset on upgrade so no ballot's electorate widens without a decision; a
+  department whose bylaws treat senior members as regular members sets
+  **Counts as** on the tier by hand.
+- **Tier benefits still resolve by the legacy field.** Voting eligibility,
+  the office-holding right and training exemption are looked up by
+  `membership_type == tier.id`, which for an operational member on a tier is
+  the tier id, but for an administrative or social member is the class word.
+  An administrative life member therefore does not receive the Life tier's
+  training exemption through the tier. The readers (election service,
+  training service, events, attendance dashboard, service history) should move
+  to `MembershipTierService.tier_for_status(tiers, member_status)`; not done
+  here to keep the change set to one model change.
+- **The pipeline's conversion outcomes are built-in statuses only.** The
+  applicant conversion dialog offers the seven built-in statuses, not the
+  department's tiers; a converted member who should start on a custom tier is
+  moved there from the edit page.
+- **The baseline Member position is no longer shown on the profile chips.**
+  It is of kind `system`, held by everyone, and the profile now lists offices
+  and committees; the members admin hub still shows it where it can be
+  removed from an archived member.
+
 This page consolidates known limitations and deferred design decisions surfaced
 by the ongoing code review (see [review-log.md](./review-log.md) for the raw
 findings and rotation). Items here are **intentionally open** — they need an
@@ -2314,6 +2347,27 @@ settings.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 
+> **Generic Webhooks — resolved (2026-10-29), as the owner chose: build it
+> out.** A connected webhook is now sent `event.created`, `shift.created` and
+> `training.recorded`, the events the chat integrations get, through
+> `dispatch_generic_webhooks` beside the chat dispatch. Its settings pick which
+> (`event_types`, validated against `WEBHOOK_EVENT_TYPES`); none ticked means
+> all, so a webhook connected earlier starts receiving every event. Each
+> delivery is recorded in the integration's run history. Covered by
+> `tests/test_generic_webhook_dispatch.py`.
+>
+> **NWS Weather Alerts — resolved (2026-10-29), as the owner chose: build it
+> out.** `weather_alert_poll` checks each department's zone every 15 minutes
+> and keeps Severe and Extreme alerts (real ones, not tests) in the new
+> `weather_alerts` table, unique on department and NWS alert id, so each alert
+> is announced once. The department picks the channels in the integration's
+> settings: a dashboard banner while the alert is active
+> (`GET /integrations/weather/active-alerts`), a bell notice to every current
+> member, and an email under the new optional **Severe weather alerts** kind;
+> banner and bell default on, email off. The row is committed before anyone is
+> told, so a crash in between loses that alert's notices rather than repeating
+> them to the department. Covered by `tests/test_weather_alerts.py`.
+
 Both are listed in the integrations catalogue as `available`
 (`app/api/v1/endpoints/integrations.py`), can be connected, and pass their
 **Test** — and that test is the only thing either of them ever does.
@@ -2352,6 +2406,16 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    **Labelled (2026-10-11):** the setting's description now says it changes
    the reminder, and it shows "Not in effect yet — a shift can still be closed
    out without a report." Enforcing it at close-out is still open.
+   **Resolved (2026-10-29), owner decision: enforce at close-out.** With the
+   setting on (and post-shift validation on, which is when the box shows),
+   `finalize_shift` refuses while any member in a training seat has no shift
+   completion report for the shift, naming them; a shift with no training
+   seats closes as before. A `scheduling.manage` holder may override with a
+   reason (`override_missing_reports`), audit-logged as
+   `shift_finalized_report_override`; a shift officer without that grant may
+   not. Both close-out paths show the block (`TraineeReportGate`, reading
+   `GET /scheduling/shifts/{id}/trainee-reports`). Covered by
+   `tests/test_shift_trainee_report_requirement.py`.
 2. **"Reviewer role"** (Shift Reports settings). Saved as
    `report_review_role` in the training module config and read by nothing.
    Approving reports is gated on `training.manage` alone
@@ -2385,12 +2449,19 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    members are the exceptions. **Same refusal now extends to pattern
    generation (2026-10-24):** generated seats run the same check, so an
    excluded member is left unseated rather than seated by the pattern.
+   **Resolved (2026-10-29), owner decision: correct the text.** The card now
+   says an excluded type cannot sign up or be assigned, except to a shift
+   opened to all members. No override was added.
 6. **"Manage schedules" sees assign controls the server refuses.**
    `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
    `scheduling.manage` holders, but creating, editing or removing an assignment
    requires `scheduling.assign` or being the shift officer
    (`endpoints/scheduling.py`); `scheduling.manage` does not imply it. The
    officer fills the form and gets "Insufficient permissions".
+   **Resolved (2026-10-29), owner decision: hide the controls.** Both screens
+   now offer assigning only to `scheduling.assign` holders and the shift's own
+   officer; the server's rule is unchanged. A manage-only officer still sees
+   the check-in QR code and the declined/removed list, which are read-only.
 7. **A shift-panel hint points to a tab that no longer exists.**
    `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
    tab". Equipment checks moved to Inventory; the working route is the panel's
@@ -2429,12 +2500,18 @@ recorded here rather than built.
    Surfacing it (a notification to schedulers, or a badge on the pattern) is
    open.
 3. **Editing an approved shift report does not restate its training
-   credit.** The filing officer can no longer change a submitted report's
-   status, but can still edit an approved report's hours, calls and skills,
-   and the credit already applied keeps the old figures, so the report and the
-   pipeline disagree. Locking content edits after approval would remove
-   behaviour existing call-type provenance tests depend on; restating the
-   credit on edit is the alternative. Either is the owner's choice.
+   credit — narrowed 2026-10-27 (EC-17), still open where review is off.**
+   An edit to an approved report now sends it back to `pending_review` in any
+   org that requires review, which is also the only path to that credit being
+   restated (whoever re-approves the revised report re-triggers
+   `_trigger_deferred_progress` with the edited figures). Where the
+   department's `report_review_required` setting is off, the report stays
+   `approved` after the edit and the credit already applied keeps the old
+   figures, so the report and the pipeline still disagree for those orgs. See
+   `docs/security-review/SCH-15-scheduling.md` pass 12 and
+   `EC-14-equipment-check-shifts.md`'s EC-17 for the mechanism. Restating the
+   credit in place for the review-off case, rather than relying on a
+   re-review to do it, is still the owner's choice.
 4. **Sign-offs recorded before 2026-10-24 can still duplicate on
    re-approval.** Re-approving a report no longer adds a second skill sign-off
    for the same skill, keyed on the report id now stored in
@@ -2450,10 +2527,16 @@ recorded here rather than built.
    notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
    email the channel of record; whether a cancellation should email, and
    under which member email kind, is a product decision.
+   **Resolved (2026-10-29), owner decision: email under Shift notices.** The
+   crew is now emailed as well as notified in the app, after the cancellation
+   is saved; a member who turned Shift notices off gets the bell entry only.
 7. **The month and week calendars stop at 500 shifts without saying so.**
    `get_month_shifts` and `get_week_shifts` pass `limit=500`, so a department
    running enough units with day and night shifts loses the end of the month
    from the calendar.
+   **Resolved (2026-10-29), owner decision: load every shift in range.** Both
+   now pass no limit; the week or month is the bound. Covered by
+   `test_month_view_is_not_capped_at_500`.
 8. **Driver/EVOC enforcement knows the seat named `driver` only.** Custom
    seat names are stored as typed, so a department that names its wheel seat
    "Engineer" or "Driver/Operator" seats members without the required EVOC
@@ -6237,6 +6320,24 @@ was not meant to; each is a definition or a trade-off.
 
 ## Member Emails — An Opted-Out Officer or Nominee Hears Nothing for Email-Only Alerts (2026-09-30)
 
+> ✅ **Resolved (2026-10-29), as the owner chose: give them in-app copies.**
+> `app/services/officer_alert_copies.py` writes a bell entry for every officer
+> each alert is about, whether or not they receive the email: low stock, the
+> shelf-audit digest, NFPA retirement, Supplies to Replace and the automatic
+> reorder request; member archived, the property return summary, a new store
+> order, the directory-accounts digest, and an applicant withdrawing, going
+> inactive or coming up for auto-purge. A recurring digest refreshes an unread
+> entry instead of adding one per run. Two of the original items needed
+> nothing: failed equipment checks already wrote a bell entry for every
+> recipient, and the third-party nominee's accept-or-decline request already
+> had one (`_record_nominee_bell_notice`). Behaviour that changed with it: an
+> auto-purge warning, the shelf-audit digest and a withdrawal now count as given
+> when every coordinator or manager has turned the email off, because the bell
+> entries are the notice. Still open: there is no administrator view of who has
+> opted out of what. Covered by `tests/test_officer_alert_copies.py` and
+> `tests/test_prospect_auto_purge_warning.py`. The history below is kept as the
+> record.
+
 **Open (owner decision).** Since 2026-09-28 every member email is either always
 sent or optional (`app/services/email_policy.py`), and a member's **Email
 Notifications** switch, or their own switch for one optional email, stops it.
@@ -6337,6 +6438,18 @@ endpoint) or is to be refused with a conflict message (the precondition). Same
 lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
+
+> ✅ **Resolved (2026-10-29), as the owner chose: wire a reader.** Election
+> Settings has a **Defaults** section again, and the **Create Election** form
+> starts from the saved values; with nothing saved it starts where it always
+> did. The PATCH now refuses an unknown voting method, victory condition or
+> quorum type, and the GET reads a value stored before that check (or a null)
+> as the built-in. A default quorum, which the form has no control for, is
+> shown on the form as a read-only line. Accepted limit: only the form reads
+> the defaults, so an election created directly through the API still takes
+> the schema's own. Covered by `tests/test_election_defaults.py`,
+> `ElectionsPage.defaults.test.tsx`, `ElectionsSettingsPage.test.tsx` and
+> `utils/electionDefaults.test.ts`. The history below is kept as the record.
 
 `PATCH /elections/settings` accepts `default_voting_method`,
 `default_victory_condition`, `default_victory_percentage`,
@@ -6957,22 +7070,45 @@ duplicate route outright — is a product decision, not a drive-by patch.
 Exposure today is narrow: nothing in the frontend calls this route, so it
 reaches only a direct API client holding `training.manage`.
 
-**Still open as of security review TR-17 pass 8 (2026-10-16), and the gap
+**Was open as of security review TR-17 pass 8 (2026-10-16), and the gap
 widened in the interim.** `training_program_service.py`'s `enroll_member` (the
 fixed path) gained prerequisite-program enforcement on 2026-10-14
 (`e3aee773`, "enforce prerequisites on single-member enrollment") — a member
 missing a prerequisite now gets a clean 400 through that path. `training.py`'s
-duplicate was not touched, so `POST /training/enrollments` now also silently
-enrolls a member who has not met a program's prerequisites, in addition to the
-race and the missing `RequirementProgress`/phase/recert/notification behavior
-already recorded above. Every one of this duplicate's defects traces to the
-same root cause — a second, hand-maintained copy of enrollment logic that
-nothing keeps in sync with the one the rest of the codebase fixes — so each
-new fix to the real path is now also a new way for the duplicate to fall
-further behind it. Confirmed the frontend still calls only
-`/training/programs/enrollments`; no owner decision has been recorded yet.
+duplicate was not touched at that point, so `POST /training/enrollments` also
+silently enrolled a member who had not met a program's prerequisites, in
+addition to the race and the missing `RequirementProgress`/phase/recert/
+notification behavior already recorded above.
 
-## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06)
+**The prerequisite gap closed on 2026-10-23** (`94e3d2e0`, "Close the
+remaining pipeline gaps: empty required sets, inactive due dates,
+prerequisite checks on auto and legacy enrollment") — its own message: "The
+legacy POST /training/enrollments now refuses a missing prerequisite with the
+same message as the other manual paths." **Passes 9–11 of TR-17 did not
+notice**: pass 11 reviewed `94e3d2e0` itself (grouped with a sibling commit
+under "inactive-aware completion" in its write-up) but described only its
+pipeline/phase-completion effects, then separately re-asserted "TR7-1 — still
+OPEN/FLAGGED, unchanged" on the stated grounds that neither
+`enroll_member_in_program` nor `enroll_member` appeared among that pass's
+reviewed commits — which was incorrect; `94e3d2e0` touches
+`enroll_member_in_program` directly. Caught and corrected by TR-17 pass 12
+(2026-10-29), which re-read the current function end to end rather than
+trusting the "unchanged" citation.
+
+**Still open: the race and the structural incompleteness.** Confirmed by
+TR-17 pass 12 against the current code — "Check for existing active
+enrollment" is still a plain `SELECT` with no `.with_for_update()` and no
+backing unique constraint on `(user_id, program_id, status)`, and the
+function still never creates `RequirementProgress` rows, determines a
+starting phase, schedules a recert deadline, or sends the enrollment
+notification. Every one of these two remaining defects traces to the same
+root cause — a second, hand-maintained copy of enrollment logic that nothing
+keeps fully in sync with the one the rest of the codebase fixes. Confirmed
+the frontend still calls only `/training/programs/enrollments`; no owner
+decision on delegating, locking in place, or removing the route has been
+recorded yet.
+
+## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
 Found by security review SKT-19 pass 7
 (`docs/security-review/SKT-19-skills-testing.md`, pass 7 cross-feature scope
@@ -7001,13 +7137,23 @@ org-scoped FK validation on the requirement link (XC-1) and a frozen-per-attempt
 paper design, but a self-description in a commit message is exactly what
 this rotation exists to verify independently rather than accept.
 
-**Not reviewed, not fixed.** This is a scope-ownership gap, not a finding
-against any existing feature's code. The rotation should add
-`knowledge_tests.py`/`knowledge_test.py` (model and schema) to Feature 17's
-declared scope — it is the closest sibling (a requirement-credit path,
-like `training_programs.py`'s own enrollment logic) — and give it a first
-full pass before Feature 17 is next due in the rotation, rather than let it
-ride uncovered through another full cycle under Feature 17's existing ✅.
+**Resolved (2026-10-29, security review TR-17 pass 12).** The three files
+(plus `app/schemas/knowledge_test.py`) are now in Feature 17's declared
+scope and received their first full pass against all seven checklist
+dimensions — see `docs/security-review/TR-17-training-core.md`'s **Pass 12**
+section. Clean: every one of the 13 routes carries an auth dependency and the
+correct permission (`training.manage` for every bank write, self/officer
+split for attempts), every query is org-scoped or XC-1-validated, answer
+secrecy holds under direct trace (no path reaches `correct_option_ids` before
+submission), the attempt cap and the start-attempt dedup both lock before
+they read (Pitfall #27), and migration `7c2e9a41b6d3` is `create_all`-
+tolerant with both `SET NULL` columns nullable. No fix was needed. One
+process gap was found and corrected: this surface's own guard tests
+(`tests/test_knowledge_tests.py`, `tests/test_training_knowledge_test_score.py`)
+did not match training-core's scoped completion-gate filter
+(`pytest tests/ -k "training or compliance"`), so they had never actually run
+under that gate; the filter is now `"training or compliance or
+knowledge_test"`.
 
 ## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
 

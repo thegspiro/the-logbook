@@ -8,7 +8,8 @@ import { mirrorsRank } from '../utils/positions';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
-import { memberClassAndStatusFor } from '../utils/membership';
+import { canonicalMemberStatus, memberClassAndStatusFor } from '../utils/membership';
+import { MemberClass } from '../constants/enums';
 
 /**
  * One rejected row: why it was rejected, and the cells it was rejected from.
@@ -74,6 +75,8 @@ const TEMPLATE_HEADERS = [
   'email',
   'joinDate',
   'membershipType',
+  'memberClass',
+  'memberStatus',
   'rank',
   'role',
   'station',
@@ -112,6 +115,8 @@ const TEMPLATE_EXAMPLE: Record<(typeof TEMPLATE_HEADERS)[number], string> = {
   email: 'john.doe@example.com',
   joinDate: '2020-01-15',
   membershipType: 'regular',
+  memberClass: 'operational',
+  memberStatus: 'regular',
   rank: 'Firefighter',
   role: 'Member',
   station: 'Station 1',
@@ -195,6 +200,16 @@ const STATUS_HEADER = 'status';
  */
 const MEMBERSHIP_TYPE_VALUES = ['probationary', 'regular', 'active', 'life', 'administrative'] as const;
 const MEMBERSHIP_TYPE_HELP = 'probationary, regular, life or administrative';
+
+/**
+ * The two columns that state the pair directly, for a standing `membershipType`
+ * cannot spell (an administrative life member, a department tier). Either
+ * overrides what `membershipType` implies. `memberStatus` is checked here for
+ * shape only -- a tier id is the organization's to know -- and the create
+ * endpoint refuses one the department has not configured, row by row.
+ */
+const MEMBER_CLASS_VALUES = Object.values(MemberClass) as readonly string[];
+const MEMBER_STATUS_SHAPE = /^[a-z0-9][a-z0-9_-]{0,49}$/;
 
 /**
  * Length ceilings copied from `AdminUserCreate` and `EmergencyContact`.
@@ -383,6 +398,8 @@ const buildRow = (row: string[], headers: string[]): CSVMemberRow => ({
   joinDate: cell(row, headers, 'joindate') || '',
   status: cell(row, headers, 'status'),
   membershipType: cell(row, headers, 'membershiptype'),
+  memberClass: cell(row, headers, 'memberclass'),
+  memberStatus: cell(row, headers, 'memberstatus'),
   rank: cell(row, headers, 'rank'),
   role: cell(row, headers, 'role'),
   station: cell(row, headers, 'station'),
@@ -408,6 +425,25 @@ const usernameFromEmail = (email: string): string =>
  * offending value, because a reason the uploader cannot map back to a cell is
  * no better than no reason at all.
  */
+/** The class/status pair a row states, as the create endpoint takes it. */
+const classificationFor = (
+  data: CSVMemberRow
+): { member_class?: string | undefined; member_status?: string | undefined } => {
+  const fused = data.membershipType?.trim()
+    ? memberClassAndStatusFor(data.membershipType.trim().toLowerCase())
+    : { member_class: undefined, member_status: undefined };
+  const memberClass = data.memberClass?.trim().toLowerCase() || fused.member_class;
+  const memberStatus = canonicalMemberStatus(data.memberStatus) || fused.member_status;
+  // Create payload: a blank is omitted, never sent as '' (CLAUDE.md #1). The
+  // endpoint reads a lone half as a statement about the pair, so when only
+  // one is stated the other is filled from the fused word's default.
+  if (!memberClass && !memberStatus) return {};
+  return {
+    member_class: memberClass || MemberClass.OPERATIONAL,
+    member_status: memberStatus || 'regular',
+  };
+};
+
 const validateRow = (data: CSVMemberRow): string[] => {
   const problems: string[] = [];
 
@@ -482,6 +518,14 @@ const validateRow = (data: CSVMemberRow): string[] => {
   const membershipType = data.membershipType?.trim().toLowerCase();
   if (membershipType && !(MEMBERSHIP_TYPE_VALUES as readonly string[]).includes(membershipType)) {
     problems.push(`membershipType "${data.membershipType}" is not one of ${MEMBERSHIP_TYPE_HELP}`);
+  }
+  const memberClass = data.memberClass?.trim().toLowerCase();
+  if (memberClass && !MEMBER_CLASS_VALUES.includes(memberClass)) {
+    problems.push(`memberClass "${data.memberClass}" is not one of operational, administrative or social`);
+  }
+  const memberStatus = canonicalMemberStatus(data.memberStatus);
+  if (data.memberStatus?.trim() && (!memberStatus || !MEMBER_STATUS_SHAPE.test(memberStatus))) {
+    problems.push(`memberStatus "${data.memberStatus}" is not a membership status or tier id`);
   }
 
   return problems;
@@ -935,9 +979,8 @@ const ImportMembers: React.FC = () => {
           ...(dateOfBirth ? { date_of_birth: dateOfBirth } : {}),
           ...(joinDate ? { hire_date: joinDate } : {}),
           // Pre-flight has already rejected a value outside MEMBERSHIP_TYPE_VALUES.
-          ...(rowData.membershipType?.trim()
-            ? memberClassAndStatusFor(rowData.membershipType.trim().toLowerCase())
-            : {}),
+          // The explicit pair, when given, overrides the fused word.
+          ...classificationFor(rowData),
           ...(rowData.rank ? { rank: rowData.rank } : {}),
           ...(rowData.station ? { station: rowData.station } : {}),
           ...(rowData.platoon ? { platoon: rowData.platoon } : {}),
@@ -1036,6 +1079,11 @@ const ImportMembers: React.FC = () => {
             <li>Wrap any value containing a comma in double quotes, or its row will be rejected</li>
             <li>Leave membershipNumber blank to have the system assign one</li>
             <li>membershipType is probationary, regular, life or administrative; blank imports as regular</li>
+            <li>
+              memberClass (operational, administrative or social) and memberStatus (a membership status or one of your
+              tier ids, such as senior) state the pair directly and override membershipType, for an administrative life
+              member or a member on a department tier
+            </li>
             <li>
               Role must match a role name configured under Roles; Chief, Captain, Firefighter and the other ranks go in
               the rank column

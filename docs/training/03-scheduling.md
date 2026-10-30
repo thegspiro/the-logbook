@@ -566,7 +566,8 @@ You need to be able to manage schedules for both of these.
 ## Shift Assignments
 
 **Who can do this:** officers whose position includes **Assign members to
-shifts** or **Manage schedules**, and the shift officer named on that shift.
+shifts**, and the shift officer named on that shift. **Manage schedules** alone
+does not let you assign anyone, and the buttons below are not shown to you.
 
 1. On the calendar, open the shift's **Shift details**.
 2. On an open seat in the crew board, select **Assign someone** (on a narrow
@@ -1492,7 +1493,9 @@ Cancelling:
 
 - keeps the shift for history;
 - marks everyone's assignment cancelled;
-- notifies the assigned crew; and
+- notifies the assigned crew with a bell notice and an email, with the reason
+  if you gave one (the email is under **Shift notices**, so a member who
+  turned those off gets only the bell notice); and
 - removes the shift from the Open Shifts list. It shows a **This shift is
   cancelled** banner.
 
@@ -2121,12 +2124,16 @@ Pick one section at a time from the list. There are seven:
 | ----------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------- |
 | **Reports are filed by the officer on the rig** | Off       | Only the shift's Shift Officer can file its reports, and close-out drafts go to them. A shift with no Shift Officer can't have reports until one is set |
 | **Enable post-shift validation**                | On        | Sends the Shift Officer a reminder after the shift ends, to check the records and close it out      |
-| **Require officer shift completion report**     | Off       | Adds a line to that reminder saying a report is required (see the note below)                      |
+| **Require officer shift completion report**     | Off       | Each trainee needs a report before the shift can be closed out (see the note below)                |
 | **Validation window (hours after shift end)**   | 2         | How long after a shift ends it still gets a reminder. From 1 to 24 hours                          |
 
-> **Important.** **Require officer shift completion report** only changes the
-> reminder's wording. The Logbook does not stop a shift being closed out
-> without a report.
+> **Require officer shift completion report** blocks close-out while any member
+> in a training seat on the shift has no shift completion report for it, and
+> the close-out screen names them. A shift with no training seats closes as
+> normal. The reminder also says a report is required. A shift officer has to
+> file the reports first; an officer with **Manage schedules** can tick **Close
+> out anyway** and give a reason, which goes on the record. The box only
+> applies while **Enable post-shift validation** is on.
 
 The reminder goes only to shifts that have a Shift Officer. In departments
 that record a call count at close-out, it also asks the officer to record the
@@ -3804,6 +3811,23 @@ then your department's own.
 > rank. Members of that rank can still be eligible through a qualification,
 > training or an open position.
 
+**Which seats a qualification clears.** A qualification on a member's profile
+clears these seats while it is in force on the day of the shift:
+
+| Qualification               | Seats it clears                |
+| --------------------------- | ------------------------------ |
+| Firefighter I, Firefighter II | Firefighter                  |
+| Driver / Operator           | Driver/Operator                |
+| EMT, Advanced EMT           | EMT                            |
+| Paramedic                   | EMT, Paramedic                 |
+| Officer in Charge           | Officer, Captain, Lieutenant   |
+
+**Officer in Charge** _(2026-10-29)_ is how a member with no officer rank is
+cleared to lead a shift: give it on the profile, with an expiry if your
+clearance has one. A held office such as Quartermaster or Treasurer never
+clears a seat; an office says nothing about what its holder is trained to do
+on a rig.
+
 ![Operational Ranks settings, listing each rank with the shift positions it may fill](./images/03-33-settings-eligibility.png)
 
 **Who Can Fill What** (on the Scheduling Admin hub) shows the result: which
@@ -3840,7 +3864,7 @@ eligibility. Don't confuse the two:
 
 | Setting                       | What it does                                                                                                                         |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Excluded from Self-Signup** | Membership types that cannot sign themselves up for shifts. Unless you change it: Prospective, Retired, Honorary and Administrative |
+| **Excluded from Self-Signup** | Types that can't sign up or be assigned, except to a shift open to all. By default: Prospective, Retired, Honorary, Administrative  |
 | **Open Positions**            | Seats any eligible member can sign up for, whatever their rank or training                                                           |
 | **Members can sign up until** | When a shift stops taking sign-ups: when it starts, or 15 minutes to 1 day before                                                    |
 
@@ -3884,9 +3908,8 @@ Scheduling uses two permissions. On the Role Management screen:
 - With **Assign members to shifts** only, you can fill existing shifts but not
   create or delete them.
 - **Assigning always needs Assign members to shifts** (or being the officer
-  named on that shift). With **Manage schedules** alone, the crew board
-  controls still show, but The Logbook refuses the assignment. Give scheduling
-  officers both.
+  named on that shift). With **Manage schedules** alone, the crew board's
+  assign controls are not shown. Give scheduling officers both.
 - **The officer named on a shift** can manage that shift's crew, attendance,
   calls and close-out without either permission. Editing or deleting the shift
   itself still needs **Manage schedules**.

@@ -30,6 +30,7 @@ import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Loader2 } from 'lucide-r
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import ShiftPreShiftWorkSection from '../../modules/scheduling/components/ShiftPreShiftWorkSection';
+import TraineeReportGate, { type TraineeReportGateState } from '../../modules/scheduling/components/TraineeReportGate';
 import type { CloseoutState, CloseoutAttendanceEntry, MemberCallCredit } from '../../modules/scheduling/types';
 import { formatCalendarDate, formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -127,7 +128,8 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   // simply cannot be closed out, so the wizard has to carry it — replacing the
   // old checklist meant replacing everything it could do, not most of it.
   const blocked = requireChecks && outstandingChecks > 0;
-  const overrideBlocked = blocked && (!overrideChecks || overrideReason.trim() === '');
+  const [reportGate, setReportGate] = useState<TraineeReportGateState>({ blocked: false, override: false, reason: '' });
+  const overrideBlocked = (blocked && (!overrideChecks || overrideReason.trim() === '')) || reportGate.blocked;
 
   /**
    * Seed the local drafts from whatever the server already holds.
@@ -380,11 +382,17 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
         pass_down_notes?: string;
         override_incomplete_checks?: boolean;
         override_reason?: string;
+        override_missing_reports?: boolean;
+        report_override_reason?: string;
       } = { member_call_counts: credits };
       if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
       if (blocked && overrideChecks) {
         opts.override_incomplete_checks = true;
         if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
+      }
+      if (reportGate.override) {
+        opts.override_missing_reports = true;
+        opts.report_override_reason = reportGate.reason;
       }
       await schedulingService.finalizeShift(shiftId, undefined, opts);
       toast.success('Shift closed out');
@@ -735,6 +743,8 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
               onChange={(e) => setPassDownNotes(e.target.value)}
             />
           </div>
+
+          <TraineeReportGate shiftId={shiftId} onChange={setReportGate} />
 
           {blocked && (
             <div className="space-y-2 rounded-md border border-red-500/20 bg-red-500/5 p-2">

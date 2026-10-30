@@ -21,7 +21,7 @@ the same officer to every other admin_hours.manage-gated route in the file.
 DB mocked — this is pure permission-gate logic, no query to exercise.
 """
 
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -260,3 +260,32 @@ class TestOwnEntryScope:
                     entry_id="entry-1", db=AsyncMock(), current_user=member
                 )
         assert exc.value.status_code == 400
+
+
+class TestParseOptionalDate:
+    """``_parse_optional_date`` — the four ``start_date``/``end_date`` query
+    params (``list_my_entries``, ``list_all_entries``, ``export_entries``,
+    ``get_summary``) all route through this helper.
+
+    Regression coverage for a fix the app-review rotation's pass 2
+    (AH2, 2026-08-08) flagged and this security-review rotation's pass 12
+    found already landed (2026-10-17, no guard test of its own): a bare
+    ``datetime.fromisoformat(value)`` raises ``ValueError`` on a malformed
+    string, which FastAPI has nothing to catch, so it reached the client as
+    an unhandled 500 instead of a 400 for caller-input error. No DB — this is
+    a pure function.
+    """
+
+    def test_missing_value_is_none(self):
+        assert admin_hours_endpoint._parse_optional_date(None, "start_date") is None
+        assert admin_hours_endpoint._parse_optional_date("", "start_date") is None
+
+    def test_valid_iso_date_parses(self):
+        parsed = admin_hours_endpoint._parse_optional_date("2026-10-29", "start_date")
+        assert parsed == datetime(2026, 10, 29)
+
+    def test_malformed_value_is_a_400_not_a_500(self):
+        with pytest.raises(admin_hours_endpoint.HTTPException) as exc:
+            admin_hours_endpoint._parse_optional_date("not-a-date", "start_date")
+        assert exc.value.status_code == 400
+        assert "start_date" in exc.value.detail

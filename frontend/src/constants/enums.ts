@@ -371,6 +371,51 @@ export const VictoryCondition = {
 export type VictoryCondition = (typeof VictoryCondition)[keyof typeof VictoryCondition];
 
 // ============================================
+// Attendance Rule Mode (Election.eligibility_rules.attendance.mode)
+// ============================================
+export const AttendanceRuleMode = {
+  NONE: 'none',
+  COUNT: 'count',
+  PERCENT: 'percent',
+} as const;
+export type AttendanceRuleMode = (typeof AttendanceRuleMode)[keyof typeof AttendanceRuleMode];
+
+// ============================================
+// Waiting Period Mode (ElectionEligibilityRules.waiting_periods[type].mode)
+// ============================================
+export const WaitingPeriodMode = {
+  NONE: 'none',
+  NEVER: 'never',
+  MONTHS: 'months',
+} as const;
+export type WaitingPeriodMode = (typeof WaitingPeriodMode)[keyof typeof WaitingPeriodMode];
+
+// ============================================
+// Member Voter Type — the key a waiting period is set for. Class first
+// (administrative, social), else status. Mirrors backend VOTER_TYPE_KEYS.
+// ============================================
+export const MemberVoterType = {
+  ADMINISTRATIVE: 'administrative',
+  SOCIAL: 'social',
+  REGULAR: 'regular',
+  LIFE: 'life',
+  PROBATIONARY: 'probationary',
+  RETIRED: 'retired',
+  HONORARY: 'honorary',
+  JUNIOR: 'junior',
+} as const;
+export type MemberVoterType = (typeof MemberVoterType)[keyof typeof MemberVoterType];
+
+// ============================================
+// Meeting Kind (Election.meeting_kind) — which eligibility defaults it copies
+// ============================================
+export const MeetingKind = {
+  REGULAR: 'regular',
+  ANNUAL: 'annual',
+} as const;
+export type MeetingKind = (typeof MeetingKind)[keyof typeof MeetingKind];
+
+// ============================================
 // Ballot Choice (voter action on a ballot item)
 // ============================================
 export const BallotChoice = {
@@ -480,6 +525,44 @@ export const MemberStatus = {
   JUNIOR: 'junior',
 } as const;
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
+
+// ============================================
+// Position Kind
+// ============================================
+// What a position is. Mirrors POSITION_KINDS in backend/app/core/permissions.py.
+export const PositionKind = {
+  OFFICE: 'office',
+  COMMITTEE: 'committee',
+  SYSTEM: 'system',
+} as const;
+export type PositionKind = (typeof PositionKind)[keyof typeof PositionKind];
+
+export const POSITION_KIND_LABELS: Record<PositionKind, string> = {
+  office: 'Office',
+  committee: 'Committee',
+  system: 'System',
+};
+
+export const MEMBER_CLASS_LABELS: Record<MemberClass, string> = {
+  operational: 'Operational',
+  administrative: 'Administrative',
+  social: 'Social',
+};
+
+/**
+ * Labels for the built-in ladder statuses. `member_status` also holds the
+ * department's own tier ids (`senior`), whose display name lives in the tier
+ * config; `memberStatusLabel` in `utils/membership.ts` resolves those.
+ */
+export const MEMBER_STATUS_LABELS: Record<MemberStatus, string> = {
+  prospective: 'Prospective',
+  probationary: 'Probationary',
+  regular: 'Regular',
+  life: 'Life',
+  retired: 'Retired',
+  honorary: 'Honorary',
+  junior: 'Junior',
+};
 
 // ============================================
 // Pipeline / Applicant Stage Types
@@ -602,6 +685,9 @@ export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
   { value: 'emt', label: 'EMT' },
   { value: 'aemt', label: 'Advanced EMT' },
   { value: 'paramedic', label: 'Paramedic' },
+  // Cleared to lead a crew without an officer rank: the acting-officer / AIC
+  // card. Clears the officer, captain and lieutenant seats.
+  { value: 'officer_in_charge', label: 'Officer in Charge' },
 ];
 
 /**

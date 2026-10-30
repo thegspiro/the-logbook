@@ -15,6 +15,10 @@ decided from the request row it names — never from the request body:
 - every failure answers the same ``None``, so the public endpoints cannot be
   used to learn whether a token was ever issued.
 
+An unsubmitted form is reminded every seven days, up to three times, by
+``send_due_reminders``. A submission emails the membership coordinators a link
+to the applicant, never the answers.
+
 Writes to the applicant record follow the form's ``applicant_field`` mapping
 only. A field marked Sensitive is never mapped (FormsService refuses the pair),
 so a restricted answer is never copied onto a record every pipeline viewer can
@@ -27,7 +31,7 @@ import html as html_lib
 import re
 import secrets
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -37,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.models.forms import Form, FormField, FormStatus, FormSubmission
+from app.models.forms import FieldType, Form, FormField, FormStatus, FormSubmission
 from app.models.membership_pipeline import (
     MembershipPipelineStep,
     PipelineStepType,
@@ -87,6 +91,16 @@ _EMAIL_PATTERN = re.compile(
 
 FORM_PATH = "/application-form/"
 
+# Reminder cadence, as the department chose it: every seven days, three at
+# most, sent in the department's working day.
+REMINDER_INTERVAL_DAYS = 7
+MAX_REMINDERS = 3
+# Local hours [start, end) in which a reminder may go out. The task runs
+# hourly, so a reminder lands soon after 09:00 on the day it falls due; the
+# upper bound stops a scheduler that was down all day from emailing applicants
+# late at night.
+REMINDER_HOURS = (9, 20)
+
 
 class FollowUpFormError(ValueError):
     """A submission the applicant can correct; the message is shown to them."""
@@ -111,6 +125,32 @@ def form_url(token: str) -> str:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def display_answer(field: FormField, raw: Any) -> str:
+    """A stored answer as a person reads it.
+
+    Answers are stored HTML-escaped (FormsService escapes every value), so they
+    are unescaped for a screen that escapes on its own. A choice is shown by
+    its option label rather than its stored value, and a signature as "Signed"
+    rather than as the image data it is stored as.
+    """
+    text = html_lib.unescape(str(raw)) if raw is not None else ""
+    field_type = getattr(field.field_type, "value", field.field_type)
+    if field_type == FieldType.SIGNATURE.value:
+        return "Signed" if text else ""
+    labels = {
+        str(option.get("value")): str(option.get("label") or option.get("value"))
+        for option in (field.options or [])
+        if isinstance(option, dict)
+    }
+    if not labels:
+        return text
+    if field_type in (FieldType.MULTISELECT.value, FieldType.CHECKBOX.value):
+        return ", ".join(labels.get(value, value) for value in text.split(",") if value)
+    if field_type in (FieldType.SELECT.value, FieldType.RADIO.value):
+        return labels.get(text, text)
+    return text
 
 
 def _record_value(prospect: ProspectiveMember, field: str) -> Optional[str]:
@@ -402,6 +442,8 @@ class FollowUpFormService:
             "draft_saved_at": request.draft_saved_at,
             "submitted_at": request.submitted_at,
             "submission_id": request.submission_id,
+            "reminder_count": request.reminder_count or 0,
+            "last_reminder_at": request.last_reminder_at,
             "changes": changes,
             "contact_changed": request.contact_changed,
             "contact_change_reviewed_at": request.contact_change_reviewed_at,
@@ -409,6 +451,139 @@ class FollowUpFormService:
                 (reviewers or {}).get(str(reviewed_by)) if reviewed_by else None
             ),
         }
+
+    async def submitted_answers(
+        self, prospect_id: str, request_id: str, organization_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """A submitted follow-up form's answers, question by question.
+
+        Every answer is returned with ``is_sensitive`` set where it applies;
+        the caller decides whether a sensitive answer may be shown (the
+        endpoint withholds it from anyone without ``sensitive_answers.view``).
+        None when the request is not this applicant's in this organization.
+        Raises ValueError while the form is unsubmitted.
+        """
+        request = (
+            await self.db.execute(
+                select(ProspectFormRequest).where(
+                    ProspectFormRequest.id == str(request_id),
+                    ProspectFormRequest.prospect_id == str(prospect_id),
+                    ProspectFormRequest.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if request is None:
+            return None
+        if not request.submission_id:
+            raise ValueError("The applicant has not submitted this form")
+        answers = await self._answers_for(request, organization_id)
+        step_name = None
+        if request.step_id:
+            step = await self.db.get(MembershipPipelineStep, request.step_id)
+            step_name = step.name if step else None
+        return {
+            "request_id": request.id,
+            "step_name": step_name,
+            "form_id": answers["form_id"],
+            "form_name": answers["form_name"],
+            "submitted_at": request.submitted_at,
+            "answers": answers["answers"],
+        }
+
+    async def _answers_for(
+        self, request: ProspectFormRequest, organization_id: str
+    ) -> Dict[str, Any]:
+        submission = (
+            await self.db.execute(
+                select(FormSubmission).where(
+                    FormSubmission.id == request.submission_id,
+                    FormSubmission.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if submission is None:
+            return {"form_id": request.form_id, "form_name": None, "answers": []}
+        form = (
+            await self.db.execute(
+                select(Form)
+                .where(
+                    Form.id == submission.form_id,
+                    Form.organization_id == str(organization_id),
+                )
+                .options(selectinload(Form.fields))
+            )
+        ).scalar_one_or_none()
+        fields = sorted(form.fields, key=lambda f: f.sort_order) if form else []
+        sensitive_ids = {str(f.id) for f in fields if f.is_sensitive}
+        plain, sensitive = FormsService.partition_answers(submission, sensitive_ids)
+
+        answers: List[Dict[str, Any]] = []
+        for field in fields:
+            fid = str(field.id)
+            if field.field_type == FieldType.SECTION_HEADER:
+                continue
+            if fid in sensitive:
+                raw, is_sensitive = sensitive[fid], True
+            elif fid in plain:
+                raw, is_sensitive = plain[fid], False
+            else:
+                continue
+            answers.append(
+                {
+                    "field_id": fid,
+                    "label": field.label,
+                    "answer": display_answer(field, raw),
+                    "is_sensitive": is_sensitive,
+                }
+            )
+        return {
+            "form_id": submission.form_id,
+            "form_name": form.name if form else None,
+            "answers": answers,
+        }
+
+    async def package_answers(
+        self, prospect_id: str, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """Every submitted follow-up form, for an election package snapshot.
+
+        Sensitive answers are left out whatever the caller's permissions: the
+        snapshot is stored unencrypted and read by everyone the package is
+        shown to.
+        """
+        result = await self.db.execute(
+            select(ProspectFormRequest, MembershipPipelineStep.name)
+            .outerjoin(
+                MembershipPipelineStep,
+                MembershipPipelineStep.id == ProspectFormRequest.step_id,
+            )
+            .where(
+                ProspectFormRequest.prospect_id == str(prospect_id),
+                ProspectFormRequest.organization_id == str(organization_id),
+                ProspectFormRequest.submission_id.isnot(None),
+            )
+            .order_by(ProspectFormRequest.submitted_at)
+        )
+        forms: List[Dict[str, Any]] = []
+        for request, step_name in result.all():
+            answers = await self._answers_for(request, organization_id)
+            forms.append(
+                {
+                    "form_name": answers["form_name"],
+                    "stage_name": step_name,
+                    "submitted_at": (
+                        request.submitted_at.isoformat()
+                        if request.submitted_at
+                        else None
+                    ),
+                    "answers": [
+                        {"label": a["label"], "answer": a["answer"]}
+                        for a in answers["answers"]
+                        if not a["is_sensitive"]
+                    ],
+                }
+            )
+        return forms
 
     async def pending_contact_changes(
         self, prospect_ids: List[str], organization_id: str
@@ -533,6 +708,46 @@ class FollowUpFormService:
         if request.is_submitted:
             raise FollowUpAlreadySubmitted()
         return ResolvedRequest(request=request, prospect=prospect, step=step, form=form)
+
+    async def status_page_action(
+        self, prospect: ProspectiveMember
+    ) -> Optional[Dict[str, Any]]:
+        """The status-page card for an applicant on a Follow-up Form stage.
+
+        Shown while their form for the current stage is sent and unsubmitted,
+        and only when the link would open: the same checks ``resolve`` makes,
+        so the button never leads to "this form is not available".
+        """
+        from app.services.membership_pipeline_service import effective_step_type
+
+        step = prospect.current_step
+        if (
+            step is None
+            or prospect.status not in OPEN_STATUSES
+            or effective_step_type(step) != PipelineStepType.FOLLOW_UP_FORM
+        ):
+            return None
+        request = await self._request_for(prospect.id, step.id)
+        if (
+            request is None
+            or request.is_submitted
+            or not request.token
+            or request.last_sent_at is None
+        ):
+            return None
+        form = await self._stage_form(step, prospect.organization_id)
+        if form is None or str(form.id) != str(request.form_id or ""):
+            return None
+        return {
+            "type": "follow_up_form",
+            "label": f"Complete your form: {form.name}",
+            "url": form_url(request.token),
+            "message": (
+                "Your answers so far are saved. Pick up where you left off."
+                if request.draft_saved_at is not None
+                else "The department needs a few more details from you."
+            ),
+        }
 
     async def public_view(self, token: str) -> Optional[Dict[str, Any]]:
         resolved = await self.resolve(token)
@@ -689,6 +904,9 @@ class FollowUpFormService:
 
         if email_change is not None and email_change["applied"]:
             await self._notify_previous_address(prospect, old_email)
+        await self._notify_coordinators_of_submission(
+            prospect, step, form, request, bool(contact_fields)
+        )
 
         await pipeline.try_auto_advance_step(
             prospect_id=str(prospect.id),
@@ -811,3 +1029,287 @@ class FollowUpFormService:
                 prospect.id,
                 e,
             )
+
+    async def _notify_coordinators_of_submission(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+        form: Form,
+        request: ProspectFormRequest,
+        contact_changed: bool,
+    ) -> None:
+        """Email the membership coordinators that a form came in.
+
+        The same people the withdrawal notice reaches. After the commit and
+        best-effort, like the old-address notice: the submission stands
+        whether or not this goes out. The email links to the applicant and
+        never carries an answer.
+        """
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            recipients_for,
+        )
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        try:
+            from app.services.email_service import EmailService
+
+            org = await self.db.get(Organization, prospect.organization_id)
+            if org is None:
+                return
+            pipeline = MembershipPipelineService(self.db)
+            recipients = recipients_for(
+                await pipeline._withdrawal_notice_recipients(str(org.id)),
+                EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
+            )
+            if not recipients:
+                logger.warning(
+                    "No coordinator to notify of follow-up form {} for prospect {}",
+                    request.id,
+                    prospect.id,
+                )
+                return
+
+            frontend_url = getattr(settings, "FRONTEND_URL", "") or ""
+            applicant_url = (
+                f"{frontend_url}/prospective-members/{prospect.id}/interview"
+            )
+            email_service = EmailService(org)
+            delivered = 0
+            for user in recipients:
+                if await email_service.send_follow_up_submitted_email(
+                    to_email=user.email,
+                    recipient_name=user.full_name,
+                    applicant_name=prospect.full_name,
+                    form_name=form.name,
+                    stage_name=step.name,
+                    applicant_url=applicant_url,
+                    contact_changed=contact_changed,
+                    db=self.db,
+                    organization_id=str(org.id),
+                ):
+                    delivered += 1
+
+            await pipeline._log_activity(
+                prospect_id=str(prospect.id),
+                action="follow_up_submitted_notice_sent",
+                details={
+                    "request_id": str(request.id),
+                    "recipient_count": len(recipients),
+                    "delivered": delivered,
+                },
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.error(
+                "Failed to notify coordinators of follow-up form {} for prospect "
+                "{}: {}",
+                request.id,
+                prospect.id,
+                e,
+            )
+
+    # ------------------------------------------------------------------
+    # Reminders
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _last_contact(request: ProspectFormRequest) -> Optional[datetime]:
+        """The latest of the link email, a reminder and a saved draft.
+
+        A draft counts: an applicant who saved one this week is working on the
+        form and is not reminded about it.
+        """
+        stamps = [
+            stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+            for stamp in (
+                request.last_sent_at,
+                request.last_reminder_at,
+                request.draft_saved_at,
+            )
+            if stamp is not None
+        ]
+        return max(stamps) if stamps else None
+
+    @staticmethod
+    def reminder_due(request: ProspectFormRequest, local_now: datetime) -> bool:
+        """Whether a reminder is due at ``local_now``, the department's time.
+
+        Counted in the department's calendar days, so every reminder goes out
+        in the first run after 09:00 on its day rather than creeping an hour
+        later each week.
+        """
+        if request.reminder_count >= MAX_REMINDERS or request.is_submitted:
+            return False
+        start, end = REMINDER_HOURS
+        if not start <= local_now.hour < end:
+            return False
+        last = FollowUpFormService._last_contact(request)
+        if last is None or request.last_sent_at is None:
+            return False
+        last_day = last.astimezone(local_now.tzinfo).date()
+        return (local_now.date() - last_day).days >= REMINDER_INTERVAL_DAYS
+
+    async def send_due_reminders(
+        self, now: Optional[datetime] = None
+    ) -> Dict[str, int]:
+        """Remind every applicant whose follow-up form is due a reminder.
+
+        A request is reminded only while the applicant is still on its stage
+        and the application is open: a coordinator who moved them on has
+        decided the form is no longer needed.
+
+        Send, then stamp and commit (CLAUDE.md pitfall #36): a crash between
+        the two sends that reminder again on the next run. A duplicate reminder
+        is a nuisance, a missing one is a stalled application, so this errs on
+        the side of sending. Each row is locked and re-checked before sending,
+        so two runs cannot both remind for the same day.
+        """
+        from app.utils.org_timezone import scheduling_timezone
+
+        now = now or _now()
+        # Calendar days are compared below, so a reminder can fall due as
+        # little as six days and a few hours after the last contact. This
+        # bound only narrows the query.
+        bound = now - timedelta(days=REMINDER_INTERVAL_DAYS - 1)
+        result = await self.db.execute(
+            select(ProspectFormRequest.id, ProspectFormRequest.organization_id)
+            .join(
+                ProspectiveMember,
+                and_(
+                    ProspectiveMember.id == ProspectFormRequest.prospect_id,
+                    ProspectiveMember.organization_id
+                    == ProspectFormRequest.organization_id,
+                ),
+            )
+            .join(Organization, Organization.id == ProspectFormRequest.organization_id)
+            .where(
+                Organization.active.isnot(False),
+                ProspectFormRequest.submitted_at.is_(None),
+                ProspectFormRequest.token.isnot(None),
+                ProspectFormRequest.last_sent_at.isnot(None),
+                ProspectFormRequest.last_sent_at <= bound,
+                ProspectFormRequest.reminder_count < MAX_REMINDERS,
+                ProspectiveMember.status.in_(list(OPEN_STATUSES)),
+                ProspectiveMember.current_step_id == ProspectFormRequest.step_id,
+            )
+        )
+        candidates = [(str(rid), str(oid)) for rid, oid in result.all()]
+
+        counts = {"considered": len(candidates), "sent": 0, "failed": 0}
+        zones: Dict[str, Any] = {}
+        for request_id, organization_id in candidates:
+            if organization_id not in zones:
+                zones[organization_id] = scheduling_timezone(
+                    await self.db.get(Organization, organization_id)
+                )
+            local_now = now.astimezone(zones[organization_id])
+            outcome = await self._remind_one(
+                request_id, organization_id, local_now, now
+            )
+            if outcome is not None:
+                counts["sent" if outcome else "failed"] += 1
+        return counts
+
+    async def _remind_one(
+        self, request_id: str, organization_id: str, local_now: datetime, now: datetime
+    ) -> Optional[bool]:
+        """Remind for one request. None when nothing was due, else whether the
+        email went out. Commits or rolls back, so each row stands alone."""
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+            effective_step_type,
+        )
+
+        try:
+            request = (
+                await self.db.execute(
+                    select(ProspectFormRequest)
+                    .where(
+                        ProspectFormRequest.id == request_id,
+                        ProspectFormRequest.organization_id == organization_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if request is None or not request.token or not request.step_id:
+                await self.db.rollback()
+                return None
+            prospect = (
+                await self.db.execute(
+                    select(ProspectiveMember).where(
+                        ProspectiveMember.id == request.prospect_id,
+                        ProspectiveMember.organization_id == request.organization_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if (
+                prospect is None
+                or prospect.status not in OPEN_STATUSES
+                or str(prospect.current_step_id or "") != str(request.step_id)
+                or not self.reminder_due(request, local_now)
+            ):
+                await self.db.rollback()
+                return None
+            step = await self.db.get(MembershipPipelineStep, request.step_id)
+            if (
+                step is None
+                or effective_step_type(step) != PipelineStepType.FOLLOW_UP_FORM
+            ):
+                await self.db.rollback()
+                return None
+            form = await self._stage_form(step, prospect.organization_id)
+            if form is None or str(form.id) != str(request.form_id or ""):
+                await self.db.rollback()
+                return None
+
+            from app.services.email_service import EmailService
+
+            org = await self.db.get(Organization, prospect.organization_id)
+            number = request.reminder_count + 1
+            sent = org is not None and await EmailService(
+                org
+            ).send_follow_up_reminder_email(
+                to_email=prospect.email,
+                first_name=_record_value(prospect, "first_name") or "",
+                applicant_name=prospect.full_name,
+                form_name=form.name,
+                form_url=form_url(request.token),
+                reminder_number=number,
+                has_draft=request.draft_saved_at is not None,
+                db=self.db,
+                organization_id=str(prospect.organization_id),
+            )
+            if not sent:
+                logger.warning(
+                    "Follow-up form reminder for request {} was not sent", request_id
+                )
+                await self.db.rollback()
+                return False
+
+            request.reminder_count = number
+            request.last_reminder_at = now
+            await MembershipPipelineService(self.db)._log_activity(
+                prospect_id=str(prospect.id),
+                action="follow_up_form_reminder_sent",
+                details={
+                    "request_id": str(request.id),
+                    "step_name": step.name,
+                    "form_name": form.name,
+                    "reminder_number": number,
+                },
+            )
+            await self.db.commit()
+            return True
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                "Failed to send follow-up form reminder for request {}: {}",
+                request_id,
+                e,
+            )
+            return False

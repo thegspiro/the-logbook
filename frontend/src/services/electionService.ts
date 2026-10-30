@@ -28,6 +28,8 @@ import type {
   ElectionReportResponse,
   ElectionResults,
   ElectionSettings,
+  MemberVotingEligibility,
+  MemberVotingEligibilityUpdate,
   ElectionStats,
   ElectionUpdate,
   EligibilityRoster,
@@ -490,6 +492,25 @@ export const electionService = {
    */
   async updateSettings(data: Partial<ElectionSettings>): Promise<ElectionSettings> {
     const response = await api.patch<ElectionSettings>('/elections/settings', data);
+    return response.data;
+  },
+
+  /**
+   * A member's voting waiting period and any per-member override
+   */
+  async getMemberVotingEligibility(userId: string): Promise<MemberVotingEligibility> {
+    const response = await api.get<MemberVotingEligibility>(`/elections/members/${userId}/voting-eligibility`);
+    return response.data;
+  },
+
+  /**
+   * Set or clear a member's waiting-period override
+   */
+  async updateMemberVotingEligibility(
+    userId: string,
+    data: MemberVotingEligibilityUpdate
+  ): Promise<MemberVotingEligibility> {
+    const response = await api.put<MemberVotingEligibility>(`/elections/members/${userId}/voting-eligibility`, data);
     return response.data;
   },
 

@@ -309,6 +309,53 @@ describe('IntegrationsPage', () => {
     expect(screen.getByLabelText('Webhook URL')).toHaveAttribute('type', 'url');
   });
 
+  it('connects a Generic Webhook with the events it should be sent', async () => {
+    const user = userEvent.setup();
+    const webhook = {
+      ...(mockIntegrations[0] ?? {}),
+      id: 'wh-1',
+      integration_type: 'generic-webhook',
+      name: 'Generic Webhooks',
+      category: 'Automation',
+    };
+    mockGetIntegrations.mockResolvedValue([webhook]);
+    mockConnectIntegration.mockResolvedValue({ ...webhook, status: 'connected', enabled: true });
+
+    renderPage();
+    await screen.findByText('Generic Webhooks');
+    await user.click(within(screen.getByTestId('integration-card-generic-webhook')).getByText('Connect'));
+    await user.type(screen.getByLabelText('Webhook URL'), 'https://hooks.example.org/in');
+    await user.click(screen.getByRole('checkbox', { name: /A shift is created/ }));
+    await user.click(screen.getByRole('checkbox', { name: /A training record is added/ }));
+    await user.click(screen.getByTestId('connect-submit'));
+
+    expect(mockConnectIntegration).toHaveBeenCalledWith('wh-1', {
+      url: 'https://hooks.example.org/in',
+      secret: '',
+      event_types: ['shift.created', 'training.recorded'],
+    });
+  });
+
+  it('connects NWS Weather Alerts with the channels the department chose', async () => {
+    const user = userEvent.setup();
+    mockConnectIntegration.mockResolvedValue({ ...mockIntegrations[1], status: 'connected', enabled: true });
+
+    renderPage();
+    await screen.findByText('NWS Weather Alerts');
+    await user.click(within(screen.getByTestId('integration-card-nws-weather')).getByText('Connect'));
+    await user.type(screen.getByLabelText('NWS Zone ID'), 'vaz054');
+    await user.click(screen.getByRole('checkbox', { name: /Bell notice when an alert is issued/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Email when an alert is issued/ }));
+    await user.click(screen.getByTestId('connect-submit'));
+
+    expect(mockConnectIntegration).toHaveBeenCalledWith('int-2', {
+      zone_id: 'VAZ054',
+      notify_banner: true,
+      notify_bell: false,
+      notify_email: true,
+    });
+  });
+
   it('hides manage buttons when user lacks permission', async () => {
     mockCheckPermission.mockReturnValue(false);
     renderPage();

@@ -210,6 +210,21 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
                 </div>
               </div>
             )}
+            {currentElectionPackage.follow_up_forms?.map((form, i) => (
+              <div key={`${form.form_name ?? 'form'}-${i}`} className="pt-1">
+                <span className="text-theme-text-muted">{form.form_name ?? 'Follow-up form'}:</span>
+                <dl className="mt-1 space-y-1">
+                  {form.answers.map((answer, j) => (
+                    <div key={`${answer.label}-${j}`}>
+                      <dt className="text-theme-text-muted">{answer.label}</dt>
+                      <dd className="text-theme-text-secondary wrap-break-word whitespace-pre-line">
+                        {answer.answer || '(no answer)'}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
           </div>
 
           {/* Editable fields -- only for draft packages */}

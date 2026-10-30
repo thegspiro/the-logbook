@@ -13,6 +13,18 @@
   }
 }
 
+/* A phone held sideways: the phone layout (under 768px wide) on a screen
+   under 480px tall. An iPhone SE on its side is 568x320, and the fixed top bar
+   (64px) and bottom bar (56px) together left it ~200px of page. Both bars
+   shrink here, to 48px each, which keeps every label and the 44px touch
+   minimum. `--mobile-header-height` and `--bottom-nav-height` follow it, so
+   everything offset by the bars moves with them. */
+@custom-variant short-screen {
+  @media (max-width: 767px) and (max-height: 480px) {
+    @slot;
+  }
+}
+
 @theme {
   --color-primary-50: #fef2f2;
   --color-primary-100: #fee2e2;
@@ -373,6 +385,16 @@
   }
 }
 
+/* After the width rules so it wins: a phone held sideways is wide enough for
+   the 2rem gutter but has ~270px of page between its bars. See the
+   `short-screen` variant. */
+@media (max-width: 767px) and (max-height: 480px) {
+  :root {
+    --page-gutter-block: 1rem;
+    --page-section-gap: 1rem;
+  }
+}
+
 [data-page-layout='application'] {
   box-sizing: border-box;
   min-width: 0;
@@ -687,6 +709,47 @@
     auto-fill,
     minmax(min(100%, max(var(--card-grid-min, 20rem), calc(100% / 3 - 1rem))), 1fr)
   );
+}
+
+/* --- Page header ---
+   A page's title on the left and its actions on the right, stacked on a phone.
+
+   The usual way to write this — `flex-col sm:flex-row sm:justify-between` with
+   an action group that cannot shrink — switches to a row at a fixed width and
+   then never wraps. Whether the row fits is decided by how many actions the
+   viewer is allowed and how long the title is, not by the viewport, and the
+   sidebar takes 256px of it from md up. It broke both ways: on /locations at
+   768px the buttons ran 14px off the screen, and on /inventory at 1280px the
+   buttons squeezed the title column to 169px and "Inventory Items" spilled out
+   of it.
+
+   So from `sm` up the row wraps on its content: the title keeps at least 16rem
+   and grows, and the actions sit beside it only while they fit, otherwise
+   dropping to their own line, still at the right. Display, wrapping, gap,
+   vertical alignment and margins stay with the call site, so a group reads the
+   same in the markup as any other flex row. */
+@utility page-header {
+  display: flex;
+  flex-direction: column;
+  @media (min-width: 640px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@utility page-header-title {
+  min-width: 0;
+  @media (min-width: 640px) {
+    flex: 1 0 16rem;
+  }
+}
+
+@utility page-header-actions {
+  min-width: 0;
+  @media (min-width: 640px) {
+    margin-left: auto;
+  }
 }
 
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
@@ -1662,9 +1725,14 @@
  * bars then lift clear of it automatically instead of each one hard-coding the
  * bar's height. Public pages (login, onboarding, legal) never see the bar and
  * so never inherit the offset. Must stay in step with BottomNavigation's own
- * min-h-[56px] rows. */
+ * min-h-[56px] rows, and their 48px `short-screen` size. */
 .has-bottom-nav {
   --bottom-nav-height: 3.5rem;
+}
+@media (max-width: 767px) and (max-height: 480px) {
+  .has-bottom-nav {
+    --bottom-nav-height: 3rem;
+  }
 }
 @media (min-width: 768px) {
   .has-bottom-nav {
@@ -1777,6 +1845,11 @@
 :root:has(.has-bottom-nav) {
   --bottom-nav-height: 3.5rem;
 }
+@media (max-width: 767px) and (max-height: 480px) {
+  :root:has(.has-bottom-nav) {
+    --bottom-nav-height: 3rem;
+  }
+}
 @media (min-width: 768px) {
   :root:has(.has-bottom-nav) {
     --bottom-nav-height: 0px;
@@ -1813,12 +1886,24 @@
   padding-top: max(2rem, env(safe-area-inset-top));
 }
 
+/* The fixed mobile header's height. 3rem on a short screen (see the
+ * `short-screen` variant); read by the header itself and by everything that
+ * clears or pins beneath it, so the five stay in step. */
+:root {
+  --mobile-header-height: 4rem;
+}
+@media (max-width: 767px) and (max-height: 480px) {
+  :root {
+    --mobile-header-height: 3rem;
+  }
+}
+
 @utility mobile-header-offset {
-  /* Top padding for content sitting below the 4rem fixed mobile header,
+  /* Top padding for content sitting below the fixed mobile header,
      grown by the status-bar inset so it clears the header in standalone mode.
      Pairs with `safe-top` on the header itself. Desktop (>=768px) has no fixed
      mobile header, so the offset collapses to 0. */
-  padding-top: calc(4rem + env(safe-area-inset-top));
+  padding-top: calc(var(--mobile-header-height) + env(safe-area-inset-top));
   @media (min-width: 768px) {
     padding-top: 0;
   }
@@ -1830,7 +1915,7 @@
      `--sticky-stack` is the height of anything an ancestor has already
      pinned under that header — a tab bar — so a heading inside it sticks
      below the bar instead of sliding under it. Unset, it is nothing. */
-  top: calc(4rem + env(safe-area-inset-top) + var(--sticky-stack, 0px));
+  top: calc(var(--mobile-header-height) + env(safe-area-inset-top) + var(--sticky-stack, 0px));
 }
 
 @utility mobile-navigation-drawer {
@@ -3063,7 +3148,7 @@ tbody tr:last-child {
 
 @media (max-width: 767px) {
   .app-toaster {
-    top: calc(4rem + env(safe-area-inset-top)) !important;
+    top: calc(var(--mobile-header-height) + env(safe-area-inset-top)) !important;
     right: 1rem !important;
     left: 1rem !important;
   }

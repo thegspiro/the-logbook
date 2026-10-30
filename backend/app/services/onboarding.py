@@ -1007,6 +1007,7 @@ class OnboardingService:
                 permissions=list(role_data["permissions"]),
                 is_system=role_data.get("is_system", True),
                 priority=role_data["priority"],
+                kind=role_data.get("kind", "office"),
             )
             self.db.add(role)
 

@@ -10,6 +10,8 @@ import { Shield, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { MEMBERSHIP_TYPE_LABELS, MembershipType } from '../../../constants/enums';
+import { useMembershipTierOptions } from '../../../hooks/useMembershipTierOptions';
+import { canonicalMemberStatus, isBuiltinStatus } from '../../../utils/membership';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { schedulingService } from '../services/api';
 import { ensureShiftSettingsLoaded } from '../services/shiftSettingsApi';
@@ -42,6 +44,20 @@ export const EligibilitySettingsCard: React.FC = () => {
   // Seeded with what the settings cache holds now, then refreshed once the
   // department's own seats have landed — the same pattern as useRankEditor.
   const [seatOptions, setSeatOptions] = useState<PositionOption[]>(() => rankEligibleSeatOptions());
+  // The exclusion list is keyed on the legacy `membership_type`, which for an
+  // operational member on a department tier is the tier id itself (`senior`).
+  // So the department's own tiers are offered beside the built-in words, and a
+  // stored value neither list names is still shown so it can be switched off.
+  const { tiers } = useMembershipTierOptions();
+  const membershipTypeOptions: { value: string; label: string }[] = [
+    ...ALL_MEMBERSHIP_TYPES.map((type) => ({ value: type, label: MEMBERSHIP_TYPE_LABELS[type] ?? type })),
+    ...tiers
+      .filter((tier) => !isBuiltinStatus(tier.id) && !(ALL_MEMBERSHIP_TYPES as string[]).includes(tier.id))
+      .map((tier) => ({ value: canonicalMemberStatus(tier.id) ?? tier.id, label: tier.name })),
+    ...excludedTypes
+      .filter((stored) => !(ALL_MEMBERSHIP_TYPES as string[]).includes(stored) && !tiers.some((t) => t.id === stored))
+      .map((stored) => ({ value: stored, label: stored })),
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -124,11 +140,11 @@ export const EligibilitySettingsCard: React.FC = () => {
           Excluded from Self-Signup
         </h4>
         <p className="text-theme-text-muted mb-3 text-xs">
-          Members with these membership types cannot sign themselves up for shifts. Admins can still assign them
-          manually.
+          Members with these membership types cannot sign themselves up for shifts, and an officer cannot assign them
+          either. The exception is a shift opened to all members.
         </p>
         <div role="group" aria-labelledby="eligibility-excluded-types" className="flex flex-wrap gap-2">
-          {ALL_MEMBERSHIP_TYPES.map((type) => {
+          {membershipTypeOptions.map(({ value: type, label }) => {
             const isExcluded = excludedTypes.includes(type);
             return (
               <button
@@ -142,7 +158,7 @@ export const EligibilitySettingsCard: React.FC = () => {
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
-                {MEMBERSHIP_TYPE_LABELS[type] ?? type}
+                {label}
               </button>
             );
           })}

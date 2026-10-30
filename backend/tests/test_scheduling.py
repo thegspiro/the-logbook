@@ -535,6 +535,94 @@ class TestShiftCRUD:
         assert refreshed.assignment_status == AssignmentStatus.CANCELLED
 
     @pytest.mark.asyncio
+    async def test_cancel_shift_emails_the_crew(self, db_session, setup_org_and_users):
+        """The crew is emailed as well as told in the app, under Shift notices."""
+        from app.models.notification import NotificationLog
+        from app.services.email_service import EmailService
+
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+        day = date.today() + timedelta(days=3)
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": day,
+                "start_time": datetime(day.year, day.month, day.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        send = AsyncMock(return_value=(1, 0))
+
+        with patch.object(EmailService, "send_email", send):
+            _, err = await svc.cancel_shift(
+                uuid.UUID(shift.id),
+                uuid.UUID(org_id),
+                cancelled_by_user_id=user_id,
+                reason="Engine <1> out of service",
+            )
+
+        assert err is None
+        (call,) = send.await_args_list
+        assert call.kwargs["to_emails"] == ["ff1@test.com"]
+        assert call.kwargs["subject"] == f"Shift cancelled — {day.isoformat()}"
+        assert "Engine &lt;1&gt; out of service" in call.kwargs["html_body"]
+        bell = (
+            await db_session.execute(
+                select(NotificationLog).where(
+                    NotificationLog.recipient_id == user2_id,
+                    NotificationLog.category == "shift_cancelled",
+                )
+            )
+        ).scalar_one()
+        assert bell.action_url == "/scheduling"
+
+    @pytest.mark.asyncio
+    async def test_cancel_shift_respects_turned_off_shift_notices(
+        self, db_session, setup_org_and_users
+    ):
+        from app.services.email_service import EmailService
+
+        org_id, user_id, user2_id = setup_org_and_users
+        await db_session.execute(
+            text("UPDATE users SET notification_preferences = :p WHERE id = :id"),
+            {
+                "p": json.dumps({"email_kinds": {"shift_notices": False}}),
+                "id": user2_id,
+            },
+        )
+        svc = SchedulingService(db_session)
+        day = date.today() + timedelta(days=3)
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": day,
+                "start_time": datetime(day.year, day.month, day.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        send = AsyncMock(return_value=(1, 0))
+
+        with patch.object(EmailService, "send_email", send):
+            _, err = await svc.cancel_shift(
+                uuid.UUID(shift.id), uuid.UUID(org_id), cancelled_by_user_id=user_id
+            )
+
+        assert err is None
+        send.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_cancel_shift_twice_blocked(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
@@ -791,6 +879,33 @@ class TestCalendarHelpers:
 
         shifts = await svc.get_month_shifts(uuid.UUID(org_id), d.year, d.month)
         assert len(shifts) >= 1
+
+    @pytest.mark.asyncio
+    async def test_month_view_is_not_capped_at_500(
+        self, db_session, setup_org_and_users
+    ):
+        """A fixed cap of 500 silently dropped the end of a busy month."""
+        from app.models.training import Shift
+
+        org_id, user_id, _ = setup_org_and_users
+        year, month = 2031, 3
+        db_session.add_all(
+            Shift(
+                organization_id=org_id,
+                shift_date=date(year, month, 1 + i % 28),
+                start_time=datetime(year, month, 1 + i % 28, i % 24, 0),
+                created_by=user_id,
+            )
+            for i in range(510)
+        )
+        await db_session.flush()
+
+        shifts = await SchedulingService(db_session).get_month_shifts(
+            uuid.UUID(org_id), year, month
+        )
+
+        assert len(shifts) == 510
+        assert shifts[-1].shift_date == date(year, month, 28)
 
     @pytest.mark.asyncio
     async def test_get_summary(self, db_session, setup_org_and_users):

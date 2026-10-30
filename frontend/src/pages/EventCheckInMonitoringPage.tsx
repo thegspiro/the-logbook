@@ -9,6 +9,7 @@ import { Breadcrumbs, SkeletonText } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
 import { getRSVPStatusLabel } from '../utils/eventHelpers';
+import { StatGrid } from '../components/ux/StatGrid';
 
 /**
  * Event Check-In Monitoring Dashboard
@@ -176,7 +177,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
             </div>
           }
         />
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-6">
           <span className="sr-only">Loading monitoring dashboard...</span>
           {['Checked In', 'Check-In Rate', 'Total RSVPs', 'Avg Check-In Time'].map((label) => (
             <div key={label} className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
@@ -189,7 +190,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
               </div>
             </div>
           ))}
-        </div>
+        </StatGrid>
       </div>
     );
   }
@@ -270,7 +271,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       />
 
       {/* Key Metrics */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <StatGrid columns={4} gap={4} className="mb-6">
         {/* Total Checked In */}
         <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Checked In</div>
@@ -313,7 +314,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
               : 'before event start'}
           </div>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Early check-ins — members who tapped in before the event started. */}
       {stats.early_check_in_count > 0 && (

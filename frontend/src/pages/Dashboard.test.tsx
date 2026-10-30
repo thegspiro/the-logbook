@@ -100,6 +100,10 @@ vi.mock('../modules/scheduling/services/api', () => ({
 }));
 
 vi.mock('../services/api', () => ({
+  // The severe-weather banner; no alert unless a test says so.
+  integrationsService: {
+    getActiveWeatherAlerts: vi.fn().mockResolvedValue([]),
+  },
   notificationsService: {
     getMyNotifications: mockGetMyNotifications,
     getMyUnreadCountsByCategory: mockGetMyUnreadCountsByCategory,

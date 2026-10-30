@@ -307,7 +307,7 @@ export interface SchedulingEligibilitySettings {
 /** Why a member holds a position: their rank, a completed program, or an
  *  org-wide open position. `label` names the specific rank or program. */
 export interface PositionEligibilitySource {
-  type: 'rank' | 'position' | 'qualification' | 'training' | 'open';
+  type: 'rank' | 'qualification' | 'training' | 'open';
   label: string;
   /**
    * Calendar date the qualification lapses. Set only for `qualification`, and
@@ -619,6 +619,15 @@ export interface CloseoutState {
    * picker. Claimed ones (`attached`) are part of `reported_call_count`.
    */
   attachable_calls: CloseoutAttachableCall[];
+}
+
+/** What close-out still needs in trainee reports (GET /shifts/{id}/trainee-reports). */
+export interface TraineeReportRequirement {
+  /** The department requires a report for each member in a training seat. */
+  required: boolean;
+  missing: { user_id: string; name: string }[];
+  /** The viewer may close out without them (scheduling.manage). */
+  can_override: boolean;
 }
 
 export interface CloseoutAttendanceEntry {

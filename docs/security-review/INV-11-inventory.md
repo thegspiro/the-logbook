@@ -1,6 +1,148 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), pass 12 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), pass 13 (this PR)
+
+---
+
+## Pass 13 (2026-10-29) — watchdog pickup, near-zero delta (frontend print/a11y/dashboard-naming fixes, 2 cross-cutting encryption touches on `InventoryVendorContact`), 0 fixed, 0 new findings
+
+**Watchdog pickup.** No PR with a `claude/security-review-` head branch was
+open (`list_pull_requests`, state=open, 0 results among `claude/security-review-*`
+head branches — the 5 open PRs at the time were all unrelated feature work).
+The dedicated `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable, confirmed via `ListAgents` ("No reachable agents"). PR
+#3816 (Feature 10, Documents & legal, pass 13) had already merged
+(`e8a5c00b`); this pickup followed promptly rather than waiting for the next
+scheduled tick. Per `PROGRESS.md`'s rotation table and PR #3816's own "Next
+feature" note, row 11 (Inventory) was the next pending feature.
+
+**Backend:** zero diff across all five endpoint files (`inventory.py` 150
+routes, `inventory_nfc.py` 29, `labels.py` 12, `inventory_kiosk.py` 4,
+`inventory_last_seen.py` 2 — all unchanged from pass 12) and both
+`inventory_service.py` / `schemas/inventory.py` (confirmed via
+`git diff <pass-12-merge>..HEAD --stat` returning nothing for any of these
+paths). **Frontend:** `modules/inventory/*` — 7 commits, all UX/print/a11y,
+no data-flow change. **Migrations:** none touching an inventory table;
+`models/inventory.py` picked up two column-type changes from cross-cutting
+PII/PHI encryption sweeps that landed independently of this rotation.
+
+### Scope
+
+Baseline is pass 12's own merge commit, `6eefb3c4` (PR #3738) — confirmed an
+ancestor of `HEAD` via `git merge-base --is-ancestor`. `git log --no-merges
+6eefb3c4..HEAD` against every declared scope file (five endpoint files, both
+services, both schema/model files, `frontend/src/modules/inventory`) returns
+**7** commits, none made through this rotation:
+
+1. **`fde3d647` / `b48d63f2`** — repo-wide PII/PHI encryption sweeps
+   ("Encrypt personal phone numbers and addresses at rest" /
+   "Encrypt email columns and add fingerprint columns to the models"). Their
+   only touch inside this feature's scope is `InventoryVendorContact.phone`
+   and `.email` in `models/inventory.py`, both switched from `String` to
+   `EncryptedText`. Verified, not assumed: `grep`ped every reference to
+   `InventoryVendorContact` across `inventory_service.py`,
+   `endpoints/inventory.py` and `schemas/inventory.py` — the only query
+   touching these rows orders by `.name` (`inventory_service.py:1576`); no
+   `.ilike()`, `.filter()` or `.order_by()` ever targets `.phone` or
+   `.email`, so the encrypted columns cannot be SQL-filtered/sorted/searched
+   anywhere in this feature. The accompanying migrations
+   (`20261025_1852_5510d5ff49eb_encrypt_contact_phone_numbers_and_.py`,
+   `20261026_1211_b8236e29ec44_encrypt_email_addresses_at_rest.py`) both
+   check `inventory_vendor_contacts` against `inspector.get_table_names()`
+   before touching it (Pitfall #26 — the table is `create_all`-built on a
+   fresh install) and both detect already-encrypted values by a frozen
+   ciphertext-prefix check before re-encrypting, so either migration no-ops
+   safely on a second run. Read in full, not sampled.
+2. **Five frontend-only commits** (`4c643e01`, `955ebfd3`, `e60143a8`,
+   `2a9b11c9`, `c5640463`) — a label-printing "Print stays disabled" bug fix
+   (new test proven to fail pre-fix, per the commit's own description), a
+   dashboard work-queue rename (`W79-10`, owner decision, Pitfall #29 shape),
+   label font/wrap/paper-size print fixes, and one WCAG contrast-token swap
+   on `EquipmentCheckForm.tsx`. `git diff 6eefb3c4..HEAD -- frontend/src/modules/inventory`
+   swept for every previously-found-unsafe pattern (`window.confirm` /
+   `.alert` / `.prompt`, `dangerouslySetInnerHTML`, `.toLocaleString()` /
+   `.toLocaleDateString()` / `.toLocaleTimeString()`, a bare `date-fns`
+   import) — zero matches in the added lines.
+
+Route decorators re-enumerated **by AST** (not grep) across all five
+endpoint files this pass: `inventory.py` 150, `inventory_nfc.py` 29,
+`labels.py` 12, `inventory_kiosk.py` 4, `inventory_last_seen.py` 2 — **197
+total, identical set and count to pass 12.** Every one of the 197 route
+handlers' AST dump contains a `Depends` reference (crude auth-presence
+check); `check_route_permissions.py --strict` — 279 routes repo-wide
+(unchanged from pass 12's own count, since this feature added none),
+0 errors, 0 warnings.
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options` / `get_requestable_categories` in
+`inventory_service.py` carry zero diff since pass 12 (confirmed by the
+file-level `git diff` above returning nothing), so the finding is
+unaffected. `docs/KNOWN_LIMITATIONS.md`'s entry (the one referencing
+`INV-22`, around line 3888) is unchanged; nothing new to add.
+
+### Verified good ✅ (pass 13)
+
+- **Zero backend diff since pass 12** across every declared endpoint,
+  service and schema file — confirmed by `git diff <merge-sha>..HEAD --stat`
+  returning empty for all eight backend scope files, not inferred from the
+  commit list.
+- **The two cross-cutting encryption touches on `InventoryVendorContact`
+  introduce no SQL-queryable-ciphertext risk** — the only query against the
+  table orders by `.name`, never `.phone`/`.email`, confirmed by grep across
+  every file in scope.
+- **Both accompanying migrations are `create_all`-tolerant and idempotent**
+  on `inventory_vendor_contacts` specifically — read directly, not inferred
+  from the commit message.
+- **All 197 routes re-enumerated by AST this pass, identical set and count
+  to pass 12** — no auth-dependency or permission regression possible from
+  zero route-file diff.
+- **No new `window.confirm`/`.alert`/`.prompt`, no new
+  `dangerouslySetInnerHTML`, no new banned date-formatting call** anywhere
+  in this window's frontend diff of this feature's scope — swept directly,
+  not sampled.
+- **INV-22's "owner-accepted, leave as is" status is unchanged** in code and
+  in `KNOWN_LIMITATIONS.md`.
+
+### Findings
+
+**0 fixed, 0 new findings.** No application code in this feature's own
+backend scope changed since pass 12; the only in-scope change
+(`InventoryVendorContact` column-type swap) was reviewed and found sound,
+and the frontend changes carry no security-relevant behavior. INV-22 is the
+only standing item and remains unchanged.
+
+| ID     | Status                                        |
+| ------ | --------------------------------------------- |
+| INV-22 | Re-confirmed OPEN, unchanged (owner-accepted) |
+
+### Schema & migration notes
+
+No migration in this pass touches an inventory table. The two migrations
+that touch `inventory_vendor_contacts` as part of a repo-wide column-type
+change were authored and reviewed outside this rotation; verified here only
+for this feature's own table (see Scope above).
+
+### Guard tests added
+
+None this pass — no new code in this feature's own scope to guard.
+
+### Completion gate {#completion-gate-pass-13}
+
+| Check                                                   | Result                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/`                    | ✅ 2714 files unchanged                                      |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ 667 revisions, single head (`b74bcce55c11`)               |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 279 routes, 0 errors, 0 warnings                          |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"` | ✅ 2040 passed, 1 pre-existing skip (`py_vapid`/`pywebpush`) |
+| `cd frontend && npm run typecheck`                      | ✅ 0 errors                                                  |
+| `cd frontend && npm run lint`                           | ✅ 0 errors, 0 warnings                                      |
+| `npx vitest run src/modules/inventory`                  | ✅ 1875 passed (126 files)                                   |
+
+Rotation row 11 → ✅ (pending this PR's merge); next is Feature 12
+(Facilities).
 
 ---
 

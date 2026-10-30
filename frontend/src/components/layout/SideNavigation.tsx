@@ -667,7 +667,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         className="bg-theme-nav-bg border-theme-surface-border safe-top fixed top-0 right-0 left-0 z-50 border-b md:hidden"
         role="banner"
       >
-        <div className="flex h-16 items-center px-4">
+        <div className="flex h-(--mobile-header-height) items-center px-4">
           <Link
             to="/dashboard"
             className="focus:ring-theme-focus-ring flex min-h-[44px] min-w-0 flex-1 items-center rounded-lg focus:ring-2 focus:outline-hidden"

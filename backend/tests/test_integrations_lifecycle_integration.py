@@ -260,7 +260,8 @@ class TestConnectNeedsADestination:
                 f"/integrations/{row.id}", json={"config": {"url": ""}}
             )
             other = await client.patch(
-                f"/integrations/{row.id}", json={"config": {"event_types": ["a"]}}
+                f"/integrations/{row.id}",
+                json={"config": {"event_types": ["shift.created"]}},
             )
         assert blank.status_code == 422
         assert other.status_code == 200

@@ -100,16 +100,41 @@ describe('MembersAdminPage — the roster names rank, membership type and positi
   // "Roles" read as the place probation should appear and never did.
   it('shows rank and membership type beside the positions', async () => {
     vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
-      { ...member, rank: 'firefighter', membership_type: 'probationary' },
+      {
+        ...member,
+        rank: 'firefighter',
+        membership_type: 'probationary',
+        member_class: 'operational',
+        member_status: 'probationary',
+      },
     ] as never);
     renderWithRouter(<MembersAdminPage />);
 
     const row = await screen.findByRole('row', { name: /Jordan Avery/ });
     expect(within(row).getByText('Firefighter')).toBeInTheDocument();
-    expect(within(row).getByText('Probationary member')).toBeInTheDocument();
+    // Class and status are two facts, shown as one cell.
+    expect(within(row).getByText('Operational · Probationary member')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Positions' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Membership Type' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Membership' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Roles' })).not.toBeInTheDocument();
+  });
+
+  it('marks a committee apart from an office on the roster chips', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      {
+        ...member,
+        roles: [
+          { ...memberRole, id: 'r-treasurer', name: 'Treasurer', slug: 'treasurer', kind: 'office' },
+          { ...memberRole, id: 'r-history', name: 'History Committee', slug: 'history_committee', kind: 'committee' },
+        ],
+      },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    const row = await screen.findByRole('row', { name: /Jordan Avery/ });
+    // The chip is the element whose own text is the name.
+    expect(within(row).getByText('Treasurer')).toHaveAttribute('data-kind', 'office');
+    expect(within(row).getByText('History Committee')).toHaveAttribute('data-kind', 'committee');
   });
 });
 

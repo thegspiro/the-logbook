@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 PR recorded in `PROGRESS.md`, pass 7 PR recorded in `PROGRESS.md`, [#3456](https://github.com/thegspiro/the-logbook/pull/3456) (pass 8), pass 9 (this PR)
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 PR recorded in `PROGRESS.md`, pass 7 PR recorded in `PROGRESS.md`, [#3456](https://github.com/thegspiro/the-logbook/pull/3456) (pass 8), [#3636](https://github.com/thegspiro/the-logbook/pull/3636) (pass 9), [#3767](https://github.com/thegspiro/the-logbook/pull/3767) (pass 10), pass 11 (this PR)
 
 ## Pass 1 (2026-08-26)
 
@@ -2563,3 +2563,119 @@ frontend `node_modules` tree in this sandbox was effectively empty before
 `npm ci` was run from the repo root to restore it per the project's own
 single-lockfile convention — an environment-setup step, not a dependency
 change; no manifest or lockfile file was touched.)
+
+---
+
+## Pass 11 (2026-10-30) — watchdog pickup, true zero-delta, 0 fixed, 0 new findings
+
+Watchdog pickup for `/loop 30m /security-review`: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable (`ListAgents` — "No
+reachable agents"). PR #3848 (Feature 23, Medical supplies, pass 18) had
+already merged on `main` (`3ec28222`); `search_pull_requests` for
+`head:claude/security-review-` returned zero open results immediately before
+starting this pass, confirming row 24 (Meetings & minutes) as the next `⬜`
+row read directly off a freshly fetched `main`. **Branch name avoids reuse**
+(Pitfall #24): the bare name and the `-p10` suffix were both used and merged
+already, so this pass's branch carries a `-p11` suffix, confirmed unused by
+`search_pull_requests` and `git ls-remote origin` returning nothing for any
+`*security-review-meetings*` ref before pushing.
+
+**Baseline:** pass 10's merge, `8a2d8760` (PR #3767). `git log 8a2d8760..origin/main`
+restricted to this feature's full declared scope (`meetings.py`, `minutes.py`,
+`minutes_records.py`, `api/public/minutes.py`, `api/attendance_lock.py`,
+`app/mcp/tools/meetings.py`, every `meetings`/`minute`/`quorum`/`attendance_dashboard`
+model, schema and service file, and `frontend/src/modules/minutes`) across 181
+non-merge commits on `main` in that window surfaced exactly **one** commit
+with a real diff in scope:
+
+- `b4d9388a` ("Cap the refusals that join a list from data") — a repo-wide
+  sweep capping error messages that join a data-derived list so they can't
+  blow past `safe_error_detail`'s 300-character limit and degrade to the
+  generic "An unexpected error occurred". This feature's slice is
+  `minute_service.py`'s `submit_minutes`: the "sections required by the
+  outline" `ValueError` now builds its message with `list_within_detail_limit`
+  instead of a bare `', '.join(missing)`. Read the diff directly (not the
+  commit message): no new input reaches the message that wasn't already
+  there — `missing` is the outline's own configured section names, not new
+  user-controlled text — and the message still passes through
+  `safe_error_detail()` unchanged (a `ValueError` message with no SQL, path,
+  or traceback). No auth, tenancy, injection or exposure surface. Not a
+  security finding.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 10's count)
+
+Walked each endpoint file's decorators with `ast.walk` from scratch rather
+than diffing: **81 routes total** (17 `meetings.py` + 32 `minutes.py` + 30
+`minutes_records.py` + 2 `api/public/minutes.py`), identical in count to pass 10. All four endpoint files are **byte-identical** to the pass 10 baseline
+(diffed directly against `git show 8a2d8760:<file>`, not inferred from line
+counts), so every route's auth dependency and permission string is unchanged
+from pass 10's already-verified state: every route still carries
+`require_permission(...)` or, for the two documented self-scoped exceptions
+(`PUT /minutes/{id}/action-items/{item_id}` as-assignee, and
+`GET /minutes/action-items/mine`), `get_current_active_user` plus the
+narrower in-handler check. `check_route_permissions.py --strict`: 280 routes
+repo-wide, 0 errors/warnings, unchanged. No Alembic revision touching any
+`meetings`/`meeting_minutes`/`meeting_action_items`/`minutes_*` table exists
+since pass 10; the chain re-validated clean at a single head (`f90b1124e6f4`).
+
+Also spot-verified the FK-validation fix (module-audit MM-4, XC-1) is still
+live at its call sites — `await assert_in_org(...)` /
+`await assert_all_in_org(...)` still present in `meetings_service.py` (lines
+155, 174, 512, 549), `minute_service.py` (515, 841, 859, 1169, 1177, 1461) and
+`minutes_record_service.py` (410, 857) — read directly, not cited from a
+prior pass's line numbers (the import line shifted by one in
+`minute_service.py` because of the `b4d9388a` import addition, but every
+call site itself is unchanged).
+
+### New findings
+
+**None.** The one in-scope commit is a message-formatting robustness fix
+with no security-relevant behavior change.
+
+### Confirmed still open / still flagged, unchanged
+
+- **MM5-4** (app-review; no `ETag`/`updated_at` precondition on
+  `PUT /minutes/{minutes_id}`, two editors silently overwrite each other's
+  sections) — `minutes.py`'s `update_minutes` byte-identical to pass 10;
+  unchanged. A correctness/lost-update concern, not a cross-tenant or
+  privilege gap under this checklist's seven dimensions. **FLAGGED**, same
+  disposition as every prior pass.
+- **`minutes.view_executive` tier** (module-audit MM-3's deferred half) — a
+  product/role decision, not touched. **FLAGGED**, unchanged.
+- **MM2-3** (app-review; `status`/`priority` free-str fields on other
+  schemas) — still flagged in `docs/app-review/meetings-minutes.md` as
+  needing per-field verification; out of this rotation's scope and already
+  explicitly deferred as a focused follow-up by the app-review track itself,
+  same as pass 7's note. Not re-derived.
+- Carried-forward "looked at, not a finding" items from passes 5–10
+  (`get_stats`'s UTC-clock "this month" count, `list_waivers`'s per-waiver
+  N+1, `grant_waiver`'s unlocked find-or-create) — none of the involved files
+  changed this delta; not re-investigated beyond confirming no commit touched
+  them.
+
+`docs/KNOWN_LIMITATIONS.md`'s MM-9, MM-17, MM-19 and MM-20 entries re-read
+against current code: all four still accurate (resolved stubs). No edit
+needed from this pass.
+
+### Guard tests added
+
+None. No new finding required one.
+
+### Completion gate (pass 11)
+
+| Check                                                                                       | Result                                              |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                             | clean (0 violations)                                |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                    | clean (2,743 files unchanged)                       |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                 | clean                                               |
+| `python3 scripts/validate_migrations.py --strict`                                           | PASSED — 678 revisions, single head `f90b1124e6f4`  |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                           | 280 routes, 0 errors, 0 warnings                    |
+| backend tests, scope (`-k "meeting or minute or quorum or attendance_dashboard or motion"`) | 1,273 passed, 1 skipped (pre-existing, `pywebpush`) |
+| `cd frontend && npm run typecheck`                                                          | 0 errors                                            |
+| `cd frontend && npm run lint`                                                               | 0 errors, 0 warnings (`--max-warnings 10`)          |
+
+No source file under this feature's scope was changed by this pass. The only
+in-scope delta since pass 10 (`b4d9388a`'s message-length cap) was landed by
+other work and independently re-verified here at the diff level against all
+seven `CHECKLIST.md` dimensions. The diff this pass contributes is this
+findings file and `docs/security-review/PROGRESS.md` — no code change.

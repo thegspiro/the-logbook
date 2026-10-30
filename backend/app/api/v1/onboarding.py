@@ -45,6 +45,7 @@ from app.core.permissions import (
     module_checkbox_grants,
     module_checkbox_is_held,
     module_for_permission,
+    position_kind_for,
 )
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
@@ -2902,6 +2903,7 @@ async def save_session_roles(
                 # is stored as an ordinary position instead.
                 is_system=bool(registry_defaults),
                 priority=_stored_priority(role_data, None),
+                kind=position_kind_for(role_data.id),
             )
             db.add(new_role)
             created_roles.append(role_data.name)

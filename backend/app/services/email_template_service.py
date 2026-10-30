@@ -698,6 +698,57 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             ),
         },
     ],
+    "application_follow_up_reminder": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "form_name", "description": "Name of the follow-up form"},
+        {
+            "name": "form_url",
+            "description": "The applicant's personal link to the form",
+        },
+        {
+            "name": "reminder_number",
+            "description": "Which reminder this is: 1, 2 or 3",
+        },
+        {
+            "name": "draft_note_html",
+            "description": (
+                "A paragraph saying their answers so far are saved, omitted "
+                "entirely when they have saved none"
+            ),
+        },
+        {
+            "name": "draft_note_text",
+            "description": (
+                "The same note followed by a blank line, omitted entirely when "
+                "they have saved none (for the plain-text body)"
+            ),
+        },
+    ],
+    "application_follow_up_submitted": [
+        {"name": "recipient_name", "description": "Coordinator's display name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "form_name", "description": "Name of the follow-up form"},
+        {"name": "stage_name", "description": "The stage that sent the form"},
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant in the pipeline",
+        },
+        {
+            "name": "contact_note_html",
+            "description": (
+                "A paragraph saying the applicant changed their email or phone, "
+                "omitted entirely when they did not"
+            ),
+        },
+        {
+            "name": "contact_note_text",
+            "description": (
+                "The same note followed by a blank line, omitted entirely when "
+                "they did not (for the plain-text body)"
+            ),
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1402,6 +1453,38 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "changed_details": "email address",
         }
     ),
+    "application_follow_up_reminder": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "form_name": "Background Questionnaire",
+            "form_url": "https://example.com/application-form/sample-token",
+            "reminder_number": "1",
+            "draft_note_html": (
+                "<p>The answers you have saved so far are still there.</p>"
+            ),
+            "draft_note_text": (
+                "The answers you have saved so far are still there.\n\n"
+            ),
+        }
+    ),
+    "application_follow_up_submitted": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "form_name": "Background Questionnaire",
+            "stage_name": "Background Questionnaire",
+            "applicant_url": "https://example.org/prospective-members?applicant=sample",
+            "contact_note_html": (
+                "<p><strong>The applicant changed their contact details.</strong>"
+                " Check them on the applicant's page.</p>"
+            ),
+            "contact_note_text": (
+                "The applicant changed their contact details. Check them on "
+                "the applicant's page.\n\n"
+            ),
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1653,6 +1736,14 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_going_inactive": {"first_name": "first", "applicant_name": "full"},
     "application_follow_up_form": {"first_name": "first", "applicant_name": "full"},
     "application_contact_changed": {"first_name": "first", "applicant_name": "full"},
+    "application_follow_up_reminder": {
+        "first_name": "first",
+        "applicant_name": "full",
+    },
+    "application_follow_up_submitted": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+    },
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -2729,6 +2820,67 @@ contact the department right away.
 
 DEFAULT_APPLICATION_CONTACT_CHANGED_SUBJECT = (
     "The contact details on your application were changed"
+)
+
+# Sent every seven days, up to three times, while a follow-up form is
+# unsubmitted. Carries the same link as the first email: the link does not
+# change, so a reminder is never a reason to distrust the earlier one.
+DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML = build_shell(
+    "A Reminder About Your Form",
+    """        <p>Hi {{first_name}},</p>
+        <p>This is a reminder that <strong>{{form_name}}</strong> is still
+        waiting for you as part of your membership application with
+        {{organization_name}}.</p>
+        {{draft_note_html}}
+""" + action("{{form_url}}", "Open the Form"),
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT = """A Reminder About Your Form
+
+Hi {{first_name}},
+
+This is a reminder that {{form_name}} is still waiting for you as part of your
+membership application with {{organization_name}}.
+
+{{draft_note_text}}Open the form: {{form_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT = "Reminder: {{form_name}}"
+
+# Sent to the membership coordinators when an applicant submits a follow-up
+# form. Carries a link only, never the answers: an email cannot be taken back,
+# and the answers can include sensitive ones. An administrator editing this
+# template should keep it that way.
+DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML = build_shell(
+    "Follow-up Form Submitted",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{applicant_name}} submitted <strong>{{form_name}}</strong> for the
+        {{stage_name}} stage of their membership application.</p>
+        {{contact_note_html}}
+        <p>Open the applicant in the Logbook to read their answers.</p>
+""" + action("{{applicant_url}}", "View Applicant"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT = """Follow-up Form Submitted
+
+Hello {{recipient_name}},
+
+{{applicant_name}} submitted {{form_name}} for the {{stage_name}} stage of
+their membership application.
+
+{{contact_note_text}}Open the applicant in the Logbook to read their answers.
+
+View applicant: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT = (
+    "{{applicant_name}} submitted {{form_name}}"
 )
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
@@ -4434,6 +4586,10 @@ class EmailTemplateService:
         # render()'s appendix: built and escaped by the caller.
         _APPENDIX_HTML_VAR,
         "items_list_html",
+        # Fixed sentences the follow-up senders build; they never carry a
+        # value from a person.
+        "draft_note_html",
+        "contact_note_html",
         "items_issued_html",
         "items_returned_html",
         "items_removed_html",
@@ -4843,6 +4999,30 @@ class EmailTemplateService:
             "description": (
                 "Sent to an applicant's previous email address when a "
                 "follow-up form changes it."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER,
+            "footer": "public",
+            "name": "Application Follow-up Form Reminder",
+            "subject": DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT,
+            "html": DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML,
+            "text": DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT,
+            "description": (
+                "Sent to an applicant every seven days, up to three times, "
+                "while a follow-up form is unsubmitted."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED,
+            "name": "Application Follow-up Form Submitted",
+            "subject": DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT,
+            "html": DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML,
+            "text": DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT,
+            "description": (
+                "Sent to the membership coordinators when an applicant "
+                "submits a follow-up form. Carries a link only, never the "
+                "answers."
             ),
         },
         {

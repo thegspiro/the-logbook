@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**322 tables · 5326 columns · 1090 foreign keys**
+**323 tables · 5350 columns · 1091 foreign keys**
 
 ---
 
@@ -167,7 +167,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`ballot_send_jobs`](#ballot_send_jobs) | `BallotSendJob` | 16 | One request to email ballots, run in the background. |
 | [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 55 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 57 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -330,6 +330,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`calendar_sync_mappings`](#calendar_sync_mappings) | `CalendarSyncMapping` | 14 | One department event as published to an external calendar. |
 | [`integration_sync_logs`](#integration_sync_logs) | `IntegrationSyncLog` | 12 | One run of an integration: a sync, a connection check, a chat delivery. |
 | [`integrations`](#integrations) | `Integration` | 18 | Stores integration configurations per organization |
+| [`weather_alerts`](#weather_alerts) | `WeatherAlert` | 14 | An NWS alert the department's weather integration has seen. |
 
 ### Inventory
 
@@ -475,7 +476,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_documents`](#prospect_documents) | `ProspectDocument` | 10 | Document uploaded for a prospective member. |
 | [`prospect_election_packages`](#prospect_election_packages) | `ProspectElectionPackage` | 11 | Election package for a prospective member. |
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
-| [`prospect_form_requests`](#prospect_form_requests) | `ProspectFormRequest` | 19 | A follow-up form sent to one applicant from one Follow-up Form stage. |
+| [`prospect_form_requests`](#prospect_form_requests) | `ProspectFormRequest` | 21 | A follow-up form sent to one applicant from one Follow-up Form stage. |
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
 | [`prospective_members`](#prospective_members) | `ProspectiveMember` | 38 | Prospective member record, kept separate from the users table. |
@@ -723,11 +724,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`member_service_periods`](#member_service_periods) | `MemberServicePeriod` | 11 | One continuous stint of membership, for calculating length of service. |
 | [`organizations`](#organizations) | `Organization` | 38 | Organization/Department model |
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
-| [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
+| [`positions`](#positions) | `Position` | 12 | Corporate Position model for permission-based access control. |
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 65 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 70 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -2309,6 +2310,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `positions` | JSON | yes |  |  |  |
 | `ballot_items` | JSON | yes |  |  |  |
 | `position_eligibility` | JSON | yes |  |  |  |
+| `eligibility_rules` | JSON | yes |  |  |  |
+| `meeting_kind` | VARCHAR(20) | no |  | `regular` |  |
 | `email_sent` | BOOL | no |  | `0` |  |
 | `email_sent_at` | DATETIME | yes |  |  |  |
 | `email_recipients` | JSON | yes |  |  |  |
@@ -2589,7 +2592,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2652,7 +2655,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -5169,6 +5172,37 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `ix_integrations_org_type` (`organization_id`, `integration_type`)
 
+### `weather_alerts`
+
+**WeatherAlert** · `app/models/integration.py`
+
+> An NWS alert the department's weather integration has seen. One row per NWS alert id per department: the unique key is what makes a second poll of the same alert a no-op, so members are told about each alert once however often the zone is polled. ``ended_at`` is set when the alert stops appearing in the zone's active list before it expires (NWS cancelled or replaced it). Only Severe and Extreme alerts are stored (owner decision 2026-10-29). The text is NWS's public bulletin, not member data.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `nws_id` | VARCHAR(255) | no |  |  |  |
+| `event` | VARCHAR(255) | no |  |  |  |
+| `severity` | VARCHAR(32) | no |  |  |  |
+| `urgency` | VARCHAR(32) | yes |  |  |  |
+| `headline` | VARCHAR(500) | yes |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `instruction` | TEXT | yes |  |  |  |
+| `area_desc` | TEXT | yes |  |  |  |
+| `onset` | DATETIME | yes |  |  |  |
+| `expires` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `ended_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_weather_alerts_org_ended` (`organization_id`, `ended_at`)
+
+**Constraints**
+
+- UNIQUE `uq_weather_alerts_org_nws_id` (`organization_id`, `nws_id`)
+
 ## Inventory
 
 ### `checkout_records`
@@ -7315,6 +7349,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `token_hash` | VARCHAR(64) | yes | UQ-IDX |  |  |
 | `first_sent_at` | DATETIME | yes |  |  |  |
 | `last_sent_at` | DATETIME | yes |  |  |  |
+| `reminder_count` | INTEGER | no |  | `0` |  |
+| `last_reminder_at` | DATETIME | yes |  |  |  |
 | `draft_data` | TEXT | yes |  |  |  |
 | `draft_saved_at` | DATETIME | yes |  |  |  |
 | `submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
@@ -11033,6 +11069,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `permissions` | JSON | yes |  | `list()` |  |
 | `is_system` | BOOL | yes |  | `False` |  |
 | `priority` | INTEGER | yes |  | `0` |  |
+| `kind` | VARCHAR(20) | no | IDX | `office` |  |
 | `settings` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -11040,6 +11077,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - UNIQUE `idx_position_org_slug` (`organization_id`, `slug`)
+- `ix_positions_kind` (`kind`)
 
 ### `prospects`
 
@@ -11162,7 +11200,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `dashboard_pulse` | JSON | yes |  |  |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
-| `member_status` | VARCHAR(20) | yes | IDX |  |  |
+| `member_status` | VARCHAR(50) | yes | IDX |  |  |
+| `member_class_since` | DATETIME | yes |  |  |  |
+| `member_status_since` | DATETIME | yes |  |  |  |
+| `voting_wait_from` | DATE | yes |  |  |  |
+| `voting_wait_waived` | BOOL | no |  | `0` |  |
+| `voting_wait_override_reason` | VARCHAR(500) | yes |  |  |  |
 | `membership_type_changed_at` | DATETIME | yes |  |  |  |
 | `status` | ENUM(`active`, `inactive`, `suspended`, `probationary`, `leave`, `retired`, `dropped_voluntary`, `dropped_involuntary`, `archived`) | no | IDX | `active` |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |
@@ -11616,7 +11659,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (264 references)
+### → `organizations` (265 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11883,6 +11926,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `user_passkeys` | `organization_id` | CASCADE | no |
 | `users` | `organization_id` | CASCADE | no |
 | `voting_tokens` | `organization_id` | CASCADE | no |
+| `weather_alerts` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
 ### → `inventory_items` (22 references)

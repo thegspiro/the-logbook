@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
@@ -1339,10 +1339,13 @@ class SchedulingService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = 100,
         open_to_all_only: bool = False,
     ) -> Tuple[List[Shift], int]:
         """Get shifts with date filtering and pagination.
+
+        ``limit=None`` returns every shift in the range: the calendar views
+        pass it, because their date range is the bound.
 
         ``open_to_all_only`` keeps just the shifts flagged
         ``open_to_all_members`` — the set every eligible member can see
@@ -1364,13 +1367,11 @@ class SchedulingService:
 
         # Paginated results. The id breaks ties between shifts sharing a
         # date and start time, so a page boundary never repeats or skips one.
-        query = (
-            query.order_by(
-                Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
-            )
-            .offset(skip)
-            .limit(limit)
-        )
+        query = query.order_by(
+            Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+        ).offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.db.execute(query)
         shifts = list(result.scalars().all())
 
@@ -2804,7 +2805,7 @@ class SchedulingService:
 
         Preserves the shift record and its history (unlike ``delete_shift``),
         marks all active assignments cancelled, and notifies the assigned
-        crew. A finalized shift cannot be cancelled — its data is locked for
+        crew in the app and by email. A finalized shift cannot be cancelled — its data is locked for
         training-requirement tracking.
         """
         try:
@@ -2840,6 +2841,13 @@ class SchedulingService:
             )
             shift.cancellation_reason = reason or None
 
+            await self.db.commit()
+            await self.db.refresh(shift)
+
+            # After the commit, so a cancellation that fails to save never
+            # emails the crew. The bell entry and the email (Shift notices, on
+            # unless the member turned it off) go out together: a member who
+            # reads only email would otherwise turn up for a shift that is off.
             if recipient_ids:
                 shift_date_str = (
                     shift.shift_date.isoformat()
@@ -2849,6 +2857,13 @@ class SchedulingService:
                 message = f"Your shift on {shift_date_str} has been cancelled."
                 if reason:
                     message += f" Reason: {reason}"
+                org = (
+                    await self.db.execute(
+                        select(Organization).where(
+                            Organization.id == str(organization_id)
+                        )
+                    )
+                ).scalar_one_or_none()
                 await self._send_notification(
                     recipient_ids=recipient_ids,
                     subject="Shift Cancelled",
@@ -2857,10 +2872,12 @@ class SchedulingService:
                     organization_id=organization_id,
                     action_url="/scheduling",
                     notification_metadata={"shift_id": str(shift_id)},
+                    send_email=True,
+                    email_kind=EmailKind.SHIFT_NOTICES,
+                    email_subject=f"Shift cancelled — {shift_date_str}",
+                    org=org,
                 )
-
-            await self.db.commit()
-            await self.db.refresh(shift)
+                await self.db.commit()
             await self._cancel_swaps_for_vacated_seats(
                 organization_id, shift_ids=[shift_id]
             )
@@ -3421,17 +3438,22 @@ class SchedulingService:
     async def get_week_shifts(
         self, organization_id: UUID | str, week_start: date
     ) -> List[Shift]:
-        """Get all shifts for a specific week"""
+        """Get all shifts for a specific week.
+
+        Uncapped: a fixed cap of 500 silently dropped the end of the range
+        for a department running enough units, with nothing on screen to say
+        so. Seven days of one department's shifts is the bound.
+        """
         week_end = week_start + timedelta(days=6)
         shifts, _ = await self.get_shifts(
-            organization_id, start_date=week_start, end_date=week_end, limit=500
+            organization_id, start_date=week_start, end_date=week_end, limit=None
         )
         return shifts
 
     async def get_month_shifts(
         self, organization_id: UUID | str, year: int, month: int
     ) -> List[Shift]:
-        """Get all shifts for a specific month"""
+        """Get all shifts for a specific month, uncapped (see get_week_shifts)."""
         start = date(year, month, 1)
         if month == 12:
             end = date(year + 1, 1, 1) - timedelta(days=1)
@@ -3439,7 +3461,7 @@ class SchedulingService:
             end = date(year, month + 1, 1) - timedelta(days=1)
 
         shifts, _ = await self.get_shifts(
-            organization_id, start_date=start, end_date=end, limit=500
+            organization_id, start_date=start, end_date=end, limit=None
         )
         return shifts
 
@@ -4981,7 +5003,9 @@ class SchedulingService:
             conflicts = (await self.db.execute(overlap_query)).scalars().all()
             if conflicts:
                 dates = sorted({str(value) for value in conflicts})
-                return f"Member has a conflicting shift on {', '.join(dates)}"
+                return list_within_detail_limit(
+                    "Member has a conflicting shift on ", dates
+                )
 
         if shift.shift_date:
             leaves = await MemberLeaveService(self.db).get_active_leaves_for_user(
@@ -10125,6 +10149,66 @@ class SchedulingService:
             if s.get("check_timing") == "end_of_shift" and not s.get("is_completed")
         )
 
+    @staticmethod
+    def trainee_reports_required(org: Any) -> bool:
+        """Whether this department requires trainee reports before close-out.
+
+        The Shift Reports setting "Require officer shift completion report"
+        (``shift_reports.post_shift_validation.require_officer_report``). The
+        screen shows that box only while post-shift validation is on, so a
+        stored value behind validation turned off does not enforce anything.
+        """
+        settings = (getattr(org, "settings", None) or {}) if org else {}
+        psv = (settings.get("shift_reports") or {}).get("post_shift_validation") or {}
+        return bool(psv.get("enabled", True)) and bool(
+            psv.get("require_officer_report", False)
+        )
+
+    async def missing_trainee_reports(
+        self, shift_id: UUID | str, organization_id: UUID | str
+    ) -> List[Tuple[str, str]]:
+        """Members in a training seat on this shift with no report filed for it.
+
+        Owner decision 2026-10-29: when the department requires reports, each
+        member seated in a training slot needs a shift completion report for
+        this shift before it can be closed out. A shift with no training seats
+        needs none. Returned as ``(user_id, name)``, ordered by name.
+        """
+        seated = (
+            await self.db.execute(
+                select(ShiftAssignment.user_id, User)
+                .join(User, User.id == ShiftAssignment.user_id)
+                .where(
+                    ShiftAssignment.shift_id == str(shift_id),
+                    ShiftAssignment.is_training.is_(True),
+                    ShiftAssignment.assignment_status.notin_(
+                        self.INACTIVE_ASSIGNMENT_STATUSES
+                    ),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).all()
+        if not seated:
+            return []
+        reported = set(
+            (
+                await self.db.execute(
+                    select(ShiftCompletionReport.trainee_id).where(
+                        ShiftCompletionReport.shift_id == str(shift_id),
+                        ShiftCompletionReport.organization_id == str(organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        missing = {
+            str(user_id): (user.display_name or "A member")
+            for user_id, user in seated
+            if str(user_id) not in {str(r) for r in reported}
+        }
+        return sorted(missing.items(), key=lambda item: (item[1], item[0]))
+
     async def finalize_shift(
         self,
         shift_id: UUID,
@@ -10137,6 +10221,7 @@ class SchedulingService:
         reported_call_types: Optional[Dict[str, int]] = None,
         member_call_counts_in: Optional[Dict[str, int]] = None,
         attach_call_ids: Optional[List[str]] = None,
+        override_missing_reports: bool = False,
     ) -> Tuple[Optional[Shift], Optional[str]]:
         """Mark a shift as finalized after officer review.
 
@@ -10161,6 +10246,11 @@ class SchedulingService:
         rejected while any end-of-shift equipment check is outstanding, unless
         ``override_incomplete_checks`` is set (the caller audit-logs the
         override). ``pass_down_notes`` records the crew handoff.
+
+        When the department requires trainee reports, finalization is also
+        rejected while a member in a training seat has no shift completion
+        report for this shift, unless ``override_missing_reports`` is set (only
+        a scheduling admin may, and the caller audit-logs it).
         """
         try:
             # for_update=True for lock-ordering consistency with
@@ -10248,6 +10338,16 @@ class SchedulingService:
                             "are incomplete. Complete them, or finalize with "
                             "an override."
                         )
+
+            if not override_missing_reports and self.trainee_reports_required(org):
+                missing = await self.missing_trainee_reports(shift_id, organization_id)
+                if missing:
+                    return None, list_within_detail_limit(
+                        "A shift completion report is still needed for: ",
+                        [name for _, name in missing],
+                        suffix=". File it, or ask a scheduling admin to close "
+                        "out with an override.",
+                    )
 
             # Create attendance records for manually-entered hours
             #

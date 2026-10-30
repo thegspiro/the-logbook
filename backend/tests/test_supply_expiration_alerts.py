@@ -54,15 +54,23 @@ def _admin():
 
 
 def _db(users=None):
-    """A session whose two selects return the org list, then the admin list."""
+    """A session whose two selects return the org list, then the admin list.
+
+    Any later select is the bell copy looking for an unread entry to refresh,
+    and finds none.
+    """
     org_result = MagicMock()
     org_result.scalars.return_value.all.return_value = [_org()]
     user_result = MagicMock()
     user_result.scalars.return_value.all.return_value = (
         [_admin()] if users is None else users
     )
+    no_unread = MagicMock()
+    no_unread.scalars.return_value = iter(())
+    answers = iter([org_result, user_result])
     db = AsyncMock()
-    db.execute = AsyncMock(side_effect=[org_result, user_result])
+    db.add = MagicMock()
+    db.execute = AsyncMock(side_effect=lambda *_a, **_k: next(answers, no_unread))
     return db
 
 

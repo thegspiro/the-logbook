@@ -2,7 +2,8 @@
 
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
-(pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11) · **PR:**
+(pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12) ·
+**PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
 [#2972](https://github.com/thegspiro/the-logbook/pull/2972) (pass 7, 0
@@ -14,33 +15,31 @@ fixed),
 [#3625](https://github.com/thegspiro/the-logbook/pull/3625) (pass 10, 0
 fixed),
 [#3748](https://github.com/thegspiro/the-logbook/pull/3748) (pass 11, 0
-fixed, 0 flagged — new public guest-link surface reviewed clean)
+fixed, 0 flagged — new public guest-link surface reviewed clean),
+[#3841](https://github.com/thegspiro/the-logbook/pull/3841) (pass 12,
+watchdog pickup, 0 fixed, 0 flagged — two authorization-widening commits
+reviewed clean against all seven checklist dimensions)
 
-**Backend:** `api/v1/endpoints/events.py` (61 routes, up from 58 — the new
-guest-check-in-link issue/get/rotate trio),
+**Backend:** `api/v1/endpoints/events.py` (61 routes, unchanged — a large
+in-route diff this pass widens who may reach nine existing attendance routes
+and five existing admin routes, no new route),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
 public outreach event-request intake pipeline),
 `api/v1/endpoints/event_attendance_petitions.py` (7 routes, unchanged),
-`api/public/event_guest.py` (4 routes, **new this pass** — the event's own
-public guest-link sign-in surface; added to declared scope),
+`api/public/event_guest.py` (4 routes, unchanged, zero diff this pass),
 `services/event_service.py`,
 `services/event_request_service.py`,
 `services/event_attendance_petition_service.py`,
 `services/event_organizer_service.py`,
-`services/guest_check_in_service.py` (read in full this pass; **added to
-declared scope** — shared with the Locations/kiosk guest path but now also
-the direct callee of `event_guest.py`),
-`services/qr_check_in_analytics.py` (read this pass; added to declared
-scope),
+`services/guest_check_in_service.py`,
+`services/qr_check_in_analytics.py` (zero diff this pass),
 `models/event.py`, `models/event_request.py`
 **Frontend:** `modules/events`, `pages/AttendanceRequestsPage.tsx`,
 `pages/GuestCheckInPage.tsx` + `.test.tsx`, `components/GuestEmailSignIn.tsx`
-(new this pass, added to declared scope)
-**Migrations:** `b7e4c2a91d35` (adds `events.guest_check_in_token`) and
-`5510d5ff49eb` (repo-wide phone/address encryption at rest, touching
-`event_requests.contact_phone`/`venue_address` and
-`event_external_attendees.phone`) both reviewed this pass — see Pass 11
-below
+**Migrations:** `b8236e29ec44` (repo-wide email-address encryption at rest,
+touching `event_requests.contact_email` and
+`event_external_attendees.email`/`.email_hash`) reviewed this pass — see
+Pass 12 below
 
 ---
 
@@ -54,6 +53,315 @@ into 409 `phase_gate` with an `occurrences` list. `useRSVPForm`'s series
 branch confirms against the list and retries with `override=true`. Tests:
 `test_event_rsvp_waitlist.py::TestRsvpToSeries`,
 `test_series_rsvp_phase_gate_endpoint.py`, `hooks/useRSVPForm.test.ts`.
+
+---
+
+## Pass 12 (2026-10-29) — real delta (8 real commits of 334 in scope), two authorization-widening commits reviewed clean, 0 fixes needed, 0 flagged
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+remains unreachable. Step 0 re-check: no PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`, state=open — the one open
+PR, #3839, is unrelated layout work on branch `ccr-ba1682dc-g25b70`),
+re-checked immediately before starting. PR #3840 (Feature 15, Scheduling,
+pass 12) had already merged (`731396b9`). Row 16 (Events & requests)
+confirmed the next `⬜` row by reading the Rotation table directly on a
+freshly fetched `main`.
+
+### Scope
+
+Baseline `e8e0e075` (PR #3748's merge, pass 11). **334 non-merge commits**
+landed repo-wide in the window; diffing every declared file individually:
+
+- **Real diff:** `events.py` (+299/-33), `event_service.py` (+14),
+  `event_request_service.py` (+27/-19), `guest_check_in_service.py`
+  (+26/-2), `models/event.py` (+7/-3), `models/event_request.py` (+1/-1),
+  `schemas/event.py` (additive fields, folded into the `events.py`-driven
+  commits below), `frontend/src/modules/events/routes.tsx` (+3/-1),
+  `frontend/src/components/EventForm.tsx`,
+  `frontend/src/components/event-detail/EventRSVPSection.tsx`,
+  `frontend/src/pages/EventDetailPage.tsx` + `.test.tsx`,
+  `frontend/src/pages/EventEditPage.tsx` + `.test.tsx`,
+  `frontend/src/pages/EventQRCodePage.tsx` + `.test.tsx`,
+  `frontend/src/components/events/GuestCheckInQRCard.tsx` + `.test.tsx`,
+  `frontend/src/types/event.ts`,
+  `frontend/src/pages/EventCheckInMonitoringPage.tsx` (CLS loading-skeleton
+  only, no behavior change).
+- **Zero diff** (confirmed by `git diff --stat` returning nothing):
+  `event_requests.py`, `event_attendance_petitions.py`,
+  `api/public/event_guest.py`, `event_attendance_petition_service.py`,
+  `event_organizer_service.py`, `qr_check_in_analytics.py`,
+  `pages/AttendanceRequestsPage.tsx`, `components/GuestEmailSignIn.tsx`.
+
+**No scope gap this pass.** `grep -c '^@router\.'` against all four backend
+route files is unchanged from pass 11 (`events.py` 61, `event_requests.py`
+23, `event_attendance_petitions.py` 7, `event_guest.py` 4 — 95 total), and
+`git diff --name-status` against the full window turned up no new file
+under `backend/app/api`, `backend/app/services`, `backend/app/models` or
+`frontend/src` touching "event" beyond the fourteen files listed above as
+real diff. Full-repo route count (`check_route_permissions.py --strict`,
+below): 280, 0 errors.
+
+### Real commits reviewed (8 of the 334, by declared-file diff)
+
+- **`5764dafd` ("Let event organizers and training managers run event
+  attendance")** — the main change of this window. Nine existing,
+  previously `events.manage`-only routes (`GET /{id}/rsvps`,
+  `GET /{id}/rsvp-history`, `GET /{id}/eligible-members`,
+  `POST /{id}/check-in`, `POST /{id}/add-attendee`,
+  `POST /{id}/bulk-add-attendees`, `PATCH /{id}/rsvps/{user_id}/override`,
+  `DELETE /{id}/attendees/{user_id}`, `GET /{id}/stats`) now also admit the
+  event's own organizer/alternate (any event type) and `training.manage`
+  (Training events only), through a new `_authorize_attendance_manager`.
+  Checked against every checklist dimension:
+  - **Auth/authorization (§1/§2):** the dependency on all nine routes
+    moved from `require_permission("events.manage")` to bare
+    `get_current_user`, with `_authorize_attendance_manager` doing the
+    gating inside the handler. This is exactly the shape checklist §2 warns
+    about ("permissionless by dependency, handler decides") —
+    `tests/permissionless_route_baseline.txt` is updated for all nine
+    routes with a comment explaining the real gate, so the baseline test
+    doesn't flag them as an unreviewed regression and the next reader sees
+    why they're there. `events.manage` is checked and admitted **before any
+    read** (unchanged behavior, matching the pre-existing `require_permission`
+    shape exactly); every other caller is decided only against the event
+    read org-scoped.
+  - **Tenancy (§3, XC-3):** for the two new access paths (organizer,
+    training manager), `_authorize_attendance_manager` fetches
+    `Event.id == event_id AND Event.organization_id ==
+user.organization_id` **before** calling `attendance_access`/
+    `is_event_organizer`, so an organizer id or a training-manage grant on
+    another department's event admits nobody (404, not 403 — no existence
+    oracle). Confirmed by test
+    (`test_event_organizer_attendance.py::TestWhoIsTurnedAway::
+test_an_organizer_id_on_another_departments_event`). For the
+    `events.manage` fast path, the function returns before any read (same
+    as the route's pre-existing behavior), and every route still passes
+    `organization_id=current_user.organization_id` — never a client-
+    supplied value — to the service call beneath it, so tenancy for that
+    path is unchanged from the already-reviewed baseline, not a regression.
+  - **Separation of duties (§2):** `_refuse_own_attendance` blocks an
+    organizer from checking themselves in, adding themselves, overriding
+    their own times, or being added via bulk-add (reported per-row, not a
+    blanket refusal, so "add everyone eligible" still adds everyone else) —
+    the same "someone else vouches for you" rule attendance requests
+    already follow. Deliberately **not** applied to a `training.manage`
+    holder, who is an administrative grant-holder like `events.manage`, not
+    a single named party on one event — consistent with the existing rule
+    that `events.manage` was never subject to it either. Tested:
+    `TestWhatTheOrganizerMayNotDo::test_cannot_record_their_own_attendance`.
+  - **On a Training event**, an organizer may add/check-in/remove but may
+    not correct times or credited hours (`may_correct_attendance_times`) —
+    tested
+    (`TestWhatTheOrganizerMayNotDo::test_cannot_correct_times_on_a_training_event`).
+  - **Data exposure (§5):** off the `events.manage` path, the roster's
+    email column is re-resolved through the same contact-visibility policy
+    `get_eligible_members`/the directory already use
+    (`load_contact_policy`), rather than the raw stored address — an
+    organizer is just another member and should not see more than the
+    directory shows. `EventRSVPSection.tsx` was updated to render the email
+    conditionally (`{rsvp.user_email && ...}`) rather than assuming it is
+    always present. Two new detail-endpoint-only response fields
+    (`attendance_access`, `can_correct_attendance_times`) are per-caller,
+    not serialized on the list endpoint (`_build_event_response(event)`
+    with no extra kwargs at the one list call site, confirmed by grep),
+    matching the existing `can_manage_organizers` pattern and Pitfall #29
+    (the frontend reads these server-decided flags rather than
+    re-deriving the gate — confirmed in `EventDetailPage.tsx`).
+  - **Audit (Pitfall #33):** every write route's `log_audit_event` call now
+    carries `acting_as` (one of `events_manager`/`training_manager`/
+    `organizer`) — an id/enum, never free text.
+  - **Tests:** `test_event_organizer_attendance.py` (new, ~30 cases
+    spanning the organizer's own event, what they may not do, who is
+    turned away including the cross-org case, the training-manager path,
+    and the response flags) read in full rather than trusted from names.
+- **`692b2832` ("Let training managers edit, close and reopen Training
+  events")** — follow-up widening five more existing routes
+  (`update_event`, `update_future_events`, `record_actual_times`,
+  `finalize_attendance`, `reopen_attendance`, `end_event`) to also admit
+  `training.manage` on a Training event, via a new `_authorize_event_admin`
+  (the same org-scoped-fetch-before-permission-decision shape as above,
+  confirmed by the same read).
+  - **Scope containment is the interesting part of this commit**, and it
+    holds: a training manager may not change `event_type` away from
+    Training (`_refuse_type_change_off_training` — refused, because it
+    would move the event out of their reach and theirs to add back), and a
+    "this and all future" series edit refuses outright
+    (`PermissionError` → 403) when **any** occurrence the update would
+    reach is not Training —
+    `EventService.update_future_events(only_event_type=)` checks this on
+    the exact rows the method's own query locks for the update, so the
+    check and the write agree on the same snapshot (no TOCTOU between
+    "which rows are Training" and "which rows get written"). Tested:
+    `test_training_manager_event_admin.py::TestEditingATrainingSeries::
+test_refuses_a_series_holding_another_type`.
+  - **Tenancy (§3):** `test_training_manager_event_admin.py::
+TestEditingATrainingEvent::test_another_departments_event_is_not_found`
+    confirms the same cross-org 404 shape as the attendance commit above.
+  - **A training manager may reopen attendance they finalized themselves**
+    — an explicit, documented department decision (no second-person check),
+    not an oversight; `events.reopen_attendance` holders are unaffected
+    (still admitted unconditionally, any event).
+  - **Response/frontend:** `can_edit_event`/`can_reopen_attendance` follow
+    the same detail-only, server-decided pattern as the attendance commit;
+    `EventEditPage.tsx` locks the `event_type` field for a training-manager
+    editor and the route guard widened to
+    `requiredAnyPermission={['events.manage', 'training.manage']}` with the
+    server re-checking `can_edit_event` regardless (defense in depth, not
+    reliance on the client).
+- **`9458cb31` ("Hide the guest QR code until check-in opens")** — not a
+  vulnerability fix: the guest check-in QR code (already rate-limited,
+  daily-capped and org-scoped — reviewed clean in pass 11) was visible to
+  managers outside its check-in window, which is a photographable credential
+  shown before it is meant to be usable. `GuestCheckInService.
+guest_sign_in_state` is now the single definition both the public guest
+  endpoints (which already refused outside the window) and the manager's
+  QR card (which now hides the code outside it) read, closing a drift
+  surface rather than introducing a new control.
+- **`0a7e2a9e` ("Stop sending an email whose template is switched off")** —
+  this feature's slice of a repo-wide fix: a department-switched-off email
+  template stopped silently sending anyway. Its only touch in this
+  feature's declared scope is `event_request_service.py`'s
+  `send_request_notification`, now routed through
+  `email_service._render_unless_switched_off` and skipping the send
+  outright (`rendered is None`) rather than always sending. No
+  auth/tenancy/injection surface; reviewed to confirm the message-building
+  path still escapes/validates identically when it does send (unchanged).
+- **`43c11090`/`b48d63f2` ("Match emails by fingerprint…" / "Encrypt email
+  columns…")** — this feature's slice of a repo-wide PII-at-rest hardening:
+  `EventExternalAttendee.email` and `EventRequest.contact_email` move from
+  plain `String` to `EncryptedText` (migration `b8236e29ec44`, reviewed in
+  full below). `EventExternalAttendee` gains `email_hash` (a keyed HMAC
+  fingerprint); `EventRequest.contact_email` gets no fingerprint column,
+  confirmed correct by grep — nothing in this feature's services or
+  endpoints ever filters/joins/searches on `contact_email` (no `.like()`,
+  `.ilike()`, or `==` comparison against it anywhere in `app/`). Where the
+  application does match an attendee by email
+  (`guest_check_in_service.py:214`), it now goes through
+  `EventExternalAttendee.email_hash.in_(email_fingerprints(email))` rather
+  than a plaintext comparison — confirmed by direct read, not assumed from
+  the commit message.
+- **`b4d9388a`/`530edfc1` ("Cap the refusals that list data…")** — pure
+  disclosure-hygiene hardening, same cross-cutting `list_within_detail_limit`
+  class already reviewed for other features' passes. This feature's touch
+  is three `ValueError` messages in `event_request_service.py`
+  (`validate_staffing_roles`, `resolve_outreach_signup_role`) that joined an
+  org-/client-influenced list straight into the message — now capped with
+  "and N more" instead of risking `safe_error_detail`'s 300-character
+  truncation turning a useful 400 into a content-free 500-style message.
+  Plain string concatenation, not a logger call, so Pitfall #33 doesn't
+  apply; wording is unchanged whenever the list already fit.
+
+### Migration reviewed in full: `b8236e29ec44` (email encryption at rest)
+
+This feature's two tables, `event_requests` and `event_external_attendees`,
+are two of the twenty-odd tables this repo-wide migration touches.
+Independently re-verified rather than taken on another feature's pass:
+
+- **`create_all`-only-table guard (Pitfall #26):** the migration's own
+  `_has_table` check skips a table absent from the database it is run
+  against; `event_requests` is one of the tables its own docstring names as
+  exactly this case (no dedicated `CREATE TABLE` migration exists for it —
+  confirmed by `grep -rl "event_requests" backend/alembic/versions/` finding
+  only this encryption migration and no creation migration). This matters
+  for CI's empty-database run (Pitfall #35): the table doesn't exist there,
+  so the step correctly does nothing rather than raising
+  `NoSuchTableError`.
+- **Idempotent, key-gated:** `_is_ciphertext` prefix-checks before
+  encrypting (so a second run doesn't double-encrypt), and `_require_key`
+  refuses before any DDL if there are rows to encrypt and no
+  `ENCRYPTION_KEY` is set.
+- **No broken search:** confirmed above — neither newly-encrypted column is
+  ever the target of a `.like()`/`.ilike()`/`==` in this feature's code, so
+  the migration introduces no silently-broken query.
+- **Fingerprint only where needed:** `event_external_attendees.email_hash`
+  is added and populated (used by the one place that matches by email);
+  `event_requests.contact_email` gets none, correctly, since nothing
+  matches on it.
+- **Single head:** confirmed below (`validate_migrations.py --strict`).
+
+### Re-verified standing items
+
+- **EV-23 — still resolved**, zero diff on `rsvp_to_series`/
+  `_evaluate_session_phase_warning` this window.
+- **EV-26 — still fixed, unregressed.** Zero diff on
+  `location_service.py::check_overlapping_events` or its three call sites
+  this window; `KNOWN_LIMITATIONS.md`'s EV-26 entry still correctly
+  documents the accepted cross-department residual.
+- **`check_request_status`'s 256-bit token, still unrate-limited by
+  design** — unchanged.
+- **`ondelete="SET NULL"` nullability** — no new FK this window (the only
+  model changes are the email-encryption column-type swap and the new
+  `email_hash` column, neither a FK); the 8 existing `SET NULL` FKs across
+  both model files are unchanged.
+- **No new `.like()`/`.ilike()` beyond what's addressed above, no new CSV
+  export.**
+
+### Route inventory
+
+**`events.py`: 61, unchanged.** This pass's +299/-33 diff is entirely
+inside nine existing attendance routes and five existing admin routes
+gaining a second/third admission path (organizer, training manager) — no
+`@router` decorator was added or removed, confirmed by
+`git diff e8e0e075..HEAD -- events.py | grep '^[+-]@router'` returning
+nothing. **`event_requests.py`: 23, unchanged. `event_attendance_petitions.py`:
+7, unchanged. `api/public/event_guest.py`: 4, unchanged** — zero `@router`
+diff lines in any of the three. Full-repo route count
+(`check_route_permissions.py --strict`, see completion gate): 280, up from
+279 at pass 11 (unrelated routes from other features' concurrent work in
+the same 334-commit window — none of the +1 is this feature's).
+
+All three frontend route registries unchanged for this feature (no new
+page); `check_route_permissions.py --strict` (below) confirms 0
+errors/warnings against the current 280-route count.
+
+### Verified good ✅ (pass 12)
+
+- Both authorization-widening commits (organizer/training-manager
+  attendance access; training-manager event administration) are clean on
+  every checklist dimension: tenancy is decided against an org-scoped
+  fetch before any new access path is granted (never the `events.manage`
+  fast path's pre-existing behavior, which is unchanged), separation of
+  duties is enforced for the organizer path specifically (and deliberately
+  not for the two administrative-grant paths, consistent with how
+  `events.manage` always worked), the series-edit type-lock is checked on
+  the exact rows the update locks (no TOCTOU), response flags are
+  detail-endpoint-only and server-decided (Pitfall #29), and
+  `tests/permissionless_route_baseline.txt` carries a dated, reasoned
+  comment for every route whose dependency moved from `require_permission`
+  to a handler-side check.
+- The guest-QR visibility fix and the switched-off-template fix are both
+  centralize-one-definition refactors, not new attack surface.
+- The repo-wide email-encryption migration's touch on this feature's two
+  tables is independently re-verified: `create_all`-tolerant, idempotent,
+  key-gated, fingerprinted only where a lookup needs it, and introduces no
+  broken search.
+- No new unbounded query, no new CSV export, no new seeded-grant change, no
+  JSON-column shallow-copy mutation, no new client-supplied FK accepted
+  without an in-org check, no new route (enumerated above).
+
+### Completion gate (pass 12)
+
+| Check                                                                   | Result                                                              |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                   | ✅ 0 violations                                                     |
+| `black --check app/ tests/ alembic/` (26.10.1, pinned `/usr/local/bin`) | ✅ clean, 2743 files unchanged                                      |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                       | ✅ clean                                                            |
+| `python3 scripts/validate_migrations.py --strict`                       | ✅ single head `f90b1124e6f4`, 678 revisions                        |
+| `python3 scripts/check_route_permissions.py --strict`                   | ✅ 280 routes, 0 errors, 0 warnings                                 |
+| `python3.13 scripts/generate_schema_docs.py --check`                    | ✅ up to date                                                       |
+| `python3.13 -m pytest tests/ -k "event or guest or rsvp or attendance"` | ✅ 2137 passed, 1 pre-existing skip (`pywebpush`), 24463 deselected |
+| `npm run typecheck`                                                     | ✅ 0 errors                                                         |
+| `npm run lint` (`eslint --max-warnings 10`)                             | ✅ 0 errors, 0 warnings                                             |
+
+**Environment note:** this sandbox's `python3` resolves to 3.11 with no
+project dependencies installed; `python3.13` has them and is what every
+Python row above used, per the skill's rule rather than silently using
+whichever binary happened to work. `npm ci` was run fresh from the repo
+root against the committed lockfile and completed clean.
+
+Rotation row 16 → ✅ (pending this PR's merge). Next: Feature 17 (Training
+core) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
 
 ---
 

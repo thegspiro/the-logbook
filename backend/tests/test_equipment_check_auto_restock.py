@@ -183,6 +183,10 @@ class TestTheSwapAsksForAReorderAfterCommitting:
         assert source.index("await self._raise_low_stock_reorder(") > commit
 
 
+def _officer(user_id: str, email: str) -> SimpleNamespace:
+    return SimpleNamespace(id=user_id, email=email, notification_preferences=None)
+
+
 @pytest.mark.unit
 class TestTheReorderEmailAudience:
     async def test_a_medical_item_reaches_only_medical_audiences(self):
@@ -193,17 +197,20 @@ class TestTheReorderEmailAudience:
             reorder_point=10,
             category=SimpleNamespace(item_type=ItemType.MEDICAL),
         )
-        reorder = SimpleNamespace(quantity_requested=16)
+        reorder = SimpleNamespace(id="ro-1", quantity_requested=16)
         audiences = {
-            frozenset({"gear", "medical"}): ["qm@x.test"],
-            frozenset({"medical"}): ["ems@x.test"],
-            frozenset({"gear"}): ["uniforms@x.test"],
+            frozenset({"gear", "medical"}): [_officer("qm", "qm@x.test")],
+            frozenset({"medical"}): [_officer("ems", "ems@x.test")],
+            frozenset({"gear"}): [_officer("uniforms", "uniforms@x.test")],
         }
         send = AsyncMock(return_value=(1, 0))
+        bell = AsyncMock(return_value=1)
         with patch(
             "app.services.scheduled_tasks._stock_alert_audiences",
             AsyncMock(return_value=audiences),
-        ), patch("app.services.email_service.EmailService") as email_cls, patch(
+        ), patch("app.services.officer_alert_copies.add_in_app_copies", bell), patch(
+            "app.services.email_service.EmailService"
+        ) as email_cls, patch(
             "app.services.email_policy.department_required_kinds",
             return_value=frozenset(),
         ), patch(
@@ -217,6 +224,16 @@ class TestTheReorderEmailAudience:
         assert kwargs["to_emails"] == ["ems@x.test", "qm@x.test"]
         # The item name is escaped into the HTML body.
         assert "Gauze &lt;4x4&gt;" in kwargs["html_body"]
+        # The bell copies reach the same audiences, and only the one holding
+        # inventory.manage is pointed at the reorder queue it can open.
+        bells = {
+            tuple(c.kwargs["recipient_ids"]): c.kwargs["action_url"]
+            for c in bell.await_args_list
+        }
+        assert bells == {
+            ("qm",): "/inventory/admin/reorder",
+            ("ems",): "/medical-supplies",
+        }
 
     async def test_nobody_to_tell_sends_nothing(self):
         db = AsyncMock()
@@ -224,14 +241,20 @@ class TestTheReorderEmailAudience:
         item = SimpleNamespace(name="Halligan", reorder_point=1, category=None)
         with patch(
             "app.services.scheduled_tasks._stock_alert_audiences",
-            AsyncMock(return_value={frozenset({"medical"}): ["ems@x.test"]}),
-        ), patch("app.services.email_service.EmailService") as email_cls, patch(
+            AsyncMock(
+                return_value={frozenset({"medical"}): [_officer("ems", "ems@x.test")]}
+            ),
+        ), patch(
+            "app.services.officer_alert_copies.add_in_app_copies", AsyncMock()
+        ), patch(
+            "app.services.email_service.EmailService"
+        ) as email_cls, patch(
             "app.services.email_policy.department_required_kinds",
             return_value=frozenset(),
         ):
             email_cls.return_value.send_email = AsyncMock()
             await AutoReorderService(db)._notify(
-                "org-1", item, SimpleNamespace(quantity_requested=1), 0
+                "org-1", item, SimpleNamespace(id="ro-2", quantity_requested=1), 0
             )
 
         email_cls.return_value.send_email.assert_not_awaited()

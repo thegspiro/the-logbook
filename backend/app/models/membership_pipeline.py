@@ -952,6 +952,15 @@ class ProspectFormRequest(Base):
 
     first_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Reminders the daily task has sent, capped at three. A coordinator's
+    # resend moves last_sent_at but never resets this, so a resend cannot buy
+    # the applicant another round of reminders.
+    reminder_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    last_reminder_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Answers saved before submitting, sensitive ones included, so the whole
     # draft is encrypted rather than split the way a submission is.

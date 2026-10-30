@@ -223,6 +223,27 @@ class ComplianceConfigService:
             for req in requirements
         ]
 
+    async def get_available_positions(
+        self,
+        organization_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Get the organization's positions (for profile ``role_ids`` selection).
+
+        Served here rather than by ``GET /roles`` because that endpoint is gated
+        on ``positions.view``, which the compliance officers who manage profiles
+        do not necessarily hold. Only the id and name are returned: enough to
+        pick one, without widening who can read a position's permissions.
+        """
+        result = await self.db.execute(
+            select(Position)
+            .where(Position.organization_id == organization_id)
+            .order_by(Position.name)
+        )
+        return [
+            {"id": str(position.id), "name": position.name}
+            for position in result.scalars().all()
+        ]
+
 
 class ComplianceReportService:
     """Service for generating, storing, and emailing compliance reports."""

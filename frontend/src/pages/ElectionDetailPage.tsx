@@ -18,6 +18,7 @@ import type {
   Candidate,
   ManualBallotBatch,
   ElectionUpdate,
+  ElectionSettings,
 } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
@@ -27,13 +28,15 @@ import { MeetingAttendance } from '../components/MeetingAttendance';
 import { VoterOverrideManagement } from '../components/VoterOverrideManagement';
 import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { EligibilityRoster } from '../modules/elections/components/EligibilityRoster';
+import { ElectionEligibilityRulesPanel } from '../modules/elections/components/ElectionEligibilityRulesPanel';
+import { defaultsForKind } from '../modules/elections/eligibilityRules';
 import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { NominationsAnnouncementStatus } from '../modules/elections/components/NominationsAnnouncementStatus';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionBallot } from '../components/ElectionBallot';
-import { ElectionStatus, VotingMethod } from '../constants/enums';
+import { ElectionStatus, MeetingKind, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
@@ -181,6 +184,13 @@ export const ElectionDetailPage: React.FC = () => {
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
 
+  // Bumped when this election's voter rules change, so the roster refetches.
+  const [rosterVersion, setRosterVersion] = useState(0);
+  // The department's eligibility defaults, which seed new ballot items by
+  // the election's meeting kind. Undefined until loaded (or for a member
+  // without elections.manage), when the builder keeps its built-in defaults.
+  const [eligibilitySettings, setEligibilitySettings] = useState<ElectionSettings | undefined>(undefined);
+
   // Org-level feature toggles (default ON until settings load)
   const [featureFlags, setFeatureFlags] = useState({
     nominations_enabled: true,
@@ -234,6 +244,7 @@ export const ElectionDetailPage: React.FC = () => {
           auto_open_enabled: s.auto_open_enabled ?? true,
           paper_ballot_attestations_required: s.paper_ballot_attestations_required ?? 2,
         });
+        setEligibilitySettings(s);
       } catch {
         // Non-fatal: buttons stay visible; the backend gates enforcement.
       }
@@ -1882,7 +1893,15 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Tab: Ballot Builder */}
               {activeTab === 'ballot' && canManage && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6 space-y-6">
-                  <BallotBuilder electionId={electionId} election={election} onUpdate={setElection} />
+                  <BallotBuilder
+                    electionId={electionId}
+                    election={election}
+                    onUpdate={setElection}
+                    eligibilityDefaults={
+                      eligibilitySettings &&
+                      defaultsForKind(eligibilitySettings, election.meeting_kind ?? MeetingKind.REGULAR)
+                    }
+                  />
 
                   {/* Pending Member Applications (draft only) */}
                   {election.status === ElectionStatus.DRAFT && (
@@ -1975,8 +1994,16 @@ export const ElectionDetailPage: React.FC = () => {
 
               {/* Tab: Eligibility Roster */}
               {activeTab === 'eligibility' && canManage && election.status !== ElectionStatus.CANCELLED && (
-                <div className="mb-6">
-                  <EligibilityRoster electionId={electionId} />
+                <div className="mb-6 space-y-6">
+                  <ElectionEligibilityRulesPanel
+                    key={`${election.status}:${election.meeting_kind ?? MeetingKind.REGULAR}:${JSON.stringify(election.eligibility_rules ?? null)}`}
+                    election={election}
+                    onUpdate={(updated) => {
+                      setElection(updated);
+                      setRosterVersion((v) => v + 1);
+                    }}
+                  />
+                  <EligibilityRoster key={rosterVersion} electionId={electionId} />
                 </div>
               )}
 

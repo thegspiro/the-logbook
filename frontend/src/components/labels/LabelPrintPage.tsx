@@ -16,7 +16,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import JsBarcode from 'jsbarcode';
 import {
   AlertCircle,
   ArrowLeft,
@@ -34,6 +33,7 @@ import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
 import { BARCODE_SVG_PRINT_CSS } from './barcodePrintCss';
+import { drawCode128ForPrinter, horizontalPaddingInches, printerDpiFor } from './barcodeGeometry';
 import { LABEL_FONT_FAMILY, labelNameStyle } from './labelText';
 import { PrintSetupChecklist } from './PrintSetupChecklist';
 import { isPrintChecklistSkipped } from './printChecklist';
@@ -89,24 +89,30 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbolo
   useEffect(() => {
     if (isQr || !svgRef.current || !value) return;
     try {
-      const quietZone = Math.ceil(preset.barcodeWidth * 10);
-      JsBarcode(svgRef.current, value, {
-        format: 'CODE128',
-        width: preset.barcodeWidth,
-        height: preset.barcodeHeight,
-        displayValue: true,
-        fontSize: preset.barcodeFontSize,
-        marginTop: 0,
-        marginBottom: 1,
-        marginLeft: quietZone,
-        marginRight: quietZone,
-        textMargin: 1,
-        font: 'monospace',
-      });
+      drawCode128ForPrinter(
+        svgRef.current,
+        value,
+        {
+          moduleCssPx: preset.barcodeWidth,
+          barHeightCssPx: preset.barcodeHeight,
+          fontSizeCssPx: preset.barcodeFontSize,
+        },
+        parseFloat(preset.width) - horizontalPaddingInches(preset.padding),
+        printerDpiFor(preset.id)
+      );
     } catch {
       /* invalid value — leave empty */
     }
-  }, [isQr, value, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize]);
+  }, [
+    isQr,
+    value,
+    preset.barcodeWidth,
+    preset.barcodeHeight,
+    preset.barcodeFontSize,
+    preset.id,
+    preset.width,
+    preset.padding,
+  ]);
 
   return (
     <div

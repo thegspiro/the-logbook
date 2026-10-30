@@ -189,6 +189,32 @@ describe('registerServiceWorker', () => {
 
     Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true });
   });
+
+  it('does not register inside a frame', () => {
+    vi.stubEnv('PROD', true);
+    const container = installContainer(undefined);
+    container.register.mockResolvedValue(undefined);
+    vi.spyOn(window, 'top', 'get').mockReturnValue({} as Window);
+
+    registerServiceWorker();
+
+    expect(container.register).not.toHaveBeenCalled();
+  });
+
+  it('does not register on an embedded form opened at top level', () => {
+    vi.stubEnv('PROD', true);
+    const container = installContainer(undefined);
+    container.register.mockResolvedValue(undefined);
+    window.history.pushState({}, '', '/embed/f/abcdef123456');
+
+    try {
+      registerServiceWorker();
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+
+    expect(container.register).not.toHaveBeenCalled();
+  });
 });
 
 describe('reloadForNewVersion', () => {

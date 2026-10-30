@@ -40,6 +40,7 @@ from app.schemas.integration import (
     CALENDAR_OAUTH_MANAGED_KEYS,
     INTEGRATION_CONFIG_SCHEMAS,
     SECRET_CONFIG_KEYS,
+    ActiveWeatherAlertResponse,
     IntegrationConnectRequest,
     IntegrationUpdateRequest,
 )
@@ -1001,6 +1002,44 @@ async def list_connected_integration_status(
             "enabled": _effective_enabled(integration),
         }
         for integration in result.scalars().all()
+    ]
+
+
+@router.get("/weather/active-alerts", response_model=list[ActiveWeatherAlertResponse])
+async def list_active_weather_alerts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The department's active Severe and Extreme weather alerts, for its banner.
+
+    Any signed-in member may read it: it is the National Weather Service's
+    public bulletin for the department's own zone, filtered to the caller's
+    organization. Empty unless the department's NWS Weather Alerts integration
+    is enabled with the dashboard banner on (owner decision 2026-10-29).
+    Registered before ``/{integration_id}`` so the literal path wins.
+    """
+    from app.services.weather_alert_service import (
+        active_alerts,
+        channels,
+        weather_integration,
+    )
+
+    org_id = str(current_user.organization_id)
+    integration = await weather_integration(db, org_id)
+    if integration is None or not channels(integration)["banner"]:
+        return []
+    return [
+        {
+            "id": row.id,
+            "event": row.event,
+            "severity": row.severity,
+            "headline": row.headline,
+            "instruction": row.instruction,
+            "area_desc": row.area_desc,
+            "onset": row.onset,
+            "expires": row.expires,
+        }
+        for row in await active_alerts(db, org_id)
     ]
 
 

@@ -1415,8 +1415,8 @@ export default function LocationsPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="page-header gap-3 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">
             {isSingleStation ? 'Location & Rooms' : 'Locations & Rooms'}
           </h1>
@@ -1426,11 +1426,11 @@ export default function LocationsPage() {
               : 'Manage station addresses and room names for events, forms, and QR check-in'}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+        <div className="page-header-actions flex flex-wrap items-center gap-2">
           {canExportQRCodes && (
             <Link
               to="/locations/qr-codes"
-              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors"
             >
               <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
             </Link>
@@ -1438,7 +1438,7 @@ export default function LocationsPage() {
           {canViewReaders && (
             <Link
               to="/locations/card-readers"
-              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors"
             >
               <Nfc className="h-4 w-4" aria-hidden="true" /> Card Readers
             </Link>

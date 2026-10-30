@@ -176,12 +176,16 @@ schemas expose no FK; `edit_pending_entry` re-validates `category_id` in-org), 2
 `organization_id`; clock-out is user-scoped, one org per user), 4 (no
 join-derived `*_name`).
 
-**Flagged (LOW, unchanged):** the `start_date`/`end_date` query params on four
-list/export/summary endpoints are `datetime.fromisoformat`-parsed outside any
-try/except, so a malformed value yields a `500` instead of a `400` — a
-module-wide status-code robustness gap, not a tenancy/integrity bug; recorded
-here for a future robustness sweep (not a product decision, so not mirrored to
-`KNOWN_LIMITATIONS.md`). Also noted: `edit_pending_entry` recomputes duration but
+**Flagged (LOW) — ✅ now fixed, correction by `docs/security-review/AH-21-admin-hours.md` pass 12 (2026-10-30):**
+the `start_date`/`end_date` query params on four list/export/summary endpoints
+were `datetime.fromisoformat`-parsed outside any try/except, so a malformed
+value yielded a `500` instead of a `400`. This item sat marked "unchanged"
+through pass 5 (2026-10-20) even though the fix had already landed three days
+earlier (2026-10-17, `admin_hours.py`'s `_parse_optional_date` helper, used by
+all four endpoints this item named) — found stale by the security-review
+rotation, which also added the regression coverage the original fix shipped
+without (`TestParseOptionalDate` in
+`tests/test_admin_hours_endpoint_permission_scope.py`). Also noted: `edit_pending_entry` recomputes duration but
 (unlike create) doesn't re-run the future/24h/overlap guards — integrity holds
 because the entry stays `PENDING` under AH-4, so it's a parity nit, not a hole.
 

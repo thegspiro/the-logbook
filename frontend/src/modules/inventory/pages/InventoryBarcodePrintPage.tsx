@@ -13,7 +13,6 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
-import JsBarcode from 'jsbarcode';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft,
@@ -58,6 +57,11 @@ import { MAX_LABEL_SETUPS, MAX_SETUP_NAME, usableSetupLines } from '../utils/lab
 import type { LabelSetup } from '../utils/labelSetups';
 import { Breadcrumbs, PromptDialog } from '../../../components/ux';
 import { BARCODE_SVG_PRINT_CSS } from '../../../components/labels/barcodePrintCss';
+import {
+  drawCode128ForPrinter,
+  horizontalPaddingInches,
+  printerDpiFor,
+} from '../../../components/labels/barcodeGeometry';
 import { LABEL_FONT_FAMILY, labelNameStyle } from '../../../components/labels/labelText';
 import { PrintSetupChecklist } from '../../../components/labels/PrintSetupChecklist';
 import { isPrintChecklistSkipped } from '../../../components/labels/printChecklist';
@@ -418,22 +422,17 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
       return;
     }
     try {
-      // ISO/IEC 15417 requires a quiet zone of at least 10x the module
-      // (bar) width on each side of a Code128 barcode for reliable scanning.
-      const quietZone = Math.ceil(preset.barcodeWidth * 10);
-      JsBarcode(svgRef.current, barcodeValue, {
-        format: 'CODE128',
-        width: preset.barcodeWidth,
-        height: preset.barcodeHeight,
-        displayValue: true,
-        fontSize: preset.barcodeFontSize,
-        marginTop: 0,
-        marginBottom: 1,
-        marginLeft: quietZone,
-        marginRight: quietZone,
-        textMargin: 1,
-        font: 'monospace',
-      });
+      drawCode128ForPrinter(
+        svgRef.current,
+        barcodeValue,
+        {
+          moduleCssPx: preset.barcodeWidth,
+          barHeightCssPx: preset.barcodeHeight,
+          fontSizeCssPx: preset.barcodeFontSize,
+        },
+        parseFloat(preset.width) - horizontalPaddingInches(preset.padding),
+        printerDpiFor(preset.id)
+      );
     } catch {
       // Invalid barcode value — SVG stays empty
     }
@@ -444,6 +443,9 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
     preset.barcodeWidth,
     preset.barcodeHeight,
     preset.barcodeFontSize,
+    preset.id,
+    preset.width,
+    preset.padding,
     renderGeneration,
     onRendered,
   ]);

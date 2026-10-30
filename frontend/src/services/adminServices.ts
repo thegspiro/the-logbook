@@ -1385,6 +1385,21 @@ export interface IntegrationStatus {
   enabled: boolean;
 }
 
+// An active Severe or Extreme NWS alert, as the dashboard banner shows it
+// (GET /integrations/weather/active-alerts). Empty unless the department turned
+// the banner on for its NWS Weather Alerts integration.
+export interface ActiveWeatherAlert {
+  id: string;
+  event: string;
+  /** "Severe" or "Extreme". */
+  severity: string;
+  headline: string | null;
+  instruction: string | null;
+  area_desc: string | null;
+  onset: string | null;
+  expires: string | null;
+}
+
 // ---- Claude (MCP) service keys ------------------------------------------
 // The plaintext key appears exactly once, in the create response; every
 // other shape carries only the display prefix.
@@ -1461,6 +1476,11 @@ export const integrationsService = {
   // options without holding the integrations-admin permission (INT-3).
   async getConnectedIntegrationStatus(): Promise<IntegrationStatus[]> {
     const response = await api.get<IntegrationStatus[]>('/integrations/connected');
+    return asArray(response.data);
+  },
+
+  async getActiveWeatherAlerts(): Promise<ActiveWeatherAlert[]> {
+    const response = await api.get<ActiveWeatherAlert[]>('/integrations/weather/active-alerts');
     return asArray(response.data);
   },
 

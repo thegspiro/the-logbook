@@ -7,7 +7,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { effectiveMemberClass, isAdministrativeMember, memberClassAndStatusFor } from './membership';
+import {
+  canonicalMemberStatus,
+  effectiveMemberClass,
+  isAdministrativeMember,
+  isBuiltinStatus,
+  memberClassAndStatusFor,
+  memberClassLabel,
+  memberStatusLabel,
+  statusOptionsFor,
+} from './membership';
 
 describe('effectiveMemberClass', () => {
   it('prefers the explicit class over the legacy field', () => {
@@ -90,5 +99,107 @@ describe('memberClassAndStatusFor', () => {
       member_class: 'operational',
       member_status: 'regular',
     });
+  });
+});
+
+describe('canonicalMemberStatus', () => {
+  it.each([
+    ['active', 'regular'],
+    ['Active ', 'regular'],
+    ['probationary', 'probationary'],
+    ['life', 'life'],
+    ['regular', 'regular'],
+    ['administrative', 'regular'],
+    ['senior', 'senior'],
+    ['Senior', 'senior'],
+  ])('spells %s as %s, the way the column stores it', (value, expected) => {
+    expect(canonicalMemberStatus(value)).toBe(expected);
+  });
+
+  it('is nothing for a blank', () => {
+    expect(canonicalMemberStatus('')).toBeUndefined();
+    expect(canonicalMemberStatus('   ')).toBeUndefined();
+    expect(canonicalMemberStatus(null)).toBeUndefined();
+    expect(canonicalMemberStatus(undefined)).toBeUndefined();
+  });
+
+  it('knows the seven built-in statuses', () => {
+    expect(isBuiltinStatus('life')).toBe(true);
+    expect(isBuiltinStatus('senior')).toBe(false);
+    expect(isBuiltinStatus('active')).toBe(false);
+  });
+});
+
+describe('memberStatusLabel', () => {
+  const tiers = [
+    { id: 'active', name: 'Active Member', years_required: 1, sort_order: 1, benefits: {} },
+    { id: 'senior', name: 'Senior Member', years_required: 10, sort_order: 2, benefits: {} },
+  ];
+
+  it('labels a built-in status', () => {
+    expect(memberStatusLabel('life')).toBe('Life');
+    expect(memberStatusLabel('probationary')).toBe('Probationary');
+  });
+
+  it("uses the department's own name for a tier when the ladder is at hand", () => {
+    expect(memberStatusLabel('senior', tiers)).toBe('Senior Member');
+    // The regular status is the ladder's "active" rung, under that name.
+    expect(memberStatusLabel('regular', tiers)).toBe('Active Member');
+  });
+
+  it('humanises a tier id the ladder does not name', () => {
+    expect(memberStatusLabel('senior')).toBe('Senior');
+    expect(memberStatusLabel('distinguished_service')).toBe('Distinguished service');
+  });
+
+  it('is empty for nothing', () => {
+    expect(memberStatusLabel(null)).toBe('');
+  });
+});
+
+describe('statusOptionsFor', () => {
+  const tiers = [
+    { id: 'probationary', name: 'Probie', years_required: 0, sort_order: 0, benefits: {} },
+    { id: 'active', name: 'Active Member', years_required: 1, sort_order: 1, benefits: {} },
+    { id: 'senior', name: 'Senior Member', years_required: 10, sort_order: 2, benefits: {} },
+  ];
+
+  it('offers the seven built-ins with no ladder', () => {
+    expect(statusOptionsFor().map((o) => o.value)).toEqual([
+      'prospective',
+      'probationary',
+      'regular',
+      'life',
+      'retired',
+      'honorary',
+      'junior',
+    ]);
+  });
+
+  it('merges the ladder in, one entry per standing', () => {
+    const options = statusOptionsFor(tiers);
+    const values = options.map((o) => o.value);
+    expect(values).toContain('senior');
+    expect(values).not.toContain('active');
+    expect(values.filter((v) => v === 'regular')).toHaveLength(1);
+    expect(options.find((o) => o.value === 'regular')?.label).toBe('Active Member');
+    expect(options.find((o) => o.value === 'probationary')?.label).toBe('Probie');
+  });
+
+  it('keeps a stored value neither list names, so it can still be selected', () => {
+    const options = statusOptionsFor(tiers, ['cadet', 'life', 'Active']);
+    expect(options.find((o) => o.value === 'cadet')).toEqual({ value: 'cadet', label: 'Cadet' });
+    expect(options.filter((o) => o.value === 'life')).toHaveLength(1);
+    expect(options.filter((o) => o.value === 'regular')).toHaveLength(1);
+  });
+});
+
+describe('memberClassLabel', () => {
+  it('labels the three classes and nothing else', () => {
+    expect(memberClassLabel('operational')).toBe('Operational');
+    expect(memberClassLabel('Administrative')).toBe('Administrative');
+    expect(memberClassLabel('social')).toBe('Social');
+    expect(memberClassLabel(undefined)).toBe('');
+    expect(memberClassLabel('senior')).toBe('');
   });
 });

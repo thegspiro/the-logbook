@@ -57,6 +57,13 @@ _DELIBERATELY_KEPT: dict[str, frozenset[str]] = {
             "membership_type_changed_at",
             "member_class",
             "member_status",
+            # When the class / status began, and a secretary's correction or
+            # waiver of the voting wait counted from it: dates and a flag about
+            # standing. The free-text reason beside them is cleared.
+            "member_class_since",
+            "member_status_since",
+            "voting_wait_from",
+            "voting_wait_waived",
             "status",
             "status_changed_at",
             "archived_at",
