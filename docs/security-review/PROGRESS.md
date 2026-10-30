@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this iteration's own, number assigned at push time)** (branch
+**PR [#3848](https://github.com/thegspiro/the-logbook/pull/3848)** (branch
 `claude/security-review-medical-supplies-p18`) — Feature 23 (Medical
 supplies), pass 18, a watchdog pickup. See
 `docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 18** section for
