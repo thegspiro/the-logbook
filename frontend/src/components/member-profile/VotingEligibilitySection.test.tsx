@@ -53,6 +53,17 @@ describe('VotingEligibilitySection', () => {
     expect(screen.getByTestId('wait-outcome-annual')).toHaveTextContent('Not eligible to vote');
   });
 
+  // The card lives only in the profile's narrow sidebar, where a viewport
+  // breakpoint split it into two ~120px columns on every desktop. jsdom cannot
+  // measure layout, so this pins the class; the Playwright capture is the
+  // visual check.
+  it('stacks its fields in one column at every width', async () => {
+    renderWithRouter(<VotingEligibilitySection userId="u1" memberName="Sam Admin" />);
+
+    const fields = await screen.findByTestId('voting-eligibility-fields');
+    expect(fields.className).not.toMatch(/grid-cols/);
+  });
+
   it('requires a reason before waiving the wait', async () => {
     const user = userEvent.setup();
     renderWithRouter(<VotingEligibilitySection userId="u1" memberName="Sam Admin" />);

@@ -150,7 +150,10 @@ export const VotingEligibilitySection: React.FC<VotingEligibilitySectionProps> =
       <h2 id="voting-eligibility-heading" className="text-theme-text-primary text-lg font-semibold">
         Voting eligibility
       </h2>
-      <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+      {/* One column at every width: the card renders only in the profile's
+          narrow sidebar, and a viewport breakpoint cannot see that — `sm:`
+          split it into two ~120px columns on every desktop. */}
+      <dl data-testid="voting-eligibility-fields" className="mt-3 space-y-2 text-sm">
         <div>
           <dt className="text-theme-text-muted">Member type</dt>
           <dd className="text-theme-text-primary">{data.member_type_label ?? 'Not a voting member type'}</dd>
