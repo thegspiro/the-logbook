@@ -448,8 +448,8 @@ const StepPhases: React.FC<{
   onToggleExpand: (id: string) => void;
 }> = ({ phases, onAdd, onRemove, onUpdate, onToggleExpand }) => (
   <div className="space-y-6">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
+    <div className="split-row gap-3 sm:items-center">
+      <div className="split-row-main">
         <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Program Phases</h2>
         <p className="text-theme-text-muted text-sm">
           Define the phases or stages of your training pipeline. Members progress through these in order.
@@ -457,7 +457,7 @@ const StepPhases: React.FC<{
       </div>
       <button
         onClick={onAdd}
-        className="btn-primary flex shrink-0 items-center space-x-1 self-start px-3 text-sm sm:self-auto"
+        className="split-row-aside btn-primary flex shrink-0 items-center space-x-1 self-start px-3 text-sm sm:self-auto"
       >
         <Plus className="h-4 w-4" />
         <span>Add Phase</span>

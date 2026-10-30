@@ -961,16 +961,16 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 return (
                   <li
                     key={submission.id}
-                    className="border-theme-surface-border flex flex-col gap-1 border-t py-2.5 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                    className="split-row border-theme-surface-border gap-1 border-t py-2.5 first:border-t-0 sm:items-center sm:gap-3"
                   >
                     {/* Stacked on a phone: a badge and two 44px actions beside
                         the title leave about 200px for a course name, which
                         turns every row into an ellipsis. */}
-                    <div className="min-w-0">
+                    <div className="split-row-main">
                       <p className="text-theme-text-primary truncate text-sm font-medium">{submission.course_name}</p>
                       <p className="text-theme-text-muted text-xs">{meta}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                    <div className="split-row-aside flex flex-wrap items-center gap-2 self-end sm:self-auto">
                       <StatusBadge status={submission.status} />
                       {/* Shown on every listed row, not only in the expanded
                           list: a member with three submissions would otherwise

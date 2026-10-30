@@ -101,8 +101,8 @@ const SyncRun: React.FC<SyncRunProps> = ({ run, memberNames }) => {
 
   return (
     <li className="card p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+      <div className="split-row gap-3 sm:items-start">
+        <div className="split-row-main">
           <p className="text-theme-text-primary text-sm font-semibold">{formatDateTime(run.started_at, tz)}</p>
           <p className="text-theme-text-secondary text-sm">
             {SYNC_TYPE_LABEL[run.sync_type] ?? run.sync_type} · {SYNC_STATUS_LABEL[run.status] ?? run.status}
@@ -122,7 +122,7 @@ const SyncRun: React.FC<SyncRunProps> = ({ run, memberNames }) => {
           onClick={toggle}
           aria-expanded={expanded}
           aria-controls={panelId}
-          className="btn-secondary btn-md inline-flex shrink-0 items-center gap-1.5 self-start text-sm"
+          className="split-row-aside btn-secondary btn-md inline-flex shrink-0 items-center gap-1.5 self-start text-sm"
         >
           {expanded ? (
             <ChevronDown className="h-4 w-4" aria-hidden="true" />

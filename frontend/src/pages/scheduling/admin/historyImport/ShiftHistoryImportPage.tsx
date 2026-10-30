@@ -104,8 +104,8 @@ const ShiftHistoryImportPage: React.FC = () => {
 
         <div className="space-y-6">
           <section className="card p-4 sm:p-6" aria-labelledby="history-upload-heading">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
+            <div className="split-row mb-4 gap-3 sm:items-start">
+              <div className="split-row-main">
                 <h2 id="history-upload-heading" className="text-theme-text-primary text-lg font-semibold">
                   Upload a file
                 </h2>
@@ -117,7 +117,7 @@ const ShiftHistoryImportPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                className="btn-secondary inline-flex shrink-0 items-center gap-2"
+                className="split-row-aside btn-secondary inline-flex shrink-0 items-center gap-2"
                 onClick={() => void handleTemplate()}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
@@ -179,8 +179,8 @@ const ShiftHistoryImportPage: React.FC = () => {
             ) : (
               <ul className="card divide-theme-surface-border divide-y">
                 {imports.map((item) => (
-                  <li key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
+                  <li key={item.id} className="split-row gap-3 p-4 sm:items-center">
+                    <div className="split-row-main">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-theme-text-primary truncate font-medium">{item.source_filename}</span>
                         <span className={`badge border ${HISTORY_IMPORT_STATUS_COLORS[item.status] ?? ''}`}>
@@ -201,7 +201,7 @@ const ShiftHistoryImportPage: React.FC = () => {
                         </p>
                       )}
                     </div>
-                    <div className="flex shrink-0 gap-2">
+                    <div className="split-row-aside flex flex-wrap gap-2">
                       <Link to={`/scheduling/admin/history-import/${item.id}`} className="btn-secondary">
                         {item.status === HistoryImportStatus.DRAFT ? 'Review' : 'View'}
                       </Link>

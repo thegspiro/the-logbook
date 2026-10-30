@@ -53,8 +53,8 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
 
   return (
     <section aria-labelledby="review-members-heading" className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 id="review-members-heading" className="text-theme-text-primary text-lg font-semibold">
             Members
           </h2>
@@ -64,7 +64,7 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
               : `${unresolved.length} of ${members.length} people need a decision.`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="split-row-aside flex flex-wrap gap-2">
           {creatable.length > 0 && (
             <button
               type="button"

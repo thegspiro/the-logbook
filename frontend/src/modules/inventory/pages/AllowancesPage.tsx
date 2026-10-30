@@ -135,8 +135,8 @@ const AllowancesPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="max-w-4xl py-6 sm:py-8">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+        <div className="split-row mb-6 gap-3 sm:items-center">
+          <div className="split-row-main flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-blue-600 p-2">
               <SlidersHorizontal className="h-5 w-5 text-white" />
             </div>
@@ -147,7 +147,7 @@ const AllowancesPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="split-row-aside flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 void load();

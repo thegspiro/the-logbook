@@ -277,8 +277,8 @@ export const ShiftTemplatesPage: React.FC = () => {
     // already pads the sides; the doubled gutter took 48px from every card.
     <div className="mx-auto max-w-7xl py-6">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row mb-6 gap-3 sm:items-center">
+        <div className="split-row-main">
           {/* h2: this page renders only inside Shift Planning, whose header
               is the page's h1; a second h1 split the page in two. */}
           <h2 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
@@ -289,7 +289,7 @@ export const ShiftTemplatesPage: React.FC = () => {
         </div>
         <button
           onClick={() => (activeTab === 'templates' ? setShowTemplateModal(true) : setShowPatternModal(true))}
-          className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
+          className="split-row-aside btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="h-5 w-5" aria-hidden="true" />
           {activeTab === 'templates' ? 'New Template' : 'New Pattern'}

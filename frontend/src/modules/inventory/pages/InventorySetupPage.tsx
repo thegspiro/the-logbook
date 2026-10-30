@@ -77,8 +77,8 @@ interface StepShellProps {
 
 const StepShell: React.FC<StepShellProps> = ({ title, intro, manageTo, manageLabel, children }) => (
   <div className="card-secondary p-4 sm:p-6">
-    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
+    <div className="split-row mb-4 gap-2 sm:items-start">
+      <div className="split-row-main">
         <h2 className="text-theme-text-primary text-lg font-semibold">{title}</h2>
         <p className="text-theme-text-secondary mt-1 text-sm">{intro}</p>
       </div>
