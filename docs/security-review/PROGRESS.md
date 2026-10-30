@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD** (branch `claude/security-review-compliance-p12`) — Feature 20
+**PR [#3845](https://github.com/thegspiro/the-logbook/pull/3845)** (branch
+`claude/security-review-compliance-p12`) — Feature 20
 (Compliance), pass 12, a watchdog pickup. See
 `docs/security-review/CMP-20-compliance.md`'s **Pass 12** section for the
 full review: a real delta since pass 11 — a new org-scoped, FK-validated
