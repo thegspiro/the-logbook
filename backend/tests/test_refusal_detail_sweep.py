@@ -35,8 +35,12 @@ What the sweep can and cannot see:
   a class built inline (``FooService(db).describe(...)``), a name assigned
   from one, a parameter annotated with one, or a ``self`` attribute some
   method assigns or annotates that way. The method is looked up on that class
-  and then its bases. An object whose class only the running program knows
-  -- one returned from a call, or held in a container -- is not followed.
+  and then its bases. An object returned from a call has its callee's class:
+  from the return annotation when it names one, otherwise from the callee's
+  ``return`` values, which must all show the same class (a bare ``None``
+  aside). An object whose class only the running program knows -- one taken
+  out of a container, or returned from a function the index cannot see
+  into -- is not followed.
 * A message produced by a call is not text the first check can read, and is
   skipped there; the second check reads into it as above.
 * A raise that never reaches ``safe_error_detail`` is still checked. That is
@@ -549,14 +553,19 @@ class _Index:
         """The ``(module, class)`` of the object ``node`` evaluates to, if shown.
 
         The source shows it when the object is built by calling the class
-        (``FooService(db)``), comes from a name every binding of which is such
-        a call, is a parameter annotated with the class, or is a ``self``
-        attribute some method of the class assigns or annotates that way.
+        (``FooService(db)``), is returned from a call the index can resolve
+        (see :meth:`returned_class`), comes from a name every binding of which
+        is one of those, is a parameter annotated with the class, or is a
+        ``self`` attribute some method of the class assigns or annotates that
+        way.
         """
         if isinstance(node, ast.Await):
             return self.class_of(node.value, frame, seen)
         if isinstance(node, ast.Call):
-            return self.class_named(node.func, frame.module)
+            constructed = self.class_named(node.func, frame.module)
+            if constructed is not None:
+                return constructed
+            return self.returned_class(node, frame, seen)
         if isinstance(node, ast.Attribute):
             if (
                 isinstance(node.value, ast.Name)
@@ -571,13 +580,18 @@ class _Index:
                     if found is not None:
                         return found
             return None
-        if not isinstance(node, ast.Name) or node.id in seen:
+        if not isinstance(node, ast.Name):
             return None
         if node.id in ("self", "cls"):
             if frame.owner_class is None:
                 return None
             return (frame.module, frame.owner_class)
-        seen = seen | {node.id}
+        # Keyed by scope as well as name: a caller's ``x`` and its callee's
+        # ``x`` are different variables, and one must not block the other.
+        key = (id(frame.scopes[0]) if frame.scopes else None, node.id)
+        if key in seen:
+            return None
+        seen = seen | {key}
         if frame.function is not None:
             arguments = frame.function.args
             for param in [
@@ -607,7 +621,59 @@ class _Index:
             found = value_class
         return found
 
-    def resolve(self, func, frame):
+    def callee_frame(self, callee, call, frame, implicit_first, expression):
+        """A frame reading ``expression`` inside ``callee`` as ``call`` invoked it."""
+        callee_module, callee_class = self.owners[id(callee)]
+        scopes = (
+            self.bound_scope(callee, call, frame.scopes, implicit_first),
+            self.module_scope(callee_module),
+        )
+        return _Frame(
+            expression, scopes, callee_module, callee_class, callee, frame.depth + 1
+        )
+
+    def returned_class(self, call, frame, seen):
+        """The class of what ``call`` returns, when the callee's source shows it.
+
+        Its return annotation decides when it names an app class (``->
+        FooService``, ``Optional[FooService]``, a string). Otherwise every
+        ``return`` that is not a bare ``None`` must show one class, read inside
+        the callee with its parameters bound to what this call passed. Followed
+        up to ``MAX_CALL_DEPTH`` calls, and never back into a callee already on
+        the way.
+        """
+        if frame.depth >= MAX_CALL_DEPTH:
+            return None
+        resolved = self.resolve(call.func, frame, seen)
+        if resolved is None:
+            return None
+        callee, implicit_first = resolved
+        key = ("call", id(callee))
+        if key in seen:
+            return None
+        callee_module, _ = self.owners[id(callee)]
+        if callee.returns is not None:
+            annotated = self.class_named(callee.returns, callee_module)
+            if annotated is not None:
+                return annotated
+        found = None
+        for returned in _own_nodes(callee):
+            if not isinstance(returned, ast.Return) or returned.value is None:
+                continue
+            value = returned.value
+            if isinstance(value, ast.Constant) and value.value is None:
+                continue
+            value_class = self.class_of(
+                value,
+                self.callee_frame(callee, call, frame, implicit_first, value),
+                seen | {key},
+            )
+            if value_class is None or (found is not None and value_class != found):
+                return None
+            found = value_class
+        return found
+
+    def resolve(self, func, frame, seen=frozenset()):
         """``(definition, first parameter is implicit)`` for a call, or None.
 
         The flag says the call binds the callee's first parameter itself: a
@@ -638,7 +704,7 @@ class _Index:
             if source is not None and original is None:
                 found = self.functions.get(source, {}).get(func.attr)
                 return (found, False) if found is not None else None
-        found = self.method(self.class_of(receiver, frame), func.attr)
+        found = self.method(self.class_of(receiver, frame, seen), func.attr)
         if found is None:
             return None
         return found, "staticmethod" not in _decorator_names(found)
@@ -785,22 +851,13 @@ def _message_frames(argument, scopes, module, owner_class, function, index):
                 if resolved is None or id(node) in followed_calls:
                     continue
                 callee, implicit_first = resolved
-                callee_module, callee_class = index.owners[id(callee)]
+                callee_module, _ = index.owners[id(callee)]
                 if (callee_module, callee.name) in SELF_LIMITING_HELPERS:
                     continue
                 followed_calls.add(id(node))
-                callee_scopes = (
-                    index.bound_scope(callee, node, frame.scopes, implicit_first),
-                    index.module_scope(callee_module),
-                )
                 pending.extend(
-                    _Frame(
-                        returned.value,
-                        callee_scopes,
-                        callee_module,
-                        callee_class,
-                        callee,
-                        frame.depth + 1,
+                    index.callee_frame(
+                        callee, node, frame, implicit_first, returned.value
                     )
                     for returned in _own_nodes(callee)
                     if isinstance(returned, ast.Return) and returned.value is not None
@@ -1248,6 +1305,81 @@ def test_an_object_of_unknown_class_is_not_followed():
             "    either = Describer()\n"
             "    either = Other()\n"
             "    raise ValueError(describer.describe(ids) + either.describe(ids))\n"
+        )
+        == []
+    )
+
+
+def test_the_join_check_follows_objects_returned_from_calls():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    # From what the factory returns.
+    assert refusing(
+        "def make():\n"
+        "    return Describer()\n"
+        "def refuse(ids):\n"
+        "    raise ValueError(make().describe(ids))\n"
+    ) == ["names"]
+    # From the return annotation, plain, optional or as a string, sync or async.
+    for returns in ("Describer", "Optional[Describer]", '"Describer"'):
+        assert refusing(
+            f"async def lookup(key) -> {returns}:\n"
+            "    return REGISTRY[key]\n"
+            "async def refuse(ids):\n"
+            '    describer = await lookup("x")\n'
+            "    raise ValueError(describer.describe(ids))\n"
+        ) == ["names"], returns
+    # From a method, and through what a parameter was bound to.
+    assert refusing(
+        "def passthrough(describer):\n"
+        "    return describer\n"
+        "class Service:\n"
+        "    def describer(self):\n"
+        "        return passthrough(Describer())\n"
+        "    def refuse(self, ids):\n"
+        "        raise ValueError(self.describer().describe(ids))\n"
+    ) == ["names"]
+    # A bare None return does not stand in the way of the one class.
+    assert refusing(
+        "def maybe(flag):\n"
+        "    if flag:\n"
+        "        return None\n"
+        "    return Describer()\n"
+        "def refuse(ids, flag):\n"
+        "    raise ValueError(maybe(flag).describe(ids))\n"
+    ) == ["names"]
+
+
+def test_a_returned_object_of_unknown_class_is_not_followed():
+    other = (
+        "class Other:\n"
+        "    def describe(self, names):\n"
+        '        return "; ".join(names)\n'
+    )
+    # Returns that disagree on the class.
+    assert (
+        _joins(
+            _DESCRIBER + other + "def either(flag):\n"
+            "    if flag:\n"
+            "        return Describer()\n"
+            "    return Other()\n"
+            "def refuse(ids, flag):\n"
+            "    raise ValueError(either(flag).describe(ids))\n"
+        )
+        == []
+    )
+    # Calls that return each other, and a name rebound from itself, end
+    # rather than recursing.
+    assert (
+        _joins(
+            _DESCRIBER + "def a():\n"
+            "    return b()\n"
+            "def b():\n"
+            "    return a()\n"
+            "def refuse(ids, x):\n"
+            "    x = x.refresh()\n"
+            "    raise ValueError(a().describe(ids) + x.describe(ids))\n"
         )
         == []
     )
