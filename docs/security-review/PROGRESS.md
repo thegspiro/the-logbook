@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (to be recorded)** — Feature 29 (Reports & analytics), pass 13, a
+watchdog pickup. See `docs/security-review/RPT6-29-reports-analytics.md`'s
+**Pass 13** section for the full review: a zero-delta pass on every
+declared backend file (thirteen files, all byte-identical to pass 12's
+merge despite 219 non-merge commits landing on `main` in between), which
+also closes a frontend scope gap this rotation had carried since the file
+was first written — `modules/reports` was never the feature's whole
+frontend surface; `dashboard.py`/`labels.py`/`analytics.py` actually render
+through `pages/Dashboard.tsx`, `pages/AnalyticsDashboardPage.tsx`,
+`pages/PlatformAnalyticsPage.tsx` and `components/labels/`. All four of
+those were read this pass and found cosmetic/correctness-only (a weather
+banner include already reviewed under Feature 27, a loading-skeleton
+restructure, and a barcode-rendering precision refactor that still calls
+the same underlying library on the same value). 0 fixes needed, 0 new
+findings. LBL-29-2, LBL-29-4, RPT-5c/6/7 and DASH-2 stay open, unchanged.
+Route surface re-enumerated by AST at 35, unchanged.
+
+Rotation row 29 → ✅ (pending this PR's merge); next is Feature 30
+(Onboarding) — re-check `list_pull_requests`/`search_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 11, PR #3854, merged), preserved for history</summary>
+
 **PR [#3854](https://github.com/thegspiro/the-logbook/pull/3854)** (branch
 `claude/security-review-security-audit-ip-p11`) — Feature 28 (Security,
 audit & IP), pass 11, a watchdog pickup.
@@ -31,9 +55,9 @@ re-deriving. 0 fixes needed, 0 new findings. SEC2-28-6 (the unrelated
 duplicate-request TOCTOU) and the dead-detector-code note remain open,
 unchanged. Route surface re-enumerated by AST at 37, unchanged.
 
-Rotation row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports
-& analytics) — re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 28 → ✅ (merged); next was Feature 29 (Reports & analytics).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 11, PR #3853, merged), preserved for history</summary>
@@ -23653,7 +23677,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -23666,6 +23690,54 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 29 (Reports & analytics, pass 13) — watchdog pickup, zero-delta backend, closes a frontend scope gap, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3854 (Feature 28, Security, audit
+& IP, pass 11) had already merged (`6e5ba65f`), and a fresh
+`search_pull_requests` for `head:claude/security-review-` returned zero open
+results both before starting and again right before this push, so Feature 29
+(Reports & analytics) was confirmed as the next `⬜` row read directly off a
+freshly fetched `main`.
+
+Diffing all thirteen of this feature's declared backend files against pass
+12's merge (`65b566ee`, PR #3784) by content found zero changes, despite 219
+non-merge commits landing on `main` in that window. The real finding this
+pass is a scope correction, not a code one: every prior pass's header line
+said "Frontend: `modules/reports`," but that was never the feature's whole
+frontend surface — `dashboard.py`/`dashboard_widget_service.py` render
+through `pages/Dashboard.tsx`, `analytics.py`/`platform_analytics.py`
+through `pages/AnalyticsDashboardPage.tsx` and `pages/PlatformAnalyticsPage.tsx`,
+and `labels.py` through the shared `components/labels/` tree — none under
+`modules/reports`, so twelve passes of "Frontend: unchanged" never actually
+looked at them. Read all four this pass: `Dashboard.tsx` gained one
+`<WeatherAlertBanner />` render (Feature 27's own already-reviewed surface),
+`AnalyticsDashboardPage.tsx` got a loading-skeleton restructure (repo-wide
+layout-shift sweep, no new request or field), and
+`LabelPrintPage.tsx`/the new `barcodeGeometry.ts` replaced a direct
+`JsBarcode` call with a wrapper that still calls the identical `JsBarcode`
+internally — a printer-dot-rounding fix, not a new rendering/escaping
+surface. All four cosmetic/correctness-only; **verified good, no new
+finding.** Same root cause as this rotation's own RPT6-29-4 (pass 12's
+addendum): a declared-scope line that undercounted the feature's real
+surface, caught here by actually reading what a diff against `main`
+surfaced rather than trusting the header.
+
+Routes re-enumerated by AST from source: 35, unchanged from pass 12; every
+route's auth dependency grepped individually, none bare. Four standing
+items (LBL-29-2, LBL-29-4, RPT-5c/6/7, DASH-2) re-checked against current
+code and confirmed unchanged — all four files they live in have zero diff
+since pass 12. Full completion gate green: flake8/black/isort clean at CI's
+pinned versions, `validate_migrations.py --strict` (678 revisions, single
+head), `check_route_permissions.py --strict` (280 routes, 0 errors), scoped
+pytest (1,513 passed, 1 pre-existing skip) plus the feature's four
+integration test files run directly (48 passed), frontend typecheck/lint
+clean, scoped vitest (236 passed, 13 files). 0 fixes, 0 new findings.
+
+Full writeup: `docs/security-review/RPT6-29-reports-analytics.md`'s **Pass
+13** section.
 
 ### 2026-10-30 — Feature 28 (Security, audit & IP, pass 11) — watchdog pickup, small real delta (IP-exception approval locking), 0 fixed, 0 new findings
 
