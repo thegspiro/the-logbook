@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (to be recorded)** — Feature 29 (Reports & analytics), pass 13, a
-watchdog pickup. See `docs/security-review/RPT6-29-reports-analytics.md`'s
+**PR [#3855](https://github.com/thegspiro/the-logbook/pull/3855)** (branch
+`claude/security-review-reports-analytics-p13`) — Feature 29 (Reports &
+analytics), pass 13, a watchdog pickup. See `docs/security-review/RPT6-29-reports-analytics.md`'s
 **Pass 13** section for the full review: a zero-delta pass on every
 declared backend file (thirteen files, all byte-identical to pass 12's
 merge despite 219 non-merge commits landing on `main` in between), which
