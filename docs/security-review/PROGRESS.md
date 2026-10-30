@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (to be recorded)** — Feature 30 (Onboarding), pass 11, a watchdog
-pickup. See `docs/security-review/ONB5-30-onboarding.md`'s **Pass 11**
+**PR [#3856](https://github.com/thegspiro/the-logbook/pull/3856)** (branch
+`claude/security-review-onboarding-p11`) — Feature 30 (Onboarding), pass 11,
+a watchdog pickup. See `docs/security-review/ONB5-30-onboarding.md`'s **Pass 11**
 section for the full review: a near-zero-delta pass — only two commits
 touched this feature's declared scope since pass 10 (a different feature's
 position-`kind` column reaching `save_session_roles` through a pure,
