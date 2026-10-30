@@ -2616,3 +2616,217 @@ One source file was changed by this pass: `app/utils/google_oauth.py`
 (MSG-17's fix, 10 lines). Every other behavioral delta since pass 9 was
 landed by other, non-rotation work and is reviewed/recorded, not authored,
 here.
+
+---
+
+## Pass 11 (2026-10-30) — watchdog pickup, real delta reviewed, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in: the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`
+returned "No reachable agents"). PR #3849 (Feature 24, Meetings & minutes,
+pass 11, itself a prior watchdog pickup) was found merged and
+`search_pull_requests` (`head:claude/security-review-`) returned zero open
+results. Row 25 (Messaging & notifications) confirmed the next `⬜` row in
+`docs/security-review/PROGRESS.md`'s rotation table on `main`.
+
+Baseline: pass 10's merge, `02bdfb59` (PR #3768). `git diff 02bdfb59 HEAD`
+restricted to every file this feature's pass-1 scope declares (backend and
+frontend) found real changes in four files — the rest of the declared scope
+is byte-identical to pass 10.
+
+### `message_history.py` — recipient search moved to fingerprint matching, part of a repo-wide email-encryption sweep
+
+`to_email`/`cc_emails`/`bcc_emails` on `MessageHistory` are now `EncryptedText`/
+`EncryptedJSON` (an orphan-commit squash, `b48d63f2`, carried the model/column
+change; the real reviewable diffs are the later commits that adapted callers).
+`list_message_history`'s search no longer does `to_email.ilike(...)` — it
+can't, the column is ciphertext — and instead matches
+`MessageHistory.recipient_fingerprints` (a JSON array of per-recipient
+HMAC-SHA256 fingerprints, stored at send time by `email_service.py`'s
+`_summarize_recipients`/`send_email`) against every fingerprint
+`email_fingerprint(s)`/`email_fingerprints(search)` could produce for the
+searched string, via `func.json_contains(..., json.dumps(fp)) == 1` (an
+`OR` across fingerprints, parameterized — not string-built SQL). This is the
+same pattern already reviewed and accepted at GF-22 pass 12 (donor-email
+fingerprint search): a deliberate narrowing from substring to exact-address
+match, not a regression, and the subject-line search on the same query still
+uses `like_pattern()` + `escape=LIKE_ESCAPE_CHAR` unchanged. `email_fingerprint`/
+`email_fingerprints` (`app/core/security.py`) HMAC over `normalize_email()`
+under the current key, trying every legacy key too so search and sign-in both
+survive a key rotation before `rotate_encryption_key.py` rewrites old rows —
+read in full, matches the documented rotation contract. No new by-id query,
+no new route (`message_history.py` still 2 routes), no tenancy change — the
+existing `organization_id` filter on `list_message_history` is untouched.
+
+### `email_templates.py` — read-only `always_sent` flag added to list/get responses
+
+`is_always_sent(template.template_type)` is now included in both templates
+endpoints' response via `.model_copy(update=...)`. Purely informational
+(drives a disabled toggle + tooltip in `EmailTemplatesPage.tsx`); no new
+route, no permission change, no field a client can set.
+
+### `email_template_service.py` / `email_service.py` — "switched off" now actually stops the send, plus six new transactional emails
+
+The real behavioral change: `_render_with_fallback` (used by every
+`send_*` method) is now wrapped by a new `_render_unless_switched_off`, which
+checks `EmailTemplateService.is_switched_off` first and returns `None` (send
+nothing) instead of falling back to the built-in default — closing the gap
+`docs/app-review/notifications.md`-adjacent Pitfall #19 describes ("a switch
+wired to nothing"): until this landed, switching a template off only changed
+which copy went out, never whether anything did. Every one of the ~20
+existing `send_*` callers was updated to check for `None` and report the
+email as not sent (an unchanged failure path each caller already had for
+"email disabled" generally), and six new transactional emails were added for
+the Follow-up Form pipeline stage and the inactivity-warning feature
+(`send_follow_up_form_email`, `send_contact_changed_email`,
+`send_follow_up_reminder_email`, `send_follow_up_submitted_email`,
+`send_inactivity_warning_email`, `send_application_going_inactive_email`).
+
+Reviewed for this feature's trust boundary (the shared send layer, not the
+calling feature — see the flagged gap below):
+
+- **Essential templates cannot be switched off, enforced on both the read and
+  write side.** `ALWAYS_SENT_TYPES` (password reset, IT password
+  notification, welcome, ballot notification, application status link, plus
+  the two new follow-up-form types — the form link is the applicant's only
+  way to reach the form, and the contact-changed notice is the only warning a
+  hijacked address gets) is checked by `is_switched_off` (so these always
+  render a real template or the default, never `None`) **and** by
+  `update_template`, which raises `ValueError` (→ 400) if a client tries to
+  set `is_active=False` on one of them — a server-side guard, not merely a
+  disabled frontend button (`EmailTemplatesPage.tsx` also disables the toggle
+  and explains why, but that's UX, not the control). `create_template`
+  accepts no `is_active` parameter at all, so there's no create-time bypass.
+  `update_template`'s field set is still an explicit allowlist (not a
+  skip-list), and the row is still resolved by `id` **and**
+  `organization_id` together (Pitfall #14a) — unchanged by this diff.
+- **Fail-open direction is the correct one here.** A DB error while checking
+  `is_switched_off` logs a warning and treats the template as not switched
+  off (sends it) rather than silently dropping a password-reset or welcome
+  email to a lookup hiccup — matches the documented SEC-00 pattern of
+  choosing the failure direction by what a duplicate vs. a drop costs
+  (Pitfall #36's "decide the order" framing, applied to availability rather
+  than idempotency).
+- **The new context values that reach an HTML template are all either
+  pre-escaped or routed through the existing per-variable escaping.** The
+  three pre-built HTML fragments the new methods construct
+  (`custom_message_html`, `draft_note_html`, `contact_note_html`) are either
+  `html.escape()`d around the one genuinely free-text field
+  (`custom_message`, in `send_follow_up_form_email`) or built from a fixed,
+  code-authored sentence with no caller-supplied content spliced in
+  (`draft_note`, `contact_note` are literals, not parameters) — the same
+  shape MM's pass 10 review verified for `appendix_html`. Every other new
+  context value (`applicant_name`, `form_name`, `prospect_name`,
+  `pipeline_stage`, `stage_name`, `coordinator_name`, `changed_details`, the
+  three new `*_url` values) is a plain template variable, not a pre-built
+  fragment, so it gets the template engine's standard substitution escaping
+  already verified at MAIL-1 — re-confirmed unchanged, since
+  `EmailTemplateService.render_static` and the fallback default renderer are
+  untouched by this diff (only a new `attachments_out` parameter was added
+  to `_render_with_fallback`, which is additive and doesn't touch the escape
+  path).
+- **Migration `0d9897752425`** (widens `EmailTemplateType` by one value, and
+  switches any stored essential template back on) follows Pitfall #26/#35:
+  `_has_table` guards per table, the enum check is idempotent
+  (`all(f"'{v}'" ... in _enum_values(...))`), and the UPDATE that turns
+  essential templates back on is a plain bounded `IN` over five fixed values
+  — re-read in full rather than trusting the commit message.
+
+**Flagged, not this feature's to fix — a real scope gap worth naming.** The
+commits that drove most of this diff (`a36d27f1`, `27a363f1`, `1a9810fc`,
+plus the follow-up-form migrations/models/public-endpoint they came with)
+belong to Feature 08 (Membership pipeline) and Feature 26 (Forms), both still
+`⬜`/stale against this work — MP-08's last pass was 2026-09-02, three days
+before the Follow-up Form feature existed. This pass read only the slice in
+its own declared files (`email_service.py`, `email_template_service.py`) to
+verify this feature's trust boundary, per the same convention pass 10 used
+for `organizations.py`. It did **not** audit `follow_up_form_service.py` or
+the new public endpoint `app/api/public/follow_up_forms.py` (a public,
+token-only-authenticated surface handling applicant PII — a cursory read
+shows a 43-char high-entropy token with a fixed length/charset validator,
+per-request rate limiting via `validate_ip_rate_limit`, and
+no-store/no-referrer/noindex response headers, which all point at a
+security-conscious build, but that is not the same as a seven-dimension
+review). Recorded here rather than silently passed over, and raised as a
+priority item for whichever of Feature 08 or Feature 26 reviews next —
+either can claim it, but it should not wait for a full rotation lap.
+
+### Re-swept, unchanged since pass 10
+
+- `grep -rn "SMSService("` across `backend/app`: two call sites, both
+  gated — `notification_channels.py` (the allowlist itself) and
+  `message_delivery_service.py:582` (department-message SMS escalation),
+  which calls `resolve_sms_recipients(..., SmsAlert.URGENT_DEPARTMENT_MESSAGE)`
+  first and only reaches `SMSService()` with the already-filtered `targets`
+  list — the second site is pre-existing (0 diff since pass 10) and was
+  already within the allowlist pattern, not a new direct call.
+- `.ilike(`/`.like(` sites in this feature's scope: `message_history.py`'s
+  subject search unchanged (still `like_pattern()` + `escape=LIKE_ESCAPE_CHAR`);
+  `messaging_service.py:245-246`, `notifications_service.py:91-92` unchanged
+  (0 diff).
+- Standing findings MSG-3, MAIL-4, `email_service.py`'s F4 (no SSRF check on
+  an org-configured SMTP host), and the `NotificationRuleCreate.config`
+  unbounded-JSON note: all unchanged, re-confirmed still open by design.
+
+### Route inventory — re-enumerated by AST, 51 routes (unchanged since pass 5)
+
+Walked all four endpoint files' decorators by AST from scratch: 13
+(`messages.py`) + 2 (`message_history.py`) + 20 (`notifications.py`) + 16
+(`email_templates.py`) = **51**, matching pass 10 exactly. No new route in
+this feature's four declared endpoint files — the generic-webhook dispatch
+addition below is a new internal function, not an endpoint.
+
+### `integration_services/notification_dispatch.py` — generic webhooks now receive the same entity-created events chat integrations do
+
+`dispatch_generic_webhooks` is new: queries `Integration` rows filtered on
+`organization_id == <the event's own org>`, `enabled.is_(True)`, and
+`integration_type == "generic-webhook"` (org-scoped, matches the existing
+chat-integration query shape in the same file), reads the admin-configured
+`event_types` allowlist per integration (empty means "all", documented as
+intentional so a webhook connected before the setting existed doesn't start
+silently receiving nothing), and calls the pre-existing
+`webhook_service.send_webhook`. That function already re-validates the
+destination at send time via `assert_outbound_url_safe` (SSRF, DNS-rebinding
+safe — re-read in full, unchanged) before every delivery, the same guard the
+Slack/Discord/Teams senders rely on — so this is a new caller of an
+already-hardened sender, not a new SSRF surface. Called from
+`notify_entity_created`, the existing background-task entrypoint, alongside
+the pre-existing chat dispatch; failures are caught and logged per-integration
+(`record_integration_run`), never raised into the background task.
+
+### Frontend — reviewed, no security surface
+
+`TemplateList.tsx` (three commits: new template-type icons/labels/category
+entries for the six additions above, and an unrelated `alert-error` →
+`alert-danger` class-name fix), `EmailTemplatesPage.tsx` (the switch-off
+confirmation uses `useConfirm()`, not `window.confirm` — Pitfall #16 — and
+disables the toggle entirely when `always_sent`, matching the backend's
+server-side guard rather than relying on the client to enforce it), and
+`communicationsServices.ts` (one new optional `member_class` field on an
+unrelated type, no behavior change). `EmailTemplate.always_sent` is declared
+in `adminServices.ts` and matches the backend's unaliased, snake_case
+response shape for this module (Pitfall #5) — `npm run typecheck` confirms no
+mismatch.
+
+### Schema & migration notes
+
+`validate_migrations.py --strict`: 678 revisions, single head `f90b1124e6f4`,
+up from pass 10's 663 — growth is other features' work.
+
+## Completion gate (pass 11)
+
+| Check                                                                                                                       | Result                                                   |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin)                                                                   | clean (0 violations)                                     |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin)                                                           | clean — 2,743 files unchanged                            |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin)                                                        | clean                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                           | PASSED — 678 revisions, single head `f90b1124e6f4`       |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                           | 280 routes, 0 errors, 0 warnings                         |
+| Backend tests, scope (`-k "message or notification or email_template or smtp_batch or gmail or google_oauth or follow_up"`) | 1,433 passed, 1 skipped (environment-only — `pywebpush`) |
+| `cd frontend && npm run typecheck`                                                                                          | 0 errors                                                 |
+| `cd frontend && npm run lint` (`eslint --max-warnings 10`)                                                                  | clean, exit 0                                            |
+
+No source file was changed by this pass — every reviewed delta since pass 10
+was landed by other, non-rotation work (the email-encryption sweep, the
+switched-off-template fix, and the Follow-up Form feature) and is
+reviewed/recorded, not authored, here.
