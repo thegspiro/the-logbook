@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD** (branch `claude/security-review-grants-fundraising-p12`) —
+Feature 22 (Grants & fundraising), pass 12, a watchdog pickup. See
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 12** section for
+the full review: a real, narrow delta since pass 11 — a repo-wide
+email-encryption-at-rest sweep's share of this feature (`Donor.email` and
+`Donation.donor_email` now `EncryptedText`, a new keyed-HMAC `email_hash`
+fingerprint column on `Donor` kept in sync by a SQLAlchemy `"set"` event
+listener, and the donor-search contact path switched from a `LIKE` scan to
+an exact fingerprint match — a deliberate narrowing, not a regression) plus
+one incidental, non-security type-signature fix (`create_donation`'s
+`user_id` widened to `Optional[str]`, matching the nullable column it
+fills). 0 fixes needed (the delta was already correct), 0 new findings, 3
+documentation corrections across two other review tracks —
+`docs/app-review/grants-fundraising.md` and
+`docs/module-audit/grants-fundraising.md` both still marked GF-7 and GF-8
+"flagged"/"still open" (resolved 2026-10-11, re-confirmed fixed by this
+rotation's own pass 8) and GF-9's remaining two-thirds as "stand as before"
+(resolved 2026-10-21, re-confirmed fully resolved by this rotation's own
+pass 10); `docs/KNOWN_LIMITATIONS.md` already had all three correct, so both
+stale docs were corrected to match it. Route surface 45/45, unchanged;
+`check_route_permissions.py` 280 routes / 0 errors (unchanged — neither
+`grants.py` nor its schemas appear in this window's diff).
+
+Rotation row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests`/`search_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 12, PR #3846, merged), preserved for history</summary>
+
 **PR [#3846](https://github.com/thegspiro/the-logbook/pull/3846)** (branch
 `claude/security-review-admin-hours-p12`) — Feature 21
 (Admin hours), pass 12, a watchdog pickup (a second watchdog, since the
@@ -35,9 +65,10 @@ test (`TestParseOptionalDate`) the original fix shipped without. Route
 surface 30/30, unchanged since pass 9; `check_route_permissions.py` 280
 routes / 0 errors (unchanged).
 
-Rotation row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
-fundraising) — re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 21 → ✅ (merged as `06da5fc4`); next was Feature 22 (Grants &
+fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 12, PR #3845, merged), preserved for history</summary>
@@ -23455,7 +23486,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -23475,6 +23506,82 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 22 (Grants & fundraising, pass 12) — watchdog pickup, real delta (email encryption), 0 fixed in scope, 3 stale-doc corrections, 0 new findings
+
+Watchdog pickup — a scheduled check confirmed via `ListAgents` that the
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) has no reachable agent. PR #3846
+(Feature 21, Admin hours, pass 12) had already merged (`06da5fc4`) with no
+open PR whose head branch starts with `claude/security-review-`
+(`list_pull_requests`, state=open — 0 results; the one open PR, #3839, is
+unrelated layout work). Row 21 confirmed ✅ and row 22 (Grants &
+fundraising) confirmed the next pending feature on a freshly
+fast-forwarded `main`.
+
+**Baseline `fdfa0d83`** (pass 11's merge, PR #3765). `git diff
+fdfa0d83..HEAD --stat` against the declared scope found a real, narrow
+delta: two backend files, zero frontend files. `git log` attributes it to
+three non-rotation commits, all dated 2026-10-26/27.
+
+A repo-wide email-encryption-at-rest sweep's share of this feature
+(`b48d63f2`/`43c11090`): `Donor.email` and `Donation.donor_email` moved from
+plain `String` to `EncryptedText`; `Donor` gained an `email_hash` fingerprint
+column (keyed HMAC-SHA256, normalized case/whitespace, auto-recomputed on
+every ORM write by a `"set"` event listener — confirmed no code bypasses it
+via a bulk `update().values(email=...)`); the donor-search contact path
+switched from a `LIKE` scan to an exact fingerprint match (`email_hash.in_
+(email_fingerprints(search))`), a deliberate narrowing the ciphertext column
+requires, not a regression — `email_fingerprints` (plural) also checks any
+legacy key, so a value fingerprinted before a key rotation still matches.
+Neither `email` nor `email_hash` appears in any response schema, and
+`donor_privacy.py`'s masking is unaffected (it operates on the response
+object's `email` attribute by name, confirmed via an empty diff on that
+file). The migration (`b8236e29ec44`, repo-wide) is `create_all`-tolerant,
+idempotent, pages its backfill, and refuses without `ENCRYPTION_KEY` when
+there are rows to encrypt. One incidental, non-security commit (`f19ff577`,
+mainly a new public-portal stats endpoint elsewhere) widens
+`create_donation`'s `user_id` parameter to `Optional[str]`, matching the
+nullable column it fills for an existing dues-overpayment call site; FK
+validation and lock ordering on that path are unchanged.
+
+Route inventory re-enumerated by AST: 45 routes, byte-identical to pass 11
+(`grants.py`/`schemas/grant.py` do not appear in this window's diff at all).
+`check_route_permissions.py --strict`: 280 routes, 0 errors/warnings
+(up from 279 — Feature 20's new sub-resource route, not this feature's).
+
+**Three documentation findings, found reading prior art (Step 2), not this
+feature's own diff:** re-reading `docs/app-review/grants-fundraising.md`
+and `docs/module-audit/grants-fundraising.md` against
+`docs/KNOWN_LIMITATIONS.md`'s own GF-7/GF-8/GF-9 rows (which already state
+all three resolved, with full citations) found both other docs still marked
+GF-7 and GF-8 "🚩 FLAGGED"/"still open" — resolved 2026-10-11, and
+re-confirmed fixed by this rotation's own pass 8 (2026-10-16) — and GF-9's
+remaining two-thirds as "stand as before" — resolved 2026-10-21, and
+re-confirmed fully resolved by this rotation's own pass 10 (2026-10-24). The
+same staleness pattern as PR #3845's CS-8 correction and PR #3846's AH2-2
+correction. Corrected both files in place, each citing the fix's location
+and the `KNOWN_LIMITATIONS.md` row; no behavior changed, no new test
+needed — the existing guard tests already cover each fix and were re-run as
+part of this pass's gate.
+
+No open or flagged finding carries forward under a code regression: GF-1
+through GF-36 all re-confirmed unchanged since pass 11.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` against
+`app/ tests/ alembic/` (flake8 7.4.1, black 26.10.1, isort 9.0.2 — CI's
+pins) — clean; `validate_migrations.py --strict` — 678 revisions, single
+head; `pytest -k "grant or fundraising or donor"` — 1284 passed, 1
+pre-existing skip; `check_route_permissions.py --strict` — 280/0/0. No
+frontend file is in this pass's diff, so `typecheck`/`lint`/`vitest` are
+unchanged from pass 11's green result and were not independently re-run.
+
+See `docs/security-review/GF-22-grants-fundraising.md`'s **Pass 12** section
+for the full review.
+
+Next: Feature 23 (Medical supplies).
+
+---
 
 ### 2026-10-30 — Feature 21 (Admin hours, pass 12) — watchdog pickup, zero-delta backend, 0 fixed in scope, 1 doc-staleness item fixed, 0 new findings
 
