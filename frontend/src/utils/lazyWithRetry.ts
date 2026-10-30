@@ -13,23 +13,19 @@
  *  3. Using sessionStorage to prevent infinite reload loops — if a
  *     reload was already attempted for the same page, the error is
  *     re-thrown and caught by the ErrorBoundary instead.
+ *
+ * The guard is cleared only when that error is handed to the ErrorBoundary.
+ * Clearing it when the app boots — which App.tsx once did — runs before the
+ * reloaded page's import has had time to fail, so every reload found the
+ * guard empty and reloaded again: a page whose chunk stayed unreachable (a
+ * captive portal, a removed deploy) reloaded itself many times a second.
  */
 
 import { lazy, type ComponentType } from 'react';
+import { isChunkLoadError } from './chunkLoadError';
 import { reloadForNewVersion } from './serviceWorkerUpdate';
 
 const RELOAD_KEY = 'chunk_reload';
-
-function isChunkLoadError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const msg = error.message.toLowerCase();
-  return (
-    msg.includes('failed to fetch dynamically imported module') ||
-    msg.includes('loading chunk') ||
-    msg.includes('loading css chunk') ||
-    msg.includes('importing a module script failed')
-  );
-}
 
 /**
  * Drop-in replacement for `React.lazy()` that retries failed dynamic
@@ -76,12 +72,4 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       });
     })
   );
-}
-
-/**
- * Clear the reload guard. Call this once the app boots successfully so
- * that future chunk errors on the same page can trigger a reload again.
- */
-export function clearChunkReloadFlag(): void {
-  sessionStorage.removeItem(RELOAD_KEY);
 }
