@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3850](https://github.com/thegspiro/the-logbook/pull/3850)** (branch
+`claude/security-review-messaging-notifications-p11`) — Feature 25
+(Messaging & notifications), pass 11, a watchdog pickup. See
+`docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 11**
+section for the full review: a real delta since pass 10 — 8 non-merge
+commits touching this feature's declared scope, the largest being a
+template on/off switch (`EmailTemplateService.is_switched_off`,
+`ALWAYS_SENT_TYPES`, `EmailService._render_unless_switched_off` wrapping
+all 16 template-backed senders) and a new generic-webhook dispatch path
+(`notification_dispatch.py`) reusing the pre-existing
+`assert_outbound_url_safe`-guarded `send_webhook`. Every context value
+reaching HTML email bodies traced by hand for escaping; the fingerprint-
+based message-history search re-verified org-scoped and failing closed to
+"match nothing" on a non-email search term. 0 fixes needed, 0 new
+findings. Route surface re-enumerated by AST at 51 (unchanged). MSG-3,
+MAIL-4, the SMTP-host F4 and the `NotificationRuleCreate.config`
+unbounded-JSON note remain the only open items, all unchanged
+by-design/owner decisions. This PR also carries the ride-along edits for
+PR #3849's merge (Feature 24, Meetings & minutes, pass 11) — row 24 was
+already marked ✅ by that PR's own commit, so the only ride-along here is
+clearing this section to describe the current PR instead.
+
+Rotation row 25 → ✅ (pending this PR's merge); next is Feature 26
+(Forms) — re-check `list_pull_requests`/`search_pull_requests` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 11, PR #3849, merged), preserved for history</summary>
+
 **PR [#3849](https://github.com/thegspiro/the-logbook/pull/3849)** (branch
 `claude/security-review-meetings-minutes-p11`) — Feature 24 (Meetings &
 minutes), pass 11, a watchdog pickup. See
@@ -34,9 +63,10 @@ ride-along edits for PR #3848's merge (Feature 23, Medical supplies, pass 18) �
 ride-along here is clearing this section to describe the current PR
 instead.
 
-Rotation row 24 → ✅ (pending this PR's merge); next is Feature 25
-(Messaging & notifications) — re-check `list_pull_requests`/`search_pull_requests`
-fresh rather than trusting this note.
+Rotation row 24 → ✅ (merged as `52bb15d5`); next was Feature 25
+(Messaging & notifications).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 18, PR #3848, merged), preserved for history</summary>
@@ -23543,7 +23573,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
@@ -23560,6 +23590,66 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-30 — Feature 25 (Messaging & notifications, pass 11) — watchdog pickup, real delta, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents`, "No reachable agents"). PR #3849 (Feature 24, Meetings &
+minutes, pass 11) had already merged (`52bb15d5`), and a fresh
+`search_pull_requests` for `head:claude/security-review-` returned zero
+open results both before starting and again right before this push, so
+Feature 25 (Messaging & notifications) was confirmed as the next `⬜` row
+read directly off a freshly fetched `main`.
+
+`git log` restricted to this feature's full declared scope (`messages.py`,
+`message_history.py`, `notifications.py`, `email_templates.py`,
+`messaging_service.py`, `message_delivery_service.py`,
+`notifications_service.py`, `push_service.py`, `notification_rules.py`,
+`notification_channels.py`, `integration_services/notification_dispatch.py`,
+`email_template_service.py`, `email_templates_storefront.py`,
+`email_footers.py`, `email_theme.py`, `email_service.py`) across 179
+non-merge commits since pass 10's merge (`02bdfb59`, PR #3768) found **8**
+commits in scope. The largest: a template on/off switch that now actually
+stops a switched-off email from sending (`EmailTemplateService.
+is_switched_off`, `ALWAYS_SENT_TYPES` refusing a 400 on the five emails
+with no other delivery path, `EmailService._render_unless_switched_off`
+wrapping all 16 template-backed senders, fail-open on a lookup error by
+deliberate design) and a new generic-webhook dispatch path
+(`notification_dispatch.py`'s `dispatch_generic_webhooks`, org-scoped,
+reusing the pre-existing `assert_outbound_url_safe`-guarded `send_webhook`
+rather than rolling its own outbound call). The other six are three new
+`EmailService` senders for Feature 08's Follow-up Form stage and
+inactivity emails, plus the repo-wide email-fingerprint sweep's edit to
+`message_history.py`'s search. Every context value reaching an HTML email
+body was traced by hand against `_replace_variables`'s escaping and the
+`_RAW_HTML_VARIABLES` allowlist; none bypasses it. The fingerprint-based
+search is appended to an already org-scoped query and degrades to
+`false()` (matches nothing) on a non-email search term rather than ever
+widening the match. No auth, tenancy, injection or exposure finding.
+
+Routes re-enumerated by AST at 51 (13 `messages.py` + 2
+`message_history.py` + 20 `notifications.py` + 16 `email_templates.py`),
+unchanged from pass 10. `SMSService(` direct-call sweep: still exactly the
+two allowlisted sites. `.ilike`/`.like` sweep: still all three sites pass
+`escape=LIKE_ESCAPE_CHAR`. 0 fixes needed, 0 new findings. MSG-3, MAIL-4,
+the SMTP-host F4 and the `NotificationRuleCreate.config` unbounded-JSON
+note remain the only open items — all unchanged by-design/owner decisions.
+Full writeup: `docs/security-review/MSG-25-messaging-notifications.md`'s
+**Pass 11** section.
+
+Completion gate: flake8/black/isort (all at CI's pinned versions, against
+`app/`, `tests/`, `alembic/`) clean; `validate_migrations.py --strict` —
+678 revisions, single head; scoped pytest (`-k "message or notification or
+email_template or smtp_batch or gmail or google_oauth or follow_up or
+inactivity or cert_alert or member_archive or event_request_pipeline_review
+or webhook"`) — 1,660 passed, 1 pre-existing unrelated skip; frontend
+`typecheck` and `lint` both clean; scoped vitest for
+`src/modules/communications` (275 passed) and
+`src/modules/prospective-members` (351 passed).
+
+Rotation row 25 → ✅ (pending this PR's merge); next is Feature 26
+(Forms).
 
 ### 2026-10-30 — Feature 24 (Meetings & minutes, pass 11) — watchdog pickup, zero-delta, 0 fixed, 0 new findings
 
