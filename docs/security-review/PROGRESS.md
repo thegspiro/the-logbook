@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR, number filled in once opened)** (branch
-`claude/security-review-permissions-roles-p14`) — Feature 02 (Permissions &
-roles), pass 14, a watchdog pickup (the dedicated
+**PR [#3871](https://github.com/thegspiro/the-logbook/pull/3871)**
+(branch `claude/security-review-permissions-roles-p14`) — Feature 02
+(Permissions & roles), pass 14, a watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable). Step 0 (re-verified fresh against
 `search_pull_requests`, `head:claude/security-review-` `is:open`) found 0
