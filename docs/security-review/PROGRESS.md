@@ -16,6 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3878](https://github.com/thegspiro/the-logbook/pull/3878)**
+(branch `claude/security-review-public-surface-webhooks`) — Feature 03
+(Public surface & webhooks), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). Step 0 (re-verified fresh against
+`list_pull_requests`/`search_pull_requests`, `is:open`) found 0 open
+security-review PRs: PR #3871 (Feature 02, Permissions & roles, pass 14)
+had already merged (`f9220b364`), marking row 02 `✅`. Row 03 was the next
+`⬜`. See `docs/security-review/PUB-03-public-surface-webhooks.md`'s
+**Pass 14** section for the full review: baseline `d2cd227f` to head
+`ffcced29d`, 277 commits (180 non-merge). A fresh AST route walk across all
+15 route-bearing files under `app/api/public/` finds **48 routes** (up from
+pass 13's 45 — a new `follow_up_forms.py` adds 3), all mounted in
+`main.py`, none orphaned. The real delta is a new public Follow-up Form
+surface (a pipeline stage's personal, no-sign-in applicant link) plus a
+data-correctness fix to three previously-null public-portal statistics;
+the three webhook handlers and every other public route are
+byte-identical to pass 13's reviewed state. 2 fixes, both LOW: **PUB-13**
+— the two public guest-sign-in _info_ endpoints (kiosk + event-link paths)
+still reported `is_open: true` after attendance was finalized, because an
+Oct 28 commit updated the write guard and the manager's card to the new
+combined `guest_sign_in_state` check but missed these read endpoints,
+which the frontend sign-in page relies on to decide whether to show the
+form at all (guard tests confirmed red pre-fix). **PUB-14** — the new
+follow-up-form link token had no entry in either side's client-error path
+redaction list (`error_reporting.py`/`errorReporting.ts`), unlike every
+other public bearer-token workflow, so a client-side error report from the
+applicant's form page would have written the token in clear text into
+`error_logs` (guard tests confirmed red pre-fix on both sides). Neither is
+an owner decision, so no `docs/KNOWN_LIMITATIONS.md` entry. PUB-1 through
+PUB-12 re-verified unaffected; PUB-3 (INFO, accepted by design) unchanged.
+Completion gate green (flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 679 revisions, single head;
+`check_route_permissions.py --strict` — 281 routes, 0 errors/warnings;
+scoped backend tests, 1629 passed, 1 pre-existing skip; frontend
+typecheck/lint clean; `errorReporting.test.ts` 71 passed).
+
+Rotation row 03 → ✅ (pending this PR's merge). Re-check
+`list_pull_requests`/`search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 14, PR #3871, merged), preserved for history</summary>
+
 **PR [#3871](https://github.com/thegspiro/the-logbook/pull/3871)**
 (branch `claude/security-review-permissions-roles-p14`) — Feature 02
 (Permissions & roles), pass 14, a watchdog pickup (the dedicated
@@ -60,6 +104,8 @@ found already merged and clear before starting Feature 02's own review.
 Rotation row 02 → ✅ (pending this PR's merge). Re-check
 `list_pull_requests`/`search_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 14, PR #3870, merged), preserved for history</summary>
