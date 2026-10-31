@@ -2560,10 +2560,11 @@ class SchedulingService:
                 ),
             )
         )
+        driver_seats = await self._driver_seat_values(organization_id)
         drivers = [
             assignment
             for assignment in result.scalars().all()
-            if self._is_driver_position(assignment.position)
+            if self._is_driver_position(assignment.position, driver_seats)
         ]
         if not drivers:
             return None
@@ -4980,12 +4981,52 @@ class SchedulingService:
     # ============================================
 
     @staticmethod
-    def _is_driver_position(position: Any) -> bool:
-        """Whether a position value names the driver seat."""
+    def _is_driver_position(
+        position: Any, driver_seats: frozenset[str] = frozenset({"driver"})
+    ) -> bool:
+        """Whether a position value names a seat that drives the apparatus.
+
+        ``driver_seats`` comes from ``_driver_seat_values``: the built-in
+        ``driver`` plus every custom position the department flagged.
+        """
         if position is None:
             return False
         value = getattr(position, "value", position)
-        return str(value).strip().lower() == "driver"
+        return str(value).strip().lower() in driver_seats
+
+    async def _driver_seat_values(self, organization_id: UUID | str) -> frozenset[str]:
+        """The seat names the EVOC check applies to in this department.
+
+        Seat names are stored as typed, so a department that calls its wheel
+        seat "Engineer" or "Driver/Operator" seated members with no EVOC level
+        and no warning (KNOWN_LIMITATIONS, shifts-module review item 8). A
+        custom position marked "Drives apparatus" in Scheduling Settings is
+        held to the same check as ``driver``, which is always one.
+        """
+        from app.services.scheduling_module_config_service import (
+            SchedulingModuleConfigService,
+        )
+
+        # Read once per service instance: generation asks for every seat of
+        # every occurrence, and the answer cannot change inside one request.
+        cache: Dict[str, frozenset[str]] = self.__dict__.setdefault(
+            "_driver_seat_cache", {}
+        )
+        cached = cache.get(str(organization_id))
+        if cached is not None:
+            return cached
+        settings, _ = await SchedulingModuleConfigService(self.db).get_settings(
+            str(organization_id)
+        )
+        seats = {"driver"}
+        for custom in settings.get("custom_positions") or []:
+            if not isinstance(custom, dict) or not custom.get("drivesApparatus"):
+                continue
+            value = str(custom.get("value") or "").strip().lower()
+            if value:
+                seats.add(value)
+        cache[str(organization_id)] = frozenset(seats)
+        return cache[str(organization_id)]
 
     async def _evaluate_driver_seat(
         self,
@@ -5002,7 +5043,9 @@ class SchedulingService:
         ``evaluate_driver_assignment`` consults — nothing here needs to know
         about it beyond honouring the answer.
         """
-        if not self._is_driver_position(position):
+        if not self._is_driver_position(
+            position, await self._driver_seat_values(organization_id)
+        ):
             return None
 
         # Imported here rather than at module scope: the eligibility service
@@ -5753,7 +5796,8 @@ class SchedulingService:
             # to driver — the same unqualified driver, one request later.
             driver_verdict: Optional[Dict[str, Any]] = None
             if "position" in update_data and self._is_driver_position(
-                update_data.get("position")
+                update_data.get("position"),
+                await self._driver_seat_values(organization_id),
             ):
                 driver_verdict = await self._check_driver_qualification(
                     user_id=str(assignment.user_id),

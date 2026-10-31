@@ -3867,6 +3867,14 @@ standing shift like any built-in seat.
 A shift that is open to all members also opens it. Paramedic is never on
 either list: that seat comes from a member's certification, not their rank.
 
+**A seat that drives the vehicle needs Drives apparatus ticked** _(2026-10-31)_.
+If your department calls its wheel seat something other than Driver, such as
+"Engineer", tick **Drives apparatus** beside it under **Position Names**. That
+seat then gets the same EVOC check as the Driver seat: a member without the
+vehicle's EVOC level is refused, a generated shift leaves the seat empty, and
+the position roster shows each member's EVOC card. Without the tick, the seat
+is not checked.
+
 **A member can only be put in a seat the shift has.** Asking for a seat the
 shift doesn't have is refused with _"'…' is not a seat on this shift. Choose
 one of the seats the shift lists, or add the seat to the shift first."_

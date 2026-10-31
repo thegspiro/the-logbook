@@ -2562,6 +2562,12 @@ recorded here rather than built.
    "Engineer" or "Driver/Operator" seats members without the required EVOC
    level, with no block or warning. A fix is a "drives apparatus" flag on the
    seat definition or an alias list.
+   **Resolved (2026-10-31), owner decision: a "Drives apparatus" flag.** Each
+   custom position under Scheduling Settings → Position Names carries a
+   **Drives apparatus** tick (`drivesApparatus`, off by default). A ticked seat
+   gets the driver EVOC check everywhere `driver` does: assignment, editing
+   an assignment, re-timing or re-vehicling a shift, and pattern generation.
+   `driver` is always checked. Covered by `tests/test_custom_driver_seats.py`.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
