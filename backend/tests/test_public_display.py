@@ -234,6 +234,70 @@ class TestGuestCheckInDailyCapOrdering:
         cap_mock.assert_awaited_once()
 
 
+class TestGuestCheckInInfoReflectsAttendanceLock:
+    """The info the sign-in page reads must agree with what the write
+    endpoint enforces (``GuestCheckInService.guest_sign_in_state``), not
+    merely with the check-in window. Otherwise the page keeps showing the
+    sign-in form once attendance has been finalized, and the guest is
+    refused only after filling it in (PUB-13)."""
+
+    def _event(self, **overrides):
+        now = datetime.now(tz.utc)
+        defaults = dict(
+            id=uuid4(),
+            title="Open House",
+            event_type=None,
+            start_datetime=now - timedelta(minutes=5),
+            end_datetime=now + timedelta(hours=1),
+            actual_start_time=None,
+            actual_end_time=None,
+            check_in_window_type=CheckInWindowType.FLEXIBLE,
+            check_in_minutes_before=30,
+            check_in_minutes_after=None,
+            allow_guest_check_in=True,
+            guest_check_in_creates_prospect=False,
+            attendance_finalized_at=now - timedelta(minutes=1),
+            custom_fields={},
+        )
+        defaults.update(overrides)
+        return SimpleNamespace(**defaults)
+
+    async def test_finalized_attendance_reports_closed(self, monkeypatch):
+        location = SimpleNamespace(id=LOC_ID, organization_id="org-1", name="Station 1")
+        org = SimpleNamespace(name="Test Dept", timezone="UTC")
+        event = self._event()
+        monkeypatch.setattr(
+            display,
+            "_resolve_guest_event",
+            AsyncMock(return_value=(location, event, org)),
+        )
+
+        result = await display.get_guest_check_in_info(
+            display_code="abc123", event_id=event.id, db=_db()
+        )
+
+        assert result.is_open is False
+        assert result.closed_reason == "Attendance for this event has been closed."
+
+    async def test_open_window_still_reports_open(self, monkeypatch):
+        """Control: a genuinely open event is unaffected by this check."""
+        location = SimpleNamespace(id=LOC_ID, organization_id="org-1", name="Station 1")
+        org = SimpleNamespace(name="Test Dept", timezone="UTC")
+        event = self._event(attendance_finalized_at=None)
+        monkeypatch.setattr(
+            display,
+            "_resolve_guest_event",
+            AsyncMock(return_value=(location, event, org)),
+        )
+
+        result = await display.get_guest_check_in_info(
+            display_code="abc123", event_id=event.id, db=_db()
+        )
+
+        assert result.is_open is True
+        assert result.closed_reason is None
+
+
 class TestGuestCheckInFlag:
     """The kiosk only draws a guest QR code for events that opted in.
 

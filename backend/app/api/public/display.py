@@ -455,7 +455,7 @@ async def get_guest_check_in_info(
     """
     location, event, org = await _resolve_guest_event(db, display_code, event_id)
 
-    is_open, closed_reason = GuestCheckInService.check_in_window_state(
+    is_open, closed_reason = GuestCheckInService.guest_sign_in_state(
         event, datetime.now(timezone.utc)
     )
 
