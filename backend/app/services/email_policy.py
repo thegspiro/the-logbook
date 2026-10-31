@@ -391,6 +391,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A member declined a shift",
             "Shift drafts finalized",
             "Attendance to validate after a shift",
+            "Seats automatic shift generation could not fill",
         ),
         rationale="The task also waits in the bell and on the schedule.",
     ),

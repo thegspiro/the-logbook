@@ -15,6 +15,7 @@
 import uuid
 from datetime import date, datetime, timezone
 from typing import Optional
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.api.v1.endpoints import scheduling as scheduling_endpoint
 from app.core.database import get_db
+from app.models.notification import NotificationLog
 from app.models.training import (
     PatternType,
     Shift,
@@ -480,6 +482,69 @@ class TestGeneratedSeats:
         warnings = service.last_generation_seat_warnings
         assert len(warnings) == 2
         assert any("officer" in w for w in warnings)
+
+    async def test_the_scheduled_run_tells_the_schedulers_who_was_not_seated(
+        self, db_session
+    ):
+        """KNOWN_LIMITATIONS shifts-module review item 2: the scheduled run
+        logged a count and nobody in the app heard."""
+        dept = await _dept(db_session, open_positions=["firefighter"])
+        service = SchedulingService(db_session)
+        a, b = await self._members(dept, 2)
+        template = await _template(dept, "Crew", positions=SEATS)
+        pattern = await _pattern(
+            dept,
+            template,
+            assigned_members=[
+                {"user_id": a.id, "position": "officer"},
+                {"user_id": b.id, "position": "firefighter"},
+            ],
+        )
+        pattern.name = "Engine crew"
+        pattern.end_date = START
+        await db_session.flush()
+        email_cls = MagicMock()
+        email_cls.return_value.send_email = AsyncMock(return_value=(1, 0))
+
+        with patch("app.services.email_service.EmailService", email_cls):
+            created = await service.auto_generate_shifts_for_org(
+                dept["org_id"], 1, reference_date=START
+            )
+
+        assert created == 1
+        entries = (
+            await db_session.scalars(
+                select(NotificationLog).where(
+                    NotificationLog.organization_id == dept["org_id"],
+                    NotificationLog.category == "shift_generation_skips",
+                )
+            )
+        ).all()
+        assert [e.recipient_id for e in entries] == [dept["user"].id]
+        assert entries[0].subject == ("Automatic shift generation left 1 seat unfilled")
+        assert "Engine crew: 2026-03-02: ff0 Test not seated" in entries[0].message
+        sent = email_cls.return_value.send_email.await_args.kwargs
+        assert sent["to_emails"] == [dept["user"].email]
+        assert "Engine crew: 2026-03-02: ff0 Test not seated" in sent["text_body"]
+
+    async def test_a_full_crew_sends_no_notice(self, db_session):
+        dept = await _dept(db_session, open_positions=["firefighter"])
+        service = SchedulingService(db_session)
+        (b,) = await self._members(dept, 1)
+        template = await _template(
+            dept, "Crew", positions=[{"position": "firefighter", "required": True}]
+        )
+        pattern = await _pattern(dept, template, assigned_members=[{"user_id": b.id}])
+        pattern.end_date = START
+        await db_session.flush()
+        notify = AsyncMock()
+
+        with patch.object(service, "notify_generation_skips", notify):
+            await service.auto_generate_shifts_for_org(
+                dept["org_id"], 1, reference_date=START
+            )
+
+        notify.assert_not_awaited()
 
     async def test_live_platoon_members_take_the_seats_they_qualify_for(
         self, db_session

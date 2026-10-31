@@ -2090,6 +2090,9 @@ class SchedulingService:
 
         held = await self.inactive_templates_by_pattern(patterns, organization_id)
         total = 0
+        # Seats each pattern left empty this run, reported to the schedulers
+        # once the run is done (see notify_generation_skips).
+        skipped_by_pattern: Dict[str, List[str]] = {}
         for pattern in patterns:
             if str(pattern.id) in held:
                 # Skipped, not failed: the pattern is paused by its template's
@@ -2124,19 +2127,150 @@ class SchedulingService:
                     )
                     continue
                 total += len(created)
+                skipped = list(self.last_generation_warnings or []) + list(
+                    self.last_generation_seat_warnings or []
+                )
                 # Counts only: the warning text names members, and a count is
                 # enough to send someone to the pattern.
-                if self.last_generation_seat_warnings:
+                if skipped:
                     logger.warning(
-                        "Auto-generation for pattern {} left {} member(s) unseated",
+                        "Auto-generation for pattern {} left {} seat(s) unfilled",
                         pattern.id,
-                        len(self.last_generation_seat_warnings),
+                        len(skipped),
                     )
+                    skipped_by_pattern[pattern.name or "Unnamed pattern"] = skipped
             except Exception as e:
                 logger.warning(
                     "Auto-generation for pattern {} errored: {}", pattern.id, e
                 )
+        if skipped_by_pattern:
+            try:
+                await self.notify_generation_skips(organization_id, skipped_by_pattern)
+            except Exception as e:
+                # The shifts are already committed; a failed notice must not
+                # report the run as failed.
+                await self.db.rollback()
+                logger.warning(
+                    "Generation skip notice for org {} failed: {}", organization_id, e
+                )
         return total
+
+    # Lines of an emailed or in-app skip list; the rest is summarised as a
+    # count so a pattern whose crew lost eligibility wholesale stays readable.
+    GENERATION_SKIP_LIST_LIMIT = 50
+
+    async def notify_generation_skips(
+        self, organization_id: UUID | str, skipped_by_pattern: Dict[str, List[str]]
+    ) -> int:
+        """Tell the schedulers which seats automatic generation left empty.
+
+        A manual Generate names these in its toast; the scheduled run had only
+        a count in the server log, so a department whose members lack a rank,
+        qualification or open position saw crews left short with no notice
+        (KNOWN_LIMITATIONS, shifts-module review item 2). Every
+        ``scheduling.manage`` holder gets a bell entry; those who keep
+        Scheduling officer duties email also get the list by email.
+
+        Sent once per run. A rerun does not repeat it: the occurrence ledger
+        means the same occurrence is not generated, and so not skipped, twice.
+        Returns the number of officers notified.
+        """
+        from sqlalchemy.orm import selectinload
+
+        from app.core.config import settings
+        from app.core.permissions import permission_matches
+        from app.models.user import ACTIVE_ACCOUNT_STATUSES
+        from app.services.email_service import EmailService, wrap_email_body
+        from app.services.officer_alert_copies import add_in_app_copies
+
+        org = await self.db.get(Organization, str(organization_id))
+        if org is None:
+            return 0
+        users = (
+            await self.db.execute(
+                select(User)
+                .where(User.organization_id == str(organization_id))
+                .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
+                .where(User.deleted_at.is_(None))
+                .options(selectinload(User.roles))
+            )
+        ).scalars()
+        schedulers = [
+            user
+            for user in users
+            if permission_matches(
+                "scheduling.manage",
+                {p for role in (user.roles or []) for p in (role.permissions or [])},
+            )
+        ]
+        if not schedulers:
+            return 0
+
+        lines = [
+            f"{name}: {warning}"
+            for name, warnings in sorted(skipped_by_pattern.items())
+            for warning in warnings
+        ]
+        shown = lines[: self.GENERATION_SKIP_LIST_LIMIT]
+        more = len(lines) - len(shown)
+        count = len(lines)
+        subject = (
+            f"Automatic shift generation left {count} "
+            f"seat{'s' if count != 1 else ''} unfilled"
+        )
+        summary = (
+            "The scheduled run generated shifts but could not seat everyone the "
+            "pattern names. The seats are open on the schedule; fill them by hand "
+            "or check the members' rank, qualifications and open positions."
+        )
+        tail = f"\n…and {more} more" if more else ""
+        action_path = "/scheduling/admin/planning/patterns"
+
+        await add_in_app_copies(
+            self.db,
+            organization_id=str(organization_id),
+            recipient_ids=[str(u.id) for u in schedulers],
+            category="shift_generation_skips",
+            subject=subject,
+            message=summary + "\n\n" + "\n".join(shown) + tail,
+            action_url=action_path,
+        )
+        await self.db.commit()
+
+        required = department_required_kinds(org)
+        emails = [
+            u.email
+            for u in schedulers
+            if u.email
+            and member_receives_email(
+                u.notification_preferences, EmailKind.SCHEDULING_DUTIES, required
+            )
+        ]
+        if emails:
+            url = f"{settings.FRONTEND_URL}{action_path}"
+            items = "".join(f"<li>{_html.escape(line)}</li>" for line in shown)
+            more_html = f"<p>…and {more} more.</p>" if more else ""
+            html_body = wrap_email_body(
+                org,
+                "Shift generation left seats unfilled",
+                f"<p>{_html.escape(summary)}</p><ul>{items}</ul>{more_html}"
+                f'<p style="text-align: center;"><a href="{_html.escape(url)}" '
+                'class="button" role="link">Open shift patterns</a></p>',
+            )
+            text_body = (
+                summary + "\n\n" + "\n".join(shown) + tail + f"\n\nOpen: {url}\n"
+            )
+            email_service = EmailService(organization=org)
+            # One message per officer: a shared To line would show every
+            # scheduler's address to the others.
+            for address in emails:
+                await email_service.send_email(
+                    to_emails=[address],
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                )
+        return len(schedulers)
 
     async def get_shifts_for_user_feed(
         self, user: User, start_date: date, end_date: date
@@ -4290,6 +4424,7 @@ class SchedulingService:
         # Members the pattern names who could not be seated: not eligible for
         # the seat, the seat already full, or a conflict on that date.
         skipped_seats: List[str] = []
+        self.last_generation_warnings = []
         self.last_generation_seat_warnings = []
         try:
             pattern = await self.get_pattern_by_id(pattern_id, organization_id)

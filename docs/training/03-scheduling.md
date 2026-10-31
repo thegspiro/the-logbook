@@ -3312,6 +3312,16 @@ Automatic shift generation**, active patterns keep generating shifts ahead by
 themselves. It is off unless you turn it on. **Weeks ahead** sets how far
 (1 to 52; 4 when first turned on).
 
+**When automatic generation leaves a seat empty** _(2026-10-31)_, everyone who
+can manage schedules gets a bell notification, _"Automatic shift generation
+left N seats unfilled"_. It names each pattern, date and member, with the
+reason. Those who keep **Scheduling officer duties** email also get the list by
+email. A seat is left empty for the same reasons a manual **Generate** reports
+one: the member's rank, qualifications or open positions don't fit the seat,
+the seat is full, the member is on leave or already working, or the driver
+seat needs an EVOC level the member does not hold. The seats stay open on the
+schedule for you to fill.
+
 #### Pausing a pattern and reactivating a template _(2026-10-25)_
 
 - **Pause** on a pattern stops it generating shifts, by schedule or by hand;

@@ -2507,6 +2507,12 @@ recorded here rather than built.
    position configured sees crews left unseated with no on-screen notice.
    Surfacing it (a notification to schedulers, or a badge on the pattern) is
    open.
+   **Resolved (2026-10-31), owner decision: notify the schedulers.** After a
+   scheduled run, every `scheduling.manage` holder gets a bell entry listing
+   each pattern's empty seats (driver seats included), and those who keep
+   Scheduling officer duties email get the same list by email. Sent once per
+   run; the occurrence ledger (item 1) keeps a rerun from repeating it. Covered
+   by `test_the_scheduled_run_tells_the_schedulers_who_was_not_seated`.
 3. **Editing an approved shift report does not restate its training
    credit — narrowed 2026-10-27 (EC-17), still open where review is off.**
    An edit to an approved report now sends it back to `pending_review` in any
