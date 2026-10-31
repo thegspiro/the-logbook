@@ -16,6 +16,55 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+(branch `claude/security-review-storefront-payments`) — Feature 04
+(Storefront & payments), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents`). Step 0
+(`gh api repos/.../pulls?state=open`) found 0 open PRs whose head branch
+starts with `claude/security-review-`: the three open PRs at the time
+(#3875, #3876, #3877) are all unrelated feature work. PR #3878 (Feature 03,
+Public surface & webhooks, pass 14) had already merged (`657911daa`),
+marking row 03 `✅`. Row 04 was the next `⬜`, confirmed on a freshly
+unshallowed `main`.
+
+See `docs/security-review/SF-04-storefront-payments.md`'s **Pass 14**
+section for the full review: baseline `7c0162c06` (PR #3805, pass 13's
+merge) to current `main`. Only **2** non-merge commits touch this feature's
+declared scope, both read in full and neither a security change: a new
+in-app bell entry for store-admin notices (`get_admin_user_ids` is freshly
+org-scoped and `ACTIVE_ACCOUNT_STATUSES`-compliant; the message renders as
+plain JSX text, never `dangerouslySetInnerHTML`, so no injection concern
+even though it interpolates a user-controlled display name), and a
+frontend-only layout-shift fix to `StoreAdminPage.tsx` (an
+invisible-while-loading back-link correctly paired with `tabIndex={-1}`/
+`aria-hidden`). Every core payment file (`storefront.py`,
+`storefront_service.py`, `schemas/storefront.py`, `paypal_webhook.py`,
+`models/storefront.py`, etc.) is byte-identical to pass 13's state
+(confirmed by an empty `git diff --stat`), so the price-integrity,
+capacity-locking, separation-of-duties and PayPal-replay-guard mechanisms
+all carry forward unchanged with no re-derivation needed. A fresh,
+independent AST route walk finds **48** routes — identical to pass
+11/12/13's count — all re-confirmed against their `Depends`/
+`require_permission` gate; no new migration touches a storefront table.
+The two standing findings this feature carried (SF8-04-2, SF8-04-3) were
+already confirmed FIXED in pass 13 and remain fixed, since the file that
+held both is unchanged.
+
+**0 fixed, 0 new findings.** Completion gate green: flake8/black/isort on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` — 679 revisions,
+single head; `check_route_permissions.py --strict` — 281 routes, 0
+errors/warnings; scoped backend tests (`-k "storefront or stripe or
+payment or refund or checkout"`) — 603 passed, 1 environment-only skip
+(`pywebpush`); storefront + bell-copy guard suites — 66 passed; standing
+repo-wide guard suites — 171 passed; frontend typecheck/lint clean.
+
+Rotation row 04 → ✅ (pending this PR's merge). Re-check `gh api
+repos/.../pulls?state=open` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 14, PR #3878, merged), preserved for history</summary>
+
 **PR [#3878](https://github.com/thegspiro/the-logbook/pull/3878)**
 (branch `claude/security-review-public-surface-webhooks`) — Feature 03
 (Public surface & webhooks), pass 14, a watchdog pickup (the dedicated
@@ -53,9 +102,10 @@ Completion gate green (flake8/black/isort on `app/ tests/ alembic/`;
 scoped backend tests, 1629 passed, 1 pre-existing skip; frontend
 typecheck/lint clean; `errorReporting.test.ts` 71 passed).
 
-Rotation row 03 → ✅ (pending this PR's merge). Re-check
-`list_pull_requests`/`search_pull_requests` fresh rather than trusting this
-note.
+Rotation row 03 → ✅ (merged as `657911daa`); next was Feature 04
+(Storefront & payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 14, PR #3871, merged), preserved for history</summary>
@@ -23985,7 +24035,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -24023,6 +24073,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-31 — Feature 04 (Storefront & payments, pass 14) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`. Step 0 (`gh api repos/thegspiro/the-logbook/pulls?state=open`)
+found 0 open PRs whose head branch starts with `claude/security-review-`:
+the three open PRs at the time (#3875, #3876, #3877) are all unrelated
+feature work. PR #3878 (Feature 03, Public surface & webhooks, pass 14)
+had already merged (`657911daa`). Row 04 was the next `⬜` on a freshly
+unshallowed `main`.
+
+See `docs/security-review/SF-04-storefront-payments.md`'s **Pass 14**
+section for the full review: baseline `7c0162c06` (PR #3805's merge, pass 13) to current `main`. Only 2 non-merge commits touch this feature's
+declared scope, both read in full: a new in-app bell entry for
+store-admin new-order notices (`storefront_notification_service.py`, fresh
+org-scoping confirmed, `ACTIVE_ACCOUNT_STATUSES`-compliant, message
+renders as plain JSX text so no injection concern) and a frontend-only
+layout-shift fix to `StoreAdminPage.tsx`'s back link (correctly
+`tabIndex`/`aria-hidden` paired with its invisibility). Every core
+payment file is byte-identical to pass 13's reviewed state (empty `git
+diff --stat`), so price-integrity, capacity-locking,
+separation-of-duties and the PayPal replay guard all carry forward
+unchanged. A fresh, independent AST route walk re-confirms **48** routes
+(unchanged from pass 11/12/13), all re-checked against their permission
+gate; no new storefront migration landed. The two standing findings this
+feature carried, SF8-04-2 and SF8-04-3, were already confirmed FIXED in
+pass 13 and remain fixed, since the file holding both is unchanged.
+
+**0 fixed, 0 new findings** — a legitimate, normal outcome of this
+rotation. Completion gate green: flake8/black/isort on `app/ tests/
+alembic/`; `validate_migrations.py --strict` — 679 revisions, single head;
+`check_route_permissions.py --strict` — 281 routes, 0 errors/warnings;
+scoped backend tests (`-k "storefront or stripe or payment or refund or
+checkout"`) — 603 passed, 1 environment-only skip (`pywebpush`);
+storefront + bell-copy guard suites — 66 passed; standing repo-wide guard
+suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping,
+`create_all`-table tolerance, baseline member grants, account-status
+gates) — 171 passed; frontend typecheck/lint clean.
+
+Rotation row 04 → ✅ (pending PR merge); next is Feature 05 (Finance &
+approvals).
 
 ### 2026-10-31 — Feature 03 (Public surface & webhooks, pass 14) — watchdog pickup, 2 fixed (LOW), 0 new OPEN findings
 
