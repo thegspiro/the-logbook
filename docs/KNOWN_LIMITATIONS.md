@@ -6355,6 +6355,13 @@ can't be attached from the app yet." A department that needs a file on an event
 attaches it through the API. Building the control, or dropping the endpoint, is
 an owner decision.
 
+**Resolved (2026-10-31), owner decision: add the control.** The event page's
+**Attachments** card shows **Attach file** and a remove button for each file
+to `events.manage` holders. It shows even when the event has no files yet.
+It uses the existing endpoints and the server's type and size rules (25 MB,
+also checked in the browser before sending). Removing asks first. Covered by
+`EventAttachmentsList.test.tsx`.
+
 ## Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)
 
 Workflow review W44 (`docs/workflow-review/W44-nfc.md`) and the NFC design left
