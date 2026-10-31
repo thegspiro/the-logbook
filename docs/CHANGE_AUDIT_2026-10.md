@@ -5,6 +5,26 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 30 – 31, 2026
+
+Merged to `main` after `6bf6ba32` (2026-10-30 12:40 UTC) through `f9220b3`
+(2026-10-31 00:40 UTC). Security-review passes (locations-kiosk, core-infra,
+frontend-shared, cross-cutting-baseline with SEC14-1 fixed, auth-session) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                               | Guide | Disposition                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | -------------------------------------------------------------------------------------------- |
+| Card and list rows (87 of them) use the new `split-row` utilities: the buttons wrap under the title instead of squeezing it a word per line when the sidebar is open (#3864)         | none  | Visual only; screenshots of such rows between 768 and ~1100px wide may differ, see the queue |
+| Member profile **Voting eligibility** card stacks its fields in one column (#3864)                                                                                                   | 14    | The card's screenshot is already queued; capture it after this change                        |
+| Update and chunk recovery: an unreachable page chunk no longer reloads forever, double taps on **Reload now** join one attempt, and Firefox's chunk-load error is recognised (#3863) | none  | No guide described the reload loop                                                           |
+| pypdf 6.21.4 (CVE-2026-119203 to -205), follow-redirects 1.16.2 (GHSA-mrwp-f3q8-3g9p); SEC14-1: an import error no longer carries a raw exception message (#3869, #3870)             | none  | Dependency and backend only                                                                  |
+| Refusal-message sweep test follows objects returned from calls (#3864)                                                                                                               | none  | Test only                                                                                    |
+
+**Screenshots to create:** none new. **Re-check:** the member profile
+**Voting eligibility** card (single column), and any shot of a card or list row
+with buttons at the right on a mid-width screen. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 29 – 30, 2026
 
 Merged to `main` since `2aac367a` (2026-10-29 11:29 UTC) through `6bf6ba32`
