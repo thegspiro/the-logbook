@@ -24103,7 +24103,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-10-31 — Feature 04 (Storefront & payments, pass 14) — watchdog pickup, 0 fixed, 0 new findings
+### 2026-10-31 — Feature 04 (Storefront & payments, pass 14) — watchdog pickup, 1 fixed (LOW), 0 open findings remain (amended same day)
 
 Watchdog pickup. The dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
@@ -24131,8 +24131,7 @@ gate; no new storefront migration landed. The two standing findings this
 feature carried, SF8-04-2 and SF8-04-3, were already confirmed FIXED in
 pass 13 and remain fixed, since the file holding both is unchanged.
 
-**0 fixed, 0 new findings** — a legitimate, normal outcome of this
-rotation. Completion gate green: flake8/black/isort on `app/ tests/
+Completion gate green on this delta: flake8/black/isort on `app/ tests/
 alembic/`; `validate_migrations.py --strict` — 679 revisions, single head;
 `check_route_permissions.py --strict` — 281 routes, 0 errors/warnings;
 scoped backend tests (`-k "storefront or stripe or payment or refund or
@@ -24141,6 +24140,36 @@ storefront + bell-copy guard suites — 66 passed; standing repo-wide guard
 suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping,
 `create_all`-table tolerance, baseline member grants, account-status
 gates) — 171 passed; frontend typecheck/lint clean.
+
+**Amended same day, same PR, before merge — a second, independent watchdog
+session reviewing this exact delta found one real gap the above missed.**
+Reading the new `get_admin_user_ids` next to the two sibling functions it
+sits beside in `storefront_notification_service.py` — rather than only
+confirming the new function was itself correct — found that
+`get_admin_recipients` had **no account-status filter at all**, not even
+the literal `== ACTIVE` CLAUDE.md Pitfall #32's sweep checks for. Nothing
+in the member drop/retire flow revokes a position, so a retired or
+dropped quartermaster/chief kept receiving every new store order's
+customer name, email and shipping address by mail indefinitely — the
+opposite direction from the usual Pitfall #32 shape. **SF14-04-1** (LOW,
+fixed) — added `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, mirroring both
+siblings; narrowing-only, no existing test exercised the real query, so
+nothing broke. Guarded by 2 new DB-backed tests in
+`test_storefront_notifications.py::TestAdminRecipientsExcludeFormerOfficers`,
+both seen to fail against the pre-fix code before the fix (Pitfall #37).
+Pushed as a third commit onto this same branch/PR rather than opening a
+second, competing PR for the same rotation slot (two sessions picked up
+the same `⬜` row within minutes of each other). Gate re-run after the
+amendment: flake8/black/isort clean (isort initially flagged the
+amendment's own import order, fixed); scoped backend tests
+(`-k "storefront or stripe or payment or refund or checkout or paypal"`,
+no `-m` exclusion, matching this feature's own convention of running its
+`db_session`-backed money tests directly) — 953 passed, 1 skipped,
+including the 2 new tests; frontend typecheck/lint unaffected.
+
+**1 fixed (LOW) total; 0 findings remain OPEN or FLAGGED for this feature
+going into pass 15.** See `docs/security-review/SF-04-storefront-payments.md`'s
+pass-14 section and addendum for the full text.
 
 Rotation row 04 → ✅ (pending PR merge); next is Feature 05 (Finance &
 approvals).
