@@ -38,6 +38,18 @@ vi.mock('../services/api', () => ({
     list: () => Promise.resolve([]),
     getAnswers: () => Promise.resolve(null),
   },
+  // A coordinator, who may log an interview for any applicant they can see.
+  applicantService: {
+    getMyAccess: () =>
+      Promise.resolve({
+        roles: [],
+        view_all: true,
+        can_work: true,
+        can_manage: true,
+        can_see_full: true,
+        can_log_interview: true,
+      }),
+  },
 }));
 
 import { InterviewPage } from './InterviewPage';
@@ -116,7 +128,8 @@ describe('InterviewPage interview form', () => {
     const user = userEvent.setup();
     renderWithRouter(<InterviewPage />);
 
-    await user.click(screen.getByRole('button', { name: 'New Interview' }));
+    // Offered once the page has the caller's access for this applicant.
+    await user.click(await screen.findByRole('button', { name: 'New Interview' }));
     await user.type(screen.getByPlaceholderText(/Record your observations/), 'First impressions');
     await user.click(screen.getByRole('button', { name: 'Submit Interview' }));
 

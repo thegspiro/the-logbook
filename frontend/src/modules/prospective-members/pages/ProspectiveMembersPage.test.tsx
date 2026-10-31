@@ -15,6 +15,17 @@ const mockCheckExisting = vi.fn();
 const mockCreateApplicant = vi.fn();
 const mockFetchApplicant = vi.fn();
 
+// A coordinator holding prospective_members.view_all: the pipeline-wide stats,
+// bulk actions and purge these tests drive are offered only with it.
+vi.mock('../../../stores/authStore', () => {
+  const state = { user: { id: 'coordinator-1' }, checkPermission: () => true };
+  return {
+    useAuthStore: Object.assign((select?: (s: typeof state) => unknown) => (select ? select(state) : state), {
+      getState: () => state,
+    }),
+  };
+});
+
 vi.mock('../services/api', () => ({
   applicantService: {
     bulkSetStatus: (...a: unknown[]) => mockBulkSetStatus(...a) as unknown,

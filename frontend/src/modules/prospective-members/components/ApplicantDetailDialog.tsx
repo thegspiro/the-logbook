@@ -48,6 +48,9 @@ import LinkedEventsSection from './LinkedEventsSection';
 import ApplicantDocumentsSection from './ApplicantDocumentsSection';
 import FollowUpFormsSection from './FollowUpFormsSection';
 import { ApplicantActionPanels } from './ApplicantActionPanels';
+import ApplicantAssignmentsSection from './ApplicantAssignmentsSection';
+import { ApplicantAccessContext, READ_ONLY_ACCESS } from './ApplicantAccessContext';
+import type { ProspectAccess } from '../types';
 
 /** Maps snake_case backend field keys to human-readable labels. */
 const FORM_FIELD_LABELS: Record<string, string> = {
@@ -168,6 +171,27 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
   const isOnElectionStage =
     applicant?.current_stage_type === StageTypeEnum.ELECTION_VOTE && applicant?.status === ApplicantStatus.ACTIVE;
 
+  // What the caller may do with this applicant, as the backend decided it.
+  // Read-only until it arrives, and if it cannot be read: a case manager or
+  // interviewer must not be offered a Reject the backend will refuse.
+  const [access, setAccess] = useState<ProspectAccess>(READ_ONLY_ACCESS);
+  useEffect(() => {
+    if (!isOpen || !applicant?.id) return undefined;
+    let cancelled = false;
+    setAccess(READ_ONLY_ACCESS);
+    applicantService
+      .getMyAccess(applicant.id)
+      .then((result) => {
+        if (!cancelled) setAccess(result);
+      })
+      .catch(() => {
+        if (!cancelled) setAccess(READ_ONLY_ACCESS);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, applicant?.id]);
+
   // Reset editing state when applicant changes
   useEffect(() => {
     setIsEditingContact(false);
@@ -271,641 +295,659 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
   const maskValue = (value: string) => (showPii ? value : '••••••••');
 
   return (
-    <DialogPortal>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Applicant details"
-      >
-        {/* Scrim as an empty sibling of the panel, so it carries no z-index of
+    <ApplicantAccessContext.Provider value={access}>
+      <DialogPortal>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Applicant details"
+        >
+          {/* Scrim as an empty sibling of the panel, so it carries no z-index of
             its own (see the modal-overlay utility) and takes no clicks: a
             click outside must not discard a half-edited contact form. */}
-        <div className="modal-overlay pointer-events-none" aria-hidden="true" />
+          <div className="modal-overlay pointer-events-none" aria-hidden="true" />
 
-        {/* DialogPanel supplies the focus trap, body scroll lock, stack-aware
+          {/* DialogPanel supplies the focus trap, body scroll lock, stack-aware
             Escape and overlay registration. The panel is a flex column under
             modal-panel-scroll's height cap so the header and the stage actions
             stay in view while only the content between them scrolls. */}
-        <DialogPanel
-          onClose={onClose}
-          className="modal-panel-scroll relative z-10 flex w-full max-w-[calc(100vw-2rem)] flex-col sm:max-w-5xl"
-        >
-          {/* Loading */}
-          {isLoadingApplicant && (
-            <div className="flex flex-1 items-center justify-center py-16" role="status" aria-live="polite">
-              <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-            </div>
-          )}
-
-          {applicant && !isLoadingApplicant && (
-            <>
-              {/* Header */}
-              <div className="border-theme-surface-border flex shrink-0 items-center justify-between border-b p-4 sm:px-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-red-600 to-red-700 text-sm font-bold text-white">
-                    {getInitials(applicant.first_name, applicant.last_name)}
-                  </div>
-                  <div>
-                    <h2 className="text-theme-text-primary text-lg font-bold">
-                      {applicant.first_name} {applicant.last_name}
-                    </h2>
-                    <p className="text-theme-text-muted text-sm capitalize">
-                      {APPLICANT_STATUS_LABELS[applicant.status]} &middot; {applicant.target_membership_type} member
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowPii(!showPii)}
-                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    title={showPii ? 'Hide personal info' : 'Show personal info'}
-                    aria-label={showPii ? 'Hide personal info' : 'Show personal info'}
-                  >
-                    {showPii ? (
-                      <EyeOff className="h-4 w-4" aria-hidden="true" />
-                    ) : (
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                    )}
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    aria-label="Close detail panel"
-                  >
-                    <X className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </div>
+          <DialogPanel
+            onClose={onClose}
+            className="modal-panel-scroll relative z-10 flex w-full max-w-[calc(100vw-2rem)] flex-col sm:max-w-5xl"
+          >
+            {/* Loading */}
+            {isLoadingApplicant && (
+              <div className="flex flex-1 items-center justify-center py-16" role="status" aria-live="polite">
+                <Loader2 className="h-8 w-8 animate-spin text-red-500" />
               </div>
+            )}
 
-              {/* Inactive Notice */}
-              {applicant.status === ApplicantStatus.INACTIVE && (
-                <div className="mx-4 mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                  <div className="mb-1 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-                    <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Application Inactive</span>
+            {applicant && !isLoadingApplicant && (
+              <>
+                {/* Header */}
+                <div className="border-theme-surface-border flex shrink-0 items-center justify-between border-b p-4 sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-red-600 to-red-700 text-sm font-bold text-white">
+                      {getInitials(applicant.first_name, applicant.last_name)}
+                    </div>
+                    <div>
+                      <h2 className="text-theme-text-primary text-lg font-bold">
+                        {applicant.first_name} {applicant.last_name}
+                      </h2>
+                      <p className="text-theme-text-muted text-sm capitalize">
+                        {APPLICANT_STATUS_LABELS[applicant.status]} &middot; {applicant.target_membership_type} member
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-theme-text-muted text-xs">
-                    This application was marked inactive
-                    {applicant.deactivated_at && <> on {formatDate(applicant.deactivated_at, tz)}</>} after a period
-                    with no activity. A coordinator can reactivate it, or the applicant can submit a new interest form.
-                  </p>
-                  {applicant.reactivated_at && (
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Previously reactivated on {formatDate(applicant.reactivated_at, tz)}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Withdrawn Notice */}
-              {applicant.status === ApplicantStatus.WITHDRAWN && (
-                <div className="card-secondary mx-4 mt-4 p-3">
-                  <div className="mb-1 flex items-center gap-2">
-                    <Archive className="text-theme-text-muted h-4 w-4" />
-                    <span className="text-theme-text-secondary text-sm font-medium">Application Withdrawn</span>
-                  </div>
-                  <p className="text-theme-text-muted text-xs">
-                    This application was withdrawn
-                    {applicant.withdrawn_at && <> on {formatDate(applicant.withdrawn_at, tz)}</>}.
-                  </p>
-                  {applicant.withdrawal_reason && (
-                    <p className="text-theme-text-muted mt-1 text-xs">Reason: {applicant.withdrawal_reason}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Content — the applicant on the left, where they stand in the
-                pipeline on the right. Stacked below lg, applicant first. */}
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid lg:grid-cols-2">
-                <div className="lg:border-theme-surface-border lg:border-r">
-                  {/* Contact Info */}
-                  <div className="border-theme-surface-border border-b p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-theme-text-muted text-xs font-medium tracking-wider uppercase">
-                        Contact Information
-                      </h3>
-                      {!isEditingContact ? (
-                        <button
-                          onClick={startEditingContact}
-                          className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          Edit
-                        </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowPii(!showPii)}
+                      className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      title={showPii ? 'Hide personal info' : 'Show personal info'}
+                      aria-label={showPii ? 'Hide personal info' : 'Show personal info'}
+                    >
+                      {showPii ? (
+                        <EyeOff className="h-4 w-4" aria-hidden="true" />
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </button>
+                    <button
+                      onClick={onClose}
+                      className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      aria-label="Close detail panel"
+                    >
+                      <X className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inactive Notice */}
+                {applicant.status === ApplicantStatus.INACTIVE && (
+                  <div className="mx-4 mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                    <div className="mb-1 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                      <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                        Application Inactive
+                      </span>
+                    </div>
+                    <p className="text-theme-text-muted text-xs">
+                      This application was marked inactive
+                      {applicant.deactivated_at && <> on {formatDate(applicant.deactivated_at, tz)}</>} after a period
+                      with no activity. A coordinator can reactivate it, or the applicant can submit a new interest
+                      form.
+                    </p>
+                    {applicant.reactivated_at && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Previously reactivated on {formatDate(applicant.reactivated_at, tz)}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Withdrawn Notice */}
+                {applicant.status === ApplicantStatus.WITHDRAWN && (
+                  <div className="card-secondary mx-4 mt-4 p-3">
+                    <div className="mb-1 flex items-center gap-2">
+                      <Archive className="text-theme-text-muted h-4 w-4" />
+                      <span className="text-theme-text-secondary text-sm font-medium">Application Withdrawn</span>
+                    </div>
+                    <p className="text-theme-text-muted text-xs">
+                      This application was withdrawn
+                      {applicant.withdrawn_at && <> on {formatDate(applicant.withdrawn_at, tz)}</>}.
+                    </p>
+                    {applicant.withdrawal_reason && (
+                      <p className="text-theme-text-muted mt-1 text-xs">Reason: {applicant.withdrawal_reason}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Content — the applicant on the left, where they stand in the
+                pipeline on the right. Stacked below lg, applicant first. */}
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid lg:grid-cols-2">
+                  <div className="lg:border-theme-surface-border lg:border-r">
+                    {/* Contact Info */}
+                    <div className="border-theme-surface-border border-b p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-theme-text-muted text-xs font-medium tracking-wider uppercase">
+                          Contact Information
+                        </h3>
+                        {!access.can_work ? null : !isEditingContact ? (
                           <button
-                            onClick={() => setIsEditingContact(false)}
-                            className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
+                            onClick={startEditingContact}
+                            className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors"
                           >
-                            Cancel
+                            <Pencil className="h-3 w-3" />
+                            Edit
                           </button>
-                          <button
-                            onClick={() => {
-                              void saveContactEdits();
-                            }}
-                            disabled={isSavingContact}
-                            className="flex items-center gap-1 text-xs text-emerald-700 transition-colors hover:text-emerald-500 disabled:opacity-50 dark:text-emerald-600"
-                          >
-                            {isSavingContact ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Save className="h-3 w-3" />
-                            )}
-                            Save
-                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setIsEditingContact(false)}
+                              className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => {
+                                void saveContactEdits();
+                              }}
+                              disabled={isSavingContact}
+                              className="flex items-center gap-1 text-xs text-emerald-700 transition-colors hover:text-emerald-500 disabled:opacity-50 dark:text-emerald-600"
+                            >
+                              {isSavingContact ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Save className="h-3 w-3" />
+                              )}
+                              Save
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isEditingContact ? (
+                        <div className="space-y-2">
+                          <div className="form-grid-2">
+                            <input
+                              type="text"
+                              value={editFields.first_name}
+                              onChange={(e) => setEditFields((f) => ({ ...f, first_name: e.target.value }))}
+                              placeholder="First name"
+                              aria-label="First name"
+                              className="form-input-sm"
+                            />
+                            <input
+                              type="text"
+                              value={editFields.last_name}
+                              onChange={(e) => setEditFields((f) => ({ ...f, last_name: e.target.value }))}
+                              placeholder="Last name"
+                              aria-label="Last name"
+                              className="form-input-sm"
+                            />
+                          </div>
+                          <input
+                            type="email"
+                            value={editFields.email}
+                            onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
+                            placeholder="Email"
+                            aria-label="Email address"
+                            className="form-input-sm"
+                          />
+                          <input
+                            type="text"
+                            value={editFields.phone}
+                            onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))}
+                            placeholder="Phone"
+                            aria-label="Phone number"
+                            className="form-input-sm"
+                          />
+                          <input
+                            type="date"
+                            value={editFields.date_of_birth}
+                            onChange={(e) => setEditFields((f) => ({ ...f, date_of_birth: e.target.value }))}
+                            aria-label="Date of birth"
+                            className="form-input-sm"
+                          />
+                          <input
+                            type="text"
+                            value={editFields.address_street}
+                            onChange={(e) => setEditFields((f) => ({ ...f, address_street: e.target.value }))}
+                            placeholder="Street address"
+                            aria-label="Street address"
+                            className="form-input-sm"
+                          />
+                          <div className="form-grid-3">
+                            <input
+                              type="text"
+                              value={editFields.address_city}
+                              onChange={(e) => setEditFields((f) => ({ ...f, address_city: e.target.value }))}
+                              placeholder="City"
+                              aria-label="City"
+                              className="form-input-sm"
+                            />
+                            <input
+                              type="text"
+                              value={editFields.address_state}
+                              onChange={(e) => setEditFields((f) => ({ ...f, address_state: e.target.value }))}
+                              placeholder="State"
+                              aria-label="State"
+                              className="form-input-sm"
+                            />
+                            <input
+                              type="text"
+                              value={editFields.address_zip}
+                              onChange={(e) => setEditFields((f) => ({ ...f, address_zip: e.target.value }))}
+                              placeholder="ZIP"
+                              aria-label="ZIP code"
+                              className="form-input-sm"
+                            />
+                          </div>
+                          <TargetRolePicker
+                            id="dialog-target-role"
+                            value={editFields.target_role_id}
+                            onChange={(target_role_id) => setEditFields((f) => ({ ...f, target_role_id }))}
+                            hint="Applied to the member record when this applicant is converted."
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Mail className="text-theme-text-muted h-4 w-4" />
+                            <span className="text-theme-text-secondary">{maskValue(applicant.email)}</span>
+                          </div>
+                          {applicant.phone && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Phone className="text-theme-text-muted h-4 w-4" />
+                              <span className="text-theme-text-secondary">{maskValue(applicant.phone)}</span>
+                            </div>
+                          )}
+                          {applicant.date_of_birth && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Calendar className="text-theme-text-muted h-4 w-4" />
+                              <span className="text-theme-text-secondary">
+                                DOB: {showPii ? formatDate(applicant.date_of_birth, tz) : '••/••/••••'}
+                              </span>
+                            </div>
+                          )}
+                          {(applicant.address?.street ||
+                            applicant.address?.city ||
+                            applicant.address?.state ||
+                            applicant.address?.zip_code) && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <MapPin className="text-theme-text-muted h-4 w-4" />
+                              <span className="text-theme-text-secondary">
+                                {showPii
+                                  ? [
+                                      applicant.address.street,
+                                      applicant.address.city,
+                                      applicant.address.state,
+                                      applicant.address.zip_code,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(', ')
+                                  : '••••••••'}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
 
-                    {isEditingContact ? (
-                      <div className="space-y-2">
-                        <div className="form-grid-2">
-                          <input
-                            type="text"
-                            value={editFields.first_name}
-                            onChange={(e) => setEditFields((f) => ({ ...f, first_name: e.target.value }))}
-                            placeholder="First name"
-                            aria-label="First name"
-                            className="form-input-sm"
-                          />
-                          <input
-                            type="text"
-                            value={editFields.last_name}
-                            onChange={(e) => setEditFields((f) => ({ ...f, last_name: e.target.value }))}
-                            placeholder="Last name"
-                            aria-label="Last name"
-                            className="form-input-sm"
-                          />
-                        </div>
-                        <input
-                          type="email"
-                          value={editFields.email}
-                          onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
-                          placeholder="Email"
-                          aria-label="Email address"
-                          className="form-input-sm"
-                        />
-                        <input
-                          type="text"
-                          value={editFields.phone}
-                          onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))}
-                          placeholder="Phone"
-                          aria-label="Phone number"
-                          className="form-input-sm"
-                        />
-                        <input
-                          type="date"
-                          value={editFields.date_of_birth}
-                          onChange={(e) => setEditFields((f) => ({ ...f, date_of_birth: e.target.value }))}
-                          aria-label="Date of birth"
-                          className="form-input-sm"
-                        />
-                        <input
-                          type="text"
-                          value={editFields.address_street}
-                          onChange={(e) => setEditFields((f) => ({ ...f, address_street: e.target.value }))}
-                          placeholder="Street address"
-                          aria-label="Street address"
-                          className="form-input-sm"
-                        />
-                        <div className="form-grid-3">
-                          <input
-                            type="text"
-                            value={editFields.address_city}
-                            onChange={(e) => setEditFields((f) => ({ ...f, address_city: e.target.value }))}
-                            placeholder="City"
-                            aria-label="City"
-                            className="form-input-sm"
-                          />
-                          <input
-                            type="text"
-                            value={editFields.address_state}
-                            onChange={(e) => setEditFields((f) => ({ ...f, address_state: e.target.value }))}
-                            placeholder="State"
-                            aria-label="State"
-                            className="form-input-sm"
-                          />
-                          <input
-                            type="text"
-                            value={editFields.address_zip}
-                            onChange={(e) => setEditFields((f) => ({ ...f, address_zip: e.target.value }))}
-                            placeholder="ZIP"
-                            aria-label="ZIP code"
-                            className="form-input-sm"
-                          />
-                        </div>
-                        <TargetRolePicker
-                          id="dialog-target-role"
-                          value={editFields.target_role_id}
-                          onChange={(target_role_id) => setEditFields((f) => ({ ...f, target_role_id }))}
-                          hint="Applied to the member record when this applicant is converted."
-                        />
+                    {/* Desired Membership Type */}
+                    <div className="border-theme-surface-border border-b p-4">
+                      <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                        Desired Membership Type
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        {(['regular', 'administrative'] as const).map((type) => {
+                          const isSelected = applicant.target_membership_type === type;
+                          const label = type === 'regular' ? 'Regular Member' : 'Administrative';
+                          const desc = type === 'regular' ? 'Starts as probationary' : 'Non-operational role';
+                          return (
+                            <button
+                              key={type}
+                              disabled={isSelected}
+                              onClick={() => {
+                                void applicantService
+                                  .updateApplicant(applicant.id, { target_membership_type: type })
+                                  .then(() => {
+                                    toast.success(`Membership type changed to ${label.toLowerCase()}`);
+                                    const { fetchApplicant } = useProspectiveMembersStore.getState();
+                                    if (fetchApplicant) {
+                                      void fetchApplicant(applicant.id);
+                                    }
+                                  })
+                                  .catch(() => {
+                                    toast.error('Failed to update membership type');
+                                  });
+                              }}
+                              className={`flex-1 rounded-lg border p-2.5 text-left transition-all ${
+                                isSelected
+                                  ? 'border-red-500 bg-red-500/10'
+                                  : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border cursor-pointer'
+                              }`}
+                            >
+                              <p className="text-theme-text-primary text-sm font-medium">{label}</p>
+                              <p className="text-theme-text-muted text-xs">{desc}</p>
+                            </button>
+                          );
+                        })}
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Mail className="text-theme-text-muted h-4 w-4" />
-                          <span className="text-theme-text-secondary">{maskValue(applicant.email)}</span>
-                        </div>
-                        {applicant.phone && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Phone className="text-theme-text-muted h-4 w-4" />
-                            <span className="text-theme-text-secondary">{maskValue(applicant.phone)}</span>
-                          </div>
-                        )}
-                        {applicant.date_of_birth && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Calendar className="text-theme-text-muted h-4 w-4" />
-                            <span className="text-theme-text-secondary">
-                              DOB: {showPii ? formatDate(applicant.date_of_birth, tz) : '••/••/••••'}
-                            </span>
-                          </div>
-                        )}
-                        {(applicant.address?.street ||
-                          applicant.address?.city ||
-                          applicant.address?.state ||
-                          applicant.address?.zip_code) && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <MapPin className="text-theme-text-muted h-4 w-4" />
-                            <span className="text-theme-text-secondary">
-                              {showPii
-                                ? [
-                                    applicant.address.street,
-                                    applicant.address.city,
-                                    applicant.address.state,
-                                    applicant.address.zip_code,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(', ')
-                                : '••••••••'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Desired Membership Type */}
-                  <div className="border-theme-surface-border border-b p-4">
-                    <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                      Desired Membership Type
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      {(['regular', 'administrative'] as const).map((type) => {
-                        const isSelected = applicant.target_membership_type === type;
-                        const label = type === 'regular' ? 'Regular Member' : 'Administrative';
-                        const desc = type === 'regular' ? 'Starts as probationary' : 'Non-operational role';
-                        return (
-                          <button
-                            key={type}
-                            disabled={isSelected}
-                            onClick={() => {
-                              void applicantService
-                                .updateApplicant(applicant.id, { target_membership_type: type })
-                                .then(() => {
-                                  toast.success(`Membership type changed to ${label.toLowerCase()}`);
-                                  const { fetchApplicant } = useProspectiveMembersStore.getState();
-                                  if (fetchApplicant) {
-                                    void fetchApplicant(applicant.id);
-                                  }
-                                })
-                                .catch(() => {
-                                  toast.error('Failed to update membership type');
-                                });
-                            }}
-                            className={`flex-1 rounded-lg border p-2.5 text-left transition-all ${
-                              isSelected
-                                ? 'border-red-500 bg-red-500/10'
-                                : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border cursor-pointer'
-                            }`}
-                          >
-                            <p className="text-theme-text-primary text-sm font-medium">{label}</p>
-                            <p className="text-theme-text-muted text-xs">{desc}</p>
-                          </button>
-                        );
-                      })}
                     </div>
-                  </div>
 
-                  {/* Referral — the prospect's own columns, not form answers. A
+                    {/* Referral — the prospect's own columns, not form answers. A
                     guest sign-in stamps referral_source with the event they
                     walked in from. */}
-                  {(applicant.referral_source || applicant.referred_by_name || applicant.interest_reason) && (
-                    <section
-                      aria-labelledby="applicant-referral-heading"
-                      className="border-theme-surface-border border-b p-4"
-                    >
-                      <h3
-                        id="applicant-referral-heading"
-                        className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase"
+                    {(applicant.referral_source || applicant.referred_by_name || applicant.interest_reason) && (
+                      <section
+                        aria-labelledby="applicant-referral-heading"
+                        className="border-theme-surface-border border-b p-4"
                       >
-                        How They Found Us
-                      </h3>
-                      <dl className="space-y-2 text-sm">
-                        {applicant.referral_source && (
-                          <div>
-                            <dt className="text-theme-text-muted text-xs">Referral source</dt>
-                            <dd className="text-theme-text-primary break-words">{applicant.referral_source}</dd>
-                          </div>
-                        )}
-                        {applicant.referred_by_name && (
-                          <div>
-                            <dt className="text-theme-text-muted text-xs">Referred by</dt>
-                            <dd className="text-theme-text-primary">{applicant.referred_by_name}</dd>
-                          </div>
-                        )}
-                        {applicant.interest_reason && (
-                          <div>
-                            <dt className="text-theme-text-muted text-xs">Why they want to join</dt>
-                            <dd className="text-theme-text-primary break-words whitespace-pre-wrap">
-                              {applicant.interest_reason}
-                            </dd>
-                          </div>
-                        )}
-                      </dl>
-                    </section>
-                  )}
-
-                  {/* Application Data — always visible regardless of current step */}
-                  {(() => {
-                    const formArtifact = applicant.stage_history
-                      .flatMap((e) => e.artifacts)
-                      .find((a) => a.type === StageTypeEnum.FORM_SUBMISSION && a.data);
-                    if (!formArtifact?.data) return null;
-                    const fields = formArtifact.data;
-                    return (
-                      <div className="border-theme-surface-border border-b p-4">
-                        <h3 className="text-theme-text-muted mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wider uppercase">
-                          <FileText className="h-3.5 w-3.5" />
-                          Application Data
+                        <h3
+                          id="applicant-referral-heading"
+                          className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase"
+                        >
+                          How They Found Us
                         </h3>
-                        <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
-                          {Object.entries(fields).map(([key, value]) => (
-                            <div key={key} className="contents">
-                              <dt className="text-theme-text-muted text-xs">{fieldLabel(key)}</dt>
-                              <dd className="text-theme-text-primary text-xs">{formatFieldValue(value)}</dd>
+                        <dl className="space-y-2 text-sm">
+                          {applicant.referral_source && (
+                            <div>
+                              <dt className="text-theme-text-muted text-xs">Referral source</dt>
+                              <dd className="text-theme-text-primary break-words">{applicant.referral_source}</dd>
                             </div>
-                          ))}
+                          )}
+                          {applicant.referred_by_name && (
+                            <div>
+                              <dt className="text-theme-text-muted text-xs">Referred by</dt>
+                              <dd className="text-theme-text-primary">{applicant.referred_by_name}</dd>
+                            </div>
+                          )}
+                          {applicant.interest_reason && (
+                            <div>
+                              <dt className="text-theme-text-muted text-xs">Why they want to join</dt>
+                              <dd className="text-theme-text-primary break-words whitespace-pre-wrap">
+                                {applicant.interest_reason}
+                              </dd>
+                            </div>
+                          )}
                         </dl>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Notes */}
-                  {applicant.notes && (
-                    <div className="border-theme-surface-border border-b p-4">
-                      <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase">Notes</h3>
-                      <p className="text-theme-text-secondary text-sm">{applicant.notes}</p>
-                    </div>
-                  )}
-
-                  {/* Metadata */}
-                  <div className="border-theme-surface-border border-b p-4 lg:border-b-0">
-                    <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase">Details</h3>
-                    <div className="text-theme-text-muted space-y-1 text-xs">
-                      <p>Applied: {formatDate(applicant.created_at, tz)}</p>
-                      <p>Last updated: {formatDate(applicant.updated_at, tz)}</p>
-                      <p>Last activity: {formatDate(applicant.last_activity_at, tz)}</p>
-                      {applicant.pipeline_name && <p>Pipeline: {applicant.pipeline_name}</p>}
-                      {applicant.deactivated_at && <p>Deactivated: {formatDate(applicant.deactivated_at, tz)}</p>}
-                      {applicant.reactivated_at && <p>Last reactivated: {formatDate(applicant.reactivated_at, tz)}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  {/* Current Stage */}
-                  <div className="border-theme-surface-border border-b p-4">
-                    <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                      Current Stage
-                    </h3>
-                    <div className="card p-3">
-                      <div className="mb-1 flex items-center gap-2">
-                        {applicant.current_stage_type &&
-                          (() => {
-                            const Icon = STAGE_TYPE_ICONS[applicant.current_stage_type];
-                            return <Icon className="h-4 w-4 text-red-700 dark:text-red-400" />;
-                          })()}
-                        <span className="text-theme-text-primary text-sm font-medium">
-                          {applicant.current_stage_name ?? 'Unknown stage'}
-                        </span>
-                      </div>
-                      <div className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
-                        <Clock className="h-3 w-3" />
-                        Entered {formatDateTime(applicant.stage_entered_at, tz)}
-                      </div>
-                    </div>
-
-                    {/* Target Role */}
-                    {applicant.target_role_name && (
-                      <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-sm">
-                        <User className="h-4 w-4" />
-                        Target role: <span className="text-theme-text-secondary">{applicant.target_role_name}</span>
-                      </div>
+                      </section>
                     )}
-                  </div>
 
-                  {/* Election Package Section */}
-                  {isOnElectionStage && <ElectionPackageSection applicant={applicant} tz={tz} />}
-
-                  {/* Linked Events */}
-                  <LinkedEventsSection applicant={applicant} tz={tz} />
-
-                  {/* Documents */}
-                  <ApplicantDocumentsSection applicant={applicant} tz={tz} />
-
-                  {/* Follow-up Forms */}
-                  <FollowUpFormsSection applicant={applicant} tz={tz} />
-
-                  {/* Checklist Stage Section */}
-                  {applicant.current_stage_type === StageTypeEnum.CHECKLIST &&
-                    applicant.status === ApplicantStatus.ACTIVE &&
-                    (() => {
-                      const stageConfig = applicant.current_stage_config as Partial<ChecklistConfig> | undefined;
-                      const items = (stageConfig?.items ?? []).map((item) => item.label).filter(Boolean);
-                      const ticked = items.filter((label) => checklistTicks.includes(label)).length;
+                    {/* Application Data — always visible regardless of current step */}
+                    {(() => {
+                      const formArtifact = applicant.stage_history
+                        .flatMap((e) => e.artifacts)
+                        .find((a) => a.type === StageTypeEnum.FORM_SUBMISSION && a.data);
+                      if (!formArtifact?.data) return null;
+                      const fields = formArtifact.data;
                       return (
                         <div className="border-theme-surface-border border-b p-4">
-                          <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                            Checklist
+                          <h3 className="text-theme-text-muted mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wider uppercase">
+                            <FileText className="h-3.5 w-3.5" />
+                            Application Data
                           </h3>
-                          {items.length > 0 ? (
-                            <>
-                              <p className="text-theme-text-secondary mb-2 text-xs">
-                                {ticked} of {items.length} items done
-                                {stageConfig?.require_all !== false && ticked < items.length
-                                  ? ' — tick every item to advance'
-                                  : ''}
-                              </p>
-                              <ul className="space-y-1">
-                                {items.map((label) => (
-                                  <li key={label}>
-                                    <label className="text-theme-text-primary flex items-center gap-2 text-sm">
-                                      <input
-                                        type="checkbox"
-                                        className="form-checkbox"
-                                        checked={checklistTicks.includes(label)}
-                                        onChange={(e) => toggleChecklistItem(label, e.target.checked)}
-                                      />
-                                      {label}
-                                    </label>
-                                  </li>
-                                ))}
-                              </ul>
-                            </>
-                          ) : (
-                            <p className="text-theme-text-muted text-xs">This stage has no checklist items.</p>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                  {/* Multi-Approval Stage Section */}
-                  {applicant.current_stage_type === StageTypeEnum.MULTI_APPROVAL &&
-                    applicant.status === ApplicantStatus.ACTIVE &&
-                    (() => {
-                      // Who must sign is the stage's configuration; who has signed is
-                      // the progress row for *this* stage. Reading both off the last
-                      // history entry's action_result found neither, so the panel
-                      // said "No approval data" after every signer had signed.
-                      const currentEntry = applicant.stage_history.find(
-                        (h) => h.stage_id === applicant.current_stage_id
-                      );
-                      const actionResult = currentEntry?.action_result ?? {};
-                      const approvals =
-                        (actionResult.approvals as
-                          Array<{ role: string; approved_by?: string; approved_at?: string }> | undefined) ?? [];
-                      const stageConfig = applicant.current_stage_config as Partial<MultiApprovalConfig> | undefined;
-                      const requiredApprovers = stageConfig?.required_approvers ?? [];
-                      return (
-                        <div className="border-theme-surface-border border-b p-4">
-                          <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                            Approval Status
-                          </h3>
-                          {requiredApprovers.length > 0 ? (
-                            <ul className="space-y-2" aria-label="Approval status">
-                              {requiredApprovers.map((role) => {
-                                // Signers sign the trimmed role, so a padded stored key
-                                // must be trimmed to find its approval.
-                                const approval = approvals.find(
-                                  (a) => a.role.trim().toLowerCase() === role.trim().toLowerCase()
-                                );
-                                return (
-                                  <li key={role} className="flex items-center justify-between text-xs">
-                                    <span className="text-theme-text-secondary">
-                                      {approverRoleLabel(role, applicant.current_stage_approver_labels)}
-                                    </span>
-                                    {approval ? (
-                                      <span className="flex items-center gap-1 text-emerald-500">
-                                        <CheckCircle className="h-3 w-3" />
-                                        Approved
-                                      </span>
-                                    ) : (
-                                      <span className="text-theme-text-muted flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
-                                        Pending
-                                      </span>
-                                    )}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          ) : (
-                            <p className="text-theme-text-muted text-xs">No approval data recorded yet.</p>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                  {/* Reference Check Stage Section */}
-                  {applicant.current_stage_type === StageTypeEnum.REFERENCE_CHECK &&
-                    applicant.status === ApplicantStatus.ACTIVE &&
-                    (() => {
-                      const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                      const actionResult = currentEntry?.action_result ?? {};
-                      const references =
-                        (actionResult.references as
-                          Array<{ name?: string; status?: string; submitted_at?: string }> | undefined) ?? [];
-                      const requiredCount = (actionResult.required_count as number | undefined) ?? 0;
-                      return (
-                        <div className="border-theme-surface-border border-b p-4">
-                          <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                            Reference Checks
-                          </h3>
-                          <div className="space-y-2">
-                            <p className="text-theme-text-secondary text-xs">
-                              {references.length} of {requiredCount || '?'} references received
-                            </p>
-                            {references.map((ref, idx) => (
-                              <div key={idx} className="card flex items-center justify-between p-2 text-xs">
-                                <span className="text-theme-text-primary">{ref.name ?? `Reference ${idx + 1}`}</span>
-                                <span className={ref.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}>
-                                  {ref.status ?? 'pending'}
-                                </span>
+                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                            {Object.entries(fields).map(([key, value]) => (
+                              <div key={key} className="contents">
+                                <dt className="text-theme-text-muted text-xs">{fieldLabel(key)}</dt>
+                                <dd className="text-theme-text-primary text-xs">{formatFieldValue(value)}</dd>
                               </div>
                             ))}
-                            {references.length === 0 && (
-                              <p className="text-theme-text-muted text-xs">No references submitted yet.</p>
-                            )}
-                          </div>
+                          </dl>
                         </div>
                       );
                     })()}
 
-                  {/* Interview Requirement Stage Section */}
-                  {applicant.current_stage_type === StageTypeEnum.INTERVIEW_REQUIREMENT &&
-                    applicant.status === ApplicantStatus.ACTIVE &&
-                    (() => {
-                      const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                      const actionResult = currentEntry?.action_result ?? {};
-                      const interviewCount = (actionResult.interview_count as number | undefined) ?? 0;
-                      const requiredCount = (actionResult.required_count as number | undefined) ?? 1;
-                      return (
-                        <div className="border-theme-surface-border border-b p-4">
-                          <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                            Interview Requirement
-                          </h3>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-theme-text-secondary">
-                              {interviewCount} of {requiredCount} interview{requiredCount !== 1 ? 's' : ''} completed
-                            </span>
-                            {interviewCount >= requiredCount ? (
-                              <span className="flex items-center gap-1 text-emerald-500">
-                                <CheckCircle className="h-3 w-3" />
-                                Requirement met
-                              </span>
+                    {/* Notes */}
+                    {applicant.notes && (
+                      <div className="border-theme-surface-border border-b p-4">
+                        <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase">
+                          Notes
+                        </h3>
+                        <p className="text-theme-text-secondary text-sm">{applicant.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Metadata */}
+                    <div className="border-theme-surface-border border-b p-4 lg:border-b-0">
+                      <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase">
+                        Details
+                      </h3>
+                      <div className="text-theme-text-muted space-y-1 text-xs">
+                        <p>Applied: {formatDate(applicant.created_at, tz)}</p>
+                        <p>Last updated: {formatDate(applicant.updated_at, tz)}</p>
+                        <p>Last activity: {formatDate(applicant.last_activity_at, tz)}</p>
+                        {applicant.pipeline_name && <p>Pipeline: {applicant.pipeline_name}</p>}
+                        {applicant.deactivated_at && <p>Deactivated: {formatDate(applicant.deactivated_at, tz)}</p>}
+                        {applicant.reactivated_at && (
+                          <p>Last reactivated: {formatDate(applicant.reactivated_at, tz)}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    {/* Current Stage */}
+                    <div className="border-theme-surface-border border-b p-4">
+                      <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                        Current Stage
+                      </h3>
+                      <div className="card p-3">
+                        <div className="mb-1 flex items-center gap-2">
+                          {applicant.current_stage_type &&
+                            (() => {
+                              const Icon = STAGE_TYPE_ICONS[applicant.current_stage_type];
+                              return <Icon className="h-4 w-4 text-red-700 dark:text-red-400" />;
+                            })()}
+                          <span className="text-theme-text-primary text-sm font-medium">
+                            {applicant.current_stage_name ?? 'Unknown stage'}
+                          </span>
+                        </div>
+                        <div className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
+                          <Clock className="h-3 w-3" />
+                          Entered {formatDateTime(applicant.stage_entered_at, tz)}
+                        </div>
+                      </div>
+
+                      {/* Target Role */}
+                      {applicant.target_role_name && (
+                        <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-sm">
+                          <User className="h-4 w-4" />
+                          Target role: <span className="text-theme-text-secondary">{applicant.target_role_name}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Election Package Section */}
+                    {isOnElectionStage && access.can_see_full && (
+                      <ElectionPackageSection applicant={applicant} tz={tz} />
+                    )}
+
+                    {/* Who is assigned to this applicant */}
+                    <ApplicantAssignmentsSection applicant={applicant} />
+
+                    {/* Linked Events */}
+                    {access.can_see_full && <LinkedEventsSection applicant={applicant} tz={tz} />}
+
+                    {/* Documents */}
+                    <ApplicantDocumentsSection applicant={applicant} tz={tz} />
+
+                    {/* Follow-up Forms */}
+                    <FollowUpFormsSection applicant={applicant} tz={tz} />
+
+                    {/* Checklist Stage Section */}
+                    {applicant.current_stage_type === StageTypeEnum.CHECKLIST &&
+                      applicant.status === ApplicantStatus.ACTIVE &&
+                      (() => {
+                        const stageConfig = applicant.current_stage_config as Partial<ChecklistConfig> | undefined;
+                        const items = (stageConfig?.items ?? []).map((item) => item.label).filter(Boolean);
+                        const ticked = items.filter((label) => checklistTicks.includes(label)).length;
+                        return (
+                          <div className="border-theme-surface-border border-b p-4">
+                            <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                              Checklist
+                            </h3>
+                            {items.length > 0 ? (
+                              <>
+                                <p className="text-theme-text-secondary mb-2 text-xs">
+                                  {ticked} of {items.length} items done
+                                  {stageConfig?.require_all !== false && ticked < items.length
+                                    ? ' — tick every item to advance'
+                                    : ''}
+                                </p>
+                                <ul className="space-y-1">
+                                  {items.map((label) => (
+                                    <li key={label}>
+                                      <label className="text-theme-text-primary flex items-center gap-2 text-sm">
+                                        <input
+                                          type="checkbox"
+                                          className="form-checkbox"
+                                          checked={checklistTicks.includes(label)}
+                                          disabled={!access.can_work}
+                                          onChange={(e) => toggleChecklistItem(label, e.target.checked)}
+                                        />
+                                        {label}
+                                      </label>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </>
                             ) : (
-                              <span className="flex items-center gap-1 text-amber-500">
-                                <Clock className="h-3 w-3" />
-                                In progress
-                              </span>
+                              <p className="text-theme-text-muted text-xs">This stage has no checklist items.</p>
                             )}
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                      })()}
 
-                  {/* Medical Screening Stage Section */}
-                  {applicant.current_stage_type === StageTypeEnum.MEDICAL_SCREENING &&
-                    applicant.status === ApplicantStatus.ACTIVE &&
-                    (() => {
-                      const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                      const actionResult = currentEntry?.action_result ?? {};
-                      const screenings =
-                        (actionResult.screenings as
-                          Array<{ type: string; status: string; date?: string }> | undefined) ?? [];
-                      const requiredScreenings = (actionResult.required_screenings as string[] | undefined) ?? [];
-                      return (
-                        <div className="border-theme-surface-border border-b p-4">
-                          <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                            Medical Screenings
-                          </h3>
-                          {requiredScreenings.length > 0 || screenings.length > 0 ? (
+                    {/* Multi-Approval Stage Section */}
+                    {applicant.current_stage_type === StageTypeEnum.MULTI_APPROVAL &&
+                      applicant.status === ApplicantStatus.ACTIVE &&
+                      (() => {
+                        // Who must sign is the stage's configuration; who has signed is
+                        // the progress row for *this* stage. Reading both off the last
+                        // history entry's action_result found neither, so the panel
+                        // said "No approval data" after every signer had signed.
+                        const currentEntry = applicant.stage_history.find(
+                          (h) => h.stage_id === applicant.current_stage_id
+                        );
+                        const actionResult = currentEntry?.action_result ?? {};
+                        const approvals =
+                          (actionResult.approvals as
+                            Array<{ role: string; approved_by?: string; approved_at?: string }> | undefined) ?? [];
+                        const stageConfig = applicant.current_stage_config as Partial<MultiApprovalConfig> | undefined;
+                        const requiredApprovers = stageConfig?.required_approvers ?? [];
+                        return (
+                          <div className="border-theme-surface-border border-b p-4">
+                            <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                              Approval Status
+                            </h3>
+                            {requiredApprovers.length > 0 ? (
+                              <ul className="space-y-2" aria-label="Approval status">
+                                {requiredApprovers.map((role) => {
+                                  // Signers sign the trimmed role, so a padded stored key
+                                  // must be trimmed to find its approval.
+                                  const approval = approvals.find(
+                                    (a) => a.role.trim().toLowerCase() === role.trim().toLowerCase()
+                                  );
+                                  return (
+                                    <li key={role} className="flex items-center justify-between text-xs">
+                                      <span className="text-theme-text-secondary">
+                                        {approverRoleLabel(role, applicant.current_stage_approver_labels)}
+                                      </span>
+                                      {approval ? (
+                                        <span className="flex items-center gap-1 text-emerald-500">
+                                          <CheckCircle className="h-3 w-3" />
+                                          Approved
+                                        </span>
+                                      ) : (
+                                        <span className="text-theme-text-muted flex items-center gap-1">
+                                          <Clock className="h-3 w-3" />
+                                          Pending
+                                        </span>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <p className="text-theme-text-muted text-xs">No approval data recorded yet.</p>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                    {/* Reference Check Stage Section */}
+                    {applicant.current_stage_type === StageTypeEnum.REFERENCE_CHECK &&
+                      applicant.status === ApplicantStatus.ACTIVE &&
+                      (() => {
+                        const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                        const actionResult = currentEntry?.action_result ?? {};
+                        const references =
+                          (actionResult.references as
+                            Array<{ name?: string; status?: string; submitted_at?: string }> | undefined) ?? [];
+                        const requiredCount = (actionResult.required_count as number | undefined) ?? 0;
+                        return (
+                          <div className="border-theme-surface-border border-b p-4">
+                            <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                              Reference Checks
+                            </h3>
                             <div className="space-y-2">
-                              {(requiredScreenings.length > 0 ? requiredScreenings : screenings.map((s) => s.type)).map(
-                                (type) => {
+                              <p className="text-theme-text-secondary text-xs">
+                                {references.length} of {requiredCount || '?'} references received
+                              </p>
+                              {references.map((ref, idx) => (
+                                <div key={idx} className="card flex items-center justify-between p-2 text-xs">
+                                  <span className="text-theme-text-primary">{ref.name ?? `Reference ${idx + 1}`}</span>
+                                  <span className={ref.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}>
+                                    {ref.status ?? 'pending'}
+                                  </span>
+                                </div>
+                              ))}
+                              {references.length === 0 && (
+                                <p className="text-theme-text-muted text-xs">No references submitted yet.</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                    {/* Interview Requirement Stage Section */}
+                    {applicant.current_stage_type === StageTypeEnum.INTERVIEW_REQUIREMENT &&
+                      applicant.status === ApplicantStatus.ACTIVE &&
+                      (() => {
+                        const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                        const actionResult = currentEntry?.action_result ?? {};
+                        const interviewCount = (actionResult.interview_count as number | undefined) ?? 0;
+                        const requiredCount = (actionResult.required_count as number | undefined) ?? 1;
+                        return (
+                          <div className="border-theme-surface-border border-b p-4">
+                            <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                              Interview Requirement
+                            </h3>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-theme-text-secondary">
+                                {interviewCount} of {requiredCount} interview{requiredCount !== 1 ? 's' : ''} completed
+                              </span>
+                              {interviewCount >= requiredCount ? (
+                                <span className="flex items-center gap-1 text-emerald-500">
+                                  <CheckCircle className="h-3 w-3" />
+                                  Requirement met
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-amber-500">
+                                  <Clock className="h-3 w-3" />
+                                  In progress
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                    {/* Medical Screening Stage Section */}
+                    {applicant.current_stage_type === StageTypeEnum.MEDICAL_SCREENING &&
+                      applicant.status === ApplicantStatus.ACTIVE &&
+                      (() => {
+                        const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                        const actionResult = currentEntry?.action_result ?? {};
+                        const screenings =
+                          (actionResult.screenings as
+                            Array<{ type: string; status: string; date?: string }> | undefined) ?? [];
+                        const requiredScreenings = (actionResult.required_screenings as string[] | undefined) ?? [];
+                        return (
+                          <div className="border-theme-surface-border border-b p-4">
+                            <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                              Medical Screenings
+                            </h3>
+                            {requiredScreenings.length > 0 || screenings.length > 0 ? (
+                              <div className="space-y-2">
+                                {(requiredScreenings.length > 0
+                                  ? requiredScreenings
+                                  : screenings.map((s) => s.type)
+                                ).map((type) => {
                                   const screening = screenings.find((s) => s.type === type);
                                   const isPassed = screening?.status === 'passed' || screening?.status === 'completed';
                                   return (
@@ -932,318 +974,324 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                                       )}
                                     </div>
                                   );
-                                }
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-theme-text-muted text-xs">No screening data recorded yet.</p>
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-theme-text-muted text-xs">No screening data recorded yet.</p>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                    {/* Visual Stage Progress */}
+                    {applicant.total_stages > 0 && (
+                      <div className="border-theme-surface-border border-b p-4">
+                        <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                          Progress
+                        </h3>
+                        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                          {applicant.stage_history.map((entry, idx) => {
+                            // Both derived from facts the record states rather than
+                            // inferred: a `completed_at` stamp can outlive the
+                            // completion it recorded, and "the last entry" is only
+                            // the current stage while the history is exactly the
+                            // visited prefix. Together they drew a track that
+                            // contradicted the Current Stage panel directly above it.
+                            const isComplete = entry.status === StepProgressStatus.COMPLETED;
+                            // A skipped stage is finished with, not unreached: Skip
+                            // Stage stamps `completed_at` and moves the pointer on.
+                            // Matching only COMPLETED drew it as a muted upcoming
+                            // bubble while the timeline below showed the same stamp,
+                            // so it gets its own state rather than being folded into
+                            // either — counting it as complete would report work that
+                            // was deliberately bypassed.
+                            const isSkipped = entry.status === StepProgressStatus.SKIPPED;
+                            const isCurrent = entry.stage_id === applicant.current_stage_id;
+                            const StageIcon = STAGE_TYPE_ICONS[entry.stage_type] ?? Circle;
+                            const stateLabel = isComplete
+                              ? 'Complete'
+                              : isSkipped
+                                ? 'Skipped'
+                                : isCurrent
+                                  ? 'Current'
+                                  : '';
+                            return (
+                              <React.Fragment key={entry.id}>
+                                {idx > 0 && (
+                                  <div
+                                    className={`h-0.5 w-4 shrink-0 ${
+                                      isComplete || isCurrent
+                                        ? 'bg-emerald-400'
+                                        : isSkipped
+                                          ? 'bg-amber-400'
+                                          : 'bg-theme-surface-border'
+                                    }`}
+                                  />
+                                )}
+                                <div
+                                  className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs ${
+                                    isComplete
+                                      ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
+                                      : isSkipped
+                                        ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
+                                        : isCurrent
+                                          ? 'bg-red-500/10 text-red-700 ring-1 ring-red-500/30 dark:text-red-400'
+                                          : 'bg-theme-surface-hover text-theme-text-muted'
+                                  }`}
+                                  title={`${entry.stage_name}${stateLabel ? ` (${stateLabel})` : ''}`}
+                                >
+                                  {isComplete ? (
+                                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                                  ) : isSkipped ? (
+                                    <SkipForward className="h-3 w-3" aria-hidden="true" />
+                                  ) : (
+                                    <StageIcon className="h-3 w-3" aria-hidden="true" />
+                                  )}
+                                  <span className="max-w-[80px] truncate">{entry.stage_name}</span>
+                                  {/* `title` is not reliably announced; the state has to be in the text. */}
+                                  {stateLabel && <span className="sr-only"> ({stateLabel})</span>}
+                                </div>
+                              </React.Fragment>
+                            );
+                          })}
+                          {/* Placeholder bubbles for unreached pipeline stages */}
+                          {Array.from({ length: applicant.total_stages - applicant.stage_history.length }).map(
+                            (_, idx) => (
+                              <React.Fragment key={`pending-${idx}`}>
+                                <div className="bg-theme-surface-border h-0.5 w-4 shrink-0" />
+                                <div
+                                  className="bg-theme-surface-hover text-theme-text-muted flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs opacity-50"
+                                  title="Upcoming"
+                                >
+                                  <Circle className="h-3 w-3" />
+                                </div>
+                              </React.Fragment>
+                            )
                           )}
                         </div>
-                      );
-                    })()}
+                        {/* Time in pipeline summary */}
+                        <p className="text-theme-text-muted mt-2 text-xs">
+                          {applicant.stage_history.filter((e) => e.status === StepProgressStatus.COMPLETED).length} of{' '}
+                          {applicant.total_stages} stages completed &middot; In pipeline since{' '}
+                          {formatDate(applicant.created_at, tz)}
+                        </p>
+                      </div>
+                    )}
 
-                  {/* Visual Stage Progress */}
-                  {applicant.total_stages > 0 && (
+                    {/* Stage History Timeline */}
                     <div className="border-theme-surface-border border-b p-4">
                       <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                        Progress
+                        Stage History
                       </h3>
-                      <div className="flex items-center gap-1 overflow-x-auto pb-1">
-                        {applicant.stage_history.map((entry, idx) => {
-                          // Both derived from facts the record states rather than
-                          // inferred: a `completed_at` stamp can outlive the
-                          // completion it recorded, and "the last entry" is only
-                          // the current stage while the history is exactly the
-                          // visited prefix. Together they drew a track that
-                          // contradicted the Current Stage panel directly above it.
-                          const isComplete = entry.status === StepProgressStatus.COMPLETED;
-                          // A skipped stage is finished with, not unreached: Skip
-                          // Stage stamps `completed_at` and moves the pointer on.
-                          // Matching only COMPLETED drew it as a muted upcoming
-                          // bubble while the timeline below showed the same stamp,
-                          // so it gets its own state rather than being folded into
-                          // either — counting it as complete would report work that
-                          // was deliberately bypassed.
-                          const isSkipped = entry.status === StepProgressStatus.SKIPPED;
-                          const isCurrent = entry.stage_id === applicant.current_stage_id;
-                          const StageIcon = STAGE_TYPE_ICONS[entry.stage_type] ?? Circle;
-                          const stateLabel = isComplete
-                            ? 'Complete'
-                            : isSkipped
-                              ? 'Skipped'
-                              : isCurrent
-                                ? 'Current'
-                                : '';
-                          return (
-                            <React.Fragment key={entry.id}>
-                              {idx > 0 && (
-                                <div
-                                  className={`h-0.5 w-4 shrink-0 ${
-                                    isComplete || isCurrent
-                                      ? 'bg-emerald-400'
-                                      : isSkipped
-                                        ? 'bg-amber-400'
-                                        : 'bg-theme-surface-border'
-                                  }`}
-                                />
-                              )}
-                              <div
-                                className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs ${
-                                  isComplete
-                                    ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
-                                    : isSkipped
-                                      ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
-                                      : isCurrent
-                                        ? 'bg-red-500/10 text-red-700 ring-1 ring-red-500/30 dark:text-red-400'
-                                        : 'bg-theme-surface-hover text-theme-text-muted'
-                                }`}
-                                title={`${entry.stage_name}${stateLabel ? ` (${stateLabel})` : ''}`}
-                              >
-                                {isComplete ? (
-                                  <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
-                                ) : isSkipped ? (
-                                  <SkipForward className="h-3 w-3" aria-hidden="true" />
-                                ) : (
-                                  <StageIcon className="h-3 w-3" aria-hidden="true" />
-                                )}
-                                <span className="max-w-[80px] truncate">{entry.stage_name}</span>
-                                {/* `title` is not reliably announced; the state has to be in the text. */}
-                                {stateLabel && <span className="sr-only"> ({stateLabel})</span>}
-                              </div>
-                            </React.Fragment>
-                          );
-                        })}
-                        {/* Placeholder bubbles for unreached pipeline stages */}
-                        {Array.from({ length: applicant.total_stages - applicant.stage_history.length }).map(
-                          (_, idx) => (
-                            <React.Fragment key={`pending-${idx}`}>
-                              <div className="bg-theme-surface-border h-0.5 w-4 shrink-0" />
-                              <div
-                                className="bg-theme-surface-hover text-theme-text-muted flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs opacity-50"
-                                title="Upcoming"
-                              >
-                                <Circle className="h-3 w-3" />
-                              </div>
-                            </React.Fragment>
-                          )
-                        )}
-                      </div>
-                      {/* Time in pipeline summary */}
-                      <p className="text-theme-text-muted mt-2 text-xs">
-                        {applicant.stage_history.filter((e) => e.status === StepProgressStatus.COMPLETED).length} of{' '}
-                        {applicant.total_stages} stages completed &middot; In pipeline since{' '}
-                        {formatDate(applicant.created_at, tz)}
-                      </p>
-                    </div>
-                  )}
+                      {applicant.stage_history.length === 0 ? (
+                        <p className="text-theme-text-muted text-sm">No history yet.</p>
+                      ) : (
+                        <div className="space-y-0">
+                          {applicant.stage_history.map((entry: StageHistoryEntry, idx: number) => {
+                            // A skipped stage carries a `completed_at` stamp too, so
+                            // it has to be told apart by status — otherwise it draws
+                            // the same green tick as a stage that was actually
+                            // worked, and disagrees with the progress strip above.
+                            const isSkipped = entry.status === StepProgressStatus.SKIPPED;
+                            const isComplete = !!entry.completed_at && !isSkipped;
+                            const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete && !isSkipped;
 
-                  {/* Stage History Timeline */}
-                  <div className="border-theme-surface-border border-b p-4">
-                    <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                      Stage History
-                    </h3>
-                    {applicant.stage_history.length === 0 ? (
-                      <p className="text-theme-text-muted text-sm">No history yet.</p>
-                    ) : (
-                      <div className="space-y-0">
-                        {applicant.stage_history.map((entry: StageHistoryEntry, idx: number) => {
-                          // A skipped stage carries a `completed_at` stamp too, so
-                          // it has to be told apart by status — otherwise it draws
-                          // the same green tick as a stage that was actually
-                          // worked, and disagrees with the progress strip above.
-                          const isSkipped = entry.status === StepProgressStatus.SKIPPED;
-                          const isComplete = !!entry.completed_at && !isSkipped;
-                          const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete && !isSkipped;
-
-                          return (
-                            <div key={entry.id} className="flex gap-3">
-                              {/* Timeline line */}
-                              <div className="flex flex-col items-center">
-                                {isComplete ? (
-                                  <CheckCircle2
-                                    className="h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400"
-                                    aria-hidden="true"
-                                  />
-                                ) : isSkipped ? (
-                                  <SkipForward
-                                    className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400"
-                                    aria-hidden="true"
-                                  />
-                                ) : isCurrent ? (
-                                  <div className="h-5 w-5 shrink-0 rounded-full border-2 border-red-500 bg-red-500/20" />
-                                ) : (
-                                  <Circle className="text-theme-text-muted h-5 w-5 shrink-0" aria-hidden="true" />
-                                )}
-                                {idx < applicant.stage_history.length - 1 && (
-                                  <div className="bg-theme-surface-border my-1 h-full min-h-[24px] w-px" />
-                                )}
-                              </div>
-
-                              {/* Content */}
-                              <div className="min-w-0 pb-4">
-                                <p
-                                  className={`text-sm font-medium ${isComplete || isSkipped ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
-                                >
-                                  {entry.stage_name}
-                                  {isSkipped && <span className="sr-only"> (Skipped)</span>}
-                                </p>
-                                <p className="text-theme-text-muted mt-0.5 text-xs">
-                                  Entered {formatDateTime(entry.entered_at, tz)}
-                                  {entry.completed_at && (
-                                    <>
-                                      {' '}
-                                      &middot; {isSkipped ? 'Skipped' : 'Completed'}{' '}
-                                      {formatDateTime(entry.completed_at, tz)}
-                                    </>
+                            return (
+                              <div key={entry.id} className="flex gap-3">
+                                {/* Timeline line */}
+                                <div className="flex flex-col items-center">
+                                  {isComplete ? (
+                                    <CheckCircle2
+                                      className="h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400"
+                                      aria-hidden="true"
+                                    />
+                                  ) : isSkipped ? (
+                                    <SkipForward
+                                      className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400"
+                                      aria-hidden="true"
+                                    />
+                                  ) : isCurrent ? (
+                                    <div className="h-5 w-5 shrink-0 rounded-full border-2 border-red-500 bg-red-500/20" />
+                                  ) : (
+                                    <Circle className="text-theme-text-muted h-5 w-5 shrink-0" aria-hidden="true" />
                                   )}
-                                </p>
-                                {entry.completed_by_name && (
-                                  <p className="text-theme-text-muted mt-0.5 text-xs">By {entry.completed_by_name}</p>
-                                )}
-                                {entry.notes && (
-                                  <p className="text-theme-text-muted bg-theme-surface-secondary mt-1 rounded-sm px-2 py-1 text-xs">
-                                    {entry.notes}
+                                  {idx < applicant.stage_history.length - 1 && (
+                                    <div className="bg-theme-surface-border my-1 h-full min-h-[24px] w-px" />
+                                  )}
+                                </div>
+
+                                {/* Content */}
+                                <div className="min-w-0 pb-4">
+                                  <p
+                                    className={`text-sm font-medium ${isComplete || isSkipped ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
+                                  >
+                                    {entry.stage_name}
+                                    {isSkipped && <span className="sr-only"> (Skipped)</span>}
                                   </p>
-                                )}
-                                {entry.artifacts.length > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {entry.artifacts.map((artifact) => {
-                                      if (artifact.type === StageTypeEnum.FORM_SUBMISSION && artifact.data) {
-                                        const fields = artifact.data;
+                                  <p className="text-theme-text-muted mt-0.5 text-xs">
+                                    Entered {formatDateTime(entry.entered_at, tz)}
+                                    {entry.completed_at && (
+                                      <>
+                                        {' '}
+                                        &middot; {isSkipped ? 'Skipped' : 'Completed'}{' '}
+                                        {formatDateTime(entry.completed_at, tz)}
+                                      </>
+                                    )}
+                                  </p>
+                                  {entry.completed_by_name && (
+                                    <p className="text-theme-text-muted mt-0.5 text-xs">By {entry.completed_by_name}</p>
+                                  )}
+                                  {entry.notes && (
+                                    <p className="text-theme-text-muted bg-theme-surface-secondary mt-1 rounded-sm px-2 py-1 text-xs">
+                                      {entry.notes}
+                                    </p>
+                                  )}
+                                  {entry.artifacts.length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      {entry.artifacts.map((artifact) => {
+                                        if (artifact.type === StageTypeEnum.FORM_SUBMISSION && artifact.data) {
+                                          const fields = artifact.data;
+                                          return (
+                                            <div
+                                              key={artifact.id}
+                                              className="bg-theme-surface-secondary rounded px-3 py-2"
+                                            >
+                                              <p className="text-theme-text-secondary mb-1.5 flex items-center gap-1 text-xs font-medium">
+                                                <FileText className="h-3 w-3" />
+                                                {artifact.name}
+                                              </p>
+                                              <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                                {Object.entries(fields).map(([key, value]) => (
+                                                  <div key={key} className="contents">
+                                                    <dt className="text-theme-text-muted text-xs">{fieldLabel(key)}</dt>
+                                                    <dd className="text-theme-text-primary text-xs">
+                                                      {formatFieldValue(value)}
+                                                    </dd>
+                                                  </div>
+                                                ))}
+                                              </dl>
+                                            </div>
+                                          );
+                                        }
                                         return (
                                           <div
                                             key={artifact.id}
-                                            className="bg-theme-surface-secondary rounded px-3 py-2"
+                                            className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400"
                                           >
-                                            <p className="text-theme-text-secondary mb-1.5 flex items-center gap-1 text-xs font-medium">
-                                              <FileText className="h-3 w-3" />
-                                              {artifact.name}
-                                            </p>
-                                            <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                              {Object.entries(fields).map(([key, value]) => (
-                                                <div key={key} className="contents">
-                                                  <dt className="text-theme-text-muted text-xs">{fieldLabel(key)}</dt>
-                                                  <dd className="text-theme-text-primary text-xs">
-                                                    {formatFieldValue(value)}
-                                                  </dd>
-                                                </div>
-                                              ))}
-                                            </dl>
+                                            <FileText className="h-3 w-3" />
+                                            {artifact.url && isSafeUrl(artifact.url) ? (
+                                              <a
+                                                href={artifact.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="hover:underline"
+                                              >
+                                                {artifact.name}
+                                              </a>
+                                            ) : (
+                                              <span>{artifact.name}</span>
+                                            )}
                                           </div>
                                         );
-                                      }
-                                      return (
-                                        <div
-                                          key={artifact.id}
-                                          className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400"
-                                        >
-                                          <FileText className="h-3 w-3" />
-                                          {artifact.url && isSafeUrl(artifact.url) ? (
-                                            <a
-                                              href={artifact.url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="hover:underline"
-                                            >
-                                              {artifact.name}
-                                            </a>
-                                          ) : (
-                                            <span>{artifact.name}</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Activity Log */}
-                  <div className="border-theme-surface-border border-b p-4">
-                    <button
-                      onClick={() => setShowActivityLog(!showActivityLog)}
-                      className="flex w-full items-center gap-2 text-left"
-                    >
-                      <Activity className="text-theme-text-muted h-3.5 w-3.5" />
-                      <h3 className="text-theme-text-muted text-xs font-medium tracking-wider uppercase">
-                        Activity Log
-                      </h3>
-                      <span className="text-theme-text-muted ml-auto text-xs">{showActivityLog ? '▾' : '▸'}</span>
-                    </button>
-                    {showActivityLog && (
-                      <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
-                        {isLoadingActivity ? (
-                          <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
-                            <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />
-                          </div>
-                        ) : activityLog.length === 0 ? (
-                          <p className="text-theme-text-muted py-2 text-xs">No activity recorded yet.</p>
-                        ) : (
-                          activityLog.map((entry) => {
-                            const from = detailText(entry.details, 'from');
-                            const to = detailText(entry.details, 'to');
-                            const reason = detailText(entry.details, 'reason');
-                            const notes = detailText(entry.details, 'notes');
-                            return (
-                              <div key={entry.id} className="flex items-start gap-2 text-xs">
-                                <div className="bg-theme-text-muted mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
-                                <div className="min-w-0">
-                                  <span className="text-theme-text-secondary font-medium">
-                                    {entry.action.replace(/_/g, ' ')}
-                                  </span>
-                                  {from && to && (
-                                    <span className="text-theme-text-muted">
-                                      {' '}
-                                      ({from.replace(/_/g, ' ')} → {to.replace(/_/g, ' ')})
-                                    </span>
-                                  )}
-                                  {entry.performer_name && (
-                                    <span className="text-theme-text-muted"> by {entry.performer_name}</span>
-                                  )}
-                                  <div className="text-theme-text-muted">{formatDateTime(entry.created_at, tz)}</div>
-                                  {/* The reason a coordinator gave for a rejection,
-                                    hold or withdrawal. It is recorded here rather
-                                    than in the notes field, which it used to
-                                    overwrite, so this is the only place it shows. */}
-                                  {reason && (
-                                    <p className="text-theme-text-secondary mt-0.5 break-words italic">“{reason}”</p>
-                                  )}
-                                  {/* Notes the coordinator attached to the action —
-                                    the Convert dialog's notes live only here. */}
-                                  {notes && (
-                                    <p className="text-theme-text-secondary mt-0.5 break-words whitespace-pre-wrap">
-                                      {notes}
-                                    </p>
+                                      })}
+                                    </div>
                                   )}
                                 </div>
                               </div>
                             );
-                          })
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Activity Log */}
+                    {access.can_see_full && (
+                      <div className="border-theme-surface-border border-b p-4">
+                        <button
+                          onClick={() => setShowActivityLog(!showActivityLog)}
+                          className="flex w-full items-center gap-2 text-left"
+                        >
+                          <Activity className="text-theme-text-muted h-3.5 w-3.5" />
+                          <h3 className="text-theme-text-muted text-xs font-medium tracking-wider uppercase">
+                            Activity Log
+                          </h3>
+                          <span className="text-theme-text-muted ml-auto text-xs">{showActivityLog ? '▾' : '▸'}</span>
+                        </button>
+                        {showActivityLog && (
+                          <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+                            {isLoadingActivity ? (
+                              <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
+                                <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />
+                              </div>
+                            ) : activityLog.length === 0 ? (
+                              <p className="text-theme-text-muted py-2 text-xs">No activity recorded yet.</p>
+                            ) : (
+                              activityLog.map((entry) => {
+                                const from = detailText(entry.details, 'from');
+                                const to = detailText(entry.details, 'to');
+                                const reason = detailText(entry.details, 'reason');
+                                const notes = detailText(entry.details, 'notes');
+                                return (
+                                  <div key={entry.id} className="flex items-start gap-2 text-xs">
+                                    <div className="bg-theme-text-muted mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
+                                    <div className="min-w-0">
+                                      <span className="text-theme-text-secondary font-medium">
+                                        {entry.action.replace(/_/g, ' ')}
+                                      </span>
+                                      {from && to && (
+                                        <span className="text-theme-text-muted">
+                                          {' '}
+                                          ({from.replace(/_/g, ' ')} → {to.replace(/_/g, ' ')})
+                                        </span>
+                                      )}
+                                      {entry.performer_name && (
+                                        <span className="text-theme-text-muted"> by {entry.performer_name}</span>
+                                      )}
+                                      <div className="text-theme-text-muted">
+                                        {formatDateTime(entry.created_at, tz)}
+                                      </div>
+                                      {/* The reason a coordinator gave for a rejection,
+                                    hold or withdrawal. It is recorded here rather
+                                    than in the notes field, which it used to
+                                    overwrite, so this is the only place it shows. */}
+                                      {reason && (
+                                        <p className="text-theme-text-secondary mt-0.5 break-words italic">
+                                          “{reason}”
+                                        </p>
+                                      )}
+                                      {/* Notes the coordinator attached to the action —
+                                    the Convert dialog's notes live only here. */}
+                                      {notes && (
+                                        <p className="text-theme-text-secondary mt-0.5 break-words whitespace-pre-wrap">
+                                          {notes}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
                 </div>
-              </div>
 
-              {/* Footer Actions */}
-              <ApplicantActionPanels
-                applicant={applicant}
-                checklistTicks={checklistTicks}
-                isLastStage={isLastStage}
-                isFirstStage={isFirstStage}
-                onClose={onClose}
-                onConvert={onConvert}
-              />
-            </>
-          )}
-        </DialogPanel>
-      </div>
-    </DialogPortal>
+                {/* Footer Actions */}
+                <ApplicantActionPanels
+                  applicant={applicant}
+                  checklistTicks={checklistTicks}
+                  isLastStage={isLastStage}
+                  isFirstStage={isFirstStage}
+                  onClose={onClose}
+                  onConvert={onConvert}
+                />
+              </>
+            )}
+          </DialogPanel>
+        </div>
+      </DialogPortal>
+    </ApplicantAccessContext.Provider>
   );
 };

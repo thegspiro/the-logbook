@@ -252,7 +252,8 @@ A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens 
 | --------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
 | `/prospective-members`                        | Prospective Members Pipeline | `prospective_members.manage`                         |
 | `/prospective-members/settings`               | Pipeline Settings            | `prospective_members.manage`                         |
-| `/prospective-members/:applicantId/interview` | Applicant Interview          | `prospective_members.manage`                         |
+| `/prospective-members/:applicantId/interview` | Applicant Interview          | Authenticated                                        |
+| `/prospective-members/my-applicants`          | My Applicants                | Authenticated                                        |
 | `/prospective-members/sign-offs`              | Sign-offs                    | Authenticated                                        |
 | `/application-status/:token`                  | Public Application Status    | None (token-based; see the public-routes note above) |
 | `/application-form/:token`                    | Applicant Follow-up Form     | None (token-based; see the public-routes note above) |
@@ -1545,22 +1546,22 @@ A missing or unknown `?tab=` opens Overview.
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                     | Prints                  | Permission                                                     |
-| --------------------------------------- | ----------------------- | -------------------------------------------------------------- |
-| `/members/print-labels`                 | Member labels           | `members.manage` **OR** `members.manage_id_cards`              |
-| `/members/print-id-cards`               | Member ID cards         | `members.manage` **OR** `members.manage_id_cards`              |
-| `/members/:userId/id-card`              | Member ID card          | Authenticated                                                  |
-| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`                           |
-| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view` **OR** `prospective_members.manage` |
-| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                                             |
-| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                                             |
-| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`                     |
-| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage`                   |
-| `/training/print/member`                | Member training history | Authenticated                                                  |
-| `/training/print/program`               | Training program        | Authenticated                                                  |
-| `/training/print/compliance`            | Compliance matrix       | `training.manage`                                              |
-| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                                  |
-| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                                  |
+| URL                                     | Prints                  | Permission                                        |
+| --------------------------------------- | ----------------------- | ------------------------------------------------- |
+| `/members/print-labels`                 | Member labels           | `members.manage` **OR** `members.manage_id_cards` |
+| `/members/print-id-cards`               | Member ID cards         | `members.manage` **OR** `members.manage_id_cards` |
+| `/members/:userId/id-card`              | Member ID card          | Authenticated                                     |
+| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`              |
+| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view_all`                    |
+| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                                |
+| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                                |
+| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`        |
+| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage`      |
+| `/training/print/member`                | Member training history | Authenticated                                     |
+| `/training/print/program`               | Training program        | Authenticated                                     |
+| `/training/print/compliance`            | Compliance matrix       | `training.manage`                                 |
+| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                     |
+| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                     |
 
 ---
 
@@ -1723,6 +1724,8 @@ the click.
 | ------------------------------- | ---------------------------- | ---------------------------- |
 | `/prospective-members`          | Prospective Members Pipeline | `prospective_members.manage` |
 | `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage` |
+
+> **My Applicants (`/prospective-members/my-applicants`) and the Interview page** _(added 2026-10-31)_. A member assigned to an applicant as case manager or interviewer (`prospect_assignments`) reaches them here, and the Interview page is open to them for that applicant. Authenticated with the module on, and no permission beyond it: an assigned board member or trustee holds no `prospective_members` access, and the server admits the caller per applicant — `prospective_members.view_all`, or an assignment to that applicant — answering 404 otherwise. The menu offers My Applicants only to a member who has an assignment.
 
 > **Sign-offs (`/prospective-members/sign-offs`)** _(added 2026-09-28)_. Where the officers a Multi-Signer Approval stage names (the Chief, the President) approve an applicant. Authenticated with the module on, and no permission beyond it: those officers rarely hold `prospective_members` access, and `GET /prospective-members/my-sign-offs` lists only stages asking for a role the caller holds — by applicant name and stage, not their record. Conversion refuses until every required stage is complete.
 

@@ -22,6 +22,7 @@ const InterviewPage = lazyWithRetry(() => import('./pages/InterviewPage'));
 const FollowUpFormPage = lazyWithRetry(() => import('./pages/FollowUpFormPage'));
 const ProspectLabelPrintPage = lazyWithRetry(() => import('./pages/ProspectLabelPrintPage'));
 const SignOffsPage = lazyWithRetry(() => import('./pages/SignOffsPage'));
+const MyApplicantsPage = lazyWithRetry(() => import('./pages/MyApplicantsPage'));
 
 export const getProspectiveMembersRoutes = () => {
   return (
@@ -30,13 +31,13 @@ export const getProspectiveMembersRoutes = () => {
         path="/prospective-members/print-labels"
         element={
           <Suspense fallback={null}>
-            {/* View or manage, as the label API accepts: a coordinator holds
-                manage alone, and the pipeline's own Print Labels button sent
-                them to an Access Denied page. */}
+            {/* view_all, as the label API accepts: a label names applicants
+                by id, and without view_all a member sees only the applicants
+                assigned to them. */}
             <ProtectedRoute
               requiredModule="prospective_members"
               moduleLabel="Prospective Members"
-              requiredAnyPermission={['prospective_members.view', 'prospective_members.manage']}
+              requiredPermission="prospective_members.view_all"
             >
               <ProspectLabelPrintPage />
             </ProtectedRoute>
@@ -90,15 +91,31 @@ export const getProspectiveMembersRoutes = () => {
         }
       />
 
+      {/* My Applicants: the applicants the caller is assigned to as case
+          manager or interviewer. No permission beyond the module, like
+          Sign-offs: an assigned board member holds none, and the server lists
+          only the applicants the caller's assignments cover. */}
+      <Route
+        path="/prospective-members/my-applicants"
+        element={
+          <ProtectedRoute requiredModule="prospective_members" moduleLabel="Prospective Members">
+            <Suspense fallback={null}>
+              <MyApplicantsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
       {/* Interview View */}
       <Route
         path="/prospective-members/:applicantId/interview"
         element={
-          <ProtectedRoute
-            requiredModule="prospective_members"
-            moduleLabel="Prospective Members"
-            requiredPermission="prospective_members.manage"
-          >
+          /*
+            No permission here: an interviewer assigned to the applicant (a
+            board member, a trustee) holds none. The backend admits the caller
+            per applicant and answers 404 for anyone it does not.
+          */
+          <ProtectedRoute requiredModule="prospective_members" moduleLabel="Prospective Members">
             <Suspense fallback={null}>
               <InterviewPage />
             </Suspense>

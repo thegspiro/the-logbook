@@ -37,6 +37,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getInitials } from '../utils';
 import FollowUpAnswersPanel from '../components/FollowUpAnswersPanel';
+import { applicantService } from '../services/api';
 import { blankToNull } from '../../../utils/formValues';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
 import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS, StepProgressStatus } from '../types';
@@ -553,6 +554,27 @@ export const InterviewPage: React.FC = () => {
 
   const [showForm, setShowForm] = useState(false);
 
+  // Whether the caller may log an interview for this applicant: a manager, or
+  // anyone assigned to them. An interviewer reaches this page through their
+  // assignment, so the backend says, per applicant, rather than a permission.
+  const [canInterview, setCanInterview] = useState(false);
+  const shownApplicantId = currentApplicant?.id;
+  useEffect(() => {
+    if (!shownApplicantId) return undefined;
+    let cancelled = false;
+    applicantService
+      .getMyAccess(shownApplicantId)
+      .then((access) => {
+        if (!cancelled) setCanInterview(access.can_log_interview);
+      })
+      .catch(() => {
+        if (!cancelled) setCanInterview(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shownApplicantId]);
+
   // Load applicant and interviews on mount
   useEffect(() => {
     if (!applicantId) return;
@@ -605,14 +627,16 @@ export const InterviewPage: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowForm(!showForm)}
-          className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 sm:self-auto"
-        >
-          <MessageSquare className="h-4 w-4" />
-          {showForm ? 'Hide Form' : 'New Interview'}
-        </button>
+        {canInterview && (
+          <button
+            type="button"
+            onClick={() => setShowForm(!showForm)}
+            className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 sm:self-auto"
+          >
+            <MessageSquare className="h-4 w-4" />
+            {showForm ? 'Hide Form' : 'New Interview'}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -663,7 +687,7 @@ export const InterviewPage: React.FC = () => {
         {/* Right column: Interview form + existing interviews */}
         <div className="space-y-4 lg:col-span-2">
           {/* New interview form */}
-          {showForm && (
+          {showForm && canInterview && (
             <div className="card border-blue-200 p-4 dark:border-blue-800">
               <h3 className="text-theme-text-primary mb-4 flex items-center gap-2 text-sm font-semibold">
                 <MessageSquare className="h-4 w-4 text-blue-600" />
@@ -695,13 +719,15 @@ export const InterviewPage: React.FC = () => {
               <div className="border-theme-surface-border flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
                 <MessageSquare className="text-theme-text-muted mb-2 h-8 w-8" />
                 <p className="text-theme-text-secondary text-sm">No interviews recorded yet</p>
-                <button
-                  type="button"
-                  onClick={() => setShowForm(true)}
-                  className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-                >
-                  Submit the first interview
-                </button>
+                {canInterview && (
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(true)}
+                    className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Submit the first interview
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

@@ -327,7 +327,7 @@ class TestKanbanResponseShape:
                 "id": position_id,
                 "org": org_id,
                 "slug": f"coord-{position_id[:8]}",
-                "perms": '["prospective_members.view"]',
+                "perms": '["prospective_members.view", "prospective_members.view_all"]',
             },
         )
         await db_session.execute(

@@ -247,6 +247,11 @@ class TestModuleRegistry:
     #: baseline members.view.
     BADGE_MODULES = {"membership": {"manage", "manage_id_cards"}}
 
+    #: Applicant labels name applicants by id, and only view_all sees every
+    #: applicant: without it, even a manage holder sees only those assigned to
+    #: them (app/services/prospect_access.py), so manage alone must not print.
+    VIEW_ALL_MODULES = {"prospective_members": {"view_all"}}
+
     def test_every_module_accepts_its_manage_grant(self):
         """A manage-only user must be able to print.
 
@@ -257,6 +262,8 @@ class TestModuleRegistry:
         by the next test.
         """
         for module, (permissions, _) in ls.MODULE_LABELS.items():
+            if module in self.VIEW_ALL_MODULES:
+                continue
             assert f"{module_permission_prefix(module)}.manage" in permissions, module
 
     def test_view_grant_is_registered_except_where_deliberately_manage_only(self):
@@ -264,6 +271,8 @@ class TestModuleRegistry:
             actions = {p.split(".")[-1] for p in permissions}
             if module in self.BADGE_MODULES:
                 assert actions == self.BADGE_MODULES[module], module
+            elif module in self.VIEW_ALL_MODULES:
+                assert actions == self.VIEW_ALL_MODULES[module], module
             elif module in self.MANAGE_ONLY_MODULES:
                 assert actions == {"manage"}, (
                     f"{module} is manage-only by policy; registering a view "

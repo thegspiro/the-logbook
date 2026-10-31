@@ -127,6 +127,14 @@ PROSPECTIVE_MEMBERS_MANAGE = Permission(
     "Manage prospective members and pipeline",
     PermissionCategory.PROSPECTIVE_MEMBERS,
 )
+# Without it, a holder of view or manage sees only the applicants they are
+# assigned to as case manager or interviewer (prospect_assignments). Unassigned
+# applicants, pipeline statistics and reports are visible to this alone.
+PROSPECTIVE_MEMBERS_VIEW_ALL = Permission(
+    "prospective_members.view_all",
+    "View every prospective member, assigned or not",
+    PermissionCategory.PROSPECTIVE_MEMBERS,
+)
 
 # ============================================
 # Position Management Permissions
@@ -905,6 +913,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Prospective Members
     PROSPECTIVE_MEMBERS_VIEW,
     PROSPECTIVE_MEMBERS_MANAGE,
+    PROSPECTIVE_MEMBERS_VIEW_ALL,
 ]
 
 
@@ -1393,6 +1402,7 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     NOTIFICATIONS_VIEW.name,
     REPORTS_VIEW.name,
     PROSPECTIVE_MEMBERS_VIEW.name,
+    PROSPECTIVE_MEMBERS_VIEW_ALL.name,
 ]
 
 # What a rank-and-file member of the department can see, whatever their
@@ -1960,6 +1970,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
@@ -2063,6 +2074,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -2161,6 +2173,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -2420,6 +2433,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
@@ -2455,6 +2469,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW.name,
             MEMBERS_VIEW.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             STOREFRONT_VIEW.name,

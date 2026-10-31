@@ -684,28 +684,72 @@ The leadership Pipeline Overview report additionally provides year-over-year app
 
 ## Permissions
 
-| Permission                   | Description                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------- |
-| `prospective_members.view`   | View pipeline, applicant list, and details                                                  |
-| `prospective_members.manage` | Full CRUD: modify pipeline, advance/reject/reactivate applicants, configure settings, purge |
+| Permission                     | Description                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `prospective_members.view`     | View the pipeline and the applicants the holder can see                                                             |
+| `prospective_members.manage`   | Full CRUD on the applicants the holder can see: advance/reject/reactivate, configure the pipeline, assign people    |
+| `prospective_members.view_all` | See **every** applicant, assigned or not, plus pipeline statistics, reports, labels and bulk actions _(2026-10-31)_ |
 
 ### Default Role Assignments
 
-| Position                                                 | Permission                                               |
-| -------------------------------------------------------- | -------------------------------------------------------- |
-| IT Manager                                               | Full access (wildcard)                                   |
-| Chief, Deputy Chief, Assistant Chief, Captain            | `prospective_members.view`, `prospective_members.manage` |
-| Lieutenant                                               | `prospective_members.view`                               |
-| President, Vice President, Secretary                     | `prospective_members.manage`                             |
-| Membership Coordinator, Assistant Membership Coordinator | `prospective_members.manage`                             |
+| Position                                                 | Permission                                         |
+| -------------------------------------------------------- | -------------------------------------------------- |
+| IT Manager                                               | Full access (wildcard)                             |
+| Chief, Deputy Chief, Assistant Chief, Captain            | `prospective_members.view`, `.manage`, `.view_all` |
+| Lieutenant                                               | `prospective_members.view`, `.view_all`            |
+| President, Vice President, Secretary                     | `prospective_members.manage`, `.view_all`          |
+| Membership Coordinator, Assistant Membership Coordinator | `prospective_members.manage`, `.view_all`          |
 
 The officer operational ranks (fire chief through lieutenant) also carry
-`prospective_members.view` by default. Source of truth: `DEFAULT_POSITIONS` and
-`OPERATIONAL_RANKS` in `backend/app/core/permissions.py`.
+`prospective_members.view` and `.view_all` by default. Source of truth:
+`DEFAULT_POSITIONS` and `OPERATIONAL_RANKS` in `backend/app/core/permissions.py`.
+
+### Case managers and interviewers _(2026-10-31)_
+
+A coordinator assigns members to an applicant from the applicant's **Assigned**
+section, as **case manager** or **interviewer** (`prospect_assignments`, one row
+per member per role per applicant, several of each allowed). Any current member
+can be assigned, whatever they hold, and is emailed a link (template
+**Applicant Assigned**). The assignment is itself the grant:
+
+- **Holders of `prospective_members.view_all`** see every applicant, as every
+  holder of view or manage did before. Migration `c588f525fdbb` gave
+  `view_all` to every position, seeded or department-created, that held view or
+  manage, so nobody's view narrowed on upgrade.
+- **Without `view_all`**, a holder of view or manage sees only the applicants
+  they are assigned to. A position created after the upgrade gets `view_all`
+  only if an administrator ticks it.
+- **A case manager** works their applicant: edit details and notes, upload and
+  remove documents, tick a checklist, send forms, advance, skip and move back a
+  stage, log interviews. Rejecting, holding, withdrawing, converting, moving to
+  any stage, the election package and assigning people stay with
+  `prospective_members.manage`.
+- **An interviewer** sees the applicant's details and documents, opens their
+  Interview page, and logs and edits their own interview. They see only their
+  own interview, so each assessment is made without reading the others, and no
+  activity log, linked events or election package.
+- **Unassigned applicants** are visible only to `view_all` holders.
+
+Assigned members without the pipeline page's permission (a board member, a
+trustee) reach their applicants from **My Applicants**
+(`/prospective-members/my-applicants`), which the menu offers only to a member
+who has an assignment. The rules live in `app/services/prospect_access.py`;
+every route naming an applicant declares its level with
+`require_prospect_access` (`app/api/prospect_access.py`), which
+`tests/test_prospect_access_routes.py` enforces. A member who cannot see the
+applicant gets 404, one who can see but not act gets 403. The applicant's
+dialog asks `GET /prospects/{id}/my-access` and offers only what it reports.
+
+Pipeline-wide figures and anything that names applicants in bulk need
+`view_all`: statistics, the dashboard widget, the source-event list, the
+election package list (or `elections.manage`), the Pipeline Overview report,
+applicant labels, bulk advance and status, purge and the inactivity sweep.
+Anonymizing a converted member also reduces each of their election packages'
+applicant copy to the anonymized name, membership type and stage list.
 
 **Sign-offs need no module permission** _(2026-09-28)_. `GET /prospective-members/my-sign-offs` and `POST /prospective-members/prospects/{prospect_id}/approve-step` are reachable by any signed-in member with the module on: the officers a Multi-Signer Approval stage names rarely hold `prospective_members.*`. The service lists and accepts only stages asking for a role the caller holds, and returns the applicant's name and stage only — never the record. The last required signature completes the stage and advances the applicant.
 
-**Applicant labels** _(2026-09-28, W17-3/W17-4)_. `/prospective-members/print-labels` takes `prospective_members.view` **or** `.manage` (a manage-only coordinator used to get Access Denied), and labels print `_short_id(id)` — never the status token, which the label preview used to return to staff and every printed badge carried.
+**Applicant labels** _(2026-09-28, W17-3/W17-4)_. `/prospective-members/print-labels` takes `prospective_members.view_all` since 2026-10-31 (it took view **or** manage before), and labels print `_short_id(id)` — never the status token, which the label preview used to return to staff and every printed badge carried.
 
 ---
 
@@ -762,7 +806,11 @@ The `useProspectiveMembersStore` manages all module state:
 Every path below is under `/api/v1/prospective-members` (router in
 `backend/app/api/v1/endpoints/membership_pipeline.py`). Applicants are addressed
 as **prospects**. "view" means `prospective_members.view` **or**
-`prospective_members.manage`; permissions written with `|` are OR.
+`prospective_members.manage`; permissions written with `|` are OR. Since
+2026-10-31 every route naming an applicant also needs that applicant to be
+visible to the caller: `prospective_members.view_all`, or an assignment to them
+(see "Case managers and interviewers"). An assigned case manager or interviewer
+reaches the routes their role allows without the permission listed.
 
 ### Pipeline Endpoints
 
@@ -827,15 +875,25 @@ log, not in the coordinator notes.
 
 ### Follow-up Form Endpoints
 
-| Method | Path                                                                          | Permission                   | Description                                    |
-| ------ | ----------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------- |
-| `GET`  | `/prospects/{prospect_id}/follow-up-forms`                                    | view                         | Forms sent, progress and record changes        |
-| `POST` | `/prospects/{prospect_id}/follow-up-forms/{step_id}/send`                     | `prospective_members.manage` | Send or resend a stage's form (same link)      |
-| `POST` | `/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change` | `prospective_members.manage` | Clear the contact-change flag                  |
-| `GET`  | `/prospects/{prospect_id}/follow-up-forms/{request_id}/answers`               | view                         | A submitted form's answers; 409 before submit  |
-| `GET`  | `/api/public/v1/follow-up-forms/{token}`                                      | None (link token)            | The form with pre-fill or draft; 409 once sent |
-| `PUT`  | `/api/public/v1/follow-up-forms/{token}/draft`                                | None (link token)            | Save a draft                                   |
-| `POST` | `/api/public/v1/follow-up-forms/{token}/submit`                               | None (link token)            | Submit; 400 names an answer to correct         |
+| Method | Path                                                                          | Permission                   | Description                                   |
+| ------ | ----------------------------------------------------------------------------- | ---------------------------- | --------------------------------------------- |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms`                                    | view                         | Forms sent, progress and record changes       |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{step_id}/send`                     | `prospective_members.manage` | Send or resend a stage's form (same link)     |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change` | `prospective_members.manage` | Clear the contact-change flag                 |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms/{request_id}/answers`               | view                         | A submitted form's answers; 409 before submit |
+
+### Assignment Endpoints
+
+| Method   | Path                                                   | Permission                                 | Description                                                      |
+| -------- | ------------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------- |
+| `GET`    | `/my-applicants`                                       | Authenticated                              | The caller's assigned applicants, with their roles in `my_roles` |
+| `GET`    | `/prospects/{prospect_id}/my-access`                   | `view_all`, or assigned                    | What the caller may do with this applicant                       |
+| `GET`    | `/prospects/{prospect_id}/assignments`                 | `view_all`, or assigned                    | Who is assigned, and as what                                     |
+| `POST`   | `/prospects/{prospect_id}/assignments`                 | `prospective_members.manage` (and visible) | Assign a current member; emails them; assigning twice is a no-op |
+| `DELETE` | `/prospects/{prospect_id}/assignments/{assignment_id}` | `prospective_members.manage` (and visible) | Unassign; their access ends at once                              |
+| `GET`    | `/api/public/v1/follow-up-forms/{token}`               | None (link token)                          | The form with pre-fill or draft; 409 once sent                   |
+| `PUT`    | `/api/public/v1/follow-up-forms/{token}/draft`         | None (link token)                          | Save a draft                                                     |
+| `POST`   | `/api/public/v1/follow-up-forms/{token}/submit`        | None (link token)                          | Submit; 400 names an answer to correct                           |
 
 ### Event Link Endpoints
 
@@ -896,7 +954,8 @@ record, if any, is omitted from both `items` and `total`.
 ### The Kanban Board Endpoint
 
 `GET /api/v1/prospective-members/pipelines/{pipeline_id}/kanban`
-(`prospective_members.view` | `prospective_members.manage`)
+(`prospective_members.view` | `prospective_members.manage` |
+`prospective_members.view_all`; without `view_all`, assigned applicants only)
 
 **It now declares a response model.** It previously returned a bare `dict`, so
 FastAPI serialized **every column** of `ProspectiveMember` — which put

@@ -78,6 +78,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.APPLICATION_CONTACT_CHANGED.value: "f34e25e2c820",
     EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER.value: "30e5b112ec00",
     EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED.value: "30e5b112ec00",
+    EmailTemplateType.APPLICATION_ASSIGNED.value: "c588f525fdbb",
 }
 
 
