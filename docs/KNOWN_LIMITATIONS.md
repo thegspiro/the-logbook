@@ -6468,6 +6468,19 @@ affected shift the moment it deployed.
 Either way the gate stops depending on a reference nothing maintains. Until one
 is chosen, the log line is the only signal.
 
+**Resolved (2026-10-31), owner decision: resolve both tables and fail
+closed.** A foreign key turned out not to be possible: `shifts.apparatus_id`
+names a row in either `apparatus` or `basic_apparatus`, depending on the
+department, so a key to one table would reject the other. Both deletes
+already refuse a vehicle a shift still names (`apparatus_in_use`), so only
+references from before those guards can dangle. The gate now treats a
+`basic_apparatus` id as having no requirement, which matches what it did
+before. An id found in neither table is ineligible, with a message telling
+the officer to pick the shift's vehicle again. The department's enforcement
+setting still decides whether that blocks or only warns, and a chief's
+exception still applies. No migration was needed. Covered by
+`TestDriverEligibility` in `tests/test_evoc_level_service.py`.
+
 ## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Showed At Most 100 Records (2026-10-11, resolved 2026-10-25)
 
 **Resolved.** `GET /facilities/maintenance/page` and `GET /facilities/inspections/page`
