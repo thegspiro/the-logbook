@@ -63,7 +63,7 @@ from its open list.
 | B22 | compliance & skills        | CS2    | ✅     |
 | B23 | security, audit & IP       | SEC2   | ✅     |
 | B24 | core infra                 | CI2    | ✅     |
-| B25 | onboarding                 | ONB2   | ⬜     |
+| B25 | onboarding                 | ONB2   | ✅     |
 | B26 | public-portal              | PP2    | ⬜     |
 | B27 | frontend shared            | FE2    | ⬜     |
 
@@ -3470,3 +3470,12 @@ secrets redacted for non-admins. See
   in-memory caches are bounded; requirements pins. **Not re-run:** the other checklist dimensions; CI-9,
   CI-4, CI-10 and CI-11 stay open. Gate: flake8 / black clean · 1,007 related tests pass · new file 42 pass,
   unit-marked. See core-infra.md → Pass 5. Next: B25 onboarding.
+- **B25 onboarding ✅ (pass 5).** Pitfall #27/#36 lens on the steps that replace
+  their own earlier rows. **ONB2-3 FIXED:** `/session/stations` and
+  `/session/apparatus` read the previous pass's ids from the session and then
+  inserted, unlocked — a double-submit left both sets of rows, with only the last
+  recorded, so the duplicates could never be replaced. Now serialised by
+  `_lock_session_for_step` (status row, then session row, locking refresh) ahead
+  of the completion check. Race test red→green (2 rows → 1). Pass-1 LOW items
+  re-verified closed. `/session/roles` simultaneous double-submit noted, not
+  fixed. See onboarding.md. Next: B26 public-portal.
