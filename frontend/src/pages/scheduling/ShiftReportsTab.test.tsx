@@ -20,6 +20,7 @@ const mockGetShift = vi.fn();
 const mockBatchCreate = vi.fn();
 const mockUpdateReport = vi.fn();
 const mockGetOrgSettings = vi.fn();
+const mockGetReviewAccess = vi.fn();
 let canManage = true;
 let canViewAnalytics = false;
 
@@ -36,6 +37,7 @@ vi.mock('../../services/api', () => ({
     getShiftCrewStatus: (...a: unknown[]) => mockGetShiftCrewStatus(...a) as unknown,
     batchCreateReports: (...a: unknown[]) => mockBatchCreate(...a) as unknown,
     updateReport: (...a: unknown[]) => mockUpdateReport(...a) as unknown,
+    getReviewAccess: (...a: unknown[]) => mockGetReviewAccess(...a) as unknown,
   },
   trainingModuleConfigService: {
     getConfig: (...a: unknown[]) => mockGetConfig(...a) as unknown,
@@ -103,6 +105,42 @@ beforeEach(() => {
   mockGetOfficerAnalytics.mockResolvedValue(null);
   mockGetOrgSettings.mockReset();
   mockGetOrgSettings.mockResolvedValue({});
+  mockGetReviewAccess.mockReset();
+  mockGetReviewAccess.mockResolvedValue({ can_review: false, by_role: false });
+});
+
+describe('ShiftReportsTab — a reviewer by the department role', () => {
+  // 2026-10-31: the reviewer role chosen in Shift Reports settings lets its
+  // holders review without training.manage. The server says who they are.
+  beforeEach(() => {
+    canManage = false;
+    mockGetReviewAccess.mockResolvedValue({ can_review: true, by_role: true });
+  });
+
+  it('offers the review queue and flagged lists', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftReportsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'Review Queue' }));
+
+    expect(screen.getByRole('button', { name: 'Flagged' })).toBeInTheDocument();
+    await waitFor(() => expect(mockGetPendingReview).toHaveBeenCalled());
+  });
+
+  it('opens the queue a notification links to', async () => {
+    searchParams = new URLSearchParams('view=pending-review');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await waitFor(() => expect(mockGetPendingReview).toHaveBeenCalled());
+  });
+
+  it('offers neither to a member the role does not cover', async () => {
+    mockGetReviewAccess.mockResolvedValue({ can_review: false, by_role: false });
+    renderWithRouter(<ShiftReportsTab />);
+
+    await waitFor(() => expect(mockGetReviewAccess).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Review Queue' })).not.toBeInTheDocument();
+  });
 });
 
 describe('ShiftReportsTab — the view named in the URL', () => {

@@ -19,6 +19,7 @@ from typing import List
 
 import pytest
 
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.storefront import (
     StoreOrderStatus,
     StoreOrderWindow,
@@ -27,7 +28,14 @@ from app.models.storefront import (
     StoreProductStatus,
     StoreWindowStatus,
 )
-from app.models.user import Organization, User
+from app.models.user import (
+    Organization,
+    Position,
+    User,
+    UserStatus,
+    user_positions,
+)
+from app.services.storefront_notification_service import StorefrontNotificationService
 from app.services.storefront_service import StorefrontService
 
 pytestmark = pytest.mark.integration
@@ -364,6 +372,70 @@ class TestDirectMessagesAreNotSwitched:
             order.id, org.id, None, "Your shirt is on the truck."
         )
         assert recorder.sent == ["send_order_update"]
+
+
+class TestAdminRecipientsExcludeFormerOfficers:
+    """CLAUDE.md Pitfall #32: a status gate asks "is this a current member".
+
+    ``get_admin_recipients`` holds every store order's customer name, email
+    and shipping address. A quartermaster's position is not revoked by a
+    status change, so an unfiltered scan over "has the role" alone would
+    mail every new order's customer PII to a retired or dropped officer
+    forever, with no admin action able to stop it short of deleting the
+    position outright.
+    """
+
+    async def _quartermaster_position(self, db, org_id) -> Position:
+        position = Position(
+            organization_id=org_id,
+            name="Quartermaster",
+            slug=ADMIN_NOTIFY_ROLE_SLUGS[0],
+            permissions=[],
+        )
+        db.add(position)
+        await db.flush()
+        return position
+
+    async def _grant(self, db, user: User, position: Position) -> None:
+        await db.execute(
+            user_positions.insert().values(user_id=user.id, position_id=position.id)
+        )
+        await db.flush()
+
+    async def test_a_retired_quartermaster_is_excluded(self, db_session):
+        org = await _make_org(db_session)
+        position = await self._quartermaster_position(db_session, org.id)
+
+        active = await _make_member(db_session, org)
+        active.email = "active-qm@example.org"
+        await self._grant(db_session, active, position)
+
+        retired = await _make_member(db_session, org)
+        retired.email = "retired-qm@example.org"
+        retired.status = UserStatus.RETIRED
+        await self._grant(db_session, retired, position)
+
+        recipients = await StorefrontNotificationService(
+            db_session
+        ).get_admin_recipients(org.id, None)
+
+        assert "active-qm@example.org" in recipients
+        assert "retired-qm@example.org" not in recipients
+
+    async def test_a_dropped_member_is_excluded(self, db_session):
+        org = await _make_org(db_session)
+        position = await self._quartermaster_position(db_session, org.id)
+
+        dropped = await _make_member(db_session, org)
+        dropped.email = "dropped-qm@example.org"
+        dropped.status = UserStatus.DROPPED_INVOLUNTARY
+        await self._grant(db_session, dropped, position)
+
+        recipients = await StorefrontNotificationService(
+            db_session
+        ).get_admin_recipients(org.id, None)
+
+        assert "dropped-qm@example.org" not in recipients
 
 
 class TestDefaults:

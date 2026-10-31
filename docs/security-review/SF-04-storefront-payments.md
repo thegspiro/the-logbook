@@ -1,6 +1,252 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 14 (2026-10-31) — watchdog pickup: true near-zero delta, 1 fixed (LOW, addendum below), 0 open findings remain
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed via
+`ListAgents`. Step 0 (`gh api repos/.../pulls?state=open`) found 0 open PRs
+whose head branch starts with `claude/security-review-`: the three open PRs
+at the time (#3875, #3876, #3877) are all unrelated feature work. PR #3878
+(Feature 03, Public surface & webhooks, pass 14) had already merged
+(`657911daa`). Row 04 (Storefront & payments) was the next `⬜` row,
+confirmed on a freshly fetched, unshallowed `main`.
+
+**Scope.** Diffed pass 13's own merge (`7c0162c06`, PR #3805) against current
+`main` across the full established domain: `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `email_templates_storefront.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, the
+entire `frontend/src/modules/storefront/` tree, and every migration added
+since, checked by content for storefront/embroidery/personalization/thread
+keywords (repo was shallow at session start; `git fetch --unshallow`
+resolved it before trusting any diff range, same precaution every prior pass
+has had to take).
+
+**Near-zero delta — exactly 2 non-merge commits touch this scope, both read
+in full:**
+
+1. **`31f39cf6c` — "Notifications: officer alerts whose email can be turned
+   off also leave a bell entry."** Touches only
+   `storefront_notification_service.py`, adding `get_admin_user_ids` (a
+   fresh, org-scoped `select(User).where(User.organization_id == ...,
+User.status.in_(ACTIVE_ACCOUNT_STATUSES), ...)` — Pitfall #32 compliant,
+   not a literal `== ACTIVE`) and wiring `send_admin_new_order` to also write
+   an in-app bell entry via the new shared `officer_alert_copies.
+add_in_app_copies` helper, guarded by `if self._capture is None` so a
+   settings-screen preview (which diverts into `_capture` instead of
+   sending) never writes a bell entry — exactly the "not written for a
+   settings preview" the commit message states, confirmed by reading
+   `StorefrontNotificationService.__init__`'s own docstring on `_capture`.
+   Read `add_in_app_copies` (new shared infra in
+   `app/services/officer_alert_copies.py`) in full: `organization_id` is the
+   caller's own already-resolved `order.organization_id` (never a
+   client-supplied id), `recipient_ids` come only from the org-scoped
+   `get_admin_user_ids` query, and the one `logger.debug` call passes
+   `category`/`organization_id`/counts as arguments rather than splicing them
+   into the f-string (Pitfall #33 compliant). The notification `message`
+   interpolates `order.customer_name` (itself server-derived at order
+   creation from `user.full_name or user.email or "Member"`, already
+   reviewed under this feature in prior passes — not client-free-text at
+   checkout) via an f-string, but this is building a stored `message` field,
+   not a log call, so Pitfall #33 does not apply to it; checked the frontend
+   render path (`components/NotificationCard.tsx:228,264`) renders
+   `notification.message` as plain JSX text (`{notification.message}`), never
+   `dangerouslySetInnerHTML`, so React's default escaping closes any HTML/XSS
+   concern regardless. `storefront_admin` is a new `NotificationLog.category`
+   value; `notificationCategoryDisplay.tsx`'s `CATEGORY_ALIASES` map is
+   cosmetic only (icon/color, falls back to a generic icon for an
+   unmapped category) — its absence from that map is not a Pitfall #19
+   "switch with no reader" shape, since the bell entry still renders and
+   functions without it. No route, permission, schema, or org-scoping file
+   touched.
+2. **`f2ea7ba55` — "Stop the remaining pages jumping while they load"**
+   (a 135-route layout-shift sweep). Touches only
+   `StoreAdminPage.tsx` (+11/-2): the back-link-to-Inventory anchor is held
+   in the layout, invisible (`invisible` class) and keyboard-unreachable
+   (`tabIndex={-1}`, `aria-hidden`) while the enabled-modules lookup is in
+   flight, instead of popping in afterwards and shifting the header. Purely
+   a CSS/accessibility layout fix — `aria-hidden`/`tabIndex={-1}` correctly
+   pair so an invisible link is also not tab-focusable, and Tailwind's
+   `invisible` utility (`visibility: hidden`) already makes it
+   unclickable — no data-fetching, auth, or permission logic touched.
+
+**No new migrations** touching storefront/embroidery/personalization tables
+landed in this window. Four new migration files since pass 13 matched a
+content grep for `store_`/`storefront`/`thread` purely incidentally — three
+repeat the repo-wide `REQUIRED_EMAIL_KINDS`/notification-kind enum literal
+list (which happens to include the ten `storefront_*` template-kind strings)
+for unrelated follow-up-form seed migrations, and the fourth
+(`d8f1a4c27b93`, positions/committee seeds) grants new baseline positions the
+same member-level `storefront.view`/`storefront.order` pair every other
+baseline position already carries — the same false-positive content-grep
+shape pass 3/4/7 already classified, re-confirmed by reading each match
+directly; none creates or alters a `store_*` table.
+
+**Re-verified unchanged, by direct read of an empty diff (not inferred from
+"file not listed"):** `git diff --stat 7c0162c06..main -- storefront.py
+storefront_service.py schemas/storefront.py paypal_webhook.py
+models/storefront.py storefront_preview_service.py storefront_payments.py
+size_order.py embroidery.py` returns nothing — every one of those files is
+byte-identical to pass 13's reviewed state. This means the price/amount
+integrity guard (`StoreOrderItemInput` carries no price field;
+`_price_lines` recomputes every line from the org-scoped catalog),
+capacity locking (organisation → window → product → tally lock order),
+all five self-settlement separation-of-duties guards
+(`assert_different_person` in `record_payment`, `mark_order_paid`,
+`waive_order_payment`, `refund_order`, `update_order_status`'s settlement
+branch), the PayPal webhook signature verification and replay/idempotency
+guard (`UniqueConstraint(organization_id, provider, external_id)`), and
+SF8-04-2/SF8-04-3's locking fixes (pass 13's own confirmation) all carry
+forward unchanged with no re-derivation needed.
+
+**Route inventory re-enumerated by AST, independently of the file diff.**
+`ast.walk` over every `@router.{get,post,put,patch,delete}`-decorated
+function in `storefront.py` finds **48** routes — identical to pass
+11/12/13's count. Re-read every one of the 48 against its dependency: 47
+carry `require_permission(...)` (the member self-service surface —
+`/orders/mine*`, payment-method update, `report_payment`, order
+cancellation — `storefront.view`; order creation the dedicated
+`storefront.order`; every catalog/window/order-admin/payment-admin route,
+including both refund and the four payout/settlement routes,
+`storefront.manage`); the 48th (`GET /permissions`) carries only
+`Depends(get_current_user)` — a self-introspection endpoint returning the
+caller's own permission flags, listed in
+`tests/permissionless_route_baseline.txt`
+(`app/api/v1/endpoints/storefront.py::get_store_permissions`), unchanged
+classification from every prior pass.
+
+**0 fixed, 0 new findings at this point in the pass.** Both standing
+findings this feature carried (SF8-04-2, SF8-04-3) were already confirmed
+FIXED in pass 13 — see that section — and remain fixed: the file that held
+both (`storefront_service.py`) is byte-identical to pass 13's state,
+confirmed above. **See the addendum immediately below: re-reading the
+sibling this same commit's `get_admin_user_ids` sits beside turned up
+SF14-04-1, found after this section was first written.**
+
+### Addendum (same pass, same day) — SF14-04-1 found on a second read of `31f39cf6c`'s sibling
+
+A second, independent read of this pass's own item 1 above — specifically,
+reading `get_admin_user_ids` next to the two functions it sits beside
+rather than only confirming it was itself correct — found that one of
+those siblings had no account-status filter at all.
+
+### SF14-04-1 — LOW — `get_admin_recipients` had no account-status filter, so a retired or dropped officer kept getting every new order's customer PII by email — ✅ FIXED
+
+**What:** `get_admin_recipients` (`storefront_notification_service.py:192`)
+resolves the store's admin-email list by eager-loading every org member's
+`roles` (a synonym for `positions`) and keeping anyone whose position slug
+is in `ADMIN_NOTIFY_ROLE_SLUGS` (`it_manager`/`quartermaster`/`chief`). The
+`where()` clause filtered `organization_id`, `email IS NOT NULL` and
+`deleted_at IS NULL` — but **no account-status filter at all**, not even
+the literal `== ACTIVE` comparison CLAUDE.md Pitfall #32's sweep
+(`tests/test_account_status_gates.py`) checks for. Its two siblings in the
+same file do filter: `get_member_recipients` (`:180`) and this pass's own
+`get_admin_user_ids` (`:687`, added by `31f39cf6c` above) both carry
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)`.
+
+**Where:** `backend/app/services/storefront_notification_service.py:192-220`
+(function `get_admin_recipients`), called from `send_admin_new_order`
+(`:722`) whenever `notify_admins_on_order` is on (the default) and from
+every other admin-facing storefront notice that fans out to
+`get_admin_recipients`.
+
+**Impact:** nothing in the member status-change flow revokes a position —
+confirmed by reading `app/api/v1/endpoints/member_status.py` (the drop/
+retire endpoint) and `app/services/member_archive_service.py`, neither of
+which touches `user_positions`. A quartermaster or chief who is marked
+`RETIRED`, `SUSPENDED`, `LEAVE`, `DROPPED_VOLUNTARY`,
+`DROPPED_INVOLUNTARY` or `ARCHIVED` — current and correct account-status
+handling everywhere else in the app, per Pitfall #32 — keeps their
+position (nothing in this app's workflow strips it on a status change) and
+therefore kept receiving admin storefront email for as long as the row
+exists: every new order's customer name, email and shipping address,
+mailed to someone no longer serving in the role, with no admin control
+able to stop it short of deleting the position outright. This is the
+opposite direction from the usual Pitfall #32 shape (that class
+under-included current members; this one over-included a departed one),
+in a function whose two immediate siblings already had the gate — which
+is exactly why reading it beside them, rather than only confirming the new
+function was correct in isolation, is what surfaced it.
+
+**Fix:** added `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` to the `where()`
+clause, mirroring `get_member_recipients` immediately above it and
+`get_admin_user_ids` below it. Narrowing-only: an organization's currently
+active or probationary admins are unaffected; only non-current statuses
+are now excluded. No existing test exercises the real query (every test
+referencing `get_admin_recipients` or `send_admin_new_order` mocks the
+method or the whole notification service — confirmed by
+`grep -rln get_admin_recipients backend/tests/`), so nothing broke, and
+nothing was relying on the gap.
+
+**Guarded:** `tests/test_storefront_notifications.py::
+TestAdminRecipientsExcludeFormerOfficers` — two DB-backed cases (a retired
+admin, a dropped-involuntary admin), each asserting their email is absent
+from the recipient list while an active admin's email is present. **Seen
+to fail against the pre-fix code** (both cases:
+`AssertionError: assert 'retired-qm@example.org' not in [...]` / same for
+the dropped case) before the fix, green after (CLAUDE.md Pitfall #37).
+
+**1 fixed (LOW) by this pass overall. 0 findings remain OPEN or FLAGGED
+for this feature going into pass 15** — SF-1 through SF-11 and
+SF8-04-1/2/3 all re-verified FIXED and unchanged earlier in this section;
+SF14-04-1 above is the only new one, and it is closed.
+
+## Guard tests added (pass 14)
+
+`tests/test_storefront_notifications.py::TestAdminRecipientsExcludeFormerOfficers`
+(2 new tests, both red before the fix — see SF14-04-1). Re-ran the full
+existing suite: `test_storefront_payment_race.py`,
+`test_storefront_waive_settled.py`, `test_storefront_order_deadlock.py`,
+`test_storefront_schemas.py`, `test_storefront_locking.py`,
+`test_encryption_registry_coverage.py`, `test_email_fingerprint.py`,
+`test_rotate_email_fingerprints.py`, `test_officer_alert_copies.py` (the new
+shared bell-copy sender this pass reviewed, not storefront-owned, included
+because `send_admin_new_order` now calls it), plus the repo-wide
+`test_org_scoping_ratchet.py` / `test_capacity_locking.py` /
+`test_csv_writer_sweep.py` / `test_like_escaping.py` /
+`test_migration_create_all_tables.py` / `test_baseline_member_grants.py` /
+`test_account_status_gates.py`.
+
+## Completion gate (pass 14)
+
+| Check                                                                                                                                                                         | Result                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (via `/usr/bin/python3`, CI's interpreter/pin)                                                                                                  | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/`                                                                                                                                          | ✅ 2754 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                     | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                             | ✅ 679 revisions, single head (`c588f525fdbb`)           |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                             | ✅ 281 routes, 0 errors, 0 warnings                      |
+| backend tests (scoped: `-k "storefront or stripe or payment or refund or checkout"`)                                                                                          | ✅ 603 passed, 1 skipped (environment-only: `pywebpush`) |
+| storefront + bell-copy guard suites (payment race, waive-settled, order-deadlock, schemas, locking, encryption-registry coverage, email-fingerprint ×2, officer-alert-copies) | ✅ 66 passed                                             |
+| standing repo-wide guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates) | ✅ 171 passed                                            |
+| `cd frontend && npm run typecheck`                                                                                                                                            | ✅ 0 errors                                              |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                   | ✅ 0 errors, 0 warnings                                  |
+
+Note on tooling (still true this pass): a bare `python3`/`pytest` on this
+sandbox resolves to an isolated interpreter (3.11) lacking the app's own
+dependencies; `/usr/bin/python3` (3.13) is the one with
+`sqlalchemy`/`fastapi`/`flake8`/`black`/`isort`/`pytest` installed at the
+versions CI pins, and is what every command above actually ran under.
+
+**Gate re-run after the SF14-04-1 amendment above:** `flake8`/`black`/
+`isort` clean on `app/ tests/ alembic/` (isort initially flagged the
+amendment's own new import order in the one test file touched — fixed
+with `isort app/ tests/ alembic/`, then clean, per CLAUDE.md's "isort is
+the one that bites" warning); scoped backend tests
+(`-k "storefront or stripe or payment or refund or checkout or paypal"`,
+no `-m` exclusion, matching this feature's own established convention of
+running its `db_session`-backed `integration`-marked money tests directly
+against the sandbox's live database) — **953 passed, 1 skipped**
+(environment-only: `pywebpush`), including the 2 new tests in
+`TestAdminRecipientsExcludeFormerOfficers`; `validate_migrations.py`/
+`check_route_permissions.py` unaffected (no migration or route touched by
+the amendment); frontend typecheck/lint unaffected (no frontend file
+touched).
 
 ---
 

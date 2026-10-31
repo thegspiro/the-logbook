@@ -3873,6 +3873,9 @@ class ShiftAttendance(Base):
     __table_args__ = (
         Index("idx_shift_att_shift", "shift_id"),
         Index("idx_shift_att_user", "user_id"),
+        # One attendance row per member per shift. The service paths lock the
+        # shift and check first; this is what holds when two requests race.
+        UniqueConstraint("shift_id", "user_id", name="uq_shift_attendance_shift_user"),
     )
 
     def __repr__(self):
@@ -4356,6 +4359,54 @@ class ShiftPattern(Base):
 
     def __repr__(self):
         return f"<ShiftPattern(name={self.name}, type={self.pattern_type})>"
+
+
+class ShiftPatternOccurrence(Base):
+    """
+    One row per occurrence a pattern has generated: the durable key that stops
+    generation recreating it.
+
+    The older guard matches a shift from the pattern's template starting at the
+    occurrence's date and time, so deleting a generated shift or moving its
+    start left nothing for that guard to find and the next scheduled run put
+    the original back with its full crew (KNOWN_LIMITATIONS, shifts-module
+    review item 1). This row outlives both: deleting the shift only clears
+    ``shift_id``. Removed with its pattern.
+    """
+
+    __tablename__ = "shift_pattern_occurrences"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    pattern_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("shift_patterns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    occurrence_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # "on" for a single-shift day, or the "day" / "night" side.
+    shift_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pattern_id",
+            "occurrence_date",
+            "shift_type",
+            name="uq_shift_pattern_occurrence",
+        ),
+        Index("idx_shift_pattern_occ_org", "organization_id"),
+        Index("idx_shift_pattern_occ_shift", "shift_id"),
+    )
 
 
 # ============================================
