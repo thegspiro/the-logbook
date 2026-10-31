@@ -302,6 +302,37 @@ class TestSeeing:
         assert res.status_code == 200
 
 
+class TestNotes:
+    """The coordinators' notes go with the file an interviewer does not see."""
+
+    async def _with_notes(self, db_session, world):
+        await db_session.execute(
+            text("UPDATE prospective_members SET notes = :n WHERE id = :id"),
+            {"n": "Hesitant about night calls", "id": world.applicant_id},
+        )
+        await db_session.commit()
+
+    async def test_an_interviewer_does_not_see_them(self, db_session, world):
+        await self._with_notes(db_session, world)
+
+        res = await _call(
+            db_session, world.interviewer, "GET", f"/prospects/{world.applicant_id}"
+        )
+
+        assert res.status_code == 200
+        assert res.json()["notes"] is None
+
+    @pytest.mark.parametrize("who", ["case_manager", "coordinator"])
+    async def test_whoever_works_the_applicant_does(self, db_session, world, who):
+        await self._with_notes(db_session, world)
+
+        res = await _call(
+            db_session, getattr(world, who), "GET", f"/prospects/{world.applicant_id}"
+        )
+
+        assert res.json()["notes"] == "Hesitant about night calls"
+
+
 class TestLists:
     async def test_without_view_all_the_list_holds_assigned_applicants_only(
         self, db_session, world
@@ -438,8 +469,33 @@ class TestWorking:
         assert advanced.status_code == 200, advanced.text
         assert back.status_code == 200, back.text
 
-    @pytest.mark.parametrize("status", ["rejected", "on_hold", "withdrawn"])
-    async def test_a_case_manager_cannot_close_the_application(
+    async def test_a_case_manager_withdraws_the_application(self, db_session, world):
+        res = await _call(
+            db_session,
+            world.case_manager,
+            "POST",
+            f"/prospects/{world.applicant_id}/status",
+            json={"status": "withdrawn", "reason": "Moved out of the district"},
+        )
+
+        assert res.status_code == 200, res.text
+        assert res.json()["status"] == "withdrawn"
+
+    async def test_an_interviewer_cannot_withdraw_the_application(
+        self, db_session, world
+    ):
+        res = await _call(
+            db_session,
+            world.interviewer,
+            "POST",
+            f"/prospects/{world.applicant_id}/status",
+            json={"status": "withdrawn"},
+        )
+
+        assert res.status_code == 403
+
+    @pytest.mark.parametrize("status", ["rejected", "on_hold", "inactive", "active"])
+    async def test_a_case_manager_cannot_set_any_other_status(
         self, db_session, world, status
     ):
         res = await _call(

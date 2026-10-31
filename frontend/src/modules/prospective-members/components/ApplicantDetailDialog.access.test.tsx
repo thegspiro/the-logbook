@@ -84,10 +84,10 @@ const access = (overrides: Partial<ProspectAccess>): ProspectAccess => ({
   ...overrides,
 });
 
-const renderDialog = (isLastStage = false) =>
+const renderDialog = (isLastStage = false, overrides: Partial<Applicant> = {}) =>
   renderWithRouter(
     <ApplicantDetailDialog
-      applicant={applicant}
+      applicant={{ ...applicant, ...overrides }}
       isOpen
       onClose={vi.fn()}
       onConvert={vi.fn()}
@@ -127,17 +127,26 @@ describe('ApplicantDetailDialog for an assigned member', () => {
     expect(mocks.getMyAccess).toHaveBeenCalledWith('app-1');
   });
 
-  it('lets a case manager advance, skip and move back, but not reject, hold or withdraw', async () => {
+  it('lets a case manager advance, skip, move back and withdraw, but not reject or hold', async () => {
     mocks.getMyAccess.mockResolvedValue(caseManager);
     renderDialog();
 
     expect(await screen.findByRole('button', { name: /Advance/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Skip/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Back/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Withdraw/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Reject/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Hold/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Withdraw/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit/ })).toBeInTheDocument();
+  });
+
+  it('lets a case manager withdraw an application on hold, but not resume or reject it', async () => {
+    mocks.getMyAccess.mockResolvedValue(caseManager);
+    renderDialog(false, { status: 'on_hold' });
+
+    expect(await screen.findByRole('button', { name: /Withdraw/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Resume/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reject/ })).not.toBeInTheDocument();
   });
 
   it('does not offer a case manager Convert on the last stage', async () => {
