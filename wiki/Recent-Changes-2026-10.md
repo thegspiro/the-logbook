@@ -5,6 +5,19 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 30 – 31, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-30--31-2026).
+
+- **Rows with buttons now wrap.** On cards and lists, action buttons drop
+  under the title when space is tight instead of squeezing the title.
+- **The Voting eligibility card** on a member profile shows its fields in one
+  column.
+- **A page that cannot load no longer reloads forever;** it shows the error
+  screen. Double-tapping **Reload now** is safe.
+- Dependency security updates (pypdf, follow-redirects). No action needed.
+
 ## Recent changes: October 29 – 30, 2026
 
 The engineering audit is
