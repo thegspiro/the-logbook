@@ -26,6 +26,7 @@ import { RequirementLibraryPicker } from '../components/training/RequirementLibr
 import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
 import { ProgramEnrollmentRulesFields } from '../components/training/ProgramEnrollmentRulesFields';
 import { ProgramRequirementSettingsFields } from '../components/training/ProgramRequirementSettingsFields';
+import { ShiftEvaluationTemplateSelect } from '../components/training/ShiftEvaluationTemplateSelect';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import type {
@@ -273,6 +274,7 @@ const StepInfo: React.FC<{
     is_template: boolean;
     prerequisite_program_ids: string[];
     allows_concurrent_enrollment: boolean;
+    shift_evaluation_template_id: string;
   };
   onChange: (field: string, value: string | boolean | string[]) => void;
 }> = ({ data, onChange }) => (
@@ -436,6 +438,12 @@ const StepInfo: React.FC<{
       onSelectedIdsChange={(ids) => onChange('prerequisite_program_ids', ids)}
       allowsConcurrent={data.allows_concurrent_enrollment}
       onAllowsConcurrentChange={(value) => onChange('allows_concurrent_enrollment', value)}
+    />
+
+    <ShiftEvaluationTemplateSelect
+      id="prog-evaluation-template"
+      value={data.shift_evaluation_template_id}
+      onChange={(templateId) => onChange('shift_evaluation_template_id', templateId)}
     />
   </div>
 );
@@ -1369,6 +1377,7 @@ const CreatePipelinePage: React.FC = () => {
     is_template: false,
     prerequisite_program_ids: [] as string[],
     allows_concurrent_enrollment: true,
+    shift_evaluation_template_id: '',
   });
 
   // Phases state
@@ -1601,6 +1610,7 @@ const CreatePipelinePage: React.FC = () => {
           is_template: info.is_template,
           prerequisite_program_ids: info.prerequisite_program_ids.length ? info.prerequisite_program_ids : undefined,
           allows_concurrent_enrollment: info.allows_concurrent_enrollment,
+          shift_evaluation_template_id: info.shift_evaluation_template_id || undefined,
         },
         phases: usesPhases
           ? phases.map((phaseData) => ({
