@@ -721,13 +721,13 @@ can be assigned, whatever they hold, and is emailed a link (template
   only if an administrator ticks it.
 - **A case manager** works their applicant: edit details and notes, upload and
   remove documents, tick a checklist, send forms, advance, skip and move back a
-  stage, log interviews. Rejecting, holding, withdrawing, converting, moving to
-  any stage, the election package and assigning people stay with
-  `prospective_members.manage`.
+  stage, log interviews, and withdraw the application. Rejecting, holding,
+  reactivating, converting, moving to any stage, the election package and
+  assigning people stay with `prospective_members.manage`.
 - **An interviewer** sees the applicant's details and documents, opens their
   Interview page, and logs and edits their own interview. They see only their
   own interview, so each assessment is made without reading the others, and no
-  activity log, linked events or election package.
+  coordinators' notes, activity log, linked events or election package.
 - **Unassigned applicants** are visible only to `view_all` holders.
 
 Assigned members without the pipeline page's permission (a board member, a
