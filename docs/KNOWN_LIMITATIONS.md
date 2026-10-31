@@ -23,6 +23,27 @@ evaluator defaults, line-officer visibility of their own crew's evaluations,
 and approvals. Not started; it is a change to the member model and its editing
 screens, separate from the evaluations work.
 
+## Frontend API Cache — An Inventory Item's Detail Is Cacheable and Names the Holder (2026-10-31)
+
+`GET /inventory/items/{id}` fills in `assigned_to_name` — who currently holds the
+item — for a caller who manages inventory or who holds it themselves. The shared
+API cache (`frontend/src/utils/apiCache.ts`) keeps GET responses for 30 seconds
+fresh and 90 stale, and `/inventory/items/{id}` is not in `UNCACHEABLE_PREFIXES`,
+although `/inventory/checkout/` and `/inventory/users/` are excluded for exactly
+this reason (who holds what is PII).
+
+It is left as it is because an earlier decision (FE9-34, pinned by a test in
+`apiCache.test.ts`) deliberately keeps the item list and detail cacheable and
+excludes only the maintenance sub-resource. Excluding the detail needs a prefix
+that would also uncache the item's other sub-routes, which is a performance
+change to a hot screen. Choosing between that and the current exposure is an
+owner decision.
+
+Owner decision: either (a) keep it — the response is already redacted per
+viewer on the server, and the cache is cleared on logout; or (b) exclude
+`/inventory/items/{id}` itself (a narrower pattern than a prefix) and update the
+FE9-34 test to match.
+
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
 The member standing rework (class and status as two controls, tiers as

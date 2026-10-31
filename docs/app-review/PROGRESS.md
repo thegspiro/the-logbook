@@ -65,7 +65,7 @@ from its open list.
 | B24 | core infra                 | CI2    | ✅     |
 | B25 | onboarding                 | ONB2   | ✅     |
 | B26 | public-portal              | PP2    | ⬜     |
-| B27 | frontend shared            | FE2    | ⬜     |
+| B27 | frontend shared            | FE2    | ✅     |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -3479,3 +3479,14 @@ secrets redacted for non-admins. See
   of the completion check. Race test red→green (2 rows → 1). Pass-1 LOW items
   re-verified closed. `/session/roles` simultaneous double-submit noted, not
   fixed. See onboarding.md. Next: B26 public-portal.
+- **B27 frontend shared ✅ (pass 5) — final row of the rotation.** Measured the
+  hand-maintained `UNCACHEABLE_PREFIXES` against the API: parsed the list, walked
+  every non-excluded GET route's response schema for member-identifying fields
+  (94 hits, nearly all an object's own `name` or a business contact). **FE2-1
+  FIXED:** `/reports/saved` (recipients' emails) and `/public-portal/access-logs`
+  (external IPs) added to the list, two tests red→green. **FE2-2 FLAGGED:**
+  `/inventory/items/{id}` names the holder and is cacheable, but FE9-34 decided
+  the item detail stays cacheable and pins it with a test — not reversed here;
+  owner decision recorded in KNOWN_LIMITATIONS.md. Suggested follow-up: a backend
+  guard test for the list. See frontend-shared.md. Rotation complete: all 27 Tier B
+  rows ✅.
