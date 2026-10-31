@@ -40,6 +40,7 @@ from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
+from app.api.public.zeffy_webhook import router as zeffy_webhook_router
 from app.api.v1.api import api_router
 from app.core.cache import cache_manager
 from app.core.config import settings
@@ -2467,6 +2468,9 @@ app.include_router(
 app.include_router(sf_webhook_router, prefix="/api", responses=public_responses.WEBHOOK)
 app.include_router(
     paypal_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
+)
+app.include_router(
+    zeffy_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
 )
 
 # Include Documenso & Cal.com inbound webhooks

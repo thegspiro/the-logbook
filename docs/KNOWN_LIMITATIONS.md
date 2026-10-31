@@ -1,5 +1,27 @@
 # Known Limitations & Open Decisions
 
+## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
+
+The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies
+Zeffy payments to donations, fundraising-event revenue and member dues. These
+were chosen deliberately and are open for the owner to confirm or change:
+
+- **A refund of dues already credited is flagged, not reversed.** The dues
+  ledger has no reversal entry, so the payment shows **Needs review** and the
+  treasurer adjusts the dues by hand. Donations and event revenue are adjusted
+  automatically.
+- **Linking starts "from now on" by default.** Earlier Zeffy payments are
+  recorded but applied only if the link's start date is moved back, so nothing
+  the treasurer already typed in is counted twice.
+- **A payment stays on the record it was first applied to** when its campaign's
+  link is pointed elsewhere.
+- **A refund made more than 7 days after the sale arrives only by webhook.**
+  Zeffy's payment list has no "changed since" filter, so the hourly sync cannot
+  find it. Departments without the webhook will not see such refunds.
+- **Membership payments are matched to members by email only.** A payer who
+  used a different address than the one on their profile is left **No member
+  match** for the treasurer.
+
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
 The member standing rework (class and status as two controls, tiers as
