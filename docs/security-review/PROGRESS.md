@@ -51,13 +51,42 @@ The two standing findings this feature carried (SF8-04-2, SF8-04-3) were
 already confirmed FIXED in pass 13 and remain fixed, since the file that
 held both is unchanged.
 
-**0 fixed, 0 new findings.** Completion gate green: flake8/black/isort on
-`app/ tests/ alembic/`; `validate_migrations.py --strict` — 679 revisions,
-single head; `check_route_permissions.py --strict` — 281 routes, 0
-errors/warnings; scoped backend tests (`-k "storefront or stripe or
-payment or refund or checkout"`) — 603 passed, 1 environment-only skip
-(`pywebpush`); storefront + bell-copy guard suites — 66 passed; standing
-repo-wide guard suites — 171 passed; frontend typecheck/lint clean.
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 679 revisions, single head;
+`check_route_permissions.py --strict` — 281 routes, 0 errors/warnings;
+scoped backend tests (`-k "storefront or stripe or payment or refund or
+checkout"`) — 603 passed, 1 environment-only skip (`pywebpush`);
+storefront + bell-copy guard suites — 66 passed; standing repo-wide guard
+suites — 171 passed; frontend typecheck/lint clean.
+
+**Amended same day, same PR, before merge:** a second read of this pass's
+own delta — specifically, reading the new `get_admin_user_ids` next to the
+two sibling functions it sits beside rather than only confirming it was
+itself correct — found that one of those siblings,
+`get_admin_recipients`, had **no account-status filter at all** (not even
+the literal `== ACTIVE` CLAUDE.md Pitfall #32's sweep checks for), so a
+retired or dropped quartermaster/chief (nothing in the member drop/retire
+flow revokes a position) kept receiving every new order's customer name,
+email and shipping address by mail indefinitely. Fixed by adding
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, mirroring both siblings;
+narrowing-only, no existing test exercised the real query. **SF14-04-1**
+(LOW) — see `docs/security-review/SF-04-storefront-payments.md`'s pass-14
+addendum. Guarded by 2 new DB-backed tests in
+`test_storefront_notifications.py::TestAdminRecipientsExcludeFormerOfficers`,
+both seen to fail against the pre-fix code before the fix (Pitfall #37).
+Completion gate re-run clean after the amendment: flake8/black/isort clean
+on `app/ tests/ alembic/` (isort initially flagged the amendment's own new
+import order — fixed, then clean); scoped backend tests
+(`-k "storefront or stripe or payment or refund or checkout or paypal"`,
+no `-m` exclusion — this feature's money-correctness tests are
+`db_session`-backed `integration` tests and the sandbox has a live
+database, matching every prior pass's convention for this feature) — 953
+passed, 1 environment-only skip (`pywebpush`), including the 2 new tests;
+frontend typecheck/lint unaffected, no frontend file touched by the
+amendment.
+
+**1 fixed (LOW) total this pass; 0 findings remain OPEN or FLAGGED for
+this feature.**
 
 Rotation row 04 → ✅ (pending this PR's merge). Re-check `gh api
 repos/.../pulls?state=open` fresh rather than trusting this note.

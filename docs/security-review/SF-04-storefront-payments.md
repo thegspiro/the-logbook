@@ -4,7 +4,7 @@
 
 ---
 
-## Pass 14 (2026-10-31) — watchdog pickup: true near-zero delta, 0 fixed, 0 new findings
+## Pass 14 (2026-10-31) — watchdog pickup: true near-zero delta, 1 fixed (LOW, addendum below), 0 open findings remain
 
 Watchdog pickup. The dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed via
@@ -120,15 +120,87 @@ caller's own permission flags, listed in
 (`app/api/v1/endpoints/storefront.py::get_store_permissions`), unchanged
 classification from every prior pass.
 
-**0 fixed, 0 new findings.** Both standing findings this feature carried
-(SF8-04-2, SF8-04-3) were already confirmed FIXED in pass 13 — see that
-section — and remain fixed: the file that held both (`storefront_service.py`)
-is byte-identical to pass 13's state, confirmed above.
+**0 fixed, 0 new findings at this point in the pass.** Both standing
+findings this feature carried (SF8-04-2, SF8-04-3) were already confirmed
+FIXED in pass 13 — see that section — and remain fixed: the file that held
+both (`storefront_service.py`) is byte-identical to pass 13's state,
+confirmed above. **See the addendum immediately below: re-reading the
+sibling this same commit's `get_admin_user_ids` sits beside turned up
+SF14-04-1, found after this section was first written.**
+
+### Addendum (same pass, same day) — SF14-04-1 found on a second read of `31f39cf6c`'s sibling
+
+A second, independent read of this pass's own item 1 above — specifically,
+reading `get_admin_user_ids` next to the two functions it sits beside
+rather than only confirming it was itself correct — found that one of
+those siblings had no account-status filter at all.
+
+### SF14-04-1 — LOW — `get_admin_recipients` had no account-status filter, so a retired or dropped officer kept getting every new order's customer PII by email — ✅ FIXED
+
+**What:** `get_admin_recipients` (`storefront_notification_service.py:192`)
+resolves the store's admin-email list by eager-loading every org member's
+`roles` (a synonym for `positions`) and keeping anyone whose position slug
+is in `ADMIN_NOTIFY_ROLE_SLUGS` (`it_manager`/`quartermaster`/`chief`). The
+`where()` clause filtered `organization_id`, `email IS NOT NULL` and
+`deleted_at IS NULL` — but **no account-status filter at all**, not even
+the literal `== ACTIVE` comparison CLAUDE.md Pitfall #32's sweep
+(`tests/test_account_status_gates.py`) checks for. Its two siblings in the
+same file do filter: `get_member_recipients` (`:180`) and this pass's own
+`get_admin_user_ids` (`:687`, added by `31f39cf6c` above) both carry
+`User.status.in_(ACTIVE_ACCOUNT_STATUSES)`.
+
+**Where:** `backend/app/services/storefront_notification_service.py:192-220`
+(function `get_admin_recipients`), called from `send_admin_new_order`
+(`:722`) whenever `notify_admins_on_order` is on (the default) and from
+every other admin-facing storefront notice that fans out to
+`get_admin_recipients`.
+
+**Impact:** nothing in the member status-change flow revokes a position —
+confirmed by reading `app/api/v1/endpoints/member_status.py` (the drop/
+retire endpoint) and `app/services/member_archive_service.py`, neither of
+which touches `user_positions`. A quartermaster or chief who is marked
+`RETIRED`, `SUSPENDED`, `LEAVE`, `DROPPED_VOLUNTARY`,
+`DROPPED_INVOLUNTARY` or `ARCHIVED` — current and correct account-status
+handling everywhere else in the app, per Pitfall #32 — keeps their
+position (nothing in this app's workflow strips it on a status change) and
+therefore kept receiving admin storefront email for as long as the row
+exists: every new order's customer name, email and shipping address,
+mailed to someone no longer serving in the role, with no admin control
+able to stop it short of deleting the position outright. This is the
+opposite direction from the usual Pitfall #32 shape (that class
+under-included current members; this one over-included a departed one),
+in a function whose two immediate siblings already had the gate — which
+is exactly why reading it beside them, rather than only confirming the new
+function was correct in isolation, is what surfaced it.
+
+**Fix:** added `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` to the `where()`
+clause, mirroring `get_member_recipients` immediately above it and
+`get_admin_user_ids` below it. Narrowing-only: an organization's currently
+active or probationary admins are unaffected; only non-current statuses
+are now excluded. No existing test exercises the real query (every test
+referencing `get_admin_recipients` or `send_admin_new_order` mocks the
+method or the whole notification service — confirmed by
+`grep -rln get_admin_recipients backend/tests/`), so nothing broke, and
+nothing was relying on the gap.
+
+**Guarded:** `tests/test_storefront_notifications.py::
+TestAdminRecipientsExcludeFormerOfficers` — two DB-backed cases (a retired
+admin, a dropped-involuntary admin), each asserting their email is absent
+from the recipient list while an active admin's email is present. **Seen
+to fail against the pre-fix code** (both cases:
+`AssertionError: assert 'retired-qm@example.org' not in [...]` / same for
+the dropped case) before the fix, green after (CLAUDE.md Pitfall #37).
+
+**1 fixed (LOW) by this pass overall. 0 findings remain OPEN or FLAGGED
+for this feature going into pass 15** — SF-1 through SF-11 and
+SF8-04-1/2/3 all re-verified FIXED and unchanged earlier in this section;
+SF14-04-1 above is the only new one, and it is closed.
 
 ## Guard tests added (pass 14)
 
-None new. Nothing in this window's 2-commit delta closed a new class of bug.
-Re-ran the full existing suite: `test_storefront_payment_race.py`,
+`tests/test_storefront_notifications.py::TestAdminRecipientsExcludeFormerOfficers`
+(2 new tests, both red before the fix — see SF14-04-1). Re-ran the full
+existing suite: `test_storefront_payment_race.py`,
 `test_storefront_waive_settled.py`, `test_storefront_order_deadlock.py`,
 `test_storefront_schemas.py`, `test_storefront_locking.py`,
 `test_encryption_registry_coverage.py`, `test_email_fingerprint.py`,
@@ -160,6 +232,21 @@ sandbox resolves to an isolated interpreter (3.11) lacking the app's own
 dependencies; `/usr/bin/python3` (3.13) is the one with
 `sqlalchemy`/`fastapi`/`flake8`/`black`/`isort`/`pytest` installed at the
 versions CI pins, and is what every command above actually ran under.
+
+**Gate re-run after the SF14-04-1 amendment above:** `flake8`/`black`/
+`isort` clean on `app/ tests/ alembic/` (isort initially flagged the
+amendment's own new import order in the one test file touched — fixed
+with `isort app/ tests/ alembic/`, then clean, per CLAUDE.md's "isort is
+the one that bites" warning); scoped backend tests
+(`-k "storefront or stripe or payment or refund or checkout or paypal"`,
+no `-m` exclusion, matching this feature's own established convention of
+running its `db_session`-backed `integration`-marked money tests directly
+against the sandbox's live database) — **953 passed, 1 skipped**
+(environment-only: `pywebpush`), including the 2 new tests in
+`TestAdminRecipientsExcludeFormerOfficers`; `validate_migrations.py`/
+`check_route_permissions.py` unaffected (no migration or route touched by
+the amendment); frontend typecheck/lint unaffected (no frontend file
+touched).
 
 ---
 
