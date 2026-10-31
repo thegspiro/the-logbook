@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**324 tables · 5357 columns · 1095 foreign keys**
+**333 tables · 5468 columns · 1124 foreign keys**
 
 ---
 
@@ -193,6 +193,22 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`error_logs`](#error_logs) | `ErrorLog` | 10 | Stores application error logs for monitoring |
+
+### Evaluation
+
+<sub>`app/models/evaluation.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`evaluation_amendments`](#evaluation_amendments) | `EvaluationAmendment` | 8 | A finalized evaluation reopened as a new revision, and why. |
+| [`evaluation_deletion_records`](#evaluation_deletion_records) | `EvaluationDeletionRecord` | 14 | The permanent trace of a deleted evaluation. |
+| [`evaluation_parts`](#evaluation_parts) | `EvaluationPart` | 11 | A block of authored content: the evaluator's ratings and narrative, the |
+| [`evaluation_periods`](#evaluation_periods) | `EvaluationPeriod` | 9 | A review period a manager opens, e.g. "2026 Annual Review". |
+| [`evaluation_signatures`](#evaluation_signatures) | `EvaluationSignature` | 14 | A signature given on one step of one revision. |
+| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 13 | The state of one workflow step on one revision of an evaluation. |
+| [`evaluation_template_versions`](#evaluation_template_versions) | `EvaluationTemplateVersion` | 11 | One version of a template's content and workflow. |
+| [`evaluation_templates`](#evaluation_templates) | `EvaluationTemplate` | 11 | A department's evaluation form for one kind of member. |
+| [`evaluations`](#evaluations) | `Evaluation` | 20 | One member's evaluation for one period. |
 
 ### Event Requests
 
@@ -2699,6 +2715,277 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_error_logs_created` (`created_at`)
 - `ix_error_logs_org_type` (`organization_id`, `error_type`)
+
+## Evaluation
+
+### `evaluation_amendments`
+
+**EvaluationAmendment** · `app/models/evaluation.py`
+
+> A finalized evaluation reopened as a new revision, and why. The reason is required and is announced to the member and everyone who signed. Only this record of the amendment is kept; the superseded text is not.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `evaluation_id` | VARCHAR(36) | no | FK |  | → `evaluations.id` ON DELETE CASCADE |
+| `from_revision` | INTEGER | no |  |  |  |
+| `to_revision` | INTEGER | no |  |  |  |
+| `reason` | TEXT | no |  |  |  |
+| `amended_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `amended_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_amendments_org_eval` (`organization_id`, `evaluation_id`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_amendments_revision` (`evaluation_id`, `to_revision`)
+
+### `evaluation_deletion_records`
+
+**EvaluationDeletionRecord** · `app/models/evaluation.py`
+
+> The permanent trace of a deleted evaluation. The evaluation row and its content are removed; this row stays on the member's history. ``evaluation_id`` deliberately has no foreign key — the row it named no longer exists. The names are copied at deletion time so the record still reads correctly after a rename or a removed account.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
+| `evaluation_id` | VARCHAR(36) | no |  |  |  |
+| `period_name` | VARCHAR(150) | yes |  |  |  |
+| `period_start` | DATE | no |  |  |  |
+| `period_end` | DATE | no |  |  |  |
+| `template_name` | VARCHAR(150) | no |  |  |  |
+| `evaluator_name` | VARCHAR(200) | yes |  |  |  |
+| `was_finalized` | BOOL | no |  |  |  |
+| `reason` | TEXT | no |  |  |  |
+| `deleted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `deleted_by_name` | VARCHAR(200) | no |  |  |  |
+| `deleted_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_deletion_records_org_member` (`organization_id`, `member_id`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_deletion_records_evaluation` (`evaluation_id`)
+
+### `evaluation_parts`
+
+**EvaluationPart** · `app/models/evaluation.py`
+
+> A block of authored content: the evaluator's ratings and narrative, the member's self-evaluation, or the member's post-finalization response. ``content`` holds the responses keyed by template item, including any score a data block's rule calculated, the score finally given and the written justification when the two differ.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `evaluation_id` | VARCHAR(36) | no | FK |  | → `evaluations.id` ON DELETE CASCADE |
+| `revision` | INTEGER | no |  |  |  |
+| `kind` | VARCHAR(24) | no |  |  |  |
+| `author_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `content` | JSON | no |  |  |  |
+| `status` | VARCHAR(16) | no |  | `draft` |  |
+| `submitted_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_parts_org_eval` (`organization_id`, `evaluation_id`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_parts_kind` (`evaluation_id`, `revision`, `kind`)
+
+### `evaluation_periods`
+
+**EvaluationPeriod** · `app/models/evaluation.py`
+
+> A review period a manager opens, e.g. "2026 Annual Review". Bulk drafting runs against one period. Each member's own coverage within it is narrower when they joined partway through, separated or were on an approved leave; that is computed per evaluation, not stored here.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `start_date` | DATE | no |  |  |  |
+| `end_date` | DATE | no |  |  |  |
+| `is_closed` | BOOL | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_periods_org_dates` (`organization_id`, `start_date`)
+
+**Constraints**
+
+- CHECK `ck_evaluation_periods_date_order`: `end_date >= start_date`
+- UNIQUE `uq_evaluation_periods_org_name` (`organization_id`, `name`)
+
+### `evaluation_signatures`
+
+**EvaluationSignature** · `app/models/evaluation.py`
+
+> A signature given on one step of one revision. The signer must be signed in; ``signed_name`` is the name they typed and ``intent_confirmed`` their explicit confirmation that typing it is signing. ``content_hash`` is the SHA-256 of the exact content they were shown, and ``ip_address`` / ``user_agent`` record where it was given — together the intent and attribution evidence the ESIGN Act and UETA look for. A member's signature reads as an acknowledgement of receipt, not agreement.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `evaluation_id` | VARCHAR(36) | no | FK |  | → `evaluations.id` ON DELETE CASCADE |
+| `revision` | INTEGER | no |  |  |  |
+| `step_key` | VARCHAR(50) | no |  |  |  |
+| `signer_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `signed_name` | VARCHAR(200) | no |  |  |  |
+| `disposition` | VARCHAR(20) | no |  |  |  |
+| `comment` | TEXT | yes |  |  |  |
+| `intent_confirmed` | BOOL | no |  |  |  |
+| `content_hash` | VARCHAR(64) | no |  |  |  |
+| `ip_address` | VARCHAR(45) | yes |  |  |  |
+| `user_agent` | VARCHAR(512) | yes |  |  |  |
+| `signed_at` | DATETIME | no |  |  |  |
+
+**Indexes**
+
+- `ix_evaluation_signatures_org_eval` (`organization_id`, `evaluation_id`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_signatures_step` (`evaluation_id`, `revision`, `step_key`)
+
+### `evaluation_steps`
+
+**EvaluationStep** · `app/models/evaluation.py`
+
+> The state of one workflow step on one revision of an evaluation. Copied from the template version's workflow when the evaluation (or an amendment's new revision) starts, with ``due_date`` resolved from the step's offset. ``completed`` is final; nothing moves a step back.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `evaluation_id` | VARCHAR(36) | no | FK |  | → `evaluations.id` ON DELETE CASCADE |
+| `revision` | INTEGER | no |  |  |  |
+| `step_key` | VARCHAR(50) | no |  |  |  |
+| `step_order` | INTEGER | no |  |  |  |
+| `step_type` | VARCHAR(30) | no |  |  |  |
+| `status` | VARCHAR(16) | no |  | `pending` |  |
+| `due_date` | DATE | yes |  |  |  |
+| `completed_at` | DATETIME | yes |  |  |  |
+| `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_steps_org_due` (`organization_id`, `status`, `due_date`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_steps_key` (`evaluation_id`, `revision`, `step_key`)
+
+### `evaluation_template_versions`
+
+**EvaluationTemplateVersion** · `app/models/evaluation.py`
+
+> One version of a template's content and workflow. ``published_at`` NULL is the editable draft; once set, the row is frozen. ``definition`` holds the sections, items, evaluation tools, behavioral anchors, data blocks with their scoring rules, and rank-triggered officer sections; ``workflow`` holds the ordered steps and their deadlines (days after the period ends). Both are written only through the template service, which settles them to one canonical shape on every write (CLAUDE.md pitfall #20).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `template_id` | VARCHAR(36) | no | FK |  | → `evaluation_templates.id` ON DELETE CASCADE |
+| `version_number` | INTEGER | no |  |  |  |
+| `definition` | JSON | no |  |  |  |
+| `workflow` | JSON | no |  |  |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_template_versions_org_template` (`organization_id`, `template_id`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_template_versions_number` (`template_id`, `version_number`)
+
+### `evaluation_templates`
+
+**EvaluationTemplate** · `app/models/evaluation.py`
+
+> A department's evaluation form for one kind of member. A template matches members by ``member_class`` and ``member_status`` (see ``app/utils/membership.py``); NULL in either means "any". The content and workflow live on ``EvaluationTemplateVersion`` so that publishing a change never alters an evaluation already started. Retiring a template is ``is_active``; a template whose versions are referenced by an evaluation cannot be deleted (the version foreign key is RESTRICT).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `kind` | VARCHAR(16) | no |  | `annual` |  |
+| `member_class` | VARCHAR(20) | yes |  |  |  |
+| `member_status` | VARCHAR(20) | yes |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_templates_org_active` (`organization_id`, `is_active`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_templates_org_name` (`organization_id`, `name`)
+
+### `evaluations`
+
+**Evaluation** · `app/models/evaluation.py`
+
+> One member's evaluation for one period. ``period_start`` / ``period_end`` are the nominal dates (the period's, or custom dates for a one-off). ``coverage_start`` / ``coverage_end`` and ``excluded_ranges`` narrow them to the time the member was actually serving: from the first full month after joining, without separations or approved leaves of absence. Data blocks and requirements are measured over that coverage, not the nominal period. The evaluator can never be the member. That rule is enforced by the evaluation service rather than a CHECK constraint: MySQL refuses a CHECK on a column whose foreign key has a referential action, and ``evaluator_id`` must be SET NULL so an evaluator leaving the department does not block their removal.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
+| `evaluator_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `period_id` | VARCHAR(36) | yes | FK |  | → `evaluation_periods.id` ON DELETE RESTRICT |
+| `template_version_id` | VARCHAR(36) | no | FK |  | → `evaluation_template_versions.id` ON DELETE RESTRICT |
+| `status` | VARCHAR(20) | no |  | `in_progress` |  |
+| `revision` | INTEGER | no |  | `1` |  |
+| `period_start` | DATE | no |  |  |  |
+| `period_end` | DATE | no |  |  |  |
+| `coverage_start` | DATE | yes |  |  |  |
+| `coverage_end` | DATE | yes |  |  |  |
+| `excluded_ranges` | JSON | yes |  |  |  |
+| `includes_officer_sections` | BOOL | no |  | `0` |  |
+| `data_snapshot` | JSON | yes |  |  |  |
+| `snapshot_taken_at` | DATETIME | yes |  |  |  |
+| `finalized_at` | DATETIME | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluations_org_evaluator` (`organization_id`, `evaluator_id`)
+- `ix_evaluations_org_member` (`organization_id`, `member_id`)
+- `ix_evaluations_org_period` (`organization_id`, `period_id`)
+- `ix_evaluations_org_status` (`organization_id`, `status`)
+
+**Constraints**
+
+- CHECK `ck_evaluations_period_order`: `period_end >= period_start`
+- UNIQUE `uq_evaluations_member_period` (`member_id`, `period_id`)
 
 ## Event Requests
 
@@ -11277,7 +11564,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (402 references)
+### → `users` (415 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11378,6 +11665,19 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_requests` | `fulfilled_by` | SET NULL | yes |
 | `equipment_requests` | `requester_id` | CASCADE | no |
 | `equipment_requests` | `reviewed_by` | SET NULL | yes |
+| `evaluation_amendments` | `amended_by` | SET NULL | yes |
+| `evaluation_deletion_records` | `deleted_by` | SET NULL | yes |
+| `evaluation_deletion_records` | `member_id` | RESTRICT | no |
+| `evaluation_parts` | `author_id` | SET NULL | yes |
+| `evaluation_periods` | `created_by` | SET NULL | yes |
+| `evaluation_signatures` | `signer_id` | SET NULL | yes |
+| `evaluation_steps` | `completed_by` | SET NULL | yes |
+| `evaluation_template_versions` | `created_by` | SET NULL | yes |
+| `evaluation_template_versions` | `published_by` | SET NULL | yes |
+| `evaluation_templates` | `created_by` | SET NULL | yes |
+| `evaluations` | `created_by` | SET NULL | yes |
+| `evaluations` | `evaluator_id` | SET NULL | yes |
+| `evaluations` | `member_id` | RESTRICT | no |
 | `event_attendance_petitions` | `reviewed_by` | SET NULL | yes |
 | `event_attendance_petitions` | `user_id` | CASCADE | no |
 | `event_external_attendees` | `created_by` | SET NULL | yes |
@@ -11684,7 +11984,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (266 references)
+### → `organizations` (275 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11750,6 +12050,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_check_templates` | `organization_id` | CASCADE | no |
 | `equipment_kits` | `organization_id` | CASCADE | no |
 | `equipment_requests` | `organization_id` | CASCADE | no |
+| `evaluation_amendments` | `organization_id` | CASCADE | no |
+| `evaluation_deletion_records` | `organization_id` | CASCADE | no |
+| `evaluation_parts` | `organization_id` | CASCADE | no |
+| `evaluation_periods` | `organization_id` | CASCADE | no |
+| `evaluation_signatures` | `organization_id` | CASCADE | no |
+| `evaluation_steps` | `organization_id` | CASCADE | no |
+| `evaluation_template_versions` | `organization_id` | CASCADE | no |
+| `evaluation_templates` | `organization_id` | CASCADE | no |
+| `evaluations` | `organization_id` | CASCADE | no |
 | `event_attendance_petitions` | `organization_id` | CASCADE | no |
 | `event_external_attendees` | `organization_id` | CASCADE | no |
 | `event_hour_mappings` | `organization_id` | CASCADE | no |
@@ -12395,6 +12704,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
 | `template_change_logs` | `template_id` | CASCADE | no |
 
+### → `evaluations` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `evaluation_amendments` | `evaluation_id` | CASCADE | no |
+| `evaluation_parts` | `evaluation_id` | CASCADE | no |
+| `evaluation_signatures` | `evaluation_id` | CASCADE | no |
+| `evaluation_steps` | `evaluation_id` | CASCADE | no |
+
 ### → `forms` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -12739,6 +13057,24 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `equipment_kit_items` | `kit_id` | CASCADE | no |
+
+### → `evaluation_periods` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `evaluations` | `period_id` | RESTRICT | yes |
+
+### → `evaluation_template_versions` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `evaluations` | `template_version_id` | RESTRICT | no |
+
+### → `evaluation_templates` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `evaluation_template_versions` | `template_id` | CASCADE | no |
 
 ### → `event_requests` (1 references)
 
