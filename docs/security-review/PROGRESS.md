@@ -16,6 +16,64 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3890](https://github.com/thegspiro/the-logbook/pull/3890)** (branch
+`claude/security-review-finance-approvals-p14`) — Feature 05 (Finance &
+approvals), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). Step 0 (`list_pull_requests`, state=open) found 0
+open PRs whose head branch starts with `claude/security-review-`: the
+five open PRs at the time (#3880–#3884) are all unrelated feature work.
+PR #3879 (Feature 04, Storefront & payments, pass 14) had already merged
+(`b7f72c67a`), and row 04 was already `✅` from that PR's own commit. Row
+05 was the next `⬜`, confirmed fresh against the rotation table.
+
+See `docs/security-review/FIN-05-finance-approvals.md`'s **Pass 14**
+section for the full review: baseline `dd47d8734` (PR #3807, pass 13's
+merge) to current `main`. 6 non-merge commits touch this feature's
+declared scope, each read against its own diff: 4 cosmetic frontend
+layout-utility refactors across 15 files (`split-row`/`page-header`/
+`StatGrid`/`KpiTile` — same JSX structure, same permission-gated
+conditionals, no new API call); 1 unrelated prospective-members/
+permissions commit whose only touch in scope is a 4-line test-mock
+addition to `restrictedFunds.test.tsx`; 1 (`530edfc18`) caps the inactive
+budget-category refusal message through the shared
+`list_within_detail_limit()` helper (length-DoS/readability fix, no
+access-control or money-correctness effect). Every other file in scope is
+byte-identical to pass 13's reviewed state. A fresh, independent AST route
+walk re-confirms **136** routes in `finance.py` (unchanged from
+pass 12/13) plus **3** in `public/finance_approvals.py`, every one
+carrying an explicit auth dependency parsed from its own handler
+signature. Re-verified by direct code read, not taken on a prior pass's
+word: `_ensure_current_step`'s step-ordering guard, `approve_step`'s
+org-scoped lock + cross-approver SoD check, `approve_by_token`'s
+requester-email self-approval block, `waive_dues`'s row-lock +
+repeat-waiver refusal, `_mutate_budget`'s fail-closed overspend ceiling,
+`_validate_finance_fks`'s FK validation, the `SafeCsvWriter` export and
+escaped `.like()` call, and FIN8-05-1's decider-SoD guard in
+`decide_request` — all hold unchanged. FIN-30 (LOW, `list_dues_payments`
+has no pagination) remains the one standing item, an already-accepted
+owner decision unchanged in `docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 680 revisions, single head
+`3fbd0fe30e5b`; `check_route_permissions.py --strict` — 281 routes, 0
+errors/warnings; scoped backend tests (`-k "finance or budget_request or
+approval_chain or dues or reimburs or quickbooks or waive"`, no `-m`
+exclusion — live MySQL in sandbox, matching this feature's prior-pass
+convention) — 1,562 passed, 2 environment-only skips (`pywebpush`, a
+missing time-zone-table fixture); standing repo-wide guard suites — 191
+passed, 1 environment-only skip; frontend typecheck/lint clean.
+
+**0 fixed, 0 new findings this pass** — the fourth consecutive
+near-zero-delta pass (12, 13, 14) for this module.
+
+Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
+(Elections & ballots) — re-check `list_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 14, PR #3879, merged), preserved for history</summary>
+
 **PR [#3879](https://github.com/thegspiro/the-logbook/pull/3879)**
 (branch `claude/security-review-storefront-payments`) — Feature 04
 (Storefront & payments), pass 14, a watchdog pickup (the dedicated
@@ -90,6 +148,8 @@ this feature.**
 
 Rotation row 04 → ✅ (pending this PR's merge). Re-check `gh api
 repos/.../pulls?state=open` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 14, PR #3878, merged), preserved for history</summary>
