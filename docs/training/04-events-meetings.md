@@ -1689,6 +1689,12 @@ Executive, Annual and Other. Minutes written from a meeting keep its type.
 Each type starts with its own sections. **Executive** minutes cannot be read
 by members, even once approved.
 
+**Two people editing one draft** _(2026-10-31)_. If someone else saves the
+minutes after you opened them, your next section save is refused rather than
+writing their sections back as they were. A banner says so, and what you
+were typing stays in the editor. Select **Reload** to see their changes, then
+save yours again.
+
 ### Motions
 
 Record each formal motion with:

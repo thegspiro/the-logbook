@@ -6516,6 +6516,16 @@ concurrent editing of one draft is a supported workflow (the per-section
 endpoint) or is to be refused with a conflict message (the precondition). Same
 lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
 
+**Resolved (2026-10-31), owner decision: refuse with a conflict.**
+`meeting_minutes.edit_version` (migration `e15d635bbb98`) goes up by one on
+every content save. The minutes page sends the version it loaded as
+`expected_version` with every section edit (save, not-taken-up, reorder, add,
+delete). If someone has saved since, `PUT /minutes-records/{id}` refuses with 409. The version is read with a locking read, so two saves racing each other
+cannot both pass. The page keeps whatever was in the editor and shows a
+**Reload** banner. A save that sends no version is unconditional, as before.
+Covered by `tests/test_minutes_edit_conflict_integration.py` and the
+rich-text page test.
+
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 
 > ✅ **Resolved (2026-10-29), as the owner chose: wire a reader.** Election
