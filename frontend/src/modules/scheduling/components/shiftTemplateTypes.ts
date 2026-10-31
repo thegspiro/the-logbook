@@ -428,6 +428,37 @@ export const emptyTemplateForm: TemplateFormData = {
   resources: [],
 };
 
+/**
+ * A blank template form starting from the department's defaults (Scheduling
+ * Settings → Department Defaults, wired 2026-10-31): the default length sets
+ * the end time from the 08:00 start, and the default minimum staffing fills
+ * that field. A length of a day or more is stated outright, since the end time
+ * alone cannot say how many days it spans. An unusable value falls back to the
+ * built-in blank form's.
+ */
+export const newTemplateForm = (defaults: {
+  defaultDurationHours: number;
+  defaultMinStaffing: number;
+}): TemplateFormData => {
+  const hours =
+    Number.isFinite(defaults.defaultDurationHours) && defaults.defaultDurationHours > 0
+      ? defaults.defaultDurationHours
+      : 12;
+  const staffing =
+    Number.isInteger(defaults.defaultMinStaffing) && defaults.defaultMinStaffing > 0
+      ? defaults.defaultMinStaffing
+      : Number(emptyTemplateForm.min_staffing);
+  const startMinutes = 8 * 60;
+  const endMinutes = (startMinutes + Math.round(hours * 60)) % (24 * 60);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    ...emptyTemplateForm,
+    end_time_of_day: `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`,
+    duration_hours: String(hours),
+    min_staffing: String(staffing),
+  };
+};
+
 export const emptyPatternForm: PatternFormData = {
   name: '',
   description: '',

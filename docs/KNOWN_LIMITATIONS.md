@@ -2437,6 +2437,15 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    them: new shifts and templates do not pick them up, and no overtime warning
    reads the threshold. **Labelled (2026-10-11):** the card shows "Not in
    effect yet". Applying the defaults is still open.
+   **Resolved (2026-10-31), owner decision: apply them, and merge the
+   overtime threshold into the Overtime advisory.** A new shift template
+   starts from the default length (end time that many hours after 08:00) and
+   minimum staffing, and the built-in Day/Night/24 Hour shift types staff to
+   that minimum. The weekly overtime threshold field is removed: the Overtime
+   advisory card (hours limit over a window of days) already drives the
+   assignment warning, and two limits that could disagree would be worse. Its
+   stored value is kept untouched, and the settings summary now reports the
+   advisory instead.
 4. **Start-of-shift reminder emails default on in the backend, off on the
    screen.** `scheduled_tasks.py` (~line 2358) reads
    `reminder_cfg.get("send_email", True)` ("sent by default"); the
