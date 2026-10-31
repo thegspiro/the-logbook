@@ -1,7 +1,7 @@
 """Member performance evaluations
 
 Revision ID: 3fbd0fe30e5b
-Revises: f90b1124e6f4
+Revises: c588f525fdbb
 Create Date: 2026-10-31 17:05:00.000000
 
 Adds the nine tables behind member performance evaluations
@@ -33,7 +33,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "3fbd0fe30e5b"
-down_revision: Union[str, None] = "f90b1124e6f4"
+down_revision: Union[str, None] = "c588f525fdbb"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

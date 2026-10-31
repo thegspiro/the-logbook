@@ -313,8 +313,14 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/prospective-members/:applicantId/interview',
         label: 'Interview',
-        permission: 'prospective_members.manage',
         module: 'prospective_members',
+        note: 'A manager, or anyone assigned to the applicant; the server admits per applicant',
+      },
+      {
+        path: '/prospective-members/my-applicants',
+        label: 'My applicants',
+        module: 'prospective_members',
+        note: 'Applicants the member is assigned to as case manager or interviewer',
       },
       {
         path: '/prospective-members/sign-offs',
@@ -325,7 +331,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/prospective-members/print-labels',
         label: 'Print prospect labels',
-        anyPermission: ['prospective_members.view', 'prospective_members.manage'],
+        permission: 'prospective_members.view_all',
         module: 'prospective_members',
       },
     ],

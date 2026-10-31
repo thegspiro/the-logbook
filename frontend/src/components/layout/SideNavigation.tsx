@@ -4,6 +4,7 @@ import {
   Home,
   Users,
   UserPlus,
+  UserCheck,
   Calendar,
   FileText,
   Settings,
@@ -67,6 +68,7 @@ import { governanceNavItems } from './governanceNavigation';
 import { trainingNavItems } from './trainingNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
+import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -133,6 +135,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
   const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const hasAssignedApplicants = useHasAssignedApplicants(
+    currentUser?.id,
+    !modulesLoading && isModuleOn('prospective_members')
+  );
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -203,6 +209,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
+    // Offered only to a member assigned to an applicant: the assignment, not a
+    // permission, is what opens the page (modules/prospective-members).
+    ...(hasAssignedApplicants
+      ? [{ label: 'My Applicants', path: '/prospective-members/my-applicants', icon: UserCheck } as NavItem]
+      : []),
     // The route requires `storefront.view` (modules/storefront/routes.tsx), so
     // the module toggle alone is not the gate: a member whose department was
     // seeded before the storefront module shipped holds no storefront grant

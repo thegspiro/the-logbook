@@ -72,7 +72,9 @@ REPORT_PERIODS = (
 # no request, enforces the identical map.
 PII_REPORT_PERMISSIONS: dict[str, str] = {
     "member_roster": "members.view",
-    "pipeline_overview": "prospective_members.view",
+    # Lists every applicant, so it needs what sees every applicant: holders of
+    # view without view_all see only their assigned ones (prospect_access.py).
+    "pipeline_overview": "prospective_members.view_all",
     "training_summary": "training.manage",
     "training_progress": "training.manage",
     "annual_training": "training.manage",

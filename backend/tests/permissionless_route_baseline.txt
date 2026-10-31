@@ -230,6 +230,9 @@ app/api/v1/endpoints/member_service_history.py::get_service_history
 
 app/api/v1/endpoints/membership_pipeline.py::approve_step
 app/api/v1/endpoints/membership_pipeline.py::list_my_sign_offs
+# Scoped to the caller: the applicants they are assigned to, read from
+# prospect_assignments by their own user id. The assignment is the grant.
+app/api/v1/endpoints/membership_pipeline.py::list_my_applicants
 
 app/api/v1/endpoints/messages.py::acknowledge_message
 app/api/v1/endpoints/messages.py::get_inbox

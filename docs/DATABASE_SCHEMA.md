@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**332 tables · 5461 columns · 1120 foreign keys**
+**333 tables · 5468 columns · 1124 foreign keys**
 
 ---
 
@@ -489,6 +489,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`membership_pipeline_steps`](#membership_pipeline_steps) | `MembershipPipelineStep` | 17 | A single step within a membership pipeline. |
 | [`membership_pipelines`](#membership_pipelines) | `MembershipPipeline` | 16 | Pipeline definition for prospective member onboarding. |
 | [`prospect_activity_log`](#prospect_activity_log) | `ProspectActivityLog` | 6 | Audit trail for prospect-related actions. |
+| [`prospect_assignments`](#prospect_assignments) | `ProspectAssignment` | 7 | A member assigned to one applicant, as case manager or interviewer. |
 | [`prospect_documents`](#prospect_documents) | `ProspectDocument` | 10 | Document uploaded for a prospective member. |
 | [`prospect_election_packages`](#prospect_election_packages) | `ProspectElectionPackage` | 11 | Election package for a prospective member. |
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
@@ -2608,7 +2609,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2671,7 +2672,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -7550,6 +7551,28 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_activity_log_action` (`action`)
 - `idx_activity_log_prospect` (`prospect_id`)
 
+### `prospect_assignments`
+
+**ProspectAssignment** · `app/models/membership_pipeline.py`
+
+> A member assigned to one applicant, as case manager or interviewer. The assignment is itself the grant: a member holding no pipeline permission (a board member asked to interview) reaches the applicant through it, and a holder of view or manage without ``prospective_members.view_all`` sees only the applicants they are assigned to. One row per member per role per applicant (``uq_prospect_assignment``), so assigning twice is a no-op. ``role`` is a String rather than a database ENUM so a later role needs no column rewrite; AssignmentRole is checked on every write.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `prospect_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `prospective_members.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `role` | VARCHAR(20) | no |  |  |  |
+| `assigned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_prospect_assignment_org` (`organization_id`)
+- `idx_prospect_assignment_user` (`user_id`, `organization_id`)
+- UNIQUE `uq_prospect_assignment` (`prospect_id`, `user_id`, `role`)
+
 ### `prospect_documents`
 
 **ProspectDocument** · `app/models/membership_pipeline.py`
@@ -11541,7 +11564,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (413 references)
+### → `users` (415 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11836,6 +11859,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `program_enrollments` | `user_id` | CASCADE | no |
 | `property_return_reminders` | `user_id` | CASCADE | no |
 | `prospect_activity_log` | `performed_by` | SET NULL | yes |
+| `prospect_assignments` | `assigned_by` | SET NULL | yes |
+| `prospect_assignments` | `user_id` | CASCADE | no |
 | `prospect_documents` | `uploaded_by` | SET NULL | yes |
 | `prospect_event_links` | `linked_by` | SET NULL | yes |
 | `prospect_form_requests` | `contact_change_reviewed_by` | SET NULL | yes |
@@ -11959,7 +11984,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (274 references)
+### → `organizations` (275 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12158,6 +12183,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `positions` | `organization_id` | CASCADE | no |
 | `program_enrollments` | `organization_id` | CASCADE | no |
 | `property_return_reminders` | `organization_id` | CASCADE | no |
+| `prospect_assignments` | `organization_id` | CASCADE | no |
 | `prospect_form_requests` | `organization_id` | CASCADE | no |
 | `prospective_members` | `organization_id` | CASCADE | no |
 | `prospects` | `organization_id` | CASCADE | no |
@@ -12398,6 +12424,21 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 | `training_submissions` | `shift_id` | SET NULL | yes |
 
+### → `prospective_members` (10 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_external_attendees` | `prospect_id` | SET NULL | yes |
+| `prospect_activity_log` | `prospect_id` | CASCADE | no |
+| `prospect_assignments` | `prospect_id` | CASCADE | no |
+| `prospect_documents` | `prospect_id` | CASCADE | no |
+| `prospect_election_packages` | `prospect_id` | CASCADE | no |
+| `prospect_event_links` | `prospect_id` | CASCADE | no |
+| `prospect_form_requests` | `prospect_id` | CASCADE | no |
+| `prospect_interviews` | `prospect_id` | CASCADE | no |
+| `prospect_step_progress` | `prospect_id` | CASCADE | no |
+| `screening_records` | `prospect_id` | CASCADE | yes |
+
 ### → `training_courses` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -12441,20 +12482,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_election_packages` | `election_id` | SET NULL | yes |
 | `votes` | `election_id` | CASCADE | no |
 | `voting_tokens` | `election_id` | CASCADE | no |
-
-### → `prospective_members` (9 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_external_attendees` | `prospect_id` | SET NULL | yes |
-| `prospect_activity_log` | `prospect_id` | CASCADE | no |
-| `prospect_documents` | `prospect_id` | CASCADE | no |
-| `prospect_election_packages` | `prospect_id` | CASCADE | no |
-| `prospect_event_links` | `prospect_id` | CASCADE | no |
-| `prospect_form_requests` | `prospect_id` | CASCADE | no |
-| `prospect_interviews` | `prospect_id` | CASCADE | no |
-| `prospect_step_progress` | `prospect_id` | CASCADE | no |
-| `screening_records` | `prospect_id` | CASCADE | yes |
 
 ### → `training_categories` (9 references)
 

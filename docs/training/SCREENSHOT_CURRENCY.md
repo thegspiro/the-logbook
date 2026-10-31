@@ -1,5 +1,12 @@
 # Screenshot currency
 
+## Queued by the October 30 – 31 documentation pass
+
+No new screens. **Re-check:** the member profile **Voting eligibility** card
+(fields now stack in one column), and any screenshot of a card or list row with
+buttons at its right edge at a mid-width window (sidebar open), since the
+buttons now wrap under the title.
+
 ## Queued by the October 29 – 30 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
