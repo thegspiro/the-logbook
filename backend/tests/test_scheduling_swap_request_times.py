@@ -57,6 +57,10 @@ async def test_swap_request_start_times_carry_a_utc_offset(db_session: AsyncSess
     )
     db_session.add(swap)
     await db_session.flush()
+    # Load the server-defaulted timestamps now, as a query would have: left
+    # expired, _orm_to_dict reads them lazily outside a greenlet and raises
+    # MissingGreenlet under MySQL 8.
+    await db_session.refresh(swap)
 
     [enriched] = await SchedulingService(db_session).enrich_swap_requests([swap])
 
