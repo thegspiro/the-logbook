@@ -197,6 +197,15 @@ def _timestamp(value: Any) -> Optional[datetime]:
         return None
 
 
+def as_dict(value: Any) -> Dict[str, Any]:
+    """``value`` if it is a JSON object, else an empty one.
+
+    Zeffy sends ``null`` for an absent nested object (no dispute, no
+    recurrence), so every nested read goes through here.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def parse_payment(payment: Dict[str, Any]) -> ParsedPayment:
     """Read a Zeffy payment object. Raises ZeffyError if it has no id."""
     payment_id = _text(payment.get("id"), 120)
@@ -215,16 +224,10 @@ def parse_payment(payment: Dict[str, Any]) -> ParsedPayment:
     tribute = next(
         (i["tribute"] for i in items if isinstance(i.get("tribute"), dict)), None
     )
-    buyer = payment.get("buyer") if isinstance(payment.get("buyer"), dict) else {}
-    dispute = payment.get("dispute") if isinstance(payment.get("dispute"), dict) else {}
-    method = (
-        payment.get("payment_method")
-        if isinstance(payment.get("payment_method"), dict)
-        else {}
-    )
-    recurring = (
-        payment.get("recurring") if isinstance(payment.get("recurring"), dict) else {}
-    )
+    buyer = as_dict(payment.get("buyer"))
+    dispute = as_dict(payment.get("dispute"))
+    method = as_dict(payment.get("payment_method"))
+    recurring = as_dict(payment.get("recurring"))
 
     return ParsedPayment(
         zeffy_payment_id=payment_id,

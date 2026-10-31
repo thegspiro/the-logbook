@@ -43,6 +43,7 @@ from app.services.integration_services.zeffy_service import (
     ZeffyClient,
     ZeffyError,
     api_key_from_integration,
+    as_dict,
     verify_signature,
     webhook_secret_from_integration,
 )
@@ -123,7 +124,7 @@ async def zeffy_inbound_webhook(
         # so Zeffy does not retry for three days.
         return {"status": "ignored", "reason": f"unhandled event type {event_type}"}
 
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    data = as_dict(payload.get("data"))
     payment_id = str(data.get("id") or "").strip()
     if not payment_id:
         raise HTTPException(

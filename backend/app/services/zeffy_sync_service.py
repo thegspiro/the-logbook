@@ -41,7 +41,7 @@ Effects by link target:
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, overload
 
 from loguru import logger
 from sqlalchemy import or_, select
@@ -122,6 +122,16 @@ _METHODS = {
     "pad": PaymentMethod.BANK_TRANSFER,
     "bank_transfer": PaymentMethod.BANK_TRANSFER,
 }
+
+
+@overload
+def _utc(moment: datetime) -> datetime:
+    """A stored time read as UTC; a naive one is UTC by convention."""
+
+
+@overload
+def _utc(moment: None) -> None:
+    """No time in, no time out."""
 
 
 def _utc(moment: Optional[datetime]) -> Optional[datetime]:
