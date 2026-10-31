@@ -31,6 +31,7 @@ const mockGetDirectory = vi.fn();
 const mockCheckContactInfoEnabled = vi.fn();
 const mockReactivateMember = vi.fn();
 const mockGetServiceHistory = vi.fn();
+const mockGetTierConfig = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
@@ -45,7 +46,7 @@ vi.mock('../services/api', () => ({
     reactivateMember: (...args: unknown[]) => mockReactivateMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => mockGetServiceHistory(...args) as unknown,
     // The class/status filters offer the department's tiers; none here.
-    getTierConfig: () => Promise.resolve({ auto_advance: true, tiers: [] }),
+    getTierConfig: (...args: unknown[]) => mockGetTierConfig(...args) as unknown,
   },
 }));
 
@@ -176,6 +177,8 @@ function installDefaults(held: string[]): void {
     is_estimated: false,
     default_rejoin_credit: 'continue',
   });
+  mockGetTierConfig.mockReset();
+  mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
   mockRoster.mockResolvedValue(ROSTER);
   mockCheckContactInfoEnabled.mockResolvedValue({
     enabled: true,
@@ -194,6 +197,15 @@ describe('Members roster — regular member (no members.manage)', () => {
 
     await waitFor(() => expect(mockGetDirectory).toHaveBeenCalledTimes(1));
     expect(mockGetUsers).not.toHaveBeenCalled();
+  });
+
+  // The tier config answers members.manage only, so asking for it on a
+  // member's directory put a 403 in every member's console for nothing.
+  it('does not ask for the tier config it would be refused', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetDirectory).toHaveBeenCalledTimes(1));
+    expect(mockGetTierConfig).not.toHaveBeenCalled();
   });
 
   // W15-4: a member's directory opens on Active members; the server already
@@ -411,6 +423,12 @@ describe('Members roster — membership coordinator (members.manage)', () => {
 
     await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(1));
     expect(mockGetDirectory).not.toHaveBeenCalled();
+  });
+
+  it('asks for the tier config, to label the membership-status filter', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetTierConfig).toHaveBeenCalled());
   });
 
   it('opens on All Current, which leaves archived members out', async () => {

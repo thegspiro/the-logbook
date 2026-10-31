@@ -367,6 +367,40 @@ describe('MemberProfilePage leaves of absence', () => {
 
     await waitFor(() => expect(getMemberLeaves).toHaveBeenCalledWith(VIEWER_ID));
   });
+
+  // `active_only` drops cancelled leaves, not ones outside their dates, so a
+  // leave starting next month and one that ended years ago both arrive here.
+  // Every one used to be badged "Active", while the Waivers screen reading the
+  // same rows called them Future and Expired.
+  it('labels each leave by its dates, as the Waivers screen does', async () => {
+    routeUserId = VIEWER_ID;
+    const leave = {
+      organization_id: 'org-1',
+      user_id: VIEWER_ID,
+      leave_type: 'medical',
+      granted_by: null,
+      granted_at: null,
+      active: true,
+      exempt_from_training_waiver: false,
+      linked_training_waiver_id: null,
+      created_at: null,
+      updated_at: null,
+    };
+    getMemberLeaves.mockResolvedValue([
+      { ...leave, id: 'l-future', reason: 'Starts later', start_date: '2099-01-01', end_date: '2099-02-01' },
+      { ...leave, id: 'l-past', reason: 'Long over', start_date: '2000-01-01', end_date: '2000-02-01' },
+      { ...leave, id: 'l-now', reason: 'Under way', start_date: '2000-01-01', end_date: '2099-12-31' },
+      { ...leave, id: 'l-open', reason: 'No end', start_date: '2000-01-01', end_date: null },
+    ]);
+
+    renderWithRouter(<MemberProfilePage />);
+
+    // The cards render in the order the API returned them, so the badges do
+    // too: one per leave, read off in sequence.
+    await screen.findByText('No end');
+    const badges = screen.getAllByText(/^(Future|Expired|Active|Permanent)$/).map((el) => el.textContent);
+    expect(badges).toEqual(['Future', 'Expired', 'Active', 'Permanent']);
+  });
 });
 
 describe('MemberProfilePage membership and privacy', () => {
