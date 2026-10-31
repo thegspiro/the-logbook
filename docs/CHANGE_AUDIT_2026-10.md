@@ -5,6 +5,61 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 30 – 31, 2026
+
+Merged to `main` after `6bf6ba32` (2026-10-30 12:40 UTC) through `f9220b3`
+(2026-10-31 00:40 UTC). Security-review passes (locations-kiosk, core-infra,
+frontend-shared, cross-cutting-baseline with SEC14-1 fixed, auth-session) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                               | Guide | Disposition                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | -------------------------------------------------------------------------------------------- |
+| Card and list rows (87 of them) use the new `split-row` utilities: the buttons wrap under the title instead of squeezing it a word per line when the sidebar is open (#3864)         | none  | Visual only; screenshots of such rows between 768 and ~1100px wide may differ, see the queue |
+| Member profile **Voting eligibility** card stacks its fields in one column (#3864)                                                                                                   | 14    | The card's screenshot is already queued; capture it after this change                        |
+| Update and chunk recovery: an unreachable page chunk no longer reloads forever, double taps on **Reload now** join one attempt, and Firefox's chunk-load error is recognised (#3863) | none  | No guide described the reload loop                                                           |
+| pypdf 6.21.4 (CVE-2026-119203 to -205), follow-redirects 1.16.2 (GHSA-mrwp-f3q8-3g9p); SEC14-1: an import error no longer carries a raw exception message (#3869, #3870)             | none  | Dependency and backend only                                                                  |
+| Refusal-message sweep test follows objects returned from calls (#3864)                                                                                                               | none  | Test only                                                                                    |
+
+**Screenshots to create:** none new. **Re-check:** the member profile
+**Voting eligibility** card (single column), and any shot of a card or list row
+with buttons at the right on a mid-width screen. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Change audit: October 29 – 30, 2026
+
+Merged to `main` since `2aac367a` (2026-10-29 11:29 UTC) through `6bf6ba32`
+(2026-10-30 12:40 UTC), 35 merges. Security-review passes (inventory,
+facilities, apparatus-nfc, equipment-check-shifts, scheduling, events-requests,
+training-core, training-extended, skills-testing, compliance, admin-hours,
+grants-fundraising, medical-supplies, meetings-minutes, messaging-notifications,
+forms, integrations, security-audit-ip, reports-analytics, onboarding) are in
+`docs/security-review/PROGRESS.md`; none fixed code, and several corrected
+their own records. The October 29 pass (#3822) and its top-up (#3831) merged in
+this window. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                          | Guide                                                  | Disposition                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Members: **Member class** and **Membership status** replace the single Membership Type; offices, committees and seat qualifications are separate facts; four committees seeded; a tier's **Counts as** (#3833)                                  | 01, 03, glossary (with the change); 02, 04, 11, 08, 14 | Remaining "membership type" wording corrected in 02, 04, 11, 14; 01's edit-page field, status sync and auto-advance rules corrected; 08 lists **Counts as**. `UPGRADING` written with the change |
+| Election Settings → **Voter Eligibility**: rules every voter must meet (attendance, waiting period), check-in, who votes on a new item or per position, separate annual-meeting rules; a member's **Voting eligibility** card (#3828)           | 14                                                     | Added; also corrected the section count, the department-made tier row, and two "no screen sets a quorum" sentences (#3829 added one). `UPGRADING` written with the change                        |
+| Follow-up forms, part two: reminders (every 7 days, at most 3, 09:00–20:00), a coordinator notice on submission, answers on the Interview page and optionally in the election package, a **Complete your form** card on the status page (#3827) | 15, 08                                                 | Added, with two new templates                                                                                                                                                                    |
+| Compliance profiles scoped by position: **Applies to Members Holding a Position** (#3825)                                                                                                                                                       | 02, 08                                                 | Added; 08's profile form now says **Profile Name**                                                                                                                                               |
+| Known limitations closed with code: weather alerts, generic webhooks, required trainee reports, cancelled-shift email, full calendar range (#3838); election defaults, assign controls, officer-alert bell copies (#3829)                       | 03, 05, 14, 16                                         | Written with the changes                                                                                                                                                                         |
+| Layout: a shared page header, stat tiles sized to their space, compact bars in phone landscape, contrast fixes (#3839, #3834)                                                                                                                   | none                                                   | Visual only                                                                                                                                                                                      |
+| Embedded forms no longer offer to install the app on the host site (#3830); Code 128 bars a whole number of printer dots wide (#3824); refusal messages that list names stay within the length limit (#3826, #3836)                             | none                                                   | No guide change                                                                                                                                                                                  |
+
+**Not fixed here, raised with the owner:** the training-exemption and
+attendance-dashboard tier lookups still read the legacy `membership_type`, so an
+administrative or social member on a tier such as Life does not get that tier's
+exemption or voting rule; and the compliance profile **junior** chip matches
+nobody, because a junior member's derived type is probationary.
+
+**Screenshots to create:** Election Settings → **Voter Eligibility**, the
+member **Voting eligibility** card, the Interview page's **Follow-up Forms**
+panel, the Election Vote stage's **Include follow-up form answers**, the status
+page's **Open the form** card, and the profile form with **Applies to Members
+Holding a Position**. **Replace:** `17-05-dropped-member-anonymize` (the
+profile now shows class and status). See `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 29, 2026
 
 Merged to `main` since `7ac356b4` (2026-10-29 03:12 UTC) through `2aac367a`

@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useApplicantAccess } from './ApplicantAccessContext';
 import {
   ArrowLeft,
   ArrowRight,
@@ -110,6 +111,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
   onConvert,
 }) => {
   const navigate = useNavigate();
+  const access = useApplicantAccess();
   const stageRequirementHint = getStageRequirementHint(applicant);
   // The server refuses a skip on a required stage; disabling the button here
   // says so before the click rather than after it. The refusal is the
@@ -276,6 +278,11 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
     }
   };
 
+  // A case manager advances, skips, moves back and withdraws; rejecting,
+  // holding, converting, reactivating and placing on a stage stay with the
+  // pipeline's managers. An interviewer gets no actions here at all.
+  if (!access.can_work) return null;
+
   return (
     <>
       {/* Active Status Actions */}
@@ -289,7 +296,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
             stages offered come from the pipeline the applicant actually
             belongs to, not whichever board happens to be open.
           */}
-          {canPlaceOnStage && (
+          {canPlaceOnStage && access.can_manage && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
               <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Not on a stage</p>
               <p className="text-theme-text-muted mt-1 text-xs">
@@ -470,25 +477,29 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
 
             <div className="flex-1" />
 
-            <button
-              onClick={() => setShowWithdrawConfirm(true)}
-              disabled={isActionInProgress}
-              className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
-              title="Withdraw application"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              <span className="action-label">Withdraw</span>
-            </button>
-            <button
-              onClick={() => {
-                void handleHold();
-              }}
-              disabled={isActionInProgress}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 px-3 py-2 text-sm text-amber-700 transition-colors hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-400"
-            >
-              {isHolding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
-              <span className="action-label">Hold</span>
-            </button>
+            {access.can_work && (
+              <button
+                onClick={() => setShowWithdrawConfirm(true)}
+                disabled={isActionInProgress}
+                className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                title="Withdraw application"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                <span className="action-label">Withdraw</span>
+              </button>
+            )}
+            {access.can_manage && (
+              <button
+                onClick={() => {
+                  void handleHold();
+                }}
+                disabled={isActionInProgress}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 px-3 py-2 text-sm text-amber-700 transition-colors hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-400"
+              >
+                {isHolding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                <span className="action-label">Hold</span>
+              </button>
+            )}
             {!isLastStage && (
               <button
                 onClick={() => setShowSkipConfirm(true)}
@@ -504,24 +515,32 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
                 <span className="action-label">Skip</span>
               </button>
             )}
-            <button
-              onClick={() => setShowRejectConfirm(true)}
-              disabled={isActionInProgress}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-700 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              <span className="action-label">Reject</span>
-            </button>
-            <button
-              onClick={() => {
-                void handleAdvance();
-              }}
-              disabled={isActionInProgress}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
-            >
-              {isAdvancing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
-              {isLastStage ? 'Convert' : 'Advance'}
-            </button>
+            {access.can_manage && (
+              <button
+                onClick={() => setShowRejectConfirm(true)}
+                disabled={isActionInProgress}
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-700 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                <span className="action-label">Reject</span>
+              </button>
+            )}
+            {(!isLastStage || access.can_manage) && (
+              <button
+                onClick={() => {
+                  void handleAdvance();
+                }}
+                disabled={isActionInProgress}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+              >
+                {isAdvancing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-3.5 w-3.5" />
+                )}
+                {isLastStage ? 'Convert' : 'Advance'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -611,30 +630,34 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
               <Archive className="h-3.5 w-3.5" />
               <span className="action-label">Withdraw</span>
             </button>
-            <button
-              onClick={() => setShowRejectConfirm(true)}
-              disabled={isActionInProgress}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-700 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              <span className="action-label">Reject</span>
-            </button>
-            <button
-              onClick={() => {
-                void handleResume();
-              }}
-              disabled={isActionInProgress}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
-            >
-              {isResuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-              Resume
-            </button>
+            {access.can_manage && (
+              <button
+                onClick={() => setShowRejectConfirm(true)}
+                disabled={isActionInProgress}
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-700 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                <span className="action-label">Reject</span>
+              </button>
+            )}
+            {access.can_manage && (
+              <button
+                onClick={() => {
+                  void handleResume();
+                }}
+                disabled={isActionInProgress}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+              >
+                {isResuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                Resume
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {/* Withdrawn Actions */}
-      {applicant.status === ApplicantStatus.WITHDRAWN && (
+      {applicant.status === ApplicantStatus.WITHDRAWN && access.can_manage && (
         <div className="border-theme-surface-border space-y-3 border-t p-4">
           {showNotesInput && (
             <div className="flex items-start gap-2">
@@ -676,7 +699,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       )}
 
       {/* Inactive Actions */}
-      {applicant.status === ApplicantStatus.INACTIVE && (
+      {applicant.status === ApplicantStatus.INACTIVE && access.can_manage && (
         <div className="border-theme-surface-border space-y-3 border-t p-4">
           {showNotesInput && (
             <div className="flex items-start gap-2">

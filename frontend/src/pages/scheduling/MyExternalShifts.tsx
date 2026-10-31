@@ -79,8 +79,8 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
 
   return (
     <section className="card p-4" aria-labelledby="my-external-shifts-heading">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <div className="split-row mb-3 gap-3 sm:items-start">
+        <div className="split-row-main">
           <h4 id="my-external-shifts-heading" className="text-theme-text-primary font-semibold">
             Shifts with other departments
           </h4>
@@ -90,7 +90,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
         </div>
         <button
           type="button"
-          className="btn-primary flex shrink-0 items-center gap-2"
+          className="split-row-aside btn-primary flex shrink-0 items-center gap-2"
           onClick={() => {
             setEditing(null);
             setFormOpen(true);
@@ -124,8 +124,8 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
             const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
             const times = externalShiftTimeRange(entry, tz);
             return (
-              <li key={entry.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
+              <li key={entry.id} className="split-row gap-2 py-3 sm:items-center">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary font-medium">
                     {entry.agency_name}
                     {rejected && (

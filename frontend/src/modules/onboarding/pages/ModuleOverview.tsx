@@ -169,8 +169,8 @@ const ModuleOverview: React.FC = () => {
           </div>
 
           {/* Stats Banner */}
-          <div className="card mb-6 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="split-row card mb-6 gap-3 p-4 sm:items-center">
+            <div className="split-row-main flex items-center space-x-4">
               <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{enabledCount}</span>
                 <span className="text-theme-text-muted ml-2">modules enabled</span>
@@ -181,7 +181,7 @@ const ModuleOverview: React.FC = () => {
                 void handleContinue();
               }}
               disabled={isSaving || enabledCount === 0}
-              className={`rounded-lg px-6 py-2 font-semibold transition-all ${
+              className={`touch-target-phone rounded-lg px-6 py-2 font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
                   ? 'bg-linear-to-r from-red-700 to-orange-700 text-white hover:from-red-800 hover:to-orange-800'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
@@ -243,14 +243,14 @@ const ModuleOverview: React.FC = () => {
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
                           aria-label={`Set up ${module.name} later`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Later
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
                           aria-label={`Skip ${module.name}`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Skip
                         </button>
@@ -305,14 +305,14 @@ const ModuleOverview: React.FC = () => {
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
                           aria-label={`Set up ${module.name} later`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Later
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
                           aria-label={`Skip ${module.name}`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Skip
                         </button>
@@ -359,7 +359,7 @@ const ModuleOverview: React.FC = () => {
                         onClick={() => handleModuleAction(module.id, 'start')}
                         aria-pressed={isEnabled}
                         aria-label={`${isEnabled ? 'Enabled' : 'Enable'} ${module.name}`}
-                        className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        className={`touch-target-phone flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           isEnabled
                             ? 'bg-green-700 text-white hover:bg-green-800'
                             : 'bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover'
@@ -377,7 +377,7 @@ const ModuleOverview: React.FC = () => {
                       <button
                         onClick={() => handleModuleAction(module.id, 'ignore')}
                         aria-label={`Skip ${module.name}`}
-                        className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted w-full rounded-lg px-3 py-2 text-xs transition-colors"
+                        className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted touch-target-phone w-full rounded-lg px-3 py-2 text-xs transition-colors"
                       >
                         Skip
                       </button>

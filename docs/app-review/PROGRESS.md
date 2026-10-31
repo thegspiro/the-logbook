@@ -62,8 +62,8 @@ from its open list.
 | B21 | orgs, roles & users        | ORU2   | ✅     |
 | B22 | compliance & skills        | CS2    | ✅     |
 | B23 | security, audit & IP       | SEC2   | ✅     |
-| B24 | core infra                 | CI2    | ⬜     |
-| B25 | onboarding                 | ONB2   | ⬜     |
+| B24 | core infra                 | CI2    | ✅     |
+| B25 | onboarding                 | ONB2   | ✅     |
 | B26 | public-portal              | PP2    | ⬜     |
 | B27 | frontend shared            | FE2    | ⬜     |
 
@@ -3458,3 +3458,24 @@ secrets redacted for non-admins. See
   request from one member is not refused. **Not re-run:** the other five checklist dimensions; SEC-2's
   tail-truncation residual stays open. Gate: flake8 / black clean · 1,298 related tests pass · new file
   3 pass, unit-marked. See security-audit-ip.md → Pass 5. Next: B24 core infra.
+- **B24 core infra ✅ (pass 5) — the shared null-refusal base class had no test of its own
+  (CI2-1).** Foundation code with no endpoints, so the update-payload and state-machine lenses had
+  nothing to drive; the pass looked at what this rotation added to the foundation. **Closed** —
+  `RefusesNull`, now behind 17 schemas, was exercised only by other modules' integration tests, and
+  nothing checked that a subclass's `null_refused` names real fields (a typo refuses nothing and reads as
+  protection). `test_refuses_null.py` (42 unit tests, DB-free) covers the behaviour and sweeps every
+  subclass; it found no existing typo and fails when one is introduced. **Open (owner):**
+  `with_db_retry` / `retry_on_db_error` are used by no application code (only `is_transient_db_error` is);
+  pitfall #36 lists them, so they stay, with a docstring now saying reads only. **Verified good:** the six
+  in-memory caches are bounded; requirements pins. **Not re-run:** the other checklist dimensions; CI-9,
+  CI-4, CI-10 and CI-11 stay open. Gate: flake8 / black clean · 1,007 related tests pass · new file 42 pass,
+  unit-marked. See core-infra.md → Pass 5. Next: B25 onboarding.
+- **B25 onboarding ✅ (pass 5).** Pitfall #27/#36 lens on the steps that replace
+  their own earlier rows. **ONB2-3 FIXED:** `/session/stations` and
+  `/session/apparatus` read the previous pass's ids from the session and then
+  inserted, unlocked — a double-submit left both sets of rows, with only the last
+  recorded, so the duplicates could never be replaced. Now serialised by
+  `_lock_session_for_step` (status row, then session row, locking refresh) ahead
+  of the completion check. Race test red→green (2 rows → 1). Pass-1 LOW items
+  re-verified closed. `/session/roles` simultaneous double-submit noted, not
+  fixed. See onboarding.md. Next: B26 public-portal.

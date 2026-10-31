@@ -1,8 +1,8 @@
 """Shift attendance: one row per member per shift
 
 Revision ID: 1740b4886e52
-Revises: f90b1124e6f4
-Create Date: 2026-10-31 10:00:00.000000
+Revises: 3fbd0fe30e5b
+Create Date: 2026-10-31 18:00:00.000000
 
 Adds ``uq_shift_attendance_shift_user`` on ``shift_attendance (shift_id,
 user_id)`` (KNOWN_LIMITATIONS, "Scheduling — Left Open by the Shifts-Module
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "1740b4886e52"
-down_revision: Union[str, None] = "f90b1124e6f4"
+down_revision: Union[str, None] = "3fbd0fe30e5b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

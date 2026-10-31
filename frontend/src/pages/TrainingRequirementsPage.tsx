@@ -497,8 +497,8 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
     <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex-1">
+        <div className="split-row gap-4 sm:items-start">
+          <div className="split-row-main">
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h2>
               {requirement.requirement_type && (
@@ -609,7 +609,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex flex-wrap items-center gap-2 sm:ml-4">
+          <div className="split-row-aside flex flex-wrap items-center gap-2 sm:ml-4">
             <button
               onClick={onToggleActive}
               className={`rounded-lg p-2 transition-colors ${

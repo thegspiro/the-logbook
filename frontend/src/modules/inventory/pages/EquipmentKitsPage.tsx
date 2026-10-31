@@ -376,14 +376,14 @@ const EquipmentKitsPage: React.FC = () => {
   return (
     <div className="max-w-7xl space-y-6 py-6 sm:py-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-4 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-2xl font-bold">Gear Kits</h2>
           <p className="text-theme-text-secondary mt-1">
             Create kit templates to issue multiple items to members at once.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+        <div className="split-row-aside flex flex-wrap items-center gap-3 whitespace-nowrap">
           <label className="text-theme-text-secondary touch:min-h-11 flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"

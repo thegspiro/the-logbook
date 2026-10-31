@@ -693,6 +693,60 @@ class TestImportButtonsShareTheImport:
         assert "INSERT INTO" not in failed.import_error
         assert ".py" not in failed.import_error
 
+    async def test_matched_member_import_failure_does_not_persist_the_raw_exception_text(
+        self, db_session
+    ):
+        """Same contract as the single/bulk import routes, for the third
+        writer of ``import_error``: ``import_pending_for_matched_members``
+        (the "repair" pass run when a member is mapped after their
+        completions were staged, or from the officer's "Import matched"
+        button). It calls ``import_single_record`` itself and stores any
+        failure's text straight onto the same ``ExternalTrainingImport`` row
+        the other two routes write to and that ``ExternalTrainingImportResponse``
+        serializes back to the client.
+        """
+        ctx = await _setup(db_session)
+        await _upload_report(db_session, ctx, _row("x@y.test", *SEPSIS, "T-1"))
+        staged = await _staged(db_session, ctx, "T-1")
+        staged.user_id = ctx.member.id
+        await db_session.flush()
+        staged_id = staged.id
+
+        unsafe = (
+            "sqlalchemy.exc.IntegrityError: (pymysql.err.IntegrityError) "
+            "(1062, \"Duplicate entry 'abc' for key "
+            "'external_training_imports.ix_external_record_id'\") "
+            "[SQL: INSERT INTO external_training_imports ...] "
+            'File "/app/app/services/external_training_service.py", line 42'
+        )
+
+        service = ExternalTrainingSyncService(db_session)
+        with patch.object(
+            ExternalTrainingSyncService,
+            "import_single_record",
+            AsyncMock(side_effect=RuntimeError(unsafe)),
+        ):
+            imported, failed_count = await service.import_pending_for_matched_members(
+                ctx.provider.id,
+                ctx.org.id,
+                created_by=ctx.officer.id,
+            )
+        assert imported == 0
+        assert failed_count == 1
+
+        failed = (
+            await db_session.execute(
+                select(ExternalTrainingImport).where(
+                    ExternalTrainingImport.id == staged_id
+                )
+            )
+        ).scalar_one()
+        assert failed.import_status == "failed"
+        assert failed.import_error is not None
+        assert "sqlalchemy" not in failed.import_error.lower()
+        assert "INSERT INTO" not in failed.import_error
+        assert ".py" not in failed.import_error
+
     async def test_bulk_import_uses_its_default_category(self, db_session):
         ctx = await _setup(db_session)
         batch = await _category(db_session, ctx, "Batch default")

@@ -60,8 +60,8 @@ const ExpiringCertsTab: React.FC = () => {
 
   return (
     <div className="py-8">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row mb-6 gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
             <Shield className="h-5 w-5 text-red-700 dark:text-red-400" />
             Expiring Certifications
@@ -74,7 +74,7 @@ const ExpiringCertsTab: React.FC = () => {
           value={daysWindow}
           onChange={(e) => setDaysWindow(Number(e.target.value))}
           aria-label="Expiring within"
-          className="form-input-sm sm:w-auto"
+          className="split-row-aside form-input-sm sm:w-auto"
         >
           <option value={30}>30 days</option>
           <option value={60}>60 days</option>

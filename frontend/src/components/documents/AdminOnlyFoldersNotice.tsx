@@ -72,12 +72,11 @@ export const AdminOnlyFoldersNotice: React.FC<AdminOnlyFoldersNoticeProps> = ({ 
           </p>
           <ul className="mt-3 space-y-2">
             {folders.map((folder) => (
-              <li
-                key={folder.id}
-                className="border-theme-surface-border flex flex-col gap-2 border-t pt-2 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <span className="text-theme-text-primary text-sm font-medium break-words">{folder.name}</span>
-                <span className="flex flex-wrap gap-2">
+              <li key={folder.id} className="split-row border-theme-surface-border gap-2 border-t pt-2 sm:items-center">
+                <span className="split-row-main text-theme-text-primary text-sm font-medium break-words">
+                  {folder.name}
+                </span>
+                <span className="split-row-aside flex flex-wrap gap-2">
                   <button
                     type="button"
                     className="btn-primary px-3 py-1.5 text-sm"

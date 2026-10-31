@@ -2,7 +2,7 @@
 
 Revision ID: db30a34afa5b
 Revises: 1740b4886e52
-Create Date: 2026-10-31 10:30:00.000000
+Create Date: 2026-10-31 18:30:00.000000
 
 Adds ``shift_pattern_occurrences``: one row per (pattern, date, shift type)
 that generation has produced, so deleting or re-timing a generated shift no

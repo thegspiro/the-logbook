@@ -195,3 +195,55 @@ class StarredPermissionConstants(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PerApplicantAccess(unittest.TestCase):
+    """Routes gated by backend/app/api/prospect_access.py.
+
+    They admit an assigned member as well as a permission holder, so they
+    carry no ``require_permission`` call at all; reading only that helper
+    reported every one of them as ``undefended``.
+    """
+
+    def _enforced(self, signature: str) -> set:
+        fn, authorizers, constants = route(
+            f"@router.get('/x')\nasync def handler({signature}):\n    pass\n"
+        )
+        return enforced_permissions(fn, authorizers, constants)
+
+    def test_a_read_level_enforces_view_all(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.SEE))"
+        ) == {"prospective_members.view_all"}
+
+    def test_a_write_level_defaults_to_the_manage_pair(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.WORK))"
+        ) == {"members.manage", "prospective_members.manage"}
+
+    def test_a_write_level_reads_its_own_manage_permissions(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.MANAGE, "
+            "manage_permissions=('prospective_members.manage',)))"
+        ) == {"prospective_members.manage"}
+
+    def test_bypass_permissions_are_added(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.FULL, "
+            "bypass_permissions=('elections.manage',)))"
+        ) == {"prospective_members.view_all", "elections.manage"}
+
+    def test_view_all_with_its_alternatives(self):
+        assert self._enforced(
+            "user=Depends(require_view_all('elections.manage'))"
+        ) == {"prospective_members.view_all", "elections.manage"}
+
+    def test_bare_dependencies_resolve_to_fixed_sets(self):
+        assert self._enforced("access=Depends(require_interview_access)") == {
+            "prospective_members.manage"
+        }
+        assert self._enforced("user=Depends(require_pipeline_reader)") == {
+            "prospective_members.view",
+            "prospective_members.manage",
+            "prospective_members.view_all",
+        }

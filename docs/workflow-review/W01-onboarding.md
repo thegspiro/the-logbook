@@ -108,25 +108,35 @@ Not driven: the Email and File Storage configuration forms with real credentials
 **Where:** `AuthenticationChoice.tsx` and `AuthSettingsSection.tsx` offer it. `oauth_service.py` implements only Google and Microsoft. `auth.py` forgot-password refuses a reset for any non-local provider.
 **Why not fixed:** implementing Authentik OIDC and withdrawing the option are both product decisions, and an organization already storing `authentik` needs a chosen fallback. Mirrored to `docs/KNOWN_LIMITATIONS.md`. The forgot-password screen ignoring the server's message is a W03 lead.
 
-### W01-12 — LOW — A backup recovery email identical to the administrator's is accepted — OPEN
+### W01-12 — LOW — A backup recovery email identical to the administrator's is accepted — FIXED (2026-10-31)
 
 The IT contacts step says "Use a different email than the primary admin account" but accepted `review_admin@example.org` as the backup for `review_admin@example.org`. Recovery through the same mailbox recovers nothing. `ITTeamBackupAccess.tsx` validation. Left open: whether to refuse or only warn is a product choice.
 
-### W01-13 — LOW — Tap targets under 44px on three steps at phone width — OPEN
+**Fixed (2026-10-31, owner decision: refuse it):** Continue now refuses a backup address equal to the administrator's, ignoring case and surrounding spaces, with "Use a different email than the administrator account". `ITTeamBackupAccess.backupEmail.test.tsx`; re-driven on a fresh install. The check is in the browser only: the API still stores whatever it is sent.
+
+### W01-13 — LOW — Tap targets under 44px on three steps at phone width — FIXED (2026-10-31)
 
 At 390×844: Modules' "Later / Skip For Now / Ignore" card buttons, the Ranks & Positions row controls (move, edit, delete, the permission checkboxes and radios), and the Apparatus "+ position" chips. `touch-target-phone` exists for this. Left for the W79 phone pass rather than restyling three pages here.
 
-### W01-14 — NIT — The Create button's accessible name does not contain its visible text — OPEN
+**Fixed (2026-10-31):** measured again on a fresh install at 390×844 before changing anything, since the steps had moved on. Under 44px were: Modules' Later and Skip (36px), the optional modules' Enable and Skip (36 and 32px) and Continue (40px); Ranks & Positions' Remove buttons and View / Manage toggles (24px), "Show all modules" (16px), Continue and Create Custom Position (40px); Apparatus' "+ position" chips (26px) and a seat's remove button (12px). The same drive found four more on other steps: the administrator step's two show-password toggles (20px), IT Contacts' Add Member (36px), the setup-complete page's eight next steps (20px), and Reset Progress (42px) on every step. All take `touch-target-phone`, so desktop density is unchanged. Re-driven: every onboarding step now measures clean at 390px. Pinned by the touch-target tests in the steps' own test files.
+
+### W01-14 — NIT — The Create button's accessible name does not contain its visible text — FIXED (2026-10-31)
 
 The button reads "Create Account & Continue" but is named "Create System Owner account and continue setup" (`aria-label`). A voice-control user saying the visible words gets no match (WCAG 2.5.3).
 
-### W01-15 — LOW — A failed Continue on Organization Setup does not move focus — OPEN
+**Fixed (2026-10-31):** the `aria-label` is gone, so the button is named by its words. Reset Progress had the same fault (named "Reset onboarding progress") and is fixed the same way. `AdminUserCreation.test.tsx` now finds the button by its visible text, and `seed.mjs` follows.
+
+### W01-15 — LOW — A failed Continue on Organization Setup does not move focus — FIXED (2026-10-31)
 
 Errors are listed in a toast and a summary, but focus stays on the button, so a keyboard or screen-reader user must hunt for the first invalid field.
 
-### W01-16 — LOW — Stations has no Back button — OPEN
+**Fixed (2026-10-31):** a failed Continue moves focus to the first invalid field, once its section has expanded. `OrganizationSetup.validation.test.tsx`; re-driven: focus lands on Organization Name, and on Street Address once the name is filled.
+
+### W01-16 — LOW — Stations has no Back button — FIXED (2026-10-31)
 
 Its predecessor, Ranks & Positions, can be revisited, but Stations shows the "Organization details are already saved" note in place of Back. That is the note for the steps next to Organization Setup, and it reads oddly here.
+
+**Fixed (2026-10-31):** Stations has Back to the previous step, in place of the note. Its drafts are already in the onboarding store, so going back loses nothing. `StationSetup.back.test.tsx`; re-driven: Back lands on Ranks & Positions.
 
 ## Harness
 
@@ -138,11 +148,11 @@ The seed read a step's button list while the previous page was still on screen, 
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. The job gets done    | ✅ after W01-5 and W01-10; completion data checked in the database, not the toast                                                                                         |
 | 2. The right people     | ✅ the server refuses a second owner, and a reset requires the owner's session (read from code, `_require_owner_authority`); only an anonymous visitor precedes the owner |
-| 3. Wrong input, failure | ✅ after W01-1 and W01-2; W01-12 open                                                                                                                                     |
+| 3. Wrong input, failure | ✅ after W01-1, W01-2 and W01-12                                                                                                                                          |
 | 4. Browser signals      | ✅ after W01-10; the dashboard's 403s on disabled modules remain (W07 lead)                                                                                               |
 | 5. Coming back to it    | ✅ after W01-5; reload on the account step clears the form (acceptable: nothing is saved client-side, passwords included)                                                 |
-| 6. On a phone           | ✅ after W01-8; W01-13 open                                                                                                                                               |
-| 7. Everyone can use it  | ✅ after W01-1 and W01-7; W01-14 and W01-15 open                                                                                                                          |
+| 6. On a phone           | ✅ after W01-8 and W01-13                                                                                                                                                 |
+| 7. Everyone can use it  | ✅ after W01-1, W01-7, W01-14 and W01-15                                                                                                                                  |
 | 8. What happens around  | W01-11 flagged; reset is audited (`onboarding.reset_initiated` / `_completed`, read from code)                                                                            |
 
 ## Completion gate

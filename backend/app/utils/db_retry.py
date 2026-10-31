@@ -57,6 +57,12 @@ async def with_db_retry(
     """
     Call *coro_fn(*args, **kwargs)* with automatic retry on transient DB errors.
 
+    For reads only. A ``2013 Lost connection during query`` can arrive after the
+    server has already committed the statement, so retrying a function that
+    writes can apply the write twice. Nothing in the application wraps a write
+    in this today; keep it that way unless the write is made idempotent first
+    (CLAUDE.md pitfall #36).
+
     Parameters
     ----------
     coro_fn:

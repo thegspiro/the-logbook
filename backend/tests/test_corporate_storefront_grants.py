@@ -44,6 +44,10 @@ _ADDED_SINCE: dict[str, set[str]] = {
     "communications_officer": {"suggestions.manage"},
     # 84819ea78a79, with its own backfill.
     "training_officer": {"training.view_analytics"},
+    # c588f525fdbb, with its own backfill: every holder of
+    # prospective_members.view or .manage gains view_all.
+    "membership_coordinator": {"prospective_members.view_all"},
+    "secretary": {"prospective_members.view_all"},
 }
 
 

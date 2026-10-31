@@ -1,5 +1,52 @@
 # Application Review — Onboarding (Tier B)
 
+## Pass 5 (2026-10-31) — a step submitted twice at once stacks its own rows (ONB2-3)
+
+Lens: pitfalls #27 and #36 — the steps that "replace what the previous pass
+created" and learn which rows those are from the session. Re-verified first that
+the pass-1 LOW items are closed: duplicate role ids are refused at 422
+(`_reject_duplicate_ids`), and the post-completion guard covers stations and
+apparatus.
+
+### ONB2-3 — MED — Double-submitting `/session/stations` or `/session/apparatus` stacked duplicate rows — ✅ FIXED
+
+Both handlers promise (their docstrings) that re-submitting the step replaces its
+own rows. They keep it by reading `previous_ids` out of `session.data` and
+deleting those ids before inserting. That read is a check-then-write on the
+session row: two submissions at once — a double-tap on "Next", or a client retry
+of a POST that timed out after it was processed — both read the same
+`previous_ids`, both insert, and the session records only the last writer's ids.
+The first writer's rows sit beside the second's and are in nobody's list, so no
+later pass can ever remove them: a department finishes setup with every
+apparatus (or station and its location) listed twice. `validate_session` commits
+before the handler body, so nothing was held across the read.
+
+Reproduced against MariaDB before the fix: two concurrent `save_session_apparatus`
+calls left **2** `basic_apparatus` rows, only one of them recorded in the session.
+
+**Fix:** `_lock_session_for_step` takes the onboarding status row, then
+re-reads the session row with `refresh(..., with_for_update=True)`, before the
+completion check and the id read. The refresh is a locking read so the waiter
+sees the ids the winner committed. Taking the lock before `needs_onboarding()`
+also serialises the write against `complete_onboarding`, which locks the same
+status row. Lock order (status, then session) matches the other steps.
+
+**Test:** `tests/test_onboarding_step_resubmit_race.py` — a DB-backed race on two
+independent connections (red before the fix: 2 rows; green after: 1) plus
+source-level guards that both handlers lock before reading the ids.
+
+### Still flagged (unchanged)
+
+- **ONB-7** residual (role editor — product decision), **ONB-8 residual**
+  (reset re-auth policy). `/session/roles` deletes and re-inserts custom rows
+  under the same session, so a simultaneous double-submit could still collide on
+  the unique slug (a 500, no stacked rows); it is not locked by this change —
+  noted for a later pass.
+
+**Completion gate (pass 5):** `flake8` / `black --check` on the touched files;
+onboarding tests (`-k onboarding`) green; `tsc` / `npm run lint` n/a (no frontend
+change).
+
 **Prefix:** `ONB2` · **Iteration:** B25 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 

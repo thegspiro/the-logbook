@@ -6,7 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { clearLegacySensitiveData } from './modules/onboarding/utils/storage';
 
 // Dynamic import retry/reload for stale chunks after deployments
-import { clearChunkReloadFlag, lazyWithRetry } from './utils/lazyWithRetry';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // Error Boundary
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -98,7 +98,6 @@ function App() {
   // Security: Clear any legacy sensitive data on app initialization
   useEffect(() => {
     clearLegacySensitiveData();
-    clearChunkReloadFlag();
   }, []);
 
   return (

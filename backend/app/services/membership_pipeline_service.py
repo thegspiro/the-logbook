@@ -23,7 +23,9 @@ from typing import (
 )
 
 from loguru import logger
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, delete
+from sqlalchemy import false as sa_false
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1467,17 +1469,26 @@ class MembershipPipelineService:
 
     @staticmethod
     def _apply_prospect_exclusions(
-        query, exclude_prospect_ids: Optional[Iterable[str]]
+        query,
+        exclude_prospect_ids: Optional[Iterable[str]],
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ):
         """Drop specific prospect rows from a query over ``ProspectiveMember``.
 
-        Used to keep a caller's own prospective-membership record out of the
-        lists, boards and counts they can see (see app/api/prospect_privacy.py).
+        ``exclude_prospect_ids`` keeps a caller's own prospective-membership
+        record out of the lists, boards and counts they can see (see
+        app/api/prospect_privacy.py). ``only_prospect_ids`` keeps everything
+        but the applicants they are assigned to out, for a member without
+        ``prospective_members.view_all`` (app/services/prospect_access.py):
+        None means no such limit, and an empty collection means none at all.
         """
         ids = [str(i) for i in (exclude_prospect_ids or []) if i]
-        if not ids:
-            return query
-        return query.where(ProspectiveMember.id.notin_(ids))
+        if ids:
+            query = query.where(ProspectiveMember.id.notin_(ids))
+        if only_prospect_ids is not None:
+            only = [str(i) for i in only_prospect_ids if i]
+            query = query.where(ProspectiveMember.id.in_(only) if only else sa_false())
+        return query
 
     @staticmethod
     def _prospect_search_filter(search: str) -> ColumnElement[bool]:
@@ -1571,6 +1582,7 @@ class MembershipPipelineService:
         offset: int = 0,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
         open_only: bool = False,
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ) -> tuple[List[ProspectiveMember], int]:
         """List prospects with filters.
 
@@ -1609,7 +1621,9 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.target_role),
             )
         )
-        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
+        query = self._apply_prospect_exclusions(
+            query, exclude_prospect_ids, only_prospect_ids
+        )
 
         # Count query
         count_query = select(func.count()).select_from(query.subquery())
@@ -5615,6 +5629,7 @@ class MembershipPipelineService:
         pipeline_id: str,
         organization_id: str,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get the kanban board view for a pipeline.
 
@@ -5640,6 +5655,7 @@ class MembershipPipelineService:
                 func.count(ProspectiveMember.id),
             ).where(scope),
             exclude_prospect_ids,
+            only_prospect_ids,
         ).group_by(ProspectiveMember.current_step_id)
         count_rows = (await self.db.execute(count_query)).all()
         counts = {
@@ -5666,7 +5682,9 @@ class MembershipPipelineService:
             .order_by(ProspectiveMember.created_at)
             .limit(self.MAX_KANBAN_CARDS)
         )
-        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
+        query = self._apply_prospect_exclusions(
+            query, exclude_prospect_ids, only_prospect_ids
+        )
         result = await self.db.execute(query)
         prospects = list(result.scalars().all())
 

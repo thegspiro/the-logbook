@@ -10,8 +10,6 @@ import type { Applicant, FollowUpFormRequest } from '../types';
 const mockList = vi.fn();
 const mockSend = vi.fn();
 const mockReview = vi.fn();
-let canManage = true;
-
 vi.mock('../services/api', () => ({
   followUpFormService: {
     list: (...a: unknown[]) => mockList(...a) as unknown,
@@ -20,14 +18,10 @@ vi.mock('../services/api', () => ({
   },
 }));
 
-vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: (select: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
-    select({ checkPermission: (p: string) => p === 'prospective_members.manage' && canManage }),
-}));
-
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 import FollowUpFormsSection from './FollowUpFormsSection';
+import { ApplicantAccessContext, READ_ONLY_ACCESS } from './ApplicantAccessContext';
 
 const applicant = (overrides: Partial<Applicant> = {}): Applicant =>
   ({
@@ -55,7 +49,6 @@ const request = (overrides: Partial<FollowUpFormRequest> = {}): FollowUpFormRequ
 
 describe('FollowUpFormsSection', () => {
   beforeEach(() => {
-    canManage = true;
     mockList.mockReset();
     mockSend.mockReset();
     mockReview.mockReset();
@@ -143,10 +136,13 @@ describe('FollowUpFormsSection', () => {
     expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument();
   });
 
-  it('shows a viewer the progress but none of the buttons', async () => {
-    canManage = false;
+  it('shows someone who cannot work the applicant the progress but none of the buttons', async () => {
     mockList.mockResolvedValue([request({ contact_changed: true })]);
-    render(<FollowUpFormsSection applicant={applicant()} tz="UTC" />);
+    render(
+      <ApplicantAccessContext.Provider value={{ ...READ_ONLY_ACCESS, roles: ['interviewer'] }}>
+        <FollowUpFormsSection applicant={applicant()} tz="UTC" />
+      </ApplicantAccessContext.Provider>
+    );
 
     expect(await screen.findByText('Sent')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resend' })).not.toBeInTheDocument();
