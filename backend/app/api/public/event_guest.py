@@ -107,7 +107,7 @@ async def get_link_guest_check_in_info(
     """
     event, org = await _resolve_link_event(db, guest_token)
 
-    is_open, closed_reason = GuestCheckInService.check_in_window_state(
+    is_open, closed_reason = GuestCheckInService.guest_sign_in_state(
         event, datetime.now(timezone.utc)
     )
 
