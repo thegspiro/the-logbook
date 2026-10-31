@@ -1290,6 +1290,14 @@ tests and 4083 backend tests (minutes and meetings) pass, as does the full front
 
 Next: W52.
 
+### W50 (re-drive) — Voter-eligibility rules and the lifecycle — 2026-10-31
+
+Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a fresh database, at 1280×900 and 390×844. Covered: department defaults (regular and annual), the waiting period per member type, the profile override, a status change, count-mode attendance, the frozen roll, voting, close and results. Findings are in [W50-elections.md](./W50-elections.md#w50-re-drive--2026-10-31-voter-eligibility-rules-and-the-lifecycle).
+
+- Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
+- Flagged: W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll).
+- Open: W50-R4, W50-R5 (NIT).
+
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 
 Driven as: `secretary`, `member` and `member2` (driver A) and `admin`,
