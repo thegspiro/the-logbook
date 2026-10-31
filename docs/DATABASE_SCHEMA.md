@@ -9918,6 +9918,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_shift_att_shift` (`shift_id`)
 - `idx_shift_att_user` (`user_id`)
 
+**Constraints**
+
+- UNIQUE `uq_shift_attendance_shift_user` (`shift_id`, `user_id`)
+
 ### `shift_calls`
 
 **ShiftCall** · `app/models/training.py`

@@ -2522,6 +2522,12 @@ recorded here rather than built.
    `member_check_in` already did, but `shift_attendance` has no unique
    constraint on `(shift_id, user_id)`. Adding one needs a migration that first
    settles any duplicate rows already stored (CLAUDE.md Pitfall #35).
+   **Resolved (2026-10-31), owner decision: add the key.** Migration
+   `1740b4886e52` merges any duplicates into the earliest row (earliest
+   check-in, latest check-out, the largest minutes and call count — not the
+   sum, which would double-count a stint recorded twice), deletes the rest, and
+   adds `uq_shift_attendance_shift_user`. Covered by
+   `tests/test_shift_attendance_unique_migration.py`.
 6. **Shift cancellation notices are in-app only.** `cancel_shift` notifies the
    crew in the app and sends no email, and unlike the decline and assignment
    notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes

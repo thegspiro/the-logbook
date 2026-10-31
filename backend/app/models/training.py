@@ -3873,6 +3873,9 @@ class ShiftAttendance(Base):
     __table_args__ = (
         Index("idx_shift_att_shift", "shift_id"),
         Index("idx_shift_att_user", "user_id"),
+        # One attendance row per member per shift. The service paths lock the
+        # shift and check first; this is what holds when two requests race.
+        UniqueConstraint("shift_id", "user_id", name="uq_shift_attendance_shift_user"),
     )
 
     def __repr__(self):
