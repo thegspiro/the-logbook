@@ -185,20 +185,25 @@ class NotificationsService:
         Deliberately runs after the log row is committed and swallows all
         errors: the notification is already durably recorded, and a push
         service outage must not fail the action that produced it.
+
+        Queued rather than sent: callers log one notification per recipient,
+        and waiting on each member's devices in turn held the request that
+        caused them — see app/services/push_dispatch.py.
         """
         if log.channel != NotificationChannel.IN_APP or not log.recipient_id:
             return
         try:
+            from app.services.push_dispatch import schedule_push
             from app.services.push_service import PushService
 
-            push = PushService(self.db)
-            if not push.is_configured():
+            if not PushService.is_configured():
                 return
-            await push.send_to_user(
-                organization_id=organization_id,
-                user_id=log.recipient_id,
+            schedule_push(
+                organization_id=str(organization_id),
+                user_id=str(log.recipient_id),
                 title=log.subject or "The Logbook",
                 body=log.message or "",
+                url=log.action_url,
                 tag=log.category or "logbook",
             )
         except Exception:
