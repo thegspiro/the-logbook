@@ -1062,7 +1062,7 @@ async def update_module_settings(
     - elections: Elections & Voting
     - minutes: Meeting Minutes
     - reports: Reports & Analytics
-    - notifications: Email Notifications
+    - notifications: In-App Notifications (bell, inbox, push, rules)
     - mobile: Mobile App Access
     - forms: Custom Forms
     - integrations: External Integrations

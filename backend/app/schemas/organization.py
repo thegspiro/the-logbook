@@ -1262,7 +1262,10 @@ class ModuleSettings(BaseModel):
     apparatus: bool = Field(default=True, description="Apparatus Management module")
     minutes: bool = Field(default=True, description="Meeting Minutes module")
     reports: bool = Field(default=True, description="Reports & Analytics module")
-    notifications: bool = Field(default=True, description="Email Notifications module")
+    notifications: bool = Field(
+        default=True,
+        description="In-App Notifications module (bell, inbox, push, notification rules)",
+    )
     forms: bool = Field(default=True, description="Custom Forms module")
     integrations: bool = Field(default=True, description="External Integrations module")
     facilities: bool = Field(

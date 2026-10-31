@@ -61,6 +61,14 @@ export interface ModuleDefinition {
 }
 
 /**
+ * Modules the server keeps on whatever is stored — the core list in
+ * `ModuleSettings.get_enabled_modules` (`schemas/organization.py`). The module
+ * step used to offer Skip on these, which changed nothing; it now shows them
+ * as always on. Keep the two lists in step.
+ */
+export const ALWAYS_ON_MODULE_IDS: readonly string[] = ['members', 'events', 'documents'];
+
+/**
  * All available modules in the application.
  * Add new modules here to have them appear throughout the onboarding process.
  */
@@ -363,8 +371,13 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   // ============================================
   {
     id: 'notifications',
-    name: 'Email Notifications',
-    description: 'Automated email notifications for events, reminders, and important updates.',
+    // The switch gates /notifications: the bell and inbox, web push and the
+    // notification rules screen. Nothing on the sending side reads it, so the
+    // old name ("Email Notifications") told a department that skipping it
+    // stopped email, when it removed the bell and left every email going out.
+    name: 'In-App Notifications',
+    description:
+      'The notification bell and inbox, phone push notifications, and the notification rules screen. Notices are emailed whether or not this is on.',
     icon: Bell,
     priority: 'optional',
     category: 'Communication',
