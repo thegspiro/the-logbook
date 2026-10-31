@@ -27,13 +27,17 @@ export const AssetWidgetRegistry: React.FC<{ widgets: AssetWidgetData[] }> = ({ 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {widgets.map((widget) => {
           const Icon = moduleIcon[widget.module];
+          // A neutral tile is a total (every inventory item), not a set of rows
+          // needing attention, so it opens the page rather than promising a
+          // filter it has none of (DASH-37).
+          const filtered = widget.severity !== 'neutral';
           return (
             <button
               key={widget.id}
               type="button"
               onClick={() => void navigate(widget.href)}
               className="card hover:border-theme-accent-blue min-h-32 p-4 text-left transition-colors"
-              aria-label={`${widget.title}: ${widget.count}. Open filtered results`}
+              aria-label={`${widget.title}: ${widget.count}. ${filtered ? 'Open filtered results' : 'Open'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <span className="bg-theme-surface-secondary rounded-lg p-2">
@@ -47,7 +51,7 @@ export const AssetWidgetRegistry: React.FC<{ widgets: AssetWidgetData[] }> = ({ 
               </div>
               <p className="text-theme-text-primary mt-2 font-semibold">{widget.title}</p>
               {widget.count === 0 && <p className="text-theme-text-muted mt-1 text-xs">{widget.empty_state}</p>}
-              {widget.count > 0 && (
+              {widget.count > 0 && filtered && (
                 <p className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
                   <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                   View filtered results
