@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import list_within_detail_limit
 from app.models.evaluation import (
     Evaluation,
     EvaluationPeriod,
@@ -567,8 +568,9 @@ class EvaluationTemplateService:
             unknown = [r for r in definition.officer_ranks if r not in known]
             if unknown:
                 raise ValueError(
-                    "These ranks are not defined in your department: "
-                    + ", ".join(unknown)
+                    list_within_detail_limit(
+                        "These ranks are not defined in your department: ", unknown
+                    )
                 )
         position_ids = {
             s.actor.position_id for s in workflow.steps if s.actor.position_id

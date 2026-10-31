@@ -20,7 +20,7 @@ Responses are snake_case, like the rest of the reports module.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -84,11 +84,16 @@ class ScaleLevel(BaseModel):
         return v.strip() or None if v is not None else None
 
 
+# The largest value a data source can report: hours and counts over a review
+# period stay far below it, and a percentage below 100.
+MAX_BAND_VALUE = 100_000
+
+
 class ScoreBand(BaseModel):
     """``min`` inclusive, ``max`` exclusive; ``max`` None means "and above"."""
 
-    min: float = Field(ge=0)
-    max: Optional[float] = Field(default=None, ge=0)
+    min: float = Field(ge=0, le=MAX_BAND_VALUE)
+    max: Optional[float] = Field(default=None, ge=0, le=MAX_BAND_VALUE)
     score: int = Field(ge=0, le=10)
 
     @model_validator(mode="after")
@@ -137,7 +142,9 @@ class TemplateItem(BaseModel):
     # Percentage of the weighted overall; 0 leaves a scored item out of it.
     weight: int = Field(default=0, ge=0, le=100)
     # Levels at which the evaluator must describe a specific instance.
-    require_example_for: List[int] = Field(default_factory=list, max_length=11)
+    require_example_for: List[Annotated[int, Field(ge=0, le=10)]] = Field(
+        default_factory=list, max_length=11
+    )
     checklist_options: List[str] = Field(default_factory=list, max_length=30)
     comment: Literal["none", "optional", "required"] = "optional"
     # Whether the member answers this item in their self-evaluation.
