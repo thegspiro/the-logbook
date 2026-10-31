@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
-from app.core.utils import generate_uuid, list_within_detail_limit
+from app.core.utils import generate_uuid, list_within_detail_limit, utc_isoformat
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
@@ -1077,10 +1077,13 @@ class SchedulingService:
                     Shift.id.in_(list(shift_ids))
                 )
             )
+            # A column-tuple select skips the ORM load event that tags naive
+            # MySQL datetimes as UTC, so the offset is added here: without it
+            # the browser reads the start time as its own local time.
             for row in shift_result.all():
                 shift_info_map[str(row[0])] = {
                     "date": row[1],
-                    "start_time": str(row[2]) if row[2] else None,
+                    "start_time": utc_isoformat(row[2]),
                 }
 
         result = []
