@@ -24065,7 +24065,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -24102,6 +24102,67 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-31 — Feature 05 (Finance & approvals, pass 14) — watchdog pickup, 0 fixed, 0 new findings; fourth consecutive near-zero-delta pass
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. Step 0
+(`list_pull_requests`, state=open) found 0 open PRs whose head branch
+starts with `claude/security-review-`: the five open PRs at the time
+(#3880–#3884) are all unrelated feature work. PR #3879 (Feature 04,
+Storefront & payments, pass 14) had already merged (`b7f72c67a`), and row
+04 was already `✅` from that PR's own commit. Row 05 was the next `⬜`,
+confirmed fresh against the rotation table.
+
+See `docs/security-review/FIN-05-finance-approvals.md`'s **Pass 14**
+section for the full review: baseline `dd47d8734` (PR #3807's merge, pass 13) to current `main`. Only 6 non-merge commits touch this feature's
+declared scope, all read in full against their own diffs: 4 are shared
+layout-utility refactors (`split-row`/`page-header`/`StatGrid`/`KpiTile`)
+across 15 frontend files, confirmed cosmetic (same JSX structure, same
+permission-gated conditionals, no new API call); 1 is an unrelated
+prospective-members/permissions commit whose only touch in scope is a
+4-line test-mock addition to `restrictedFunds.test.tsx`; 1
+(`530edfc18`) caps the inactive-budget-category refusal message through
+the shared `list_within_detail_limit()` helper (a length-DoS/readability
+fix, not an access-control or money change). `finance_service.py` itself
+has only this 11/3-line change; every other file in the feature's full
+established scope (`finance.py`, `finance_budget_request_service.py`,
+`finance_budget_access.py`, `finance_report_service.py`,
+`finance_reimbursement.py`, `finance_approver_matching.py`,
+`finance_budget_ownership.py`, `finance_budget_request_notifications.py`,
+`utils/finance_settings.py`, `schemas/finance.py`, `models/finance.py`,
+`public/finance_approvals.py`) is byte-identical to pass 13's reviewed
+state. A fresh, independent AST route walk re-confirms **136** routes in
+`finance.py` (unchanged from pass 12/13) plus **3** in
+`public/finance_approvals.py`, every one carrying an explicit auth
+dependency (parsed from each handler's parameter defaults, not a
+text/substring scan) — zero without one. Re-read by direct code access
+(not taken on a prior pass's word): `_ensure_current_step`'s step-ordering
+guard, `approve_step`'s org-scoped lock + cross-approver SoD check,
+`approve_by_token`'s requester-email self-approval block, `waive_dues`'s
+row-lock + repeat-waiver refusal, `_mutate_budget`'s fail-closed overspend
+ceiling, `_validate_finance_fks`'s FK validation on every create/update
+path, the `SafeCsvWriter` export and the one escaped `.like()` call, and
+FIN8-05-1's decider-SoD guard in `decide_request` — all hold unchanged.
+FIN-30 (LOW, `list_dues_payments` has no pagination) remains the one
+standing item, still an accepted owner decision already mirrored in
+`docs/KNOWN_LIMITATIONS.md`, re-verified against unchanged code.
+
+Completion gate green on this delta: flake8/black/isort on `app/ tests/
+alembic/` (7.4.1/26.10.1/9.0.2, CI's pins, confirmed by `--version`);
+`validate_migrations.py --strict` — 680 revisions, single head
+`3fbd0fe30e5b`; `check_route_permissions.py --strict` — 281 routes, 0
+errors/warnings; scoped backend tests (`-k "finance or budget_request or
+approval_chain or dues or reimburs or quickbooks or waive"`, no `-m`
+exclusion — this feature's money-correctness tests are `db_session`-backed
+`integration` tests and the sandbox has a live MySQL, matching every prior
+pass's convention) — 1,562 passed, 2 environment-only skips (`pywebpush`,
+a missing time-zone-table fixture); standing repo-wide guard suites
+(org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping,
+`create_all`-table tolerance, baseline member grants, account-status
+gates, encryption-registry coverage, email-fingerprint,
+rotate-email-fingerprints) — 191 passed, 1 environment-only skip;
+frontend typecheck/lint clean.
 
 ### 2026-10-31 — Feature 04 (Storefront & payments, pass 14) — watchdog pickup, 1 fixed (LOW), 0 open findings remain (amended same day)
 
