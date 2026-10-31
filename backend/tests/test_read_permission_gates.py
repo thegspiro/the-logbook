@@ -25,9 +25,11 @@ from app.services.finance_service import FinanceService
 class TestReportPiiGate:
     def test_pii_map_covers_roster_and_pipeline(self):
         assert reports_ep.PII_REPORT_PERMISSIONS["member_roster"] == "members.view"
+        # view_all, since view alone no longer sees every applicant
+        # (app/services/prospect_access.py).
         assert (
             reports_ep.PII_REPORT_PERMISSIONS["pipeline_overview"]
-            == "prospective_members.view"
+            == "prospective_members.view_all"
         )
 
     def test_blocks_roster_without_members_view(self):

@@ -552,6 +552,26 @@ class TestPublicSignIn:
         assert body["location_name"] == "Central Park Pavilion"
         assert body["is_open"] is True
 
+    async def test_info_reports_closed_once_attendance_is_finalized(
+        self, client, db_session, org_id
+    ):
+        """PUB-13: the info the sign-in page reads must agree with what the
+        write endpoint enforces (GuestCheckInService.guest_sign_in_state),
+        not merely with the check-in window — otherwise the page shows the
+        form for an event whose attendance is already closed, and the guest
+        is refused only after filling it in."""
+        _event, token = await _issued(
+            db_session, org_id, attendance_finalized_at=datetime.now(timezone.utc)
+        )
+
+        async with client as c:
+            r = await c.get(f"/public/v1/event-guest/{token}/guest")
+
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["is_open"] is False
+        assert body["closed_reason"] == "Attendance for this event has been closed."
+
     async def test_sign_in_records_the_guest_as_event_qr(
         self, client, db_session, org_id
     ):

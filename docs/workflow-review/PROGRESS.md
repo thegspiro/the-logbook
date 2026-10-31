@@ -159,9 +159,12 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
-- **A fresh install** — tap targets under 44px on the onboarding Modules,
-  Ranks & Positions and Apparatus steps at 390px wide (W01-13); setup cannot
-  be replayed on an installed department, so W79 could not drive it.
+- **Dashboard, or any activity touching a module left off at setup** — on a
+  fresh install with every module skipped, the administrator's first dashboard
+  asks `GET /integrations/weather/active-alerts` and
+  `GET /training/module-config/config`, and both are refused `403 LB-ORG-002`
+  ("module is not enabled"). The dashboard should not ask a disabled module.
+  Seen driving the W01 follow-up (2026-10-31).
 - **Any run touching the app shell** — nothing keeps `TopNavigation` and
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
@@ -221,6 +224,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### W01 follow-up — The open onboarding findings — 2026-10-31
+
+Driven as: a fresh install, three times, at 390×844 (the review database only,
+reset with `start.sh --reset` and seeded again afterwards). Fixed: W01-12 (owner
+decision: refuse a backup email equal to the administrator's), W01-13 (measured
+again first; every control under 44px on Modules, Ranks & Positions and
+Apparatus, and the four more the drive found on the administrator, IT Contacts
+and setup-complete steps and Reset Progress, now take `touch-target-phone`),
+W01-14 (the Create button, and Reset Progress, are named by their visible
+words), W01-15 (a failed Continue on Organization Setup focuses the first invalid
+field) and W01-16 (Stations has Back). Re-driven: every onboarding step measures
+clean at 390px, and `seed.mjs` onboards with the renamed button. New lead: the
+first dashboard asks two disabled modules and is refused. Gate: typecheck and
+lint clean, and the onboarding tests and the tests related to the changed files
+pass.
 
 ### W08-6 follow-up — Requests held while a password change is required — 2026-10-25
 

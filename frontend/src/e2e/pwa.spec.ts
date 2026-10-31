@@ -89,3 +89,25 @@ test('an embedded form does not install the worker on the embedding site', async
   }));
   expect(state).toEqual({ registered: false, caches: [] });
 });
+
+test('a page chunk that stays unreachable reloads once, then shows the error', async ({ browser }) => {
+  // Without a worker, as on a first visit or an embedded form. Aborting the
+  // chunk stands in for any way it can stay out of reach: a deploy that
+  // removed it, or station Wi-Fi's captive portal answering for it.
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  await context.route(/\/assets\/PublicFormPage-[^/]+\.js$/, (route) => route.abort());
+  const page = await context.newPage();
+
+  let loads = 0;
+  page.on('load', () => {
+    loads += 1;
+  });
+  await page.goto('/f/abcdef123456');
+
+  // One automatic reload is the recovery; a second is the loop.
+  await expect(page.getByText('New Version Available')).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(2_000);
+  expect(loads).toBe(2);
+
+  await context.close();
+});

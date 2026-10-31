@@ -146,6 +146,7 @@ const PATH_LABELS: Record<string, string> = {
   categories: 'Categories',
   'print-labels': 'Print Labels',
   'sign-offs': 'Sign-offs',
+  'my-applicants': 'My Applicants',
 
   // Finance module
   finance: 'Finance',

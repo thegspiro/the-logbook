@@ -2025,6 +2025,12 @@ async def lifespan(app: FastAPI):
     await ws_manager.stop_listener()
     await geoip_invalidation_listener.stop()
     await link_domain_listener.stop()
+    # Pushes queued by requests that have already answered. Bounded well inside
+    # Docker's default 10s stop grace period; whatever is left is dropped, which
+    # push has always been allowed to do — the notification itself is stored.
+    from app.services.push_dispatch import wait_for_queued_pushes
+
+    await wait_for_queued_pushes(timeout=5)
     await database_manager.disconnect()
     await cache_manager.disconnect()
     logger.info("Shutdown complete")

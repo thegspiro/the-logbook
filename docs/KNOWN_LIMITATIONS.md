@@ -22,6 +22,29 @@ were chosen deliberately and are open for the owner to confirm or change:
   used a different address than the one on their profile is left **No member
   match** for the treasurer.
 
+## Members — No Supervisor or "Reports To" Relationship (2026-10-31)
+
+Nothing in the data model records who supervises whom. A member has a rank, a
+station is a free-text field, and positions say what a member does, but no
+column or table links a member to the officer they report to. So "my crew" and
+"the members I supervise" cannot be answered anywhere in the application.
+
+Member performance evaluations (`app/models/evaluation.py`) are the first
+feature to feel this. Until a relationship exists, anyone holding the
+evaluator permission may be assigned to evaluate any member (owner decision
+2026-10-31): the evaluator is named per evaluation, by whoever drafts it or in
+bulk by an evaluation manager, rather than derived from a supervisor. The one
+structural rule — an evaluator is never the member being evaluated — is
+enforced by the evaluation service, not the database (see the `Evaluation`
+model's docstring for why).
+
+**Open decision:** add a supervisor relationship to members (likely a nullable
+`reports_to_id` on `users`, or a dated assignment table so the history of who
+supervised a member is kept), and then decide which features read it —
+evaluator defaults, line-officer visibility of their own crew's evaluations,
+and approvals. Not started; it is a change to the member model and its editing
+screens, separate from the evaluations work.
+
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
 The member standing rework (class and status as two controls, tiers as

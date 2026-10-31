@@ -56,6 +56,7 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useAuthStore } from '../../../stores/authStore';
 export const ProspectiveMembersPage: React.FC = () => {
   const { confirm } = useConfirm();
   const navigate = useNavigate();
@@ -167,6 +168,10 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [conversionApplicant, setConversionApplicant] = useState<Applicant | null>(null);
   const [selectedInactive, setSelectedInactive] = useState<Set<string>>(new Set());
+  // Bulk actions, badges and the purge reach every applicant they name, so
+  // the backend asks for prospective_members.view_all; without it a
+  // coordinator works their assigned applicants one at a time.
+  const seesAll = useAuthStore((st) => st.checkPermission)('prospective_members.view_all');
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
   const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
@@ -856,7 +861,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             ) : (
               <>
                 {/* Bulk Actions Bar */}
-                {selectedApplicants.size > 0 && (
+                {selectedApplicants.size > 0 && seesAll && (
                   <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
                     <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                       <input
@@ -994,7 +999,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         {activeTab === 'inactive' && (
           <div>
             {/* Inactive Bulk Actions */}
-            {selectedInactive.size > 0 && (
+            {selectedInactive.size > 0 && seesAll && (
               <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
                 <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
                 <div className="ml-auto flex items-center gap-2">

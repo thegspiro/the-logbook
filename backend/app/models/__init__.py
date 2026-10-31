@@ -88,6 +88,24 @@ from app.models.email_template import (
     EmailTemplateType,
 )
 from app.models.error_log import ErrorLog
+from app.models.evaluation import (
+    Evaluation,
+    EvaluationAmendment,
+    EvaluationDeletionRecord,
+    EvaluationPart,
+    EvaluationPartKind,
+    EvaluationPartStatus,
+    EvaluationPeriod,
+    EvaluationSignature,
+    EvaluationStatus,
+    EvaluationStep,
+    EvaluationStepStatus,
+    EvaluationStepType,
+    EvaluationTemplate,
+    EvaluationTemplateKind,
+    EvaluationTemplateVersion,
+    SignatureDisposition,
+)
 from app.models.event import (
     AttendancePetitionStatus,
     CheckInWindowType,
@@ -627,6 +645,23 @@ __all__ = [
     "VotingToken",
     "Vote",
     "ElectionStatus",
+    # Member performance evaluation models
+    "Evaluation",
+    "EvaluationAmendment",
+    "EvaluationDeletionRecord",
+    "EvaluationPart",
+    "EvaluationPartKind",
+    "EvaluationPartStatus",
+    "EvaluationPeriod",
+    "EvaluationSignature",
+    "EvaluationStatus",
+    "EvaluationStep",
+    "EvaluationStepStatus",
+    "EvaluationStepType",
+    "EvaluationTemplate",
+    "EvaluationTemplateKind",
+    "EvaluationTemplateVersion",
+    "SignatureDisposition",
     # Event models
     "Event",
     "EventRSVP",

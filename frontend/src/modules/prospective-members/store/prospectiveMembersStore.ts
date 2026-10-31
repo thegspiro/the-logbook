@@ -25,6 +25,7 @@ import type {
 import { pipelineService, applicantService, interviewService } from '../services/api';
 import { handleStoreError } from '../../../utils/storeHelpers';
 import { KANBAN_PAGE_SIZE } from '../constants';
+import { useAuthStore } from '../../../stores/authStore';
 
 export type PipelineTab = 'active' | 'inactive' | 'withdrawn' | 'rejected' | 'converted';
 
@@ -351,6 +352,13 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   },
 
   fetchPipelineStats: async (id: string) => {
+    // Pipeline-wide counts take prospective_members.view_all; without it a
+    // member sees only the applicants assigned to them, so there is nothing
+    // to count and asking would only answer 403.
+    if (!useAuthStore.getState().checkPermission('prospective_members.view_all')) {
+      set({ pipelineStats: null, isLoadingStats: false });
+      return;
+    }
     const { search, event_id } = get().filters;
     const token = beginFetch('stats');
     set({ isLoadingStats: true });

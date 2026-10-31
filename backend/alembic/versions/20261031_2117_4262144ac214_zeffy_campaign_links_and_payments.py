@@ -1,7 +1,7 @@
 """Zeffy campaign links and payments
 
 Revision ID: 4262144ac214
-Revises: f90b1124e6f4
+Revises: 3fbd0fe30e5b
 Create Date: 2026-10-31 21:17:00.000000
 
 Adds the two tables the Zeffy integration reads into:
@@ -35,7 +35,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "4262144ac214"
-down_revision: Union[str, None] = "f90b1124e6f4"
+down_revision: Union[str, None] = "3fbd0fe30e5b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

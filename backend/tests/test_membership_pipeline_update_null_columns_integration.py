@@ -89,7 +89,8 @@ async def bench(db_session: AsyncSession) -> _Bench:
         text(
             "INSERT INTO positions (id, organization_id, name, slug, permissions) "
             "VALUES (:id, :org, 'Membership Officer', 'membership_officer', "
-            '\'["prospective_members.manage", "prospective_members.view"]\')'
+            '\'["prospective_members.manage", "prospective_members.view", '
+            '"prospective_members.view_all"]\')'
         ),
         {"id": position_id, "org": org_id},
     )

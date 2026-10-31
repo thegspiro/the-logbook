@@ -271,6 +271,24 @@ describe('ErrorBoundary', () => {
     await screen.findByText('Copied to clipboard!');
   });
 
+  it.each([
+    ['Chrome', 'Failed to fetch dynamically imported module: https://example.test/assets/Page.js'],
+    ['Safari', 'Importing a module script failed.'],
+    ['Firefox', 'error loading dynamically imported module: https://example.test/assets/Page.js'],
+  ])('offers the new version for a %s chunk-load failure', (_browser, message) => {
+    function ThrowsChunkError(): ReactElement {
+      throw new TypeError(message);
+    }
+
+    render(
+      <ErrorBoundary>
+        <ThrowsChunkError />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByText('New Version Available')).toBeInTheDocument();
+  });
+
   it('Go to Dashboard button navigates to /dashboard', () => {
     // Set up a writable location mock
     const locationMock = { ...window.location, href: '' };
