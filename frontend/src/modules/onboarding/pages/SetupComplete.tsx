@@ -165,7 +165,7 @@ const SetupComplete: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void navigate(item.path)}
-                        className="text-theme-text-primary hover:text-theme-accent-red text-left text-sm font-medium underline-offset-2 hover:underline"
+                        className="text-theme-text-primary hover:text-theme-accent-red touch-target-phone touch:justify-start text-left text-sm font-medium underline-offset-2 hover:underline"
                       >
                         {item.title}
                       </button>

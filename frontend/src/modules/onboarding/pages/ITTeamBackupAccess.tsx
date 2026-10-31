@@ -140,6 +140,10 @@ const ITTeamBackupAccess: React.FC = () => {
       newErrors.backupEmail = 'Backup recovery email is required';
     } else if (!isValidEmail(backupEmail)) {
       newErrors.backupEmail = 'Enter a valid email address';
+    } else if (systemOwnerEmail.trim() && backupEmail.trim().toLowerCase() === systemOwnerEmail.trim().toLowerCase()) {
+      // A recovery address is for when the administrator's own mailbox is
+      // lost; the same mailbox recovers nothing (workflow review W01-12).
+      newErrors.backupEmail = 'Use a different email than the administrator account';
     }
 
     // Validate backup phone
@@ -302,7 +306,7 @@ const ITTeamBackupAccess: React.FC = () => {
                 <button
                   type="button"
                   onClick={addITMember}
-                  className="split-row-aside flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-800 sm:self-auto"
+                  className="split-row-aside touch-target-phone flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-800 sm:self-auto"
                 >
                   <Plus aria-hidden="true" className="h-4 w-4" />
                   <span>Add Member</span>
