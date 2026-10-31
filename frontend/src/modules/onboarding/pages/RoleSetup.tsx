@@ -839,7 +839,7 @@ const PositionSetup: React.FC = () => {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setShowCustomModal(true)}
-                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors"
+                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch-target-phone flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Create Custom Position
@@ -849,7 +849,7 @@ const PositionSetup: React.FC = () => {
                   void handleContinue();
                 }}
                 disabled={isSaving || selectedCount < 2}
-                className={`rounded-lg px-6 py-2 font-semibold transition-all ${
+                className={`touch-target-phone rounded-lg px-6 py-2 font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving
                     ? 'bg-linear-to-r from-red-700 to-orange-700 text-white hover:from-red-800 hover:to-orange-800'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
@@ -1002,7 +1002,7 @@ const PositionSetup: React.FC = () => {
                                   e.stopPropagation();
                                   togglePosition(position);
                                 }}
-                                className="hover:bg-theme-accent-orange-muted text-theme-text-muted hover:text-theme-accent-red rounded-sm p-1 transition-colors"
+                                className="hover:bg-theme-accent-orange-muted text-theme-text-muted hover:text-theme-accent-red touch-target-phone rounded-sm p-1 transition-colors"
                                 aria-label={`Remove ${position.name} position`}
                               >
                                 <X className="h-4 w-4" aria-hidden="true" />
@@ -1036,7 +1036,7 @@ const PositionSetup: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => setShowAllModules((shown) => !shown)}
-                                  className="text-theme-text-primary underline underline-offset-2"
+                                  className="text-theme-text-primary touch-target-phone underline underline-offset-2"
                                 >
                                   {showAllModules ? 'Show enabled modules only' : 'Show all modules'}
                                 </button>
@@ -1088,7 +1088,7 @@ const PositionSetup: React.FC = () => {
                                             viewNote ??
                                             `${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`
                                           }
-                                          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                          className={`touch-target-phone flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
                                             perms.view || viaView
                                               ? 'bg-theme-accent-green-muted text-theme-accent-green'
                                               : 'bg-theme-surface text-theme-text-muted'
@@ -1113,7 +1113,7 @@ const PositionSetup: React.FC = () => {
                                             manageNote ??
                                             `${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`
                                           }
-                                          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                          className={`touch-target-phone flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
                                             perms.manage || viaManage
                                               ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
                                               : 'bg-theme-surface text-theme-text-muted'

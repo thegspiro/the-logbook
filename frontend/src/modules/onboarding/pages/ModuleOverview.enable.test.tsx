@@ -109,3 +109,26 @@ describe('ModuleOverview enabling', () => {
     expect(useOnboardingStore.getState().selectedModules).not.toContain('storefront');
   });
 });
+
+// W01-13: Later, Skip and the optional modules' Enable were 32–36px tall at
+// phone width. jsdom cannot measure, so this pins the utility that sizes them;
+// the workflow review measures the rendered page.
+describe('ModuleOverview touch targets', () => {
+  beforeEach(() => {
+    useOnboardingStore.setState({ departmentName: 'Falls Church Fire', moduleStatuses: {}, selectedModules: [] });
+  });
+
+  it('gives every card action and Continue the phone touch minimum', () => {
+    renderPage();
+
+    const actions = [
+      ...screen.getAllByRole('button', { name: /^set up .* later$/i }),
+      ...screen.getAllByRole('button', { name: /^skip /i }),
+      ...screen.getAllByRole('button', { name: /^enable /i }),
+      screen.getByRole('button', { name: /^continue to/i }),
+    ];
+    expect(actions.length).toBeGreaterThan(10);
+    // The btn-* utilities carry the same touch rule internally.
+    for (const button of actions) expect(button.className).toMatch(/\btouch-target-phone\b|\bbtn-(primary|info)\b/);
+  });
+});

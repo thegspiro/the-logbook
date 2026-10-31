@@ -452,6 +452,10 @@ describe('sanitizePath', () => {
     // An event's own guest QR code token: the page and the public API.
     ['/event-guest/guest-secret', '/event-guest/[REDACTED]'],
     ['/api/public/v1/event-guest/guest-secret/guest-check-in', '/api/public/v1/event-guest/[REDACTED]/guest-check-in'],
+    // A follow-up form's personal link token (PUB-14): the page is singular
+    // /application-form/..., the API it calls is plural /follow-up-forms/....
+    ['/application-form/form-secret', '/application-form/[REDACTED]'],
+    ['/api/public/v1/follow-up-forms/form-secret/submit', '/api/public/v1/follow-up-forms/[REDACTED]/submit'],
   ])('redacts tokenized path %s', (path, expected) => {
     expect(sanitizePath(path)).toBe(expected);
   });
