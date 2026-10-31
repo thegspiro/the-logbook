@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**333 tables · 5468 columns · 1124 foreign keys**
+**333 tables · 5469 columns · 1124 foreign keys**
 
 ---
 
@@ -494,7 +494,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_election_packages`](#prospect_election_packages) | `ProspectElectionPackage` | 11 | Election package for a prospective member. |
 | [`prospect_event_links`](#prospect_event_links) | `ProspectEventLink` | 6 | Links a prospective member to an upcoming event. |
 | [`prospect_form_requests`](#prospect_form_requests) | `ProspectFormRequest` | 21 | A follow-up form sent to one applicant from one Follow-up Form stage. |
-| [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
+| [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 13 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
 | [`prospective_members`](#prospective_members) | `ProspectiveMember` | 38 | Prospective member record, kept separate from the users table. |
 
@@ -2609,7 +2609,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2672,7 +2672,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -7693,6 +7693,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `step_id` | VARCHAR(36) | yes | FK |  | → `membership_pipeline_steps.id` ON DELETE SET NULL |
 | `interviewer_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `interviewer_role` | VARCHAR(100) | yes |  |  |  |
+| `interviewer_positions` | JSON | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `recommendation` | ENUM(`recommend`, `recommend_with_reservations`, `do_not_recommend`, `undecided`) | yes |  |  |  |
 | `recommendation_notes` | TEXT | yes |  |  |  |
