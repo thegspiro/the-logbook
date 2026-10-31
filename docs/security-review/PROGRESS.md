@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR #3879 (Feature 04, Storefront & payments, pass 14) merged
+(`b7f72c67a`) — confirmed via `list_pull_requests`/`pull_request_read`. No
+security-review PR is open — confirmed via `list_pull_requests`
+(`state=open`), 0 results whose head branch starts with
+`claude/security-review-`. Rotation row 04 stays `✅`. This watchdog
+iteration picked up Feature 05 (Finance & approvals, pass 14), the next
+`⬜` row, confirmed on a freshly fast-forwarded `main`; row 05 is marked
+`🔄` below while that review is in progress.
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3879, Feature 04, Storefront & payments, pass 14, merged), preserved for history</summary>
+
 **PR [#3879](https://github.com/thegspiro/the-logbook/pull/3879)**
 (branch `claude/security-review-storefront-payments`) — Feature 04
 (Storefront & payments), pass 14, a watchdog pickup (the dedicated
@@ -88,8 +100,9 @@ amendment.
 **1 fixed (LOW) total this pass; 0 findings remain OPEN or FLAGGED for
 this feature.**
 
-Rotation row 04 → ✅ (pending this PR's merge). Re-check `gh api
-repos/.../pulls?state=open` fresh rather than trusting this note.
+Rotation row 04 → ✅ (merged). Next is Feature 05 (Finance & approvals).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 14, PR #3878, merged), preserved for history</summary>
@@ -24065,7 +24078,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -24102,6 +24115,60 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-31 — Feature 05 (Finance & approvals, pass 14) — watchdog pickup, true near-zero delta (an unbounded-refusal cap fix, pure frontend layout refactors), 0 fixed, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` remains unreachable). No open
+security-review PR — confirmed via `list_pull_requests` (`state=open`), 0
+results whose head branch starts with `claude/security-review-`, after
+Feature 04 (Storefront & payments)'s own PR (#3879) merged (`b7f72c67a`).
+Row 05 confirmed the next `⬜` row by reading the rotation table on a
+freshly fast-forwarded `main`.
+
+Real delta since pass 13's own merge (`dd47d8734`, PR #3807) across this
+feature's full established scope was true near-zero: only
+`finance_service.py` (+10/-3) and 15 frontend files (+63/-85) changed;
+`endpoints/finance.py`, `finance_budget_request_service.py`,
+`finance_budget_access.py`, `finance_report_service.py`,
+`finance_reimbursement.py`, `schemas/finance.py`, `models/finance.py` and
+`public/finance_approvals.py` are all byte-identical to pass 13, confirmed
+individually rather than trusting the combined diff stat. The one backend
+change caps the inactive-budget-category `ValueError` with
+`list_within_detail_limit` (part of a same-day cross-service sweep,
+`530edfc18`) so a long list of blocked category names can no longer push
+the message past `MAX_ERROR_DETAIL_LENGTH` and get discarded by
+`safe_error_detail` into a generic 500-reading "An unexpected error
+occurred" — a correctness/availability fix, not a new exposure, and the
+category names it lists were already visible to the caller through the
+org-scoped `CategoryTree` it reads from. The frontend changes are pure
+layout refactors (shared `KpiTile`/`StatGrid`/`split-row` components
+replacing hand-rolled markup across 9 Finance screens) from repo-wide
+sweeps reviewed under their own commits — no data, auth or tenancy change.
+One migration in the window matched a finance keyword
+(`d8f1a4c27b93`, seeded committee positions) but only copies the
+pre-existing `member` baseline permission list — which already included
+`finance.request` — onto four new committee positions; PERM-02's
+territory, not a change this feature owns. Route count re-enumerated by
+AST: 136 (`finance.py`) and 3 (`public/finance_approvals.py`), both
+unchanged from pass 13, every route still carrying an explicit auth
+dependency. FIN8-05-1 (the `decide_request` separation-of-duties guard)
+and the `waive_dues` row-lock/repeat-waiver guard re-verified present and
+unchanged by direct read. FIN-30 (LOW, `list_dues_payments` unpaginated)
+remains the owner's 2026-10-05 "leave as is" decision, re-verified
+unchanged in `KNOWN_LIMITATIONS.md`. Full writeup:
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 14** section.
+
+Completion gate: flake8/black/isort (`app/ tests/ alembic/`, CI's pins)
+clean; `validate_migrations.py --strict` passed (680 revisions, single
+head `3fbd0fe30e5b`); `check_route_permissions.py --strict` 281 routes, 0
+errors/warnings; scoped backend pytest (`-k "finance or budget_request or
+approval_chain or dues or reimburs or quickbooks or waive"`, no `-m`
+exclusion) 1,562 passed, 2 skipped (both environment-only: `pywebpush`,
+and a time-zone-table fixture); frontend typecheck 0 errors; frontend
+lint 0 errors/0 warnings.
+
+Next: Feature 06 (Elections & ballots), once this PR merges.
 
 ### 2026-10-31 — Feature 04 (Storefront & payments, pass 14) — watchdog pickup, 1 fixed (LOW), 0 open findings remain (amended same day)
 

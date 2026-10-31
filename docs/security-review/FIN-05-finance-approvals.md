@@ -1,6 +1,119 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 14 (2026-10-31) — watchdog pickup: true near-zero delta (an unbounded-refusal cap fix to one `ValueError`, pure frontend layout refactors), 0 fixed, 0 new findings
+
+**Scope.** Pass 13 merged as `dd47d8734` (PR #3807). `git diff --stat
+dd47d8734..HEAD` over this feature's full established scope
+(`endpoints/finance.py`, `finance_service.py`,
+`finance_budget_request_service.py`, `finance_budget_access.py`,
+`finance_report_service.py`, `finance_reimbursement.py`,
+`schemas/finance.py`, `models/finance.py`, `public/finance_approvals.py`,
+`frontend/src/modules/finance/`) touches exactly **2** files:
+`finance_service.py` (+10/-3) and 15 frontend files (+63/-85, mostly
+layout). `endpoints/finance.py`, `finance_budget_request_service.py`,
+`finance_budget_access.py`, `finance_report_service.py`,
+`finance_reimbursement.py`, `schemas/finance.py`, `models/finance.py` and
+`public/finance_approvals.py` are all confirmed byte-identical to pass 13
+(`git diff --stat` empty for each, checked individually rather than
+trusting the combined stat). No migration in this window touches a
+finance table — the one migration whose text matches a finance keyword
+(`d8f1a4c27b93`, "positions.kind, and the four seeded committee
+positions") only copies the pre-existing baseline `member` permission
+list — which already included `finance.request` before this migration,
+confirmed by its own comment and by `core/permissions.py:1442` — onto four
+new committee positions; it is PERM-02's territory (seeded baseline
+grants), not a change to anything Finance & approvals owns, and grants
+nothing new.
+
+**The one backend change, read in full:** `finance_service.py`'s inactive-
+budget-category refusal (`_assert_category_takes_new_lines`'s `ValueError`)
+switched from joining every blocked category's name into the message by
+hand to building it with `list_within_detail_limit` (`core/utils.py:75`),
+part of a same-day sweep that capped three such refusals across unrelated
+services (`530edfc18`, "Cap three more refusals that list data through a
+variable"). This is a correctness/availability fix, not a new exposure: an
+org with enough inactive categories named in one request used to produce a
+message longer than `MAX_ERROR_DETAIL_LENGTH`, which `safe_error_detail`
+then discards entirely in favor of the generic "An unexpected error
+occurred" — turning a legible 400 into an opaque one for the admin who hit
+it. `list_within_detail_limit` keeps the message under the cap by
+truncating to "and N more" rather than dropping it, and never exceeds the
+cap itself, so it cannot reopen that same discard path. The category names
+it lists come from `BudgetCategory.name` rows already resolved through the
+org-scoped `CategoryTree` (unchanged ten lines above this edit), so nothing
+newly unauthorized is echoed back — the admin already has permission to see
+every category name in their own org's budget tree.
+
+**The frontend changes, read in full:** 15 files replace a locally-defined
+`KpiCard`/ad-hoc stat grid with the shared `KpiTile`/`StatGrid` components
+(`FinanceDashboardPage.tsx`), and switch ~10 hand-rolled
+`flex flex-col sm:flex-row sm:justify-between` headers/rows to the shared
+`split-row`/`page-header` utilities across the Budgets, Dues, Check
+Requests, Expense Reports, Purchase Requests, Fiscal Year Settings, QuickBooks
+Export Settings, Approval Chains Settings and Manual Approval Panel screens
+— all part of the repo-wide layout sweeps (`ab879fc7d`, `cf8fdae30`,
+`06dec4a13`, `18e105b48`) reviewed under their own commits. None changes a
+data fetch, a permission check, or what is rendered beyond CSS/markup
+shape; no new axios instance, no new endpoint call, no new user input.
+`restrictedFunds.test.tsx`'s own +4/-0 is a mock addition
+(`approvalChainService: { routePreview: ... }`) needed only because an
+unrelated feature's commit (`92ec254c3`, prospective-members case
+managers) now trips the request form's debounced route-preview call under
+load in that one test file — not a finance behavior change.
+
+**Route count.** `finance.py` re-enumerated fresh by AST (not taken from
+the diff): **136 routes**, unchanged from pass 11/12/13. Every one still
+carries an explicit auth dependency in its signature (`Depends(...)`
+containing `get_current_user` or a permission check), confirmed
+programmatically with no false negatives. `public/finance_approvals.py`
+re-enumerated the same way: **3 routes**
+(`get_approval_detail`/`approve_via_token`/`deny_via_token`), unchanged,
+file byte-identical to pass 13 so their token-scoped fail-closed behavior
+(verified in earlier passes) carries forward unchanged.
+
+**Standing items re-verified by direct read, both unchanged:**
+
+- **FIN8-05-1 — stays ✅ FIXED.** `finance_budget_request_service.py:679`
+  (`decide_request`) still carries the `BudgetRequestForbiddenError` guard
+  comparing `request.submitted_by`/`_acts_as_owner` against `decided_by`,
+  placed after the stage/status checks and before any mutation, matching
+  `review_request`'s shape. Also re-confirmed: `waive_dues`
+  (`finance_service.py:6938`) still takes the row lock
+  (`.with_for_update()`) before its `assert_different_person` (FIN-4)
+  check, and still refuses a second waiver of an already-`WAIVED` record
+  rather than silently overwriting who waived it — both shipped in pass
+  13's window and unchanged since.
+- **FIN-30 (LOW) — still an accepted owner decision, not a live gap.**
+  `list_dues_payments` (`finance_service.py:6918`, unchanged body) still
+  takes no `.offset()`/`.limit()`; `docs/KNOWN_LIMITATIONS.md`'s
+  2026-10-05 owner decision to leave it unpaginated still matches the code
+  and needs no update.
+
+**Not security-relevant, confirmed by reading each commit in the window
+touching this scope:** the four layout-sweep commits above and the one
+test-mock commit — none changes auth, tenancy, data exposure or abuse
+resistance for this feature.
+
+**0 fixed this pass** (no finding of this review's own needed fixing —
+the refusal-cap change was already correct when it landed), **0 new
+findings.**
+
+### Completion gate (pass 14)
+
+| Check                                                                                                                                                              | Result                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                    | clean                                                                                                                   |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                           | clean, 2757 files unchanged                                                                                             |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                        | clean                                                                                                                   |
+| `scripts/validate_migrations.py --strict`                                                                                                                          | passed, 680 revisions, single head `3fbd0fe30e5b`                                                                       |
+| `scripts/check_route_permissions.py --strict` (repo root)                                                                                                          | 281 routes, 0 errors, 0 warnings                                                                                        |
+| `pytest tests/ -k "finance or budget_request or approval_chain or dues or reimburs or quickbooks or waive"` (no `-m` exclusion — this sandbox has a live database) | 1,562 passed, 2 skipped (both environment-only: `pywebpush`, and a time-zone-table fixture unavailable in this sandbox) |
+| `frontend: npm run typecheck`                                                                                                                                      | 0 errors                                                                                                                |
+| `frontend: npm run lint`                                                                                                                                           | 0 errors, 0 warnings                                                                                                    |
 
 ---
 
