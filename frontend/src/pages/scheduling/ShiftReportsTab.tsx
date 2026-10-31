@@ -242,8 +242,33 @@ export const ShiftReportsTab: React.FC = () => {
     };
   }, [canManage, linkedShiftId, userId]);
 
+  // Whether the department's reviewer role makes this member a reviewer
+  // without training.manage (2026-10-31). The server decides: it depends on
+  // the chosen role and the member's positions and rank.
+  const [reviewsByRole, setReviewsByRole] = useState(false);
+  // The deep link is honoured once, on arrival, not on every later change.
+  const [arrivalView] = useState(() => searchParams.get('view'));
+  useEffect(() => {
+    if (canManage) return;
+    let cancelled = false;
+    shiftCompletionService
+      .getReviewAccess()
+      .then((access) => {
+        if (cancelled || !access.by_role) return;
+        setReviewsByRole(true);
+        if (arrivalView === 'pending-review' || arrivalView === 'flagged') setViewMode(arrivalView);
+      })
+      .catch(() => {
+        /* no review views; the server refuses them anyway */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, arrivalView]);
+
+  const showDraftsSwitch = filesAsShiftOfficer || draftBadgeCount > 0 || viewMode === 'drafts';
   // Shown the officer's switch only when there is something behind it.
-  const showOfficerSwitch = !canManage && (filesAsShiftOfficer || draftBadgeCount > 0 || viewMode === 'drafts');
+  const showOfficerSwitch = !canManage && (showDraftsSwitch || reviewsByRole);
 
   // Load config for visibility and rating settings
   useEffect(() => {
@@ -1643,27 +1668,31 @@ export const ShiftReportsTab: React.FC = () => {
         <div className="segmented-group inline-flex items-center gap-1">
           {(
             [
-              ['my-reports', 'About me'],
-              ['drafts', 'Drafts'],
+              ['my-reports', 'About me', true],
+              ['drafts', 'Drafts', showDraftsSwitch],
+              ['pending-review', 'Review Queue', reviewsByRole],
+              ['flagged', 'Flagged', reviewsByRole],
             ] as const
-          ).map(([mode, label]) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
-                viewMode === mode
-                  ? 'bg-violet-700 text-white'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-            >
-              {label}
-              {mode === 'drafts' && draftBadgeCount > 0 && viewMode !== 'drafts' && (
-                <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
-                  {draftBadgeCount}
-                </span>
-              )}
-            </button>
-          ))}
+          )
+            .filter(([, , shown]) => shown)
+            .map(([mode, label]) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                  viewMode === mode
+                    ? 'bg-violet-700 text-white'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                {label}
+                {mode === 'drafts' && draftBadgeCount > 0 && viewMode !== 'drafts' && (
+                  <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+                    {draftBadgeCount}
+                  </span>
+                )}
+              </button>
+            ))}
         </div>
       )}
 
