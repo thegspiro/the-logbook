@@ -50,7 +50,12 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
     }
     case StageType.INTERVIEW_REQUIREMENT: {
       const count = 'required_count' in config ? config.required_count : 1;
-      return `Record ${count} required interview${count === 1 ? '' : 's'} before advancing.`;
+      const positions = 'required_interviewer_positions' in config ? (config.required_interviewer_positions ?? []) : [];
+      // The positions themselves, done and missing, are listed in the
+      // Interview Requirement section above, under the department's names.
+      return positions.length > 0
+        ? `Record ${count} required interview${count === 1 ? '' : 's'}, including one from each required position, before advancing.`
+        : `Record ${count} required interview${count === 1 ? '' : 's'} before advancing.`;
     }
     case StageType.MULTI_APPROVAL: {
       const roles = 'required_approvers' in config ? config.required_approvers : [];
