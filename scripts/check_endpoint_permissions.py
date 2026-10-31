@@ -76,6 +76,32 @@ BODY_AUTHORIZERS = {
     "_authorize_budget_view",
 }
 
+# Per-applicant access dependencies (backend/app/api/prospect_access.py). A
+# route gated by one of these admits a member assigned to the applicant as well
+# as a permission holder, so the permissions below are what the docstring has
+# to name and the assignment is stated in prose beside them.
+#
+# require_prospect_access(Level.X, manage_permissions=(...), bypass_permissions=(...))
+#   SEE / FULL read levels enforce prospective_members.view_all; the WORK,
+#   MANAGE and INTERVIEW levels enforce the manage_permissions (by default
+#   members.manage and prospective_members.manage). bypass_permissions add to
+#   either.
+# require_view_all(*also) enforces prospective_members.view_all and ``also``.
+# Two are passed bare rather than called, and resolve to fixed sets.
+PROSPECT_ACCESS_HELPER = "require_prospect_access"
+VIEW_ALL_HELPER = "require_view_all"
+VIEW_ALL = "prospective_members.view_all"
+PROSPECT_READ_LEVELS = {"SEE", "FULL"}
+PROSPECT_DEFAULT_MANAGE = {"members.manage", "prospective_members.manage"}
+BARE_DEPENDENCIES = {
+    "require_pipeline_reader": {
+        "prospective_members.view",
+        "prospective_members.manage",
+        VIEW_ALL,
+    },
+    "require_interview_access": {"prospective_members.manage"},
+}
+
 # Two spellings are in use across the codebase and BOTH must be recognised:
 #
 #   **Requires permission: training.view or training.manage**   (428 uses)
@@ -240,6 +266,32 @@ def module_permission_constants(tree: ast.AST) -> dict[str, set[str]]:
     return found
 
 
+def _literal_permissions(node: ast.AST | None) -> set[str]:
+    if not isinstance(node, (ast.Tuple, ast.List)):
+        return set()
+    return {
+        el.value
+        for el in node.elts
+        if isinstance(el, ast.Constant)
+        and isinstance(el.value, str)
+        and PERM_TOKEN_RE.fullmatch(el.value)
+    }
+
+
+def _prospect_access_permissions(call: ast.Call) -> set[str]:
+    """What ``require_prospect_access(...)`` enforces, per the table above."""
+    level = call.args[0] if call.args else None
+    level_name = level.attr if isinstance(level, ast.Attribute) else None
+    keywords = {kw.arg: kw.value for kw in call.keywords}
+    if level_name in PROSPECT_READ_LEVELS:
+        perms = {VIEW_ALL}
+    elif "manage_permissions" in keywords:
+        perms = _literal_permissions(keywords["manage_permissions"])
+    else:
+        perms = set(PROSPECT_DEFAULT_MANAGE)
+    return perms | _literal_permissions(keywords.get("bypass_permissions"))
+
+
 def _permissions_from_calls(
     nodes,
     authorizers: dict[str, set[str]],
@@ -250,9 +302,22 @@ def _permissions_from_calls(
     perms: set[str] = set()
     for root in nodes:
         for sub in ast.walk(root):
+            if isinstance(sub, ast.Name) and sub.id in BARE_DEPENDENCIES:
+                perms |= BARE_DEPENDENCIES[sub.id]
+                continue
             if not isinstance(sub, ast.Call):
                 continue
             name = _call_name(sub)
+            if name == PROSPECT_ACCESS_HELPER:
+                perms |= _prospect_access_permissions(sub)
+                continue
+            if name == VIEW_ALL_HELPER:
+                perms |= {VIEW_ALL} | {
+                    arg.value
+                    for arg in sub.args
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                }
+                continue
             if name not in PERMISSION_HELPERS | BODY_AUTHORIZERS:
                 continue
             for arg in sub.args:

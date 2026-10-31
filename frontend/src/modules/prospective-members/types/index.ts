@@ -759,6 +759,8 @@ export interface ApplicantListItem {
   withdrawal_reason?: string | undefined;
   /** A follow-up form changed their email or phone, and nobody has reviewed it. */
   contact_change_pending?: boolean | undefined;
+  /** The caller's roles on this applicant; filled only on My Applicants. */
+  my_roles?: AssignmentRole[] | undefined;
   created_at: string;
 }
 
@@ -1289,6 +1291,7 @@ export interface BackendProspectResponse {
 
 /** Backend prospect list item response (ProspectListResponse schema). */
 export interface BackendProspectListResponse {
+  my_roles?: AssignmentRole[] | undefined;
   contact_change_pending?: boolean | undefined;
   target_role_name: string | null;
   deactivated_at: string | null;
@@ -1508,4 +1511,40 @@ export interface InterviewUpdate {
   recommendation_notes?: string | null | undefined;
   interviewer_role?: string | null | undefined;
   interview_date?: string | null | undefined;
+}
+
+// =============================================================================
+// Assignments and per-applicant access
+// =============================================================================
+
+/** What a member assigned to one applicant does for them. */
+export const AssignmentRole = {
+  CASE_MANAGER: 'case_manager',
+  INTERVIEWER: 'interviewer',
+} as const;
+export type AssignmentRole = (typeof AssignmentRole)[keyof typeof AssignmentRole];
+
+/** A member assigned to an applicant (snake_case, as the API sends it). */
+export interface ProspectAssignment {
+  id: string;
+  prospect_id: string;
+  user_id: string;
+  user_name?: string | null | undefined;
+  role: AssignmentRole;
+  assigned_by_name?: string | null | undefined;
+  created_at?: string | null | undefined;
+}
+
+/**
+ * What the caller may do with one applicant, as the backend decided it
+ * (app/services/prospect_access.py). The applicant's page offers exactly these
+ * actions rather than re-deriving them from permissions.
+ */
+export interface ProspectAccess {
+  roles: AssignmentRole[];
+  view_all: boolean;
+  can_work: boolean;
+  can_manage: boolean;
+  can_see_full: boolean;
+  can_log_interview: boolean;
 }

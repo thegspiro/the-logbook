@@ -16,7 +16,7 @@ import { followUpFormService } from '../services/api';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ApplicantStatus, StageType } from '../../../constants/enums';
-import { useAuthStore } from '../../../stores/authStore';
+import { useApplicantAccess } from './ApplicantAccessContext';
 import { FOLLOW_UP_MAX_REMINDERS } from '../constants';
 
 interface FollowUpFormsSectionProps {
@@ -44,7 +44,8 @@ const FollowUpFormsSection: React.FC<FollowUpFormsSectionProps> = ({ applicant, 
   const [requests, setRequests] = useState<FollowUpFormRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const canManage = useAuthStore((s) => s.checkPermission)('prospective_members.manage');
+  // A case manager sends and resends their applicant's forms too.
+  const canManage = useApplicantAccess().can_work;
 
   useEffect(() => {
     if (!applicant.id) return;

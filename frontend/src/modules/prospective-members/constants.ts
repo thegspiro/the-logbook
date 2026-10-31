@@ -13,7 +13,7 @@ import {
   Stethoscope,
   ClipboardPen,
 } from 'lucide-react';
-import type { StageType, ApplicantStatus } from './types';
+import type { StageType, ApplicantStatus, AssignmentRole } from './types';
 
 export const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   form_submission: FileText,
@@ -136,3 +136,9 @@ export const KANBAN_PAGE_SIZE = 200;
  * Mirrors MAX_REMINDERS in backend app/services/follow_up_form_service.py.
  */
 export const FOLLOW_UP_MAX_REMINDERS = 3;
+
+/** Labels for what a member assigned to an applicant does for them. */
+export const ASSIGNMENT_ROLE_LABELS: Record<AssignmentRole, string> = {
+  case_manager: 'Case manager',
+  interviewer: 'Interviewer',
+};

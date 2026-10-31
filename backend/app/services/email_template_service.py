@@ -749,6 +749,19 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             ),
         },
     ],
+    "application_assigned": [
+        {"name": "recipient_name", "description": "Assigned member's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "role_label",
+            "description": 'What they were assigned as ("case manager", "interviewer")',
+        },
+        {"name": "assigned_by_name", "description": "Who made the assignment"},
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant on the member's My Applicants page",
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1485,6 +1498,17 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
         }
     ),
+    "application_assigned": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "role_label": "interviewer",
+            "assigned_by_name": "Sam Reed",
+            "applicant_url": (
+                "https://example.org/prospective-members/my-applicants?applicant=sample"
+            ),
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1743,6 +1767,11 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_follow_up_submitted": {
         "recipient_name": "full",
         "applicant_name": "full",
+    },
+    "application_assigned": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+        "assigned_by_name": "full",
     },
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
@@ -2881,6 +2910,37 @@ View applicant: {{applicant_url}}
 
 DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT = (
     "{{applicant_name}} submitted {{form_name}}"
+)
+
+# Sent to a member assigned to an applicant as case manager or interviewer.
+# The assignment is what lets them see the applicant at all, so this email is
+# how a member with no other pipeline access learns there is something to do.
+# It names the applicant and links to them, and carries nothing from the file.
+DEFAULT_APPLICATION_ASSIGNED_HTML = build_shell(
+    "You Have Been Assigned an Applicant",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{assigned_by_name}} assigned you as <strong>{{role_label}}</strong>
+        for {{applicant_name}}, who is applying for membership.</p>
+        <p>You can see their application from My Applicants in the Logbook.</p>
+""" + action("{{applicant_url}}", "Open My Applicants"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_ASSIGNED_TEXT = """You Have Been Assigned an Applicant
+
+Hello {{recipient_name}},
+
+{{assigned_by_name}} assigned you as {{role_label}} for {{applicant_name}}, who
+is applying for membership. You can see their application from My Applicants
+in the Logbook.
+
+Open My Applicants: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_ASSIGNED_SUBJECT = (
+    "You are now {{role_label}} for {{applicant_name}}"
 )
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
@@ -5023,6 +5083,17 @@ class EmailTemplateService:
                 "Sent to the membership coordinators when an applicant "
                 "submits a follow-up form. Carries a link only, never the "
                 "answers."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_ASSIGNED,
+            "name": "Applicant Assigned",
+            "subject": DEFAULT_APPLICATION_ASSIGNED_SUBJECT,
+            "html": DEFAULT_APPLICATION_ASSIGNED_HTML,
+            "text": DEFAULT_APPLICATION_ASSIGNED_TEXT,
+            "description": (
+                "Sent to a member assigned to an applicant as case manager or "
+                "interviewer, with a link to their My Applicants page."
             ),
         },
         {

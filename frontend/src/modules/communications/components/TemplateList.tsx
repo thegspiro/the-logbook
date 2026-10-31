@@ -124,6 +124,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     label: 'Application Follow-up Form Submitted',
     color: 'text-blue-700 dark:text-blue-400',
   },
+  application_assigned: {
+    icon: UserPlus,
+    label: 'Applicant Assigned',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
   equipment_request_update: {
     icon: PackageCheck,
@@ -197,6 +202,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'application_contact_changed',
       'application_follow_up_reminder',
       'application_follow_up_submitted',
+      'application_assigned',
     ],
   },
   {
