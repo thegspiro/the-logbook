@@ -2222,6 +2222,13 @@ enter anything in it.
 approved before the member can see them, and the **Review Queue** view
 appears.
 
+**Reviewer role** _(2026-10-31)_ appears once review is required. Choose
+**Training Officer**, **Captain** or **Chief**. Members holding that position or
+rank can review reports, in addition to anyone who can manage training. Chief
+covers the fire chief, deputy chief and assistant chief positions. A member who
+reviews by role sees the **Review Queue** and **Flagged** views on Shift
+Reports, but not reports about themselves, which someone else reviews.
+
 #### Rating Scale
 
 | Setting           | Starts as              | What it does                                                    |

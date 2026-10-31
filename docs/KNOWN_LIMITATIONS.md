@@ -2424,6 +2424,14 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    and the My Training settings page) show "Not in effect yet — anyone who can
    manage training can review reports, whatever is chosen here." Wiring it is
    still open.
+   **Resolved (2026-10-31), owner decision: also allow that role.** While
+   review is required, members holding the chosen position (or rank) may work
+   the review queue, read and review pending or flagged reports, and batch
+   review, in addition to `training.manage` holders, who keep what they had.
+   "Chief" covers `fire_chief`, `deputy_chief` and `assistant_chief`. A role
+   reviewer never sees or reviews a report about themselves. The screen asks
+   `GET /training/shift-reports/review-access`. Covered by
+   `tests/test_shift_report_reviewer_role.py`.
 3. **Department Defaults** (default duration, minimum staffing, overtime
    threshold). Stored and shown on the settings summary, but nothing applies
    them: new shifts and templates do not pick them up, and no overtime warning

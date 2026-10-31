@@ -1198,6 +1198,12 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  /** Whether the caller may review reports, and whether that comes from the department's reviewer role. */
+  async getReviewAccess(): Promise<{ can_review: boolean; by_role: boolean }> {
+    const response = await api.get<{ can_review: boolean; by_role: boolean }>('/training/shift-reports/review-access');
+    return response.data;
+  },
+
   async getPendingReviewReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
     const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
       '/training/shift-reports/pending-review'

@@ -2402,6 +2402,9 @@ A shift report moves through these stages:
 
 **For reviewers:**
 
+- Who reviews: anyone who can manage training, and, since 2026-10-31,
+  members holding the **Reviewer role** chosen in Shift Report settings. A
+  reviewer by role does not see or review reports about themselves.
 - Open the **Review Queue** view. It appears only while **Require report
   review before trainee visibility** is on in Shift Report settings.
   **Flagged** appears whenever review is on. It also appears with review off

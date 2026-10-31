@@ -337,6 +337,8 @@ app/api/v1/endpoints/shift_completion.py::get_my_shift_reports
 app/api/v1/endpoints/shift_completion.py::get_my_shift_stats
 app/api/v1/endpoints/shift_completion.py::get_shift_crew_status
 app/api/v1/endpoints/shift_completion.py::get_shift_report
+# Answers only whether the caller may review shift reports; reveals no report.
+app/api/v1/endpoints/shift_completion.py::get_review_access
 app/api/v1/endpoints/shift_completion.py::submit_all_drafts
 app/api/v1/endpoints/shift_completion.py::update_shift_report
 
