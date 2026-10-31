@@ -1267,10 +1267,14 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Reports
 
-| URL              | Page          | Permission     |
-| ---------------- | ------------- | -------------- |
-| `/reports`       | Reports       | `reports.view` |
-| `/reports/saved` | Saved Reports | `reports.view` |
+| URL                                          | Page                        | Permission                                      |
+| -------------------------------------------- | --------------------------- | ----------------------------------------------- |
+| `/reports`                                   | Reports                     | `reports.view`                                  |
+| `/reports/saved`                             | Saved Reports               | `reports.view`                                  |
+| `/reports/evaluations`                       | Member Evaluations (setup)  | `evaluations.configure` or `evaluations.manage` |
+| `/reports/evaluations/templates/:templateId` | Evaluation Template Builder | `evaluations.configure`                         |
+
+> **Member Evaluations** _(added 2026-10-31)_. Templates for each member class and status (sections, evaluation tools with behavior descriptions, data blocks with scoring rules, rank-triggered officer sections, and a forward-only workflow with deadlines) and the review periods they are completed for. Setup only: drafting and completing evaluations arrives in a later change, and the page says so.
 
 ---
 
