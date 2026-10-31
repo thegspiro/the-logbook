@@ -2560,10 +2560,13 @@ class SchedulingService:
                 ),
             )
         )
+        crew = list(result.scalars().all())
+        if not crew:
+            return None
         driver_seats = await self._driver_seat_values(organization_id)
         drivers = [
             assignment
-            for assignment in result.scalars().all()
+            for assignment in crew
             if self._is_driver_position(assignment.position, driver_seats)
         ]
         if not drivers:
