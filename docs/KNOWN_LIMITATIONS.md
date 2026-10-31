@@ -7104,6 +7104,47 @@ mounted route (now marked in the file, 2026-10-11). Server-supplied and registry
 both drifted from the routes they name, for the same reason — nothing in the
 type system connects either to a `path=` string.
 
+**Resolved (2026-10-31), owner decision: the pages honour the filter.**
+
+Every parameterised target now lands on the rows its tile counted, and the
+filter is shown on the page with a way to clear it:
+
+- **Apparatus** (`serviceStatus`, `hasDeficiency`, `inspection`): new optional
+  `GET /apparatus` filters. The out-of-service codes are one shared constant.
+- **Inspections** (`dueWithin`): `due_within_days` on
+  `GET /facilities/inspections/page`.
+- **Facilities** (`compliance=due`): a "Compliance deadlines in the next 30
+  days" list, from `due_within_days` on `GET /facilities/compliance-checklists`.
+- **Low stock** (`stock=low`): `low_stock_categories` on the item list and its
+  export. These are the items in the categories the tile counts. The tile
+  counts categories, so its number differs from the row count.
+- **Overdue returns** (`status=overdue`): opens the Overdue tab.
+  - The tile and the tab now share one overdue rule,
+    `InventoryService.overdue_checkout_clause`. The tile used to count loans
+    whose stored flag was set even after they were extended.
+  - The tab loads up to 200 loans.
+- **Admin hours** (`status=pending`): opens Pending Review.
+- **Notifications** (`status=failed`): `failed` on `GET /notifications/logs`.
+- **Action items** (`status=overdue`, `source`): `overdue` and `source` on
+  `GET /dashboard/action-items`.
+  - The meeting tile now links with `source=meeting`.
+  - Minutes items are overdue by the department's calendar day, not the clock.
+    This changed the minutes tile's and the admin summary's counts slightly: an
+    item due today is no longer overdue from 00:00 UTC.
+- **Members** (`status=active`): seeds the status filter.
+- **Events** (`range=next-30-days`): a "Next 30 days" chip over the same
+  department-calendar window.
+
+A neutral total tile (the Inventory count) now says only **Open**.
+
+**Residual limits:**
+
+- Event and compliance lists cap at 500 rows.
+- Action-item tiles are gated on the `.manage` permissions, while the page
+  lists by the `.view` ones.
+- The out-of-service tile's fleet summary does not exclude archived apparatus.
+  Archiving changes the status, so the two agree in practice.
+
 ## DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)
 
 - **DASH-38 — no apparatus maintenance page.** `/apparatus/maintenance` is an

@@ -478,6 +478,8 @@ export const dashboardService = {
   async getActionItems(params?: {
     status_filter?: string | undefined;
     assigned_to_me?: boolean | undefined;
+    overdue?: boolean | undefined;
+    source?: 'meeting' | 'minutes' | undefined;
   }): Promise<ActionItemSummary[]> {
     const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
     return asArray(response.data);

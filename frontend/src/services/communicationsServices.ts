@@ -87,6 +87,8 @@ export const notificationsService = {
     cursor?: string;
     skip?: number;
     limit?: number;
+    /** Only deliveries that recorded an error, within the requested scope. */
+    failed?: boolean;
   }): Promise<NotificationLogPage> {
     const response = await api.get<NotificationLogPage>('/notifications/logs', { params });
     return response.data;

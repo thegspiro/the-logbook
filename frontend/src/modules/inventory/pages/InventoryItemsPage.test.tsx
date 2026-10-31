@@ -500,6 +500,56 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
     );
   });
 
+  // The dashboard's Low stock tile counts categories at or below their
+  // threshold and links here as ?stock=low. The server owns that scan, so the
+  // page's job is to ask for it and show it is applied.
+  it('lists only the low-stock-category rows from the dashboard tile, and says so', async () => {
+    mockGetItems.mockImplementation((params: { low_stock_categories?: boolean }) =>
+      Promise.resolve(
+        params.low_stock_categories
+          ? { items: [makeItem({ id: 'low-1', name: 'Nitrile Gloves' })], total: 1 }
+          : {
+              items: [
+                makeItem({ id: 'low-1', name: 'Nitrile Gloves' }),
+                makeItem({ id: 'ok-1', name: 'Cordless Drill' }),
+              ],
+              total: 2,
+            }
+      )
+    );
+    renderAt('/inventory?stock=low');
+
+    expect((await screen.findAllByText('Nitrile Gloves')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Cordless Drill')).not.toBeInTheDocument();
+    expect(mockGetItems).toHaveBeenCalledWith(
+      expect.objectContaining({ low_stock_categories: true, low_stock: undefined })
+    );
+    expect(
+      screen.getByText('Showing only items in categories at or below their low-stock threshold.')
+    ).toBeInTheDocument();
+  });
+
+  it('sends no low-stock-category filter without the parameter', async () => {
+    renderAt('/inventory/admin/items?stock=high');
+    await screen.findByText(EMPTY_LIST);
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ low_stock_categories: undefined }));
+    expect(screen.queryByText(/in categories at or below/)).not.toBeInTheDocument();
+  });
+
+  it('drops the low-stock-category filter, and reloads, from Show all categories', async () => {
+    const user = userEvent.setup();
+    renderAt('/inventory?stock=low');
+    await screen.findByText(EMPTY_LIST);
+
+    await user.click(screen.getByRole('button', { name: 'Show all categories' }));
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ low_stock_categories: undefined }))
+    );
+  });
+
   it('writes the dropdown selection back to the URL', async () => {
     const user = userEvent.setup();
     renderAt('/inventory/admin/items');

@@ -15,8 +15,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 import { renderWithRouter } from '../test/utils';
 import type { User } from '../types/user';
 import { UserStatus } from '../constants/enums';
@@ -717,5 +719,67 @@ describe('Members roster — class and membership-status filters', () => {
 
     await user.selectOptions(filter, 'senior');
     expect(within(table()).getByText('Sam Senior')).toBeInTheDocument();
+  });
+});
+
+// DASH-37: the dashboard's Active members tile counts ACTIVE_ACCOUNT_STATUSES
+// (active and probationary, not deleted) and links here with ?status=active.
+describe('Members roster — opened from the Active members tile', () => {
+  beforeEach(() => {
+    installDefaults(['members.manage']);
+    mockRoster.mockResolvedValue([
+      makeMember(),
+      makeMember({
+        id: 'u2',
+        username: 'bprobie',
+        email: 'b@example.org',
+        first_name: 'Brian',
+        last_name: 'Probie',
+        status: UserStatus.PROBATIONARY,
+      }),
+      makeMember({
+        id: 'u3',
+        username: 'iidle',
+        email: 'i@example.org',
+        first_name: 'Ivan',
+        last_name: 'Idle',
+        status: UserStatus.INACTIVE,
+      }),
+    ]);
+  });
+
+  const renderAt = async (url: string) => {
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <ConfirmProvider>
+          <Members />
+        </ConfirmProvider>
+      </MemoryRouter>
+    );
+    await screen.findByRole('table');
+  };
+
+  it('shows the active and probationary members the tile counted, with Active selected', async () => {
+    await renderAt('/members?status=active');
+
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('active');
+    expect(within(table()).getByText('Laura Adams')).toBeInTheDocument();
+    expect(within(table()).getByText('Brian Probie')).toBeInTheDocument();
+    expect(within(table()).queryByText('Ivan Idle')).not.toBeInTheDocument();
+  });
+
+  it('lets the filter be cleared from the select', async () => {
+    const user = userEvent.setup();
+    await renderAt('/members?status=active');
+
+    await user.selectOptions(screen.getByLabelText('Filter by status'), 'current');
+    expect(within(table()).getByText('Ivan Idle')).toBeInTheDocument();
+  });
+
+  it('opens on its usual filter without the parameter, or with one it does not offer', async () => {
+    await renderAt('/members?status=bogus');
+
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('current');
+    expect(within(table()).getByText('Ivan Idle')).toBeInTheDocument();
   });
 });

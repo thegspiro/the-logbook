@@ -6,6 +6,7 @@ including an admin-level summary for Chiefs and department leaders.
 """
 
 from datetime import date, datetime, time, timedelta, timezone
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
@@ -98,6 +99,41 @@ def minutes_visibility_filter(current_user: User):
             MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
         ),
         ActionItem.assignee_id == current_user.id,
+    )
+
+
+# One definition of "overdue" per action-item source, shared by the dashboard
+# tiles that count them and by the unified feed those tiles link to, so the
+# list a tile opens holds exactly the rows the tile counted (DASH-37).
+def meeting_action_item_overdue(local_today: date):
+    """Open or in-progress meeting items due before today on the department
+    calendar. ``due_date`` is a DATE."""
+    return and_(
+        MeetingActionItem.status.in_(
+            [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+        ),
+        MeetingActionItem.due_date < local_today,
+    )
+
+
+def minutes_action_item_overdue(local_today: date):
+    """Pending or in-progress minutes items due before today on the
+    department calendar.
+
+    A minutes ``due_date`` is the UTC midnight of the calendar day it was
+    entered for, so the cut-off is the UTC midnight of the department's today.
+    Comparing it with the clock instead counted an item overdue from the
+    evening before it was due anywhere west of UTC — the same mistake W52-2
+    fixed on the action-items page, whose Overdue card already counts this way.
+    """
+    return and_(
+        ActionItem.status.in_(
+            [
+                MinutesActionItemStatus.PENDING.value,
+                MinutesActionItemStatus.IN_PROGRESS.value,
+            ]
+        ),
+        ActionItem.due_date < datetime.combine(local_today, time.min, timezone.utc),
     )
 
 
@@ -200,11 +236,7 @@ async def get_asset_widgets(
         overdue = await db.scalar(
             select(func.count(CheckOutRecord.id)).where(
                 CheckOutRecord.organization_id == org_id,
-                CheckOutRecord.is_returned.is_(False),
-                or_(
-                    CheckOutRecord.is_overdue.is_(True),
-                    CheckOutRecord.expected_return_at < datetime.now(timezone.utc),
-                ),
+                InventoryService.overdue_checkout_clause(datetime.now(timezone.utc)),
             )
         )
         widgets.extend(
@@ -682,10 +714,7 @@ async def get_operations_dashboard(
             db,
             MeetingActionItem,
             MeetingActionItem.organization_id == org_id,
-            MeetingActionItem.status.in_(
-                [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
-            ),
-            MeetingActionItem.due_date < local_today,
+            meeting_action_item_overdue(local_today),
             date_column=MeetingActionItem.due_date,
         )
         exception_items.append(
@@ -696,7 +725,9 @@ async def get_operations_dashboard(
                 count=count,
                 oldest_age_days=_age_days(oldest, local_today, org_tz),
                 most_urgent="Oldest overdue action item" if count else None,
-                href="/action-items?status=overdue",
+                # Meeting items only, as counted: without ``source`` the page
+                # would add the overdue minutes items the next card counts.
+                href="/action-items?source=meeting&status=overdue",
             )
         )
     # Minutes descriptions are never queried here. A minutes count is disclosed
@@ -708,13 +739,7 @@ async def get_operations_dashboard(
             .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
             .where(
                 MeetingMinutes.organization_id == org_id,
-                ActionItem.status.in_(
-                    [
-                        MinutesActionItemStatus.PENDING.value,
-                        MinutesActionItemStatus.IN_PROGRESS.value,
-                    ]
-                ),
-                ActionItem.due_date < now,
+                minutes_action_item_overdue(local_today),
             )
         )
         count, oldest = result.one()
@@ -1244,17 +1269,13 @@ async def get_admin_summary(
     if "minutes" in enabled:
         overdue_meeting = 0
         open_meeting = 0
+        org_today: date | None = None
         try:
+            org_today = await resolve_org_today(db, org_id)
             result = await db.execute(
                 select(func.count(MeetingActionItem.id)).where(
                     MeetingActionItem.organization_id == org_id,
-                    MeetingActionItem.status.in_(
-                        [
-                            ActionItemStatus.OPEN.value,
-                            ActionItemStatus.IN_PROGRESS.value,
-                        ]
-                    ),
-                    MeetingActionItem.due_date < await resolve_org_today(db, org_id),
+                    meeting_action_item_overdue(org_today),
                 )
             )
             overdue_meeting = result.scalar() or 0
@@ -1283,13 +1304,9 @@ async def get_admin_summary(
                 .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
                 .where(
                     MeetingMinutes.organization_id == org_id,
-                    ActionItem.status.in_(
-                        [
-                            MinutesActionItemStatus.PENDING.value,
-                            MinutesActionItemStatus.IN_PROGRESS.value,
-                        ]
+                    minutes_action_item_overdue(
+                        org_today or await resolve_org_today(db, org_id)
                     ),
-                    ActionItem.due_date < datetime.now(timezone.utc),
                 )
             )
             overdue_minutes = result.scalar() or 0
@@ -1380,10 +1397,16 @@ async def get_unified_action_items(
     assigned_to_me: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    overdue: bool = False,
+    source: Literal["meeting", "minutes"] | None = None,
 ) -> list[ActionItemSummary]:
     """
     Unified view of action items from both Meeting and Minutes modules.
     Merges results and returns them sorted by due date.
+
+    ``overdue`` and ``source`` are what the operations dashboard's overdue
+    cards link with: ``overdue`` applies the very predicate those cards count
+    by, so the page opens on the rows the card counted (DASH-37).
 
     Both halves are owned by the Minutes module (``/meetings`` and
     ``/minutes-records`` are gated on it), so a department that has switched
@@ -1401,6 +1424,8 @@ async def get_unified_action_items(
     if "minutes" not in enabled:
         return items
 
+    local_today = await resolve_org_today(db, org_id) if overdue else None
+
     # This unified feed merges two modules and is NOT permission-gated at the
     # route, so gate each half in-code exactly as its owning module does —
     # otherwise a member with neither permission reads every action item's
@@ -1414,7 +1439,7 @@ async def get_unified_action_items(
     can_view_minutes = user_has_permission(current_user, "minutes.view")
 
     # ── Meeting action items ──
-    if can_view_meetings:
+    if can_view_meetings and source != "minutes":
         query = select(MeetingActionItem).where(
             MeetingActionItem.organization_id == org_id,
         )
@@ -1422,6 +1447,8 @@ async def get_unified_action_items(
             query = query.where(MeetingActionItem.status == status_filter)
         if assigned_to_me:
             query = query.where(MeetingActionItem.assigned_to == current_user.id)
+        if local_today is not None:
+            query = query.where(meeting_action_item_overdue(local_today))
 
         result = await db.execute(query.order_by(MeetingActionItem.due_date.asc()))
         for item in result.scalars().all():
@@ -1443,64 +1470,69 @@ async def get_unified_action_items(
                 )
             )
 
-    # ── Minutes action items (scoped to organization via MeetingMinutes) ──
-    # An item assigned to the caller by member is always theirs to see,
-    # whatever the minutes' state or the caller's minutes.view: they may
-    # update its status (W52-7), and "Assigned to me" must find it (W52-6).
-    # Only the item is disclosed, never the minutes it was recorded in.
-    assigned_to_caller = ActionItem.assignee_id == current_user.id
-    query2 = (
-        select(ActionItem)
-        .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
-        .where(MeetingMinutes.organization_id == org_id)
-    )
-    if can_view_minutes:
-        restriction = minutes_visibility_filter(current_user)
-        if restriction is not None:
-            query2 = query2.where(or_(restriction, assigned_to_caller))
-    else:
-        query2 = query2.where(assigned_to_caller)
-
-    if status_filter:
-        query2 = query2.where(ActionItem.status == status_filter)
-    if assigned_to_me:
-        query2 = query2.where(assigned_to_caller)
-
-    result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
-    for minutes_item in result2.scalars().all():
-        items.append(
-            ActionItemSummary(
-                id=minutes_item.id,
-                source="minutes",
-                source_id=minutes_item.minutes_id,
-                description=minutes_item.description,
-                assignee_id=minutes_item.assignee_id,
-                assignee_name=minutes_item.assignee_name,
-                due_date=(
-                    minutes_item.due_date.isoformat() if minutes_item.due_date else None
-                ),
-                status=(
-                    minutes_item.status.value
-                    if hasattr(minutes_item.status, "value")
-                    else str(minutes_item.status)
-                ),
-                priority=(
-                    (
-                        minutes_item.priority.value
-                        if hasattr(minutes_item.priority, "value")
-                        else str(minutes_item.priority)
-                    )
-                    if minutes_item.priority
-                    else None
-                ),
-                completion_notes=minutes_item.completion_notes,
-                created_at=(
-                    minutes_item.created_at.isoformat()
-                    if minutes_item.created_at
-                    else ""
-                ),
-            )
+    if source != "meeting":
+        # ── Minutes action items (scoped to organization via MeetingMinutes) ──
+        # An item assigned to the caller by member is always theirs to see,
+        # whatever the minutes' state or the caller's minutes.view: they may
+        # update its status (W52-7), and "Assigned to me" must find it (W52-6).
+        # Only the item is disclosed, never the minutes it was recorded in.
+        assigned_to_caller = ActionItem.assignee_id == current_user.id
+        query2 = (
+            select(ActionItem)
+            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+            .where(MeetingMinutes.organization_id == org_id)
         )
+        if can_view_minutes:
+            restriction = minutes_visibility_filter(current_user)
+            if restriction is not None:
+                query2 = query2.where(or_(restriction, assigned_to_caller))
+        else:
+            query2 = query2.where(assigned_to_caller)
+
+        if status_filter:
+            query2 = query2.where(ActionItem.status == status_filter)
+        if assigned_to_me:
+            query2 = query2.where(assigned_to_caller)
+        if local_today is not None:
+            query2 = query2.where(minutes_action_item_overdue(local_today))
+
+        result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
+        for minutes_item in result2.scalars().all():
+            items.append(
+                ActionItemSummary(
+                    id=minutes_item.id,
+                    source="minutes",
+                    source_id=minutes_item.minutes_id,
+                    description=minutes_item.description,
+                    assignee_id=minutes_item.assignee_id,
+                    assignee_name=minutes_item.assignee_name,
+                    due_date=(
+                        minutes_item.due_date.isoformat()
+                        if minutes_item.due_date
+                        else None
+                    ),
+                    status=(
+                        minutes_item.status.value
+                        if hasattr(minutes_item.status, "value")
+                        else str(minutes_item.status)
+                    ),
+                    priority=(
+                        (
+                            minutes_item.priority.value
+                            if hasattr(minutes_item.priority, "value")
+                            else str(minutes_item.priority)
+                        )
+                        if minutes_item.priority
+                        else None
+                    ),
+                    completion_notes=minutes_item.completion_notes,
+                    created_at=(
+                        minutes_item.created_at.isoformat()
+                        if minutes_item.created_at
+                        else ""
+                    ),
+                )
+            )
 
     # Sort by due date (nulls last)
     items.sort(key=lambda x: x.due_date or "9999-12-31")

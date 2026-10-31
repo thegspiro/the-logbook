@@ -4978,8 +4978,7 @@ class InventoryService:
 
         query = select(CheckOutRecord).where(
             CheckOutRecord.organization_id == str(organization_id),
-            CheckOutRecord.is_returned.is_(False),
-            CheckOutRecord.expected_return_at < now,
+            self.overdue_checkout_clause(now),
         )
         if exclude_item_types:
             query = query.where(
@@ -4999,6 +4998,26 @@ class InventoryService:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    def overdue_checkout_clause(now: datetime) -> Any:
+        """:meth:`checkout_is_overdue` as a SQL condition, for counts and lists.
+
+        The dashboard's Overdue returns tile and the Overdue tab it links to
+        both use this, so the tile counts exactly the loans the tab lists
+        (DASH-37). The tile used to add every loan whose stored flag was set,
+        including one extended since the daily task flagged it.
+        """
+        return and_(
+            CheckOutRecord.is_returned.is_(False),
+            or_(
+                CheckOutRecord.expected_return_at < now,
+                and_(
+                    CheckOutRecord.expected_return_at.is_(None),
+                    CheckOutRecord.is_overdue.is_(True),
+                ),
+            ),
+        )
 
     @staticmethod
     def checkout_is_overdue(record: CheckOutRecord) -> bool:
@@ -5378,6 +5397,35 @@ class InventoryService:
     # ============================================
     # Reporting & Analytics
     # ============================================
+
+    async def item_ids_in_low_stock_categories(
+        self,
+        organization_id: UUID | str,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
+    ) -> List[str]:
+        """Ids of the active items filed under a category that
+        :meth:`get_low_stock_items` reports as low.
+
+        The dashboard's Low stock tile counts those categories, and its link
+        opens the items list; reusing the same scan here keeps the list on the
+        categories the tile counted rather than a second definition of "low"
+        (an item's own reorder point is a different question — see
+        :meth:`get_low_stock_items_for_alerts`).
+        """
+        org_id = str(organization_id)
+        low = await self.get_low_stock_items(
+            org_id, exclude_item_types=exclude_item_types
+        )
+        category_ids = [str(row["category_id"]) for row in low]
+        if not category_ids:
+            return []
+        result = await self.db.execute(
+            select(InventoryItem.id)
+            .where(InventoryItem.organization_id == org_id)
+            .where(InventoryItem.category_id.in_(category_ids))
+            .where(InventoryItem.active.is_(True))
+        )
+        return [str(i) for i in result.scalars().all()]
 
     async def get_low_stock_items(
         self,
