@@ -14,9 +14,6 @@ const SavedReportsPage = lazyWithRetry(() => import('./pages/SavedReportsPage'))
 const EvaluationsPage = lazyWithRetry(() => import('./pages/EvaluationsPage'));
 const EvaluationTemplateBuilderPage = lazyWithRetry(() => import('./pages/EvaluationTemplateBuilderPage'));
 
-// Template builders and period managers may each read the other's list.
-const EVALUATION_SETUP = ['evaluations.configure', 'evaluations.manage'];
-
 export const getReportsRoutes = () => {
   return (
     <React.Fragment>
@@ -43,7 +40,11 @@ export const getReportsRoutes = () => {
       <Route
         path="/reports/evaluations"
         element={
-          <ProtectedRoute requiredModule="reports" moduleLabel="Reports" requiredAnyPermission={EVALUATION_SETUP}>
+          <ProtectedRoute
+            requiredModule="reports"
+            moduleLabel="Reports"
+            requiredAnyPermission={['evaluations.configure', 'evaluations.manage']}
+          >
             <Suspense fallback={null}>
               <EvaluationsPage />
             </Suspense>
