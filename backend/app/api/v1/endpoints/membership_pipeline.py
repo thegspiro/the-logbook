@@ -1315,7 +1315,13 @@ async def get_prospect(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
-    return prospect
+    response = ProspectResponse.model_validate(prospect)
+    if not access.can_see_full:
+        # The coordinators' notes are written about the applicant, not for an
+        # interviewer assessing them; they go with the rest of the file an
+        # interviewer does not see (activity log, election package).
+        response.notes = None
+    return response
 
 
 @router.put("/prospects/{prospect_id}", response_model=ProspectResponse)
@@ -1709,18 +1715,28 @@ async def set_prospect_status(
     data: ProspectStatusChangeRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    access: ProspectAccess = Depends(require_prospect_access(Level.MANAGE)),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Set one prospect's status (reject, place on hold, withdraw, reactivate).
+
+    A case manager may withdraw their applicant's application and nothing
+    else; every other status, reactivating a withdrawn one included, stays
+    with the pipeline's managers.
 
     ``reason`` is recorded in the prospect's activity log. Like the bulk
     endpoint, it deliberately does not touch the coordinator notes field —
     routing a rejection reason through the update endpoint as ``notes``
     overwrote whatever had been written about the applicant.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager (to withdraw only)**
     """
+    if not access.can_manage and data.status != ProspectStatus.WITHDRAWN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A case manager can withdraw an application but not set it to "
+            f"{data.status}",
+        )
     service = MembershipPipelineService(db)
     try:
         prospect = await service.set_prospect_status(
