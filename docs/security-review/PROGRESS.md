@@ -16,6 +16,54 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3871](https://github.com/thegspiro/the-logbook/pull/3871)**
+(branch `claude/security-review-permissions-roles-p14`) — Feature 02
+(Permissions & roles), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). Step 0 (re-verified fresh against
+`search_pull_requests`, `head:claude/security-review-` `is:open`) found 0
+open `claude/security-review-*` PRs: PR #3870 (Feature 01, Auth & session
+lifecycle, pass 14) had already merged (`f9220b364`), marking row 01 `✅`.
+Row 02 was the next `⬜`. See
+`docs/security-review/PERM-02-permissions-roles.md`'s **Pass 14** section
+for the full review: baseline `4f21727a` to head `f9220b364`, 267 commits
+(175 non-merge). A fresh AST walk over all four endpoint files
+(`roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`)
+re-confirms the same 28 routes as pass 13. Four of the eleven tracked
+files/pairs changed: `core/permissions.py` + `role_service.py` + `roles.py`
+add a new `kind` field to positions (`office`/`committee`/`system`, backing
+four new seeded committee positions — reviewed in full, Pitfall #23/#20/#26
+compliant, migration `d8f1a4c27b93` guarded and idempotent);
+`operational_rank_service.py` only hardened an error message's length cap
+(unrelated to `kind`); `users.py` gained adjacent `member_status`/tier
+validation that is this pass's territory only because it shares two
+functions with the rank-ceiling machinery (reviewed for permissions/
+org-scoping impact — none — and left to Features 07/08's own scope for the
+rest). 1 fix, LOW: **PERM-12** — `RoleManagementService.create_role`'s
+`kind` validation was weaker than its sibling `update_role` check and would
+have accepted `kind="system"` from a caller that bypasses the
+`RoleCreate` schema (no live caller does; closed as defense in depth, with
+a guard test seen to fail against the pre-fix code). PERM-10 (MED) and
+PERM-11 (MED) re-verified OPEN/FLAGGED and unchanged — both remain an
+owner decision belonging to Feature 01's `STEPUP_HANDLERS` mechanism;
+`docs/KNOWN_LIMITATIONS.md`'s entries for both are present and accurate.
+Completion gate green (flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 678 revisions, single head;
+`check_route_permissions.py --strict` — 280 routes, 0 errors/warnings;
+scoped backend tests, 1676 passed, 1 pre-existing skip; frontend
+typecheck/lint n/a — no frontend files touched this pass).
+
+**Ride-along:** this commit also carries the Step 0 record of PR #3870's
+merge (Feature 01, Auth & session lifecycle, pass 14), which this iteration
+found already merged and clear before starting Feature 02's own review.
+
+Rotation row 02 → ✅ (pending this PR's merge). Re-check
+`list_pull_requests`/`search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 14, PR #3870, merged), preserved for history</summary>
+
 **PR [#3870](https://github.com/thegspiro/the-logbook/pull/3870)**
 (branch `claude/security-review-auth-session-p14`) — Feature 01 (Auth &
 session lifecycle), pass 14, a watchdog pickup (the dedicated
@@ -43,9 +91,9 @@ single head; `check_route_permissions.py --strict` — 280 routes, 0
 errors/warnings; scoped backend tests, 1507 passed; the 11-file standing
 guard suite, 209 passed; frontend typecheck/lint, 0 errors/warnings).
 
-Rotation row 01 → ✅ (pending this PR's merge). Re-check
-`list_pull_requests`/`search_pull_requests` fresh rather than trusting this
-note.
+Rotation row 01 → ✅ (merged). Next `⬜` row: 02 — Permissions & roles.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 14, PR #3869, merged), preserved for history</summary>
@@ -23889,7 +23937,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | 🔄     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -23929,6 +23977,92 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-31 — Feature 02 (Permissions & roles, pass 14) — watchdog pickup, 1 fixed (LOW), 0 new OPEN findings
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents` ("No reachable agents") immediately before this iteration was
+dispatched. Step 0 was re-verified fresh in this iteration:
+`search_pull_requests` for `head:claude/security-review-` `is:open` against
+`thegspiro/the-logbook` returned 0 results. PR #3870 (Feature 01, Auth &
+session lifecycle, pass 14 — a true zero-delta pass, plus an unrelated
+`follow-redirects` npm-audit fix) had already merged (`f9220b364`),
+marking row 01 `✅`. Row 02 (Permissions & roles) was confirmed the next
+`⬜` row on a freshly fetched `origin/main`.
+
+**Review:** baseline `4f21727a` (main's state when pass 13 began its own
+review; pass 13's own merge, PR #3803, landed one commit later and touched
+only docs, so it adds no code delta to diff against) to head `f9220b364`
+(PR #3870's merge, current `main`) — 267 commits, 175 non-merge. Of the
+eleven tracked files/pairs, four changed: `roles.py` (+2),
+`core/permissions.py` (+109), `operational_rank_service.py` (+11/-4),
+`role_service.py` (+26), and `users.py` (+62/-10, adjacent). `dependencies.py`,
+`officers.py`/`officer_service.py`, `org_chart.py`/`org_chart_service.py`,
+and `admin_continuity_service.py` are byte-identical to pass 13. A fresh
+AST walk of all four endpoint files' route decorators re-confirms the same
+28 routes, same methods, same paths, same handler names as pass 13's
+inventory — `officers.py` and `org_chart.py` are untouched so neither could
+have regressed, and the changes in `roles.py`/`operational_ranks.py`'s
+pair touch neither a route decorator nor a `Depends`/permission string.
+
+The substantive change is a new `kind` field on positions
+(`office`/`committee`/`system`), backing four new seeded committee
+positions and letting a department mark its own custom position as a
+committee. Reviewed in full: the four seeded committees carry a _copy_ of
+the `member` baseline permission list via `list()`, never the same list
+object (Pitfall #23's exact failure mode, with
+`tests/test_position_kinds.py` machine-checking the `is not` identity);
+migration `d8f1a4c27b93` is guarded on table existence (Pitfall #26),
+settles existing rows with a `server_default` (Pitfall #35), inlines its
+own frozen snapshot of the system-slug list and baseline permissions
+(Pitfall #20), and its committee backfill is idempotent (checks
+`(org, slug)` existence before inserting). The `kind` passthrough in
+`roles.py`'s create/update handlers sits after the existing
+`_enforce_permission_grant_ceiling` calls, so it cannot be used to bypass
+that gate. `operational_rank_service.py`'s own change (an unbounded error
+message capped via the existing `list_within_detail_limit()` util) is
+unrelated to `kind` and is an abuse-resistance hardening, not a behavior
+change. `users.py`'s new `member_status`/tier validation
+(`_accepted_member_status_or_400`) is feature work for the membership-tiers
+model that happens to sit in two functions this feature tracks; reviewed
+for permissions/org-scoping impact (none — no client-supplied org id, fails
+closed, lock ordering matches the file's existing Organization-before-member
+convention) and left to Features 07/08's own scope for anything beyond
+that.
+
+**PERM-12 (LOW, FIXED):** `RoleManagementService.create_role`'s own `kind`
+validation (`if kind not in POSITION_KINDS`) was weaker than its sibling
+`update_role` check and — unlike `update_role` — would have accepted
+`kind="system"`, since `POSITION_KINDS` includes `"system"`. Not reachable
+through the live API today (`RoleCreate.kind` is `Literal["office",
+"committee"]`, and the only other live caller, `clone_role`, never passes
+`"system"` either), but a latent defense-in-depth gap: a future internal
+caller bypassing the Pydantic schema could mint a role claiming to be the
+platform's own. Fixed by matching `update_role`'s exclusion, with a new
+guard test (`test_create_role_also_refuses_system`) seen to fail against
+the pre-fix code (`DID NOT RAISE ValueError`) and pass against the fix, per
+Pitfall #37.
+
+PERM-10 (MED, `create_member`/the rank-change branch of
+`update_user_profile` lack `require_stepup`) and PERM-11 (MED, rank CRUD in
+`operational_ranks.py` lacks `require_stepup`) re-verified OPEN/FLAGGED and
+unchanged — both remain an owner decision belonging to Feature 01's
+`STEPUP_HANDLERS` mechanism; `docs/KNOWN_LIMITATIONS.md`'s entries for both
+are present and accurate.
+
+**Completion gate:** flake8/black/isort clean on `app/ tests/ alembic/`
+(2744 files unchanged by black); `validate_migrations.py --strict` — 678
+revisions, single head `f90b1124e6f4`; `check_route_permissions.py --strict`
+— 280 routes, 0 errors/0 warnings; scoped backend tests (`-k "permission or
+role or rank or officer or org_chart or passkey"`) — 1676 passed, 1 skipped
+(environment-only: `pywebpush`); frontend typecheck/lint — n/a, no frontend
+files touched this pass.
+
+Rotation row 02 → ✅ (pending this PR's merge). **Next `⬜` row for the
+iteration after this one: 03 — Public surface & webhooks** (prefix `PUB`,
+principal code `api/public/*` (40 unauth routes), `paypal_webhook.py`,
+`integrations_webhook.py`, `salesforce_webhook.py`).
 
 ### 2026-10-31 — Feature 01 (Auth & session lifecycle, pass 14) — watchdog pickup, 0 fixed, 0 new findings; true zero-delta pass
 
