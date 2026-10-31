@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3891](https://github.com/thegspiro/the-logbook/pull/3891)** (branch
+`claude/security-review-finance-approvals`) — Feature 05 (Finance &
+approvals), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). No open security-review PR was found before this
+one opened — confirmed via `list_pull_requests` (`state=open`), 0 results
+whose head branch starts with `claude/security-review-`, after PR #3879
+(Feature 04, Storefront & payments, pass 14) had already merged
+(`b7f72c67a`). Row 05 confirmed the next `⬜` row on a freshly
+fast-forwarded `main`.
+
+Real delta since pass 13's own merge (`dd47d8734`, PR #3807) was true
+near-zero: see this row's Log entry and
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 14** section
+for the full review. **0 fixed, 0 new findings** — FIN8-05-1 and FIN-30
+both re-verified at their standing dispositions. Completion gate green:
+flake8/black/isort clean; `validate_migrations.py --strict` 680
+revisions, single head; `check_route_permissions.py --strict` 281
+routes, 0 errors/warnings; scoped backend pytest 1,562 passed, 2
+environment-only skips; frontend typecheck/lint clean.
+
+Rotation row 05 → ✅ (pending this PR's merge). Re-check
+`list_pull_requests` (`state=open`) fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3879's merge, Feature 05, Finance & approvals, pass 14 — the state this pass's PR opened from), preserved for history</summary>
+
 None. PR #3879 (Feature 04, Storefront & payments, pass 14) merged
 (`b7f72c67a`) — confirmed via `list_pull_requests`/`pull_request_read`. No
 security-review PR is open — confirmed via `list_pull_requests`
@@ -24,6 +51,8 @@ security-review PR is open — confirmed via `list_pull_requests`
 iteration picked up Feature 05 (Finance & approvals, pass 14), the next
 `⬜` row, confirmed on a freshly fast-forwarded `main`; row 05 is marked
 `🔄` below while that review is in progress.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3879, Feature 04, Storefront & payments, pass 14, merged), preserved for history</summary>
