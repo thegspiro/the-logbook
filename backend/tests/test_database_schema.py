@@ -551,6 +551,12 @@ class TestColumnConstraints:
             # nfc_card_taps: the row is the tap, stamped when it happened and
             # never updated.
             "tapped_at",
+            # evaluation_amendments: the row is the amendment, server-stamped
+            # when it is made and never updated.
+            "amended_at",
+            # evaluation_deletion_records: the row is the deletion, stamped
+            # when it happened and never updated.
+            "deleted_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():
