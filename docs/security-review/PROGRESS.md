@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+**PR [#3879](https://github.com/thegspiro/the-logbook/pull/3879)**
 (branch `claude/security-review-storefront-payments`) — Feature 04
 (Storefront & payments), pass 14, a watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
