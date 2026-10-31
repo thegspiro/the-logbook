@@ -2490,6 +2490,14 @@ recorded here rather than built.
    To change a generated shift's start, cancel it and create the replacement
    by hand. A fix needs a stored pattern/occurrence key on generated shifts (a
    column and a migration).
+   **Resolved (2026-10-31), owner decision: add the key.** Generation now
+   records every occurrence it makes in `shift_pattern_occurrences` (pattern,
+   date, day/night side), and both a manual Generate and the scheduled run skip
+   an occurrence already recorded, whatever happened to its shift since.
+   Deleting the shift clears only the row's `shift_id`. Shifts generated before
+   the table existed are not backfilled (nothing records which pattern made
+   them), so they rely on the start-time guard as before. Covered by
+   `TestOccurrenceLedger` in `tests/test_scheduling_generation_fixes.py`.
 2. **The nightly run reports skipped seats as a count in the server log
    only.** Generation now seats a member only where the seat, eligibility,
    seat cap, leave and overlap checks an officer's assignment runs would allow

@@ -40,6 +40,7 @@ from app.models.training import (
     ShiftCall,
     ShiftCompletionReport,
     ShiftPattern,
+    ShiftPatternOccurrence,
     ShiftPosition,
     ShiftPreWorkSession,
     ShiftStatus,
@@ -4610,11 +4611,38 @@ class SchedulingService:
             else:
                 existing_shifts = set()
 
+            # The durable guard: every occurrence this pattern has generated
+            # since the ledger existed, whatever has happened to its shift
+            # since. Deleting a generated shift or moving its start defeats the
+            # start-time guard above; it does not remove the ledger row, so the
+            # occurrence is not laid down again. The start-time guard stays for
+            # shifts generated before the ledger.
+            generated_before: set[tuple[date, str]] = set()
+            if occurrences:
+                ledger = await self.db.execute(
+                    select(
+                        ShiftPatternOccurrence.occurrence_date,
+                        ShiftPatternOccurrence.shift_type,
+                    )
+                    .where(ShiftPatternOccurrence.pattern_id == str(pattern.id))
+                    .where(
+                        ShiftPatternOccurrence.organization_id == str(organization_id)
+                    )
+                    .where(
+                        ShiftPatternOccurrence.occurrence_date.between(
+                            start_date, end_date
+                        )
+                    )
+                )
+                generated_before = {(row[0], row[1]) for row in ledger.all()}
+
             # Create shifts for each occurrence (date order, day before night)
             created_shifts = []
             for (shift_date_val, entry_type), occ in sorted(
                 occurrences.items(), key=lambda kv: (kv[0][0], kv[0][1])
             ):
+                if (shift_date_val, entry_type) in generated_before:
+                    continue
                 members = occ["members"]
                 shift_platoon = occ["platoon"]
                 shift_template = _template_for(entry_type)
@@ -4685,6 +4713,18 @@ class SchedulingService:
                 )
                 self.db.add(shift)
                 await self.db.flush()  # Get the shift ID without committing
+                # Two runs racing over one range collide on the ledger's unique
+                # key at commit; the loser rolls back whole and the next run
+                # finds the winner's rows.
+                self.db.add(
+                    ShiftPatternOccurrence(
+                        organization_id=str(organization_id),
+                        pattern_id=str(pattern.id),
+                        occurrence_date=shift_date_val,
+                        shift_type=entry_type,
+                        shift_id=str(shift.id),
+                    )
+                )
 
                 # Auto-create assignments for this occurrence's members
                 # (skip duplicate users on the same shift).

@@ -30,6 +30,7 @@ from app.models.training import (
     Shift,
     ShiftAssignment,
     ShiftPattern,
+    ShiftPatternOccurrence,
     ShiftStatus,
     ShiftTemplate,
 )
@@ -259,6 +260,81 @@ class TestDuplicateGuard:
         assert error is None
         assert again == []
         assert len(await _shifts_for(dept, template.id)) == 3
+
+
+class TestOccurrenceLedger:
+    """A generated occurrence is generated once, whatever happens to its shift.
+
+    KNOWN_LIMITATIONS shifts-module review item 1: deleting a generated shift
+    or moving its start left nothing at the start-time key, so the next run put
+    the original back with its full crew.
+    """
+
+    async def test_a_deleted_occurrence_is_not_recreated(self, dept):
+        service = SchedulingService(dept["db"])
+        template = await _template(dept, "Day Shift")
+        pattern = await _pattern(dept, template)
+        created, _ = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, END, None
+        )
+        await dept["db"].delete(created[0])
+        await dept["db"].flush()
+
+        again, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, END, None
+        )
+
+        assert error is None
+        assert again == []
+        assert [s.shift_date for s in await _shifts_for(dept, template.id)] == [
+            date(2026, 3, 3),
+            date(2026, 3, 4),
+        ]
+        ledger = await dept["db"].scalars(
+            select(ShiftPatternOccurrence).where(
+                ShiftPatternOccurrence.pattern_id == pattern.id
+            )
+        )
+        rows = sorted(ledger.all(), key=lambda r: r.occurrence_date)
+        assert [(r.occurrence_date, r.shift_type) for r in rows] == [
+            (date(2026, 3, 2), "on"),
+            (date(2026, 3, 3), "on"),
+            (date(2026, 3, 4), "on"),
+        ]
+        assert rows[0].shift_id is None
+
+    async def test_a_moved_occurrence_is_not_recreated(self, dept):
+        service = SchedulingService(dept["db"])
+        template = await _template(dept, "Day Shift")
+        pattern = await _pattern(dept, template)
+        created, _ = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, END, None
+        )
+        created[0].start_time = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
+        await dept["db"].flush()
+
+        again, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, END, None
+        )
+
+        assert error is None
+        assert again == []
+        assert len(await _shifts_for(dept, template.id)) == 3
+
+    async def test_new_dates_beyond_the_ledger_still_generate(self, dept):
+        service = SchedulingService(dept["db"])
+        template = await _template(dept, "Day Shift")
+        pattern = await _pattern(dept, template)
+        await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, END, None
+        )
+
+        later, error = await service.generate_shifts_from_pattern(
+            pattern.id, dept["org_id"], START, date(2026, 3, 5), None
+        )
+
+        assert error is None
+        assert [s.shift_date for s in later] == [date(2026, 3, 5)]
 
 
 class TestDaylightSaving:

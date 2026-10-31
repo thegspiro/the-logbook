@@ -3290,7 +3290,7 @@ dates before you select **Generate**. Afterwards, The Logbook tells you:
 | Message                                                                                                                   | What it means                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **"Generated N shifts"**                                                                                                  | The number of shifts created                                                                                                                                              |
-| **"No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern's own start and end."**      | The normal answer when you run a range again. Nothing is wrong                                                                                                            |
+| **"No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern's own start and end and dates whose generated shift was deleted or moved."** | The normal answer when you run a range again. Nothing is wrong                                                                                                            |
 | **"N driver seats were left unfilled: …"** (red, stays 8 seconds)                                                         | A member in the rotation doesn't hold the Emergency Vehicle Operations Course (EVOC) level the vehicle needs. The driver seat was left empty and each one is named. Fill them before the shift |
 
 ![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
@@ -3299,6 +3299,13 @@ dates before you select **Generate**. Afterwards, The Logbook tells you:
 
 **To extend a schedule,** generate the same pattern again for the next range.
 Dates already on the schedule are skipped, so overlapping ranges are safe.
+
+**A pattern generates each occurrence once** _(2026-10-31)_. The Logbook keeps a
+record of every shift a pattern has made. If you delete one of those shifts, or
+move its start time, generating again does not put the original back, whether
+you select **Generate** or automatic generation runs. To restore a deleted
+occurrence, add the shift by hand. Shifts generated before 2026-10-31 have no
+such record, so deleting one of those and generating again still rebuilds it.
 
 **Or let The Logbook do it.** Under **Scheduling Settings → General →
 Automatic shift generation**, active patterns keep generating shifts ahead by
@@ -4177,7 +4184,7 @@ assigned, time off is approved, shifts are generated, and staffing is checked.
 | What happened                                                  | What it means / what to do                                                                                                                                                          |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A template ends earlier in the day than it starts (e.g. 19:00–07:00) | The shift ends the next morning. The Logbook handles this for you                                                                                                             |
-| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has a shift **from this pattern's template** starting at the same time, including one that was cancelled. Since 2026-10-24 another unit's shift, or a shift added by hand, at the same time no longer stops the pattern's shift being made |
+| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has a shift **from this pattern's template** starting at the same time, including one that was cancelled. Since 2026-10-24 another unit's shift, or a shift added by hand, at the same time no longer stops the pattern's shift being made. Since 2026-10-31 it also skips a date whose generated shift was deleted or moved |
 | The toast says some members were not seated                   | Each platoon member is placed in the first seat they are cleared for, with the same checks as assigning by hand: rank and seat eligibility, the seat's cap, leave, time off, another shift at the same time and the driver rule. The toast names who was left off and why. Their seat stays open |
 | An overnight or 24-hour shift on a daylight-saving day          | It ends at its usual clock time, not an hour early or late                                                                                                                         |
 | A shift made from a template that is open to all members        | The shift is open to all members too                                                                                                                                              |
