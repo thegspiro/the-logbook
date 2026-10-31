@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+(branch `claude/security-review-auth-session-p14`) — Feature 01 (Auth &
+session lifecycle), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). Step 0 (re-verified fresh) found 0 open
+`claude/security-review-*` PRs: PR #3869 (Feature 00, Cross-cutting
+baseline, pass 14 — the full-rotation reset-and-restart iteration) had
+already merged (`10312c364`), resetting the rotation table to `⬜` and
+marking row 00 `✅` again. Row 01 was the next `⬜`. See
+`docs/security-review/AUTH-01-auth-session.md`'s **Pass 14** section for the
+full review: a true zero-delta pass — all eighteen tracked files
+(`auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`,
+`consent_service.py`, `passkey_service.py`, `models/passkey.py`,
+`dependencies.py`, `security.py`, `suspicious_ip.py`, `schemas/auth.py`,
+`authStore.ts`, `authService.ts`, `apiClient.ts`, `utils/passkeys.ts`,
+`PasskeySettingsCard.tsx`, `StepUpContext.tsx`, `utils/stepUp.ts`) are
+byte-identical to pass 13's merge (`4f21727a`), despite 263 commits (172
+non-merge) landing on `main` in between; a fresh AST walk over `auth.py`
+re-confirms the same 38 routes, same names, same auth dependencies. 0 fixes,
+0 new findings. AUTH-23 (MED, `step_up` has no account-tied lockout)
+re-verified OPEN/FLAGGED and unchanged — `docs/KNOWN_LIMITATIONS.md`'s entry
+for it is present and accurate. Completion gate green (flake8/black/isort on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` — 678 revisions,
+single head; `check_route_permissions.py --strict` — 280 routes, 0
+errors/warnings; scoped backend tests, 1507 passed; the 11-file standing
+guard suite, 209 passed; frontend typecheck/lint, 0 errors/warnings).
+
+Rotation row 01 → ✅ (pending this PR's merge). Re-check
+`list_pull_requests`/`search_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 14, PR #3869, merged), preserved for history</summary>
+
 **PR [#3869](https://github.com/thegspiro/the-logbook/pull/3869)** (branch
 `claude/security-review-cross-cutting-baseline-p14`) — Feature 00
 (Cross-cutting baseline), pass 14, a watchdog pickup (the
@@ -56,10 +90,11 @@ Pass 13 already on record (2026-10-28), so this is correctly **Pass 14**,
 not Pass 6. Recorded in that file's Pass 14 section as well, so the next
 reader's "re-verify prior findings" step looks at the right prior pass.
 
-Rotation row 00 → ✅ (pending this PR's merge); every other row is `⬜` for
-the fresh pass that opens with this PR, starting again at Feature 01 once
-this merges. Re-check `list_pull_requests`/`search_pull_requests` fresh
-rather than trusting this note.
+Rotation row 00 → ✅ (merged); every other row was `⬜` for the fresh pass
+that opened with this PR, starting again at Feature 01 — which this PR's
+successor (above) picked up.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 13, PR #3868, merged), preserved for history</summary>
@@ -23853,7 +23888,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | 🔄     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -23894,6 +23929,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-31 — Feature 01 (Auth & session lifecycle, pass 14) — watchdog pickup, 0 fixed, 0 new findings; true zero-delta pass
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents` ("No reachable agents") immediately before this iteration was
+dispatched. Step 0 was re-verified fresh in this iteration: `search_pull_requests`
+for `head:claude/security-review-` `is:open` against `thegspiro/the-logbook`
+returned 0 results. PR #3869 (Feature 00, Cross-cutting baseline, pass 14 —
+the full-rotation reset-and-restart iteration) had already merged
+(`10312c364`), resetting the rotation table from all-`✅` back to `⬜` and
+marking row 00 `✅` again for its own pass. Row 01 (Auth & session lifecycle)
+was confirmed the next `⬜` row on a freshly fetched `origin/main`.
+
+**Review:** baseline `4f21727a` (PR #3802's merge, pass 13) to head
+`10312c364` (PR #3869's merge, current `main`) — 263 commits, 172 non-merge.
+All eighteen files this feature tracks (nine backend service/endpoint/model
+files plus `dependencies.py`/`security.py`/`suspicious_ip.py`/
+`schemas/auth.py`, and six frontend files) are byte-identical to pass 13 —
+confirmed with a single `git diff` across all eighteen paths at once
+(zero output), not inferred from a per-file stat line. Also checked for a
+new auth-adjacent file added anywhere in the 263-commit range by
+`git log --diff-filter=A` filtered to `auth|mfa|oauth|session|passkey|
+stepup|webauthn`: zero matches, closing the gap this skill's own note about
+`GET /my-sign-offs` (MP-32) warns against. A fresh AST walk of `auth.py`'s
+`@router.*` decorators re-confirms the same 38 routes, same names, same auth
+dependencies and permission strings as pass 13's table; public/private split
+unchanged at 17/21.
+
+**AUTH-23** (MED, `POST /auth/step-up` has no account-tied lockout)
+re-verified OPEN/FLAGGED and unchanged — the handler is byte-identical since
+pass 12, and `docs/KNOWN_LIMITATIONS.md`'s entry for it is present and
+accurate. AUTH-15, AUTH-17, AUTH-21 and AUTH-22 remain closed; AUTH-4
+(informational, unbounded roster query) remains accepted. 0 fixes applied, 0
+new findings.
+
+**Completion gate:** flake8/black/isort clean on `app/ tests/ alembic/`
+(2744 files unchanged by black); `validate_migrations.py --strict` — 678
+revisions, single head `f90b1124e6f4`; `check_route_permissions.py --strict`
+— 280 routes, 0 errors/0 warnings; scoped backend tests (`-k "auth or mfa or
+oauth or consent or suspicious_ip or dependencies or permission or
+authentik or password or security_notification or stepup or kiosk or
+passkey or webauthn"`) — 1507 passed, 2 skipped (environment-only); the
+11-file standing guard suite run directly — 209 passed; `cd frontend && npm
+run typecheck` — 0 errors; `cd frontend && npm run lint` — 0 errors, 0
+warnings.
+
+Rotation row 01 → ✅ (pending this PR's merge). **Next `⬜` row for the
+iteration after this one: 02 — Permissions & roles** (prefix `PERM`,
+principal code `dependencies.py`, `core/permissions.py`, `roles.py`,
+`operational_ranks.py`, `officers.py`, `org_chart.py`).
 
 ### 2026-10-30 — Feature 00 (Cross-cutting baseline, pass 14) — watchdog pickup, full-rotation reset ride-along, 1 fixed (LOW, a re-sweep catch), 0 flagged (new)
 
