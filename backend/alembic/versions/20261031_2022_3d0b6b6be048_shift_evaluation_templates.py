@@ -24,7 +24,7 @@ in dependency order. Templates a department created are lost with the table;
 nothing else references them yet.
 
 Revision ID: 3d0b6b6be048
-Revises: 3fbd0fe30e5b
+Revises: db30a34afa5b
 Create Date: 2026-10-31 20:22:56.078131
 
 """
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "3d0b6b6be048"
-down_revision: Union[str, None] = "3fbd0fe30e5b"
+down_revision: Union[str, None] = "db30a34afa5b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

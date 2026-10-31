@@ -889,7 +889,11 @@ export const ElectionsPage: React.FC = () => {
                                 e.preventDefault();
                                 addPosition();
                                 setShowPositionDropdown(false);
-                              } else if (e.key === 'Escape') {
+                              } else if (e.key === 'Escape' && positionListboxOpen) {
+                                // Escape dismisses the open list only. Left to
+                                // bubble, it also reaches the dialog's Escape
+                                // handlers and discards the whole form.
+                                e.stopPropagation();
                                 setShowPositionDropdown(false);
                               }
                             }}
