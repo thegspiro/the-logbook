@@ -3,7 +3,7 @@
 DASH-37. The tile used to add every loan whose stored ``is_overdue`` flag was
 set, including one extended since the daily task flagged it, which the tab
 (due date in the past) leaves out. Both now use
-``InventoryService.overdue_checkout_clause``.
+``overdue_checkout_clause``.
 """
 
 import uuid
@@ -18,7 +18,7 @@ from app.models.inventory import (
     ItemStatus,
     TrackingType,
 )
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, overdue_checkout_clause
 from tests.test_admin_hub_db import _member, _org
 
 pytestmark = [pytest.mark.integration]
@@ -65,7 +65,7 @@ async def test_tile_count_equals_tab_rows(db_session):
     counted = await db_session.scalar(
         select(func.count(CheckOutRecord.id)).where(
             CheckOutRecord.organization_id == org.id,
-            InventoryService.overdue_checkout_clause(now),
+            overdue_checkout_clause(now),
         )
     )
 

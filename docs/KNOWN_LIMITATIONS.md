@@ -7120,7 +7120,7 @@ filter is shown on the page with a way to clear it:
   counts categories, so its number differs from the row count.
 - **Overdue returns** (`status=overdue`): opens the Overdue tab.
   - The tile and the tab now share one overdue rule,
-    `InventoryService.overdue_checkout_clause`. The tile used to count loans
+    `overdue_checkout_clause` (in `inventory_service.py`). The tile used to count loans
     whose stored flag was set even after they were extended.
   - The tab loads up to 200 loans.
 - **Admin hours** (`status=pending`): opens Pending Review.

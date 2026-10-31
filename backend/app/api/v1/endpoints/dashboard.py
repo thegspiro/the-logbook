@@ -63,7 +63,7 @@ from app.schemas.dashboard_pulse import (
 )
 from app.services.apparatus_service import ApparatusService
 from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, overdue_checkout_clause
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import (
     compute_org_compliance_pct,
@@ -236,7 +236,7 @@ async def get_asset_widgets(
         overdue = await db.scalar(
             select(func.count(CheckOutRecord.id)).where(
                 CheckOutRecord.organization_id == org_id,
-                InventoryService.overdue_checkout_clause(datetime.now(timezone.utc)),
+                overdue_checkout_clause(datetime.now(timezone.utc)),
             )
         )
         widgets.extend(

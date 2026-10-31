@@ -644,6 +644,27 @@ def is_pool_without_stock(item_data: Dict[str, Any]) -> bool:
     )
 
 
+def overdue_checkout_clause(now: datetime) -> Any:
+    """``InventoryService.checkout_is_overdue`` as a SQL condition.
+
+    The dashboard's Overdue returns tile and the Overdue tab it links to both
+    use this, so the tile counts exactly the loans the tab lists (DASH-37). The
+    tile used to add every loan whose stored flag was set, including one
+    extended since the daily task flagged it. A module function rather than a
+    method, so code that swaps the service class out still gets real SQL.
+    """
+    return and_(
+        CheckOutRecord.is_returned.is_(False),
+        or_(
+            CheckOutRecord.expected_return_at < now,
+            and_(
+                CheckOutRecord.expected_return_at.is_(None),
+                CheckOutRecord.is_overdue.is_(True),
+            ),
+        ),
+    )
+
+
 class InventoryService:
     """Service for inventory management"""
 
@@ -4978,7 +4999,7 @@ class InventoryService:
 
         query = select(CheckOutRecord).where(
             CheckOutRecord.organization_id == str(organization_id),
-            self.overdue_checkout_clause(now),
+            overdue_checkout_clause(now),
         )
         if exclude_item_types:
             query = query.where(
@@ -4998,26 +5019,6 @@ class InventoryService:
             .limit(limit)
         )
         return list(result.scalars().all())
-
-    @staticmethod
-    def overdue_checkout_clause(now: datetime) -> Any:
-        """:meth:`checkout_is_overdue` as a SQL condition, for counts and lists.
-
-        The dashboard's Overdue returns tile and the Overdue tab it links to
-        both use this, so the tile counts exactly the loans the tab lists
-        (DASH-37). The tile used to add every loan whose stored flag was set,
-        including one extended since the daily task flagged it.
-        """
-        return and_(
-            CheckOutRecord.is_returned.is_(False),
-            or_(
-                CheckOutRecord.expected_return_at < now,
-                and_(
-                    CheckOutRecord.expected_return_at.is_(None),
-                    CheckOutRecord.is_overdue.is_(True),
-                ),
-            ),
-        )
 
     @staticmethod
     def checkout_is_overdue(record: CheckOutRecord) -> bool:
