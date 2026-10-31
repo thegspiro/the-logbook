@@ -120,4 +120,35 @@ describe('usePushNotifications', () => {
     expect(SUB.unsubscribe).toHaveBeenCalledTimes(1);
     expect(result.current.subscribed).toBe(false);
   });
+
+  it('gives up with an error when no service worker ever becomes ready', async () => {
+    // `ready` never settles in a browser whose worker failed to register, and
+    // the toggle used to stay busy forever with nothing said.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: { ready: new Promise(() => {}) },
+        configurable: true,
+      });
+      installNotification('default', 'granted');
+      const { result } = renderHook(() => usePushNotifications());
+      await waitFor(() => expect(result.current.supported).toBe(true));
+
+      let outcome: boolean | undefined;
+      await act(async () => {
+        const pending = result.current.subscribe().then((value) => {
+          outcome = value;
+        });
+        await vi.advanceTimersByTimeAsync(15_000);
+        await pending;
+      });
+
+      expect(outcome).toBe(false);
+      expect(result.current.busy).toBe(false);
+      expect(result.current.error).toBe('Could not enable push notifications on this device.');
+      expect(mockPost).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
