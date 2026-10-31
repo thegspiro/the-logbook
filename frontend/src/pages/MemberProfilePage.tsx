@@ -80,6 +80,7 @@ import { UndoDropControl } from '../components/member-profile/UndoDropControl';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
+import { getWaiverStatusBadge } from '../utils/waiverStatus';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 // Types for inventory data
@@ -1506,34 +1507,41 @@ export const MemberProfilePage: React.FC = () => {
               <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Leave of Absence</h2>
                 <div className="space-y-3">
-                  {activeLeaves.map((leave) => (
-                    <div key={leave.id} className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-sm font-medium text-yellow-700 capitalize dark:text-yellow-400">
-                          {(leave.leave_type ?? '').replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-theme-text-muted text-xs">Active</span>
-                      </div>
-                      <p className="text-theme-text-secondary text-xs">
-                        {/* Calendar dates, not instants — run through a
+                  {activeLeaves.map((leave) => {
+                    // "active" from the API means not cancelled; whether the
+                    // leave is in force today is a matter of its dates.
+                    const badge = getWaiverStatusBadge(leave, getTodayLocalDate(tz));
+                    return (
+                      <div key={leave.id} className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="text-sm font-medium text-yellow-700 capitalize dark:text-yellow-400">
+                            {(leave.leave_type ?? '').replace(/_/g, ' ')}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <p className="text-theme-text-secondary text-xs">
+                          {/* Calendar dates, not instants — run through a
                             timezone these render a day early. */}
-                        {formatCalendarDate(leave.start_date, {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                        })}{' '}
-                        &ndash;{' '}
-                        {leave.end_date
-                          ? formatCalendarDate(leave.end_date, {
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit',
-                            })
-                          : 'Permanent'}
-                      </p>
-                      {leave.reason && <p className="text-theme-text-muted mt-1 text-xs">{leave.reason}</p>}
-                    </div>
-                  ))}
+                          {formatCalendarDate(leave.start_date, {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                          })}{' '}
+                          &ndash;{' '}
+                          {leave.end_date
+                            ? formatCalendarDate(leave.end_date, {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                              })
+                            : 'Permanent'}
+                        </p>
+                        {leave.reason && <p className="text-theme-text-muted mt-1 text-xs">{leave.reason}</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

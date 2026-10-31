@@ -1,5 +1,18 @@
 # Known Limitations & Open Decisions
 
+## Members — Members See the Built-In Tier Names (2026-10-31)
+
+The department's membership tiers ("Active Member", "Senior Member", …) come
+from `GET /users/membership-tiers/config`, which requires `members.manage`. A
+member without that grant sees the built-in names instead. In the directory's
+status filter and on profiles that is "Regular member" and "Life member", and a
+custom tier such as Senior is missing from the filter. Officers and members
+therefore describe the same person differently (workflow re-check MR-3).
+
+**Open decision:** expose the tier _names_ to members through a read-only
+endpoint (ids and names only, without the advancement rules), or decide that
+tier naming is officer-facing and leave it as it is.
+
 ## Members — No Supervisor or "Reports To" Relationship (2026-10-31)
 
 Nothing in the data model records who supervises whom. A member has a rank, a

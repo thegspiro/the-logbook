@@ -225,6 +225,23 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### Membership re-check (W08, W10–W15) — 2026-10-31
+
+Driven as: `admin`, `member` and `member2` on a fresh install, at 1280×900 and
+390×844. Held: every admin route and mutation refused for `member`, and contact
+data redacted from colleagues. Add member saved exactly one record on a double
+click. Clearing date of birth and phone saved the clear. The class and status
+filters and search found the edited member. The audit history recorded the edit.
+Waiver date validation worked. Deactivate worked through the step-up prompt.
+Nothing overflowed on a phone. Fixed: MR-1 (MED — the profile called future and
+expired leaves "Active"; it now shares the Waivers screen's rule) and MR-2 (LOW —
+the directory fired a refused tier-config request for every member). Flagged:
+MR-3 (LOW — members see built-in tier names; mirrored to KNOWN_LIMITATIONS),
+MR-4 (LOW — profile views crowd the audit history) and MR-7 (NIT — an unused
+membership store). Open: MR-5 and MR-6 (NIT). Gate: typecheck and lint clean;
+lint needed a larger Node heap with the harness running. The touched suites
+pass. See W10-W15-membership-recheck.md.
+
 ### W01 follow-up — The open onboarding findings — 2026-10-31
 
 Driven as: a fresh install, three times, at 390×844 (the review database only,
