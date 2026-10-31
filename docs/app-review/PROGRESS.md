@@ -64,7 +64,7 @@ from its open list.
 | B23 | security, audit & IP       | SEC2   | ✅     |
 | B24 | core infra                 | CI2    | ✅     |
 | B25 | onboarding                 | ONB2   | ⬜     |
-| B26 | public-portal              | PP2    | ⬜     |
+| B26 | public-portal              | PP2    | ✅     |
 | B27 | frontend shared            | FE2    | ⬜     |
 
 **36 features total.** After B27 the rotation wraps to A1.
@@ -3470,3 +3470,11 @@ secrets redacted for non-admins. See
   in-memory caches are bounded; requirements pins. **Not re-run:** the other checklist dimensions; CI-9,
   CI-4, CI-10 and CI-11 stay open. Gate: flake8 / black clean · 1,007 related tests pass · new file 42 pass,
   unit-marked. See core-infra.md → Pass 5. Next: B25 onboarding.
+- **B26 public-portal ✅ (pass 5).** Pitfall #27/#36 lens on the unauthenticated
+  writes. **PP2-2 FIXED:** `check_in_guest` was find-then-insert with no lock, so a
+  double scan of the guest QR (or a retried POST) inserted two attendee rows and
+  counted the guest twice; now serialized on the event row with a locking lookup,
+  covering both the guest-QR and room-kiosk paths. Race test red→green. Verified
+  fine: finance token approvals (already `FOR UPDATE`), Documenso/Cal.com/
+  Salesforce/PayPal webhooks. PP-6 and PP-7 residual unchanged. See
+  public-portal.md. Next: B27 frontend shared.
