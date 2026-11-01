@@ -1,6 +1,108 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), (this PR) (pass 13)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), (this PR) (pass 14)
+
+---
+
+## Pass 14 (2026-11-01)
+
+Step 0 (`search_pull_requests`, `is:pr is:open head:claude/security-review-`)
+found 0 open rotation PRs. PR #3911 (Feature 09, Medical screening, pass 14)
+had already merged (`6a1ad33`); row 09 was already `✅` from that PR's own
+commit. Rotation row 10 (Documents & legal) was the next `⬜`, confirmed by
+re-reading `PROGRESS.md`'s rotation table on a freshly fetched `main`.
+
+**Baseline** `e8a5c00` (PR #3816's merge, pass 13). `git diff --stat` against
+it, across **every** file this repository names with "document" or "legal"
+in its path — not only the declared scope, to catch a file the table's
+`documents.py`/`station_documents.py`/`legal_documents.py` list would miss —
+found exactly three changed frontend files, zero changed backend files:
+
+| File                                                                   | +/−     | What changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pages/DocumentsPage.tsx`                                              | +55/−47 | Pure layout refactor: the page header markup was lifted into a local `pageHeader` constant so it renders identically above the loading spinner (previously a full-screen centred spinner replaced the header outright, landing the page ~400px above where its box would be). No data flow, permission check, or API call touched.                                                                                                                                                                                                                                                                                                                     |
+| `components/documents/AdminOnlyFoldersNotice.tsx`                      | +5/−6   | Swapped a hand-written flex row for the shared `split-row`/`split-row-main`/`split-row-aside` utility classes. Pure CSS class names; the folder-release button, its `facilities.delete`/`facilities.manage` gate, and the request itself are untouched.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `modules/prospective-members/components/ApplicantDocumentsSection.tsx` | +6/−5   | **Out of this feature's scope** — gates the upload/delete buttons on `useApplicantAccess().can_work` instead of bare `applicant.status === ACTIVE`, part of Membership Pipeline's case-manager/interviewer assignment model (reviewed under MP-08 pass 15, `PROSPECTIVE_MEMBERS_VIEW_ALL`/`prospect_assignments`). The endpoint this component calls lives in `membership_pipeline.py`, not `documents.py`/`station_documents.py`/`legal_documents.py`, and frontend button visibility is not itself an access control regardless of feature — the server-side gate is MP-08's concern. Noted here only because the filename matched the scope search. |
+
+No other file under `backend/app/` or `frontend/src/` whose path contains
+"document" or "legal" differs from the pass-13 baseline — confirmed by
+`git diff --stat` over the full, broadened file list (public `legal.py`,
+`agenda_document_access.py`, `module_documents.py`, `print_document.py`,
+`print_document_service.py`, `document_service.py`, `mcp/tools/documents.py`,
+every frontend module and test file matching either name) returning empty
+for all of it except the three rows above.
+
+### Reviewed in full
+
+- **Route enumeration, by AST** (not `grep -c`): `documents.py` 15,
+  `station_documents.py` 2, `legal_documents.py` 7 — 24 total, identical set
+  and count to pass 9-13. Every route carries a `Depends(...)`:
+  - `documents.py` — all 15 gated by `require_permission("documents.view")`
+    or `require_permission("documents.manage")` per the sensitivity of the
+    operation (view/list/download/summary vs. create/update/delete/folder
+    management) — unchanged from pass 13.
+  - `station_documents.py` — both routes (`preview_station_document`,
+    `print_station_document`) carry only `Depends(get_current_user)`, matching
+    their two listed entries in `tests/permissionless_route_baseline.txt`;
+    intentional self-service print/preview, not a finding.
+  - `legal_documents.py` — all 7 OR-gated: 5 on
+    `require_permission("legal.propose", "legal.publish", "settings.manage")`
+    and 2 (`publish_revision`, `revert_to_default`) on the narrower
+    `require_permission("legal.publish", "settings.manage")` — unchanged from
+    pass 13, every alternative in each OR-gate re-checked against
+    `DEFAULT_POSITIONS` and none newly broadened.
+- **LIKE escaping** — `documents_service.py:1700-1702`, the one search path
+  in this feature, still passes `escape=LIKE_ESCAPE_CHAR` on all three
+  `ilike()` calls (`Document.name`/`.description`/`.tags`). No bare
+  `csv.writer`/`csv.DictWriter` anywhere in the feature's endpoint or service
+  files (re-grepped, not assumed).
+- **DOC-31** (`documents_service.py:1500-1570`, `_release_document_references`)
+  — read directly rather than taken on the prior write-up's word: the
+  `PurchaseRequest`/`ExpenseReport` refusal checks (lines 1525, 1545) are
+  still plain `SELECT`s with no `.with_for_update()` before refusing a
+  receipt-document delete past `DRAFT`. Byte-identical to pass 13 (the file
+  has zero diff against baseline), so the race window described in
+  `docs/KNOWN_LIMITATIONS.md` is unaffected.
+- **`app/core/permissions.py`** changed (+124/−0) in the wider repo diff
+  between baseline and `main`, but entirely for `prospective_members.*` and
+  new committee positions (`PROSPECTIVE_MEMBERS_VIEW_ALL`,
+  `community_outreach_team`, `history_committee`, `fundraising_committee`,
+  `membership_committee`) — no `documents.*`/`legal.*` permission string
+  added, removed, or reassigned to a different `DEFAULT_POSITIONS` entry.
+- **Models** (`models/document.py`, `models/legal.py`) and **schemas**
+  (`schemas/documents.py`, `schemas/legal.py`) — zero diff against baseline.
+
+## Findings — 0 fixed, 0 new findings
+
+- **DOC-31 — LOW — FLAGGED — re-confirmed OPEN, unaffected.** Same as pass
+  11-13: `_release_document_references`'s refusal check is a plain `SELECT`,
+  not `.with_for_update()`, on the referencing `PurchaseRequest`/
+  `ExpenseReport` rows before refusing a receipt-document delete. Already in
+  `docs/KNOWN_LIMITATIONS.md`; no new information this pass.
+
+No other standing OPEN/FLAGGED finding exists for this feature (passes 9-13
+all closed with none besides DOC-31).
+
+## Completion gate
+
+| Check                                                                                                                                                                      | Result                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                              | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                                                                                                                                       | ✅ 2776 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                  | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                          | ✅ 684 revisions, single head `5781476f2012`    |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                          | ✅ 283 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only"`                                                                      | ✅ 656 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                                                                                         | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                                                                                              | ✅ 0 errors, 0 warnings                         |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/pages/DocumentsPage.access.test.tsx src/pages/DocumentsPage.delete.test.tsx src/components/documents src/pages/legal` | ✅ 74 passed (8 files)                          |
+
+No source file needed a fix this pass — only this findings file and
+`PROGRESS.md` were updated.
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 

@@ -24262,7 +24262,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -24294,6 +24294,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-01 — Feature 10 (Documents & legal, pass 14) — 0 fixed, 0 new findings; zero backend delta
+
+Step 0 (`search_pull_requests`, `is:pr is:open head:claude/security-review-`)
+found 0 open rotation PRs. PR #3911 (Feature 09, Medical screening, pass 14)
+had already merged (`6a1ad33`); row 09 was already `✅` from that PR's own
+commit. Row 10 (Documents & legal) was the next `⬜`, confirmed fresh against
+the rotation table on a freshly fetched `main`.
+
+See `docs/security-review/DOC-10-documents-legal.md`'s **Pass 14** section
+for the full review: baseline `e8a5c00` (PR #3816's merge, pass 13) to
+current `main`. `git diff --stat` across every backend and frontend file in
+the repo whose path contains "document" or "legal" — deliberately broader
+than the declared scope — found zero changed backend files and three
+changed frontend files: two pure layout/CSS refactors
+(`DocumentsPage.tsx`, `AdminOnlyFoldersNotice.tsx`, neither touching data
+flow or permission checks) and one file that matched the filename search but
+belongs to a different feature (`ApplicantDocumentsSection.tsx`, a
+`useApplicantAccess().can_work` button-visibility gate tied to Membership
+Pipeline's case-manager assignment model, reviewed under MP-08 pass 15 — its
+endpoint lives in `membership_pipeline.py`, not this feature's scope). All
+24 routes re-enumerated by AST (`documents.py` 15, `station_documents.py` 2,
+`legal_documents.py` 7), identical set and count to passes 9-13; every
+alternative in `legal_documents.py`'s two OR-gates re-checked against
+`DEFAULT_POSITIONS`, none newly broadened. LIKE escaping and the absence of
+a raw `csv.writer` both re-grepped directly. DOC-31 re-confirmed OPEN,
+unaffected (the file it lives in, `documents_service.py`, has zero diff
+against baseline).
+
+Completion gate: flake8/black/isort on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 684 revisions, single head
+`5781476f2012`; `check_route_permissions.py --strict` — 283 routes, 0
+errors/warnings; scoped backend tests (`-k "document or legal or
+station_document or facility_folder or folder or admin_only"`) — 656 passed,
+1 pre-existing skip (`py_vapid`); frontend `npm run typecheck`/`npm run
+lint` — 0 errors, 0 warnings; scoped frontend suite (`DocumentsPage`
+variants, `components/documents`, `pages/legal`) — 74 passed (8 files).
+
+Rotation row 10 → ✅ (pending this PR's merge); next is Feature 11
+(Inventory) — re-check `search_pull_requests`/`list_pull_requests` fresh
+rather than trusting this note.
 
 ### 2026-11-01 — Feature 09 (Medical screening, PHI, pass 14) — watchdog pickup, 0 fixed, 0 new findings; cosmetic-only delta; corrects a stale MS-16 claim
 
