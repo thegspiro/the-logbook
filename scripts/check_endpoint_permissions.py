@@ -74,7 +74,22 @@ BODY_AUTHORIZERS = {
     "_authorize_test_write",
     # finance.view, or the member who owns the budget line (finance.py).
     "_authorize_budget_view",
+    # training.manage, or the shift's own officer (shift_completion.py). Also
+    # imported by shift_evaluations.py, so it is resolved across files.
+    "_authorize_report_filing",
+    # shift_evaluations.py's wrapper: authorizes through the helper above,
+    # then loads the shift.
+    "_shift_for_filing",
+    # The training.manage half of the officer-or-trainer checks, called inline
+    # where the other half is a row comparison (shift_completion.py).
+    "_manages_training",
 }
+
+# Calls whose dotted string literal is a permission being checked, when they
+# appear inside a body authorizer. `_has_permission` is the grant-matching
+# primitive (`_has_permission("training.manage", perms)`) that
+# `_manages_training` uses instead of `user_has_permission`.
+PERMISSION_CHECKS = PERMISSION_HELPERS | {"user_has_permission", "_has_permission"}
 
 # Per-applicant access dependencies (backend/app/api/prospect_access.py). A
 # route gated by one of these admits a member assigned to the applicant as well
@@ -188,7 +203,19 @@ def _call_name(node: ast.Call) -> str | None:
     return None
 
 
-def authorizer_permissions(tree: ast.AST) -> dict[str, set[str]]:
+def _defined_authorizers(tree: ast.AST) -> set[str]:
+    """The body authorizers this module defines itself."""
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in BODY_AUTHORIZERS
+    }
+
+
+def authorizer_permissions(
+    tree: ast.AST, shared: dict[str, set[str]] | None = None
+) -> dict[str, set[str]]:
     """Permissions each body authorizer in this module enforces internally.
 
     ``_authorize_assignment_management(service, user, assignment_id)`` takes no
@@ -203,17 +230,30 @@ def authorizer_permissions(tree: ast.AST) -> dict[str, set[str]]:
     is at the call site, where it is already read — because a bare ``Name``
     reference is not a string constant.
     """
+    local: dict[str, ast.AST] = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in BODY_AUTHORIZERS
+    }
+    shared = shared or {}
     found: dict[str, set[str]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        if node.name not in BODY_AUTHORIZERS:
-            continue
+
+    def resolve(name: str, seen: frozenset[str]) -> set[str]:
+        # A helper defined here wins over one of the same name elsewhere; one
+        # imported from another endpoint module is read from `shared`.
+        if name not in local:
+            return set(shared.get(name, set()))
+        if name in found:
+            return found[name]
+        if name in seen:  # a recursive pair adds nothing it does not already
+            return set()
         perms: set[str] = set()
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Call) and _call_name(sub) in (
-                PERMISSION_HELPERS | {"user_has_permission"}
-            ):
+        for sub in ast.walk(local[name]):
+            if not isinstance(sub, ast.Call):
+                continue
+            callee = _call_name(sub)
+            if callee in PERMISSION_CHECKS:
                 for arg in sub.args:
                     if (
                         isinstance(arg, ast.Constant)
@@ -221,7 +261,19 @@ def authorizer_permissions(tree: ast.AST) -> dict[str, set[str]]:
                         and PERM_TOKEN_RE.fullmatch(arg.value)
                     ):
                         perms.add(arg.value)
-        found[node.name] = perms
+            elif callee in BODY_AUTHORIZERS and callee != name:
+                # A wrapper inherits what the helper it delegates to enforces:
+                # `_shift_for_filing` adds nothing of its own beyond
+                # `_authorize_report_filing`.
+                perms |= resolve(callee, seen | {name})
+        found[name] = perms
+        return perms
+
+    for name in local:
+        resolve(name, frozenset())
+    # Imported helpers the routes here call by name, so a call site resolves.
+    for name, perms in shared.items():
+        found.setdefault(name, set(perms))
     return found
 
 
@@ -401,16 +453,41 @@ def analyze() -> tuple[list[Finding], int]:
     findings: list[Finding] = []
     checked = 0
 
+    trees: list[tuple[str, ast.AST]] = []
     for path in sorted(glob.glob(ENDPOINT_GLOB, recursive=True)):
         try:
-            tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
+            trees.append(
+                (path, ast.parse(open(path, encoding="utf-8").read(), filename=path))
+            )
         except SyntaxError as exc:  # pragma: no cover - a broken file fails lint
             print(f"{path}: could not parse: {exc}", file=sys.stderr)
-            continue
 
-        # Resolved once per module: a body authorizer and the routes calling it
-        # always live in the same endpoint file.
-        authorizers = authorizer_permissions(tree)
+    # A body authorizer used to be assumed to live beside the routes calling
+    # it. shift_evaluations.py imports `_authorize_report_filing` from
+    # shift_completion.py, and reading only the calling module reported its
+    # four gated routes as `undefended`. So each helper is resolved first in
+    # the module that defines it, and offered to every other module by name;
+    # a name defined in more than one module is not shared, since which one a
+    # caller imports cannot be told from the name alone.
+    # Repeated until nothing changes, so a wrapper of an imported helper picks
+    # up what that helper enforces however many modules the chain crosses.
+    owners: dict[str, list[ast.AST]] = {}
+    for _path, tree in trees:
+        for name in _defined_authorizers(tree):
+            owners.setdefault(name, []).append(tree)
+    shared: dict[str, set[str]] = {}
+    for _ in range(len(trees) + 1):
+        resolved = {
+            name: authorizer_permissions(homes[0], shared)[name]
+            for name, homes in owners.items()
+            if len(homes) == 1
+        }
+        if resolved == shared:
+            break
+        shared = resolved
+
+    for path, tree in trees:
+        authorizers = authorizer_permissions(tree, shared)
         constants = module_permission_constants(tree)
 
         for node in ast.walk(tree):

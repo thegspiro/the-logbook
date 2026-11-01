@@ -17,13 +17,15 @@ An evaluation records a copy of the template it was filled out on, so editing
 a template never rewrites a submitted evaluation.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -35,6 +37,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 #: Who fills out an evaluation on this template. Only the shift officer for
@@ -148,3 +151,141 @@ class ShiftEvaluationTemplate(Base):
         return (
             f"<ShiftEvaluationTemplate(name={self.name!r}, org={self.organization_id})>"
         )
+
+
+#: An evaluation is a draft until the evaluator submits it. Only a submitted
+#: one satisfies close-out or is shown to the member.
+EVALUATION_STATUSES: tuple[str, ...] = ("draft", "submitted")
+
+#: The ``scope_key`` of an evaluation that is not for one program: the general
+#: form, or one evaluation counting for every program the member is in.
+GENERAL_SCOPE = "general"
+COMBINED_SCOPE = "combined"
+
+
+class ShiftEvaluation(Base):
+    """One member's evaluation for one shift, filled out on a template.
+
+    ``scope_key`` says what the evaluation is for: an enrollment id (one
+    program), ``combined`` (every program, when the department allows one
+    evaluation to count for several) or ``general`` (the department's general
+    form). The unique key on (shift, member, scope) is what makes a second
+    save, or two officers saving at once, land on the same row rather than a
+    duplicate (Pitfall #36).
+
+    The template is copied into ``template_snapshot`` on first save, so a
+    later edit to the template never changes what this evaluation asked or
+    how it is read back. The ratings and comments can name patients ("68 y/o
+    syncope"), so they are encrypted at rest; the computed average is not,
+    so statistics can be read without decrypting every row.
+    """
+
+    __tablename__ = "shift_evaluations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # SET NULL: the evaluation is the member's record and outlives a deleted
+    # shift; the snapshot columns below keep it readable (Pitfall #2).
+    shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("shifts.id", ondelete="SET NULL", name="fk_shift_evaluations_shift"),
+        nullable=True,
+    )
+    shift_date: Mapped[date] = mapped_column(Date, nullable=False)
+    shift_start: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    shift_end: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    unit_label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    member_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # SET NULL, as on shift reports: deleting a former officer must not delete
+    # the evaluations they wrote about other members.
+    evaluator_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    scope_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    # Enrollment ids this evaluation counts toward (one, several, or none for
+    # the general form).
+    enrollment_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    program_names: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+
+    template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluation_templates.id",
+            ondelete="SET NULL",
+            name="fk_shift_evaluations_template",
+        ),
+        nullable=True,
+    )
+    template_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    template_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+    status: Mapped[str] = mapped_column(
+        String(20), default="draft", server_default="draft", nullable=False
+    )
+    # {header_field_key: "B"}
+    header_values: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
+    # {"calls": 7, "transports": 4, "refusals": 2}; only the template's keys.
+    statistics: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False)
+    # {item_key: {"rating": int | None, "not_applicable": bool, "comment": str | None}}
+    responses: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        EncryptedJSON, nullable=True
+    )
+    closing_comments: Mapped[Optional[str]] = mapped_column(
+        EncryptedText, nullable=True
+    )
+
+    average_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    rated_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    # Ratings at or below the template's comment threshold.
+    low_rating_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "shift_id",
+            "member_id",
+            "scope_key",
+            name="uq_shift_evaluation_shift_member_scope",
+        ),
+        Index(
+            "idx_shift_evaluation_org_member_date",
+            "organization_id",
+            "member_id",
+            "shift_date",
+        ),
+        Index("idx_shift_evaluation_org_shift", "organization_id", "shift_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ShiftEvaluation(member={self.member_id}, shift={self.shift_id}, scope={self.scope_key})>"

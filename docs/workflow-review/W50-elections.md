@@ -1424,17 +1424,28 @@ eligibility gate.
 member waived after opening is correctly told "not on the frozen roll".
 Showing the live reason only when it still fails would cover both cases.
 
-### W50-R4 — NIT — The roster's "eligible from" date is day-first — OPEN
+### W50-R4 — NIT — The roster's "eligible from" date is day-first — ✅ FIXED (2026-11-01)
 
 The roster reads "eligible from 30 April 2027". The profile card reads
 "Apr 30, 2027", and every other date is month-first. The string is composed
 in `membership_tier_service.py` (`{day.day} {day:%B %Y}`).
 
-### W50-R5 — NIT — The position input has no combobox semantics — OPEN
+**Fix:** `wait_ineligibility_reason` now writes "Apr 30, 2027", the same
+format as the profile card. It is the one wording for the ballot check, the
+roster and the profile. `test_still_waiting` pins it.
+
+### W50-R5 — NIT — The position input has no combobox semantics — ✅ FIXED (2026-11-01)
 
 `#election-position-input` drives a `role="listbox"` but carries no
 `role="combobox"`, `aria-expanded` or `aria-controls`. A screen reader is not
 told that suggestions opened.
+
+**Fix:** the input is now `role="combobox"` with `aria-autocomplete="list"`,
+`aria-expanded` that follows the list, and `aria-controls` naming the
+listbox's id while it is open. The `<li>` wrappers are
+`role="presentation"`, so each option belongs to the listbox. Covered in
+`ElectionsPage.w50-position-add.test.tsx`; the tests that found the input by
+its old `textbox` role now find it as a combobox.
 
 ## Completion gate
 

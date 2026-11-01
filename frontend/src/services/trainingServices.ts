@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
+import { newRequestId } from '../utils/requestId';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { toAppError } from '../utils/errorHandling';
 import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
@@ -1354,7 +1355,10 @@ export const trainingSubmissionService = {
   },
 
   // Member submissions
-  async createSubmission(data: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+  async createSubmission(input: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+    // Chosen once, before the first attempt: a queued copy is resent whenever
+    // an answer goes missing, and the server stores a repeat of this key once.
+    const data: TrainingSubmissionCreate = { ...input, client_request_id: input.client_request_id || newRequestId() };
     // If the device is offline, persist the submission to IndexedDB so it
     // syncs when connectivity returns. This is the most-used action in the
     // product and must never silently drop because of weak station wifi.
@@ -1572,6 +1576,66 @@ export const shiftEvaluationTemplateService = {
       updates
     );
     return response.data;
+  },
+};
+
+// ============================================
+// Shift Evaluations Service
+// ============================================
+
+const evaluationPath = (shiftId: string, memberId: string, scopeKey: string) =>
+  `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}/members/${encodeURIComponent(
+    memberId
+  )}/${encodeURIComponent(scopeKey)}`;
+
+export const shiftEvaluationService = {
+  /** Who on a shift needs an evaluation, and where each one stands. */
+  async getRoster(shiftId: string): Promise<import('../types/training').ShiftEvaluationRoster> {
+    const response = await api.get<import('../types/training').ShiftEvaluationRoster>(
+      `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}`
+    );
+    return response.data;
+  },
+
+  async getForm(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    templateId?: string
+  ): Promise<import('../types/training').ShiftEvaluationFormResponse> {
+    const response = await api.get<import('../types/training').ShiftEvaluationFormResponse>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      templateId ? { params: { template_id: templateId } } : undefined
+    );
+    return response.data;
+  },
+
+  async save(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    body: import('../types/training').ShiftEvaluationSaveBody
+  ): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.put<import('../types/training').ShiftEvaluationDetail>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      body
+    );
+    return response.data;
+  },
+
+  async get(evaluationId: string): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail>(
+      `/training/shift-evaluations/${encodeURIComponent(evaluationId)}`
+    );
+    return response.data;
+  },
+
+  /** The caller's own submitted evaluations they may see yet. */
+  async listMine(): Promise<import('../types/training').ShiftEvaluationDetail[]> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail[]>(
+      '/training/shift-evaluations/mine'
+    );
+    return asArray(response.data);
   },
 };
 

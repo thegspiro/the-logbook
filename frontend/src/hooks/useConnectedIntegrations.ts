@@ -11,6 +11,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { integrationsService } from '../services/api';
+import { useEnabledModules } from './useEnabledModules';
 
 interface UseConnectedIntegrationsResult {
   /** Set of integration_type values whose status is "connected". */
@@ -23,10 +24,9 @@ interface UseConnectedIntegrationsResult {
 
 interface UseConnectedIntegrationsOptions {
   /**
-   * False skips the request and reports nothing connected. The navigation
-   * passes the Integrations module switch here: with the module off the
-   * endpoint answers 403, and every page load fired it from both navigation
-   * bars (workflow review W07).
+   * False skips the request and reports nothing connected — for a caller whose
+   * own permission makes the answer irrelevant. The Integrations module switch
+   * is checked here regardless, so a caller need not pass it.
    */
   enabled?: boolean;
 }
@@ -36,9 +36,16 @@ export const useConnectedIntegrations = ({
 }: UseConnectedIntegrationsOptions = {}): UseConnectedIntegrationsResult => {
   const [connected, setConnected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  // The endpoint sits behind the Integrations module gate and answers 403 when
+  // the department has it off. Only the navigation bars used to check, so the
+  // dozen other callers drew a refused request on every load of a fresh
+  // install that skipped the module (workflow reviews W07 and W01).
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const shouldFetch = enabled && isModuleOn('integrations');
 
   useEffect(() => {
-    if (!enabled) {
+    if (modulesLoading) return undefined;
+    if (!shouldFetch) {
       setConnected(new Set());
       setLoading(false);
       return undefined;
@@ -60,7 +67,7 @@ export const useConnectedIntegrations = ({
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [shouldFetch, modulesLoading]);
 
   const isConnected = useCallback((integrationType: string) => connected.has(integrationType), [connected]);
 

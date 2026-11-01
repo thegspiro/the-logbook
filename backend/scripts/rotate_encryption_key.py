@@ -69,6 +69,11 @@ _PLAIN_COLUMNS = [
         ],
     ),
     (
+        "shift_evaluations",
+        "id",
+        ["responses", "closing_comments"],
+    ),
+    (
         "users",
         "id",
         [

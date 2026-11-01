@@ -40,6 +40,7 @@ export {
   trainingSubmissionService,
   trainingModuleConfigService,
   shiftEvaluationTemplateService,
+  shiftEvaluationService,
   skillsTestingService,
   courseSyllabusService,
   courseCohortService,

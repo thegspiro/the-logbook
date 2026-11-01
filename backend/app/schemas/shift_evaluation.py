@@ -14,8 +14,8 @@ ratings already given against it.
 
 import re
 import uuid
-from datetime import datetime
-from typing import List, Literal, Optional
+from datetime import date, datetime
+from typing import Annotated, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -290,3 +290,143 @@ class ShiftEvaluationSettingsUpdate(BaseModel):
     general_shift_evaluation_template_id: Optional[uuid.UUID] = None
     general_shift_evaluation_mode: Optional[GeneralShiftEvaluationMode] = None
     one_shift_evaluation_for_multiple_programs: Optional[bool] = None
+
+
+# ---------------------------------------------------------------------------
+# Filled-out evaluations
+# ---------------------------------------------------------------------------
+
+MAX_COMMENT_LENGTH = 2000
+MAX_CLOSING_COMMENTS_LENGTH = 5000
+MAX_HEADER_VALUE_LENGTH = 200
+MAX_STATISTIC_VALUE = 1000
+
+
+class EvaluationItemResponse(BaseModel):
+    """One item's answer: a rating, or N/A, and an optional comment."""
+
+    rating: Optional[int] = Field(None, ge=0, le=100)
+    not_applicable: bool = False
+    comment: Optional[str] = Field(None, max_length=MAX_COMMENT_LENGTH)
+
+    @model_validator(mode="after")
+    def _settle(self) -> "EvaluationItemResponse":
+        self.comment = _clean_text(self.comment)
+        if self.not_applicable and self.rating is not None:
+            raise ValueError("An item is either rated or N/A, not both")
+        return self
+
+
+class ShiftEvaluationSave(BaseModel):
+    """What the evaluation page sends on every save.
+
+    ``submit`` false keeps it a draft, which may be incomplete; true checks
+    that every item is answered and every required comment is written.
+    The template's own rules are applied by the service, which knows them.
+    """
+
+    template_id: Optional[uuid.UUID] = None
+    header_values: dict[str, str] = Field(
+        default_factory=dict, max_length=MAX_HEADER_FIELDS
+    )
+    statistics: dict[str, Annotated[int, Field(ge=0, le=MAX_STATISTIC_VALUE)]] = Field(
+        default_factory=dict, max_length=3
+    )
+    responses: dict[str, EvaluationItemResponse] = Field(
+        default_factory=dict, max_length=MAX_ITEMS_TOTAL
+    )
+    closing_comments: Optional[str] = Field(
+        None, max_length=MAX_CLOSING_COMMENTS_LENGTH
+    )
+    submit: bool = False
+
+    @model_validator(mode="after")
+    def _settle(self) -> "ShiftEvaluationSave":
+        self.closing_comments = _clean_text(self.closing_comments)
+        return self
+
+
+class TemplateOption(BaseModel):
+    id: str
+    name: str
+
+
+class ShiftEvaluationSummary(UTCResponseBase):
+    id: str
+    status: str
+    average_rating: Optional[float] = None
+    rated_count: int = 0
+    low_rating_count: int = 0
+    evaluator_name: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ShiftEvaluationRequirement(BaseModel):
+    member_id: str
+    member_name: str
+    seat: Optional[str] = None
+    scope_key: str
+    program_names: List[str] = Field(default_factory=list)
+    # False for an optional general form, and for an evaluation already on file
+    # that no rule calls for any more (kept so it is not orphaned).
+    required: bool
+    template_options: List[TemplateOption] = Field(default_factory=list)
+    evaluation: Optional[ShiftEvaluationSummary] = None
+
+
+class ShiftEvaluationRoster(UTCResponseBase):
+    shift_id: str
+    shift_date: date
+    shift_start: Optional[datetime] = None
+    shift_end: Optional[datetime] = None
+    unit_label: Optional[str] = None
+    platoon: Optional[str] = None
+    requirements: List[ShiftEvaluationRequirement]
+
+
+class ShiftEvaluationDetail(UTCResponseBase):
+    id: str
+    member_id: str
+    member_name: Optional[str] = None
+    evaluator_id: Optional[str] = None
+    evaluator_name: Optional[str] = None
+    shift_id: Optional[str] = None
+    shift_date: date
+    shift_start: Optional[datetime] = None
+    shift_end: Optional[datetime] = None
+    unit_label: Optional[str] = None
+    scope_key: str
+    program_names: List[str] = Field(default_factory=list)
+    template_id: Optional[str] = None
+    template_version: int
+    template: dict
+    status: str
+    header_values: dict[str, str]
+    statistics: dict[str, int]
+    responses: dict[str, EvaluationItemResponse]
+    closing_comments: Optional[str] = None
+    average_rating: Optional[float] = None
+    rated_count: int = 0
+    low_rating_count: int = 0
+    submitted_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ShiftEvaluationForm(UTCResponseBase):
+    """Everything the evaluation page needs to open."""
+
+    requirement: ShiftEvaluationRequirement
+    shift_id: str
+    shift_date: date
+    shift_start: Optional[datetime] = None
+    shift_end: Optional[datetime] = None
+    unit_label: Optional[str] = None
+    platoon: Optional[str] = None
+    # The form to fill out: the evaluation's own copy once one exists,
+    # otherwise the chosen template as it is now.
+    template: dict
+    template_id: Optional[str] = None
+    evaluation: Optional[ShiftEvaluationDetail] = None
+    # Suggested values for a new evaluation, from the shift's records.
+    prefill_statistics: dict[str, int] = Field(default_factory=dict)

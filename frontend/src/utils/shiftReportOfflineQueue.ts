@@ -15,7 +15,10 @@ export interface QueuedShiftReport extends OwnedQueueEntry {
   id: string;
   payload: BatchShiftReportCreate;
   queuedAt: number;
+  /** Times the server has refused this report outright (a 4xx, not an outage). */
   retries: number;
+  /** What the server said the last time it refused the report. */
+  lastError?: string;
 }
 
 // Shares the `logbook-offline` database with the equipment-check queue; the
@@ -76,20 +79,27 @@ export async function dequeueShiftReport(id: string): Promise<void> {
   });
 }
 
-export async function markReportRetry(id: string): Promise<void> {
+/**
+ * Record that the server refused a report, and why. Returns how many times it
+ * has now been refused, or 0 when the report is no longer queued.
+ */
+export async function markReportRetry(id: string, lastError?: string): Promise<number> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_REPORTS, 'readwrite');
     const store = tx.objectStore(STORE_REPORTS);
     const getReq = store.get(id);
+    let retries = 0;
     getReq.onsuccess = () => {
       const entry = getReq.result as QueuedShiftReport | undefined;
       if (entry) {
         entry.retries += 1;
+        if (lastError !== undefined) entry.lastError = lastError;
+        retries = entry.retries;
         store.put(entry);
       }
     };
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => resolve(retries);
     tx.onerror = () => reject(tx.error ?? new Error('Failed to mark report retry'));
   });
 }

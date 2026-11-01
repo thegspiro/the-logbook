@@ -314,8 +314,10 @@ const ITTeamBackupAccess: React.FC = () => {
               </div>
 
               <p className="text-theme-text-muted mb-6 text-sm">
-                The first person listed is the primary contact. Anyone without an account gets one when setup finishes,
-                and every contact is emailed whenever a member asks to reset their password.
+                The first person listed is the primary contact, and every contact is emailed whenever a member asks to
+                reset their password. Anyone without an account gets a member account when setup finishes — no password
+                is sent, so they sign in by choosing <strong>Forgot your password?</strong> once email is set up. Give
+                them a position from Members afterwards if they need administrative access.
               </p>
 
               {itTeam.map((member, index) => (

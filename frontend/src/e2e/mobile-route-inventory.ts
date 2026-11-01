@@ -1274,6 +1274,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet — saved and scheduled reports',
   },
   {
+    path: '/reports/evaluations',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — member evaluation setup',
+  },
+  {
+    path: '/reports/evaluations/templates/:templateId',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/scheduling',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'ratchet',
@@ -1523,6 +1535,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/scheduling/shift-reports/print',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/scheduling/shift-evaluations/print',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
