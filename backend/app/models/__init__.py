@@ -482,6 +482,12 @@ from app.models.user import (
     UserStatus,
     user_roles,
 )
+from app.models.zeffy import (
+    ZeffyCampaignLink,
+    ZeffyLinkTarget,
+    ZeffyPayment,
+    ZeffyPaymentState,
+)
 
 __all__ = [
     # Admin hours models
@@ -573,6 +579,10 @@ __all__ = [
     "Integration",
     "IntegrationSyncLog",
     "WeatherAlert",
+    "ZeffyCampaignLink",
+    "ZeffyLinkTarget",
+    "ZeffyPayment",
+    "ZeffyPaymentState",
     "CalendarSyncMapping",
     "McpServiceKey",
     "UserPasskey",

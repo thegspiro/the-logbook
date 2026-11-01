@@ -1405,6 +1405,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/grants/donations/new`          | Record Donation     | `fundraising.manage` |
 | `/grants/pledges`                | Pledges             | `fundraising.view`   |
 | `/grants/events`                 | Fundraising Events  | `fundraising.view`   |
+| `/grants/zeffy`                  | Zeffy               | `fundraising.view`   |
 | `/grants/reports`                | Fundraising Reports | `fundraising.view`   |
 
 ---

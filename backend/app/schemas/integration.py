@@ -299,6 +299,21 @@ class PayPalConfig(BaseModel):
     auto_apply_payments: bool = PAYPAL_AUTO_APPLY_DEFAULT
 
 
+class ZeffyConfig(BaseModel):
+    """Zeffy API key plus the webhook signing secret.
+
+    Read-only: the key lists payments and campaigns, and nothing is ever
+    written to Zeffy. The signing secret (``whsec_...``) is optional — without
+    it the webhook refuses every delivery and payments arrive on the hourly
+    sync instead.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: str = ""
+    webhook_secret: str = ""
+
+
 class ClaudeMcpConfig(BaseModel):
     """What the department lets an MCP client see and do.
 
@@ -566,6 +581,7 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "documenso": DocumensoConfig,
     "calcom": CalcomConfig,
     "paypal": PayPalConfig,
+    "zeffy": ZeffyConfig,
     "claude-mcp": ClaudeMcpConfig,
     "google-workspace": GoogleWorkspaceConfig,
     "microsoft-365": Microsoft365Config,
