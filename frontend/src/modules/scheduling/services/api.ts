@@ -1198,6 +1198,25 @@ export const schedulingService = {
     const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', { params });
     return response.data;
   },
+  /**
+   * Every approved time-off span of one member. `user_id` scopes an officer's
+   * read to that member; a member's own read is scoped server-side to them
+   * whatever is passed. Pages until the total is reached, because the list is
+   * ordered by creation and a cut-off page could drop a span still ahead.
+   */
+  async getApprovedTimeOffFor(userId: string, config?: AxiosRequestConfig): Promise<SchedulingTimeOffRequest[]> {
+    const pageSize = 1000;
+    const collected: SchedulingTimeOffRequest[] = [];
+    for (;;) {
+      const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', {
+        params: { status: 'approved', user_id: userId, skip: collected.length, limit: pageSize },
+        ...config,
+      });
+      const page = asArray(response.data?.items);
+      collected.push(...page);
+      if (page.length < pageSize || collected.length >= (response.data?.total ?? 0)) return collected;
+    }
+  },
   async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
     const response = await api.post<SchedulingTimeOffRequest>('/scheduling/time-off', data);
     return response.data;

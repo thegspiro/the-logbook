@@ -185,6 +185,12 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         hint: 'Skills Testing, or sign-offs on shift reports',
         icon: Award,
       },
+      {
+        id: 'shift-evaluations',
+        label: 'Shift Evaluations',
+        hint: 'Evaluation forms for trainees and crews',
+        icon: ClipboardList,
+      },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
       {
         id: 'import',

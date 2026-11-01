@@ -20,6 +20,7 @@ import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
@@ -912,7 +913,10 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The department's date, which is what get_summary counts "this month"
+        # by; the container's UTC date is already tomorrow on a New York
+        # evening, and on the last day of a month that is next month.
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1351,9 +1355,15 @@ class TestPatternGeneration:
         shift = shifts[0]
         # End time should be 07:00 the next day
         assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (
-            shift.start_time.month != shift.end_time.month
-        )
+        # 19:00 and 07:00 are the department's wall-clock times. In UTC the two
+        # fall on the same calendar day whenever New York is on standard time
+        # (19:00 EST is 00:00Z the next day), so compare in the department's
+        # zone, where "the next day" is what the template means.
+        tz = ZoneInfo("America/New_York")
+        local_start = shift.start_time.astimezone(tz)
+        local_end = shift.end_time.astimezone(tz)
+        assert (local_start.hour, local_end.hour) == (19, 7)
+        assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):
