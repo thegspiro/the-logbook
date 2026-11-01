@@ -61,6 +61,7 @@ from app.api.v1.endpoints import (
     member_qualifications,
     member_service_history,
     member_status,
+    member_supervisors,
     membership_pipeline,
     message_history,
     messages,
@@ -336,6 +337,9 @@ api_router.include_router(
 api_router.include_router(member_status.router, prefix="/users", tags=["member-status"])
 api_router.include_router(
     member_service_history.router, prefix="/users", tags=["member-status"]
+)
+api_router.include_router(
+    member_supervisors.router, prefix="/users", tags=["member-supervisors"]
 )
 api_router.include_router(
     member_qualifications.router, prefix="/users", tags=["member-qualifications"]

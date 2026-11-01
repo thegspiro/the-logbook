@@ -326,6 +326,7 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.member_supervisor import MemberSupervisorAssignment
 from app.models.membership_pipeline import (
     ActionType,
     MembershipPipeline,
@@ -499,6 +500,7 @@ __all__ = [
     "user_roles",
     "MemberLeaveOfAbsence",
     "MemberServicePeriod",
+    "MemberSupervisorAssignment",
     "LeaveType",
     # Audit models
     "AuditChainHead",

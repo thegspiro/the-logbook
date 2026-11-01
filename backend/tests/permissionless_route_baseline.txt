@@ -228,6 +228,10 @@ app/api/v1/endpoints/member_leaves.py::get_my_leaves
 
 app/api/v1/endpoints/member_service_history.py::get_service_history
 
+# The caller's own supervisor history; anyone else's is refused in the body
+# without members.manage.
+app/api/v1/endpoints/member_supervisors.py::get_member_supervisor
+
 app/api/v1/endpoints/membership_pipeline.py::approve_step
 app/api/v1/endpoints/membership_pipeline.py::list_my_sign_offs
 # Scoped to the caller: the applicants they are assigned to, read from

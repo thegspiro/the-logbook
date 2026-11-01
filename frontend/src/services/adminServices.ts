@@ -880,6 +880,41 @@ export const memberStatusService = {
     return response.data;
   },
 
+  /** Who the member reports to now, and every earlier assignment. */
+  async getSupervisor(userId: string): Promise<import('../types/user').MemberSupervisor> {
+    const response = await api.get<import('../types/user').MemberSupervisor>(`/users/${userId}/supervisor`);
+    return { ...response.data, history: asArray(response.data?.history) };
+  },
+
+  /** Current members who may be named as this member's supervisor. */
+  async getSupervisorCandidates(userId: string): Promise<import('../types/user').SupervisorCandidate[]> {
+    const response = await api.get<{ candidates: import('../types/user').SupervisorCandidate[] }>(
+      `/users/${userId}/supervisor/candidates`
+    );
+    return asArray(response.data?.candidates);
+  },
+
+  /** Set or change the supervisor; an omitted start date means today on the department's calendar. */
+  async setSupervisor(
+    userId: string,
+    payload: { supervisor_id: string; starts_on?: string | undefined }
+  ): Promise<import('../types/user').MemberSupervisor> {
+    const response = await api.put<import('../types/user').MemberSupervisor>(`/users/${userId}/supervisor`, payload);
+    return { ...response.data, history: asArray(response.data?.history) };
+  },
+
+  /** End the current assignment on `ends_on` (inclusive; omitted means today). */
+  async endSupervisor(
+    userId: string,
+    payload: { ends_on?: string | undefined }
+  ): Promise<import('../types/user').MemberSupervisor> {
+    const response = await api.post<import('../types/user').MemberSupervisor>(
+      `/users/${userId}/supervisor/end`,
+      payload
+    );
+    return { ...response.data, history: asArray(response.data?.history) };
+  },
+
   async getOverduePropertyReturns(): Promise<{
     overdue_count: number;
     members: import('../types/user').OverdueMember[];
