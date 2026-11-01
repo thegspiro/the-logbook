@@ -21,6 +21,7 @@ import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from '../services
 import type { User } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { getWaiverStatusBadge } from '../utils/waiverStatus';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -55,22 +56,6 @@ const APPLIES_TO_OPTIONS = [
 
 function getWaiverTypeLabel(type: string): string {
   return WAIVER_TYPES.find((t) => t.value === type)?.label || type.replace(/_/g, ' ');
-}
-
-function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }, today: string) {
-  if (!waiver.active) {
-    return { label: 'Inactive', color: 'bg-theme-surface-secondary text-theme-text-muted' };
-  }
-  if (waiver.start_date > today) {
-    return { label: 'Future', color: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' };
-  }
-  if (!waiver.end_date) {
-    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' };
-  }
-  if (waiver.end_date < today) {
-    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400' };
-  }
-  return { label: 'Active', color: 'bg-green-500/20 text-green-800 dark:text-green-400' };
 }
 
 // Unified waiver type combining leaves and training waivers
@@ -801,7 +786,7 @@ export const WaiverManagementPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-theme-surface-border divide-y">
                     {filteredHistory.map((waiver) => {
-                      const badge = getStatusBadge(waiver, today);
+                      const badge = getWaiverStatusBadge(waiver, today);
                       return (
                         <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
                           <td className="px-4 py-3">

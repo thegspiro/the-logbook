@@ -2223,6 +2223,13 @@ enter anything in it.
 approved before the member can see them, and the **Review Queue** view
 appears.
 
+**Reviewer role** _(2026-10-31)_ appears once review is required. Choose
+**Training Officer**, **Captain** or **Chief**. Members holding that position or
+rank can review reports, in addition to anyone who can manage training. Chief
+covers the fire chief, deputy chief and assistant chief positions. A member who
+reviews by role sees the **Review Queue** and **Flagged** views on Shift
+Reports, but not reports about themselves, which someone else reviews.
+
 #### Rating Scale
 
 | Setting           | Starts as              | What it does                                                    |
@@ -3291,7 +3298,7 @@ dates before you select **Generate**. Afterwards, The Logbook tells you:
 | Message                                                                                                                   | What it means                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **"Generated N shifts"**                                                                                                  | The number of shifts created                                                                                                                                              |
-| **"No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern's own start and end."**      | The normal answer when you run a range again. Nothing is wrong                                                                                                            |
+| **"No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern's own start and end and dates whose generated shift was deleted or moved."** | The normal answer when you run a range again. Nothing is wrong                                                                                                            |
 | **"N driver seats were left unfilled: …"** (red, stays 8 seconds)                                                         | A member in the rotation doesn't hold the Emergency Vehicle Operations Course (EVOC) level the vehicle needs. The driver seat was left empty and each one is named. Fill them before the shift |
 
 ![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
@@ -3301,10 +3308,27 @@ dates before you select **Generate**. Afterwards, The Logbook tells you:
 **To extend a schedule,** generate the same pattern again for the next range.
 Dates already on the schedule are skipped, so overlapping ranges are safe.
 
+**A pattern generates each occurrence once** _(2026-10-31)_. The Logbook keeps a
+record of every shift a pattern has made. If you delete one of those shifts, or
+move its start time, generating again does not put the original back, whether
+you select **Generate** or automatic generation runs. To restore a deleted
+occurrence, add the shift by hand. Shifts generated before 2026-10-31 have no
+such record, so deleting one of those and generating again still rebuilds it.
+
 **Or let The Logbook do it.** Under **Scheduling Settings → General →
 Automatic shift generation**, active patterns keep generating shifts ahead by
 themselves. It is off unless you turn it on. **Weeks ahead** sets how far
 (1 to 52; 4 when first turned on).
+
+**When automatic generation leaves a seat empty** _(2026-10-31)_, everyone who
+can manage schedules gets a bell notification, _"Automatic shift generation
+left N seats unfilled"_. It names each pattern, date and member, with the
+reason. Those who keep **Scheduling officer duties** email also get the list by
+email. A seat is left empty for the same reasons a manual **Generate** reports
+one: the member's rank, qualifications or open positions don't fit the seat,
+the seat is full, the member is on leave or already working, or the driver
+seat needs an EVOC level the member does not hold. The seats stay open on the
+schedule for you to fill.
 
 #### Pausing a pattern and reactivating a template _(2026-10-25)_
 
@@ -3478,7 +3502,7 @@ computer never sees your values.
 | **Enforce EVOC for drivers**                              | On unless you turn it off. See [Position Eligibility](#position-eligibility)                                                                                                                                   |
 | **Restrict check-in to assigned members**                 | Only members on a shift's roster can check in to it (open shifts are exempt)                                                                                                                                   |
 | **Allow pre-shift work**                                  | Lets a member time prep work, such as an early equipment check, before check-in opens. An officer approves the time before it counts                                                                           |
-| **Department Defaults**                                   | **Default Shift Duration (hours)**, **Default Min Staffing** and **Overtime Threshold (hours/week)**. These are shown as your department's defaults on Shift Planning. The card is marked **Not in effect yet**: new shifts and templates don't use them, and no overtime warning reads the threshold |
+| **Department Defaults**                                   | **Default Shift Duration (hours)** and **Default Min Staffing**. Since 2026-10-31 a new shift template starts with them: the end time is set that many hours after the 08:00 start, and minimum staffing is filled in. The built-in Day, Night and 24 Hour shift types use the minimum staffing too. Overtime is set under **Overtime advisory**, not here |
 | **Position Names**                                        | Add your own seats under **Add Custom Position**. See [Your department's own seats](#your-departments-own-seats). The on/off ticks for built-in seats are saved but marked **Not in effect yet**: templates and shifts still offer the full built-in list                                                                  |
 
 ### What the settings do not do
@@ -3851,6 +3875,14 @@ standing shift like any built-in seat.
 A shift that is open to all members also opens it. Paramedic is never on
 either list: that seat comes from a member's certification, not their rank.
 
+**A seat that drives the vehicle needs Drives apparatus ticked** _(2026-10-31)_.
+If your department calls its wheel seat something other than Driver, such as
+"Engineer", tick **Drives apparatus** beside it under **Position Names**. That
+seat then gets the same EVOC check as the Driver seat: a member without the
+vehicle's EVOC level is refused, a generated shift leaves the seat empty, and
+the position roster shows each member's EVOC card. Without the tick, the seat
+is not checked.
+
 **A member can only be put in a seat the shift has.** Asking for a seat the
 shift doesn't have is refused with _"'…' is not a seat on this shift. Choose
 one of the seats the shift lists, or add the seat to the shift first."_
@@ -4178,7 +4210,7 @@ assigned, time off is approved, shifts are generated, and staffing is checked.
 | What happened                                                  | What it means / what to do                                                                                                                                                          |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A template ends earlier in the day than it starts (e.g. 19:00–07:00) | The shift ends the next morning. The Logbook handles this for you                                                                                                             |
-| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has a shift **from this pattern's template** starting at the same time, including one that was cancelled. Since 2026-10-24 another unit's shift, or a shift added by hand, at the same time no longer stops the pattern's shift being made |
+| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has a shift **from this pattern's template** starting at the same time, including one that was cancelled. Since 2026-10-24 another unit's shift, or a shift added by hand, at the same time no longer stops the pattern's shift being made. Since 2026-10-31 it also skips a date whose generated shift was deleted or moved |
 | The toast says some members were not seated                   | Each platoon member is placed in the first seat they are cleared for, with the same checks as assigning by hand: rank and seat eligibility, the seat's cap, leave, time off, another shift at the same time and the driver rule. The toast names who was left off and why. Their seat stays open |
 | An overnight or 24-hour shift on a daylight-saving day          | It ends at its usual clock time, not an hour early or late                                                                                                                         |
 | A shift made from a template that is open to all members        | The shift is open to all members too                                                                                                                                              |

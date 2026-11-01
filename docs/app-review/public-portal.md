@@ -1,7 +1,59 @@
 # Application Review — Public Portal (Tier B)
 
 **Prefix:** `PP2` · **Iteration:** B26 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-31 (pass 5)
+
+## Pass 5 (2026-10-31) — a double scan of the guest QR counts the guest twice (PP2-2)
+
+Lens: pitfalls #27 and #36 across the public surface's unauthenticated writes.
+Checked and left alone: finance approvals (`approve_by_token` / `deny_by_token`
+already select the step record `FOR UPDATE`, so a repeat answers "already acted
+on"); the Documenso, Cal.com and Salesforce webhooks (`is_duplicate_webhook`
+before acting — a freshness check, but their effects are idempotent state
+advances); PayPal (unique `external_id`, per the pitfall #36 write-up).
+
+### PP2-2 — MED — Two simultaneous guest sign-ins inserted two attendee rows — ✅ FIXED
+
+`GuestCheckInService.check_in_guest` finds the guest's existing
+`event_external_attendees` row and inserts one only when there is none, with no
+lock and no unique key on (event, guest). The docstring on the lookup names the
+trigger: "a duplicate every time someone taps the QR twice". Two taps at once — a
+double-tap, or a client retry of a POST that timed out after it was processed —
+both read "no attendee yet" before either commits and both insert. The event's
+headcount, and the attendance record an officer finalizes, then count the guest
+twice. Every public path reaches it: the guest QR (`/{guest_token}/guest-check-in`
+and `guest-confirm`) and the room kiosk (`/{display_code}/events/{id}/guest-check-in`
+and `guest-confirm`).
+
+**Fix:** `check_in_guest` now locks the event row (`_lock_event`, scoped to the
+caller's organization) before the lookup, and the lookup is a locking read
+(`for_update=True`). Locking the parent is the right row — the conflicting
+attendee does not exist yet — and the locking read matters because the caller
+resolved the event first, so REPEATABLE READ would otherwise answer the lookup
+from that earlier snapshot even after the lock is granted. The lock is released by
+the commit already at the end of the method. The sign-in rate limits already bound
+how hot this row can get.
+
+**Test:** `tests/test_guest_check_in_race.py` — two simultaneous scans by the same
+guest on independent connections, red before (duplicate rows) and green after (1
+row, both scans answered with the same attendee), plus source guards for the
+lock-then-lookup order.
+
+### Still flagged (unchanged)
+
+- **PP-6** (Redis-backed rate limiter; two-column status-token storage) and
+  **PP-7 residual** (display-code lockout; per-subfield address whitelisting).
+- A guest with no email is matched on name alone (documented in the lookup's
+  docstring): two different people of the same name at one event collapse into
+  one row. That is a deliberate trade-off against the duplicate-on-double-tap case,
+  not changed here.
+
+**Completion gate (pass 5):** `flake8`, `black --check`, `isort --check-only` on
+the touched files; guest/kiosk/pipeline suites (220 tests) green; `tsc` and
+`npm run lint` n/a (no frontend change).
+
+---
 
 ## Pass 4 (2026-08-09) — invariants re-verified, no code change
 

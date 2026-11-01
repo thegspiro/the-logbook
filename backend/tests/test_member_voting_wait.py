@@ -8,7 +8,7 @@ in ``test_election_eligibility_rules.py``.
 
 import importlib.util
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -37,6 +37,7 @@ from app.services.membership_tier_service import (
     wait_ineligibility_reason,
 )
 from app.utils.membership import voter_type_key
+from app.utils.org_timezone import org_today
 
 UTC = ZoneInfo("UTC")
 TODAY = date(2026, 10, 29)
@@ -486,6 +487,33 @@ class TestMemberVotingEligibilityEndpoints:
         )
         assert response.voting_wait_from is None
         assert {o.state for o in response.outcomes} == {"waiting"}
+
+    async def test_a_date_after_the_departments_today_is_refused(self, db_session):
+        # The date records when the member became their type. A future one
+        # silently bars them until it passes and the wait runs out after it.
+        org, secretary, member = await self._setup(db_session)
+        today = org_today(org)
+        with pytest.raises(HTTPException) as exc:
+            await update_member_voting_eligibility(
+                user_id=member.id,
+                override=MemberVotingEligibilityUpdate(
+                    voting_wait_from=today + timedelta(days=1), reason="Typo"
+                ),
+                db=db_session,
+                current_user=secretary,
+            )
+        assert exc.value.status_code == 400
+        assert member.voting_wait_from is None
+
+        response = await update_member_voting_eligibility(
+            user_id=member.id,
+            override=MemberVotingEligibilityUpdate(
+                voting_wait_from=today, reason="Became administrative today"
+            ),
+            db=db_session,
+            current_user=secretary,
+        )
+        assert response.voting_wait_from == today
 
 
 # ---------------------------------------------------------------------------

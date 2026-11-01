@@ -33,6 +33,19 @@ def _department_today(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _built_in_driver_seat_only(monkeypatch):
+    """The department flags no custom seat as driving. The service reads that
+    from the scheduling settings, which the mocked session here cannot answer;
+    the flagged-seat case is covered against the database in
+    test_custom_driver_seats.py."""
+    monkeypatch.setattr(
+        SchedulingService,
+        "_driver_seat_values",
+        AsyncMock(return_value=frozenset({"driver"})),
+    )
+
+
 class TestDriverPositionDetection:
     """Whatever shape the position arrives in, the driver seat is recognised."""
 
