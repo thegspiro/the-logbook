@@ -86,6 +86,7 @@ import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
+import { SkeletonText } from '../../components/ux/Skeleton';
 import { AssignmentActions } from './AssignmentActions';
 import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
@@ -2240,8 +2241,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 {(() => {
                   const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
                   const filled = activeAssignments.length;
-                  const isFull = target > 0 && filled >= target;
-                  const isShort = target > 0 && filled < target;
+                  // Until the roster has loaded, `filled` counts the empty
+                  // array the panel starts with: the card read "0 assigned"
+                  // in short-staffed amber on every opening, then jumped to
+                  // the real figure. Neither colour is claimed until it is
+                  // known.
+                  const isFull = !loading && target > 0 && filled >= target;
+                  const isShort = !loading && target > 0 && filled < target;
                   return (
                     <div
                       className={`flex items-center gap-3 rounded-lg p-3 ${
@@ -2258,8 +2264,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       <div>
                         <p className="text-theme-text-muted text-xs">Crew</p>
                         <p className="text-theme-text-primary text-sm font-medium">
-                          {filled} assigned
-                          {target > 0 && <span className="text-theme-text-muted"> / {target} positions</span>}
+                          {loading ? (
+                            <>
+                              <SkeletonText className="w-24" />
+                              <span className="sr-only">Loading crew…</span>
+                            </>
+                          ) : (
+                            <>
+                              {filled} assigned
+                              {target > 0 && <span className="text-theme-text-muted"> / {target} positions</span>}
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -2426,7 +2441,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       >
                         <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
                       </button>
-                      {openPositions.length > 1 && (
+                      {/* Not until the roster has loaded: before then every seat
+                          reads as open, so the label overstated the gap and the
+                          form it opens offered seats already taken. */}
+                      {!loading && openPositions.length > 1 && (
                         <button
                           onClick={openBulkAssign}
                           className="flex items-center gap-1 rounded-lg border border-violet-500/20 px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
