@@ -19,6 +19,7 @@ import { MicrosoftAuthMethod } from '@/constants/enums';
 import { GMAIL_SENDING_NOTES } from '@/constants/gmailSendingGuidance';
 import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '@/constants/smtpProviders';
 import { nextStepPath, stepPath } from '../config/steps';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 interface EmailConfig {
   // Cloudflare Email Service
@@ -109,6 +110,12 @@ const EmailConfiguration: React.FC = () => {
   });
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
+  // Why the last connection test failed, kept on the page until the settings
+  // change. Owner decision 2026-11-01 (W01-27): warn when the test fails, but
+  // let the settings be saved — the mail server may simply not be reachable
+  // from here yet. The result used to live only in a toast that vanished.
+  const [testFailure, setTestFailure] = useState<string | null>(null);
+  const { confirm } = useConfirm();
   // The provider whose guidance is on screen. A hint about the choice just
   // made, not configuration — only the host, port and encryption it filled in
   // are saved, and those stay editable.
@@ -144,6 +151,7 @@ const EmailConfiguration: React.FC = () => {
   const handleInputChange = (field: keyof EmailConfig, value: string) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
     setConnectionTested(false); // Reset test status when config changes
+    setTestFailure(null);
   };
 
   // Onboarding is always a new setup, so Microsoft starts on the app
@@ -200,6 +208,7 @@ const EmailConfiguration: React.FC = () => {
 
     setTestingConnection(true);
     setConnectionTested(false);
+    setTestFailure(null);
 
     try {
       // Test email connection with real API call
@@ -211,6 +220,7 @@ const EmailConfiguration: React.FC = () => {
       setTestingConnection(false);
 
       if (response.error) {
+        setTestFailure(response.error);
         toast.error(`Connection test failed: ${response.error}`);
         return;
       }
@@ -219,11 +229,14 @@ const EmailConfiguration: React.FC = () => {
         setConnectionTested(true);
         toast.success(response.data.message || 'Connection test passed');
       } else {
-        toast.error(response.data?.message || 'Connection test failed');
+        const message = response.data?.message || 'Connection test failed';
+        setTestFailure(message);
+        toast.error(message);
       }
     } catch (err: unknown) {
       setTestingConnection(false);
       const errorMessage = getErrorMessage(err, 'Could not test the email connection');
+      setTestFailure(errorMessage);
       toast.error(errorMessage);
     }
   };
@@ -269,6 +282,24 @@ const EmailConfiguration: React.FC = () => {
         toast.error(problem);
         return;
       }
+    }
+
+    if (
+      testFailure &&
+      !(await confirm({
+        title: 'Save settings that failed the test?',
+        message: (
+          <>
+            These settings failed their connection test: {testFailure} You can save them and fix them later in Settings
+            → Email, but no email will be sent until the connection works.
+          </>
+        ),
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Fix the settings',
+        variant: 'warning',
+      }))
+    ) {
+      return;
     }
 
     const { data, error: _apiError } = await executeSave(
@@ -616,6 +647,7 @@ const EmailConfiguration: React.FC = () => {
                       smtpEncryption: preset.encryption,
                     }));
                     setConnectionTested(false);
+                    setTestFailure(null);
                   }}
                   className="form-input py-3"
                 >
@@ -927,6 +959,16 @@ const EmailConfiguration: React.FC = () => {
               <p className="text-theme-text-muted mt-2 text-center text-sm">
                 Checks that The Logbook can connect and sign in. No email is sent.
               </p>
+              {testFailure && (
+                <div role="alert" className="alert-warning mt-3 text-sm">
+                  <p className="font-semibold">The connection test failed</p>
+                  <p className="mt-1">{testFailure}</p>
+                  <p className="mt-1">
+                    You can still save these settings and fix them later in Settings → Email, but no email will be sent
+                    until the connection works.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

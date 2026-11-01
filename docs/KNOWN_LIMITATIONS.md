@@ -14,10 +14,10 @@ pass (`docs/workflow-review/W01-onboarding.md`).
   stores it off while Settings → Modules lists it as enabled by default.
   Either offer it during setup or leave it at its default.
 
-Also open from the same pass, a smaller decision: the email step saves settings
-that have just failed their connection test, says "Email settings saved", and
-the completion page then reports the platform as configured (W01-27). Warn,
-confirm, or refuse.
+Also from the same pass, resolved 2026-11-01: the email step saved settings that
+had just failed their connection test without a word (W01-27). Owner decision:
+warn, but allow saving. The failure now stays on the page, and Continue asks
+before saving.
 
 ## Members — Members See the Built-In Tier Names (2026-10-31)
 
