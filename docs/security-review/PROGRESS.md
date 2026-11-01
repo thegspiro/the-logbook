@@ -16,10 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3914](https://github.com/thegspiro/the-logbook/pull/3914)** (branch
+`claude/security-review-documents-legal`) — Feature 10 (Documents & legal),
+pass 14. See the Log entry above for the full review summary.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, PHI, pass 14, PR #3911, merged), preserved for history</summary>
+
 **PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911)** (branch
 `claude/security-review-medical-screening-p14`) — Feature 09 (Medical
 screening, PHI), pass 14, a watchdog pickup. See the Log entry above for the
 full review summary.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 15, PR #3910, merged), preserved for history</summary>
