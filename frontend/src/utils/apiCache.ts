@@ -110,6 +110,8 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
   '/dashboard/action-items', // unified meeting/minutes action items: assignee_name + free-text description (RPT-29)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
+  '/reports/saved', // saved-report configs list their recipients' email addresses (PII)
+  '/public-portal/access-logs', // external callers' IP addresses, user agents and referers; a stale page hides a new flagged entry
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
   '/inventory/members/', // member size preferences — body measurements (PII)
   '/inventory/my/', // current user's own size preferences (PII)

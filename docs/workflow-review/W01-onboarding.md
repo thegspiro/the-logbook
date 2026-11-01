@@ -215,9 +215,11 @@ Gmail offered "Calendar sync available" and Microsoft 365 "Teams integration": b
 **Saw:** From Email Address, From Name, SMTP Host, Port, Encryption, Username, Password and every Gmail, Microsoft and Cloudflare secret had a visible label with no `htmlFor` and a control with no `id`: fourteen fields across the four forms, announced by placeholder or not at all. Separately, after choosing iCloud in "Fill in settings for a known provider", the box snapped back to "My own mail server, or a provider not listed…" above iCloud's host and iCloud's hint.
 **Where:** `EmailConfiguration.tsx`. **Fix:** `id` / `htmlFor` pairs; the Microsoft method buttons are a group named "Authentication"; the box shows the provider filled in, and choosing "my own server" removes the hint. Test: `EmailConfiguration.labels.test.tsx`.
 
-### W01-27 — LOW — Continue saves email settings that just failed their test — FLAGGED
+### W01-27 — LOW — Continue saves email settings that just failed their test — ✅ FIXED (owner decision 2026-11-01: warn, but allow saving)
 
 After "Could not reach an SMTP server…", Continue answered "Email settings saved" and the summary reported "SMTP". Saving settings for a mail server not reachable yet is reasonable; saying nothing about it is not. Whether to warn, confirm or refuse is a product choice. The test result also lives only in a toast that disappears after a few seconds (NIT).
+
+**Fixed (2026-11-01, owner decision: warn when the test fails, but allow saving).** A failed test now leaves a warning on the page (`role="alert"`) with the server's reason and "You can still save these settings and fix them later in Settings → Email, but no email will be sent until the connection works". It clears when the settings change or a later test passes. Continue then asks **Save anyway** / **Fix the settings** before saving; settings that were never tested save as before, since the decision covers a failed test. Re-driven on a fresh install against a port with nothing listening: the warning stayed, Fix the settings kept the page, Save anyway saved and moved on to File Storage. Test: `EmailConfiguration.failedTest.test.tsx`. The three existing email-page tests now render inside `ConfirmProvider`, as the app root does.
 
 ### W01-28 — LOW — Skip for Now on the email settings page left the provider as the answer — ✅ FIXED
 

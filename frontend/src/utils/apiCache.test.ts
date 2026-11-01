@@ -466,6 +466,20 @@ describe('apiCache', () => {
       expect(isCacheable('/message-history?page=1')).toBe(false);
     });
 
+    it("returns false for saved reports (recipients' email addresses)", () => {
+      expect(isCacheable('/reports/saved')).toBe(false);
+      expect(isCacheable('/reports/saved?x=1')).toBe(false);
+      // The prefix has no trailing slash, so the whole subtree is excluded.
+      expect(isCacheable('/reports/saved/abc-123')).toBe(false);
+    });
+
+    it('returns false for the public-portal access log (external IPs)', () => {
+      expect(isCacheable('/public-portal/access-logs')).toBe(false);
+      expect(isCacheable('/public-portal/access-logs?flagged=true')).toBe(false);
+      expect(isCacheable('/public-portal/access-logs/abc-123')).toBe(false);
+      expect(isCacheable('/public-portal/api-keys')).toBe(true);
+    });
+
     it('returns false for /roles/my/ endpoints', () => {
       expect(isCacheable('/roles/my/permissions')).toBe(false);
     });

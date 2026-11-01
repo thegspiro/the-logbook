@@ -36,10 +36,10 @@ pass (`docs/workflow-review/W01-onboarding.md`).
   stores it off while Settings → Modules lists it as enabled by default.
   Either offer it during setup or leave it at its default.
 
-Also open from the same pass, a smaller decision: the email step saves settings
-that have just failed their connection test, says "Email settings saved", and
-the completion page then reports the platform as configured (W01-27). Warn,
-confirm, or refuse.
+Also from the same pass, resolved 2026-11-01: the email step saved settings that
+had just failed their connection test without a word (W01-27). Owner decision:
+warn, but allow saving. The failure now stays on the page, and Continue asks
+before saving.
 
 ## Members — Members See the Built-In Tier Names (2026-10-31)
 
@@ -96,6 +96,27 @@ or removed), after which evaluations can list what a member held during the
 period. The audit log records `user_role_assigned` / `user_role_removed`
 events, but rebuilding history from it depends on the log being complete and
 was not chosen.
+
+## Frontend API Cache — An Inventory Item's Detail Is Cacheable and Names the Holder (2026-10-31)
+
+`GET /inventory/items/{id}` fills in `assigned_to_name` — who currently holds the
+item — for a caller who manages inventory or who holds it themselves. The shared
+API cache (`frontend/src/utils/apiCache.ts`) keeps GET responses for 30 seconds
+fresh and 90 stale, and `/inventory/items/{id}` is not in `UNCACHEABLE_PREFIXES`,
+although `/inventory/checkout/` and `/inventory/users/` are excluded for exactly
+this reason (who holds what is PII).
+
+It is left as it is because an earlier decision (FE9-34, pinned by a test in
+`apiCache.test.ts`) deliberately keeps the item list and detail cacheable and
+excludes only the maintenance sub-resource. Excluding the detail needs a prefix
+that would also uncache the item's other sub-routes, which is a performance
+change to a hot screen. Choosing between that and the current exposure is an
+owner decision.
+
+Owner decision: either (a) keep it — the response is already redacted per
+viewer on the server, and the cache is cleared on logout; or (b) exclude
+`/inventory/items/{id}` itself (a narrower pattern than a prefix) and update the
+FE9-34 test to match.
 
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
