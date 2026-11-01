@@ -16,6 +16,7 @@ invariants carry that:
 import json
 import uuid
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import text
@@ -31,6 +32,16 @@ from app.services.scheduling_service import SchedulingService
 
 def _uid() -> str:
     return str(uuid.uuid4())
+
+
+def _org_today(tz: str = "America/New_York") -> date:
+    """Today in the department's timezone, which is what the service reports.
+
+    ``date.today()`` is the host's date: on a UTC runner it is already the 1st
+    while New York is still on the last day of the month, so "this month" and
+    "last month" named the wrong months for the first hours of every month.
+    """
+    return datetime.now(ZoneInfo(tz)).date()
 
 
 async def _add_org(db_session: AsyncSession, tz: str = "America/New_York") -> str:
@@ -322,7 +333,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        today = _org_today()
         await _worked(db_session, org_id, user_id, today, 480, finalized=True, calls=2)
 
         history = await svc.get_my_hours_history(user_id, org_id, today.year - 6)
@@ -339,7 +350,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        today = _org_today()
         previous_end = today.replace(day=1) - timedelta(days=1)
         await _worked(
             db_session, org_id, user_id, previous_end, 600, finalized=True, calls=3
