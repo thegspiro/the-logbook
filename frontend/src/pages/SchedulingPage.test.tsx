@@ -27,6 +27,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getShift: vi.fn(),
     createShift: vi.fn(),
     getMySwapRequests: vi.fn().mockResolvedValue([]),
+    getApprovedTimeOffFor: vi.fn().mockResolvedValue([]),
   },
   // A pure helper the create form calls on the template list; the real one just
   // flattens seats, so an empty list is a faithful stand-in for no template.
@@ -74,6 +75,12 @@ vi.mock('../stores/authStore', () => ({
     checkPermission: mockCheckPermission,
     user: { id: '1', first_name: 'Test', last_name: 'User', organization_id: '1' },
   }),
+}));
+
+// The built-in shift types read the department's default minimum staffing;
+// the real accessor keys its cache on the auth store, mocked above as a hook.
+vi.mock('../modules/scheduling/services/shiftSettingsApi', () => ({
+  getCachedShiftSettings: () => ({ defaultMinStaffing: 4 }),
 }));
 
 // Mock timezone hook
