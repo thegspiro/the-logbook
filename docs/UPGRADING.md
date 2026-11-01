@@ -625,6 +625,23 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A member's tier is found by their membership status, whatever their class (2026-11-01)
+
+Two readers still found a member's membership tier from the legacy
+`membership_type`, which since the class/status split names an administrative
+member "administrative" and a social member "honorary" whatever their status:
+the training report's tier exemption and the attendance dashboard's vote
+check. Both now use the member's **Membership status**, as tier advancement
+already did. Nothing in the database changes, but **standing can change the
+moment you upgrade**:
+
+- An administrative or social member on a tier with **Exempt from training
+  requirements** now shows compliant.
+- On the attendance dashboard, the same members now follow their tier's voting
+  rules (not eligible, or an attendance minimum).
+- A compliance profile with the **junior** membership type now matches members
+  whose status is Junior; before, it matched nobody.
+
 ### Election Settings gains a Voter Eligibility section (2026-10-29)
 
 Nothing changes who may vote in any existing election. Migration
