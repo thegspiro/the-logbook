@@ -115,6 +115,18 @@ describe('applicantService list scoping', () => {
     expect(requestedParams().open_only).toBe(true);
   });
 
+  it('asks for the caller’s applicants only when My applicants is on', async () => {
+    await applicantService.getApplicants({ filters: { assigned_to_me: true }, openOnly: true });
+
+    expect(requestedParams().assigned_to_me).toBe(true);
+  });
+
+  it('leaves assigned_to_me off otherwise, so the request is unchanged', async () => {
+    await applicantService.getApplicants({ filters: { assigned_to_me: false }, openOnly: true });
+
+    expect(requestedParams().assigned_to_me).toBeUndefined();
+  });
+
   it('leaves open_only off the archive fetches, which filter to one closed status', async () => {
     await applicantService.getRejectedApplicants({ page: 1, pageSize: 25 });
 
@@ -132,5 +144,31 @@ describe('applicantService list scoping', () => {
     const params = requestedParams();
     expect(params.status).toBe('transferred');
     expect(params.open_only).toBeUndefined();
+  });
+});
+
+describe('applicantService interview requirement', () => {
+  it('reads the stage’s grading for the applicant', async () => {
+    const progress = {
+      step_id: 's2',
+      required_count: 1,
+      recorded_count: 0,
+      required_recommendation: null,
+      recommendation_met: null,
+      positions: [{ position: 'fire_chief', label: 'Fire Chief', satisfied: false }],
+      complete: false,
+    };
+    mockGet.mockResolvedValue({ data: progress });
+
+    const result = await applicantService.getInterviewRequirement('p1');
+
+    expect(mockGet).toHaveBeenCalledWith('/prospective-members/prospects/p1/interview-requirement');
+    expect(result).toEqual(progress);
+  });
+
+  it('is null when the applicant is not on an interview stage', async () => {
+    mockGet.mockResolvedValue({ data: null });
+
+    expect(await applicantService.getInterviewRequirement('p1')).toBeNull();
   });
 });

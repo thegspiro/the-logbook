@@ -121,6 +121,12 @@ class TrainingSubmissionCreate(BaseModel):
     # A draft is parked in the member's own list and never reaches the review
     # queue until POST /{id}/submit promotes it.
     save_as_draft: bool = False
+    # The device picks one before its first attempt and repeats it on every
+    # resend, so a submission sent twice is stored once; see
+    # TrainingSubmissionService.create_submission.
+    client_request_id: Optional[str] = Field(
+        None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
 
     @field_validator("training_type")
     @classmethod

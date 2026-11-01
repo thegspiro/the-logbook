@@ -34,14 +34,14 @@ def _uid() -> str:
     return str(uuid.uuid4())
 
 
-def _org_today(tz: str = "America/New_York") -> date:
-    """Today in the department's timezone, which is what the service reports.
+def _department_today() -> date:
+    """The org's date (America/New_York, as _add_org makes it).
 
-    ``date.today()`` is the host's date: on a UTC runner it is already the 1st
-    while New York is still on the last day of the month, so "this month" and
-    "last month" named the wrong months for the first hours of every month.
+    The service reads "this month" and "last month" in the department's zone;
+    the container's UTC date runs ahead of it every New York evening, which on
+    the last day of a month puts the two in different months.
     """
-    return datetime.now(ZoneInfo(tz)).date()
+    return datetime.now(ZoneInfo("America/New_York")).date()
 
 
 async def _add_org(db_session: AsyncSession, tz: str = "America/New_York") -> str:
@@ -333,7 +333,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = _org_today()
+        today = _department_today()
         await _worked(db_session, org_id, user_id, today, 480, finalized=True, calls=2)
 
         history = await svc.get_my_hours_history(user_id, org_id, today.year - 6)
@@ -350,7 +350,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = _org_today()
+        today = _department_today()
         previous_end = today.replace(day=1) - timedelta(days=1)
         await _worked(
             db_session, org_id, user_id, previous_end, 600, finalized=True, calls=3

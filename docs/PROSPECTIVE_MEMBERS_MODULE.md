@@ -747,6 +747,63 @@ applicant labels, bulk advance and status, purge and the inactivity sweep.
 Anonymizing a converted member also reduces each of their election packages'
 applicant copy to the anonymized name, membership type and stage list.
 
+### Interviewer positions, case-manager notices and My applicants _(2026-10-31)_
+
+**Required interviewer positions.** An Interview Requirement stage can name
+the positions it needs an interview from (`required_interviewer_positions`,
+position slugs chosen from the department's positions in the stage editor, the
+Chief and committees such as the Board of Directors included). The stage
+completes only once each listed position has an interview logged against it by
+a member holding that position, on top of the required count and
+recommendation. A position counts by what the interviewer held **when the
+interview was logged**: `prospect_interviews.interviewer_positions` snapshots
+their position slugs, names and office keys at that moment (migration
+`aefb58788235`), so a chief who steps down still counts for the interview they
+gave as chief, and a member who takes an office later does not count for an
+interview given before. Interviews logged before the snapshot existed have
+none and count by the interviewer's current positions. Values are matched
+trimmed and case-blind; a blank entry keeps the stage closed rather than
+dropping a requirement, as with Multi-Signer approver roles. This replaces the
+frontend's `interviewer_roles` field, which nothing read.
+
+`GET /prospects/{id}/interview-requirement` reports the stage as the server
+grades it (count recorded, each position done or missing, and whether a
+required recommendation is met), and completion refuses on exactly what it
+reports. The Interview page and the applicant's dialog show it; the dialog's
+section previously read an `interview_count` nothing wrote, and showed "0 of
+N" whatever had been logged. A caller who sees only their own interview is not
+told whether the recommendation is met, since that is part of the other
+interviewers' assessments.
+
+**Interviewer title.** `my-access` reports `interviewer_title`, the caller's
+most senior position (an office or committee over a platform position, by
+priority; never the baseline Member). The Interview page offers it as the
+title for a new interview; it stays editable, and an edit keeps the title the
+interview was signed with.
+
+**Sensitive answers for interviewers.** An applicant's assigned interviewers see
+that applicant's sensitive follow-up answers. The grant covers that one
+applicant; `sensitive_answers.view` still governs everywhere else, and a case
+manager without it sees the answers withheld. Each reveal is audit-logged as
+`form_sensitive_answers_viewed` with `via` set to `permission` or
+`interviewer_assignment`.
+
+**Case managers are told.** A case manager is emailed (template **Applicant
+Needs Your Attention**, link only) when their applicant submits a follow-up
+form, withdraws from the status page, or reaches an Interview Requirement or
+Multi-Signer Approval stage by any movement (advance, move back, placing a
+stageless applicant, a deleted stage's fallback). A coordinator who has just
+had the coordinators' notice for the same event is not sent it again. It is
+membership-admin email, so a member who has switched that off is not sent it.
+Like the stage's own emails, the stage-entry notice goes out within the move,
+best-effort.
+
+**My applicants.** A `view_all` holder can narrow the pipeline board and table
+to the applicants they are assigned to with the **My applicants** toggle
+(`assigned_to_me` on the list and kanban endpoints). The header counts stay
+pipeline-wide. Without `view_all` the server already shows only assigned
+applicants, so the toggle is not offered.
+
 **Sign-offs need no module permission** _(2026-09-28)_. `GET /prospective-members/my-sign-offs` and `POST /prospective-members/prospects/{prospect_id}/approve-step` are reachable by any signed-in member with the module on: the officers a Multi-Signer Approval stage names rarely hold `prospective_members.*`. The service lists and accepts only stages asking for a role the caller holds, and returns the applicant's name and stage only — never the record. The last required signature completes the stage and advances the applicant.
 
 **Applicant labels** _(2026-09-28, W17-3/W17-4)_. `/prospective-members/print-labels` takes `prospective_members.view_all` since 2026-10-31 (it took view **or** manage before), and labels print `_short_id(id)` — never the status token, which the label preview used to return to staff and every printed badge carried.
@@ -866,12 +923,13 @@ log, not in the coordinator notes.
 
 ### Interview Endpoints
 
-| Method   | Path                                  | Permission                   | Description      |
-| -------- | ------------------------------------- | ---------------------------- | ---------------- |
-| `GET`    | `/prospects/{prospect_id}/interviews` | view                         | List interviews  |
-| `POST`   | `/prospects/{prospect_id}/interviews` | `prospective_members.manage` | Record interview |
-| `PUT`    | `/interviews/{interview_id}`          | `prospective_members.manage` | Update interview |
-| `DELETE` | `/interviews/{interview_id}`          | `prospective_members.manage` | Delete interview |
+| Method   | Path                                             | Permission                   | Description                                                     |
+| -------- | ------------------------------------------------ | ---------------------------- | --------------------------------------------------------------- |
+| `GET`    | `/prospects/{prospect_id}/interviews`            | view                         | List interviews                                                 |
+| `POST`   | `/prospects/{prospect_id}/interviews`            | `prospective_members.manage` | Record interview                                                |
+| `PUT`    | `/interviews/{interview_id}`                     | `prospective_members.manage` | Update interview                                                |
+| `DELETE` | `/interviews/{interview_id}`                     | `prospective_members.manage` | Delete interview                                                |
+| `GET`    | `/prospects/{prospect_id}/interview-requirement` | `view_all`, or assigned      | The current Interview Requirement stage as graded; null off one |
 
 ### Follow-up Form Endpoints
 
@@ -934,15 +992,16 @@ Withdrawn / Converted figures the same response feeds.
 
 ### Query Parameters (Prospect List)
 
-| Parameter     | Type      | Description                                                                            |
-| ------------- | --------- | -------------------------------------------------------------------------------------- |
-| `pipeline_id` | `UUID`    | Filter by pipeline                                                                     |
-| `status`      | `string`  | Filter by one status (backend values — `transferred`, not `converted`)                 |
-| `search`      | `string`  | Search by name or email                                                                |
-| `event_id`    | `UUID`    | Only prospects produced by or linked to this event                                     |
-| `open_only`   | `boolean` | Drop closed applications (rejected, withdrawn, inactive, transferred); default `false` |
-| `limit`       | `number`  | Page size (default 50, max 200)                                                        |
-| `offset`      | `number`  | Rows to skip (default 0)                                                               |
+| Parameter        | Type      | Description                                                                              |
+| ---------------- | --------- | ---------------------------------------------------------------------------------------- |
+| `pipeline_id`    | `UUID`    | Filter by pipeline                                                                       |
+| `status`         | `string`  | Filter by one status (backend values — `transferred`, not `converted`)                   |
+| `search`         | `string`  | Search by name or email                                                                  |
+| `event_id`       | `UUID`    | Only prospects produced by or linked to this event                                       |
+| `open_only`      | `boolean` | Drop closed applications (rejected, withdrawn, inactive, transferred); default `false`   |
+| `assigned_to_me` | `boolean` | Only applicants the caller is assigned to; default `false` (also on the kanban endpoint) |
+| `limit`          | `number`  | Page size (default 50, max 200)                                                          |
+| `offset`         | `number`  | Rows to skip (default 0)                                                                 |
 
 The response is `{items, total, limit, offset}`. The caller's own prospect
 record, if any, is omitted from both `items` and `total`.
