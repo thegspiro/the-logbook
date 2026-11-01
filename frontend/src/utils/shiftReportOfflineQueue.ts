@@ -10,6 +10,7 @@
 import type { BatchShiftReportCreate } from '@/types/training';
 import { isOwnedByCurrentMember, requireQueueOwner } from './offlineQueueOwner';
 import { STORE_REPORTS, listPendingReports, openDB, type QueuedShiftReport } from './shiftReportOfflineStore';
+import { requestBackgroundSync } from './backgroundSyncRegistration';
 
 export {
   claimUntaggedReport,
@@ -32,12 +33,14 @@ export async function enqueueShiftReport(payload: BatchShiftReportCreate): Promi
     retries: 0,
   };
 
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_REPORTS, 'readwrite');
     tx.objectStore(STORE_REPORTS).add(entry);
-    tx.oncomplete = () => resolve(id);
+    tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error('Failed to enqueue shift report'));
   });
+  void requestBackgroundSync();
+  return id;
 }
 
 /** The reports the signed-in member queued, which are the only ones to send. */

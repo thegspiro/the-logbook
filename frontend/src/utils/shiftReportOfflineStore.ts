@@ -27,6 +27,12 @@ export interface QueuedShiftReport extends OwnedQueueEntry {
 // never disagree about the version (which previously broke check queueing).
 export const STORE_REPORTS = STORE_PENDING_SHIFT_REPORTS;
 
+/**
+ * Refusals before a queued report is named to the officer, by the page drain
+ * (shiftReportSync.ts) and the worker's (sw/backgroundSync.ts) alike.
+ */
+export const SHIFT_REPORT_REFUSALS_BEFORE_NOTICE = 3;
+
 export const openDB = openOfflineDb;
 
 /**

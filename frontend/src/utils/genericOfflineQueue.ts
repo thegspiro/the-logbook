@@ -25,6 +25,7 @@ import {
   type GenericQueueKind,
   type GenericQueuedItem,
 } from './genericOfflineStore';
+import { requestBackgroundSync } from './backgroundSyncRegistration';
 
 export {
   GENERIC_HELD_STALE_MS,
@@ -65,6 +66,7 @@ export async function enqueueGeneric(
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
+  void requestBackgroundSync();
   return entry;
 }
 
@@ -95,6 +97,9 @@ export async function putGenericItem(item: GenericQueuedItem): Promise<void> {
       req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
     };
   });
+  // Asked on every write, held or not: the worker skips a held entry, and the
+  // write that releases it is the one whose sync sends it.
+  void requestBackgroundSync();
 }
 
 /** The signed-in member's queued items, oldest first — the only ones to send. */
