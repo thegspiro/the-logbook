@@ -1167,3 +1167,100 @@ class TestMeetingKind:
             {"id": election_id},
         )
         assert result.scalar_one() == "regular"
+
+
+# ---------------------------------------------------------------------------
+# _get_ineligibility_reason_for_user agrees with the real gate
+# (security review ELEC-06, pass 14)
+# ---------------------------------------------------------------------------
+
+
+class TestIneligibilityReasonUsesTheSharedGate:
+    """The skipped-recipient message (ballot send, eligibility roster) is
+    built from ``_universal_gate`` rather than its own copy of the
+    override/tier check, so it can never disagree with the real decision in
+    ``annotate_ballot_items_for_user`` — and a malformed stored tier value
+    degrades instead of 500ing the admin's screen.
+    """
+
+    @pytest.mark.unit
+    async def test_a_non_dict_membership_tiers_setting_does_not_crash(self):
+        # A malformed org.settings["membership_tiers"] (any non-dict value)
+        # used to reach a bare `.get("tiers", [])` and raise AttributeError,
+        # taking down the ballot-send/eligibility-roster request for the
+        # whole org instead of degrading the way _tier_benefits already does.
+        db = Mock()
+        svc = ElectionService(db)
+        user = Mock(id="u1", membership_type="active")
+        org = Mock(settings={"membership_tiers": "not-a-dict"})
+        election = Mock(
+            ballot_items=[{"id": "i1", "title": "T", "eligible_voter_types": ["all"]}],
+            voter_overrides=None,
+            eligibility_rules=None,
+        )
+
+        reason = await svc._get_ineligibility_reason_for_user(
+            user, election, "org-1", org
+        )
+
+        assert reason is None
+
+    @pytest.mark.unit
+    async def test_a_voting_ineligible_tier_reports_through_the_shared_gate(self):
+        db = Mock()
+        svc = ElectionService(db)
+        user = Mock(id="u1", membership_type="probationary")
+        org = Mock(
+            settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {
+                            "id": "probationary",
+                            "name": "Probationary",
+                            "benefits": {"voting_eligible": False},
+                        }
+                    ]
+                }
+            }
+        )
+        election = Mock(
+            ballot_items=[{"id": "i1", "title": "T", "eligible_voter_types": ["all"]}],
+            voter_overrides=None,
+            eligibility_rules=None,
+        )
+
+        reason = await svc._get_ineligibility_reason_for_user(
+            user, election, "org-1", org
+        )
+
+        assert reason == "Membership tier 'Probationary' is not eligible to vote"
+
+    @pytest.mark.unit
+    async def test_a_voter_override_still_short_circuits(self):
+        db = Mock()
+        svc = ElectionService(db)
+        user = Mock(id="u1", membership_type="probationary")
+        org = Mock(
+            settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {
+                            "id": "probationary",
+                            "name": "Probationary",
+                            "benefits": {"voting_eligible": False},
+                        }
+                    ]
+                }
+            }
+        )
+        election = Mock(
+            ballot_items=[{"id": "i1", "title": "T", "eligible_voter_types": ["all"]}],
+            voter_overrides=[{"user_id": "u1"}],
+            eligibility_rules=None,
+        )
+
+        reason = await svc._get_ineligibility_reason_for_user(
+            user, election, "org-1", org
+        )
+
+        assert reason is None
