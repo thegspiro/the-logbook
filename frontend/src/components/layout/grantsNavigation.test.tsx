@@ -83,6 +83,7 @@ describe('Grants & Fundraising navigation', () => {
       '/grants/donations',
       '/grants/pledges',
       '/grants/events',
+      '/grants/zeffy',
       '/grants/reports',
     ]);
   });

@@ -306,6 +306,20 @@ INTEGRATION_CATALOG: list[_CatalogEntry] = [
         "status": "available",
     },
     {
+        "integration_type": "zeffy",
+        "name": "Zeffy",
+        "description": (
+            "Read donations, event tickets and memberships sold through the "
+            "department's Zeffy account into the Logbook. Link each Zeffy "
+            "campaign to a fundraising campaign, fundraising event or dues "
+            "schedule, and its payments are recorded there as they arrive, "
+            "including refunds. Read-only: nothing is ever changed in Zeffy, "
+            "and Zeffy keeps issuing the tax receipts."
+        ),
+        "category": "Payments",
+        "status": "available",
+    },
+    {
         "integration_type": "claude-mcp",
         "name": "Claude (MCP)",
         "description": (
@@ -670,6 +684,7 @@ def _validate_config(integration_type: str, config: dict[str, Any]) -> dict[str,
 # validated against the same schema, so connect checks them by name instead.
 _CREDENTIALS_REQUIRED_TO_CONNECT: dict[str, tuple[str, ...]] = {
     "paypal": ("client_id", "client_secret"),
+    "zeffy": ("api_key",),
     "documenso": ("api_token",),
     "calcom": ("api_key",),
     "salesforce": ("client_id", "client_secret"),
@@ -1491,10 +1506,13 @@ async def test_connection(
         # fixed vocabulary sanitize_error_message's blacklist could catch
         # (INT-6 follow-up).
         from app.services.integration_services.paypal_service import PayPalError
+        from app.services.integration_services.zeffy_service import ZeffyError
 
         return {
             "success": False,
-            "message": sanitize_connector_error(e, trusted_types=(PayPalError,)),
+            "message": sanitize_connector_error(
+                e, trusted_types=(PayPalError, ZeffyError)
+            ),
         }
 
 
