@@ -197,3 +197,66 @@ describe('ApparatusListPage NFPA department switch', () => {
     expect(screen.getByRole('switch', { name: 'NFPA Compliance' })).toBeChecked();
   });
 });
+
+// The dashboard's fleet-readiness tiles link here with a filter in the query
+// string and say "View filtered results"; the list used to ignore it and open
+// the whole fleet.
+describe('ApparatusListPage dashboard tile filters', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    grantedPermissions = new Set(['apparatus.manage']);
+    mockCheckPermission.mockImplementation((permission: string) => grantedPermissions.has(permission));
+    localStorage.setItem('has_session', 'true');
+    store.apparatusList = [
+      { id: 'a-1', unitNumber: 'E-2', name: 'Pumper', minStaffing: 3, isArchived: false, hasDeficiency: true },
+    ];
+  });
+
+  afterEach(() => {
+    store.apparatusList = [];
+    window.history.pushState({}, '', '/');
+  });
+
+  const lastFilters = () => store.setFilters.mock.lastCall?.[0] as Record<string, unknown> | undefined;
+
+  it.each([
+    ['serviceStatus=unavailable', { serviceStatus: 'unavailable' }, 'out of service or in maintenance'],
+    ['hasDeficiency=true', { hasDeficiency: true }, 'unresolved equipment deficiency'],
+    ['inspection=overdue', { inspection: 'overdue' }, 'inspection has expired'],
+  ])('applies ?%s and says so', async (query, expected, banner) => {
+    window.history.pushState({}, '', `/apparatus?${query}`);
+    renderWithRouter(<ApparatusListPage />);
+
+    await waitFor(() => expect(lastFilters()).toMatchObject({ isArchived: false, ...expected }));
+    expect(screen.getByText(new RegExp(banner))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View E-2' })).toBeInTheDocument();
+  });
+
+  it('clears the filter from the URL and the request', async () => {
+    window.history.pushState({}, '', '/apparatus?hasDeficiency=true');
+    renderWithRouter(<ApparatusListPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Clear filter: Unresolved deficiency' }));
+
+    await waitFor(() => expect(lastFilters()).toMatchObject({ hasDeficiency: undefined }));
+    expect(window.location.search).toBe('');
+    expect(screen.queryByText(/unresolved equipment deficiency/)).not.toBeInTheDocument();
+  });
+
+  it('ignores a value no tile sends', async () => {
+    window.history.pushState({}, '', '/apparatus?hasDeficiency=yes&serviceStatus=broken');
+    renderWithRouter(<ApparatusListPage />);
+
+    await waitFor(() => expect(store.setFilters).toHaveBeenCalled());
+    expect(lastFilters()).toEqual({
+      isArchived: false,
+      apparatusTypeId: undefined,
+      statusId: undefined,
+      search: undefined,
+      serviceStatus: undefined,
+      hasDeficiency: undefined,
+      inspection: undefined,
+    });
+    expect(screen.queryByRole('button', { name: /Clear filter:/ })).not.toBeInTheDocument();
+  });
+});

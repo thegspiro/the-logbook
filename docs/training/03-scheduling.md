@@ -4017,7 +4017,15 @@ certificate that runs out before the shift does not count.
 | **On** (unless your department turns it off)      | The member cannot be assigned, or sign up, as driver. Pattern generation leaves the driver seat empty and tells you      |
 | **Off**                                           | The assignment goes ahead with a warning naming the required level                                                      |
 
-A vehicle with no required level is never checked.
+A vehicle with no required level is never checked, and nor is a vehicle added
+during setup rather than in the Apparatus module.
+
+**A shift whose vehicle was deleted** _(2026-10-31)_ refuses its driver seat (or
+warns, with enforcement off): _"This shift's vehicle no longer exists, so its
+EVOC requirement cannot be checked. Choose the shift's vehicle again before
+seating a driver."_ Pick the vehicle again in the shift's edit form. A vehicle
+can no longer be deleted while a shift names it, so this only affects shifts
+from before that rule.
 
 **When an officer is refused,** a **Driver qualification required** window
 opens. It says the member was not assigned as driver, and lists **who can

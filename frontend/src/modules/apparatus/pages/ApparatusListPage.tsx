@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   Truck,
   Plus,
@@ -31,8 +31,37 @@ import { NfpaDepartmentSwitch } from '../components/NfpaDepartmentSwitch';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
+// The dashboard's fleet-readiness tiles link here with one of these in the
+// query string. Only the exact value a tile sends turns its filter on; anything
+// else is unrecognized and degrades to the full list rather than an error.
+const DASHBOARD_FILTERS = [
+  {
+    param: 'serviceStatus',
+    value: 'unavailable',
+    name: 'Out of service or in maintenance',
+    label: 'Showing only apparatus that are out of service or in maintenance.',
+  },
+  {
+    param: 'hasDeficiency',
+    value: 'true',
+    name: 'Unresolved deficiency',
+    label: 'Showing only apparatus with an unresolved equipment deficiency.',
+  },
+  {
+    param: 'inspection',
+    value: 'overdue',
+    name: 'Inspection overdue',
+    label: 'Showing only apparatus whose inspection has expired.',
+  },
+] as const;
+
 export const ApparatusListPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeDashboardFilters = DASHBOARD_FILTERS.filter((f) => searchParams.get(f.param) === f.value);
+  const unavailableOnly = searchParams.get('serviceStatus') === 'unavailable';
+  const deficiencyOnly = searchParams.get('hasDeficiency') === 'true';
+  const inspectionOverdueOnly = searchParams.get('inspection') === 'overdue';
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterType, setFilterType] = useState<string>('');
@@ -40,7 +69,9 @@ export const ApparatusListPage: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   // An empty list under a search or filter says nothing about whether the
   // department has any apparatus, so it must not read as a first-run screen.
-  const isNarrowed = Boolean(searchQuery || filterType || filterStatus || showArchived);
+  const isNarrowed = Boolean(
+    searchQuery || filterType || filterStatus || showArchived || activeDashboardFilters.length > 0
+  );
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canManage = checkPermission('apparatus.manage');
   const canCreate = canManage || checkPermission('apparatus.create');
@@ -78,31 +109,43 @@ export const ApparatusListPage: React.FC = () => {
       return;
     }
 
-    // Load initial data
+    // Load initial data. The list itself is fetched by the filter effect
+    // below, which also runs on mount: a second fetch here would race it with
+    // whatever filters the store kept from the last visit.
     void fetchTypes();
     void fetchStatuses();
     if (canManage) void fetchFleetSummary();
-    void fetchApparatusList(1);
-  }, [navigate, canManage, fetchTypes, fetchStatuses, fetchFleetSummary, fetchApparatusList]);
+  }, [navigate, canManage, fetchTypes, fetchStatuses, fetchFleetSummary]);
 
-  // Apply filters when they change
+  // Apply filters when they change. Every key is sent, cleared ones as
+  // undefined, because the store merges into the filters it already holds and
+  // an omitted key would keep the previous value.
   useEffect(() => {
-    const filters: Record<string, unknown> = {
+    setFilters({
       isArchived: showArchived,
-    };
+      apparatusTypeId: filterType || undefined,
+      statusId: filterStatus || undefined,
+      search: searchQuery || undefined,
+      serviceStatus: unavailableOnly ? 'unavailable' : undefined,
+      hasDeficiency: deficiencyOnly || undefined,
+      inspection: inspectionOverdueOnly ? 'overdue' : undefined,
+    });
+  }, [
+    filterType,
+    filterStatus,
+    showArchived,
+    searchQuery,
+    unavailableOnly,
+    deficiencyOnly,
+    inspectionOverdueOnly,
+    setFilters,
+  ]);
 
-    if (filterType) {
-      filters.apparatusTypeId = filterType;
-    }
-    if (filterStatus) {
-      filters.statusId = filterStatus;
-    }
-    if (searchQuery) {
-      filters.search = searchQuery;
-    }
-
-    setFilters(filters);
-  }, [filterType, filterStatus, showArchived, searchQuery, setFilters]);
+  const clearDashboardFilters = (params: readonly string[]) => {
+    const next = new URLSearchParams(searchParams);
+    params.forEach((param) => next.delete(param));
+    setSearchParams(next, { replace: true });
+  };
 
   const handlePageChange = (page: number) => {
     void fetchApparatusList(page);
@@ -291,6 +334,7 @@ export const ApparatusListPage: React.FC = () => {
                     setFilterStatus('');
                     setShowArchived(false);
                     setSearchQuery('');
+                    clearDashboardFilters(DASHBOARD_FILTERS.map((f) => f.param));
                   }}
                   className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 transition-colors"
                 >
@@ -300,6 +344,25 @@ export const ApparatusListPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Readiness filters, arrived at from the dashboard tiles */}
+        {activeDashboardFilters.map((filter) => (
+          <div
+            key={filter.param}
+            className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm"
+            role="status"
+          >
+            <span>{filter.label}</span>
+            <button
+              type="button"
+              onClick={() => clearDashboardFilters([filter.param])}
+              aria-label={`Clear filter: ${filter.name}`}
+              className="touch-target-phone font-medium underline"
+            >
+              Clear filter
+            </button>
+          </div>
+        ))}
 
         {/* Apparatus Table */}
         {isLoading ? (

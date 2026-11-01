@@ -2,11 +2,13 @@
  * Action Items Page (C2)
  *
  * Unified view of action items from both Meeting and Minutes modules.
- * Allows filtering by status and showing items assigned to the current user.
+ * Allows filtering by status and source and showing items assigned to the
+ * current user. `?status=` and `?source=` seed those filters, which is how the
+ * operations dashboard's overdue cards link here (DASH-37).
  */
 
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { AlertTriangle, CheckCircle2, Clock, Filter, Loader2 } from 'lucide-react';
 import { dashboardService } from '../services/api';
@@ -66,6 +68,23 @@ const isOpen = (item: ActionItemSummary): boolean => !CLOSED_STATUSES.includes(i
  */
 const OPEN_FILTER = 'open';
 
+/**
+ * Overdue is decided by the server, with the predicate the dashboard's overdue
+ * cards count by, so a card's link opens on exactly the rows it counted. It is
+ * not a stored status: sent as one it would match only minutes items a person
+ * had marked `overdue` by hand, which the cards never count.
+ */
+const OVERDUE_FILTER = 'overdue';
+
+const STATUS_FILTERS: readonly string[] = [OPEN_FILTER, OVERDUE_FILTER, 'pending', 'in_progress', 'completed'];
+
+type SourceFilter = '' | 'meeting' | 'minutes';
+
+const sourceFromParam = (value: string | null): SourceFilter =>
+  value === 'meeting' || value === 'minutes' ? value : '';
+
+const statusFromParam = (value: string | null): string => (value && STATUS_FILTERS.includes(value) ? value : '');
+
 const priorityLabel = (item: ActionItemSummary): string | undefined =>
   item.priority && item.source === 'meeting'
     ? (MEETING_PRIORITY_LABELS[item.priority] ?? item.priority)
@@ -73,10 +92,12 @@ const priorityLabel = (item: ActionItemSummary): string | undefined =>
 
 const ActionItemsPage: React.FC = () => {
   const tz = useTimezone();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<ActionItemSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>(() => statusFromParam(searchParams.get('status')));
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(() => sourceFromParam(searchParams.get('source')));
   const [assignedToMe, setAssignedToMe] = useState(false);
   const currentUserId = useAuthStore((state) => state.user?.id);
   const [editing, setEditing] = useState<ActionItemSummary | null>(null);
@@ -114,16 +135,15 @@ const ActionItemsPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    void fetchItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, assignedToMe]);
-
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     try {
       setLoading(true);
       const data = await dashboardService.getActionItems({
-        ...(statusFilter && statusFilter !== OPEN_FILTER ? { status_filter: statusFilter } : {}),
+        ...(statusFilter && statusFilter !== OPEN_FILTER && statusFilter !== OVERDUE_FILTER
+          ? { status_filter: statusFilter }
+          : {}),
+        ...(statusFilter === OVERDUE_FILTER ? { overdue: true } : {}),
+        ...(sourceFilter ? { source: sourceFilter } : {}),
         ...(assignedToMe ? { assigned_to_me: assignedToMe } : {}),
       });
       setItems(statusFilter === OPEN_FILTER ? data.filter(isOpen) : data);
@@ -132,6 +152,19 @@ const ActionItemsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  }, [statusFilter, sourceFilter, assignedToMe]);
+
+  useEffect(() => {
+    void fetchItems();
+  }, [fetchItems]);
+
+  // A filter changed on the page drops the parameter that seeded it, so a
+  // reload or a shared link does not bring back a filter the user cleared.
+  const dropParam = (name: string) => {
+    if (!searchParams.has(name)) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete(name);
+    setSearchParams(next, { replace: true });
   };
 
   // A due date is a calendar day (a meeting item's DATE, or a minutes item's
@@ -185,15 +218,32 @@ const ActionItemsPage: React.FC = () => {
           <Filter className="text-theme-text-muted h-4 w-4" />
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              dropParam('status');
+            }}
             aria-label="Filter action items by status"
             className="form-input-sm"
           >
             <option value="">All Statuses</option>
             <option value={OPEN_FILTER}>Open (not done)</option>
+            <option value={OVERDUE_FILTER}>Overdue</option>
             <option value="pending">Pending</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
+          </select>
+          <select
+            value={sourceFilter}
+            onChange={(e) => {
+              setSourceFilter(sourceFromParam(e.target.value));
+              dropParam('source');
+            }}
+            aria-label="Filter action items by source"
+            className="form-input-sm"
+          >
+            <option value="">All Sources</option>
+            <option value="meeting">Meetings</option>
+            <option value="minutes">Minutes</option>
           </select>
         </div>
         <label className="text-theme-text-secondary touch:min-h-[44px] flex cursor-pointer items-center gap-2 text-sm">
@@ -219,9 +269,9 @@ const ActionItemsPage: React.FC = () => {
       ) : items.length === 0 ? (
         <EmptyState
           icon={CheckCircle2}
-          title={statusFilter || assignedToMe ? 'No matching action items' : 'No action items'}
+          title={statusFilter || sourceFilter || assignedToMe ? 'No matching action items' : 'No action items'}
           description={
-            statusFilter || assignedToMe
+            statusFilter || sourceFilter || assignedToMe
               ? 'Choose a different status or clear "Assigned to me" to see more.'
               : 'Action items recorded in meetings and minutes appear here.'
           }

@@ -34,7 +34,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { PublishingStatusNote } from '../components/PublishingStatusNote';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatDateTime } from '../../../utils/dateFormatting';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { plainTextToHtml, sectionIsBlank } from '../../../utils/richText';
 import type {
   MeetingMinutes,
@@ -296,6 +296,30 @@ export const MinutesDetailPage: React.FC = () => {
 
   // ── Section CRUD ──
 
+  // Every section edit sends the whole list, so a save from a copy loaded
+  // before someone else's save would write their sections back as they were.
+  // Naming the version this copy was loaded at makes the server refuse that
+  // instead (MM5-4); the editor keeps what was typed, and the banner offers
+  // the reload.
+  const [staleCopy, setStaleCopy] = useState(false);
+  const saveSections = async (sections: SectionEntry[]) => {
+    if (!minutesId || !minutes) throw new Error('Minutes not loaded');
+    try {
+      return await minutesService.updateMinutes(minutesId, {
+        sections,
+        expected_version: minutes.edit_version ?? 0,
+      });
+    } catch (err: unknown) {
+      if (toAppError(err).status === 409) setStaleCopy(true);
+      throw err;
+    }
+  };
+
+  const reloadStaleCopy = async () => {
+    await refreshMinutes();
+    setStaleCopy(false);
+  };
+
   const handleSaveSection = async (sectionKey: string) => {
     if (!minutesId || !minutes) return;
     try {
@@ -303,7 +327,7 @@ export const MinutesDetailPage: React.FC = () => {
       const updatedSections = minutes.sections.map((s) =>
         s.key === sectionKey ? { ...s, content: sectionValue, format: 'html' as const } : s
       );
-      const updated = await minutesService.updateMinutes(minutesId, { sections: updatedSections });
+      const updated = await saveSections(updatedSections);
       setMinutes(updated);
       setEditingSection(null);
       toast.success('Section saved');
@@ -320,7 +344,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId || !minutes) return;
     try {
       const sections = minutes.sections.map((s) => (s.key === sectionKey ? { ...s, not_taken_up: notTakenUp } : s));
-      setMinutes(await minutesService.updateMinutes(minutesId, { sections }));
+      setMinutes(await saveSections(sections));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update the section'));
     }
@@ -348,7 +372,7 @@ export const MinutesDetailPage: React.FC = () => {
 
     try {
       setSaving(true);
-      const updated = await minutesService.updateMinutes(minutesId, { sections: renumbered });
+      const updated = await saveSections(renumbered);
       setMinutes(updated);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to move section'));
@@ -373,9 +397,7 @@ export const MinutesDetailPage: React.FC = () => {
 
     try {
       setSaving(true);
-      const updated = await minutesService.updateMinutes(minutesId, {
-        sections: [...minutes.sections, newSection],
-      });
+      const updated = await saveSections([...minutes.sections, newSection]);
       setMinutes(updated);
       setNewSectionTitle('');
       setShowAddSection(false);
@@ -402,7 +424,7 @@ export const MinutesDetailPage: React.FC = () => {
 
     try {
       setSaving(true);
-      const updated = await minutesService.updateMinutes(minutesId, { sections: filtered });
+      const updated = await saveSections(filtered);
       setMinutes(updated);
       toast.success('Section deleted');
     } catch (err: unknown) {
@@ -1179,6 +1201,18 @@ export const MinutesDetailPage: React.FC = () => {
                 className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
               >
                 Cancel
+              </button>
+            </div>
+          )}
+
+          {staleCopy && (
+            <div className="alert-warning flex flex-wrap items-center justify-between gap-3 text-sm" role="alert">
+              <p>
+                Someone else saved these minutes after you opened them, so your last change was not saved. Anything you
+                were typing is still in the editor. Reload to see their changes, then save yours again.
+              </p>
+              <button type="button" onClick={() => void reloadStaleCopy()} className="btn-primary px-3 py-1.5 text-sm">
+                Reload
               </button>
             </div>
           )}

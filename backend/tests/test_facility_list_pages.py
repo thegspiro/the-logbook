@@ -19,6 +19,7 @@ import pytest
 from app.api.v1.endpoints import facilities as endpoints
 from app.models.facilities import (
     Facility,
+    FacilityComplianceChecklist,
     FacilityInspection,
     FacilityMaintenance,
     FacilityMaintenanceType,
@@ -27,6 +28,7 @@ from app.models.facilities import (
 )
 from app.models.user import Organization
 from app.services.facilities_service import FacilitiesService
+from app.utils.org_timezone import resolve_org_today
 
 pytestmark = pytest.mark.integration
 
@@ -207,6 +209,119 @@ class TestInspectionPage:
 
         assert total == 1
         assert [i.title for i in items] == ["Inspection 3"]
+
+
+class TestDashboardDueWindows:
+    """The dashboard's "Upcoming inspections" and "Compliance deadlines" tiles
+    link here with a 30-day window (DASH-37). Rows sit on both sides of every
+    edge the tiles' queries in dashboard.py draw: before today, today, the
+    thirtieth day, the day after, and a facility that has been archived."""
+
+    async def _archived_facility(self, db, org, beside):
+        fac = Facility(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Old Station",
+            facility_type_id=beside.facility_type_id,
+            status_id=beside.status_id,
+            is_archived=True,
+        )
+        db.add(fac)
+        await db.flush()
+        return fac
+
+    async def test_inspections_due_within_the_window(self, db_session, scene):
+        org, fac, _ = scene
+        archived = await self._archived_facility(db_session, org, fac)
+        today = await resolve_org_today(db_session, org.id)
+        offsets = {"yesterday": -1, "today": 0, "day 30": 30, "day 31": 31}
+        for title, days in offsets.items():
+            db_session.add(
+                FacilityInspection(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    facility_id=fac.id,
+                    inspection_type="fire",
+                    title=title,
+                    inspection_date=today - timedelta(days=365),
+                    next_inspection_date=today + timedelta(days=days),
+                )
+            )
+        db_session.add(
+            FacilityInspection(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                facility_id=archived.id,
+                inspection_type="fire",
+                title="archived facility",
+                inspection_date=today - timedelta(days=365),
+                next_inspection_date=today + timedelta(days=5),
+            )
+        )
+        await db_session.flush()
+
+        items, total = await FacilitiesService(db_session).page_inspections(
+            org.id, due_within_days=30
+        )
+
+        assert sorted(i.title for i in items) == ["day 30", "today"]
+        assert total == 2
+
+        _, unfiltered = await FacilitiesService(db_session).page_inspections(org.id)
+        assert unfiltered == 5
+
+    async def test_compliance_due_within_the_window(self, db_session, scene):
+        org, fac, _ = scene
+        archived = await self._archived_facility(db_session, org, fac)
+        today = await resolve_org_today(db_session, org.id)
+
+        def checklist(name, days, facility=fac, done=False):
+            return FacilityComplianceChecklist(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                facility_id=facility.id,
+                checklist_name=name,
+                compliance_type="fire_code",
+                due_date=today + timedelta(days=days),
+                is_completed=done,
+            )
+
+        db_session.add_all(
+            [
+                checklist("yesterday", -1),
+                checklist("today", 0),
+                checklist("day 30", 30),
+                checklist("day 31", 31),
+                checklist("completed", 5, done=True),
+                checklist("archived facility", 5, facility=archived),
+            ]
+        )
+        other = await _org(db_session, "Other")
+        other_fac = await _facility(db_session, other)
+        db_session.add(
+            FacilityComplianceChecklist(
+                id=str(uuid.uuid4()),
+                organization_id=other.id,
+                facility_id=other_fac.id,
+                checklist_name="other org",
+                compliance_type="fire_code",
+                due_date=today + timedelta(days=5),
+            )
+        )
+        await db_session.flush()
+
+        rows = await endpoints.list_facility_compliance_checklists(
+            facility_id=None,
+            compliance_type=None,
+            is_completed=False,
+            due_within_days=30,
+            skip=0,
+            limit=500,
+            db=db_session,
+            current_user=type("U", (), {"organization_id": org.id})(),
+        )
+
+        assert sorted(r.checklist_name for r in rows) == ["day 30", "today"]
 
 
 @pytest.mark.parametrize("prefix", ["/maintenance", "/inspections"])

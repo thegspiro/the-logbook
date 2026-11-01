@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, useLocation } from 'react-router';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 import { renderWithRouter } from '../test/utils';
 import { EventsPage } from './EventsPage';
 import * as apiModule from '../services/api';
@@ -721,6 +723,99 @@ describe('EventsPage', () => {
         'href',
         '/events/attendance-requests'
       );
+    });
+  });
+
+  // DASH-37: the operations dashboard's "Next 30 days" card counts
+  // non-cancelled events starting from the department's midnight today up to,
+  // not including, its midnight 30 days later, and links here with
+  // ?range=next-30-days.
+  describe('Opened from the Next 30 days card', () => {
+    const LocationProbe: React.FC = () => <output data-testid="location">{useLocation().search}</output>;
+
+    const renderAt = (url: string) =>
+      render(
+        <MemoryRouter initialEntries={[url]}>
+          <ConfirmProvider>
+            <EventsPage />
+            <LocationProbe />
+          </ConfirmProvider>
+        </MemoryRouter>
+      );
+
+    const event = (id: string, title: string, start: string): EventListItem => ({
+      id,
+      title,
+      event_type: 'training',
+      start_datetime: start,
+      end_datetime: start,
+      requires_rsvp: false,
+      is_mandatory: false,
+      is_cancelled: false,
+    });
+
+    beforeEach(() => {
+      // 10 PM on 31 October in Chicago; clocks go back on 1 November, inside
+      // the window, so its end is a CST midnight and its start a CDT one.
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-01T03:00:00Z') });
+      mockAuthState.user = { timezone: 'America/Chicago' };
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockReset();
+      vi.mocked(eventService.getEvents).mockResolvedValue([
+        // Began this morning and already over: counted by the card.
+        event('e1', 'Morning drill', '2026-10-31T13:00:00Z'),
+        event('e2', 'Hose testing', '2026-11-20T14:00:00Z'),
+        // Exactly the window's exclusive end, which start_before includes.
+        event('e3', 'Midnight start', '2026-11-30T06:00:00Z'),
+      ]);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('asks for events starting inside the department-calendar window', async () => {
+      renderAt('/events?range=next-30-days');
+
+      expect(await screen.findByText('Hose testing')).toBeInTheDocument();
+      expect(eventService.getEvents).toHaveBeenCalledTimes(1);
+      expect(eventService.getEvents).toHaveBeenCalledWith({
+        start_after: '2026-10-31T05:00:00.000Z',
+        start_before: '2026-11-30T06:00:00.000Z',
+        include_drafts: true,
+        limit: 500,
+      });
+      expect(screen.getByText('Morning drill')).toBeInTheDocument();
+      expect(screen.queryByText('Midnight start')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clear filter: next 30 days' })).toBeInTheDocument();
+    });
+
+    it('clears back to Upcoming from the chip, and drops the parameter', async () => {
+      const user = userEvent.setup({ advanceTimers: () => undefined });
+      renderAt('/events?range=next-30-days');
+      await screen.findByText('Hose testing');
+
+      await user.click(screen.getByRole('button', { name: 'Clear filter: next 30 days' }));
+
+      await waitFor(() =>
+        expect(eventService.getEvents).toHaveBeenLastCalledWith({
+          end_after: '2026-11-01T03:00:00.000Z',
+          include_drafts: true,
+        })
+      );
+      expect(screen.queryByRole('button', { name: 'Clear filter: next 30 days' })).not.toBeInTheDocument();
+      expect(screen.getByTestId('location')).toBeEmptyDOMElement();
+    });
+
+    it('opens on Upcoming without the parameter', async () => {
+      renderAt('/events');
+
+      await screen.findByText('Hose testing');
+      expect(eventService.getEvents).toHaveBeenCalledWith({
+        end_after: '2026-11-01T03:00:00.000Z',
+        include_drafts: true,
+      });
+      expect(screen.queryByRole('button', { name: 'Clear filter: next 30 days' })).not.toBeInTheDocument();
     });
   });
 });

@@ -75,6 +75,7 @@ import type {
   MyBudget,
   MyBudgetRequestLines,
   MyBudgetsSummary,
+  ApprovalEmailResendResult,
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
@@ -682,6 +683,18 @@ export const approvalService = {
       `/finance/approvals/${stepRecordId}/deny`,
       stepDecisionBody(notes, overrideReason)
     );
+    return response.data;
+  },
+
+  /**
+   * Email an external approver a fresh link; the old one stops working.
+   * `linkVersion` is the `emailLinkVersion` the queue showed, so a repeated
+   * click sends nothing (`resent: false`).
+   */
+  async resendEmail(stepRecordId: string, linkVersion: number): Promise<ApprovalEmailResendResult> {
+    const response = await api.post<ApprovalEmailResendResult>(`/finance/approvals/${stepRecordId}/resend-email`, {
+      linkVersion,
+    });
     return response.data;
   },
 

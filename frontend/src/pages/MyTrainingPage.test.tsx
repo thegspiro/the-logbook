@@ -11,6 +11,7 @@ const mockGetVisibility = vi.fn();
 const mockExportMyTraining = vi.fn();
 const mockGetMyTrainingRecords = vi.fn();
 const mockGetTests = vi.fn();
+const mockGetMyCohorts = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingModuleConfigService: {
@@ -22,6 +23,9 @@ vi.mock('../services/api', () => ({
   },
   skillsTestingService: {
     getTests: (...args: unknown[]) => mockGetTests(...args) as unknown,
+  },
+  courseCohortService: {
+    getMyCohorts: (...args: unknown[]) => mockGetMyCohorts(...args) as unknown,
   },
 }));
 
@@ -141,6 +145,8 @@ describe('MyTrainingPage', () => {
     skills.method = null;
     mockGetTests.mockReset();
     mockGetTests.mockResolvedValue({ items: [], total: 0 });
+    mockGetMyCohorts.mockReset();
+    mockGetMyCohorts.mockResolvedValue([]);
     mockGetMyTraining.mockResolvedValue(mockTrainingData);
     mockGetConfig.mockResolvedValue({});
     mockGetVisibility.mockResolvedValue(mockTrainingData.visibility);
@@ -241,6 +247,55 @@ describe('MyTrainingPage', () => {
     });
     renderWithRouter(<MyTrainingPage />);
     expect(await screen.findByText('Awaiting Sign-off')).toBeInTheDocument();
+  });
+
+  describe('my classes', () => {
+    const cohort = {
+      id: 'cohort-1',
+      organization_id: 'org-1',
+      course_id: 'course-1',
+      name: 'Recruit School 26-2',
+      start_date: '2026-11-02',
+      end_date: '2027-02-20',
+      status: 'in_progress',
+      date_roll_policy: 'none',
+      requires_rsvp: true,
+      auto_create_records: true,
+      created_at: '2026-10-01T12:00:00Z',
+      course_name: 'Firefighter I',
+      class_count: 24,
+      member_count: 0,
+    };
+
+    it('lists the cohorts the member is on, each linking to its page', async () => {
+      mockGetMyCohorts.mockResolvedValue([cohort]);
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByRole('heading', { name: 'My classes' })).toBeInTheDocument();
+      expect(mockGetMyCohorts).toHaveBeenCalledWith();
+      const link = screen.getByRole('link', { name: /Recruit School 26-2/ });
+      expect(link).toHaveAttribute('href', '/training/cohorts/cohort-1');
+      expect(link).toHaveTextContent('Firefighter I');
+      expect(link).toHaveTextContent('24 classes');
+    });
+
+    it('is not drawn for a member on no cohort', async () => {
+      renderWithRouter(<MyTrainingPage />);
+      await screen.findByRole('heading', { level: 1 });
+      await waitFor(() => expect(mockGetMyCohorts).toHaveBeenCalledWith());
+
+      expect(screen.queryByRole('heading', { name: 'My classes' })).not.toBeInTheDocument();
+    });
+
+    it('is left out, not an error, when the lookup fails', async () => {
+      mockGetMyCohorts.mockRejectedValue(new Error('Network error'));
+      renderWithRouter(<MyTrainingPage />);
+      await waitFor(() => expect(mockGetMyCohorts).toHaveBeenCalledWith());
+
+      expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('My Training');
+      expect(screen.queryByRole('heading', { name: 'My classes' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Network error/)).not.toBeInTheDocument();
+    });
   });
 
   describe('member visibility settings tab', () => {

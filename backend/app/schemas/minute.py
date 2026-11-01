@@ -648,6 +648,16 @@ class MinutesUpdate(BaseModel):
     )
     header_config: Optional[HeaderConfig] = None
     footer_config: Optional[FooterConfig] = None
+    expected_version: Optional[int] = Field(
+        None,
+        ge=0,
+        le=INT32_MAX,
+        description=(
+            "The edit_version the editor loaded. When sent and someone has "
+            "saved since, the save is refused with 409 instead of overwriting "
+            "their changes. Omitted, the save is unconditional, as before."
+        ),
+    )
     # Legacy fields still accepted
     agenda: Optional[str] = None
     old_business: Optional[str] = None
@@ -706,6 +716,7 @@ class MinutesResponse(UTCResponseBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    edit_version: int = 0
     motions: List[MotionResponse] = []
     action_items: List[ActionItemResponse] = []
 

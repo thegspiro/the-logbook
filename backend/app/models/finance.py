@@ -252,6 +252,19 @@ class ApprovalStepStatus(str, enum.Enum):
     SENT = "sent"
 
 
+class ApprovalEmailStatus(str, enum.Enum):
+    """Whether the last emailed approval link reached the mail provider.
+
+    Stored as a plain string: NULL on a row is not a third state of the send
+    but the absence of a record -- a link emailed before tracking began
+    (20261101_1210_b2d4f6a8c0e3), or a step that never emailed anybody.
+    Expiry is not stored; it is read from ``token_expires_at``.
+    """
+
+    SENT = "sent"
+    FAILED = "failed"
+
+
 class ExportFormat(str, enum.Enum):
     """Format for QuickBooks export"""
 
@@ -938,6 +951,19 @@ class ApprovalStepRecord(Base):
     )
     token_expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # The outcome of the last attempt to email this step's link
+    # (ApprovalEmailStatus values), and when it was made. NULL means no attempt
+    # was recorded, not that one failed.
+    email_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    email_status_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Bumped every time a link is minted. A re-send names the version it saw,
+    # so a second click (or a retried request) on the same row finds the
+    # version already moved on and sends nothing.
+    email_link_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

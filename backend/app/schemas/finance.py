@@ -1095,6 +1095,39 @@ class PendingApprovalResponse(UTCResponseBase):
     # How far it would take its restricted funds past what they have left;
     # null when it fits or charges no fund.
     fund_shortfall: Optional[Decimal] = None
+    # An "email" approver step's link: "sent" | "failed" | "expired" |
+    # "not_sent" | "unknown" (emailed before send status was recorded); null
+    # for every other step. The link itself is never returned.
+    email_delivery: Optional[str] = None
+    # When the last send was attempted; null when none was recorded.
+    email_status_at: Optional[datetime] = None
+    # Named back by a re-send, so a repeated one sends nothing.
+    email_link_version: int = 0
+    # The caller may re-send the link (an approvals admin, on an email step).
+    can_resend_email: bool = False
+
+
+class ApprovalEmailResendRequest(BaseModel):
+    """Re-send an email approver's link"""
+
+    model_config = _REQUEST_CONFIG
+
+    # The emailLinkVersion the queue showed. A re-send naming a version the
+    # step has already moved past sends nothing.
+    link_version: int = Field(..., ge=0, le=1_000_000)
+
+
+class ApprovalEmailResendResponse(UTCResponseBase):
+    """The link's state after a re-send; never the link itself"""
+
+    model_config = _RESPONSE_CONFIG
+
+    step_record_id: str
+    # False when the step had already moved past the named link version.
+    resent: bool
+    email_delivery: Optional[str] = None
+    email_status_at: Optional[datetime] = None
+    email_link_version: int
 
 
 class ApproverCoverageResponse(UTCResponseBase):
