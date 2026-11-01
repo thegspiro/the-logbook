@@ -16,7 +16,7 @@ import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { ExternalLink, HandCoins, Link2, RefreshCw, Unlink } from 'lucide-react';
 import { fundraisingService, zeffyService } from '../services/api';
-import { ZeffyPaymentState } from '../types';
+import { ZeffyLinkTarget, ZeffyPaymentState } from '../types';
 import type {
   FundraisingCampaign,
   FundraisingEvent,
@@ -151,6 +151,11 @@ const ZeffyPage: React.FC = () => {
       setSyncing(false);
     }
   };
+
+  // The backend refuses a dues link's change or removal without
+  // finance.manage, so the buttons are not offered rather than left to 403.
+  const isLockedDuesLink = (campaign: ZeffyCampaign): boolean =>
+    campaign.link?.targetType === ZeffyLinkTarget.DUES_SCHEDULE && !canLinkDues;
 
   const handleUnlink = async (campaign: ZeffyCampaign) => {
     const ok = await confirm({
@@ -312,7 +317,12 @@ const ZeffyPage: React.FC = () => {
                         Open in Zeffy
                       </a>
                     )}
-                    {campaign.link && (
+                    {isLockedDuesLink(campaign) && (
+                      <p className="text-theme-text-secondary self-center text-xs">
+                        Changing a member dues link needs finance access.
+                      </p>
+                    )}
+                    {campaign.link && !isLockedDuesLink(campaign) && (
                       <button
                         type="button"
                         onClick={() => void handleUnlink(campaign)}
@@ -323,15 +333,17 @@ const ZeffyPage: React.FC = () => {
                         Unlink
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setEditing(campaign)}
-                      className="btn-primary inline-flex items-center gap-2"
-                      aria-label={`${campaign.link ? 'Change link for' : 'Link'} ${campaign.title || campaign.id}`}
-                    >
-                      <Link2 className="h-4 w-4" />
-                      {campaign.link ? 'Change' : 'Link'}
-                    </button>
+                    {!isLockedDuesLink(campaign) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(campaign)}
+                        className="btn-primary inline-flex items-center gap-2"
+                        aria-label={`${campaign.link ? 'Change link for' : 'Link'} ${campaign.title || campaign.id}`}
+                      >
+                        <Link2 className="h-4 w-4" />
+                        {campaign.link ? 'Change' : 'Link'}
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

@@ -40,7 +40,9 @@ interface ZeffyLinkDialogProps {
 }
 
 const defaultTarget = (campaign: ZeffyCampaign, canLinkDues: boolean): ZeffyLinkTarget => {
-  if (campaign.link) return campaign.link.targetType;
+  if (campaign.link && (campaign.link.targetType !== ZeffyLinkTarget.DUES_SCHEDULE || canLinkDues)) {
+    return campaign.link.targetType;
+  }
   if (campaign.category === 'membership' && canLinkDues) return ZeffyLinkTarget.DUES_SCHEDULE;
   if (campaign.campaignType === 'ticketing' || campaign.category === 'event') {
     return ZeffyLinkTarget.FUNDRAISING_EVENT;
@@ -59,16 +61,15 @@ export const ZeffyLinkDialog: React.FC<ZeffyLinkDialogProps> = ({
 }) => {
   const tz = useTimezone();
   const existing = campaign.link ?? null;
-  const [targetType, setTargetType] = useState<ZeffyLinkTarget>(defaultTarget(campaign, canLinkDues));
-  const [targetId, setTargetId] = useState(existing?.targetId ?? '');
+  const initialType = defaultTarget(campaign, canLinkDues);
+  const [targetType, setTargetType] = useState<ZeffyLinkTarget>(initialType);
+  const [targetId, setTargetId] = useState(existing?.targetType === initialType ? (existing.targetId ?? '') : '');
   const [startDate, setStartDate] = useState(existing ? toLocalISODate(existing.applyFrom, tz) : '');
   const [startTouched, setStartTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const targetTypes = Object.values(ZeffyLinkTarget).filter(
-    (t) => t !== ZeffyLinkTarget.DUES_SCHEDULE || canLinkDues || targetType === t
-  );
+  const targetTypes = Object.values(ZeffyLinkTarget).filter((t) => t !== ZeffyLinkTarget.DUES_SCHEDULE || canLinkDues);
   const options: { id: string; name: string }[] =
     targetType === ZeffyLinkTarget.FUNDRAISING_CAMPAIGN
       ? campaigns

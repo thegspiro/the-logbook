@@ -242,6 +242,44 @@ describe('ZeffyPage — a fundraising manager', () => {
     expect(saveLink.mock.calls[0]?.[1]).toMatchObject({ targetType: 'dues_schedule', targetId: 'ds-1' });
   });
 
+  const duesLinked = () =>
+    zeffyCampaign({
+      category: 'membership',
+      title: 'Memberships',
+      link: {
+        id: 'l-2',
+        zeffyCampaignId: 'zc-1',
+        targetType: 'dues_schedule',
+        targetId: 'ds-1',
+        targetName: 'Annual dues',
+        applyFrom: '2026-10-15T14:30:00Z',
+        createdAt: '2026-10-15T14:30:00Z',
+        updatedAt: '2026-10-15T14:30:00Z',
+      },
+    });
+
+  it('does not offer to change or unlink a dues link without finance.manage', async () => {
+    listZeffyCampaigns.mockResolvedValue([duesLinked()]);
+    renderWithRouter(<ZeffyPage />);
+
+    expect(await screen.findByText('Changing a member dues link needs finance access.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Change link for Memberships' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Unlink Memberships' })).not.toBeInTheDocument();
+  });
+
+  it('lets a finance manager change a dues link', async () => {
+    granted.add('finance.manage');
+    listZeffyCampaigns.mockResolvedValue([duesLinked()]);
+    const user = userEvent.setup();
+    renderWithRouter(<ZeffyPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Change link for Memberships' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Record payments as')).toHaveValue('dues_schedule');
+    expect(within(dialog).getByLabelText('Member dues')).toHaveValue('ds-1');
+    expect(screen.queryByText('Changing a member dues link needs finance access.')).not.toBeInTheDocument();
+  });
+
   it('asks before unlinking', async () => {
     listZeffyCampaigns.mockResolvedValue([
       zeffyCampaign({
