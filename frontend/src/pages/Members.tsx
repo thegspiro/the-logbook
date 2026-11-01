@@ -99,7 +99,8 @@ const Members: React.FC = () => {
   // officer can set it from the edit page.
   const [filterClass, setFilterClass] = useState<string>('all');
   const [filterMemberStatus, setFilterMemberStatus] = useState<string>('all');
-  const { tiers } = useMembershipTierOptions();
+  // The tier config needs members.manage; a member would only be refused.
+  const { tiers } = useMembershipTierOptions(canManageMembers);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contactInfoEnabled, setContactInfoEnabled] = useState({

@@ -46,6 +46,15 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
     setNewPositionLabel('');
   };
 
+  const toggleDrivesApparatus = (val: string) => {
+    onSettingsChange((prev) => ({
+      ...prev,
+      customPositions: prev.customPositions.map((p) =>
+        p.value === val ? { ...p, drivesApparatus: !p.drivesApparatus } : p
+      ),
+    }));
+  };
+
   const removeCustomPosition = (val: string) => {
     onSettingsChange((prev) => ({
       ...prev,
@@ -58,7 +67,9 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
     <div className="card-secondary p-4 sm:p-5">
       <h3 className="text-theme-text-primary mb-1 text-base font-semibold">Position Names</h3>
       <p className="text-theme-text-muted mb-4 text-xs">
-        Add custom position types unique to your department. Custom positions appear everywhere built-in ones do.
+        Add custom position types unique to your department. Custom positions appear everywhere built-in ones do. Tick{' '}
+        <strong>Drives apparatus</strong> on a seat that drives the vehicle: members need the apparatus&rsquo;s EVOC
+        level to take it, the same as the Driver seat.
       </p>
       <p className="text-theme-text-muted mb-4 text-xs" role="note">
         Not in effect yet — the ticks below are saved, but templates and shifts offer the same fixed list of built-in
@@ -127,6 +138,19 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
                   <span className="text-theme-text-muted bg-theme-surface-hover shrink-0 rounded-sm px-1.5 py-0.5 text-[10px]">
                     {cp.value}
                   </span>
+                </label>
+                {/* The server holds a ticked seat to the driver seat's EVOC
+                    check, so a department that calls its wheel seat
+                    "Engineer" is covered (2026-10-31). */}
+                <label className="mobile-touch-row text-theme-text-secondary shrink-0 cursor-pointer gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={cp.drivesApparatus === true}
+                    onChange={() => toggleDrivesApparatus(cp.value)}
+                    className="border-theme-input-border rounded-sm"
+                    aria-label={`${cp.label} drives apparatus`}
+                  />
+                  Drives apparatus
                 </label>
                 <button
                   onClick={() => removeCustomPosition(cp.value)}

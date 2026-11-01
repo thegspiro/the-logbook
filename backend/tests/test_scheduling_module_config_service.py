@@ -122,8 +122,13 @@ class TestUpdate:
             "driver",
             "firefighter",
         ]
+        # drivesApparatus (2026-10-31) is stored explicitly, off unless sent.
         assert settings["custom_positions"] == [
-            {"value": "rescue_tech", "label": "Rescue Technician"}
+            {
+                "value": "rescue_tech",
+                "label": "Rescue Technician",
+                "drivesApparatus": False,
+            }
         ]
         # JSON columns keep the camelCase wire shape
         assert settings["apparatus_type_defaults"] == {

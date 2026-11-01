@@ -38,9 +38,16 @@ What the sweep can and cannot see:
   and then its bases. An object returned from a call has its callee's class:
   from the return annotation when it names one, otherwise from the callee's
   ``return`` values, which must all show the same class (a bare ``None``
-  aside). An object whose class only the running program knows -- one taken
-  out of a container, or returned from a function the index cannot see
-  into -- is not followed.
+  aside). An object taken out of a container -- by indexing, ``.get``,
+  ``.pop``, ``.setdefault`` or a loop, including ``.items()``, ``.values()``
+  and ``enumerate`` -- has the class of the container's items: from an
+  annotation (``dict[str, Foo]``, ``list[Foo]``) when one names it, otherwise
+  from every item the code shows going in (literal items, a comprehension's
+  element, ``.append``, ``.add``, ``.insert``, ``c[k] = v``, ``.setdefault``,
+  ``.extend``, ``.update``), which must agree. A mapping yields values when
+  indexed and keys when iterated. An object whose class only the running
+  program knows -- from a function outside ``app/``, or a container nothing
+  in the source fills -- is not followed.
 * A message produced by a call is not text the first check can read, and is
   skipped there; the second check reads into it as above.
 * A raise that never reaches ``safe_error_detail`` is still checked. That is
@@ -245,6 +252,38 @@ _SIZE_PRESERVING = frozenset(
     {"sorted", "list", "tuple", "set", "frozenset", "reversed"}
 )
 _DICT_VIEWS = frozenset({"keys", "values", "items"})
+
+#: Methods that hand back one item of a container (a mapping's value).
+_LOOKUP_METHODS = frozenset({"get", "pop", "setdefault"})
+_MAPPING_TYPES = frozenset(
+    {
+        "dict",
+        "Dict",
+        "Mapping",
+        "MutableMapping",
+        "defaultdict",
+        "DefaultDict",
+        "OrderedDict",
+    }
+)
+_COLLECTION_TYPES = frozenset(
+    {
+        "list",
+        "List",
+        "Sequence",
+        "MutableSequence",
+        "Iterable",
+        "Iterator",
+        "Collection",
+        "set",
+        "Set",
+        "frozenset",
+        "FrozenSet",
+        "tuple",
+        "Tuple",
+        "deque",
+    }
+)
 _GROWING_METHODS = frozenset({"append", "add", "extend", "update", "insert"})
 
 
@@ -254,12 +293,25 @@ def _is_constant_name(name):
     return bool(bare) and bare[0].isupper()
 
 
+class _Element(NamedTuple):
+    """A loop target: an item of ``container``.
+
+    ``position`` is None for ``for item in container``, or the index of the
+    name in an unpacked target: ``for key, value in registry.items()``.
+    """
+
+    container: ast.expr
+    position: object
+
+
 def _assignments(scope):
     """Each name bound in ``scope``, with every value it is bound to.
 
     A value of None means the name is bound in a way whose size cannot be read:
-    a parameter, a loop or unpacking target, an augmented assignment, or a
-    collection grown by ``.append`` and its kin.
+    a parameter, an unpacking target, an augmented assignment, or a collection
+    grown by ``.append`` and its kin. A loop target is an :class:`_Element` of
+    what it iterates, so the class of the items can be read, though not their
+    size.
     """
     bound = {}
     if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -287,9 +339,23 @@ def _assignments(scope):
         elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
             bound.setdefault(node.target.id, []).append(None)
         elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
-            for name in ast.walk(node.target):
-                if isinstance(name, ast.Name):
-                    bound.setdefault(name.id, []).append(None)
+            target = node.target
+            if isinstance(target, ast.Name):
+                bound.setdefault(target.id, []).append(_Element(node.iter, None))
+            elif isinstance(target, ast.Tuple):
+                for position, elt in enumerate(target.elts):
+                    if isinstance(elt, ast.Name):
+                        bound.setdefault(elt.id, []).append(
+                            _Element(node.iter, position)
+                        )
+                    else:
+                        for name in ast.walk(elt):
+                            if isinstance(name, ast.Name):
+                                bound.setdefault(name.id, []).append(None)
+            else:
+                for name in ast.walk(target):
+                    if isinstance(name, ast.Name):
+                        bound.setdefault(name.id, []).append(None)
         elif (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
@@ -376,7 +442,7 @@ class _Argument(NamedTuple):
 
 
 def _is_bounded_value(value, scopes, seen):
-    if value is None:
+    if value is None or isinstance(value, _Element):
         return False
     if isinstance(value, _Argument):
         return _is_bounded(value.expression, value.scopes, seen)
@@ -554,8 +620,10 @@ class _Index:
 
         The source shows it when the object is built by calling the class
         (``FooService(db)``), is returned from a call the index can resolve
-        (see :meth:`returned_class`), comes from a name every binding of which
-        is one of those, is a parameter annotated with the class, or is a
+        (see :meth:`returned_class`), is taken out of a container whose items
+        show it (see :meth:`element_class`) by indexing, ``.get``, ``.pop``,
+        ``.setdefault`` or a loop, comes from a name every binding of which is
+        one of those, is a parameter annotated with the class, or is a
         ``self`` attribute some method of the class assigns or annotates that
         way.
         """
@@ -565,7 +633,17 @@ class _Index:
             constructed = self.class_named(node.func, frame.module)
             if constructed is not None:
                 return constructed
-            return self.returned_class(node, frame, seen)
+            returned = self.returned_class(node, frame, seen)
+            if returned is not None:
+                return returned
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr in _LOOKUP_METHODS:
+                return self.element_class(func.value, frame, seen, "index")
+            return None
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.Slice):
+                return None
+            return self.element_class(node.value, frame, seen, "index")
         if isinstance(node, ast.Attribute):
             if (
                 isinstance(node.value, ast.Name)
@@ -612,6 +690,8 @@ class _Index:
                 value_class = self.class_of(
                     value.expression, frame._replace(scopes=value.scopes), seen
                 )
+            elif isinstance(value, _Element):
+                value_class = self.loop_item_class(value, frame, seen)
             elif value is not None:
                 value_class = self.class_of(value, frame, seen)
             else:
@@ -620,6 +700,257 @@ class _Index:
                 return None
             found = value_class
         return found
+
+    def element_of_annotation(self, annotation, module, access):
+        """The item class an annotation gives a container, if it names one.
+
+        A mapping (``dict[str, Foo]``) yields its values when indexed and its
+        keys when iterated; any other collection (``list[Foo]``,
+        ``Sequence[Foo]``, ``tuple[Foo, ...]``) yields its items either way.
+        """
+        if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+            try:
+                annotation = ast.parse(annotation.value, mode="eval").body
+            except SyntaxError:
+                return None
+        if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+            return self.element_of_annotation(
+                annotation.left, module, access
+            ) or self.element_of_annotation(annotation.right, module, access)
+        if not isinstance(annotation, ast.Subscript):
+            return None
+        base = _base_name(annotation.value)
+        arguments = (
+            annotation.slice.elts
+            if isinstance(annotation.slice, ast.Tuple)
+            else [annotation.slice]
+        )
+        if base == "Optional":
+            return self.element_of_annotation(arguments[0], module, access)
+        if base in _MAPPING_TYPES and len(arguments) == 2:
+            return self.class_named(arguments[1 if access == "index" else 0], module)
+        if base in _COLLECTION_TYPES and arguments:
+            return self.class_named(arguments[0], module)
+        return None
+
+    def _agreed(self, classes):
+        """The one class every piece of evidence shows, or None."""
+        found = None
+        for value_class in classes:
+            if value_class is None or (found is not None and value_class != found):
+                return None
+            found = value_class
+        return found
+
+    def _written_items(self, name, scope_node, access):
+        """What is put into the container ``name`` inside ``scope_node``.
+
+        ``.append``/``.add`` add an item, ``.insert`` its second argument;
+        ``c[key] = value`` and ``.setdefault(key, value)`` add a value when
+        the container is indexed and a key when it is iterated. ``.extend``
+        and ``.update`` add the items of another container, returned as
+        ``("from", container)`` for the caller to read.
+        """
+        for node in ast.walk(scope_node):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Subscript)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == name
+                    ):
+                        yield node.value if access == "index" else target.slice
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == name
+            ):
+                method, args = node.func.attr, node.args
+                if method in ("append", "add") and args:
+                    yield args[0]
+                elif method == "insert" and len(args) > 1:
+                    yield args[1]
+                elif method == "setdefault" and len(args) > 1:
+                    yield args[1] if access == "index" else args[0]
+                elif method in ("extend", "update") and args:
+                    yield ("from", args[0])
+
+    def _annotation_of(self, name, frame):
+        """The annotation ``name`` is declared with, in its function or module."""
+        if frame.function is not None:
+            arguments = frame.function.args
+            for param in [
+                *arguments.posonlyargs,
+                *arguments.args,
+                *arguments.kwonlyargs,
+            ]:
+                if param.arg == name and param.annotation is not None:
+                    return param.annotation
+        for scope_node in (frame.function, self.trees.get(frame.module)):
+            if scope_node is None:
+                continue
+            for node in ast.walk(scope_node):
+                if (
+                    isinstance(node, ast.AnnAssign)
+                    and isinstance(node.target, ast.Name)
+                    and node.target.id == name
+                ):
+                    return node.annotation
+        return None
+
+    def element_class(self, container, frame, seen, access):
+        """The class of the items taken out of ``container``, if shown.
+
+        ``access`` is ``"index"`` (``c[k]``, ``.get``, ``.values()``) or
+        ``"iterate"`` (a loop, ``.keys()``); they differ only for a mapping.
+        Every piece of evidence must show the same class: a literal's items, a
+        comprehension's element, an annotation, the items the code puts into
+        it, or the container a call returns.
+        """
+        if isinstance(container, ast.Await):
+            return self.element_class(container.value, frame, seen, access)
+        if isinstance(container, ast.Dict):
+            items = container.values if access == "index" else container.keys
+            return self._agreed(
+                self.class_of(item, frame, seen) for item in items if item is not None
+            )
+        if isinstance(container, (ast.List, ast.Tuple, ast.Set)):
+            return self._agreed(
+                (
+                    self.element_class(elt.value, frame, seen, "iterate")
+                    if isinstance(elt, ast.Starred)
+                    else self.class_of(elt, frame, seen)
+                )
+                for elt in container.elts
+            )
+        if isinstance(container, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+            return self.class_of(container.elt, frame, seen)
+        if isinstance(container, ast.DictComp):
+            item = container.value if access == "index" else container.key
+            return self.class_of(item, frame, seen)
+        if isinstance(container, ast.Call):
+            return self._called_container_class(container, frame, seen, access)
+        if isinstance(container, ast.Attribute):
+            if not (
+                isinstance(container.value, ast.Name)
+                and container.value.id == "self"
+                and frame.owner_class is not None
+            ):
+                return None
+            owner = (frame.module, frame.owner_class)
+            return self._agreed(
+                self.element_of_annotation(value, frame.module, access)
+                or self.element_class(value, frame, seen, access)
+                for value in self.attribute_values(owner).get(container.attr, [])
+            )
+        if not isinstance(container, ast.Name):
+            return None
+        annotation = self._annotation_of(container.id, frame)
+        if annotation is not None:
+            annotated = self.element_of_annotation(annotation, frame.module, access)
+            if annotated is not None:
+                return annotated
+        scope = next((s for s in frame.scopes if container.id in s), None)
+        if scope is None:
+            return None
+        key = ("items", id(scope), container.id, access)
+        if key in seen:
+            return None
+        seen = seen | {key}
+        local = scope is frame.scopes[0] and frame.function is not None
+        scope_node = frame.function if local else self.trees.get(frame.module)
+        evidence = []
+        for value in scope[container.id]:
+            if isinstance(value, _Argument):
+                evidence.append(
+                    self.element_class(
+                        value.expression,
+                        frame._replace(scopes=value.scopes),
+                        seen,
+                        access,
+                    )
+                )
+            elif isinstance(value, ast.AST) and not (
+                isinstance(value, (ast.Dict, ast.List, ast.Tuple, ast.Set))
+                and not (value.keys if isinstance(value, ast.Dict) else value.elts)
+            ):
+                # An empty literal says nothing about what will be put in it.
+                evidence.append(self.element_class(value, frame, seen, access))
+        for written in self._written_items(container.id, scope_node, access):
+            if isinstance(written, tuple):
+                evidence.append(self.element_class(written[1], frame, seen, access))
+            elif not (isinstance(written, ast.Constant) and written.value is None):
+                evidence.append(self.class_of(written, frame, seen))
+        return self._agreed(evidence) if evidence else None
+
+    def _called_container_class(self, call, frame, seen, access):
+        func = call.func
+        if isinstance(func, ast.Name) and func.id in _SIZE_PRESERVING and call.args:
+            return self.element_class(call.args[0], frame, seen, "iterate")
+        if isinstance(func, ast.Name) and func.id == "dict" and call.args:
+            return self.element_class(call.args[0], frame, seen, access)
+        if isinstance(func, ast.Attribute):
+            if func.attr == "values":
+                return self.element_class(func.value, frame, seen, "index")
+            if func.attr == "keys":
+                return self.element_class(func.value, frame, seen, "iterate")
+            if func.attr == "copy":
+                return self.element_class(func.value, frame, seen, access)
+        if frame.depth >= MAX_CALL_DEPTH:
+            return None
+        resolved = self.resolve(func, frame, seen)
+        if resolved is None:
+            return None
+        callee, implicit_first = resolved
+        key = ("items-call", id(callee), access)
+        if key in seen:
+            return None
+        callee_module, _ = self.owners[id(callee)]
+        if callee.returns is not None:
+            annotated = self.element_of_annotation(
+                callee.returns, callee_module, access
+            )
+            if annotated is not None:
+                return annotated
+        evidence = [
+            self.element_class(
+                returned.value,
+                self.callee_frame(callee, call, frame, implicit_first, returned.value),
+                seen | {key},
+                access,
+            )
+            for returned in _own_nodes(callee)
+            if isinstance(returned, ast.Return)
+            and returned.value is not None
+            and not (
+                isinstance(returned.value, ast.Constant)
+                and returned.value.value is None
+            )
+        ]
+        return self._agreed(evidence) if evidence else None
+
+    def loop_item_class(self, element, frame, seen):
+        """The class of a loop target, from the container it iterates."""
+        iterated, position = element.container, element.position
+        if isinstance(iterated, ast.Call):
+            func = iterated.func
+            if isinstance(func, ast.Attribute) and func.attr == "items":
+                if position == 0:
+                    return self.element_class(func.value, frame, seen, "iterate")
+                if position == 1:
+                    return self.element_class(func.value, frame, seen, "index")
+                return None
+            if (
+                isinstance(func, ast.Name)
+                and func.id == "enumerate"
+                and iterated.args
+                and position == 1
+            ):
+                return self.element_class(iterated.args[0], frame, seen, "iterate")
+        if position is not None:
+            return None
+        return self.element_class(iterated, frame, seen, "iterate")
 
     def callee_frame(self, callee, call, frame, implicit_first, expression):
         """A frame reading ``expression`` inside ``callee`` as ``call`` invoked it."""
@@ -840,6 +1171,8 @@ def _message_frames(argument, scopes, module, owner_class, function, index):
                                 expression=value.expression, scopes=value.scopes
                             )
                         )
+                    elif isinstance(value, _Element):
+                        pending.append(frame._replace(expression=value.container))
                     elif value is not None:
                         pending.append(frame._replace(expression=value))
             elif (
@@ -1380,6 +1713,99 @@ def test_a_returned_object_of_unknown_class_is_not_followed():
             "def refuse(ids, x):\n"
             "    x = x.refresh()\n"
             "    raise ValueError(a().describe(ids) + x.describe(ids))\n"
+        )
+        == []
+    )
+
+
+def test_the_join_check_follows_objects_taken_out_of_containers():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    registry = 'REGISTRY = {"plain": Describer()}\n'
+    # Indexing a literal, and the lookup methods.
+    for take in ('REGISTRY["plain"]', "REGISTRY.get(key)", "REGISTRY.pop(key)"):
+        assert refusing(
+            registry + "def refuse(ids, key):\n"
+            f"    raise ValueError({take}.describe(ids))\n"
+        ) == ["names"], take
+    # A loop over a list, over a mapping's values, and its items' second half.
+    for loop in (
+        "for d in [Describer(), Describer()]:",
+        "for d in REGISTRY.values():",
+        "for _, d in REGISTRY.items():",
+        "for _, d in enumerate([Describer()]):",
+    ):
+        assert refusing(
+            registry + "def refuse(ids):\n"
+            f"    {loop}\n"
+            "        raise ValueError(d.describe(ids))\n"
+        ) == ["names"], loop
+    # Filled after it was made: appended to, and written by key elsewhere.
+    assert refusing(
+        "def refuse(ids):\n"
+        "    found = []\n"
+        "    found.append(Describer())\n"
+        "    raise ValueError(found[0].describe(ids))\n"
+    ) == ["names"]
+    assert refusing(
+        "LATER = {}\n"
+        "def register(key):\n"
+        "    LATER[key] = Describer()\n"
+        "def refuse(ids, key):\n"
+        "    raise ValueError(LATER[key].describe(ids))\n"
+    ) == ["names"]
+
+
+def test_container_annotations_name_the_items():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    assert refusing(
+        "def refuse(found: list[Describer], ids):\n"
+        "    for d in found:\n"
+        "        raise ValueError(d.describe(ids))\n"
+    ) == ["names"]
+    assert refusing(
+        'def refuse(found: "dict[str, Describer]", ids, key):\n'
+        "    raise ValueError(found[key].describe(ids))\n"
+    ) == ["names"]
+    # The container a call returns, by its annotation.
+    assert refusing(
+        "def everyone() -> Optional[list[Describer]]:\n"
+        "    return load()\n"
+        "def refuse(ids):\n"
+        "    for d in everyone():\n"
+        "        raise ValueError(d.describe(ids))\n"
+    ) == ["names"]
+    # Iterating a mapping yields its keys, which here are strings.
+    assert (
+        refusing(
+            "def refuse(found: dict[str, Describer], ids):\n"
+            "    for d in found:\n"
+            "        raise ValueError(d.describe(ids))\n"
+        )
+        == []
+    )
+
+
+def test_a_container_of_unknown_items_is_not_followed():
+    other = (
+        "class Other:\n"
+        "    def describe(self, names):\n"
+        '        return "; ".join(names)\n'
+    )
+    # Items of two classes; a container nothing fills; one the source cannot see.
+    assert (
+        _joins(
+            _DESCRIBER + other + "def refuse(ids, key, outside):\n"
+            "    mixed = [Describer(), Other()]\n"
+            "    empty = {}\n"
+            "    raise ValueError(\n"
+            "        mixed[0].describe(ids)\n"
+            "        + empty[key].describe(ids)\n"
+            "        + outside[key].describe(ids)\n"
+            "    )\n"
         )
         == []
     )

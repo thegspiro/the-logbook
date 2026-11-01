@@ -80,6 +80,12 @@ vi.mock('../stores/authStore', () => ({
   }),
 }));
 
+// The built-in shift types read the department's default minimum staffing;
+// the real accessor keys its cache on the auth store, mocked above as a hook.
+vi.mock('../modules/scheduling/services/shiftSettingsApi', () => ({
+  getCachedShiftSettings: () => ({ defaultMinStaffing: 4 }),
+}));
+
 // Mock timezone hook
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',

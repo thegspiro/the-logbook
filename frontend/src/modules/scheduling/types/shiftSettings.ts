@@ -77,6 +77,8 @@ export interface ApparatusTypeDefaults {
 export interface CustomPosition {
   value: string;
   label: string;
+  /** The seat drives the apparatus, so it gets the driver seat's EVOC check. Absent on positions saved before 2026-10-31. */
+  drivesApparatus?: boolean | undefined;
 }
 
 export interface ResourceTypeDefaults {

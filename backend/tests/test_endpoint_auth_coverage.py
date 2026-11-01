@@ -26,6 +26,9 @@ AUTH_DEPS = {
     "require_interview_access",
     "require_pipeline_reader",
     "require_view_all",
+    # Shift-report review (endpoints/shift_completion.py): training.manage or
+    # the department's reviewer role, resolved through get_current_user.
+    "require_report_reviewer",
 }
 
 # Reviewed, intentionally-public endpoints, keyed by (module, function). These

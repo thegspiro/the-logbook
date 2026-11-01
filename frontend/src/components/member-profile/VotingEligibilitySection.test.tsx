@@ -8,6 +8,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import type { MemberVotingEligibility } from '../../types/election';
+import { getTodayLocalDate } from '../../utils/dateFormatting';
 
 const getMemberVotingEligibility = vi.fn();
 const updateMemberVotingEligibility = vi.fn();
@@ -90,6 +91,22 @@ describe('VotingEligibilitySection', () => {
       })
     );
     expect(await screen.findByTestId('wait-outcome-regular')).toHaveTextContent('Waiting period waived');
+  });
+
+  it('refuses a start date after today, which would bar the member until it passed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VotingEligibilitySection userId="u1" memberName="Sam Admin" />);
+
+    const dateInput = await screen.findByLabelText('Count the wait from');
+    const today = getTodayLocalDate();
+    expect(dateInput).toHaveAttribute('max', today);
+
+    await user.type(dateInput, '2099-01-01');
+    await user.type(screen.getByLabelText('Reason'), 'Typo');
+    await user.click(screen.getByRole('button', { name: 'Save override' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('The date the wait counts from cannot be after today.');
+    expect(updateMemberVotingEligibility).not.toHaveBeenCalled();
   });
 
   it('asks before removing an override', async () => {

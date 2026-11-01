@@ -64,7 +64,7 @@ from its open list.
 | B23 | security, audit & IP       | SEC2   | ✅     |
 | B24 | core infra                 | CI2    | ✅     |
 | B25 | onboarding                 | ONB2   | ✅     |
-| B26 | public-portal              | PP2    | ⬜     |
+| B26 | public-portal              | PP2    | ✅     |
 | B27 | frontend shared            | FE2    | ⬜     |
 
 **36 features total.** After B27 the rotation wraps to A1.
@@ -3479,3 +3479,11 @@ secrets redacted for non-admins. See
   of the completion check. Race test red→green (2 rows → 1). Pass-1 LOW items
   re-verified closed. `/session/roles` simultaneous double-submit noted, not
   fixed. See onboarding.md. Next: B26 public-portal.
+- **B26 public-portal ✅ (pass 5).** Pitfall #27/#36 lens on the unauthenticated
+  writes. **PP2-2 FIXED:** `check_in_guest` was find-then-insert with no lock, so a
+  double scan of the guest QR (or a retried POST) inserted two attendee rows and
+  counted the guest twice; now serialized on the event row with a locking lookup,
+  covering both the guest-QR and room-kiosk paths. Race test red→green. Verified
+  fine: finance token approvals (already `FOR UPDATE`), Documenso/Cal.com/
+  Salesforce/PayPal webhooks. PP-6 and PP-7 residual unchanged. See
+  public-portal.md. Next: B27 frontend shared.
