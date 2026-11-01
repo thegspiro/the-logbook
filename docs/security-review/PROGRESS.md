@@ -16,17 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None, as of this commit.** PR #3890 (Feature 05, Finance & approvals,
-pass 14) merged at `43a63764` — docs-only delta beyond the review itself
-(no code changes this pass; see `FIN-05-finance-approvals.md`'s **Pass 14**
-section for the full re-verification). Rotation row 05 → ✅ (already
-reflected in the table above). This iteration (a watchdog pickup — the
-dedicated `/loop 30m /security-review` session,
-`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable) re-checked
-`list_pull_requests` (state=open) fresh and found 0 PRs whose head branch
-starts with `claude/security-review-` among 15 open PRs, confirming no
-fork in the rotation. Picked up Feature 06 (Elections & ballots), the
-next `⬜` row.
+**PR [#3903](https://github.com/thegspiro/the-logbook/pull/3903)** (branch
+`claude/security-review-elections-ballots`) — Feature 06 (Elections &
+ballots), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). Step 0 (`list_pull_requests`, state=open) found 0
+open PRs whose head branch starts with `claude/security-review-` among 15
+open PRs: PR #3890 (Feature 05, Finance & approvals, pass 14) had already
+merged (`43a63764`), and row 05 was already `✅`. Row 06 was the next `⬜`,
+confirmed fresh against the rotation table.
+
+See `docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 14**
+section for the full review: baseline `3f1d5b940` (PR #3809's merge, pass 13) to current `main`. Unlike pass 13's near-zero delta, this one is real
+and substantial — 2367 insertions/152 deletions shipping a new
+voter-eligibility-rules feature (per-meeting-kind attendance rules,
+per-member-type waiting periods, a per-member secretary override) across 9
+commits already landed on `main` before this pass began. Reviewed as new
+code against all seven checklist dimensions: the two new
+`GET`/`PUT /elections/members/{id}/voting-eligibility` routes are
+`elections.manage`-gated and org-scope the member lookup (confirmed by a
+dedicated cross-org 404 test); every new schema field is bounded with
+`extra="forbid"`; `evaluate_wait()` degrades a malformed stored rule to
+"no wait" rather than raising and checks `mode == "never"` before any
+waiver; the annual-meeting-link lookup and the three new migrations are
+org-scoped/`create_all`-tolerant/idempotent; `apply_updates`/
+`copy.deepcopy`/pitfall-#33-compliant logging are all used correctly; and
+the new frontend files use `useConfirm()` and the shared date utilities
+with 0 hits for every banned pattern. **0 fixes needed, 0 new findings.**
+Standing findings ELEC-12/14/16/28/40/48/49/50 all re-confirmed unchanged
+(their files are byte-identical to pass 13).
 
 Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
 `validate_migrations.py --strict` — 680 revisions, single head
