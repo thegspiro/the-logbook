@@ -228,6 +228,7 @@ describe('ZeffyPage — a fundraising manager', () => {
 
   it('defaults a membership campaign to member dues for a finance manager', async () => {
     granted.add('finance.manage');
+    granted.add('finance.view');
     listZeffyCampaigns.mockResolvedValue([zeffyCampaign({ category: 'membership', title: 'Memberships' })]);
     const user = userEvent.setup();
     renderWithRouter(<ZeffyPage />);
@@ -269,6 +270,7 @@ describe('ZeffyPage — a fundraising manager', () => {
 
   it('lets a finance manager change a dues link', async () => {
     granted.add('finance.manage');
+    granted.add('finance.view');
     listZeffyCampaigns.mockResolvedValue([duesLinked()]);
     const user = userEvent.setup();
     renderWithRouter(<ZeffyPage />);
@@ -278,6 +280,69 @@ describe('ZeffyPage — a fundraising manager', () => {
     expect(within(dialog).getByLabelText('Record payments as')).toHaveValue('dues_schedule');
     expect(within(dialog).getByLabelText('Member dues')).toHaveValue('ds-1');
     expect(screen.queryByText('Changing a member dues link needs finance access.')).not.toBeInTheDocument();
+  });
+
+  it('does not offer member dues to a finance manager who cannot read the schedules', async () => {
+    granted.add('finance.manage');
+    listZeffyCampaigns.mockResolvedValue([zeffyCampaign({ category: 'membership', title: 'Memberships' })]);
+    const user = userEvent.setup();
+    renderWithRouter(<ZeffyPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Link Memberships' }));
+    const kinds = within(await screen.findByRole('dialog')).getByLabelText('Record payments as');
+    expect(within(kinds).queryByRole('option', { name: 'Member dues' })).not.toBeInTheDocument();
+    expect(listDuesSchedules).not.toHaveBeenCalled();
+  });
+
+  it('sends the current time when an existing start date is cleared', async () => {
+    listZeffyCampaigns.mockResolvedValue([
+      zeffyCampaign({
+        link: {
+          id: 'l-1',
+          zeffyCampaignId: 'zc-1',
+          targetType: 'fundraising_campaign',
+          targetId: 'fc-1',
+          targetName: 'Engine fund',
+          applyFrom: '2025-01-01T00:00:00Z',
+          createdAt: '2026-10-15T14:30:00Z',
+          updatedAt: '2026-10-15T14:30:00Z',
+        },
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<ZeffyPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Change link for Engine Fund Drive' }));
+    const dialog = await screen.findByRole('dialog');
+    const before = Date.now();
+    await user.clear(within(dialog).getByLabelText(/Apply payments made on or after/));
+    await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
+
+    await waitFor(() => expect(saveLink).toHaveBeenCalledTimes(1));
+    const sent = (saveLink.mock.calls[0]?.[1] as { applyFrom?: string }).applyFrom;
+    expect(sent).toBeDefined();
+    expect(Date.parse(sent ?? '')).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it('shows a failure to load the linkable records, with a retry', async () => {
+    listCampaigns.mockRejectedValueOnce(new Error('Service unavailable'));
+    const user = userEvent.setup();
+    renderWithRouter(<ZeffyPage />);
+
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    await user.click(retry);
+
+    await waitFor(() => expect(listCampaigns).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument());
+  });
+
+  it('labels an amount that is not in US dollars', async () => {
+    listPayments.mockResolvedValue({ items: [payment({ currency: 'CAD', amount: '50.00' })], total: 1 });
+    listZeffyCampaigns.mockResolvedValue([zeffyCampaign({ currency: 'cad' })]);
+    renderWithRouter(<ZeffyPage />);
+
+    expect(await within(await screen.findByRole('table')).findByText('$50.00 CAD')).toBeInTheDocument();
+    expect(await screen.findByText(/Raised \$1,250\.00 CAD/)).toBeInTheDocument();
   });
 
   it('asks before unlinking', async () => {

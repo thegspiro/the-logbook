@@ -128,6 +128,8 @@ def upgrade() -> None:
             ),
             sa.Column("apply_from", sa.DateTime(timezone=True), nullable=False),
             sa.Column("synced_through", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("sync_window_end", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("sync_cursor", sa.String(255), nullable=True),
             sa.Column(
                 "created_by",
                 sa.String(36),

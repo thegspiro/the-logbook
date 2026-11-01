@@ -121,6 +121,14 @@ class ZeffyCampaignLink(Base):
     synced_through: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Where a window the sync could not finish in one run left off: its end
+    # and Zeffy's page cursor inside it. Both null when no window is part
+    # read, so the next run resumes on the page after the last one recorded
+    # instead of starting the window again.
+    sync_window_end: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sync_cursor: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -236,6 +244,8 @@ class ZeffyPayment(Base):
     # removed (see zeffy_service.redact_payment), kept so a wrong match can
     # be worked out after the fact.
     raw_payload: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # When the Logbook last looked at this payment, from Zeffy or on a retry.
+    # The retry pass works least recently examined first.
     last_event_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

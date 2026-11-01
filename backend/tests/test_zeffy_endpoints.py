@@ -206,6 +206,39 @@ class TestUpsertLink:
         )
         assert response.synced_through is None
 
+    async def test_a_start_read_back_from_the_database_can_be_moved(
+        self, db_session, scene
+    ):
+        # MySQL returns DATETIME without tzinfo while the request's date is
+        # aware; comparing the two raised TypeError until both were read as UTC.
+        org_id, _, user = scene
+        campaign = await _campaign(db_session, org_id)
+        body = ZeffyLinkUpsert(
+            target_type=ZeffyLinkTarget.FUNDRAISING_CAMPAIGN,
+            target_id=campaign.id,
+            apply_from=PAID,
+        )
+        await endpoints.upsert_zeffy_link(
+            "camp_1", body, db=db_session, current_user=user
+        )
+        link = (await endpoints._links_by_campaign(db_session, org_id))["camp_1"]
+        link.synced_through = PAID + timedelta(days=30)
+        link.sync_window_end = PAID + timedelta(days=40)
+        link.sync_cursor = "pay_9"
+        await db_session.flush()
+        db_session.expire(link)
+
+        response = await endpoints.upsert_zeffy_link(
+            "camp_1",
+            body.model_copy(update={"apply_from": PAID - timedelta(days=365)}),
+            db=db_session,
+            current_user=user,
+        )
+
+        assert response.synced_through is None
+        await db_session.refresh(link)
+        assert (link.sync_window_end, link.sync_cursor) == (None, None)
+
 
 class TestStatusAndPayments:
     async def test_status_counts_payments_by_state(self, db_session, scene):

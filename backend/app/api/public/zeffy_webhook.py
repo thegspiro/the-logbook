@@ -173,5 +173,8 @@ async def zeffy_inbound_webhook(
                 row.applied_target_type.value if row.applied_target_type else None
             ),
         },
+        # No acting user to infer it from: without this the record is
+        # missing from the department's own audit views.
+        organization_id=organization_id,
     )
     return {"status": "received", "state": row.state.value}

@@ -64,6 +64,11 @@ _TARGET_COLUMNS = {
 }
 
 
+def _as_utc(moment: datetime) -> datetime:
+    """MySQL hands DATETIME back without tzinfo; every stored time is UTC."""
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
 async def _integration(db: AsyncSession, organization_id: str) -> Optional[Integration]:
     result = await db.execute(
         select(Integration).where(
@@ -273,10 +278,14 @@ async def upsert_zeffy_link(
             created_by=str(current_user.id),
         )
         db.add(link)
-    elif link.synced_through is not None and apply_from < link.apply_from:
-        # An earlier start means payments the sync has already passed over
-        # are now wanted: read the campaign again from the new start.
-        link.synced_through = None
+    elif _as_utc(apply_from) != _as_utc(link.apply_from):
+        # The sync's place belongs to the old start. An earlier start also
+        # wants payments the sync has already passed over, so the campaign is
+        # read again from the new one.
+        if _as_utc(apply_from) < _as_utc(link.apply_from):
+            link.synced_through = None
+        link.sync_window_end = None
+        link.sync_cursor = None
 
     link.target_type = data.target_type
     for target_type, column in _TARGET_COLUMNS.items():
@@ -312,6 +321,7 @@ async def upsert_zeffy_link(
             "payments_applied": applied,
         },
         user_id=str(current_user.id),
+        organization_id=organization_id,
     )
     return await _link_response(db, link)
 
@@ -348,6 +358,7 @@ async def delete_zeffy_link(
             "zeffy_campaign_id": zeffy_campaign_id,
         },
         user_id=str(current_user.id),
+        organization_id=organization_id,
     )
 
 

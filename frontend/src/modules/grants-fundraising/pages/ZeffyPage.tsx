@@ -46,17 +46,27 @@ const STATE_FILTERS: { value: ZeffyPaymentState | ''; label: string }[] = [
   ...Object.values(ZeffyPaymentState).map((value) => ({ value, label: ZEFFY_STATE_LABELS[value] ?? value })),
 ];
 
+/** Zeffy also takes CAD, and nothing converts it, so a non-USD amount says which. */
+const money = (amount: number | string, currency?: string | null): string => {
+  const code = (currency ?? 'USD').toUpperCase();
+  const formatted = formatCurrency(Number(amount));
+  return code === 'USD' ? formatted : `${formatted} ${code}`;
+};
+
 const amountLabel = (payment: ZeffyPayment): string => {
   const refunded = Number(payment.refundedAmount);
-  const gross = formatCurrency(Number(payment.amount));
-  return refunded > 0 ? `${gross} (${formatCurrency(refunded)} refunded)` : gross;
+  const gross = money(payment.amount, payment.currency);
+  return refunded > 0 ? `${gross} (${money(refunded, payment.currency)} refunded)` : gross;
 };
 
 const ZeffyPage: React.FC = () => {
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const canManage = useAuthStore((s) => s.checkPermission('fundraising.manage'));
-  const canLinkDues = useAuthStore((s) => s.checkPermission('finance.manage'));
+  // finance.manage is what the backend checks to save a dues link;
+  // finance.view is what reading the schedules to choose from needs, and
+  // neither implies the other.
+  const canLinkDues = useAuthStore((s) => s.checkPermission('finance.manage') && s.checkPermission('finance.view'));
 
   const [status, setStatus] = useState<ZeffyStatus | null>(null);
   const [zeffyCampaigns, setZeffyCampaigns] = useState<ZeffyCampaign[]>([]);
@@ -69,6 +79,7 @@ const ZeffyPage: React.FC = () => {
   const [events, setEvents] = useState<FundraisingEvent[]>([]);
   const [duesSchedules, setDuesSchedules] = useState<ZeffyDuesScheduleOption[]>([]);
   const [campaignError, setCampaignError] = useState<string | null>(null);
+  const [targetsError, setTargetsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -117,23 +128,28 @@ const ZeffyPage: React.FC = () => {
     void loadPayments();
   }, [loadPayments]);
 
-  useEffect(() => {
-    if (!canManage) return;
-    let cancelled = false;
-    void Promise.all([
-      fundraisingService.listCampaigns({ limit: LIST_LIMIT }).catch(() => []),
-      fundraisingService.listFundraisingEvents({ limit: LIST_LIMIT }).catch(() => []),
-      canLinkDues ? zeffyService.listDuesSchedules().catch(() => []) : Promise.resolve([]),
-    ]).then(([nextCampaigns, nextEvents, nextSchedules]) => {
-      if (cancelled) return;
+  // The records a campaign can be linked to. A failure is shown with a retry
+  // rather than read as "there are none", which the link dialog could not
+  // tell apart.
+  const loadTargets = useCallback(async () => {
+    try {
+      const [nextCampaigns, nextEvents, nextSchedules] = await Promise.all([
+        fundraisingService.listCampaigns({ limit: LIST_LIMIT }),
+        fundraisingService.listFundraisingEvents({ limit: LIST_LIMIT }),
+        canLinkDues ? zeffyService.listDuesSchedules() : Promise.resolve([]),
+      ]);
       setCampaigns(nextCampaigns);
       setEvents(nextEvents);
       setDuesSchedules(nextSchedules);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [canManage, canLinkDues]);
+      setTargetsError(null);
+    } catch (err: unknown) {
+      setTargetsError(getErrorMessage(err, 'Could not load the records campaigns can be linked to.'));
+    }
+  }, [canLinkDues]);
+
+  useEffect(() => {
+    if (canManage) void loadTargets();
+  }, [canManage, loadTargets]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -271,6 +287,14 @@ const ZeffyPage: React.FC = () => {
           <h2 id="zeffy-campaigns" className="text-theme-text-primary text-lg font-semibold">
             Campaigns
           </h2>
+          {targetsError && (
+            <div role="alert" className="alert-danger flex flex-wrap items-center gap-3 rounded-lg p-3 text-sm">
+              <span>{targetsError}</span>
+              <button type="button" onClick={() => void loadTargets()} className="btn-secondary">
+                Retry
+              </button>
+            </div>
+          )}
           {campaignError && (
             <p role="alert" className="alert-danger rounded-lg p-3 text-sm">
               {campaignError}
@@ -290,7 +314,7 @@ const ZeffyPage: React.FC = () => {
                     <h3 className="text-theme-text-primary font-semibold">{campaign.title || campaign.id}</h3>
                     <p className="text-theme-text-secondary text-sm">
                       {[campaign.category, campaign.isArchived ? 'archived' : null].filter(Boolean).join(' · ')} ·
-                      Raised {formatCurrency(Number(campaign.raised))}
+                      Raised {money(campaign.raised, campaign.currency)}
                     </p>
                   </div>
                   {campaign.link ? (

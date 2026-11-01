@@ -176,6 +176,11 @@ class ZeffySyncService:
             if parsed is None:
                 return None
             row = await self._insert_row(organization_id, zeffy_payment_id)
+        elif parsed is not None and self._is_older_than(row, parsed):
+            # A read taken before a change this row already holds — a sync
+            # page or a webhook fetch that lost the race to the refund's own
+            # delivery. Applying it would put back money that was refunded.
+            return row
 
         if parsed is None:
             row.deleted_in_zeffy = True
@@ -187,6 +192,34 @@ class ZeffySyncService:
         await self._reconcile(row, parsed)
         await self.db.flush()
         return row
+
+    @staticmethod
+    def _is_older_than(row: ZeffyPayment, parsed: ParsedPayment) -> bool:
+        """Whether ``parsed`` is an earlier state of the payment than ``row``.
+
+        Zeffy gives a payment no version or updated-at field, so this rests on
+        the fields that only move one way: a payment does not come back once
+        deleted, refunds succeed and are never un-refunded, a settled dispute
+        stays settled, and a payment never returns to pending. Fetching under
+        the row lock instead would hold the lock across an HTTP call, and the
+        sync cannot re-fetch every payment on a page within Zeffy's rate limit.
+        """
+        if row.deleted_in_zeffy:
+            return True
+        if (parsed.refunded_amount or Decimal("0")) < (
+            row.refunded_amount or Decimal("0")
+        ):
+            return True
+        if row.refund_status == "full" and parsed.refund_status != "full":
+            return True
+        if (
+            row.dispute_status in ("won", "lost")
+            and parsed.dispute_status != row.dispute_status
+        ):
+            return True
+        return (
+            row.zeffy_status in ("succeeded", "failed") and parsed.status == "pending"
+        )
 
     async def _locked_row(
         self, organization_id: str, zeffy_payment_id: str
@@ -515,6 +548,12 @@ class ZeffySyncService:
             )
             .order_by(MemberDues.due_date)
             .limit(1)
+            # A locking read (Pitfall #27): a second payment for the same
+            # member waits for the first to settle these dues, then reads
+            # their new status and moves on to the next open dues, instead of
+            # crediting paid-off dues and turning its whole amount into a
+            # donation.
+            .with_for_update()
         )
         if dues_id is None:
             row.state = ZeffyPaymentState.UNMATCHED
@@ -644,26 +683,65 @@ class ZeffySyncService:
         payment that arrived before its dues were generated is credited once
         they are.
         """
-        query = select(ZeffyPayment.zeffy_payment_id).where(
-            ZeffyPayment.organization_id == organization_id,
-            ZeffyPayment.state.in_(_RETRYABLE),
-        )
         if zeffy_campaign_id:
-            query = query.where(
+            # A link was just saved: everything waiting on this campaign,
+            # including payments before a start date that may have moved.
+            query = select(ZeffyPayment.zeffy_payment_id).where(
+                ZeffyPayment.organization_id == organization_id,
+                ZeffyPayment.state.in_(_RETRYABLE),
                 or_(
                     ZeffyPayment.zeffy_campaign_id == zeffy_campaign_id,
                     ZeffyPayment.zeffy_parent_campaign_id == zeffy_campaign_id,
-                )
+                ),
             )
+        else:
+            # The hourly pass leaves out what cannot have changed since the
+            # last one: a payment before its link's start date waits for the
+            # link to be saved, and one whose campaign has no link waits for
+            # a link. Otherwise those would fill every batch and the
+            # payments a new member record or new dues could settle would
+            # never be reached.
+            linked = (
+                select(ZeffyCampaignLink.id)
+                .where(
+                    ZeffyCampaignLink.organization_id == ZeffyPayment.organization_id,
+                    or_(
+                        ZeffyCampaignLink.zeffy_campaign_id
+                        == ZeffyPayment.zeffy_campaign_id,
+                        ZeffyCampaignLink.zeffy_campaign_id
+                        == ZeffyPayment.zeffy_parent_campaign_id,
+                    ),
+                )
+                .exists()
+            )
+            query = select(ZeffyPayment.zeffy_payment_id).where(
+                ZeffyPayment.organization_id == organization_id,
+                ZeffyPayment.state.in_(
+                    (ZeffyPaymentState.UNLINKED, ZeffyPaymentState.UNMATCHED)
+                ),
+                linked,
+            )
+        # Least recently examined first, and every row examined is stamped
+        # below, so a batch that stays unmatched rotates to the back rather
+        # than being picked again ahead of everything behind it. MySQL sorts
+        # NULL first in ascending order.
         ids = list(
             (
-                await self.db.scalars(query.order_by(ZeffyPayment.paid_at).limit(limit))
+                await self.db.scalars(
+                    query.order_by(
+                        ZeffyPayment.last_event_at, ZeffyPayment.zeffy_payment_id
+                    ).limit(limit)
+                )
             ).all()
         )
         applied = 0
+        now = datetime.now(timezone.utc)
         for payment_id in ids:
             row = await self._locked_row(organization_id, payment_id)
-            if row is None or row.state not in _RETRYABLE or not row.raw_payload:
+            if row is None or row.state not in _RETRYABLE:
+                continue
+            row.last_event_at = now
+            if not row.raw_payload:
                 continue
             parsed = parse_payment(row.raw_payload)
             # The stored payload has had the email removed; the encrypted
@@ -698,9 +776,16 @@ class ZeffySyncService:
         links = list(
             (
                 await self.db.scalars(
-                    select(ZeffyCampaignLink)
-                    .where(ZeffyCampaignLink.organization_id == organization_id)
-                    .order_by(ZeffyCampaignLink.created_at)
+                    select(ZeffyCampaignLink).where(
+                        ZeffyCampaignLink.organization_id == organization_id
+                    )
+                    # Least recently synced first (a never-synced link's NULL
+                    # sorts first in MySQL), so when the request budget runs
+                    # out the links left over go first on the next run rather
+                    # than the same early links taking every run.
+                    .order_by(
+                        ZeffyCampaignLink.synced_through, ZeffyCampaignLink.created_at
+                    )
                 )
             ).all()
         )
@@ -751,19 +836,34 @@ class ZeffySyncService:
         synced = _utc(link.synced_through)
         start = max(synced - SYNC_OVERLAP, apply_from) if synced else apply_from
         seen = 0
+        resume_end = _utc(link.sync_window_end) if link.sync_cursor else None
         while start < end:
-            window_end = min(start + SYNC_WINDOW, end)
             cursor: Optional[str] = None
+            if resume_end is not None:
+                # The window a previous run ran out of budget in: same bounds,
+                # and the page after the last one it recorded. The start is
+                # unchanged because synced_through moves only when a window
+                # finishes, and a changed start date clears the cursor.
+                window_end = resume_end
+                cursor = link.sync_cursor
+                resume_end = None
+            else:
+                window_end = min(start + SYNC_WINDOW, end)
             while True:
                 if budget <= 0:
+                    await self._save_cursor(link, window_end, cursor)
                     return budget, seen, False
                 budget -= 1
-                page = await client.list_payments_page(
-                    campaign_id=link.zeffy_campaign_id,
-                    created_gte=int(start.timestamp()),
-                    created_lt=int(window_end.timestamp()),
-                    starting_after=cursor,
-                )
+                try:
+                    page = await client.list_payments_page(
+                        campaign_id=link.zeffy_campaign_id,
+                        created_gte=int(start.timestamp()),
+                        created_lt=int(window_end.timestamp()),
+                        starting_after=cursor,
+                    )
+                except ZeffyRateLimited:
+                    await self._save_cursor(link, window_end, cursor)
+                    raise
                 for payment in page.get("data") or []:
                     if not isinstance(payment, dict) or not payment.get("id"):
                         continue
@@ -775,6 +875,20 @@ class ZeffySyncService:
                 if not page.get("has_more") or not cursor:
                     break
             link.synced_through = window_end
+            link.sync_window_end = None
+            link.sync_cursor = None
             await self.db.commit()
             start = window_end
         return budget, seen, True
+
+    async def _save_cursor(
+        self, link: ZeffyCampaignLink, window_end: datetime, cursor: Optional[str]
+    ) -> None:
+        """Keep a part-read window's place, with the payments recorded from it.
+
+        With no cursor nothing in the window has been read yet, and there is
+        nothing to resume.
+        """
+        link.sync_window_end = window_end if cursor else None
+        link.sync_cursor = cursor
+        await self.db.commit()

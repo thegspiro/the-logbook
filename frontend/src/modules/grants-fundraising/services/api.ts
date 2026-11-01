@@ -502,7 +502,17 @@ export const zeffyService = {
 
   /** Dues schedules to link a membership campaign to; needs finance access. */
   async listDuesSchedules(): Promise<ZeffyDuesScheduleOption[]> {
-    const response = await api.get<ZeffyDuesScheduleOption[]>('/finance/dues-schedules');
-    return asArray(response.data);
+    // The endpoint pages (at most 1000 a page); an older schedule past the
+    // first page may still be active and must be offered.
+    const pageSize = 1000;
+    const schedules: ZeffyDuesScheduleOption[] = [];
+    for (let skip = 0; ; skip += pageSize) {
+      const response = await api.get<ZeffyDuesScheduleOption[]>('/finance/dues-schedules', {
+        params: { skip, limit: pageSize },
+      });
+      const page = asArray(response.data);
+      schedules.push(...page);
+      if (page.length < pageSize) return schedules;
+    }
   },
 };

@@ -82,8 +82,16 @@ export const ZeffyLinkDialog: React.FC<ZeffyLinkDialogProps> = ({
       setError(`Choose the ${ZEFFY_TARGET_LABELS[targetType]?.toLowerCase() ?? 'record'} to link.`);
       return;
     }
-    const sendStart = !existing || startTouched;
-    const applyFrom = sendStart && startDate ? localToUTC(`${startDate}T00:00`, tz) || undefined : undefined;
+    // Untouched on an existing link: omitted, so the stored start stands.
+    // Cleared on an existing link: "from now on" means now, so it is sent —
+    // omitted, the backend would keep the old start. Blank on a new link: the
+    // backend's own default is now.
+    let applyFrom: string | undefined;
+    if (startDate && (!existing || startTouched)) {
+      applyFrom = localToUTC(`${startDate}T00:00`, tz) || undefined;
+    } else if (existing && startTouched) {
+      applyFrom = new Date().toISOString();
+    }
     const payload: ZeffyLinkPayload = {
       targetType,
       targetId,

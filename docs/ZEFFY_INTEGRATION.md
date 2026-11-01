@@ -67,16 +67,17 @@ record.
   only for payments nobody has entered by hand.
 
 Linking a campaign to **member dues** also needs `finance.manage`, because it
-credits members' dues.
+credits members' dues, and `finance.view`, to read the schedules to choose from.
+Without both, a dues link is shown but cannot be changed or removed.
 
 ## Permissions
 
-| Action                                                       | Permission                                    |
-| ------------------------------------------------------------ | --------------------------------------------- |
-| Connect Zeffy, set the key and signing secret                | `integrations.manage` (Integrations page)     |
-| See linked campaigns and the payments list                   | `fundraising.view`                            |
-| List Zeffy's campaigns, link or unlink one, run **Sync now** | `fundraising.manage`                          |
-| Link a campaign to a dues schedule                           | `fundraising.manage` **and** `finance.manage` |
+| Action                                                       | Permission                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| Connect Zeffy, set the key and signing secret                | `integrations.manage` (Integrations page)                     |
+| See linked campaigns and the payments list                   | `fundraising.view`                                            |
+| List Zeffy's campaigns, link or unlink one, run **Sync now** | `fundraising.manage`                                          |
+| Link a campaign to a dues schedule, or change or remove one  | `fundraising.manage`, `finance.manage` **and** `finance.view` |
 
 The payer's email is stored encrypted and never returned by the payments list.
 Their mailing address and checkout answers are not stored at all.
@@ -113,7 +114,12 @@ decision for the treasurer, not a side effect of editing a link.
   Zeffy's payment id, and every change runs under a lock on that row. The row
   records what was applied and where, and a later change applies only the
   difference. The webhook and the sync can report the same payment any number
-  of times, in any order.
+  of times, in any order — including a read taken before a refund arriving
+  after it, which is recognised as older (a payment is never un-refunded,
+  un-deleted or returned to pending) and left unapplied.
+- **Concurrent dues payments settle separate dues.** The member's open dues
+  are chosen with a locking read, so a second payment waits for the first to
+  settle its dues and then moves on to the next.
 - **The webhook body is never trusted as data.** After the signature verifies,
   the payment is re-read from Zeffy's API with the department's key — Zeffy's
   `payment.updated` and `payment.deleted` events carry only an id anyway.
@@ -123,8 +129,10 @@ decision for the treasurer, not a side effect of editing a link.
   linked campaign's payments in 30-day windows from where it last got to,
   re-reading the last 7 days so payments that settle or are partly refunded
   shortly after the sale are seen again. A run stays under 60 Zeffy requests
-  (Zeffy allows 100 a minute per organization); a long history is finished over
-  the following runs.
+  (Zeffy allows 100 a minute per organization). Links are read least recently
+  synced first, so none is starved, and a window too large for one run keeps
+  Zeffy's page cursor and resumes on the next page rather than starting over.
+  Waiting payments are retried least recently examined first.
 
 ## Limits
 

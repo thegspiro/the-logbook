@@ -909,3 +909,376 @@ class TestWebhook:
             )
         ).all()
         assert len(rows) == 1
+
+
+# ---------------------------------------------------------------------------
+# Review round 2: races, fairness, resumability
+# ---------------------------------------------------------------------------
+
+
+class TestStaleSnapshots:
+    async def test_an_older_read_after_a_refund_does_not_restore_the_donation(
+        self, db_session, org
+    ):
+        org_id, _ = org
+        campaign = await _campaign(db_session, org_id)
+        await _link(
+            db_session, org_id, ZeffyLinkTarget.FUNDRAISING_CAMPAIGN, campaign.id
+        )
+        service = ZeffySyncService(db_session)
+        await service.record_payment(org_id, "pay_1", zeffy_payment())
+        await service.record_payment(
+            org_id,
+            "pay_1",
+            zeffy_payment(refunds=refunded(5000), refund_status="full"),
+        )
+
+        # A sync page read before the refund, applied after it.
+        row = await service.record_payment(org_id, "pay_1", zeffy_payment())
+
+        assert row is not None
+        assert row.state == ZeffyPaymentState.REVERSED
+        (donation,) = await _donations(db_session, org_id)
+        assert donation.payment_status == PaymentStatus.REFUNDED
+        await db_session.refresh(campaign)
+        assert campaign.current_amount == Decimal("0.00")
+
+    async def test_an_older_read_after_a_partial_refund_keeps_the_lower_amount(
+        self, db_session, org
+    ):
+        org_id, _ = org
+        event = await _event(db_session, org_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.FUNDRAISING_EVENT, event.id)
+        service = ZeffySyncService(db_session)
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=4000, tickets=2)
+        )
+        await service.record_payment(
+            org_id,
+            "pay_1",
+            zeffy_payment(
+                amount=4000, tickets=2, refunds=refunded(1000), refund_status="partial"
+            ),
+        )
+
+        await service.record_payment(
+            org_id, "pay_1", zeffy_payment(amount=4000, tickets=2)
+        )
+
+        await db_session.refresh(event)
+        assert event.actual_revenue == Decimal("130.00")
+
+    async def test_a_deleted_payment_stays_deleted(self, db_session, org):
+        org_id, _ = org
+        campaign = await _campaign(db_session, org_id)
+        await _link(
+            db_session, org_id, ZeffyLinkTarget.FUNDRAISING_CAMPAIGN, campaign.id
+        )
+        service = ZeffySyncService(db_session)
+        await service.record_payment(org_id, "pay_1", zeffy_payment())
+        await service.record_payment(org_id, "pay_1", None)
+
+        row = await service.record_payment(org_id, "pay_1", zeffy_payment())
+
+        assert row is not None
+        assert row.deleted_in_zeffy
+        assert row.state == ZeffyPaymentState.REVERSED
+
+    async def test_a_newer_state_is_still_applied(self, db_session, org):
+        org_id, _ = org
+        campaign = await _campaign(db_session, org_id)
+        await _link(
+            db_session, org_id, ZeffyLinkTarget.FUNDRAISING_CAMPAIGN, campaign.id
+        )
+        service = ZeffySyncService(db_session)
+        await service.record_payment(org_id, "pay_1", zeffy_payment(status="pending"))
+
+        row = await service.record_payment(org_id, "pay_1", zeffy_payment())
+
+        assert row is not None
+        assert row.state == ZeffyPaymentState.APPLIED
+
+
+class TestDuesSelection:
+    async def test_two_payments_settle_two_open_dues_rather_than_donating(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, first = await _dues(db_session, org_id, officer_id, member_id)
+        second = MemberDues(
+            organization_id=org_id,
+            dues_schedule_id=schedule.id,
+            user_id=member_id,
+            amount_due=Decimal("120.00"),
+            amount_paid=Decimal("0.00"),
+            status=DuesStatus.PENDING,
+            due_date=first.due_date + timedelta(days=365),
+        )
+        db_session.add(second)
+        await db_session.flush()
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+
+        for payment_id in ("pay_1", "pay_2"):
+            await service.record_payment(
+                org_id,
+                payment_id,
+                zeffy_payment(payment_id, amount=12000, email="dana@fd.test"),
+            )
+
+        await db_session.refresh(first)
+        await db_session.refresh(second)
+        assert first.status == DuesStatus.PAID
+        assert second.status == DuesStatus.PAID
+        assert await _donations(db_session, org_id) == []
+
+    async def test_the_open_dues_are_chosen_with_a_locking_read(self, db_session, org):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, _ = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        statements = []
+        real_scalar = db_session.scalar
+
+        async def capture(statement, *args, **kwargs):
+            statements.append(statement)
+            return await real_scalar(statement, *args, **kwargs)
+
+        with patch.object(db_session, "scalar", side_effect=capture):
+            await service.record_payment(
+                org_id, "pay_1", zeffy_payment(amount=12000, email="dana@fd.test")
+            )
+
+        dues_reads = [
+            s
+            for s in statements
+            if "member_dues" in str(s) and "dues_schedule_id" in str(s)
+        ]
+        assert dues_reads
+        assert all(s._for_update_arg is not None for s in dues_reads)
+
+
+class TestRetryFairness:
+    async def test_payments_before_a_start_date_do_not_fill_the_hourly_batch(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        campaign = await _campaign(db_session, org_id)
+        await _link(
+            db_session,
+            org_id,
+            ZeffyLinkTarget.FUNDRAISING_CAMPAIGN,
+            campaign.id,
+            apply_from=PAID + timedelta(days=1),
+        )
+        service = ZeffySyncService(db_session)
+        for i in range(3):
+            # Older than the payment that can be settled, so a batch taken
+            # oldest-first would be all of these.
+            await service.record_payment(
+                org_id,
+                f"old_{i}",
+                zeffy_payment(f"old_{i}", paid_at=PAID - timedelta(days=30)),
+            )
+
+        member_id = await _member(db_session, org_id, "late@fd.test")
+        schedule, dues = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(
+            db_session,
+            org_id,
+            ZeffyLinkTarget.DUES_SCHEDULE,
+            schedule.id,
+            campaign_id="camp_m",
+        )
+        waiting = await service.record_payment(
+            org_id,
+            "pay_m",
+            zeffy_payment(
+                "pay_m", campaign_id="camp_m", amount=12000, email="nobody@fd.test"
+            ),
+        )
+        assert waiting is not None
+        assert waiting.state == ZeffyPaymentState.UNMATCHED
+        await db_session.execute(
+            text("UPDATE users SET email_hash = :h WHERE id = :i"),
+            {"h": email_fingerprint("nobody@fd.test"), "i": member_id},
+        )
+
+        applied = await service.retry_unapplied(org_id, limit=1)
+
+        assert applied == 1
+        await db_session.refresh(dues)
+        assert dues.status == DuesStatus.PAID
+
+    async def test_a_batch_that_stays_unmatched_rotates_to_the_back(
+        self, db_session, org
+    ):
+        org_id, officer_id = org
+        member_id = await _member(db_session, org_id, "dana@fd.test")
+        schedule, _ = await _dues(db_session, org_id, officer_id, member_id)
+        await _link(db_session, org_id, ZeffyLinkTarget.DUES_SCHEDULE, schedule.id)
+        service = ZeffySyncService(db_session)
+        for payment_id in ("pay_a", "pay_b"):
+            await service.record_payment(
+                org_id,
+                payment_id,
+                zeffy_payment(payment_id, amount=100, email="stranger@else.test"),
+            )
+        rows = {
+            r.zeffy_payment_id: r
+            for r in (
+                await db_session.scalars(
+                    select(ZeffyPayment).where(ZeffyPayment.organization_id == org_id)
+                )
+            ).all()
+        }
+        rows["pay_a"].last_event_at = PAID
+        rows["pay_b"].last_event_at = PAID + timedelta(minutes=1)
+        await db_session.flush()
+
+        await service.retry_unapplied(org_id, limit=1)
+        await service.retry_unapplied(org_id, limit=1)
+
+        examined = {
+            pid: row.last_event_at.replace(tzinfo=timezone.utc)
+            for pid, row in rows.items()
+        }
+        assert examined["pay_a"] > PAID + timedelta(days=1)
+        assert examined["pay_b"] > PAID + timedelta(days=1)
+
+
+class TestSyncFairnessAndResume:
+    async def test_the_least_recently_synced_link_goes_first(self, db_session, org):
+        org_id, _ = org
+        campaign = await _campaign(db_session, org_id)
+        recent = await _link(
+            db_session,
+            org_id,
+            ZeffyLinkTarget.FUNDRAISING_CAMPAIGN,
+            campaign.id,
+            campaign_id="camp_recent",
+        )
+        recent.synced_through = PAID
+        stale = await _link(
+            db_session,
+            org_id,
+            ZeffyLinkTarget.FUNDRAISING_CAMPAIGN,
+            campaign.id,
+            campaign_id="camp_stale",
+        )
+        stale.synced_through = PAID - timedelta(days=2)
+        # Created after the other, so creation order alone would pick the
+        # recently synced link first.
+        recent.created_at = PAID - timedelta(days=10)
+        stale.created_at = PAID
+        await db_session.flush()
+        integration = await _integration(db_session, org_id)
+
+        fake = _FakeZeffy(raise_after=1)
+        await ZeffySyncService(db_session).sync_integration(
+            integration, now=PAID + timedelta(hours=1), client=fake
+        )
+
+        assert [c["campaign_id"] for c in fake.calls] == ["camp_stale"]
+
+    async def test_a_window_too_big_for_one_run_resumes_on_the_next_page(
+        self, db_session, org
+    ):
+        org_id, _ = org
+        campaign = await _campaign(db_session, org_id)
+        start = PAID - timedelta(days=10)
+        link = await _link(
+            db_session,
+            org_id,
+            ZeffyLinkTarget.FUNDRAISING_CAMPAIGN,
+            campaign.id,
+            apply_from=start,
+        )
+        integration = await _integration(db_session, org_id)
+
+        def pages(call):
+            after = call.get("starting_after")
+            n = 0 if after is None else int(after.split("_")[1]) + 1
+            return {
+                "data": [zeffy_payment(f"pay_{n}")],
+                "has_more": n < 2,
+                "next_cursor": f"pay_{n}",
+            }
+
+        service = ZeffySyncService(db_session)
+        first = _FakeZeffy(pages)
+        with patch("app.services.zeffy_sync_service.MAX_REQUESTS_PER_RUN", 2):
+            counts = await service.sync_integration(integration, now=PAID, client=first)
+        assert counts["complete"] is False
+        await db_session.refresh(link)
+        assert link.sync_cursor == "pay_1"
+        assert link.sync_window_end.replace(tzinfo=timezone.utc) == PAID
+        assert link.synced_through is None
+
+        second = _FakeZeffy(pages)
+        counts = await service.sync_integration(
+            integration, now=PAID + timedelta(hours=1), client=second
+        )
+
+        assert second.calls[0]["starting_after"] == "pay_1"
+        assert second.calls[0]["created_gte"] == int(start.timestamp())
+        assert second.calls[0]["created_lt"] == int(PAID.timestamp())
+        await db_session.refresh(link)
+        assert link.sync_cursor is None
+        assert link.sync_window_end is None
+        ids = (
+            await db_session.scalars(
+                select(ZeffyPayment.zeffy_payment_id).where(
+                    ZeffyPayment.organization_id == org_id
+                )
+            )
+        ).all()
+        assert sorted(ids) == ["pay_0", "pay_1", "pay_2"]
+
+    async def test_a_rate_limit_mid_window_keeps_its_place(self, db_session, org):
+        org_id, _ = org
+        campaign = await _campaign(db_session, org_id)
+        link = await _link(
+            db_session,
+            org_id,
+            ZeffyLinkTarget.FUNDRAISING_CAMPAIGN,
+            campaign.id,
+            apply_from=PAID - timedelta(days=10),
+        )
+        integration = await _integration(db_session, org_id)
+
+        def pages(call):
+            return {"data": [zeffy_payment()], "has_more": True, "next_cursor": "c1"}
+
+        await ZeffySyncService(db_session).sync_integration(
+            integration, now=PAID, client=_FakeZeffy(pages, raise_after=1)
+        )
+
+        await db_session.refresh(link)
+        assert link.sync_cursor == "c1"
+
+
+class TestWebhookAudit:
+    async def test_the_audit_record_carries_the_organization(self, db_session, org):
+        from app.models.audit import AuditLog
+
+        org_id, _ = org
+        integration = await _webhook_integration(db_session, org_id)
+
+        with patch.object(
+            zeffy_webhook.ZeffyClient,
+            "get_payment",
+            AsyncMock(return_value=zeffy_payment()),
+        ):
+            await zeffy_webhook.zeffy_inbound_webhook(
+                integration.id, _request(_webhook_event()), db=db_session, _rl=None
+            )
+
+        logged = (
+            await db_session.scalars(
+                select(AuditLog).where(AuditLog.event_type == "zeffy_payment_received")
+            )
+        ).all()
+        assert [str(a.organization_id) for a in logged][-1:] == [org_id]

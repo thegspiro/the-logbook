@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**336 tables · 5520 columns · 1136 foreign keys**
+**336 tables · 5522 columns · 1136 foreign keys**
 
 ---
 
@@ -754,7 +754,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`zeffy_campaign_links`](#zeffy_campaign_links) | `ZeffyCampaignLink` | 13 | Routes one Zeffy campaign's payments to one Logbook record. |
+| [`zeffy_campaign_links`](#zeffy_campaign_links) | `ZeffyCampaignLink` | 15 | Routes one Zeffy campaign's payments to one Logbook record. |
 | [`zeffy_payments`](#zeffy_payments) | `ZeffyPayment` | 32 | A payment Zeffy reported, and what the Logbook applied for it. |
 
 ---
@@ -11617,6 +11617,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `dues_schedule_id` | VARCHAR(36) | yes | FK |  | → `dues_schedules.id` ON DELETE SET NULL |
 | `apply_from` | DATETIME | no |  |  |  |
 | `synced_through` | DATETIME | yes |  |  |  |
+| `sync_window_end` | DATETIME | yes |  |  |  |
+| `sync_cursor` | VARCHAR(255) | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
