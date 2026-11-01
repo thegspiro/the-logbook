@@ -15,8 +15,14 @@ const mockBuildProgram = vi.fn();
 const mockGetRequirementsEnhanced = vi.fn();
 const mockGetCourses = vi.fn();
 const mockGetPrograms = vi.fn();
+// The program forms load the department's evaluation forms for their picker;
+// an empty list unless a test says otherwise.
+const mockListShiftEvaluationTemplates = vi.fn();
 
 vi.mock('../services/api', () => ({
+  shiftEvaluationTemplateService: {
+    list: (...a: unknown[]) => mockListShiftEvaluationTemplates(...a) as unknown,
+  },
   trainingProgramService: {
     buildProgram: (...a: unknown[]) => mockBuildProgram(...a) as unknown,
     getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
@@ -65,6 +71,8 @@ const goToRequirementsWithAPhase = async (user: ReturnType<typeof userEvent.setu
 
 describe('CreatePipelinePage — linking existing requirements', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
     mockGetCourses.mockResolvedValue([]);
@@ -146,6 +154,8 @@ describe('CreatePipelinePage — linking existing requirements', () => {
 
 describe('CreatePipelinePage — a one-list program', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
     mockGetCourses.mockResolvedValue([]);
@@ -205,6 +215,8 @@ describe('CreatePipelinePage — a one-list program', () => {
 
 describe('CreatePipelinePage — a requirement’s settings in this program', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockReset();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
@@ -292,6 +304,8 @@ describe('CreatePipelinePage — enrollment rules', () => {
   ];
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockReset();
     mockGetRequirementsEnhanced.mockResolvedValue([]);
@@ -367,5 +381,61 @@ describe('CreatePipelinePage — enrollment rules', () => {
     await createFlexible(user);
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Invalid prerequisite program'));
+  });
+});
+
+describe('CreatePipelinePage — shift evaluation form', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([
+      { id: 'tpl-driver', name: 'Driver Evaluation', is_active: true },
+      { id: 'tpl-old', name: 'Old Evaluation', is_active: false },
+    ]);
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockResolvedValue({ id: 'prog-4' });
+  });
+
+  const create = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: /Next/ })); // requirements
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+    await waitFor(() => expect(mockBuildProgram).toHaveBeenCalledTimes(1));
+    return (mockBuildProgram.mock.calls[0]?.[0] as { program: Record<string, unknown> }).program;
+  };
+
+  it('sends the chosen form, offering only active ones', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Driver Candidate');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    const select = screen.getByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(screen.queryByRole('option', { name: /Old Evaluation/ })).not.toBeInTheDocument();
+    await user.selectOptions(select, 'Driver Evaluation');
+
+    const program = await create(user);
+
+    expect(program.shift_evaluation_template_id).toBe('tpl-driver');
+  });
+
+  it('leaves the key out when no form is chosen', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+
+    const program = await create(user);
+
+    expect(program.shift_evaluation_template_id).toBeUndefined();
   });
 });

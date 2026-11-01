@@ -30,19 +30,18 @@ from app.models.user import User
 from app.services.scheduling_service import SchedulingService
 
 
-def _department_today() -> date:
-    """Today in the test department's timezone, as the service reckons it.
-
-    ``date.today()`` is the machine's date. For four or five hours after
-    midnight UTC it is already tomorrow in UTC and still today in New York,
-    so a test built on it disagreed with the service and failed for that
-    stretch of every day.
-    """
-    return datetime.now(ZoneInfo("America/New_York")).date()
-
-
 def _uid() -> str:
     return str(uuid.uuid4())
+
+
+def _department_today() -> date:
+    """The org's date (America/New_York, as _add_org makes it).
+
+    The service reads "this month" and "last month" in the department's zone;
+    the container's UTC date runs ahead of it every New York evening, which on
+    the last day of a month puts the two in different months.
+    """
+    return datetime.now(ZoneInfo("America/New_York")).date()
 
 
 async def _add_org(db_session: AsyncSession, tz: str = "America/New_York") -> str:

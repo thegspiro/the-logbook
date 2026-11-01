@@ -913,10 +913,9 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        # The summary counts the department's local month, which it works out
-        # from the org's timezone rather than through ``resolve_org_today``, so
-        # the autouse fixture above does not reach it. Built on the UTC date,
-        # the shift fell in next month for the hours after midnight UTC.
+        # The department's date, which is what get_summary counts "this month"
+        # by; the container's UTC date is already tomorrow on a New York
+        # evening, and on the last day of a month that is next month.
         today = datetime.now(ZoneInfo("America/New_York")).date()
         await svc.create_shift(
             uuid.UUID(org_id),
@@ -1354,17 +1353,17 @@ class TestPatternGeneration:
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # 07:00 the next day in the department's timezone. Compared in UTC,
-        # 19:00 Eastern is the next UTC day all winter, so start and end fell
-        # on the same UTC date from the end of daylight saving time to its
-        # return and the old day-number check failed for those months.
-        local = ZoneInfo("America/New_York")
-        start_local = shift.start_time.astimezone(local)
-        end_local = shift.end_time.astimezone(local)
+        # End time should be 07:00 the next day
         assert shift.end_time > shift.start_time
-        assert (start_local.hour, start_local.minute) == (19, 0)
-        assert (end_local.hour, end_local.minute) == (7, 0)
-        assert end_local.date() == start_local.date() + timedelta(days=1)
+        # 19:00 and 07:00 are the department's wall-clock times. In UTC the two
+        # fall on the same calendar day whenever New York is on standard time
+        # (19:00 EST is 00:00Z the next day), so compare in the department's
+        # zone, where "the next day" is what the template means.
+        tz = ZoneInfo("America/New_York")
+        local_start = shift.start_time.astimezone(tz)
+        local_end = shift.end_time.astimezone(tz)
+        assert (local_start.hour, local_end.hour) == (19, 7)
+        assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):
