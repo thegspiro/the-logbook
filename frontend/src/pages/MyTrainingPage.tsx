@@ -29,7 +29,13 @@ import {
   CalendarClock,
   CalendarRange,
 } from 'lucide-react';
-import { courseCohortService, skillsTestingService, trainingModuleConfigService } from '../services/api';
+import {
+  courseCohortService,
+  shiftEvaluationService,
+  skillsTestingService,
+  trainingModuleConfigService,
+} from '../services/api';
+import { MyShiftEvaluationsList } from '../components/training/MyShiftEvaluationsList';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementMonthlyHours } from '../components/training/RequirementMonthlyHours';
@@ -42,6 +48,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import type {
   CourseCohort,
   MyTrainingSummary,
+  ShiftEvaluationDetail,
   TrainingModuleConfig as TMConfig,
   RequirementDetail,
 } from '../types/training';
@@ -571,6 +578,7 @@ const MyTrainingPage: React.FC = () => {
   // other multi-class course. Empty hides the section.
   const [myCohorts, setMyCohorts] = useState<CourseCohort[]>([]);
   const [data, setData] = useState<MyTrainingSummary | null>(null);
+  const [shiftEvaluations, setShiftEvaluations] = useState<ShiftEvaluationDetail[]>([]);
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -590,6 +598,14 @@ const MyTrainingPage: React.FC = () => {
       setError(null);
       const trainingData = await trainingModuleConfigService.getMyTraining();
       setData(trainingData);
+
+      // Caught on its own, like the settings below: an evaluation list that
+      // fails to load must not replace the overview with a full-page error.
+      try {
+        setShiftEvaluations(await shiftEvaluationService.listMine());
+      } catch {
+        setShiftEvaluations([]);
+      }
 
       if (canConfigure) {
         // Deliberately caught separately. This request only feeds the
@@ -1265,6 +1281,14 @@ const MyTrainingPage: React.FC = () => {
             </Section>
           )}
 
+          {/* Shift Evaluations: behind the same switch as the shift reports,
+              which they are filled out beside. */}
+          {v?.show_shift_reports && shiftEvaluations.length > 0 && (
+            <Section title="Shift Evaluations" icon={ClipboardCheck} defaultOpen={false}>
+              <MyShiftEvaluationsList evaluations={shiftEvaluations} />
+            </Section>
+          )}
+
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
@@ -1315,6 +1339,7 @@ const MyTrainingPage: React.FC = () => {
           {!data.training_records?.length &&
             !data.enrollments?.length &&
             !data.shift_reports?.length &&
+            !shiftEvaluations.length &&
             !data.submissions?.length &&
             !data.certifications?.length && (
               <section className="card-secondary p-6" aria-labelledby="training-getting-started">

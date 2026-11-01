@@ -27,6 +27,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getShift: vi.fn(),
     createShift: vi.fn(),
     getMySwapRequests: vi.fn().mockResolvedValue([]),
+    getApprovedTimeOffFor: vi.fn().mockResolvedValue([]),
   },
   // A pure helper the create form calls on the template list; the real one just
   // flattens seats, so an empty list is a faithful stand-in for no template.

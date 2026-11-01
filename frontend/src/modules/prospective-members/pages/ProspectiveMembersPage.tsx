@@ -30,6 +30,7 @@ import {
   RotateCcw,
   Info,
   Archive,
+  UserCheck,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
@@ -733,6 +734,25 @@ export const ProspectiveMembersPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            )}
+
+            {/* A member who can see every applicant narrows the board and the
+              table to the ones they are assigned to. Without view_all the
+              server already shows only those, so there is nothing to narrow. */}
+            {seesAll && (
+              <button
+                type="button"
+                aria-pressed={filters.assigned_to_me === true}
+                onClick={() => setFilters({ assigned_to_me: filters.assigned_to_me ? undefined : true })}
+                className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  filters.assigned_to_me
+                    ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
+                    : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
+                }`}
+              >
+                <UserCheck className="h-4 w-4" aria-hidden="true" />
+                My applicants
+              </button>
             )}
 
             {/* Status Filter */}

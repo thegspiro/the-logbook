@@ -1,7 +1,7 @@
 """Meeting minutes: edit_version
 
 Revision ID: e15d635bbb98
-Revises: db30a34afa5b
+Revises: cc4caad451c5
 Create Date: 2026-10-31 19:00:00.000000
 
 Adds ``meeting_minutes.edit_version`` (MM5-4, owner decision 2026-10-31): a
@@ -20,7 +20,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e15d635bbb98"
-down_revision: Union[str, None] = "db30a34afa5b"
+down_revision: Union[str, None] = "cc4caad451c5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

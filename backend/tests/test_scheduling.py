@@ -20,6 +20,7 @@ import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
@@ -41,8 +42,7 @@ from app.models.training import (
 )
 from app.models.user import User
 from app.schemas.scheduling import ShiftUpdate
-from app.services.scheduling_service import SchedulingService, _as_utc
-from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
+from app.services.scheduling_service import SchedulingService
 
 
 @pytest.fixture(autouse=True)
@@ -913,9 +913,10 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        # The department's date: "this month" is its month, which on the
-        # first is still the previous one in UTC's terms for a while.
-        today = await resolve_org_today(db_session, org_id)
+        # The department's date, which is what get_summary counts "this month"
+        # by; the container's UTC date is already tomorrow on a New York
+        # evening, and on the last day of a month that is next month.
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1334,34 +1335,37 @@ class TestPatternGeneration:
             uuid.UUID(user_id),
         )
 
+        local = ZoneInfo("America/New_York")
+        start = datetime.now(local).date()
         pattern, _ = await svc.create_pattern(
             uuid.UUID(org_id),
             {
                 "name": "Nightly",
                 "pattern_type": PatternType.DAILY,
                 "template_id": template.id,
-                "start_date": date.today(),
+                "start_date": start,
             },
             uuid.UUID(user_id),
         )
 
-        start = date.today()
         shifts, err = await svc.generate_shifts_from_pattern(
             uuid.UUID(pattern.id), uuid.UUID(org_id), start, start, uuid.UUID(user_id)
         )
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day, on the department's clock.
-        # In UTC a 19:00 start already falls on the next day whenever the
-        # department is five or more hours behind (Eastern after the clocks
-        # go back), so the UTC dates prove nothing either way.
-        org_tz = await resolve_scheduling_timezone(db_session, org_id)
-        local_start = _as_utc(shift.start_time).astimezone(org_tz)
-        local_end = _as_utc(shift.end_time).astimezone(org_tz)
+        # 07:00 the next day *in the department's timezone*. Compared in UTC,
+        # a 19:00 New York start is 23:00 UTC under daylight time but 00:00
+        # UTC the next day under standard time, so the start and end shared a
+        # UTC date all winter and the old day-arithmetic check failed.
         assert shift.end_time > shift.start_time
-        assert local_start.hour == 19
-        assert local_end.hour == 7
+        # 19:00 and 07:00 are the department's wall-clock times. In UTC the two
+        # fall on the same calendar day whenever New York is on standard time
+        # (19:00 EST is 00:00Z the next day), so compare in the department's
+        # zone, where "the next day" is what the template means.
+        local_start = shift.start_time.astimezone(local)
+        local_end = shift.end_time.astimezone(local)
+        assert (local_start.hour, local_end.hour) == (19, 7)
         assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio

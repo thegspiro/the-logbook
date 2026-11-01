@@ -392,6 +392,7 @@ from app.models.public_portal import (
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
+from app.models.shift_evaluation import ShiftEvaluation, ShiftEvaluationTemplate
 from app.models.shift_history_import import (
     ShiftHistoryImport,
     ShiftHistoryImportMapping,
@@ -703,6 +704,8 @@ __all__ = [
     "ShiftPreWorkSession",
     "PreWorkStatus",
     # Shift history import
+    "ShiftEvaluation",
+    "ShiftEvaluationTemplate",
     "ShiftHistoryImport",
     "ShiftHistoryImportMapping",
     "ShiftHistoryImportMappingKind",

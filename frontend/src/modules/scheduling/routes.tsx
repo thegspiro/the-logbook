@@ -60,6 +60,8 @@ const ShiftCheckInPage = lazyWithRetry(() => import('../../pages/scheduling/Shif
 
 const ShiftCheckInPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPrintPage'));
 const ShiftReportPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftReportPrintPage'));
+const ShiftEvaluationPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftEvaluationPage'));
+const ShiftEvaluationPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftEvaluationPrintPage'));
 
 export const getSchedulingRoutes = () => {
   return (
@@ -364,6 +366,29 @@ export const getSchedulingRoutes = () => {
           <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
             <Suspense fallback={null}>
               <ShiftReportPrintPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* The server decides who may fill an evaluation out (the shift's officer
+          or training.manage) and who may read one, so these gate on the module
+          only, like the shift report's print page. */}
+      <Route
+        path="/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey"
+        element={
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftEvaluationPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/scheduling/shift-evaluations/print"
+        element={
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftEvaluationPrintPage />
             </Suspense>
           </ProtectedRoute>
         }

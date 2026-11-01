@@ -1603,6 +1603,19 @@ class TrainingProgram(Base):
     )  # Conditional reminder rules
     # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
 
+    # The evaluation form a member enrolled in this program is evaluated on
+    # after a shift (a driver candidate gets the driver evaluation). SET NULL:
+    # deleting a template leaves the program, now with no form (Pitfall #2).
+    shift_evaluation_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluation_templates.id",
+            ondelete="SET NULL",
+            name="fk_training_programs_shift_evaluation_template",
+        ),
+        nullable=True,
+    )
+
     # Recertification Cycle (auto-reset)
     # When enabled, an enrolled member's accumulated progress is cleared on a
     # recurring deadline so a fresh certification cycle can begin — e.g. NREMT's
@@ -2638,6 +2651,28 @@ class TrainingModuleConfig(Base):
         String(30), nullable=True
     )
 
+    # Shift evaluations. The general form is for members in no training
+    # program who sat in one of its evaluated seats; NULL mode reads as "off"
+    # (GENERAL_EVALUATION_MODES in app/models/shift_evaluation.py), so a
+    # department that never chose one evaluates nobody new on upgrade.
+    general_shift_evaluation_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluation_templates.id",
+            ondelete="SET NULL",
+            name="fk_training_module_configs_general_shift_evaluation_template",
+        ),
+        nullable=True,
+    )
+    general_shift_evaluation_mode: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
+    # Whether one evaluation on a shift counts for every program the member is
+    # enrolled in, rather than one evaluation per program.
+    one_shift_evaluation_for_multiple_programs: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
+
     # Self-reported submissions
     show_submission_history: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="1", nullable=False
@@ -3068,6 +3103,15 @@ class TrainingSubmission(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # Chosen by the device before its first attempt to send, and repeated on
+    # every resend. A submission queued offline is sent again whenever its
+    # answer did not arrive (a dropped connection, the client's 30s timeout),
+    # including when the server had already stored it; under auto-approval
+    # that second copy became a second training record and the hours counted
+    # twice. Unique per member, and NULL for submissions made without one,
+    # which MySQL's unique index allows any number of.
+    client_request_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     # Relationships
     training_record: Mapped[Optional["TrainingRecord"]] = relationship("TrainingRecord")
 
@@ -3075,6 +3119,11 @@ class TrainingSubmission(Base):
         Index("idx_submission_org_status", "organization_id", "status"),
         Index("idx_submission_user", "submitted_by", "status"),
         Index("idx_submission_date", "completion_date"),
+        UniqueConstraint(
+            "submitted_by",
+            "client_request_id",
+            name="uq_submission_member_client_request",
+        ),
     )
 
     def __repr__(self):

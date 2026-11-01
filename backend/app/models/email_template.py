@@ -81,6 +81,7 @@ class EmailTemplateType(str, enum.Enum):
     APPLICATION_FOLLOW_UP_REMINDER = "application_follow_up_reminder"
     APPLICATION_FOLLOW_UP_SUBMITTED = "application_follow_up_submitted"
     APPLICATION_ASSIGNED = "application_assigned"
+    APPLICATION_NEEDS_ATTENTION = "application_needs_attention"
     CUSTOM = "custom"
 
 

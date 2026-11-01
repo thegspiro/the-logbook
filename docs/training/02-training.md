@@ -2710,6 +2710,40 @@ many sign-offs have been recorded.
 
 ---
 
+## Shift Evaluations _(2026-10-31 / 11-01)_
+
+A shift evaluation is the department's own form, filled out for a member after
+a shift. It is not the same as a skills evaluation or a member's yearly
+performance evaluation (that is still being built; only its storage exists).
+
+**Building the forms.** **Training Admin → Settings & Data → Shift
+Evaluations** lists the department's forms (needs `training.configure` or
+`training.manage`). A form holds the rating scale and labels, an N/A option, the
+rating below which a comment is required, header fields, statistics, and
+sections of items. **Start from the example** gives a ready template. Set the
+**general form**, whether it is optional or required, and whether one combined
+evaluation may cover several programs.
+
+**Linking a form to a program.** The create-pipeline wizard and the
+edit-program dialog have a **Shift evaluation form** picker. Leaving it blank
+means no form. A form from another department is refused.
+
+**After a shift.** In the **Shift Completion Report**, each member who needs an
+evaluation has a status line (not started, in progress, submitted, optional)
+linking to their evaluation page. A member enrolled in a program with a form is
+evaluated on it, once per program (or once for all, if combined). A member in
+no such program, in a seat the general form covers, gets the general form.
+
+- The shift officer or a `training.manage` holder fills it out; **never your own**.
+- Rating buttons are full-size touch targets; required comments open by themselves.
+- Drafts autosave. **Submit** locks the evaluation.
+- A **print** view gives the paper layout.
+- Ratings and comments are encrypted at rest.
+
+> **Screenshots to create:** the Shift Evaluations settings screen; the form
+> editor; the program picker; the report's status lines; the evaluation page;
+> the print view.
+
 ## Manual Shift Report Entry
 
 **Who can do this:** training officers.

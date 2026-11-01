@@ -1354,30 +1354,22 @@ class ElectionService:
                 select(Organization).where(Organization.id == organization_id)
             )
             org = org_result.scalar_one_or_none()
-        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
-        tiers = tier_config.get("tiers", [])
-        member_tier_id = getattr(user, "membership_type", None) or "active"
-        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
 
-        # Secretary override — if present, they are eligible for everything
-        if election.voter_overrides and any(
-            o.get("user_id") == str(user.id) for o in election.voter_overrides
-        ):
-            return None
-
-        # Tier-level ineligibility (affects all items)
-        if tier_def:
-            benefits = tier_def.get("benefits", {})
-            if not benefits.get("voting_eligible", True):
-                tier_name = tier_def.get("name", member_tier_id)
-                return f"Membership tier '{tier_name}' is not eligible to vote"
-
-        # Election-wide rules (attendance, tenure) also affect every item
-        rules_reason = await self._election_rules_reason(
-            user, election, organization_id
+        # Secretary override, tier eligibility and election-wide rules all
+        # come from the one shared gate (_universal_gate) so this message
+        # can never disagree with the real decision in
+        # annotate_ballot_items_for_user (pitfall #29). Also closes a crash:
+        # the inline version this replaced read org.settings["membership_tiers"]
+        # without checking it was a dict, so a malformed stored value 500'd
+        # the admin's ballot-send/eligibility-roster screen instead of
+        # degrading, same as _tier_benefits already does.
+        gate_reason, has_override = await self._universal_gate(
+            user, election, organization_id, org
         )
-        if rules_reason:
-            return rules_reason
+        if has_override:
+            return None
+        if gate_reason:
+            return gate_reason
 
         # Check each item for role-type and attendance requirements
         role_blocked = 0

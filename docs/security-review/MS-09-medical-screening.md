@@ -1,6 +1,122 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11, PR [#3577](https://github.com/thegspiro/the-logbook/pull/3577)), 2026-10-25 (pass 12, PR [#3711](https://github.com/thegspiro/the-logbook/pull/3711)), 2026-10-28 (pass 13, PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), [#3577](https://github.com/thegspiro/the-logbook/pull/3577) (pass 11), [#3711](https://github.com/thegspiro/the-logbook/pull/3711) (pass 12), [#3813](https://github.com/thegspiro/the-logbook/pull/3813) (pass 13)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11, PR [#3577](https://github.com/thegspiro/the-logbook/pull/3577)), 2026-10-25 (pass 12, PR [#3711](https://github.com/thegspiro/the-logbook/pull/3711)), 2026-10-28 (pass 13, PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)), 2026-11-01 (pass 14) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), [#3577](https://github.com/thegspiro/the-logbook/pull/3577) (pass 11), [#3711](https://github.com/thegspiro/the-logbook/pull/3711) (pass 12), [#3813](https://github.com/thegspiro/the-logbook/pull/3813) (pass 13), pass 14 (this PR)
+
+---
+
+## Pass 14 (2026-11-01) — watchdog pickup: 0 fixed, 0 new findings; cosmetic-only delta since pass 13 (one repo-wide CSS layout commit); corrects a stale MS-16 claim carried since pass 12 — `frequency_months` is read, only `grace_period_days` remains open; MS-14/MS-15 re-confirmed unchanged
+
+**Step 0.** 0 open PRs with a head branch starting `claude/security-review-`
+(checked directly against GitHub). PR #3910 (Feature 08, Membership
+pipeline, pass 15) had already merged (`f57fd5a6`) with no open rotation PR
+behind it. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was confirmed unreachable via
+`ListAgents` ("No reachable agents"); this is a watchdog pickup. Row 09
+(Medical screening, PHI) was confirmed the next `⬜` on a freshly pulled
+`main` and by PR #3910's own "Next feature" note.
+
+**Scope.** Baseline `7ac356b4` (PR #3813's merge, pass 13). `git log
+--no-merges 7ac356b47..HEAD` over the five declared backend files
+(`endpoints/medical_screening.py`, `services/medical_screening_service.py`,
+`models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`) plus the full `frontend/src/modules/
+medical-screening/` directory: **1 non-merge commit** (`cf8fdae3`, "fix(layout):
+one page-header layout that wraps on its content"), read in full. It is a
+repo-wide shared-CSS-utility change; its only touch inside this feature's
+scope is `MedicalScreeningPage.tsx`'s header `<div>`, swapping
+`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between` /
+`flex items-center gap-3` for the new `page-header`/`page-header-title`
+utility classes — same elements, same content, no change to any
+`ProtectedRoute` gate, data fetch, or rendered field. All five backend files
+and `mcp/tools/medical.py` are byte-identical to pass 13. No
+medical-screening-table migration landed in the window: scanned every new
+migration body (17 non-merge commits touching `alembic/versions/` in the
+window) for `medical_screening`/`screening_requirement`/`screening_record` —
+zero matches.
+
+**All 16 routes re-enumerated by AST** (`ast.walk` over every
+`@router.{get,post,put,delete,patch}` decorator), exactly matching pass 13's
+count and table. Re-read every `Depends`/`require_permission` argument
+directly against the current file rather than diffing: unchanged from pass
+13's table, including the `/compliance/me` self-scoping shape and the MS-17
+`is_in_org` guards on `/compliance/{user_id}` and
+`/compliance/prospect/{id}`.
+
+**Tenant isolation and PHI encryption, re-confirmed by direct read** (the
+backend has zero diff since pass 13, so this re-reads the same code, not a
+delta): `get_requirement`/`get_record` still filter `organization_id` in the
+same `and_()` (`medical_screening_service.py:343,454`); `create_record`'s
+three client-supplied FKs still route through `assert_in_org(...,
+allow_none=True)` (`:523-539`); `ScreeningRecordUpdate` still carries no
+`user_id`/`prospect_id`/`requirement_id` field; `provider_name`/
+`result_summary`/`notes` are still `EncryptedText`, `result_data` still
+`EncryptedJSON` (`models/medical_screening.py:198-202,226`); the two
+`ondelete="SET NULL"` FKs (`requirement_id`, `reviewed_by`) are both
+`nullable=True`. Re-grepped all five backend files plus the frontend module
+for `.ilike(`/`.like(`, `csv.writer`, and `window.confirm`/`alert`/`prompt` —
+zero matches; Pitfalls #15, #25, #31 still don't apply. `grep
+alias_generator=to_camel backend/app/schemas/medical_screening.py` — still no
+match, consistent with this module's snake_case convention on both sides.
+
+**Documentation correction, found while re-verifying the standing items, not
+re-derived from scratch:** pass 12 and pass 13 both state "`grace_period_days`
+and `frequency_months` are still written on create/update and read by nothing
+in `_grade()`." That is only half true today, and — checked directly against
+`_effective_expiration` (`medical_screening_service.py:185-211`), which
+`_grade()` calls at line 251 — was already only half true when pass 13 ran,
+since the backend is byte-identical since that pass. `frequency_months` IS
+read: `_effective_expiration` falls a record with no `expiration_date` due
+`frequency_months` after its `completed_date` (the requirement it is linked
+to, or the one it is being graded against), and `KNOWN_LIMITATIONS.md`'s own
+MS-16 entry already records this correctly — "`frequency_months` resolved
+2026-10-25 (W71-1 above)" — so the mirror in `KNOWN_LIMITATIONS.md` was
+right and only this file's pass 12/13 narrative drifted from it.
+`grace_period_days` genuinely remains unread: grepped every reference in the
+three backend files (`services/schemas/models`) and the only hits are the
+write path (`create_requirement`'s `data.grace_period_days` assignment,
+`:367`) and the schema/model field declarations — no call site in `_grade`,
+`_effective_expiration`, or anywhere else reads it back. This is a narrative
+correction, not a new finding and not a code change: the pass 12/13 sections
+above are left as written, consistent with this file's own pass-9 precedent
+for documentation-accuracy corrections, since they record what pass 12/13's
+authors believed at the time, not a claim this pass is re-asserting.
+**MS-16's remaining open half is `grace_period_days` only** — `frequency_months`
+is resolved and should no longer be cited alongside it.
+
+**Standing items re-verified, unchanged (backend byte-identical to pass 13):**
+
+- **MS-14** (`medical_screening.view` grants full narrative PHI with no
+  finer-grained read tier, LOW, FLAGGED, owner decision) — unchanged.
+  `ScreeningRecordResponse` still inherits `provider_name`/`result_summary`/
+  `notes` from `ScreeningRecordBase`, and `GET /records`/`{id}` are still
+  gated on `.view` alone.
+- **MS-15** (the compliance roster loads every screening record in the
+  organization, unbounded, LOW, FLAGGED, same class as MS-6/FIN-9/ELEC-12/
+  USR-5/MP-10/DOC-9) — `get_compliance_roster` (`:794,801`) still calls
+  `list_requirements(..., is_active=True)` and `list_records(organization_id)`
+  with `limit=None` on both. Unchanged.
+- **MS-16, corrected scope** — see above: `grace_period_days` remains unread
+  by `_grade()`; `frequency_months` is resolved (was already resolved as of
+  pass 13, mis-stated in that pass's own text).
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.** This
+pass's own contribution is the documentation correction above, found by
+re-verifying a standing claim directly against current code rather than
+carrying it forward — exactly what this file's own precedent (pass 9) says
+to do, and exactly what passes 12/13 did not do for this one claim.
+
+### Completion gate (pass 14)
+
+| Check                                                                    | Result                                                  |
+| ------------------------------------------------------------------------ | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                          | ✅ 0 violations                                         |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                  | ✅ 2776 files unchanged                                 |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)               | ✅ clean                                                |
+| `python3 scripts/validate_migrations.py --strict`                        | ✅ 684 revisions, single head `5781476f2012`            |
+| `pytest tests/ -q -k "medical_screening or medical_screen or screening"` | ✅ 171 passed, 1 skipped (environment-only, `py_vapid`) |
+| `cd frontend && npm run typecheck`                                       | ✅ clean (`tsc-native.mjs --noEmit`)                    |
+| `cd frontend && npm run lint` (`eslint --max-warnings 10`)               | ✅ clean, 0 warnings                                    |
+| `npx vitest run src/modules/medical-screening`                           | ✅ 62 passed (11 files)                                 |
 
 ---
 
