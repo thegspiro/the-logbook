@@ -1,5 +1,24 @@
 # Known Limitations & Open Decisions
 
+## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
+
+**Partly resolved (Mobile App Access removed 2026-11-01); Public Information still open.** Found in the workflow review's W01 third
+pass (`docs/workflow-review/W01-onboarding.md`).
+
+- **Mobile App Access (W01-23) — resolved 2026-11-01.** Owner decision: remove
+  it. It is no longer offered by the setup wizard or by Settings → Modules. The
+  `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
+  stored settings and the modules API do not change; nothing reads it.
+- **Public Information (W01-24).** The Modules step never offers it, but
+  saving the step writes every configurable module, so a new installation
+  stores it off while Settings → Modules lists it as enabled by default.
+  Either offer it during setup or leave it at its default.
+
+Also open from the same pass, a smaller decision: the email step saves settings
+that have just failed their connection test, says "Email settings saved", and
+the completion page then reports the platform as configured (W01-27). Warn,
+confirm, or refuse.
+
 ## Members — Members See the Built-In Tier Names (2026-10-31)
 
 The department's membership tiers ("Active Member", "Senior Member", …) come
@@ -1148,6 +1167,10 @@ Still open:
 
 - **OneDrive / SharePoint and "Other" are still unread.** The screen says
   files stay on the server for them, and lists what can be connected.
+  **Onboarding now says so too (2026-10-31, W01-29/W01-30):** the setup
+  wizard's OneDrive card and settings page used to say files would be stored
+  there; they now say it is not connected yet and files stay on the server.
+  The Local Storage page marks its path field as recorded but not used.
   **Resolved 2026-10-23: Google Drive works** (decision 32), through a
   service account and a Shared Drive. It needs Google Workspace; a personal
   Google account has no Shared Drives.

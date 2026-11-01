@@ -16,6 +16,7 @@ ROOM_BOOKING = "room_booking"
 PROGRAM_ENROLLMENT = "program_enrollment"
 ADMIN_CONTINUITY = "admin_continuity"
 QUICKBOOKS_EXPORT = "quickbooks_export"
+EVALUATION_TEMPLATE_MATCHING = "evaluation_template_matching"
 
 
 async def lock_organization_scope(

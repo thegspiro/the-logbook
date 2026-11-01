@@ -49,6 +49,7 @@ import ApplicantDocumentsSection from './ApplicantDocumentsSection';
 import FollowUpFormsSection from './FollowUpFormsSection';
 import { ApplicantActionPanels } from './ApplicantActionPanels';
 import ApplicantAssignmentsSection from './ApplicantAssignmentsSection';
+import { InterviewRequirementPanel } from './InterviewRequirementPanel';
 import { ApplicantAccessContext, READ_ONLY_ACCESS } from './ApplicantAccessContext';
 import type { ProspectAccess } from '../types';
 
@@ -894,38 +895,12 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                         );
                       })()}
 
-                    {/* Interview Requirement Stage Section */}
+                    {/* Interview Requirement Stage Section — the server's grading,
+                      which is also what decides whether the stage may complete. */}
                     {applicant.current_stage_type === StageTypeEnum.INTERVIEW_REQUIREMENT &&
-                      applicant.status === ApplicantStatus.ACTIVE &&
-                      (() => {
-                        const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                        const actionResult = currentEntry?.action_result ?? {};
-                        const interviewCount = (actionResult.interview_count as number | undefined) ?? 0;
-                        const requiredCount = (actionResult.required_count as number | undefined) ?? 1;
-                        return (
-                          <div className="border-theme-surface-border border-b p-4">
-                            <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
-                              Interview Requirement
-                            </h3>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-theme-text-secondary">
-                                {interviewCount} of {requiredCount} interview{requiredCount !== 1 ? 's' : ''} completed
-                              </span>
-                              {interviewCount >= requiredCount ? (
-                                <span className="flex items-center gap-1 text-emerald-500">
-                                  <CheckCircle className="h-3 w-3" />
-                                  Requirement met
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-amber-500">
-                                  <Clock className="h-3 w-3" />
-                                  In progress
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
+                      applicant.status === ApplicantStatus.ACTIVE && (
+                        <InterviewRequirementPanel applicantId={applicant.id} variant="section" />
+                      )}
 
                     {/* Medical Screening Stage Section */}
                     {applicant.current_stage_type === StageTypeEnum.MEDICAL_SCREENING &&

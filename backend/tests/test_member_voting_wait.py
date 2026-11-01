@@ -128,7 +128,7 @@ class TestEvaluateWait:
         assert outcome.eligible_from == date(2027, 3, 14)
         assert wait_ineligibility_reason(outcome) == (
             "Administrative members may vote 12 months after becoming "
-            "administrative; eligible from 14 March 2027"
+            "administrative; eligible from Mar 14, 2027"
         )
 
     def test_the_wait_ends_on_the_anniversary(self):

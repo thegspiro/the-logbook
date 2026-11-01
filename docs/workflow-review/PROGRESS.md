@@ -161,10 +161,10 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   in `AppLayout` (W20).
 - **Dashboard, or any activity touching a module left off at setup** — on a
   fresh install with every module skipped, the administrator's first dashboard
-  asks `GET /integrations/weather/active-alerts` and
-  `GET /training/module-config/config`, and both are refused `403 LB-ORG-002`
-  ("module is not enabled"). The dashboard should not ask a disabled module.
-  Seen driving the W01 follow-up (2026-10-31).
+  asked `GET /training/module-config/config` and was refused `403 LB-ORG-002`
+  ("module is not enabled"). The weather and `/integrations/connected` half of
+  this lead was fixed in the W01 third pass (W01-33); the training call was not
+  seen there, because that install had Training on.
 - **Any run touching the app shell** — nothing keeps `TopNavigation` and
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
@@ -234,6 +234,28 @@ which the rule leaves alone. Re-driven: the QuickBooks "Add a mapping", the
 pledge's Edit and a document's name, size, type and date all show on a phone;
 without the fix the document row showed nothing. Gate: typecheck and lint
 clean, and the tests for the changed pages pass.
+
+### W01 third pass — Onboarding options and wording, as an IT manager — 2026-10-31
+
+Driven as: a fresh install, twice (find, then re-drive), anonymous → system
+owner, at 1280×900, in the review database only. Covered what the first two
+passes left out: every option on every step against what the app did after
+(stored rows, first sign-in, navigation, Settings), the email and storage
+configuration forms, the logo upload, and the sign-in choice on a server with
+no SSO client. Held: organization and logo stored as entered, member numbering,
+IT-contact accounts without duplicates, seat lists, the SMTP test's error, and
+W01-11 (choosing an unconfigured provider keeps passwords and reset; now
+resolved). Fixed: W01-17 to W01-22, W01-25, W01-26, W01-28 to W01-33. One
+HIGH (W01-29: the OneDrive card and page said files would be stored in
+OneDrive; nothing reads that choice), now worded truthfully; the limitation
+stands per the owner's 2026-10-08 decision. Flagged: W01-23 (MED, Mobile App
+Access has no reader), W01-24 (LOW, onboarding turns Public Information off
+without offering it), W01-27 (LOW, email settings that failed their test are
+saved without a word). Resolved the dashboard lead's integrations half
+(W01-33). Gate: typecheck and lint clean, every new test seen failing first,
+the full frontend suite passes, flake8 and black clean on the two backend files.
+Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
+from onboarding and Settings (the stored field is kept, retired).
 
 ### Membership re-check (W08, W10–W15) — 2026-10-31
 
@@ -1306,7 +1328,7 @@ Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a f
 
 - Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
 - Flagged: W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll).
-- Open: W50-R4, W50-R5 (NIT).
+- Fixed 2026-11-01: W50-R4 and W50-R5 (NIT).
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 

@@ -109,27 +109,30 @@ const AuthenticationChoice: React.FC = () => {
       icon: <GoogleIcon />,
       color: 'from-blue-500 to-green-500',
       features: [
-        'Users sign in with Google accounts',
-        'No password management needed',
-        'Multi-factor authentication built-in',
-        'Seamless for Google Workspace users',
+        'Members sign in with their Google account',
+        'Google’s own two-step verification applies',
+        'Best for Google Workspace departments',
       ],
-      setupInfo: "You'll need to create a Google Cloud project and configure OAuth 2.0 credentials.",
+      // Same shape as Authentik's: where the credentials go, and what members
+      // do until they are there. Choosing a provider the server is not
+      // configured for leaves the password form in place (sso_provider_is_live).
+      setupInfo:
+        "You'll need a Google Cloud OAuth client, set as GOOGLE_OAUTH_ENABLED, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in this server's .env. Until then members sign in with passwords.",
       recommended: emailPlatform === 'gmail',
     },
     {
       id: 'microsoft',
-      name: 'Microsoft Azure AD',
+      name: 'Microsoft Entra ID',
       description: 'Sign in with Microsoft accounts',
       icon: <MicrosoftIcon />,
       color: 'from-blue-600 to-cyan-400',
       features: [
-        'Users sign in with Microsoft accounts',
-        'Integration with Active Directory',
-        'Enterprise-grade security',
-        'Perfect for Microsoft 365 organizations',
+        'Members sign in with their Microsoft 365 work account',
+        'Entra ID (formerly Azure AD) sign-in and MFA policies apply',
+        'Best for Microsoft 365 departments',
       ],
-      setupInfo: "You'll need to register an app in Azure Active Directory and configure authentication.",
+      setupInfo:
+        "You'll need an Entra ID app registration, set as AZURE_AD_ENABLED, AZURE_AD_TENANT_ID, AZURE_AD_CLIENT_ID and AZURE_AD_CLIENT_SECRET in this server's .env. Until then members sign in with passwords.",
       recommended: emailPlatform === 'microsoft',
     },
     {
@@ -232,7 +235,7 @@ const AuthenticationChoice: React.FC = () => {
                   <p className="text-theme-alert-success-title mb-1 text-sm font-medium">Recommended for you</p>
                   <p className="text-theme-alert-success-text text-sm">
                     You chose {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} for email, so{' '}
-                    {emailPlatform === 'gmail' ? 'Google OAuth' : 'Microsoft Azure AD'} is recommended. Members sign in
+                    {emailPlatform === 'gmail' ? 'Google OAuth' : 'Microsoft Entra ID'} is recommended. Members sign in
                     with the accounts they already have.
                   </p>
                 </div>

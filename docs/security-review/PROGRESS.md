@@ -16,6 +16,146 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3913](https://github.com/thegspiro/the-logbook/pull/3913)** (branch
+`claude/security-review-documents-legal-p14`) — Feature 10 (Documents &
+legal), pass 14, a watchdog pickup. See the Log entry above for the full
+review summary.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 14, PR #3911, merged), preserved for history</summary>
+
+**PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911)** (branch
+`claude/security-review-medical-screening-p14`) — Feature 09 (Medical
+screening, PHI), pass 14, a watchdog pickup. See the Log entry above for the
+full review summary.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 15, PR #3910, merged), preserved for history</summary>
+
+**PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910)** (branch
+`claude/security-review-membership-pipeline-p15`) —
+Feature 08 (Membership pipeline), pass 15, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable). Step 0 (`list_pull_requests`, state=open, all 15 open
+PRs) found 0 with a head branch starting `claude/security-review-`. PR #3908
+(Feature 07, Users & organizations, pass 14) had already merged (`c262792f`);
+row 07 was already `✅` from that PR's own commit. Row 08 was the next `⬜`,
+confirmed fresh against the rotation table on a freshly fetched `main`.
+
+See `docs/security-review/MP-08-membership-pipeline.md`'s **Pass 15** section
+for the full review: baseline `6e70e60` (pass 14's commit, PR #3811) to
+current `main`. A real feature delta: 8 non-merge commits (2 of them pure CSS
+layout, no security content), adding case managers/interviewers and
+`prospective_members.view_all` (a new per-applicant assignment model,
+`app/services/prospect_access.py`), the Follow-up Form pipeline stage (a new
+public token-scoped surface sending/collecting applicant answers, with
+sensitive-answer encryption, a server-side writeback allowlist, and an
+idempotent reminder sweep), a case-manager withdraw permission, coordinators'
+notes hidden from interviewers, and in-app bell copies alongside existing
+withdrawal/auto-purge emails. Route enumeration by AST: 62 routes (up from 53
+at pass 14), every one resolving to a recognized auth dependency.
+
+**0 fixed, 0 new findings.** MP-10 (listing half) and MP-22 re-confirmed
+OPEN, unchanged (both owner-accepted). The new assignment-grant service
+validates both the prospect and the assignee user against the caller's own
+organization before inserting (Pitfall #14c); the follow-up-form token
+re-derives its prospect/step/form by id and organization on every call;
+sensitive answers are excluded from writeback, pre-fill, the plain answer
+list, and election packages alike; the one access dependency that loads an
+object by id without its own organization filter
+(`require_interview_access`) was traced and found non-exploitable, because
+the service layer it feeds re-scopes by organization before any read or
+write.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 684 revisions, single head
+`5781476f2012`; `check_route_permissions.py --strict` — 283 routes, 0
+errors/warnings; scoped backend tests (`-k "membership or prospect or
+pipeline or follow_up or assignment"`) — 1,669 passed, 1 environment-only
+skip (`py_vapid`); scoped frontend suite (`npx vitest run
+src/modules/prospective-members`) — 375 passed; frontend typecheck/lint
+clean.
+
+Rotation row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 14, PR #3908, merged), preserved for history</summary>
+
+**PR [#3908](https://github.com/thegspiro/the-logbook/pull/3908)** (branch
+`claude/security-review-users-organizations`) — Feature 07 (Users &
+organizations), pass 14, a watchdog pickup. Step 0 (`gh api search/issues`
+for `head:claude/security-review`, is:pr is:open) found 0 results; PR #3904
+(Feature 06, Elections & ballots, pass 14) had already merged (`eaa75b2cb`),
+confirmed fresh before starting. 1 fixed (USR-14, MED), 0 new flagged
+findings; four standing findings (USR-5, USR-8, USR-11, USR-12) re-verified
+unchanged. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 14** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 14, PR #3904, merged), preserved for history</summary>
+
+**PR [#3904](https://github.com/thegspiro/the-logbook/pull/3904)** (branch
+`claude/security-review-elections-ballots-p14`) — Feature 06 (Elections &
+ballots), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session was reported unreachable by the
+watchdog that picked this task up). Step 0 (`list_pull_requests`,
+state=open) found 15 open PRs, none with a head branch starting
+`claude/security-review-`. PR #3890 (Feature 05, Finance & approvals, pass 14) had already merged (`43a63764`); row 05 was already `✅` from that PR's
+own commit. Row 06 was the next `⬜`, confirmed fresh against the rotation
+table on a freshly fetched `main`.
+
+See `docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 14**
+section for the full review: baseline `3f1d5b940` (PR #3809, pass 13's
+merge) to current `main`. Unlike pass 13's near-zero delta, a real feature
+delta: 8 non-merge commits touch this feature's declared scope (2,367
+insertions / 152 deletions across 10 files) adding election-wide
+voter-eligibility rules (meeting attendance, membership tenure), a
+per-member-type voting waiting period with a secretary override (2 new
+routes, both `elections.manage`-gated and org-scoped through `_org_member`),
+a second eligibility default set for elections held at the annual meeting,
+and a reader for the previously-inert `default_*` election settings
+(ELEC2-9, resolved). Three new migrations, all `create_all`-guarded,
+nullable/server-defaulted, no change to who may vote in an existing
+election on upgrade. All 75 routes in `elections.py` re-enumerated by AST
+(up from 73 — the 2 new voting-eligibility routes), every one carrying a
+`Depends(...)`; 63 `require_permission`-gated (62 single-permission + 1
+OR-gated `list_candidates`), 7 self-service/sign-in-only (matching
+`permissionless_route_baseline.txt`), 5 public/token-scoped.
+
+**1 fixed (ELEC-51, LOW), 0 new OPEN/FLAGGED findings.** ELEC-51:
+`_get_ineligibility_reason_for_user` (a pre-existing, unrelated-PR function
+building an admin-facing skip-reason message) duplicated the new
+`_universal_gate`'s override/tier check instead of calling it, and crashed
+with `AttributeError` on a malformed stored `membership_tiers` setting —
+reproduced against the pre-fix code, fixed by delegating to
+`_universal_gate`, guarded by 3 new tests. Display-only function (never
+consulted by the real vote-gating decision), so LOW rather than higher.
+ELEC-16/ELEC-40/ELEC-48/ELEC-49 re-confirmed unchanged (all already in
+`docs/KNOWN_LIMITATIONS.md`); ELEC2-9 re-verified resolved by this window's
+own feature commit (not by this security pass).
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 682 revisions, single head
+`db30a34afa5b`; `check_route_permissions.py --strict` — 281 routes, 0
+errors/warnings; scoped backend tests (`-k "election or ballot or vote or
+candidate"`) — 1,305 passed, 1 environment-only skip (`pywebpush`);
+`test_refusal_detail_sweep.py` — 24 passed; frontend typecheck/lint clean.
+
+Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 14, PR #3890, merged), preserved for history</summary>
+
 **PR [#3890](https://github.com/thegspiro/the-logbook/pull/3890)** (branch
 `claude/security-review-finance-approvals-p14`) — Feature 05 (Finance &
 approvals), pass 14, a watchdog pickup (the dedicated
@@ -70,6 +210,8 @@ near-zero-delta pass (12, 13, 14) for this module.
 Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
 (Elections & ballots) — re-check `list_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 14, PR #3879, merged), preserved for history</summary>
@@ -24126,11 +24268,11 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -24162,6 +24304,150 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-01 — Feature 10 (Documents & legal, pass 14) — watchdog pickup, 0 fixed, 0 new findings; cosmetic-only delta
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+`gh api search/issues` (`is:pr is:open head:claude/security-review`) returned
+0 results: PR #3911 (Feature 09, Medical screening, pass 14) had already
+merged (`6a1ad334f`); row 09 was already ✅ from that PR's own commit. Row 10
+(Documents & legal) was the next `⬜`.
+
+**Baseline** `e8a5c00b0` (PR #3816's merge, pass 13). Zero backend diff across
+all fourteen declared backend files (`documents.py`, `station_documents.py`,
+`legal_documents.py`, `api/public/legal.py`, `documents_service.py`,
+`document_service.py`, `print_document_service.py`, `legal_service.py`,
+`admin_only_folder_digest.py`, `models/document.py`, `models/legal.py`,
+`schemas/documents.py`, `schemas/legal.py`, `mcp/tools/documents.py`) — every
+one byte-identical to pass 13. Only two in-scope frontend files changed, both
+cosmetic: `DocumentsPage.tsx`'s header JSX was extracted into a reusable
+constant so it also renders during the folder-loading state (fixing a layout
+jump, no behavior change), and `AdminOnlyFoldersNotice.tsx` swapped a
+hand-rolled flex-row for the shared `split-row` utility classes. Routes: 24,
+unchanged, re-enumerated by AST (15/2/7 across the three endpoint files). No
+migration in the window touches documents/legal tables (25 unrelated
+migrations checked, all other rotation rows).
+
+**Findings: 0 fixed, 0 new.** DOC-31 (LOW, the receipt-reference refusal
+check is a plain `SELECT` rather than `.with_for_update()`) re-confirmed OPEN,
+byte-identical to pass 13 — already in `docs/KNOWN_LIMITATIONS.md`.
+
+**Completion gate:** `flake8`/`isort --check-only` clean; `black --check`
+clean under the CI-pinned `26.10.1` (a stale `26.5.1` shadowed it on `PATH` —
+invoked `/usr/local/bin/black` directly to confirm the pinned binary, since
+`pip install` reported it already satisfied); `validate_migrations.py
+--strict` — 684 revisions, single head `5781476f2012`;
+`check_route_permissions.py --strict` — 283 routes, 0 errors/warnings; scoped
+backend tests (`-k "document or legal or station_document or
+facility_folder or folder or admin_only"`) — 656 passed, 1 environment-only
+skip (`py_vapid`); frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
+warnings; scoped frontend suite — 83 passed (8 files).
+
+Full write-up: `docs/security-review/DOC-10-documents-legal.md`'s **Pass 14**
+section.
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
+re-check `list_pull_requests`/`gh api search/issues` fresh rather than
+trusting this note.
+
+### 2026-11-01 — Feature 09 (Medical screening, PHI, pass 14) — watchdog pickup, 0 fixed, 0 new findings; cosmetic-only delta; corrects a stale MS-16 claim
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). Step 0 found 0 open PRs with a head branch starting
+`claude/security-review-`: PR #3910 (Feature 08, Membership pipeline, pass 15) had already merged (`f57fd5a6`); row 08 was already `✅` from that PR's
+own commit. Row 09 was the next `⬜`, confirmed fresh against the rotation
+table on a freshly pulled `main`.
+
+See `docs/security-review/MS-09-medical-screening.md`'s **Pass 14** section
+for the full review: baseline `7ac356b4` (PR #3813's merge, pass 13) to
+current `main`. Only one non-merge commit touched this feature's scope in
+the window — a repo-wide shared-CSS layout change whose single hit here is
+`MedicalScreeningPage.tsx`'s header `<div>` switching to the new
+`page-header`/`page-header-title` utility classes. All five backend files
+are byte-identical to pass 13; all 16 routes re-enumerated by AST, unchanged.
+
+**0 fixed, 0 new findings. MS-14 and MS-15 re-confirmed unchanged** (both
+owner-accepted, already in `docs/KNOWN_LIMITATIONS.md`). **This pass's own
+contribution is a documentation correction:** pass 12 and pass 13 both
+stated `grace_period_days`/`frequency_months` as still unread by `_grade()`.
+Re-checked directly against `_effective_expiration`, which `_grade()` calls:
+`frequency_months` is read (resolved 2026-10-25, W71-1) and
+`KNOWN_LIMITATIONS.md`'s own MS-16 entry already says so correctly — only
+this file's pass 12/13 narrative had drifted from it. `grace_period_days`
+remains genuinely unread. MS-16's remaining open half is `grace_period_days`
+only; the pass 12/13 sections are left as written (this file's own pass-9
+precedent for documentation-accuracy corrections) since they record what
+those passes' authors believed at the time.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 684 revisions, single head
+`5781476f2012`; scoped backend tests (`-k "medical_screening or
+medical_screen or screening"`) — 171 passed, 1 environment-only skip
+(`py_vapid`); scoped frontend suite (`npx vitest run
+src/modules/medical-screening`) — 62 passed (11 files); frontend typecheck
+clean; frontend lint clean.
+
+Rotation row 09 → ✅ (pending this PR's merge); next is Feature 10
+(Documents & legal) — re-check `list_pull_requests` fresh rather than
+trusting this note.
+
+### 2026-11-01 — Feature 08 (Membership pipeline, pass 15) — watchdog pickup, 0 fixed, 0 new findings; real delta (per-applicant access model, Follow-up Form stage)
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. Step 0
+(`list_pull_requests`, state=open) found 0 open PRs whose head branch
+starts with `claude/security-review-`: PR #3908 (Feature 07, Users &
+organizations, pass 14) had already merged (`c262792f`); row 07 was already
+`✅` from that PR's own commit. Row 08 was the next `⬜`, confirmed fresh
+against the rotation table.
+
+See `docs/security-review/MP-08-membership-pipeline.md`'s **Pass 15** section
+for the full review: baseline `6e70e60` (PR #3811, pass 14's merge) to
+current `main`. Unlike several recent near-zero-delta passes, a real feature
+delta: 8 non-merge commits (2 pure CSS layout, no security content) adding
+case managers/interviewers and `prospective_members.view_all` (a new
+per-applicant assignment model — `app/services/prospect_access.py` +
+`app/api/prospect_access.py`, with every `{prospect_id}` route now declaring
+an explicit access level, enforced by `tests/test_prospect_access_routes.py`),
+the Follow-up Form pipeline stage (a new public, token-scoped surface that
+emails an applicant a personal form link, pre-fills and writes back to a
+fixed allowlist of applicant-record columns, encrypts drafts and sensitive
+answers, and reminds on an idempotent, row-locked daily sweep), a
+case-manager withdraw permission (restricted to exactly that one status
+transition), coordinators' notes hidden from interviewer-only access, and
+in-app bell copies riding alongside the existing withdrawal/auto-purge
+emails. Two new migrations (`f34e25e2c820`, `c588f525fdbb`), both
+`create_all`-guarded with every `ondelete="SET NULL"` column `nullable=True`.
+Route enumeration by AST (not a text scan): 62 routes, up from 53 at pass 14,
+every one resolving to a recognized auth dependency.
+
+**0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN,
+unchanged** (both already in `docs/KNOWN_LIMITATIONS.md`, owner-accepted).
+The two most security-relevant new surfaces were traced end to end rather
+than taken on their commit messages' word: `ProspectAssignmentService.assign`
+validates both the prospect and the assignee user against the caller's own
+organization before inserting a grant (Pitfall #14c); the follow-up-form
+token's `resolve()` re-derives prospect/step/form by id **and**
+`organization_id` on every call, and the writeback path can only touch one
+of twelve allowlisted, server-validated `ProspectiveMember` columns, never a
+tenancy or identity field. One access dependency
+(`require_interview_access`) loads its target by id without an
+`organization_id` filter of its own; traced and found non-exploitable,
+because the service calls it feeds (`get_interview`) always re-scope by
+organization before any read or write, so a cross-org id ends in the same
+404 either way.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`
+(7.4.1/26.10.1/9.0.2, CI's pins, confirmed by `--version`);
+`validate_migrations.py --strict` — 684 revisions, single head
+`5781476f2012`; `check_route_permissions.py --strict` — 283 routes, 0
+errors/warnings; scoped backend tests (`-k "membership or prospect or
+pipeline or follow_up or assignment"`) — 1,669 passed, 1 environment-only
+skip (`py_vapid`); scoped frontend suite (`npx vitest run
+src/modules/prospective-members`) — 375 passed (42 files); frontend
+typecheck/lint clean.
 
 ### 2026-10-31 — Feature 05 (Finance & approvals, pass 14) — watchdog pickup, 0 fixed, 0 new findings; fourth consecutive near-zero-delta pass
 
@@ -44880,3 +45166,147 @@ passed; frontend typecheck/lint — n/a, no frontend file in scope changed.
 Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
 shared) — re-check `search_pull_requests`/`list_pull_requests` fresh rather
 than trusting this note.
+
+### 2026-11-01 — Feature 06 (Elections & ballots, pass 14) — watchdog pickup, real delta (election-wide voter eligibility rules, per-member voting-wait override, ELEC2-9 resolved), 1 fixed (LOW), 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session was
+reported unreachable by the watchdog that picked this task up. No open
+security-review PR — confirmed via `list_pull_requests` (state=open), 0
+results among `claude/security-review-*` head branches (15 unrelated
+feature PRs were open at the time). PR #3890 (Feature 05, Finance &
+approvals, pass 14) had already merged (`43a63764`); row 05 was already
+`✅` from that PR's own commit. Row 06 confirmed the next `⬜` row by
+reading the rotation table on a freshly fetched `main`, matching PR
+#3890's own "next feature" note.
+
+Real delta since this feature's own pass 13 (merge `3f1d5b940`, PR #3809):
+unlike pass 13's small three-item delta, a genuine feature delta landed in
+this window — 8 non-merge commits touching the declared scope (2,367
+insertions / 152 deletions across 10 files, out of 174 non-merge commits on
+`main` since baseline). The feature gained election-wide voter-eligibility
+rules (a meeting-attendance requirement and a minimum membership tenure,
+set on Election Settings and copied onto each election at create, enforced
+through a new shared `_universal_gate` helper that the in-app ballot check,
+item annotation, roster and turnout denominator all now read from), a
+per-member-type voting waiting period counted from when the member became
+that type (two new routes, `GET`/`PUT /elections/members/{user_id}/
+voting-eligibility`, both gated `elections.manage` and org-scoping the
+target member through a new `_org_member` helper), a second eligibility
+default set for elections held at the annual meeting, and a reader for the
+seven previously-inert `default_*` election settings the app-review
+rotation had flagged as ELEC2-9 (now resolved, and already marked so in
+`docs/KNOWN_LIMITATIONS.md` by the feature commit itself, not by this
+pass). Three new migrations (`e1a7c4b2d9f3`, `b3d58e0c71a4`, `c7e2a91f4d36`)
+are all additive, `create_all`-guarded, and nullable or server-defaulted —
+no existing election's or member's live eligibility changes on upgrade.
+All 75 routes in `elections.py` re-enumerated by AST (up from 73: the two
+new voting-eligibility routes), every one carrying a `Depends(...)` — 0
+unauthenticated routes; 63 `require_permission`-gated (62 single-permission
+plus 1 OR-gated `list_candidates`, both alternatives election-specific, not
+a Pitfall #23 broad-grant case), 7 self-service/sign-in-only (matching
+`permissionless_route_baseline.txt`'s 7 entries, unchanged), 5
+public/token-scoped (unchanged).
+
+**1 fixed (ELEC-51, LOW), 0 new OPEN/FLAGGED findings.** ELEC-51: a
+pre-existing function (`_get_ineligibility_reason_for_user`, from an
+unrelated earlier PR, building the admin-facing "why was this member
+skipped" message for the ballot-send skip list and the eligibility roster)
+duplicated the new `_universal_gate`'s override/tier check instead of
+calling it — a Pitfall #29 violation the new helper's own introduction
+created the opportunity for — and read a stored `membership_tiers` org
+setting without the `isinstance(dict)` guard its sibling helpers already
+carry, so a malformed stored value raised an unhandled `AttributeError`
+instead of degrading. Reproduced directly against the pre-fix code (a mock
+org with `settings={"membership_tiers": "not-a-dict"}` crashed the
+function), fixed by delegating to `_universal_gate`, and guarded by 3 new
+tests in `tests/test_election_eligibility_rules.py`, one of which was
+confirmed to fail against the pre-fix code per CLAUDE.md Pitfall #37.
+Display-only function — never consulted by the real vote-gating decision —
+so rated LOW rather than higher. Standing findings re-confirmed unchanged
+by direct re-read: ELEC-12 (fixed), ELEC-14 (fixed), ELEC-16 (accepted as
+is, no pagination), ELEC-28 (resolved, per pass 13), ELEC-40 (flagged,
+unchanged), ELEC-48 (flagged, unchanged — neither synchronous send endpoint
+gained a row lock this pass), ELEC-50 (fixed, guard unchanged); ELEC-49 is
+unchanged because `minutes_election_filing.py` has a byte-identical, empty
+diff since pass 13's baseline. All already-open items were already
+mirrored in `docs/KNOWN_LIMITATIONS.md` before this pass; nothing new to
+add there.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`'s
+**Pass 14** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean (isort 9.0.2, already installed under
+`/usr/bin/python3`); `validate_migrations.py --strict` — 682 revisions,
+single head `db30a34afa5b`; `check_route_permissions.py --strict` — 281
+routes, 0 errors/warnings; scoped backend tests
+(`-k "election or ballot or vote or candidate"`) — 1,305 passed, 1
+environment-only skip (`pywebpush`); `test_refusal_detail_sweep.py` — 24
+passed (re-run after the one cosmetic `list_within_detail_limit` commit in
+this window's diff); frontend `npm run typecheck`/`npm run lint` — 0
+errors, 0 warnings.
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-11-01 (Feature 07, Users & organizations, pass 14, watchdog pickup)
+
+**Step 0.** `gh api search/issues` for `is:pr is:open head:claude/security-review`
+returned 0 matches. PR #3904 (Feature 06, Elections & ballots, pass 14) had
+merged (`eaa75b2cb`); row 06 was already `✅` from that PR's own commit, and
+this iteration's own first commit clears the stale Open PR note for #3904
+(it was still narrating the PR as open) rather than giving that correction
+its own PR. Row 07 was the next `⬜`, confirmed fresh against `main`.
+
+**Reviewed:** `endpoints/users.py`, `endpoints/organizations.py`,
+`endpoints/member_status.py`, `endpoints/member_leaves.py`,
+`services/user_service.py`, `services/organization_service.py`,
+`services/member_leave_service.py`, `models/user.py`, `schemas/user.py`,
+`schemas/organization.py`, `app/mcp/tools/members.py`,
+`app/mcp/tools/organization.py`, plus the frontend pages/components this
+window's delta touched (`AddMember.tsx`, `ImportMembers.tsx`,
+`MemberAdminEditPage.tsx`, `Members.tsx`, `MembersAdminPage.tsx`,
+`MemberProfilePage.tsx`, `MemberClassificationFields.tsx`,
+`useMembershipTierOptions.ts`, `utils/membership.ts`).
+
+**Real delta since pass 13** (baseline `97db9a357`): 4 non-merge commits,
+339 insertions / 44 deletions across 5 backend files, splitting a member's
+"Membership Type" into two independent controls (`member_class` and
+`member_status`), letting a department's own membership tiers act as
+statuses, adding a `kind` (office/committee/system) to `Position`, and
+adding per-member-type voting-wait tracking columns consumed by Feature 06
+(already reviewed there). All 87 routes across the four principal files
+re-enumerated by AST — unchanged counts, no new route.
+
+**Findings: 1 fixed (USR-14, MED), 0 new flagged.** USR-14: the new
+member-status validator added by this window's own feature commit
+(`_accepted_member_status_or_400`) ran before the function's pre-existing
+`members.manage` permission check on a self-profile-edit, so an
+unprivileged member could use its 400 response to enumerate the
+organization's configured membership tier ids — information otherwise
+restricted to `members.manage` holders by a dedicated backend gate and a
+frontend workaround written specifically to avoid exposing it. Fixed by
+checking the permission before the validator runs; 2 new guard tests
+confirmed red against the unfixed code first. Standing findings USR-5
+(LOW/MED, unbounded lists), USR-8 (MED, full roster record), USR-11 (MED,
+step-up gap on status-change/archive) and USR-12 (MED, step-up gap on
+Gmail delegated email) re-verified unchanged against live source; all four
+remain open owner decisions already recorded in
+`docs/KNOWN_LIMITATIONS.md`.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (versions pre-installed: flake8 7.4.1,
+black 26.10.1, isort 9.0.2); `validate_migrations.py --strict` — 684
+revisions, single head `5781476f2012`; `check_route_permissions.py
+--strict` — 283 routes, 0 errors/warnings; scoped backend tests
+(`-k "user or organization or member_status or member_leave"`) — 1,431
+passed, 1 environment-only skip (`py_vapid`); frontend `npm run
+typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md`'s
+**Pass 14** section.
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline) — re-check `list_pull_requests` fresh rather than trusting this
+note.

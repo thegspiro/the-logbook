@@ -21,7 +21,7 @@ vi.mock('../utils/offlineQueueQuarantine', async (importOriginal) => {
   };
 });
 vi.mock('../hooks/useOfflineSyncEngine', () => ({
-  triggerOfflineDrain: () => mockDrain() as Promise<void>,
+  triggerAllOfflineDrains: () => mockDrain() as Promise<void>,
 }));
 vi.mock('../stores/authStore', () => {
   const state = { user: { id: 'member-b', username: 'druiz', first_name: 'Dana', last_name: 'Ruiz' } };

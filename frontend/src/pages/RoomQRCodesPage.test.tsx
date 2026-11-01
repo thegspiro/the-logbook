@@ -364,7 +364,13 @@ describe('RoomQRCodesPage — NFC tags', () => {
       { ...baseLocation, id: 'room-4', name: 'Annex Hall', display_code: 'ANNEXCODE' },
     ]);
     mockGetEnabledModules.mockReset();
-    mockGetEnabledModules.mockResolvedValue({ enabled_modules: ['members', 'events'], configured: true });
+    // Integrations on: a connected NFC integration is only reported to a
+    // department running that module (the endpoint is refused otherwise, and
+    // useConnectedIntegrations no longer asks).
+    mockGetEnabledModules.mockResolvedValue({
+      enabled_modules: ['members', 'events', 'integrations'],
+      configured: true,
+    });
     mockGetApparatusList.mockReset();
     mockGetApparatusList.mockResolvedValue({ ...mockApparatus, items: [] });
     mockIntegrationStatus.mockReset();
