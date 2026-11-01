@@ -113,7 +113,7 @@ beforeEach(() => {
     total_rules: 0,
     active_rules: 0,
     emails_sent_this_month: 0,
-    notifications_this_month: 0,
+    notifications_sent_this_month: 0,
   });
   location = '';
 });
