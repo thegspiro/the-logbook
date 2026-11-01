@@ -16,10 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None currently open.** PR #3904 (Feature 06, Elections & ballots, pass 14)
-merged (`eaa75b2cb`); row 06 is already `✅` from that PR's own commit. This
-iteration's Step 0 (`gh api search/issues` for `head:claude/security-review`,
-is:pr is:open) found 0 results, confirmed fresh before starting Feature 07.
+**PR [#3908](https://github.com/thegspiro/the-logbook/pull/3908)** (branch
+`claude/security-review-users-organizations`) — Feature 07 (Users &
+organizations), pass 14, a watchdog pickup. Step 0 (`gh api search/issues`
+for `head:claude/security-review`, is:pr is:open) found 0 results; PR #3904
+(Feature 06, Elections & ballots, pass 14) had already merged (`eaa75b2cb`),
+confirmed fresh before starting. 1 fixed (USR-14, MED), 0 new flagged
+findings; four standing findings (USR-5, USR-8, USR-11, USR-12) re-verified
+unchanged. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 14** section.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 14, PR #3904, merged), preserved for history</summary>
