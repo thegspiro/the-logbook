@@ -44,6 +44,7 @@ const UNCACHEABLE_PREFIXES = [
   '/officers', // office holders: member names, emails, phone numbers (PII)
   '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
   '/nfc-activity', // card taps by room and by event: who checked in where and when (PII)
+  '/grants/zeffy/', // Zeffy payers' names (PII); a stale ledger would also hide what a sync or a new link just applied
   '/integrations/google-workspace/', // a member's Google account address and its provisioning state (PII); a stale one hides a retry's result
   '/apparatus/operators', // per-member driving qualification: name, licence restrictions, restriction notes (PII)
   '/apparatus/driver-exceptions', // name + the justification and restrictions behind an exception — health-adjacent free text (PII); covers /approvers too
