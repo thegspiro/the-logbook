@@ -651,6 +651,7 @@ class MinutesUpdate(BaseModel):
     expected_version: Optional[int] = Field(
         None,
         ge=0,
+        le=INT32_MAX,
         description=(
             "The edit_version the editor loaded. When sent and someone has "
             "saved since, the save is refused with 409 instead of overwriting "
