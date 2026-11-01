@@ -1296,7 +1296,7 @@ Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a f
 
 - Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
 - Flagged: W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll).
-- Open: W50-R4, W50-R5 (NIT).
+- Fixed 2026-11-01: W50-R4 and W50-R5 (NIT).
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 
