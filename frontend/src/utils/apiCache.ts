@@ -56,6 +56,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
+  '/training/shift-evaluations/', // a member's ratings and the officer's comments on them
   '/training/stats/user/', // individual compliance stats
   '/training/reports/user/', // individual training reports
   '/training/compliance-summary/', // per-member compliance status

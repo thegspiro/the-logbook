@@ -1273,6 +1273,31 @@ ballot item is an election record and is kept.
 
 ---
 
+## Case Managers and Interviewers _(2026-10-31)_
+
+An officer with **manage** can assign members to an applicant as a **case
+manager** or an **interviewer**. The assignment is itself the grant: a board
+member or trustee with no recruitment permission reaches their own applicant
+from **My Applicants** (in the menu, shown only to a member who has at least
+one) and from that applicant's **Interview** page.
+
+| Role             | Can do                                                                                                                                         | Cannot do                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Case manager** | Work the applicant: details, documents, checklists, forms, advance, skip, move back, interviews. **Withdraw** an active or on-hold application | Reject, hold, resume, convert, build the election package, assign people. These stay with **manage**   |
+| **Interviewer**  | See details and documents; log and edit **their own** interview                                                                                | See other interviewers' interviews, the activity log, the election package, or the coordinators' notes |
+
+**Who sees every applicant.** Seeing the whole list now takes the new
+`prospective_members.view_all`. Holders of `view` or `manage` without it see
+only the applicants assigned to them. An upgrade gave `view_all` to every
+position that already held `view` or `manage`, so nobody's list narrowed;
+check **Positions** if you want a position to see only its own applicants.
+
+**Withdrawing as a case manager.** The status dialog offers a case manager only
+**Withdraw** (no Reject, Hold or Resume).
+
+> **Screenshots to create:** the **My Applicants** page; the status dialog as a
+> case manager sees it; an applicant's assignment control.
+
 ## Emails to Applicants
 
 _(2026-10-26)_ The emails the pipeline sends an applicant are templates the

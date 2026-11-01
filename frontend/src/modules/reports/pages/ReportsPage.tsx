@@ -35,6 +35,7 @@ import { HelpLink } from '../../../components/HelpLink';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { toLocalISODate } from '../../../utils/dateFormatting';
 import { useRanks } from '../../../hooks/useRanks';
+import { useAuthStore } from '../../../stores/authStore';
 import { useReportsStore } from '../store/reportsStore';
 import type { ReportCardDefinition, ReportData, DatePreset } from '../types';
 import { ExportControls } from '../components/ExportControls';
@@ -269,6 +270,9 @@ const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
 export const ReportsPage: React.FC = () => {
   const tz = useTimezone();
   const { formatRank } = useRanks();
+  const canSetUpEvaluations = useAuthStore(
+    (state) => state.checkPermission('evaluations.configure') || state.checkPermission('evaluations.manage')
+  );
 
   const {
     generatingReportType,
@@ -458,6 +462,14 @@ export const ReportsPage: React.FC = () => {
               >
                 Saved reports
               </Link>
+              {canSetUpEvaluations && (
+                <Link
+                  to="/reports/evaluations"
+                  className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium"
+                >
+                  Member evaluations
+                </Link>
+              )}
               <HelpLink
                 topic="reports"
                 variant="icon"

@@ -37,6 +37,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getInitials } from '../utils';
 import FollowUpAnswersPanel from '../components/FollowUpAnswersPanel';
+import { InterviewRequirementPanel } from '../components/InterviewRequirementPanel';
 import { applicantService } from '../services/api';
 import { blankToNull } from '../../../utils/formValues';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
@@ -246,11 +247,19 @@ const PipelineProgressSection: React.FC<PipelineProgressSectionProps> = ({ appli
 interface InterviewFormProps {
   applicantId: string;
   existingInterview?: Interview | undefined;
+  /** The caller's most senior position, offered as the title for a new interview. */
+  defaultTitle?: string | undefined;
   onSaved: () => void;
   onCancel?: (() => void) | undefined;
 }
 
-const InterviewForm: React.FC<InterviewFormProps> = ({ applicantId, existingInterview, onSaved, onCancel }) => {
+const InterviewForm: React.FC<InterviewFormProps> = ({
+  applicantId,
+  existingInterview,
+  defaultTitle,
+  onSaved,
+  onCancel,
+}) => {
   const { createInterview, updateInterview } = useProspectiveMembersStore();
   const [isSaving, setIsSaving] = useState(false);
 
@@ -259,9 +268,16 @@ const InterviewForm: React.FC<InterviewFormProps> = ({ applicantId, existingInte
     existingInterview?.recommendation ?? ''
   );
   const [recommendationNotes, setRecommendationNotes] = useState(existingInterview?.recommendation_notes ?? '');
-  const [interviewerRole, setInterviewerRole] = useState(existingInterview?.interviewer_role ?? '');
+  const [interviewerRole, setInterviewerRole] = useState(existingInterview?.interviewer_role ?? defaultTitle ?? '');
 
   const isEditing = !!existingInterview;
+
+  // The suggestion can arrive after the form opens. It fills an empty box
+  // only, so it never overwrites what the interviewer has typed, and an edit
+  // keeps the title the interview was signed with.
+  useEffect(() => {
+    if (!isEditing && defaultTitle) setInterviewerRole((current) => current || defaultTitle);
+  }, [defaultTitle, isEditing]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -292,7 +308,7 @@ const InterviewForm: React.FC<InterviewFormProps> = ({ applicantId, existingInte
           setNotes('');
           setRecommendation('');
           setRecommendationNotes('');
-          setInterviewerRole('');
+          setInterviewerRole(defaultTitle ?? '');
         }
         onSaved();
       } catch {
@@ -308,6 +324,7 @@ const InterviewForm: React.FC<InterviewFormProps> = ({ applicantId, existingInte
       interviewerRole,
       isEditing,
       existingInterview,
+      defaultTitle,
       applicantId,
       createInterview,
       updateInterview,
@@ -558,6 +575,10 @@ export const InterviewPage: React.FC = () => {
   // anyone assigned to them. An interviewer reaches this page through their
   // assignment, so the backend says, per applicant, rather than a permission.
   const [canInterview, setCanInterview] = useState(false);
+  const [interviewerTitle, setInterviewerTitle] = useState<string | undefined>(undefined);
+  // Bumped whenever the interviews change, so the requirement panel re-reads
+  // where the stage stands.
+  const [requirementKey, setRequirementKey] = useState(0);
   const shownApplicantId = currentApplicant?.id;
   useEffect(() => {
     if (!shownApplicantId) return undefined;
@@ -565,7 +586,9 @@ export const InterviewPage: React.FC = () => {
     applicantService
       .getMyAccess(shownApplicantId)
       .then((access) => {
-        if (!cancelled) setCanInterview(access.can_log_interview);
+        if (cancelled) return;
+        setCanInterview(access.can_log_interview);
+        setInterviewerTitle(access.interviewer_title || undefined);
       })
       .catch(() => {
         if (!cancelled) setCanInterview(false);
@@ -583,6 +606,7 @@ export const InterviewPage: React.FC = () => {
   }, [applicantId, fetchApplicant, fetchInterviews]);
 
   const handleRefresh = useCallback(() => {
+    setRequirementKey((key) => key + 1);
     if (!applicantId) return;
     void fetchInterviews(applicantId);
   }, [applicantId, fetchInterviews]);
@@ -651,6 +675,7 @@ export const InterviewPage: React.FC = () => {
         <div className="space-y-4 lg:col-span-1">
           <ApplicantInfoSection applicant={currentApplicant} timezone={timezone} />
           <PipelineProgressSection applicant={currentApplicant} timezone={timezone} />
+          <InterviewRequirementPanel applicantId={currentApplicant.id} refreshKey={requirementKey} />
           <FollowUpAnswersPanel applicantId={currentApplicant.id} timezone={timezone} />
 
           {/* Recommendation summary */}
@@ -695,6 +720,7 @@ export const InterviewPage: React.FC = () => {
               </h3>
               <InterviewForm
                 applicantId={currentApplicant.id}
+                defaultTitle={interviewerTitle}
                 onSaved={() => {
                   handleRefresh();
                   setShowForm(false);

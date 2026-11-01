@@ -74,7 +74,7 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
 
   it('offers department positions beside ranks, each name once, without Member', async () => {
     await openCreateDialog();
-    await userEvent.click(screen.getByRole('textbox', { name: 'Position name' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Position name' }));
 
     const listbox = screen.getByRole('listbox', { name: 'Available positions' });
     const names = within(listbox)
@@ -86,7 +86,7 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
   it('still offers ranks when the positions list cannot be read', async () => {
     mockGetRoles.mockRejectedValue(new Error('403'));
     await openCreateDialog();
-    await userEvent.click(screen.getByRole('textbox', { name: 'Position name' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Position name' }));
 
     const listbox = screen.getByRole('listbox', { name: 'Available positions' });
     expect(

@@ -158,6 +158,7 @@ from app.services.scheduling_widget_service import (
     SchedulingWidgetService,
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
 from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
@@ -1082,7 +1083,7 @@ async def get_shift_trainee_report_requirement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Which trainee reports close-out still needs, when the department requires them.
+    """Which trainee reports and shift evaluations close-out still needs.
 
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
@@ -1103,9 +1104,15 @@ async def get_shift_trainee_report_requirement(
         if required
         else []
     )
+    missing_evaluations = await ShiftEvaluationService(db).missing_required(
+        shift_id, current_user.organization_id
+    )
     return {
         "required": required,
         "missing": [{"user_id": uid, "name": name} for uid, name in missing],
+        "missing_evaluations": [
+            {"user_id": uid, "name": label} for uid, label in missing_evaluations
+        ],
         "can_override": user_has_permission(current_user, "scheduling.manage"),
     }
 

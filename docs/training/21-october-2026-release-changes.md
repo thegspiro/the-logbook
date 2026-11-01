@@ -1,3 +1,17 @@
+# October 31 – November 1, 2026 workflow updates
+
+Audit: [`docs/CHANGE_AUDIT_2026-11.md`](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Screenshots to create are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                  | Now in                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| Case managers, interviewers, My Applicants, `view_all` | [15 — Prospective Members](./15-prospective-members.md) |
+| Shift evaluation forms and per-shift evaluations       | [02 — Training](./02-training.md)                       |
+| Leave badges by date                                   | [01 — Membership](./01-membership.md)                   |
+| Scheduling fixes (ledger, swap times, time off)        | [03 — Scheduling](./03-scheduling.md) (already written) |
+
+---
+
 # October 29–30, 2026 workflow updates
 
 Index for the latest window. Audit:
