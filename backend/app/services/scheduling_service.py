@@ -10574,6 +10574,27 @@ class SchedulingService:
                         "out with an override.",
                     )
 
+            # Shift evaluations are required whenever a program's form (or a
+            # required general form) calls for one, whatever the report
+            # setting says: attaching a form is the department's opt-in, and a
+            # department that has attached none sees no change. The same
+            # admin override, with its audited reason, closes out without them.
+            if not override_missing_reports:
+                from app.services.shift_evaluation_service import (
+                    ShiftEvaluationService,
+                )
+
+                missing_evaluations = await ShiftEvaluationService(
+                    self.db
+                ).missing_required(shift_id, organization_id)
+                if missing_evaluations:
+                    return None, list_within_detail_limit(
+                        "A shift evaluation is still needed for: ",
+                        [label for _, label in missing_evaluations],
+                        suffix=". Fill it in from the shift report, or ask a "
+                        "scheduling admin to close out with an override.",
+                    )
+
             # Create attendance records for manually-entered hours
             #
             # Locking read: the shift row above is now locked (for_update),

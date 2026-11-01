@@ -332,6 +332,18 @@ app/api/v1/endpoints/scheduling.py::withdraw_from_shift
 
 app/api/v1/endpoints/scheduling_module_config.py::get_shift_settings
 
+# Shift evaluations. Filling one out and listing a shift's needs check
+# training.manage or being that shift's officer (_authorize_report_filing),
+# the same grant as filing the shift's reports.
+app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation_form
+app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation_roster
+app/api/v1/endpoints/shift_evaluations.py::save_shift_evaluation
+# Returns only the caller's own submitted evaluations they may see yet.
+app/api/v1/endpoints/shift_evaluations.py::list_my_shift_evaluations
+# training.manage, the evaluator, or the evaluated member once visible to
+# them; anyone else gets the same 404 as a missing row.
+app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation
+
 app/api/v1/endpoints/shift_completion.py::acknowledge_report
 app/api/v1/endpoints/shift_completion.py::batch_create_shift_reports
 app/api/v1/endpoints/shift_completion.py::create_shift_report
