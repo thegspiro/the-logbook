@@ -816,6 +816,15 @@ class ProspectInterview(Base):
     interviewer_role: Mapped[Optional[str]] = mapped_column(
         String(100)
     )  # e.g., "Membership Coordinator", "Chief"
+    # The position slugs, names and office keys the interviewer held when the
+    # interview was logged, casefolded. An Interview Requirement stage's
+    # required_interviewer_positions are graded against this, so an interview
+    # counts for the office its interviewer held that day. NULL on interviews
+    # logged before the column existed; the grader then reads the
+    # interviewer's current positions.
+    interviewer_positions: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Interview content
     notes: Mapped[Optional[str]] = mapped_column(Text)

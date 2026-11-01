@@ -762,6 +762,21 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Link to the applicant on the member's My Applicants page",
         },
     ],
+    "application_needs_attention": [
+        {"name": "recipient_name", "description": "Case manager's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "event_summary",
+            "description": (
+                "What happened, as a sentence ending in a full stop: "
+                '"Alex Johnson submitted their follow-up form."'
+            ),
+        },
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant on the member's My Applicants page",
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1509,6 +1524,19 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
         }
     ),
+    "application_needs_attention": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "event_summary": (
+                "Alex Johnson has reached the Board Interview stage, which "
+                "needs interviews."
+            ),
+            "applicant_url": (
+                "https://example.org/prospective-members/my-applicants?applicant=sample"
+            ),
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1772,6 +1800,10 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
         "recipient_name": "full",
         "applicant_name": "full",
         "assigned_by_name": "full",
+    },
+    "application_needs_attention": {
+        "recipient_name": "full",
+        "applicant_name": "full",
     },
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
@@ -2942,6 +2974,38 @@ Open My Applicants: {{applicant_url}}
 DEFAULT_APPLICATION_ASSIGNED_SUBJECT = (
     "You are now {{role_label}} for {{applicant_name}}"
 )
+
+# Sent to an applicant's case managers when the applicant needs them: a
+# follow-up form came in, the applicant withdrew, or they reached a stage that
+# waits on interviews or sign-offs. Coordinators get their own notices for
+# these; a case manager need not be a coordinator, and is told here. Like the
+# assignment email it carries a link and a one-line summary, never anything
+# from the file.
+DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML = build_shell(
+    "An Applicant Needs Your Attention",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{event_summary}}</p>
+        <p>You are {{applicant_name}}'s case manager. You can see their
+        application from My Applicants in the Logbook.</p>
+""" + action("{{applicant_url}}", "Open My Applicants"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT = """An Applicant Needs Your Attention
+
+Hello {{recipient_name}},
+
+{{event_summary}}
+
+You are {{applicant_name}}'s case manager. You can see their application from
+My Applicants in the Logbook.
+
+Open My Applicants: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT = "{{applicant_name}} needs your attention"
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
@@ -5094,6 +5158,18 @@ class EmailTemplateService:
             "description": (
                 "Sent to a member assigned to an applicant as case manager or "
                 "interviewer, with a link to their My Applicants page."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_NEEDS_ATTENTION,
+            "name": "Applicant Needs Your Attention",
+            "subject": DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT,
+            "html": DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML,
+            "text": DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT,
+            "description": (
+                "Sent to an applicant's case managers when the applicant "
+                "submits a follow-up form, withdraws, or reaches an interview "
+                "or sign-off stage. Carries a link only."
             ),
         },
         {
