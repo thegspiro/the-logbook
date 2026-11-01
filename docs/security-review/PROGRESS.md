@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending)** — Feature 09 (Medical screening, PHI), pass 14, a watchdog
-pickup. See the Log entry above for the full review summary; the PR number
-will be recorded here in a follow-up commit on this same branch once opened.
+**PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911)** (branch
+`claude/security-review-medical-screening-p14`) — Feature 09 (Medical
+screening, PHI), pass 14, a watchdog pickup. See the Log entry above for the
+full review summary.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 15, PR #3910, merged), preserved for history</summary>
