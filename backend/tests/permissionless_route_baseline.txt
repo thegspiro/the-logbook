@@ -87,6 +87,21 @@ app/api/v1/endpoints/elections.py::get_member_ballot
 app/api/v1/endpoints/elections.py::list_my_proxy_authorizations
 app/api/v1/endpoints/elections.py::submit_member_ballot
 
+# Member performance evaluations (2026-11-01). A member reaches their own
+# evaluations on sign-in alone: they acknowledge, refuse or respond to the
+# record, so a grant a department could withdraw would withhold it from them.
+# /mine and /mine/live-data filter on current_user.id within its organization.
+# The by-id routes resolve the evaluation org-scoped, then EvaluationService
+# admits only its member, its evaluator, an approver at an open approval step
+# or a holder of evaluations.view_all / manage, and answers anyone else 404;
+# each write further requires the author of that part (403 otherwise).
+app/api/v1/endpoints/evaluations.py::get_evaluation
+app/api/v1/endpoints/evaluations.py::get_my_live_data
+app/api/v1/endpoints/evaluations.py::list_my_evaluations
+app/api/v1/endpoints/evaluations.py::refresh_evaluation_data
+app/api/v1/endpoints/evaluations.py::save_evaluation_part
+app/api/v1/endpoints/evaluations.py::submit_evaluation_part
+
 app/api/v1/endpoints/equipment_check.py::download_csv_sample
 app/api/v1/endpoints/equipment_check.py::get_check_log
 app/api/v1/endpoints/equipment_check.py::get_my_checklist_history

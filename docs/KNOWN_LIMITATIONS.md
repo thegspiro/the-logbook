@@ -106,6 +106,26 @@ member sees their own.
   it.
 - Two members may supervise each other.
 
+## Members — No History of Positions Held (2026-11-01)
+
+`user_positions` records only who holds each position now: assigning one adds
+a row stamped `assigned_at`, and removing one deletes the row. Nothing keeps a
+member's earlier offices or committee seats.
+
+Member performance evaluations show "Positions held" as a data source, and the
+owner chose (2026-11-01) to list the offices and committee seats the member
+holds when the figures are taken and that were assigned by the end of the
+review period (`EvaluationDataService._positions`). A position held earlier in
+the period and given up before the figures were taken does not appear, and the
+evaluation says the list is as of when the figures were taken.
+
+**Open decision:** keep a dated history of position assignments (an
+assignment table with start and end dates, written when a position is assigned
+or removed), after which evaluations can list what a member held during the
+period. The audit log records `user_role_assigned` / `user_role_removed`
+events, but rebuilding history from it depends on the log being complete and
+was not chosen.
+
 ## Frontend API Cache — An Inventory Item's Detail Is Cacheable and Names the Holder (2026-10-31)
 
 `GET /inventory/items/{id}` fills in `assigned_to_name` — who currently holds the

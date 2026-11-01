@@ -612,3 +612,186 @@ class EvaluationPeriodResponse(BaseModel):
     evaluations_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# -------------------------------------------------------------- evaluations ---
+
+#: The scale an evaluator picks an overall rating from when a template's
+#: ``overall_mode`` is ``evaluator``. Fixed rather than per-template: the
+#: overall rating is compared across members and years, which a scale each
+#: template could redefine would defeat.
+OVERALL_LEVELS: List[ScaleLevel] = [
+    ScaleLevel(value=1, label="Unsatisfactory"),
+    ScaleLevel(value=2, label="Needs improvement"),
+    ScaleLevel(value=3, label="Meets expectations"),
+    ScaleLevel(value=4, label="Exceeds expectations"),
+    ScaleLevel(value=5, label="Outstanding"),
+]
+
+MAX_ANSWER_TEXT = 5000
+
+
+def _blank_to_none(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    v = v.strip()
+    return v or None
+
+
+class ItemAnswer(BaseModel):
+    """One item's answer in an evaluator's part or a self-evaluation.
+
+    The canonical stored shape of an entry in ``evaluation_parts.content``
+    (CLAUDE.md pitfall #20): ``rating`` is the scale level given (``1`` /
+    ``0`` for meets / does not meet), ``text`` the answer to a narrative or
+    goals item, ``comment`` the remark beside a rated one, ``example`` the
+    specific instance a level requires, and ``justification`` the evaluator's
+    reason for departing from the score the data suggested.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rating: Optional[int] = Field(default=None, ge=0, le=10)
+    na: bool = False
+    checked: List[str] = Field(default_factory=list, max_length=30)
+    text: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    example: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    justification: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("text", "comment", "example", "justification")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+    @model_validator(mode="after")
+    def _na_is_unanswered(self) -> "ItemAnswer":
+        if self.na and self.rating is not None:
+            raise ValueError("An item marked N/A cannot also be rated")
+        return self
+
+
+class PartContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answers: dict[str, ItemAnswer] = Field(
+        default_factory=dict, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
+    )
+    overall_rating: Optional[int] = Field(default=None, ge=1, le=5)
+    overall_comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("overall_comment")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+
+class EvaluationCreate(BaseModel):
+    member_id: str = Field(min_length=1, max_length=36)
+    period_id: str = Field(min_length=1, max_length=36)
+    # Omitted means the caller evaluates the member themselves.
+    evaluator_id: Optional[str] = Field(default=None, max_length=36)
+    kind: EvaluationTemplateKind = EvaluationTemplateKind.ANNUAL
+    # Omitted means the most specific active template that fits the member.
+    template_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class PartWrite(BaseModel):
+    content: PartContent
+
+
+class PersonRef(BaseModel):
+    id: str
+    name: str
+
+
+class EvaluationStepResponse(BaseModel):
+    key: str
+    type: EvaluationStepType
+    label: str
+    order: int
+    status: str
+    due_date: Optional[date] = None
+    completed_at: Optional[datetime] = None
+
+
+class EvaluationPartResponse(BaseModel):
+    kind: str
+    status: str
+    content: PartContent
+    submitted_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ExcludedRangeResponse(BaseModel):
+    start: date
+    end: date
+    reason: Literal["leave", "separation"]
+
+
+class EvaluationSummary(BaseModel):
+    id: str
+    member: PersonRef
+    evaluator: Optional[PersonRef] = None
+    period_id: Optional[str] = None
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    template_name: str
+    kind: EvaluationTemplateKind
+    status: str
+    # The step waiting on someone, and when it is due.
+    current_step: Optional[str] = None
+    current_step_due: Optional[date] = None
+    created_at: Optional[datetime] = None
+
+
+class EvaluationViewer(BaseModel):
+    """What the caller may do with this evaluation, decided by the server so
+    the screens do not re-derive it (CLAUDE.md pitfall #29)."""
+
+    is_member: bool
+    is_evaluator: bool
+    can_edit_self_evaluation: bool
+    can_edit_evaluation: bool
+    can_refresh_data: bool
+    can_calibrate: bool
+
+
+class EvaluationDetail(EvaluationSummary):
+    coverage_start: Optional[date] = None
+    coverage_end: Optional[date] = None
+    excluded_ranges: List[ExcludedRangeResponse] = Field(default_factory=list)
+    includes_officer_sections: bool
+    # The form, with officer-only sections removed when they do not apply.
+    definition: TemplateDefinition
+    overall_levels: List[ScaleLevel]
+    steps: List[EvaluationStepResponse]
+    # Each source's entry as stored ({"available", "value", ...}); None when
+    # the caller may not see the figures yet.
+    data: Optional[dict] = None
+    suggested_scores: dict[str, int] = Field(default_factory=dict)
+    data_taken_at: Optional[datetime] = None
+    parts: List[EvaluationPartResponse]
+    # The evaluator's weighted overall, as a percentage of each item's scale,
+    # when the template calculates one and the caller may read the part.
+    weighted_overall: Optional[float] = None
+    viewer: EvaluationViewer
+
+
+class SubmitResult(BaseModel):
+    outcome: Literal["submitted", "sent_for_calibration", "finalized"]
+    evaluation: EvaluationDetail
+
+
+class LiveDataResponse(BaseModel):
+    """A member's figures for the current review period, computed now."""
+
+    period_id: Optional[str] = None
+    period_name: Optional[str] = None
+    coverage_start: Optional[date] = None
+    coverage_end: Optional[date] = None
+    excluded_ranges: List[ExcludedRangeResponse] = Field(default_factory=list)
+    sources: List[DataSourceResponse]
+    data: dict
+    note: Optional[str] = None
