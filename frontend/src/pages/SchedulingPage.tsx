@@ -31,6 +31,7 @@ import { SkeletonText } from '../components/ux/Skeleton';
 import { SchedulingPageHeader } from '../components/scheduling/SchedulingPageHeader';
 import ShiftBoard from './scheduling/board/ShiftBoard';
 import { StatGrid } from '../components/ux/StatGrid';
+import { getCachedShiftSettings } from '../modules/scheduling/services/shiftSettingsApi';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazyWithRetry(() => import('./scheduling/MyShiftsTab'));
@@ -316,7 +317,11 @@ const SchedulingPage: React.FC = () => {
   // Effective templates: backend if available, otherwise fallbacks
   const effectiveTemplates = useMemo(() => {
     const active = backendTemplates.filter((t) => t.is_active);
-    return active.length > 0 ? active : FALLBACK_TEMPLATES;
+    if (active.length > 0) return active;
+    // The built-in shift types staff to the department's default minimum
+    // (Scheduling Settings → Department Defaults) rather than a fixed four.
+    const staffing = getCachedShiftSettings().defaultMinStaffing;
+    return FALLBACK_TEMPLATES.map((t) => ({ ...t, min_staffing: staffing > 0 ? staffing : t.min_staffing }));
   }, [backendTemplates]);
 
   const usingFallbackTemplates = backendTemplates.filter((t) => t.is_active).length === 0 && templatesLoaded;

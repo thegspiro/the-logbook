@@ -29,6 +29,10 @@ describe('generationSummary', () => {
   it('explains zero rather than reporting it as a result', () => {
     expect(generationSummary({ shifts_created: 0 })).toMatch(/^No new shifts\./);
   });
+
+  it('says a deleted or moved occurrence is not put back', () => {
+    expect(generationSummary({ shifts_created: 0 })).toMatch(/generated shift was deleted or moved\.$/);
+  });
 });
 
 describe('reportGeneration', () => {

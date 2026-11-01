@@ -112,6 +112,25 @@ describe('ElectionsPage position combobox (W50-63)', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
+  // Escape with suggestions showing used to reach the dialog's own Escape
+  // handler too, closing the form and discarding everything typed into it.
+  it('closes only the listbox on Escape while suggestions are showing', async () => {
+    await openCreateDialog();
+    const input = screen.getByRole('textbox', { name: 'Position name' });
+
+    await userEvent.type(input, 'Chief');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(input).toHaveValue('Chief');
+
+    // With the list already closed, Escape still closes the dialog.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('adds a typed position on the first Add click when nothing matches', async () => {
     await openCreateDialog();
     const input = screen.getByRole('textbox', { name: 'Position name' });

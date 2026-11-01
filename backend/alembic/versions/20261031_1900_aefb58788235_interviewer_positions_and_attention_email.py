@@ -1,7 +1,7 @@
 """Interviewer position snapshot and the applicant-attention email
 
 Revision ID: aefb58788235
-Revises: 3fbd0fe30e5b
+Revises: db30a34afa5b
 Create Date: 2026-10-31 19:00:00.000000
 
 Two steps:
@@ -37,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "aefb58788235"
-down_revision: Union[str, None] = "3fbd0fe30e5b"
+down_revision: Union[str, None] = "db30a34afa5b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
