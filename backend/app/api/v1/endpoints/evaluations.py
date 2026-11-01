@@ -33,6 +33,7 @@ from app.models.user import User
 from app.schemas.evaluation import (
     BuilderOptions,
     DataSourceResponse,
+    DraftOptions,
     EvaluationCreate,
     EvaluationDetail,
     EvaluationPeriodCreate,
@@ -378,6 +379,17 @@ async def list_evaluations(
         period_id=period_id,
         status=status,
     )
+
+
+@router.get("/draft-options", response_model=DraftOptions)
+async def get_draft_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("evaluations.conduct", "evaluations.manage")
+    ),
+):
+    """Members, open periods and eligible evaluators for the draft dialog."""
+    return await EvaluationService(db).draft_options(current_user.organization_id)
 
 
 @router.post("", response_model=EvaluationDetail, status_code=201)

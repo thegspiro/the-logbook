@@ -981,3 +981,68 @@ class TestEverySource:
         assert detail["data"]["skills.tests_passed"]["value"] == 0
         assert detail["data"]["training.session_attendance_pct"]["available"] is False
         assert detail["data"]["calls.response_pct"]["available"] is False
+
+
+class TestDraftingDefaults:
+    async def _supervise(self, dept: _Dept, supervisor: User) -> None:
+        from app.models.member_supervisor import MemberSupervisorAssignment
+
+        dept.db.add(
+            MemberSupervisorAssignment(
+                organization_id=dept.org,
+                member_id=dept.member.id,
+                supervisor_id=supervisor.id,
+                starts_on=date(2024, 1, 1),
+            )
+        )
+        await dept.db.flush()
+
+    async def _draft_unassigned(self, dept: _Dept, client: AsyncClient) -> dict:
+        response = await client.post(
+            "/evaluations",
+            json={"member_id": dept.member.id, "period_id": dept.period.id},
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    async def test_a_managers_draft_goes_to_the_members_supervisor(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        await self._supervise(dept, dept.evaluator)
+        detail = await self._draft_unassigned(dept, await make_client(dept.manager))
+        assert detail["evaluator"]["id"] == dept.evaluator.id
+
+    async def test_a_supervisor_who_cannot_evaluate_leaves_it_with_the_manager(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        await self._supervise(dept, dept.reader)
+        detail = await self._draft_unassigned(dept, await make_client(dept.manager))
+        assert detail["evaluator"]["id"] == dept.manager.id
+
+    async def test_a_conductors_draft_stays_their_own(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        conductor = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        await self._supervise(dept, dept.evaluator)
+        detail = await self._draft_unassigned(dept, await make_client(conductor))
+        assert detail["evaluator"]["id"] == conductor.id
+
+    async def test_draft_options_list_members_open_periods_and_evaluators(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        await _period(dept.db, dept.org, closed=True)
+        response = await (await make_client(dept.evaluator)).get(
+            "/evaluations/draft-options"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        member_ids = {m["id"] for m in body["members"]}
+        assert {dept.member.id, dept.evaluator.id, dept.manager.id} <= member_ids
+        assert {e["id"] for e in body["evaluators"]} == {
+            dept.manager.id,
+            dept.evaluator.id,
+        }
+        assert [p["id"] for p in body["periods"]] == [dept.period.id]
+
+        member = await make_client(dept.member)
+        assert (await member.get("/evaluations/draft-options")).status_code == 403

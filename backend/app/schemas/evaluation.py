@@ -795,3 +795,16 @@ class LiveDataResponse(BaseModel):
     sources: List[DataSourceResponse]
     data: dict
     note: Optional[str] = None
+
+
+class DraftPeriodOption(BaseModel):
+    id: str
+    name: str
+    start_date: date
+    end_date: date
+
+
+class DraftOptions(BaseModel):
+    members: List[PersonRef]
+    evaluators: List[PersonRef]
+    periods: List[DraftPeriodOption]

@@ -49,7 +49,7 @@ from app.models.evaluation import (
     EvaluationTemplateKind,
     EvaluationTemplateVersion,
 )
-from app.models.user import User
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.schemas.evaluation import (
     OVERALL_LEVELS,
     SCORED_TOOLS,
@@ -67,6 +67,7 @@ from app.services.evaluation_data_service import (
     sources_used,
 )
 from app.services.evaluation_data_sources import DATA_SOURCES, DATA_SOURCES_BY_KEY
+from app.services.member_supervisor_service import MemberSupervisorService
 from app.utils.membership import canonical_member_status, effective_member_class
 from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
@@ -790,6 +791,58 @@ class EvaluationService:
 
     # -------------------------------------------------------------- drafting
 
+    async def draft_options(self, organization_id: str) -> Dict[str, Any]:
+        """What the drafting dialog offers: current members, open review
+        periods, and the members who may be assigned as evaluator. Ids and
+        names only, so drafting does not also need ``members.view``."""
+        members = list(
+            (
+                await self.db.execute(
+                    select(User)
+                    .options(selectinload(User.positions))
+                    .where(
+                        User.organization_id == organization_id,
+                        User.deleted_at.is_(None),
+                        User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        members.sort(key=lambda u: (u.last_name or "", u.first_name or ""))
+        periods = (
+            (
+                await self.db.execute(
+                    select(EvaluationPeriod)
+                    .where(
+                        EvaluationPeriod.organization_id == organization_id,
+                        EvaluationPeriod.is_closed.is_(False),
+                    )
+                    .order_by(EvaluationPeriod.start_date.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {
+            "members": [{"id": u.id, "name": u.full_name} for u in members],
+            "evaluators": [
+                {"id": u.id, "name": u.full_name}
+                for u in members
+                if user_has_permission(u, "evaluations.conduct")
+            ],
+            "periods": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "start_date": p.start_date,
+                    "end_date": p.end_date,
+                }
+                for p in periods
+            ],
+        }
+
     async def resolve_template(
         self, organization_id: str, member: User, kind: EvaluationTemplateKind
     ) -> EvaluationTemplate:
@@ -882,9 +935,19 @@ class EvaluationService:
         themselves. One evaluation per member per period, enforced by the
         unique constraint, which also settles two drafts racing past the
         check below (CLAUDE.md pitfall #36).
+
+        With no evaluator named, a manager's draft goes to the member's
+        current supervisor when the supervisor may conduct evaluations, and
+        otherwise to the manager (owner decision 2026-11-01); a conductor's
+        draft is always their own.
         """
         manager = user_has_permission(actor, "evaluations.manage")
-        evaluator_id = data.evaluator_id or actor.id
+        evaluator_id = data.evaluator_id
+        if evaluator_id is None and manager:
+            evaluator_id = await MemberSupervisorService(self.db).default_evaluator_id(
+                organization_id, data.member_id, "evaluations.conduct"
+            )
+        evaluator_id = evaluator_id or actor.id
         if not manager and evaluator_id != actor.id:
             raise PermissionError(
                 "Only an evaluations manager assigns another evaluator."
