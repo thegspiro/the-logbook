@@ -42,6 +42,7 @@ from app.models.training import (
 from app.models.user import User
 from app.schemas.scheduling import ShiftUpdate
 from app.services.scheduling_service import SchedulingService
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 
 
 @pytest.fixture(autouse=True)
@@ -912,7 +913,10 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The summary counts "this month" on the department's calendar, so the
+        # shift is placed there too; the server's UTC date is a month ahead in
+        # the first hours of every month.
+        today = await resolve_org_today(db_session, org_id)
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1337,23 +1341,28 @@ class TestPatternGeneration:
                 "name": "Nightly",
                 "pattern_type": PatternType.DAILY,
                 "template_id": template.id,
-                "start_date": date.today(),
+                "start_date": await resolve_org_today(db_session, org_id),
             },
             uuid.UUID(user_id),
         )
 
-        start = date.today()
+        start = await resolve_org_today(db_session, org_id)
         shifts, err = await svc.generate_shifts_from_pattern(
             uuid.UUID(pattern.id), uuid.UUID(org_id), start, start, uuid.UUID(user_id)
         )
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day
+        # "The next day" is the department's next day. Compared in UTC, a
+        # 19:00 start on Eastern standard time is already 00:00 the following
+        # UTC day, so start and end share a UTC date all winter. No duration
+        # is asserted: across a DST change the night is 11 or 13 hours.
+        tz = await resolve_scheduling_timezone(db_session, org_id)
+        local_start = shift.start_time.astimezone(tz)
+        local_end = shift.end_time.astimezone(tz)
         assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (
-            shift.start_time.month != shift.end_time.month
-        )
+        assert (local_start.date(), local_start.hour) == (start, 19)
+        assert (local_end.date(), local_end.hour) == (start + timedelta(days=1), 7)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):

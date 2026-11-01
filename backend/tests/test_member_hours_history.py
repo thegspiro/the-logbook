@@ -27,6 +27,7 @@ from app.api.v1.endpoints import scheduling as scheduling_endpoint
 from app.models.training import Shift, ShiftAttendance
 from app.models.user import User
 from app.services.scheduling_service import SchedulingService
+from app.utils.org_timezone import resolve_org_today
 
 
 def _uid() -> str:
@@ -322,7 +323,9 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The department's today, as the service reads it: the server's UTC
+        # date is already next month in the first hours of every month.
+        today = await resolve_org_today(db_session, org_id)
         await _worked(db_session, org_id, user_id, today, 480, finalized=True, calls=2)
 
         history = await svc.get_my_hours_history(user_id, org_id, today.year - 6)
@@ -339,7 +342,9 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The department's today, as the service reads it: the server's UTC
+        # date is already next month in the first hours of every month.
+        today = await resolve_org_today(db_session, org_id)
         previous_end = today.replace(day=1) - timedelta(days=1)
         await _worked(
             db_session, org_id, user_id, previous_end, 600, finalized=True, calls=3
