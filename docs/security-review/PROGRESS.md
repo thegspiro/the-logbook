@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-elections-ballots-p14`) —
-Feature 06 (Elections & ballots), pass 14, a watchdog pickup (the dedicated
+**PR [#3904](https://github.com/thegspiro/the-logbook/pull/3904)** (branch
+`claude/security-review-elections-ballots-p14`) — Feature 06 (Elections &
+ballots), pass 14, a watchdog pickup (the dedicated
 `/loop 30m /security-review` session was reported unreachable by the
 watchdog that picked this task up). Step 0 (`list_pull_requests`,
 state=open) found 15 open PRs, none with a head branch starting
