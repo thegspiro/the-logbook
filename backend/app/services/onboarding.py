@@ -65,7 +65,6 @@ ONBOARDING_OFFERED_MODULES = [
     "reports",
     # Communication
     "notifications",
-    "mobile",
     # Advanced
     "integrations",
     # Membership
@@ -88,6 +87,14 @@ ONBOARDING_SETTINGS_ONLY_MODULES = [
     "public_info",
     "testing",
 ]
+
+# Storable module settings that no screen offers any more. Owner decision
+# 2026-11-01 (workflow review W01-23): Mobile App Access was offered by setup
+# and by Settings → Modules while nothing read the switch — the app installs
+# and works on a phone either way. The field stays on ModuleSettings so stored
+# settings and the modules API are unchanged, and the id stays accepted so a
+# setup session saved before the change still validates.
+ONBOARDING_RETIRED_MODULES = ["mobile"]
 
 # Accepted from older saved sessions but not presented by the wizard. These are
 # not ModuleSettings fields, so they are stored in OnboardingStatus and go no
@@ -138,6 +145,7 @@ ONBOARDING_ACCEPTED_MODULE_IDS: frozenset[str] = frozenset(
             *ONBOARDING_CORE_MODULES,
             *ONBOARDING_OFFERED_MODULES,
             *ONBOARDING_SETTINGS_ONLY_MODULES,
+            *ONBOARDING_RETIRED_MODULES,
             *ONBOARDING_LEGACY_MODULES,
         }
     )

@@ -52,7 +52,7 @@ from app.core.permissions import SENSITIVE_ANSWERS_VIEW
 from app.core.security_middleware import get_client_ip
 from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.event import Event
-from app.models.membership_pipeline import ProspectStatus
+from app.models.membership_pipeline import PipelineStepType, ProspectStatus
 from app.models.user import Role, User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
@@ -70,6 +70,7 @@ from app.schemas.membership_pipeline import (
     FollowUpAnswersResponse,
     FollowUpFormRequestResponse,
     InterviewCreate,
+    InterviewRequirementProgress,
     InterviewResponse,
     InterviewUpdate,
     KanbanBoardResponse,
@@ -120,8 +121,14 @@ from app.services.membership_pipeline_service import (
     MembershipPipelineService,
     describe_existing_applicant,
     duplicate_applicant_message,
+    effective_step_type,
+    interviewer_title,
 )
-from app.services.prospect_access import ProspectAccess, visible_prospect_ids
+from app.services.prospect_access import (
+    ProspectAccess,
+    assigned_prospect_ids,
+    visible_prospect_ids,
+)
 from app.services.prospect_assignment_service import ProspectAssignmentService
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
@@ -744,6 +751,17 @@ async def delete_step(
     )
 
 
+async def _listed_prospect_ids(
+    db: AsyncSession, user: User, assigned_to_me: bool
+) -> set[str] | None:
+    """The applicants a board or list shows: everyone the caller may see, or,
+    with ``assigned_to_me``, only those they are assigned to. The assigned set
+    is always within what the caller may see, so the toggle can only narrow."""
+    if assigned_to_me:
+        return await assigned_prospect_ids(db, user)
+    return await visible_prospect_ids(db, user)
+
+
 # ============================================
 # Kanban Board Endpoint
 # ============================================
@@ -761,6 +779,10 @@ async def get_kanban_board(
         )
     ),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+    assigned_to_me: bool = Query(
+        False,
+        description="Only the applicants the caller is assigned to",
+    ),
 ):
     """
     Get the kanban board view for a pipeline.
@@ -777,7 +799,7 @@ async def get_kanban_board(
         str(pipeline_id),
         current_user.organization_id,
         exclude_prospect_ids=hidden_prospect_ids,
-        only_prospect_ids=await visible_prospect_ids(db, current_user),
+        only_prospect_ids=await _listed_prospect_ids(db, current_user, assigned_to_me),
     )
     if not board:
         raise HTTPException(
@@ -1045,6 +1067,10 @@ async def list_prospects(
             "inactive and transferred records"
         ),
     ),
+    assigned_to_me: bool = Query(
+        False,
+        description="Only the applicants the caller is assigned to",
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -1071,6 +1097,9 @@ async def list_prospects(
     for — a rejected applicant is out of the pipeline. The archive tabs fetch
     one closed status at a time through ``status`` instead.
 
+    ``assigned_to_me`` narrows the list to the applicants the caller is
+    assigned to as case manager or interviewer.
+
     The caller's own prospective-membership record, if they have one, is
     omitted from the results and from ``total``.
 
@@ -1095,7 +1124,7 @@ async def list_prospects(
         offset=offset,
         exclude_prospect_ids=hidden_prospect_ids,
         open_only=open_only,
-        only_prospect_ids=await visible_prospect_ids(db, current_user),
+        only_prospect_ids=await _listed_prospect_ids(db, current_user, assigned_to_me),
     )
 
     now = datetime.now(timezone.utc)
@@ -2755,8 +2784,10 @@ async def get_follow_up_form_answers(
 ):
     """
     A submitted follow-up form's answers. Sensitive answers are included only
-    for a viewer holding ``sensitive_answers.view``, and each such reveal is
-    audit-logged; anyone else sees them marked as withheld.
+    for a viewer holding ``sensitive_answers.view`` or assigned to interview
+    this applicant, and each such reveal is audit-logged with the grant it was
+    made under; anyone else, a case manager included, sees them marked as
+    withheld.
 
     **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
     """
@@ -2769,7 +2800,16 @@ async def get_follow_up_form_answers(
     if result is None:
         raise HTTPException(status_code=404, detail="Follow-up form not found")
 
-    reveal = user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name)
+    # An interviewer assignment is a grant for this one applicant: the
+    # interviewer reads the answers they are interviewing about, and nothing
+    # else the permission would open. The audit row records which applied.
+    if user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name):
+        via: str | None = "permission"
+    elif access.is_interviewer:
+        via = "interviewer_assignment"
+    else:
+        via = None
+    reveal = via is not None
     revealed = False
     for answer in result["answers"]:
         if answer["is_sensitive"]:
@@ -2790,6 +2830,7 @@ async def get_follow_up_form_answers(
                 "form_id": str(result["form_id"]) if result["form_id"] else None,
                 "follow_up_request_id": str(request_id),
                 "prospect_id": str(prospect_id),
+                "via": via,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -2810,7 +2851,10 @@ async def get_my_prospect_access(
     What the caller may do with this applicant, so the applicant's page offers
     only the actions the backend will accept.
     """
-    return access.as_dict()
+    return {
+        **access.as_dict(),
+        "interviewer_title": interviewer_title(current_user.positions),
+    }
 
 
 @router.get(
@@ -2967,6 +3011,41 @@ async def list_interviews(
             i for i in interviews if str(i.interviewer_id) == str(current_user.id)
         ]
     return [_interview_to_response(i) for i in interviews]
+
+
+@router.get(
+    "/prospects/{prospect_id}/interview-requirement",
+    response_model=InterviewRequirementProgress | None,
+)
+async def get_interview_requirement_progress(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
+):
+    """
+    How far the applicant's current Interview Requirement stage has got:
+    interviews recorded against the stage, and which required interviewer
+    positions have interviewed. Null when the applicant is not on such a stage.
+
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
+    """
+    service = MembershipPipelineService(db)
+    prospect = await service.get_prospect(
+        str(prospect_id), current_user.organization_id
+    )
+    if prospect is None:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+    step = prospect.current_step
+    if (
+        step is None
+        or effective_step_type(step) != PipelineStepType.INTERVIEW_REQUIREMENT
+    ):
+        return None
+    progress = await service.interview_requirement_progress(prospect, step)
+    if not access.sees_all_interviews:
+        progress["recommendation_met"] = None
+    return progress
 
 
 @router.post(

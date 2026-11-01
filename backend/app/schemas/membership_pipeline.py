@@ -1190,6 +1190,34 @@ class ProspectAccessResponse(BaseModel):
     can_manage: bool = False
     can_see_full: bool = False
     can_log_interview: bool = False
+    # The caller's most senior position, offered as the title an interview
+    # they log is signed with. A suggestion only; the form keeps it editable.
+    interviewer_title: Optional[str] = None
+
+
+class InterviewPositionProgress(BaseModel):
+    """One required interviewer position of an Interview Requirement stage."""
+
+    position: str
+    label: str
+    satisfied: bool
+
+
+class InterviewRequirementProgress(BaseModel):
+    """Where the applicant's current Interview Requirement stage stands.
+
+    ``recommendation_met`` is None when the stage asks for no recommendation,
+    and also for a caller who sees only their own interview: whether another
+    interviewer recommended the applicant is part of their assessment.
+    """
+
+    step_id: str
+    required_count: int
+    recorded_count: int
+    required_recommendation: Optional[str] = None
+    recommendation_met: Optional[bool] = None
+    positions: List[InterviewPositionProgress] = []
+    complete: bool
 
 
 class FollowUpAnswer(BaseModel):

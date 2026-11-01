@@ -23,6 +23,10 @@ export const ADMIN_NAVIGATION_PERMISSIONS = [
   'notifications.manage',
   'suggestions.manage',
   'reports.view',
+  // Member evaluation setup is delegated on its own grants, without
+  // reports.view, and its rows live in this section.
+  'evaluations.configure',
+  'evaluations.manage',
   'analytics.view',
   'audit.view',
 ] as const;

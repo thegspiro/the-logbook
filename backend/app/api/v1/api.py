@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     email_templates,
     equipment_check,
     error_logs,
+    evaluations,
     event_attendance_petitions,
     event_requests,
     events,
@@ -424,6 +425,13 @@ api_router.include_router(
     reports.router,
     prefix="/reports",
     tags=["reports"],
+    dependencies=module_gate("reports", "Reports"),
+)
+# Member evaluations sit in the Reports area, so they follow its module switch.
+api_router.include_router(
+    evaluations.router,
+    prefix="/evaluations",
+    tags=["evaluations"],
     dependencies=module_gate("reports", "Reports"),
 )
 api_router.include_router(

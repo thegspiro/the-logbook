@@ -63,9 +63,8 @@ import { FeatureStatus } from '../../../constants/enums';
  * the app can actually grant.
  *
  * A module whose View and Manage tiers are both unbacked is not a row at all.
- * Mobile App Access is that module: it is a PWA with no permission gate, so
- * both boxes wrote `mobile.view` / `mobile.manage` / `mobile.*` into every
- * position that ticked them and no endpoint has ever read one. Integrations
+ * Mobile App Access was that module — both boxes wrote `mobile.*` grants no
+ * endpoint read — and it has since been retired from setup altogether. Integrations
  * keeps its row but loses View, because there is no read-only console —
  * every route behind it requires `integrations.manage`.
  *

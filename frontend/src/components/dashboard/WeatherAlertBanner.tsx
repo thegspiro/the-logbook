@@ -25,9 +25,8 @@ const REFRESH_MS = 5 * 60 * 1000;
 export const WeatherAlertBanner: React.FC = () => {
   const tz = useTimezone();
   const [alerts, setAlerts] = useState<ActiveWeatherAlert[]>([]);
-  // The alerts belong to the Integrations module, and the server refuses the
-  // read while it is off, so every dashboard of a department that never turned
-  // it on drew a 403 every five minutes.
+  // The alerts endpoint is behind the Integrations module gate; with the module
+  // off it answers 403 on every dashboard load.
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const integrationsOn = !modulesLoading && isModuleOn('integrations');
 

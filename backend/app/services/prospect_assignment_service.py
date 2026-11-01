@@ -8,7 +8,7 @@ both the applicant and the member belong to the caller's organization
 (CLAUDE.md pitfall #14c), and only a current member can be assigned.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import select
@@ -30,6 +30,21 @@ ROLE_LABELS = {
 }
 
 MY_APPLICANTS_PATH = "/prospective-members/my-applicants"
+
+# What a case manager is told happened, one sentence per event. ``detail`` is
+# the form or stage the event names.
+ATTENTION_EVENTS = {
+    "follow_up_submitted": "{applicant} submitted their follow-up form, {detail}.",
+    "withdrew": (
+        "{applicant} withdrew their application from their application status page."
+    ),
+    "interview_stage": (
+        "{applicant} has reached the {detail} stage, which needs interviews."
+    ),
+    "approval_stage": (
+        "{applicant} has reached the {detail} stage, which needs sign-offs."
+    ),
+}
 
 
 class ProspectAssignmentService:
@@ -266,6 +281,89 @@ class ProspectAssignmentService:
             logger.error(
                 "Failed to send assignment email for prospect {}: {}", prospect.id, e
             )
+
+    async def notify_case_managers(
+        self,
+        prospect: ProspectiveMember,
+        event: str,
+        *,
+        detail: Optional[str] = None,
+        already_told: Iterable[str] = (),
+    ) -> int:
+        """Email the applicant's case managers that the applicant needs them.
+
+        ``event`` is a key of ``ATTENTION_EVENTS``, and ``detail`` the form or
+        stage name its sentence names; that sentence is all the email says
+        about what happened. Members in
+        ``already_told`` (user ids) are skipped: a coordinator who is also the
+        case manager has just had the coordinators' notice for the same event.
+        Membership-admin email, so a member who has switched that off is not
+        sent it. After the caller's commit and best-effort: the event stands
+        whether or not this goes out. Returns how many were sent.
+        """
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            recipients_for,
+        )
+
+        try:
+            skip = {str(u) for u in already_told}
+            event_summary = ATTENTION_EVENTS[event].format(
+                applicant=prospect.full_name, detail=detail or ""
+            )
+            result = await self.db.execute(
+                select(User)
+                .join(ProspectAssignment, ProspectAssignment.user_id == User.id)
+                .where(
+                    ProspectAssignment.prospect_id == str(prospect.id),
+                    ProspectAssignment.organization_id == str(prospect.organization_id),
+                    ProspectAssignment.role == AssignmentRole.CASE_MANAGER.value,
+                    User.organization_id == str(prospect.organization_id),
+                    User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    User.deleted_at.is_(None),
+                    User.email.isnot(None),
+                )
+            )
+            case_managers = [
+                u for u in result.scalars().unique().all() if str(u.id) not in skip
+            ]
+            if not case_managers:
+                return 0
+            org = await self.db.get(Organization, prospect.organization_id)
+            if org is None:
+                return 0
+            recipients = recipients_for(
+                case_managers,
+                EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
+            )
+
+            from app.services.email_service import EmailService
+
+            email_service = EmailService(org)
+            frontend_url = getattr(settings, "FRONTEND_URL", "") or ""
+            applicant_url = (
+                f"{frontend_url}{MY_APPLICANTS_PATH}?applicant={prospect.id}"
+            )
+            sent = 0
+            for member in recipients:
+                if await email_service.send_applicant_needs_attention_email(
+                    to_email=member.email,
+                    recipient_name=member.full_name,
+                    applicant_name=prospect.full_name,
+                    event_summary=event_summary,
+                    applicant_url=applicant_url,
+                    db=self.db,
+                    organization_id=str(org.id),
+                ):
+                    sent += 1
+            return sent
+        except Exception as e:
+            logger.error(
+                "Failed to notify case managers of prospect {}: {}", prospect.id, e
+            )
+            return 0
 
     async def my_applicants(
         self, user: User

@@ -1,5 +1,16 @@
 # Script currency
 
+## Flagged by the 2026-10-31 → 11-01 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                          | Beat                | Was                                 | Now                                                                      |
+| ----------------------------------------------- | ------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
+| **Any recruitment beat**                        | Who sees applicants | Anyone with view or manage sees all | `view_all` sees all; others see assigned applicants (My Applicants)      |
+| **Training Officer, Part 1 (05) / Part 2 (16)** | After a shift       | Generic rating panel in the report  | Department evaluation form per member; build it under Shift Evaluations  |
+| **Any scheduling beat**                         | Department Defaults | Overtime field on the card          | Overtime lives in the Overtime advisory; defaults pre-fill new templates |
+
 ## Flagged by the 2026-10-29 → 10-30 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).

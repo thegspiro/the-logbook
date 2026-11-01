@@ -239,6 +239,8 @@ EXPECTED_GATES = {
     "/api/v1/apparatus": "apparatus",
     "/api/v1/elections": "elections",
     "/api/v1/equipment-checks": "inventory",
+    # Member evaluations live in the Reports area and follow its switch.
+    "/api/v1/evaluations": "reports",
     "/api/v1/facilities": "facilities",
     "/api/v1/finance": "finance",
     "/api/v1/grants": "grants",
