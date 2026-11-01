@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-11-01 (pass 14) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), [#3809](https://github.com/thegspiro/the-logbook/pull/3809) (pass 13), pass 14 (this PR)
 
 ---
 
@@ -109,6 +109,223 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 14 (2026-11-01, watchdog pickup)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests`
+(`state=open`) returned 15 open PRs, 0 of them with a head branch starting
+`claude/security-review-`, immediately after PR #3890 (Feature 05, Finance &
+approvals, pass 14) merged at `43a63764`. Row 05 is `✅`; row 06 (Elections &
+ballots) is the next `⬜` row. **Watchdog pickup:** the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable, the same condition every pass back through pass 10 has
+recorded.
+
+**Baseline and delta.** Baseline is pass 13's merge (`3f1d5b940`, PR #3809,
+2026-10-28). `git diff --stat 3f1d5b940..43a637642` across the feature's
+established scope (`api/v1/endpoints/elections.py`,
+`services/election_service.py`, `services/minutes_election_filing.py`,
+`schemas/election.py`, `models/election.py`, `utils/election_ballot_pdf.py`,
+`utils/election_pdf_style.py`, `mcp/tools/elections.py`, and the frontend
+`modules/elections` tree, plus the new member-profile and member-standing
+files this delta touches) shows a **real, substantial delta** this time —
+unlike pass 13's near-zero one: 2367 insertions, 152 deletions across 10
+files (592 lines changed in `elections.py`, 20 added in `models/election.py`,
+357 changed in `schemas/election.py`, 385 changed in `election_service.py`,
+and 5 new frontend files —
+`ElectionDefaultsSection.tsx`, `ElectionEligibilityRulesPanel.tsx` (+its
+test), `EligibilityDefaultsEditor.tsx`, `EligibilityRulesEditor.tsx`,
+`eligibilityRules.ts`). `minutes_election_filing.py`, `election_ballot_pdf.py`,
+`election_pdf_style.py` and `mcp/tools/elections.py` are byte-identical to
+pass 13 (confirmed by empty `git diff` on each).
+
+**What landed: a voter-eligibility-rules feature, in 9 commits
+(`83cf79802`…`0d1f0298a`).** A department can now set, per meeting kind
+(regular business meeting vs. annual meeting): a meeting-attendance rule
+(count or percentage, optionally limited to meeting types), a minimum
+membership tenure expressed as a **per-member-type waiting period**
+("administrative members may vote a year after becoming administrative",
+"probationary members may never vote"), whether a new ballot item requires
+check-in, and who votes for named positions. The rules are copied onto each
+election at creation and enforced through the existing `_universal_gate` /
+`check_voter_eligibility` single-source-of-truth path (pitfall #29), so the
+in-app ballot, the emailed-ballot snapshot, the eligibility roster and the
+turnout denominator cannot disagree. A per-member override
+(`voting_wait_from`, `voting_wait_waived`, `voting_wait_override_reason`) lets
+a secretary correct a member's wait when the app's own record of "when they
+became that type" is a guess. Two new migrations (`b3d58e0c71a4`,
+`c7e2a91f4d36`) and a third unrelated to elections directly but feeding
+`voter_type_key` (`c4d7e2a91b60`, widening `users.member_status` to carry a
+department tier id) ship with this. Reviewed as new code against all seven
+checklist dimensions, not re-verified from a prior pass's word:
+
+1. **Two new endpoints, `GET`/`PUT /elections/members/{user_id}/voting-
+eligibility`** (`elections.py:1536`, `:1556`) — both gated
+   `require_permission("elections.manage")`, matching the sensitivity of
+   overriding a member's franchise (checklist §2). The member is resolved
+   through `_org_member()` (`elections.py:1519`), which filters
+   `User.organization_id == current_user.organization_id` and
+   `deleted_at.is_(None)` and 404s otherwise — satisfies XC-3. Confirmed by a
+   dedicated test, not just by reading the helper:
+   `tests/test_member_voting_wait.py::test_another_organizations_member_is_not_found`
+   creates a second org, puts a member in it, and asserts 404 from both
+   routes against the first org's caller. The update endpoint requires a
+   `reason` whenever the result leaves an override in place (not when
+   clearing one), refuses a `voting_wait_from` date after the organization's
+   own "today" (`org_today(org)`, not the server's clock) with a 400 before
+   any write, uses `apply_updates()` for the partial update (pitfall #1:
+   `voting_wait_from: null` clears the stored date, an omitted key leaves it
+   alone), and audit-logs via `log_audit_event()` plus a `logger.info()` call
+   that passes only ids as arguments (pitfall #33-compliant — no f-string
+   combined with positional args). Guard:
+   `tests/test_member_voting_wait.py::test_an_override_needs_a_reason`,
+   `test_a_date_after_the_departments_today_is_refused`,
+   `test_a_corrected_date_is_set_and_cleared_with_null`.
+2. **`ElectionEligibilityRules` / `AttendanceRule` / `WaitingPeriod`
+   (`schemas/election.py:350-480`)** — every numeric field is bounded
+   (`ge`/`le` against named constants, e.g. `MAX_WAITING_PERIOD_MONTHS`,
+   `MAX_ATTENDANCE_LOOKBACK_MEETINGS`), every enum-like string field
+   (`mode`) is checked against a fixed choice set, `meeting_types` is
+   checked against `VALID_MEETING_TYPES`, and every model carries
+   `extra="forbid"`. `waiting_periods` keys are checked against
+   `VOTER_TYPE_KEYS` and a `mode="none"` entry is normalized away rather
+   than stored, so the column has one canonical shape (checklist §7). An
+   admin cannot store an out-of-range or malformed rule through either the
+   org-defaults endpoint or the per-election one — both go through the same
+   Pydantic models.
+3. **`evaluate_wait()` / `_evaluate_election_rules()`
+   (`membership_tier_service.py:293`, `election_service.py:1138`)** —
+   defensively read: a malformed stored `waiting_periods` entry (wrong type,
+   not a dict, `months <= 0`) reads as `"no_rule"` rather than raising, so a
+   bad row degrades to "no wait" for one member instead of 500ing a whole
+   roster or ballot send. `mode == "never"` is checked **before** the waiver
+   check, so `voting_wait_waived=True` cannot lift a type-level ban — matches
+   the documented invariant ("a waiver never lifts a never"). `has_override`
+   (an election-level `voter_overrides` entry) still bypasses the universal
+   gate entirely, including the new rules — unchanged, deliberate design
+   from the 2026-10-05 owner decisions, not a regression.
+4. **The annual-meeting link (`_meeting_kind_of_link`, `elections.py:1202`)**
+   — org-scopes the `Meeting` lookup (`Meeting.id == ... , Meeting.
+organization_id == ...`) before reading its `meeting_type`, so a
+   client-supplied `meeting_id` cannot be used to probe another
+   organization's meeting (XC-1/XC-3). The existing `_validate_election_
+links()` → `assert_in_org()` call (`elections.py:255`) already covered
+   storing the id; this is the same guarantee extended to the new kind-
+   inference read.
+5. **Three new migrations, all checklist-§7 clean:**
+   `c4d7e2a91b60` (widens `users.member_status` 20→50 chars, raw-SQL
+   backfill from a hardcoded 7-word legacy vocabulary — not user input),
+   `b3d58e0c71a4` (`elections.meeting_kind`, `NOT NULL DEFAULT 'regular'`,
+   no separate backfill needed), `c7e2a91f4d36` (`member_class_since`/
+   `member_status_since`/`voting_wait_from` nullable; `voting_wait_waived`
+   `NOT NULL server_default false`). All three guard the `create_all`-only-
+   table case (pitfall #26), are idempotent (checked-column guards, and the
+   `c7e2a91f4d36` backfill only runs `WHERE ... IS NULL` so a re-run cannot
+   clobber a date the app has since stamped — pitfall #35), and the
+   downgrade of `c4d7e2a91b60` NULLs any value that would not fit before
+   narrowing, avoiding a truncation failure under MySQL strict mode. `models/
+election.py`'s new columns match their migrations exactly (nullable JSON,
+   NOT NULL string with the same server default). Guard:
+   `tests/test_member_voting_wait.py::test_existing_members_get_a_best_guess`,
+   `test_a_second_run_changes_nothing`, `test_a_database_without_the_table_is_
+skipped`.
+6. **`update_election_settings` (`elections.py:1358`)** — the new
+   `eligibility`/`annual_eligibility` fields are written into
+   `copy.deepcopy(org.settings or {})` (pitfall #12-compliant; unchanged
+   pattern, extended to the two new keys) and are themselves the validated
+   Pydantic models' own `model_dump()`, never a raw client dict.
+7. **Frontend** — `ElectionDefaultsSection.tsx`, `ElectionEligibilityRulesPanel
+.tsx`, `EligibilityDefaultsEditor.tsx`, `EligibilityRulesEditor.tsx`,
+   `eligibilityRules.ts`, and the member-profile `VotingEligibilitySection
+.tsx`: 0 hits for `window.confirm`/`alert`/`prompt`, 0 hits for
+   `.toLocaleDateString()`/`.toLocaleString()`/`.toLocaleTimeString()`, 0
+   hits for `?? undefined`. `VotingEligibilitySection.tsx` uses `useConfirm()`
+   for the destructive "remove override" action, `getTodayLocalDate(tz)` +
+   a `max` attribute on the date input (client-side mirror of the server's
+   future-date refusal), and is gated client-side on `checkPermission
+('elections.manage')` in `MemberProfilePage.tsx` — matching the server gate
+   (defense in depth, not the actual enforcement boundary).
+
+**Re-enumeration.** `elections.py` re-walked by AST (every `@router.<verb>`
+decorator, not a spot-check of the diff): **75 routes** (up from 73 in pass
+13 — the two new voting-eligibility routes). Every route carries a
+`Depends(...)` in its signature; 0 missing. Classification: **5**
+intentionally-public/token-scoped (unchanged lines/behavior from pass 13:
+`lookup_ballot_by_token`, `cast_vote_with_token`, `submit_ballot_with_token`,
+`verify_vote_receipt_post`, `verify_vote_receipt`), **7** self-service gated
+by sign-in alone (unchanged — cross-checked against
+`permissionless_route_baseline.txt`'s 7 `elections.py` entries, exact-match),
+**1** OR-gated (`list_candidates`: `elections.view` or `elections.manage`),
+and **62** `require_permission`-gated (up from 60 — the two new routes, both
+`elections.manage`). `get_ballot_by_token`'s token-verification order is
+unchanged (hash lookup → superseded check → expiry → used → election lookup
+→ status/window check, every step a cheap read, fail-closed on any
+mismatch) — not touched by this delta, re-confirmed by empty diff on that
+method.
+
+**0 new findings.** The feature is new and substantial, but every new
+surface reviewed above already follows this codebase's established
+invariants (org-scoping, bounds validation, fail-closed defaults on
+malformed stored JSON, `apply_updates`/pitfall #1, `copy.deepcopy`/pitfall
+#12, pitfall #33-compliant logging, `useConfirm`/pitfall #16, one
+canonical-shape JSON column/pitfall #20) and ships with its own dedicated,
+cross-org-isolation-tested guard suite
+(`tests/test_election_eligibility_rules.py`, `tests/test_member_voting_wait
+.py`, plus touches to `tests/test_membership_tier_service.py`). No fix was
+needed because none of the seven dimensions turned up a gap.
+
+**Standing findings re-confirmed unchanged** (none of the files they concern
+appear in this delta's diff — confirmed by empty `git diff` on each,
+not re-derived):
+
+- **ELEC-12** — fixed (`MAX_SAVED_BALLOT_TEMPLATES_PER_ORG = 200`). Unchanged.
+- **ELEC-14** — fixed (`POST /{election_id}/verify-receipt`); deprecated
+  `GET` variant kept for external callers. Unchanged.
+- **ELEC-16** — accepted as is (owner decision). Re-confirmed:
+  `list_manual_ballot_batches` (`elections.py:2495`) still takes no
+  pagination parameter.
+- **ELEC-28** — RESOLVED (pass 9, re-confirmed pass 13 after passes 11/12's
+  copy-paste regression was corrected). Unchanged this pass.
+- **ELEC-40** — FLAGGED. New-ballot collision still made unreachable by
+  `_validate_ballot_item_identities`; the pre-existing-ballot residual is
+  unchanged and still mirrored in `KNOWN_LIMITATIONS.md`. Confirmed
+  unchanged by empty diff on the function.
+- **ELEC-48** — LOW, FLAGGED. The synchronous send endpoints still race each
+  other with no job-row lock for either side; this pass's diff did not touch
+  the send paths.
+- **ELEC-49** — MEDIUM, FLAGGED. `rollback_election` still does not touch a
+  circulated/adopted minutes filing; `minutes_election_filing.py` is
+  byte-identical to pass 13 (empty `git diff`), so the gap is unchanged.
+- **ELEC-50** — fixed (guard). `tests/test_election_response_viewer_
+convention.py` is unchanged and still passes.
+
+## Guard tests added (pass 14)
+
+None from this pass's own review. The feature's own commits shipped with
+their own guard tests before this pass began
+(`tests/test_election_eligibility_rules.py`, `tests/test_member_voting_wait
+.py`), including the cross-org-isolation and future-date-refusal cases this
+review specifically checked for; all re-run clean below.
+
+## Completion gate (pass 14)
+
+| Check                                                                                                                                              | Result                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                      | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                                                                                                               | ✅ 2764 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/`                                                                                                          | ✅ clean                                        |
+| `validate_migrations.py --strict`                                                                                                                  | ✅ 682 revisions, single head `db30a34afa5b`    |
+| `check_route_permissions.py --strict` (repo root)                                                                                                  | ✅ 281 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "election or ballot or minutes_election or voting_wait or membership_tier or membership_class_status or membership_status_sync"` | ✅ 1333 passed, 1 skipped (env-only `py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                                                                 | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                                                                      | ✅ 0 errors, 0 warnings (`--max-warnings 10`)   |
+
+No source file needed a fix this pass — only this findings file and
+`PROGRESS.md` were updated. The 9 feature commits that make up this pass's
+real delta had already landed on `main`, with their own guard tests, before
+this review began; this pass's job was to verify each against the seven
+checklist dimensions, which it did by reading the code directly rather than
+taking the commit messages' own claims on faith.
 
 ## Pass 13 (2026-10-28)
 
