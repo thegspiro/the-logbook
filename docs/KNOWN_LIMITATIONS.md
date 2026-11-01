@@ -77,6 +77,26 @@ evaluator defaults, line-officer visibility of their own crew's evaluations,
 and approvals. Not started; it is a change to the member model and its editing
 screens, separate from the evaluations work.
 
+## Members — No History of Positions Held (2026-11-01)
+
+`user_positions` records only who holds each position now: assigning one adds
+a row stamped `assigned_at`, and removing one deletes the row. Nothing keeps a
+member's earlier offices or committee seats.
+
+Member performance evaluations show "Positions held" as a data source, and the
+owner chose (2026-11-01) to list the offices and committee seats the member
+holds when the figures are taken and that were assigned by the end of the
+review period (`EvaluationDataService._positions`). A position held earlier in
+the period and given up before the figures were taken does not appear, and the
+evaluation says the list is as of when the figures were taken.
+
+**Open decision:** keep a dated history of position assignments (an
+assignment table with start and end dates, written when a position is assigned
+or removed), after which evaluations can list what a member held during the
+period. The audit log records `user_role_assigned` / `user_role_removed`
+events, but rebuilding history from it depends on the log being complete and
+was not chosen.
+
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
 The member standing rework (class and status as two controls, tiers as

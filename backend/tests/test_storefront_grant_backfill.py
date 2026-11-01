@@ -77,6 +77,7 @@ _LATER_GRANTS = (
     _VERSIONS / "20261011_2305_9e8b0b6f3fe8_grant_quartermaster_locations_create.py",
     _VERSIONS / "20261031_1200_c588f525fdbb_prospect_assignments_and_view_all.py",
     _VERSIONS / "20261031_2054_b65eaef983b9_grant_evaluation_setup_to_chief.py",
+    _VERSIONS / "20261101_1930_1476abf56dd3_grant_evaluation_conduct_to_chief.py",
 )
 
 
