@@ -16,6 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending)** — Feature 09 (Medical screening, PHI), pass 14, a watchdog
+pickup. See the Log entry above for the full review summary; the PR number
+will be recorded here in a follow-up commit on this same branch once opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 15, PR #3910, merged), preserved for history</summary>
+
 **PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910)** (branch
 `claude/security-review-membership-pipeline-p15`) —
 Feature 08 (Membership pipeline), pass 15, a watchdog pickup (the dedicated
@@ -63,6 +70,8 @@ clean.
 Rotation row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
 screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 14, PR #3908, merged), preserved for history</summary>
@@ -24251,7 +24260,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -24284,6 +24293,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-01 — Feature 09 (Medical screening, PHI, pass 14) — watchdog pickup, 0 fixed, 0 new findings; cosmetic-only delta; corrects a stale MS-16 claim
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). Step 0 found 0 open PRs with a head branch starting
+`claude/security-review-`: PR #3910 (Feature 08, Membership pipeline, pass 15) had already merged (`f57fd5a6`); row 08 was already `✅` from that PR's
+own commit. Row 09 was the next `⬜`, confirmed fresh against the rotation
+table on a freshly pulled `main`.
+
+See `docs/security-review/MS-09-medical-screening.md`'s **Pass 14** section
+for the full review: baseline `7ac356b4` (PR #3813's merge, pass 13) to
+current `main`. Only one non-merge commit touched this feature's scope in
+the window — a repo-wide shared-CSS layout change whose single hit here is
+`MedicalScreeningPage.tsx`'s header `<div>` switching to the new
+`page-header`/`page-header-title` utility classes. All five backend files
+are byte-identical to pass 13; all 16 routes re-enumerated by AST, unchanged.
+
+**0 fixed, 0 new findings. MS-14 and MS-15 re-confirmed unchanged** (both
+owner-accepted, already in `docs/KNOWN_LIMITATIONS.md`). **This pass's own
+contribution is a documentation correction:** pass 12 and pass 13 both
+stated `grace_period_days`/`frequency_months` as still unread by `_grade()`.
+Re-checked directly against `_effective_expiration`, which `_grade()` calls:
+`frequency_months` is read (resolved 2026-10-25, W71-1) and
+`KNOWN_LIMITATIONS.md`'s own MS-16 entry already says so correctly — only
+this file's pass 12/13 narrative had drifted from it. `grace_period_days`
+remains genuinely unread. MS-16's remaining open half is `grace_period_days`
+only; the pass 12/13 sections are left as written (this file's own pass-9
+precedent for documentation-accuracy corrections) since they record what
+those passes' authors believed at the time.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 684 revisions, single head
+`5781476f2012`; scoped backend tests (`-k "medical_screening or
+medical_screen or screening"`) — 171 passed, 1 environment-only skip
+(`py_vapid`); scoped frontend suite (`npx vitest run
+src/modules/medical-screening`) — 62 passed (11 files); frontend typecheck
+clean; frontend lint clean.
+
+Rotation row 09 → ✅ (pending this PR's merge); next is Feature 10
+(Documents & legal) — re-check `list_pull_requests` fresh rather than
+trusting this note.
 
 ### 2026-11-01 — Feature 08 (Membership pipeline, pass 15) — watchdog pickup, 0 fixed, 0 new findings; real delta (per-applicant access model, Follow-up Form stage)
 
