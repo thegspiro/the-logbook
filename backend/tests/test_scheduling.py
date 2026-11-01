@@ -20,6 +20,7 @@ import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
@@ -1331,29 +1332,35 @@ class TestPatternGeneration:
             uuid.UUID(user_id),
         )
 
+        local = ZoneInfo("America/New_York")
+        start = datetime.now(local).date()
         pattern, _ = await svc.create_pattern(
             uuid.UUID(org_id),
             {
                 "name": "Nightly",
                 "pattern_type": PatternType.DAILY,
                 "template_id": template.id,
-                "start_date": date.today(),
+                "start_date": start,
             },
             uuid.UUID(user_id),
         )
 
-        start = date.today()
         shifts, err = await svc.generate_shifts_from_pattern(
             uuid.UUID(pattern.id), uuid.UUID(org_id), start, start, uuid.UUID(user_id)
         )
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day
+        # 07:00 the next day *in the department's timezone*. Compared in UTC,
+        # a 19:00 New York start is 23:00 UTC under daylight time but 00:00
+        # UTC the next day under standard time, so the start and end shared a
+        # UTC date all winter and the old day-arithmetic check failed.
         assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (
-            shift.start_time.month != shift.end_time.month
-        )
+        local_start = shift.start_time.astimezone(local)
+        local_end = shift.end_time.astimezone(local)
+        assert (local_start.hour, local_start.minute) == (19, 0)
+        assert (local_end.hour, local_end.minute) == (7, 0)
+        assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):
