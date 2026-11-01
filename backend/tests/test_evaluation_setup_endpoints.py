@@ -9,17 +9,19 @@ new draft cycle that keeps a published version frozen.
 import json
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import contextmanager
 from datetime import date
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
+from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
 from app.api.v1.endpoints import evaluations as endpoints
 from app.core.database import get_db
+from app.models.audit import AuditLog
 from app.models.evaluation import Evaluation, EvaluationTemplateVersion
 from app.models.user import User
 
@@ -264,6 +266,101 @@ class TestTemplateLifecycle:
 
         assert response.status_code == 400
         assert "Retire it instead" in response.json()["detail"]
+
+
+@contextmanager
+def _captured_sql(db: AsyncSession):
+    """Every statement the session sends, as the database receives it."""
+    seen: list[str] = []
+    engine = db.bind.sync_engine
+
+    def record(conn, cursor, statement, *args):
+        seen.append(" ".join(statement.split()))
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        yield seen
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+
+class TestConcurrentEditors:
+    """Read-then-write decisions are serialized (CLAUDE.md pitfall #27): the
+    parent is locked AND the check is a current read, since a plain SELECT
+    answers from the snapshot the permission check already established."""
+
+    async def test_matching_is_decided_under_the_department_lock(
+        self, db_session, make_client
+    ):
+        _, _, client = await _configurer(db_session, make_client)
+
+        with _captured_sql(db_session) as seen:
+            await _create(client, name="Locked", member_class="administrative")
+
+        lock = next(
+            i for i, sql in enumerate(seen) if "INSERT INTO organization_locks" in sql
+        )
+        clash = next(
+            i
+            for i, sql in enumerate(seen)
+            if sql.startswith("SELECT evaluation_templates.name")
+        )
+        assert lock < clash
+        assert seen[clash].endswith("FOR UPDATE")
+
+    async def test_writers_read_the_draft_with_a_locking_read(
+        self, db_session, make_client
+    ):
+        _, _, client = await _configurer(db_session, make_client)
+        template = await _create(client)
+
+        with _captured_sql(db_session) as seen:
+            await _save(client, template, FINISHED_DEFINITION)
+            await client.post(f"/evaluations/templates/{template['id']}/publish")
+
+        draft_reads = [
+            sql
+            for sql in seen
+            if sql.startswith("SELECT evaluation_template_versions.")
+            and "published_at IS NULL" in sql
+        ]
+        assert len(draft_reads) >= 2
+        assert all(sql.endswith("FOR UPDATE") for sql in draft_reads)
+
+
+class TestAudit:
+    async def test_saving_and_discarding_a_draft_are_audited(
+        self, db_session, make_client
+    ):
+        _, user, client = await _configurer(db_session, make_client)
+        template = await _create(client)
+        await _save(client, template, FINISHED_DEFINITION)
+        await client.post(f"/evaluations/templates/{template['id']}/publish")
+        published = (
+            await client.get(f"/evaluations/templates/{template['id']}")
+        ).json()
+        await _save(
+            client, published | {"draft": published["published"]}, FINISHED_DEFINITION
+        )
+        await client.delete(f"/evaluations/templates/{template['id']}/draft")
+
+        events = (
+            (
+                await db_session.execute(
+                    select(AuditLog.event_type).where(
+                        AuditLog.user_id == str(user.id),
+                        AuditLog.event_type.like("evaluation_template_draft_%"),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(events) == [
+            "evaluation_template_draft_discarded",
+            "evaluation_template_draft_saved",
+            "evaluation_template_draft_saved",
+        ]
 
 
 class TestReferencesStayInTheDepartment:

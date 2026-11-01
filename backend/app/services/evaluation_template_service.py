@@ -42,6 +42,7 @@ from app.schemas.evaluation import (
 )
 from app.services.evaluation_data_sources import DATA_SOURCES
 from app.utils.model_updates import apply_updates
+from app.utils.org_locks import EVALUATION_TEMPLATE_MATCHING, lock_organization_scope
 
 
 class EvaluationTemplateService:
@@ -111,6 +112,9 @@ class EvaluationTemplateService:
         self, organization_id: str, data: EvaluationTemplateCreate, actor_id: str
     ) -> str:
         await self._assert_name_free(organization_id, data.name, exclude_id=None)
+        await lock_organization_scope(
+            self.db, organization_id, EVALUATION_TEMPLATE_MATCHING
+        )
         await self._assert_matching_free(
             organization_id,
             data.kind.value,
@@ -156,6 +160,9 @@ class EvaluationTemplateService:
             )
         becomes_active = updates.get("is_active", template.is_active)
         if becomes_active:
+            await lock_organization_scope(
+                self.db, organization_id, EVALUATION_TEMPLATE_MATCHING
+            )
             await self._assert_matching_free(
                 organization_id,
                 template.kind,
@@ -187,7 +194,7 @@ class EvaluationTemplateService:
         await self._assert_references_in_org(
             organization_id, data.definition, data.workflow
         )
-        draft = await self._draft(organization_id, template.id)
+        draft = await self._draft(organization_id, template.id, for_update=True)
         if draft is None:
             latest = await self.db.scalar(
                 select(func.max(EvaluationTemplateVersion.version_number)).where(
@@ -219,7 +226,7 @@ class EvaluationTemplateService:
         )
         if template is None:
             return False
-        draft = await self._draft(organization_id, template.id)
+        draft = await self._draft(organization_id, template.id, for_update=True)
         if draft is None:
             raise ValueError("There is no draft to discard.")
         published = await self.db.scalar(
@@ -250,7 +257,7 @@ class EvaluationTemplateService:
         )
         if template is None:
             return None
-        draft = await self._draft(organization_id, template.id)
+        draft = await self._draft(organization_id, template.id, for_update=True)
         if draft is None:
             return ["There is no draft to publish."]
         definition = TemplateDefinition.model_validate(draft.definition)
@@ -432,17 +439,24 @@ class EvaluationTemplateService:
     # -------------------------------------------------------------- helpers --
 
     async def _draft(
-        self, organization_id: str, template_id: str
+        self, organization_id: str, template_id: str, *, for_update: bool = False
     ) -> Optional[EvaluationTemplateVersion]:
-        return (
-            await self.db.execute(
-                select(EvaluationTemplateVersion).where(
-                    EvaluationTemplateVersion.template_id == str(template_id),
-                    EvaluationTemplateVersion.organization_id == str(organization_id),
-                    EvaluationTemplateVersion.published_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
+        """The open draft, if any.
+
+        Writers pass ``for_update``: under REPEATABLE READ a plain SELECT
+        answers from the snapshot taken at the request's first read (the
+        permission check), so after waiting on the template lock it could
+        still see a version another editor has just published as the draft
+        and overwrite or delete frozen content (CLAUDE.md pitfall #27).
+        """
+        query = select(EvaluationTemplateVersion).where(
+            EvaluationTemplateVersion.template_id == str(template_id),
+            EvaluationTemplateVersion.organization_id == str(organization_id),
+            EvaluationTemplateVersion.published_at.is_(None),
+        )
+        if for_update:
+            query = query.with_for_update()
+        return (await self.db.execute(query)).scalar_one_or_none()
 
     async def _versions_by_template(
         self, organization_id: str, template_ids: List[str]
@@ -521,7 +535,12 @@ class EvaluationTemplateService:
     ) -> None:
         """Two active templates of one kind cannot claim exactly the same
         members, or drafting would have no way to choose between them. A more
-        specific template beside a general one is fine: the specific one wins."""
+        specific template beside a general one is fine: the specific one wins.
+
+        Callers hold the department's EVALUATION_TEMPLATE_MATCHING lock, and
+        the read below is a locking one: two editors creating or reactivating
+        templates for the same members at once must not both see none.
+        """
         query = select(EvaluationTemplate.name).where(
             EvaluationTemplate.organization_id == str(organization_id),
             EvaluationTemplate.is_active.is_(True),
@@ -539,7 +558,7 @@ class EvaluationTemplateService:
         )
         if exclude_id is not None:
             query = query.where(EvaluationTemplate.id != exclude_id)
-        clash = await self.db.scalar(query)
+        clash = await self.db.scalar(query.with_for_update())
         if clash:
             raise ValueError(
                 f"'{clash}' already applies to exactly these members. Change who "

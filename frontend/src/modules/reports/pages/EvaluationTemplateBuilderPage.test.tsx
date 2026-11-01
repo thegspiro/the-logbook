@@ -264,4 +264,46 @@ describe('EvaluationTemplateBuilderPage', () => {
       })
     );
   });
+
+  it('keeps an unsaved Details edit when a draft is saved', async () => {
+    saveDraft.mockImplementation(echoDraft);
+    get.mockResolvedValue(detail({ description: 'Old text' }));
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await user.click(await screen.findByRole('tab', { name: /details/i }));
+    const description = screen.getByLabelText(/description/i);
+    await user.clear(description);
+    await user.type(description, 'New text');
+    await user.click(screen.getByRole('tab', { name: /sections/i }));
+    await user.type(screen.getByLabelText('Section title'), '!');
+    await user.click(screen.getByRole('button', { name: /save draft/i }));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('tab', { name: /details/i }));
+    expect(screen.getByLabelText(/description/i)).toHaveValue('New text');
+  });
+
+  it('keeps edits made while a save is in flight, still unsaved', async () => {
+    let answer: (value: EvaluationTemplateDetail) => void = () => undefined;
+    saveDraft.mockImplementation(
+      () =>
+        new Promise<EvaluationTemplateDetail>((resolve) => {
+          answer = resolve;
+        })
+    );
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const title = await screen.findByLabelText('Section title');
+    await user.type(title, ' A');
+    await user.click(screen.getByRole('button', { name: /save draft/i }));
+    await user.type(title, 'B');
+    answer(detail());
+
+    expect(await screen.findByText('Unsaved changes')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: /save draft/i })).toBeEnabled());
+    expect(screen.getByLabelText('Section title')).toHaveValue('Training AB');
+    expect(screen.getByRole('button', { name: /save draft/i })).toBeEnabled();
+  });
 });

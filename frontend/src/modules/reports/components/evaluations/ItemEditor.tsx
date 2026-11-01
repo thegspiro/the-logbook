@@ -4,7 +4,7 @@
  * rule suggests a level for the evaluator to accept or override.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react';
 import {
   EVALUATION_TOOL_LABELS,
@@ -28,6 +28,15 @@ interface ItemEditorProps {
   onMove: (to: number) => void;
 }
 
+/** One option per line, trimmed, blanks and repeats dropped. */
+const parseOptions = (text: string): string[] =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line, i, all) => line && all.indexOf(line) === i);
+
+const sameOptions = (a: string[], b: string[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+
 const numberOr = (value: string, fallback: number): number => {
   const parsed = Number(value);
   return value.trim() === '' || Number.isNaN(parsed) ? fallback : parsed;
@@ -47,6 +56,16 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
   const isScored = SCORED_TOOLS.includes(item.tool);
   const source = dataSources.find((s) => s.key === item.data_block?.source);
   const bands = item.data_block?.scoring_rule?.bands ?? [];
+
+  // The textarea keeps what the user typed — a trailing blank line after
+  // Enter, a space mid-word — while the item always holds the parsed list.
+  // It is re-seeded only when the list changes from outside (a reload).
+  const [optionsText, setOptionsText] = useState(item.checklist_options.join('\n'));
+  useEffect(() => {
+    setOptionsText((text) =>
+      sameOptions(parseOptions(text), item.checklist_options) ? text : item.checklist_options.join('\n')
+    );
+  }, [item.checklist_options]);
 
   const setLevel = (levelIndex: number, patch: Partial<ScaleLevel>) => {
     const current = item.levels[levelIndex];
@@ -71,7 +90,12 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
       data_block: item.data_block?.scoring_rule
         ? {
             ...item.data_block,
-            scoring_rule: { bands: bands.filter((band) => band.score !== last.value) },
+            // A rule with no bands left is no rule; the backend refuses an
+            // empty band list.
+            scoring_rule: (() => {
+              const remaining = bands.filter((band) => band.score !== last.value);
+              return remaining.length ? { bands: remaining } : null;
+            })(),
           }
         : item.data_block,
     });
@@ -314,16 +338,11 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
             id={`${id}-options`}
             className="form-input"
             rows={4}
-            value={item.checklist_options.join('\n')}
-            onChange={(e) =>
-              onChange({
-                ...item,
-                checklist_options: e.target.value
-                  .split('\n')
-                  .map((line) => line.trim())
-                  .filter((line, i, all) => line && all.indexOf(line) === i),
-              })
-            }
+            value={optionsText}
+            onChange={(e) => {
+              setOptionsText(e.target.value);
+              onChange({ ...item, checklist_options: parseOptions(e.target.value) });
+            }}
           />
         </div>
       )}

@@ -166,7 +166,18 @@ async def save_draft(
             ),
             "Evaluation template",
         )
-    return await _detail(service, current_user, template_id)
+    detail = await _detail(service, current_user, template_id)
+    draft = detail["draft"]
+    await _audit(
+        db,
+        current_user,
+        "evaluation_template_draft_saved",
+        {
+            "template_id": template_id,
+            "version": draft["version_number"] if draft else None,
+        },
+    )
+    return detail
 
 
 @router.delete(
@@ -181,6 +192,12 @@ async def discard_draft(
     async with handle_service_errors("Failed to discard the template draft"):
         found = await service.discard_draft(current_user.organization_id, template_id)
     ensure_found(found or None, "Evaluation template")
+    await _audit(
+        db,
+        current_user,
+        "evaluation_template_draft_discarded",
+        {"template_id": template_id},
+    )
     return await _detail(service, current_user, template_id)
 
 

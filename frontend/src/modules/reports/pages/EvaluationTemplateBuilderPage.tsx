@@ -9,7 +9,7 @@
  * re-checking the rules here (CLAUDE.md pitfall #29).
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Info, Save, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -75,12 +75,22 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [publishErrors, setPublishErrors] = useState<string[]>([]);
 
-  const adopt = useCallback((detail: EvaluationTemplateDetail) => {
-    const working = detail.draft ?? detail.published;
+  // Counts edits to the definition and workflow. A response is installed
+  // over the editor only if nothing was edited while its request was in
+  // flight; otherwise the newer edits stay, still unsaved.
+  const editRevision = useRef(0);
+
+  /**
+   * Take a server response. The Details form is not touched: it is saved on
+   * its own, so a draft save must not throw away a description being typed
+   * on the Details tab.
+   */
+  const adopt = useCallback((detail: EvaluationTemplateDetail, revisionAtRequest: number) => {
     setTemplate(detail);
+    if (editRevision.current !== revisionAtRequest) return;
+    const working = detail.draft ?? detail.published;
     setDefinition(working ? working.definition : null);
     setWorkflow(working ? working.workflow : null);
-    setDetails(detailsFrom(detail));
     setDirty(false);
   }, []);
 
@@ -94,7 +104,8 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
           evaluationTemplatesService.builderOptions(),
         ]);
         if (cancelled) return;
-        adopt(detail);
+        adopt(detail, editRevision.current);
+        setDetails(detailsFrom(detail));
         setDataSources(sources);
         setOptions(builderOptions);
       } catch (err: unknown) {
@@ -107,12 +118,14 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
   }, [templateId, adopt]);
 
   const editDefinition = (next: TemplateDefinition) => {
+    editRevision.current += 1;
     setDefinition(next);
     setDirty(true);
     setPublishErrors([]);
   };
 
   const editWorkflow = (next: TemplateWorkflow) => {
+    editRevision.current += 1;
     setWorkflow(next);
     setDirty(true);
     setPublishErrors([]);
@@ -121,8 +134,9 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
   const saveDraft = async (): Promise<boolean> => {
     if (!definition || !workflow) return false;
     setBusy(true);
+    const revision = editRevision.current;
     try {
-      adopt(await evaluationTemplatesService.saveDraft(templateId, definition, workflow));
+      adopt(await evaluationTemplatesService.saveDraft(templateId, definition, workflow), revision);
       toast.success('Draft saved');
       return true;
     } catch (err: unknown) {
@@ -145,10 +159,11 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
     });
     if (!ok) return;
     setBusy(true);
+    const revision = editRevision.current;
     try {
       const result = await evaluationTemplatesService.publish(templateId);
       if (result.published && result.template) {
-        adopt(result.template);
+        adopt(result.template, revision);
         setPublishErrors([]);
         toast.success(`Published version ${result.template.published_version ?? ''}`);
       } else {
@@ -171,8 +186,9 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
     });
     if (!ok) return;
     setBusy(true);
+    const revision = editRevision.current;
     try {
-      adopt(await evaluationTemplatesService.discardDraft(templateId));
+      adopt(await evaluationTemplatesService.discardDraft(templateId), revision);
       setPublishErrors([]);
       toast.success('Draft discarded');
     } catch (err: unknown) {

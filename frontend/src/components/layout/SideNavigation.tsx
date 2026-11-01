@@ -534,6 +534,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   icon: BarChart3,
                   permission: 'reports.view',
                 } as NavItem,
+                // Its own entry, gated like its route: evaluation setup is
+                // delegated without reports.view, which the Reports entry needs.
+                {
+                  label: 'Member Evaluations',
+                  path: '/reports/evaluations',
+                  icon: ClipboardCheck,
+                  anyPermission: ['evaluations.configure', 'evaluations.manage'],
+                } as NavItem,
               ]
             : []),
           {
