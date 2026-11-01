@@ -477,11 +477,7 @@ describe('RequirementModal', () => {
       const user = userEvent.setup();
       render(
         <RequirementModal
-          requirement={existing({
-            requirement_type: 'refusals',
-            required_hours: undefined,
-            required_refusals: 5,
-          })}
+          requirement={existing({ requirement_type: 'refusals', required_refusals: 5 })}
           categories={[]}
           onClose={vi.fn()}
           onSave={onSave}
@@ -490,13 +486,13 @@ describe('RequirementModal', () => {
 
       expect(screen.getByLabelText(/Required refusals/)).toHaveValue(5);
       await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'hours');
-      await user.type(screen.getByLabelText(/^Required Hours/), '6');
       await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
       await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
 
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({
           requirement_type: 'hours',
+          required_hours: 24,
           required_refusals: null,
           evaluation_excludes_lowest_rating: false,
         }),
