@@ -16,10 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (pending)** — Feature 10 (Documents & legal), pass 14, a watchdog
+pickup. See the Log entry above for the full review summary; the PR number
+will be recorded here in a follow-up commit on this same branch once opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 14, PR #3911, merged), preserved for history</summary>
+
 **PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911)** (branch
 `claude/security-review-medical-screening-p14`) — Feature 09 (Medical
 screening, PHI), pass 14, a watchdog pickup. See the Log entry above for the
 full review summary.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 15, PR #3910, merged), preserved for history</summary>
@@ -24262,7 +24271,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -24294,6 +24303,52 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-01 — Feature 10 (Documents & legal, pass 14) — watchdog pickup, 0 fixed, 0 new findings; cosmetic-only delta
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+`gh api search/issues` (`is:pr is:open head:claude/security-review`) returned
+0 results: PR #3911 (Feature 09, Medical screening, pass 14) had already
+merged (`6a1ad334f`); row 09 was already ✅ from that PR's own commit. Row 10
+(Documents & legal) was the next `⬜`.
+
+**Baseline** `e8a5c00b0` (PR #3816's merge, pass 13). Zero backend diff across
+all fourteen declared backend files (`documents.py`, `station_documents.py`,
+`legal_documents.py`, `api/public/legal.py`, `documents_service.py`,
+`document_service.py`, `print_document_service.py`, `legal_service.py`,
+`admin_only_folder_digest.py`, `models/document.py`, `models/legal.py`,
+`schemas/documents.py`, `schemas/legal.py`, `mcp/tools/documents.py`) — every
+one byte-identical to pass 13. Only two in-scope frontend files changed, both
+cosmetic: `DocumentsPage.tsx`'s header JSX was extracted into a reusable
+constant so it also renders during the folder-loading state (fixing a layout
+jump, no behavior change), and `AdminOnlyFoldersNotice.tsx` swapped a
+hand-rolled flex-row for the shared `split-row` utility classes. Routes: 24,
+unchanged, re-enumerated by AST (15/2/7 across the three endpoint files). No
+migration in the window touches documents/legal tables (25 unrelated
+migrations checked, all other rotation rows).
+
+**Findings: 0 fixed, 0 new.** DOC-31 (LOW, the receipt-reference refusal
+check is a plain `SELECT` rather than `.with_for_update()`) re-confirmed OPEN,
+byte-identical to pass 13 — already in `docs/KNOWN_LIMITATIONS.md`.
+
+**Completion gate:** `flake8`/`isort --check-only` clean; `black --check`
+clean under the CI-pinned `26.10.1` (a stale `26.5.1` shadowed it on `PATH` —
+invoked `/usr/local/bin/black` directly to confirm the pinned binary, since
+`pip install` reported it already satisfied); `validate_migrations.py
+--strict` — 684 revisions, single head `5781476f2012`;
+`check_route_permissions.py --strict` — 283 routes, 0 errors/warnings; scoped
+backend tests (`-k "document or legal or station_document or
+facility_folder or folder or admin_only"`) — 656 passed, 1 environment-only
+skip (`py_vapid`); frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
+warnings; scoped frontend suite — 83 passed (8 files).
+
+Full write-up: `docs/security-review/DOC-10-documents-legal.md`'s **Pass 14**
+section.
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
+re-check `list_pull_requests`/`gh api search/issues` fresh rather than
+trusting this note.
 
 ### 2026-11-01 — Feature 09 (Medical screening, PHI, pass 14) — watchdog pickup, 0 fixed, 0 new findings; cosmetic-only delta; corrects a stale MS-16 claim
 
