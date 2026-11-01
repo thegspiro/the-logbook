@@ -913,7 +913,10 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The department's date, which is what get_summary counts "this month"
+        # by; the container's UTC date is already tomorrow on a New York
+        # evening, and on the last day of a month that is next month.
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1356,10 +1359,13 @@ class TestPatternGeneration:
         # UTC the next day under standard time, so the start and end shared a
         # UTC date all winter and the old day-arithmetic check failed.
         assert shift.end_time > shift.start_time
+        # 19:00 and 07:00 are the department's wall-clock times. In UTC the two
+        # fall on the same calendar day whenever New York is on standard time
+        # (19:00 EST is 00:00Z the next day), so compare in the department's
+        # zone, where "the next day" is what the template means.
         local_start = shift.start_time.astimezone(local)
         local_end = shift.end_time.astimezone(local)
-        assert (local_start.hour, local_start.minute) == (19, 0)
-        assert (local_end.hour, local_end.minute) == (7, 0)
+        assert (local_start.hour, local_end.hour) == (19, 7)
         assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio

@@ -16,6 +16,7 @@ const mockGetRecentShifts = vi.fn();
 const mockGetByOfficer = vi.fn();
 const mockGetOfficerAnalytics = vi.fn();
 const mockGetShiftCrewStatus = vi.fn();
+const mockGetEvaluationRoster = vi.fn();
 const mockGetShift = vi.fn();
 const mockBatchCreate = vi.fn();
 const mockUpdateReport = vi.fn();
@@ -41,6 +42,9 @@ vi.mock('../../services/api', () => ({
   },
   trainingModuleConfigService: {
     getConfig: (...a: unknown[]) => mockGetConfig(...a) as unknown,
+  },
+  shiftEvaluationService: {
+    getRoster: (...a: unknown[]) => mockGetEvaluationRoster(...a) as unknown,
   },
   userService: {
     getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
@@ -89,6 +93,9 @@ vi.mock('react-router', async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   searchParams = new URLSearchParams();
+  // No department form unless a block says otherwise.
+  mockGetEvaluationRoster.mockReset();
+  mockGetEvaluationRoster.mockResolvedValue({ shift_id: 'sh1', requirements: [] });
   canManage = true;
   canViewAnalytics = false;
   mockGetMyReports.mockResolvedValue([]);
@@ -873,5 +880,69 @@ describe('ShiftReportsTab — completing a draft sends every field the form owns
       'd1',
       expect.objectContaining({ officer_narrative: null, review_status: 'approved' })
     );
+  });
+});
+
+describe('ShiftReportsTab — a trainee evaluated on a department form', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Ambulance 106',
+      call_count: 5,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      {
+        user_id: 'u2',
+        user_name: 'Marcus Bell',
+        has_active_enrollment: true,
+        enrollment_id: 'en-1',
+        program_name: 'EMT Field Internship',
+        has_existing_report: false,
+        calls_responded: 5,
+        calls_source: 'closeout',
+      },
+    ]);
+    mockGetEvaluationRoster.mockReset();
+    mockGetEvaluationRoster.mockResolvedValue({
+      shift_id: 'sh1',
+      shift_date: '2026-10-03',
+      requirements: [
+        {
+          member_id: 'u2',
+          member_name: 'Marcus Bell',
+          seat: 'ems',
+          scope_key: 'en-1',
+          program_names: ['EMT Field Internship'],
+          required: true,
+          template_options: [{ id: 'tpl-1', name: 'EMT Shift Evaluation' }],
+          evaluation: null,
+        },
+      ],
+    });
+  });
+
+  it('links to the evaluation page instead of offering the generic rating panel', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    const link = await screen.findByRole('link', { name: 'Start evaluation for Marcus Bell' });
+    expect(link).toHaveAttribute('href', '/scheduling/shift-reports/sh1/evaluations/u2/en-1');
+    expect(screen.getByText('Not started')).toBeInTheDocument();
+    expect(screen.getByText('Required before close-out')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Evaluate/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the generic panel for a trainee whose program has no form', async () => {
+    mockGetEvaluationRoster.mockResolvedValue({ shift_id: 'sh1', requirements: [] });
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('button', { name: /Evaluate/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /evaluation for Marcus Bell/ })).not.toBeInTheDocument();
   });
 });
