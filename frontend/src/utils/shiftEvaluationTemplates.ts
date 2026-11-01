@@ -35,7 +35,11 @@ export function shiftEvaluationTemplateProblems(body: ShiftEvaluationTemplateWri
   if (body.scale.length < 2) problems.push('The rating scale needs at least two ratings.');
   if (body.scale.some((level) => !level.label.trim())) problems.push('Every rating needs a label.');
   const values = body.scale.map((level) => level.value);
+  if (values.some((value) => !Number.isInteger(value))) problems.push('Every rating needs a whole-number value.');
   if (new Set(values).size !== values.length) problems.push('Each rating value may appear only once.');
+  if (body.comment_required_at_or_below !== null && !values.includes(body.comment_required_at_or_below)) {
+    problems.push('"Comment required at or below" must be one of the rating values.');
+  }
   body.header_fields.forEach((field) => {
     if (!field.label.trim()) problems.push('Every header field needs a label.');
     if (field.type === 'choice' && field.options.filter((o) => o.trim()).length < 2) {

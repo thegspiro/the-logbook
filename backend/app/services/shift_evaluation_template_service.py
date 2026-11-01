@@ -50,14 +50,21 @@ class ShiftEvaluationTemplateService:
         return await self._with_usage(templates, organization_id)
 
     async def get_template(
-        self, template_id: UUID | str, organization_id: UUID | str
+        self,
+        template_id: UUID | str,
+        organization_id: UUID | str,
+        *,
+        for_update: bool = False,
     ) -> Optional[ShiftEvaluationTemplate]:
-        result = await self.db.execute(
-            select(ShiftEvaluationTemplate).where(
-                ShiftEvaluationTemplate.id == str(template_id),
-                ShiftEvaluationTemplate.organization_id == str(organization_id),
-            )
+        query = select(ShiftEvaluationTemplate).where(
+            ShiftEvaluationTemplate.id == str(template_id),
+            ShiftEvaluationTemplate.organization_id == str(organization_id),
         )
+        if for_update:
+            # A locking read that also refreshes any copy already loaded in
+            # this session, so the version read is the one committed last.
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_template_response(
@@ -94,7 +101,11 @@ class ShiftEvaluationTemplateService:
         body: ShiftEvaluationTemplateWrite,
         user_id: UUID | str,
     ) -> Optional[ShiftEvaluationTemplate]:
-        template = await self.get_template(template_id, organization_id)
+        # Locked so two officers saving at once take turns: each edit raises
+        # the version by one instead of both writing the same next number.
+        template = await self.get_template(
+            template_id, organization_id, for_update=True
+        )
         if template is None:
             return None
         await self._refuse_duplicate_name(

@@ -242,3 +242,45 @@ describe('ShiftEvaluationSettingsPanel — general form settings', () => {
     );
   });
 });
+
+describe('ShiftEvaluationSettingsPanel — unsaved settings survive template edits', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockList.mockReset();
+    mockList.mockResolvedValue([saved(), saved({ id: 'tpl-2', name: 'Driver Evaluation' })]);
+    mockGetSettings.mockReset();
+    mockGetSettings.mockResolvedValue(offSettings);
+    mockUpdate.mockReset();
+    mockUpdate.mockResolvedValue(saved());
+    mockRemove.mockReset();
+    mockRemove.mockResolvedValue(undefined);
+  });
+
+  it('keeps a chosen general form and mode after a template is saved', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftEvaluationSettingsPanel />);
+
+    await user.selectOptions(await screen.findByLabelText('General form'), 'EMT Shift Evaluation');
+    await user.click(screen.getByRole('radio', { name: /Required/ }));
+    await user.click(screen.getByRole('button', { name: 'Edit Driver Evaluation' }));
+    await user.click(screen.getAllByRole('button', { name: 'Save template' })[0] ?? document.body);
+
+    expect(await screen.findByLabelText('General form')).toHaveValue('tpl-emt');
+    expect(screen.getByRole('radio', { name: /Required/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
+  });
+
+  it('drops an unsaved choice of a template that is then deleted, and keeps the rest', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftEvaluationSettingsPanel />);
+
+    await user.selectOptions(await screen.findByLabelText('General form'), 'Driver Evaluation');
+    await user.click(screen.getByRole('checkbox', { name: /One evaluation counts for every program/ }));
+    mockList.mockResolvedValue([saved()]);
+    await user.click(screen.getByRole('button', { name: 'Delete Driver Evaluation' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete template' }));
+
+    await waitFor(() => expect(screen.getByLabelText('General form')).toHaveValue(''));
+    expect(screen.getByRole('checkbox', { name: /One evaluation counts for every program/ })).toBeChecked();
+  });
+});

@@ -67,8 +67,23 @@ export const ShiftEvaluationTemplateEditor: React.FC<Props> = ({ initial, headin
 
   // -- Scale -------------------------------------------------------------
 
-  const setLevel = (index: number, changes: Partial<{ value: number; label: string }>) =>
-    patch({ scale: body.scale.map((level, i) => (i === index ? { ...level, ...changes } : level)) });
+  const setLevel = (index: number, changes: Partial<{ value: number; label: string }>) => {
+    const before = body.scale[index];
+    const threshold = body.comment_required_at_or_below;
+    // A threshold names a rating by its value, so it follows that rating when
+    // the value is edited; left behind, it would name a rating that no longer
+    // exists and the server would refuse the save. NaN is the blank box
+    // between clearing a value and typing the new one.
+    const follows =
+      changes.value !== undefined &&
+      before !== undefined &&
+      threshold !== null &&
+      (threshold === before.value || (Number.isNaN(threshold) && Number.isNaN(before.value)));
+    patch({
+      scale: body.scale.map((level, i) => (i === index ? { ...level, ...changes } : level)),
+      ...(follows ? { comment_required_at_or_below: changes.value ?? null } : {}),
+    });
+  };
 
   const addLevel = () => {
     const highest = body.scale.reduce((max, level) => Math.max(max, level.value), 0);
