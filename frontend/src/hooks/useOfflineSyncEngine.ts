@@ -3,11 +3,12 @@
  * device comes back online and refreshes the pending-sync count.
  *
  * Mounted once at the app root (AppLayout). Listens for browser
- * `online` events, processes the generic queue (training/RSVP), and
- * keeps the pending-sync store in sync. Equipment checks and shift
- * reports each have their own page-scoped sync flows, but their
- * counts are aggregated into the same store so the nav pill speaks
- * for the entire app.
+ * `online` events, processes the generic queue (training/RSVP) and queued
+ * shift reports, and keeps the pending-sync store in sync. Equipment checks
+ * keep their page-scoped sync flow — it carries the photo-upload checkpoints
+ * that stop evidence being filed twice — so the pill can only say where they
+ * are waiting; their count is still aggregated into the same store so the nav
+ * pill speaks for the entire app.
  *
  * Skills-test scoring has its own queue (`skillsTestOffline.ts`, which orders
  * create → save → complete per test and never drops a refused evaluation) and
@@ -22,6 +23,8 @@ import { describeNfcSync } from '../modules/inventory/utils/nfcOfflineSync';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { SKILLS_OFFLINE_QUEUED_EVENT, drainSkillsQueue } from '../utils/skillsTestOffline';
+import { drainShiftReports } from '../utils/shiftReportSync';
+import { pendingCount as equipmentPendingCount } from '../utils/offlineQueue';
 
 let inFlight: Promise<void> | null = null;
 
@@ -107,6 +110,33 @@ export async function drainSkillsTests(): Promise<void> {
   }
 }
 
+/**
+ * Send queued shift reports and tell the member what happened. A refused
+ * report is named by its shift date with the server's reason, and stays saved:
+ * the device holds the only copy.
+ */
+async function drainShiftReportQueue(): Promise<void> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  try {
+    const result = await drainShiftReports();
+    if (result.synced > 0) {
+      toast.success(
+        result.synced === 1 ? 'Synced 1 offline shift report' : `Synced ${result.synced} offline shift reports`
+      );
+    }
+    for (const refused of result.refused) {
+      toast.error(
+        `Shift report for ${refused.shiftDate} was not accepted: ${refused.message} It is still saved on this device.`,
+        { duration: 10_000 }
+      );
+    }
+  } catch {
+    // Retried on the next trigger.
+  } finally {
+    void usePendingSyncStore.getState().refresh();
+  }
+}
+
 export function useOfflineSyncEngine(): void {
   const refresh = usePendingSyncStore((s) => s.refresh);
 
@@ -114,6 +144,7 @@ export function useOfflineSyncEngine(): void {
     void refresh();
     const handleOnline = () => {
       void drainGenericQueue();
+      void drainShiftReportQueue();
       void drainSkillsTests();
     };
     const handleSkillsQueued = () => {
@@ -123,6 +154,7 @@ export function useOfflineSyncEngine(): void {
     // Eagerly try to drain on mount in case the page loaded with pending items already enqueued.
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       void drainGenericQueue();
+      void drainShiftReportQueue();
       void drainSkillsTests();
     }
     window.addEventListener('online', handleOnline);
@@ -134,5 +166,26 @@ export function useOfflineSyncEngine(): void {
   }, [refresh]);
 }
 
-/** Manually trigger a drain (e.g. from a "retry now" button). Exported for tests + UI. */
+/**
+ * Drain the generic queue only, awaitable. For a screen whose own queued work
+ * must have gone before it acts (the NFC put-away screen prunes after it).
+ */
 export const triggerOfflineDrain = drainGenericQueue;
+
+/**
+ * Retry everything the "pending sync" pill counts. The pill used to call the
+ * generic drain alone, so a queued shift report or skills evaluation it was
+ * counting could not be sent from it. Equipment checks are sent only by their
+ * own screen, so when any are left the member is told where to go.
+ */
+export async function triggerAllOfflineDrains(): Promise<void> {
+  await Promise.all([drainGenericQueue(), drainShiftReportQueue(), drainSkillsTests()]);
+  const equipment = await equipmentPendingCount().catch(() => 0);
+  if (equipment > 0) {
+    toast(
+      equipment === 1
+        ? '1 equipment check is saved on this device. Open the equipment check to send it.'
+        : `${equipment} equipment checks are saved on this device. Open the equipment check to send them.`
+    );
+  }
+}
