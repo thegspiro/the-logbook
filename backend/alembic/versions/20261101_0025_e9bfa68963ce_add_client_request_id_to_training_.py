@@ -1,7 +1,7 @@
 """add client_request_id to training_submissions
 
 Revision ID: e9bfa68963ce
-Revises: db30a34afa5b
+Revises: 5781476f2012
 Create Date: 2026-11-01 00:25:34.045199
 
 A training submission queued offline is sent again whenever the answer to an
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e9bfa68963ce"
-down_revision: Union[str, None] = "db30a34afa5b"
+down_revision: Union[str, None] = "5781476f2012"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

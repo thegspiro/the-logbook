@@ -1026,6 +1026,8 @@ export interface TrainingProgram {
   recert_interval_months?: number;
   recert_anchor_month?: number;
   recert_anchor_day?: number;
+  /** The shift evaluation form members enrolled in this program are evaluated on. */
+  shift_evaluation_template_id?: string | null;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -1048,6 +1050,7 @@ export interface TrainingProgramCreate {
   recert_interval_months?: number | undefined;
   recert_anchor_month?: number | undefined;
   recert_anchor_day?: number | undefined;
+  shift_evaluation_template_id?: string | undefined;
 }
 
 export interface ProgramPhase {
@@ -1144,6 +1147,8 @@ export interface TrainingProgramUpdate {
   /** Omit to leave alone; `[]` or `null` clears every prerequisite. */
   prerequisite_program_ids?: string[] | null | undefined;
   allows_concurrent_enrollment?: boolean | undefined;
+  /** Omit to leave alone; `null` removes the program's evaluation form. */
+  shift_evaluation_template_id?: string | null | undefined;
 }
 
 export interface ProgramPhaseUpdate {
@@ -3297,4 +3302,202 @@ export interface MemberPeriodStatusResponse {
   end_date: string;
   members: MemberPeriodStatusRow[];
   generated_at: string;
+}
+
+// ============================================
+// Shift Evaluation Templates
+// ============================================
+
+export const ShiftEvaluationStatistic = {
+  CALLS: 'calls',
+  TRANSPORTS: 'transports',
+  REFUSALS: 'refusals',
+} as const;
+export type ShiftEvaluationStatistic = (typeof ShiftEvaluationStatistic)[keyof typeof ShiftEvaluationStatistic];
+
+export const GeneralShiftEvaluationMode = {
+  OFF: 'off',
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+} as const;
+export type GeneralShiftEvaluationMode = (typeof GeneralShiftEvaluationMode)[keyof typeof GeneralShiftEvaluationMode];
+
+export interface ShiftEvaluationScaleLevel {
+  value: number;
+  label: string;
+}
+
+export interface ShiftEvaluationHeaderField {
+  /** Kept across edits; omitted for a new field and minted by the server. */
+  key?: string | undefined;
+  label: string;
+  type: 'text' | 'choice';
+  options: string[];
+  required: boolean;
+}
+
+export interface ShiftEvaluationTemplateItem {
+  key?: string | undefined;
+  label: string;
+  description?: string | null | undefined;
+  comment_always_required: boolean;
+}
+
+export interface ShiftEvaluationTemplateSection {
+  key?: string | undefined;
+  title: string;
+  column_heading: string;
+  items: ShiftEvaluationTemplateItem[];
+}
+
+/** The whole template as the editor saves it (create and update take the same body). */
+export interface ShiftEvaluationTemplateWrite {
+  name: string;
+  description?: string | null | undefined;
+  is_active: boolean;
+  scale: ShiftEvaluationScaleLevel[];
+  allow_not_applicable: boolean;
+  not_applicable_label: string;
+  comment_required_at_or_below: number | null;
+  header_fields: ShiftEvaluationHeaderField[];
+  statistics: ShiftEvaluationStatistic[];
+  sections: ShiftEvaluationTemplateSection[];
+  closing_comments_label?: string | null | undefined;
+  closing_comments_hint?: string | null | undefined;
+  evaluator_rule: 'shift_officer';
+  /** Seat tokens; read only when this is the department's general form. */
+  evaluated_seats: string[];
+}
+
+export interface ShiftEvaluationTemplate extends ShiftEvaluationTemplateWrite {
+  id: string;
+  organization_id: string;
+  version: number;
+  /** Programs that use this form. */
+  program_names: string[];
+  is_general_form: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftEvaluationSettings {
+  general_shift_evaluation_template_id: string | null;
+  general_shift_evaluation_mode: GeneralShiftEvaluationMode;
+  one_shift_evaluation_for_multiple_programs: boolean;
+}
+
+export interface ShiftEvaluationSettingsUpdate {
+  general_shift_evaluation_template_id?: string | null | undefined;
+  general_shift_evaluation_mode?: GeneralShiftEvaluationMode | undefined;
+  one_shift_evaluation_for_multiple_programs?: boolean | undefined;
+}
+
+// ============================================
+// Shift Evaluations (filled out)
+// ============================================
+
+/** A copy of the form an evaluation was filled out on (the server's snapshot). */
+export interface ShiftEvaluationFormSnapshot {
+  id?: string | undefined;
+  version?: number | undefined;
+  name: string;
+  scale: ShiftEvaluationScaleLevel[];
+  allow_not_applicable: boolean;
+  not_applicable_label: string;
+  comment_required_at_or_below: number | null;
+  header_fields: ShiftEvaluationHeaderField[];
+  statistics: ShiftEvaluationStatistic[];
+  sections: ShiftEvaluationTemplateSection[];
+  closing_comments_label?: string | null | undefined;
+  closing_comments_hint?: string | null | undefined;
+}
+
+export interface ShiftEvaluationItemAnswer {
+  rating: number | null;
+  not_applicable: boolean;
+  comment?: string | null | undefined;
+}
+
+export interface ShiftEvaluationSummary {
+  id: string;
+  status: 'draft' | 'submitted';
+  average_rating: number | null;
+  rated_count: number;
+  low_rating_count: number;
+  evaluator_name: string | null;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ShiftEvaluationRequirement {
+  member_id: string;
+  member_name: string;
+  seat: string | null;
+  /** An enrollment id, 'combined' or 'general'. */
+  scope_key: string;
+  program_names: string[];
+  required: boolean;
+  template_options: { id: string; name: string }[];
+  evaluation: ShiftEvaluationSummary | null;
+}
+
+export interface ShiftEvaluationRoster {
+  shift_id: string;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  platoon: string | null;
+  requirements: ShiftEvaluationRequirement[];
+}
+
+export interface ShiftEvaluationDetail {
+  id: string;
+  member_id: string;
+  member_name: string | null;
+  evaluator_id: string | null;
+  evaluator_name: string | null;
+  shift_id: string | null;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  scope_key: string;
+  program_names: string[];
+  template_id: string | null;
+  template_version: number;
+  template: ShiftEvaluationFormSnapshot;
+  status: 'draft' | 'submitted';
+  header_values: Record<string, string>;
+  statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+  responses: Record<string, ShiftEvaluationItemAnswer>;
+  closing_comments: string | null;
+  average_rating: number | null;
+  rated_count: number;
+  low_rating_count: number;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ShiftEvaluationFormResponse {
+  requirement: ShiftEvaluationRequirement;
+  shift_id: string;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  platoon: string | null;
+  template: ShiftEvaluationFormSnapshot;
+  template_id: string | null;
+  evaluation: ShiftEvaluationDetail | null;
+  prefill_statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+}
+
+export interface ShiftEvaluationSaveBody {
+  template_id?: string | undefined;
+  header_values: Record<string, string>;
+  statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+  responses: Record<string, ShiftEvaluationItemAnswer>;
+  closing_comments?: string | null | undefined;
+  submit: boolean;
 }
