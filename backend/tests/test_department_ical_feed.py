@@ -21,7 +21,10 @@ from starlette.requests import Request
 from app.api.public import calendar as feed_ep
 from app.api.v1.endpoints import integrations as int_ep
 from app.models.integration import Integration
-from app.schemas.integration import IntegrationConnectRequest
+from app.schemas.integration import (
+    IntegrationConnectRequest,
+    IntegrationUpdateRequest,
+)
 from app.services.integration_services.ical_service import (
     ORG_FEED_TOKEN_HASH_KEY,
     ORG_FEED_TOKEN_SECRET,
@@ -137,6 +140,18 @@ class TestFeedTokenHelpers:
                 int_ep._validate_config("ical", {key: "chosen-by-client"})
             assert excinfo.value.status_code == 422
 
+    def test_filter_settings_are_accepted(self):
+        out = int_ep._validate_config(
+            "ical",
+            {"included_event_types": ["training", "training"], "include_shifts": True},
+        )
+        assert out == {"included_event_types": ["training"], "include_shifts": True}
+
+    def test_an_unknown_event_type_is_refused(self):
+        with pytest.raises(HTTPException) as excinfo:
+            int_ep._validate_config("ical", {"included_event_types": ["bogus"]})
+        assert excinfo.value.status_code == 422
+
     def test_aware_datetimes_are_published_in_utc(self):
         eastern = timezone(timedelta(hours=-5))
         ics = generate_ical_feed(
@@ -237,6 +252,49 @@ async def _event(
         },
     )
     return event_id
+
+
+async def _shift(
+    db,
+    org_id: str,
+    *,
+    days_ahead: int = 2,
+    platoon: str = "A",
+    status: str = "scheduled",
+) -> str:
+    shift_id = str(uuid.uuid4())
+    start = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
+        days=days_ahead
+    )
+    await db.execute(
+        text(
+            "INSERT INTO shifts (id, organization_id, shift_date, start_time, "
+            "end_time, platoon, notes, pass_down_notes, status) VALUES "
+            "(:id, :org, :sd, :st, :et, :pl, 'SECRET-NOTE', 'SECRET-PASSDOWN', "
+            ":status)"
+        ),
+        {
+            "id": shift_id,
+            "org": org_id,
+            "sd": start.date(),
+            "st": start,
+            "et": start + timedelta(hours=24),
+            "pl": platoon,
+            "status": status,
+        },
+    )
+    return shift_id
+
+
+async def _save_settings(db, row: Integration, admin, config: dict) -> None:
+    with patch.object(int_ep, "log_audit_event", new=AsyncMock()):
+        await int_ep.update_integration(
+            row.id,
+            _request(),
+            body=IntegrationUpdateRequest(config=config),
+            db=db,
+            current_user=admin,
+        )
 
 
 async def _connect(db, row: Integration, admin) -> str:
@@ -396,6 +454,110 @@ class TestDepartmentFeed:
         assert new != old
         with pytest.raises(HTTPException):
             await _fetch(db_session, old)
+
+    async def test_saved_type_filter_applies_and_keeps_the_url(self, db_session):
+        org_id = await _org(db_session)
+        admin = await _admin(db_session, org_id)
+        row = await _ical(db_session, org_id)
+        await _event(db_session, org_id, "Ladder Drill", event_type="training")
+        await _event(db_session, org_id, "Pancake Breakfast", event_type="fundraiser")
+        token = await _connect(db_session, row, admin)
+
+        await _save_settings(
+            db_session, row, admin, {"included_event_types": ["fundraiser"]}
+        )
+        ics = await _fetch(db_session, token)
+        assert "Pancake Breakfast" in ics
+        assert "Ladder Drill" not in ics
+
+        # An empty selection means every type again.
+        await _save_settings(db_session, row, admin, {"included_event_types": []})
+        ics = await _fetch(db_session, token)
+        assert "Pancake Breakfast" in ics
+        assert "Ladder Drill" in ics
+
+    async def test_shifts_are_published_only_when_included(self, db_session):
+        org_id = await _org(db_session)
+        other_org = await _org(db_session, name="Other Dept")
+        admin = await _admin(db_session, org_id)
+        row = await _ical(db_session, org_id)
+        shift_id = await _shift(db_session, org_id, platoon="B")
+        cancelled_id = await _shift(db_session, org_id, status="cancelled")
+        far_id = await _shift(db_session, org_id, days_ahead=400)
+        foreign_id = await _shift(db_session, other_org)
+        token = await _connect(db_session, row, admin)
+
+        ics = await _fetch(db_session, token)
+        assert shift_id not in ics
+        assert "Duty Shift" not in ics
+
+        await _save_settings(db_session, row, admin, {"include_shifts": True})
+        ics = await _fetch(db_session, token)
+        assert f"UID:shift-{shift_id}@thelogbook.app" in ics
+        assert "SUMMARY:Duty Shift — Platoon B" in ics
+        assert "CATEGORIES:Shift" in ics
+        for absent in (cancelled_id, far_id, foreign_id):
+            assert absent not in ics
+        for leaked in ("SECRET-NOTE", "SECRET-PASSDOWN", "DESCRIPTION"):
+            assert leaked not in ics
+
+        await _save_settings(db_session, row, admin, {"include_shifts": False})
+        assert shift_id not in await _fetch(db_session, token)
+
+    async def test_a_disabled_integration_serves_nothing(self, db_session):
+        org_id = await _org(db_session)
+        admin = await _admin(db_session, org_id)
+        row = await _ical(db_session, org_id)
+        token = await _connect(db_session, row, admin)
+
+        row.enabled = False
+        await db_session.flush()
+        with pytest.raises(HTTPException) as excinfo:
+            await _fetch(db_session, token)
+        assert excinfo.value.status_code == 404
+
+    async def test_each_token_serves_only_its_own_department(self, db_session):
+        org_a = await _org(db_session, name="Dept A")
+        org_b = await _org(db_session, name="Dept B")
+        admin_a = await _admin(db_session, org_a)
+        admin_b = await _admin(db_session, org_b)
+        row_a = await _ical(db_session, org_a)
+        row_b = await _ical(db_session, org_b)
+        await _event(db_session, org_a, "Alpha Drill")
+        await _event(db_session, org_b, "Bravo Drill")
+        shift_a = await _shift(db_session, org_a)
+        shift_b = await _shift(db_session, org_b)
+        token_a = await _connect(db_session, row_a, admin_a)
+        token_b = await _connect(db_session, row_b, admin_b)
+        await _save_settings(db_session, row_a, admin_a, {"include_shifts": True})
+        await _save_settings(db_session, row_b, admin_b, {"include_shifts": True})
+
+        ics_a = await _fetch(db_session, token_a)
+        ics_b = await _fetch(db_session, token_b)
+        assert "Alpha Drill" in ics_a
+        assert shift_a in ics_a
+        assert "Bravo Drill" not in ics_a
+        assert shift_b not in ics_a
+        assert "Bravo Drill" in ics_b
+        assert shift_b in ics_b
+        assert "Alpha Drill" not in ics_b
+        assert shift_a not in ics_b
+
+    async def test_settings_cannot_be_saved_on_another_departments_feed(
+        self, db_session
+    ):
+        org_id = await _org(db_session)
+        other_org = await _org(db_session, name="Other Dept")
+        admin = await _admin(db_session, org_id)
+        intruder = await _admin(db_session, other_org)
+        row = await _ical(db_session, org_id)
+        await _connect(db_session, row, admin)
+
+        with pytest.raises(HTTPException) as excinfo:
+            await _save_settings(db_session, row, intruder, {"include_shifts": True})
+        assert excinfo.value.status_code == 404
+        await db_session.refresh(row)
+        assert "include_shifts" not in row.config
 
     async def test_flag_off_refuses_to_connect_google_calendar(self, db_session):
         org_id = await _org(db_session)

@@ -759,6 +759,13 @@ What the dialog says about approvers is the rule The Logbook applies:
   screen.
 - **An emailed approval link stops working** if its step has since been changed
   away from an Email approver; the request then goes through the Approvals screen.
+- **When an emailed link did not get through** _(2026-11-01)_. Under
+  **Waiting on**, the Approvals screen says whether the approver's email went
+  out: "Email sent", "Email could not be sent" or "Link expired". An approvals
+  administrator can select **Re-send link**. The approver gets a new link by
+  email, and the old link stops working. Nobody can view or copy the link,
+  because it acts as that person's signature. The approver's page shows the
+  request's title, amount and who asked for it.
 - **Members approving in The Logbook can never approve their own request**,
   whatever **Allow self-approval by email** says; that box governs the emailed
   link only.

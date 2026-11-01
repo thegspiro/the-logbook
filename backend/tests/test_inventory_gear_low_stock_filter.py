@@ -1,4 +1,5 @@
-"""The gear items list and its export take ``low_stock`` (the alert email's link).
+"""The gear items list and its export take ``low_stock`` (the alert email's link)
+and ``low_stock_categories`` (the dashboard Low stock tile's link).
 
 The low-stock alert email links gear recipients to
 ``/inventory/admin/items?low_stock=true``. That page is only worth opening if
@@ -51,6 +52,7 @@ def service():
     svc.get_low_stock_items_for_alerts = AsyncMock(
         return_value=[_low_row("i-1"), _low_row("i-2")]
     )
+    svc.item_ids_in_low_stock_categories = AsyncMock(return_value=["i-2", "i-3"])
     with patch.object(
         inventory_endpoints,
         "InventoryService",
@@ -99,7 +101,42 @@ class TestListLowStock:
         await _list()
 
         service.get_low_stock_items_for_alerts.assert_not_awaited()
+        service.item_ids_in_low_stock_categories.assert_not_awaited()
         assert service.get_items.await_args.kwargs["item_ids"] is None
+
+
+class TestListLowStockCategories:
+    """``low_stock_categories`` is the dashboard Low stock tile's link."""
+
+    async def test_narrows_to_the_tiles_categories_without_medical_stock(self, service):
+        await _list(low_stock_categories=True)
+
+        # The tile's own scan, not the alert email's per-item one.
+        service.item_ids_in_low_stock_categories.assert_awaited_once_with(
+            ORG_ID, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
+        service.get_low_stock_items_for_alerts.assert_not_awaited()
+        assert service.get_items.await_args.kwargs["item_ids"] == ["i-2", "i-3"]
+
+    async def test_no_low_category_lists_nothing_rather_than_everything(self, service):
+        service.item_ids_in_low_stock_categories.return_value = []
+
+        await _list(low_stock_categories=True)
+
+        assert service.get_items.await_args.kwargs["item_ids"] == []
+
+    async def test_both_filters_intersect(self, service):
+        await _list(low_stock=True, low_stock_categories=True)
+
+        assert service.get_items.await_args.kwargs["item_ids"] == ["i-2"]
+
+    async def test_group_headers_count_the_same_narrowed_set(self, service):
+        await _list(low_stock_categories=True, group_by="color")
+
+        assert service.get_item_group_counts.await_args.kwargs["item_ids"] == [
+            "i-2",
+            "i-3",
+        ]
 
 
 class TestExportLowStock:
@@ -124,7 +161,47 @@ class TestExportLowStock:
         await self._export()
 
         service.get_low_stock_items_for_alerts.assert_not_awaited()
+        service.item_ids_in_low_stock_categories.assert_not_awaited()
         assert service.get_items_page.await_args.kwargs["item_ids"] is None
+
+    async def test_export_narrows_to_the_tiles_categories_too(self, service):
+        await self._export(low_stock_categories=True)
+
+        assert service.get_items_page.await_args.kwargs["item_ids"] == [
+            "i-2",
+            "i-3",
+        ]
+
+
+class TestItemIdsInLowStockCategories:
+    async def test_reads_the_items_of_the_categories_the_tile_counts(self):
+        db = AsyncMock()
+        rows = MagicMock()
+        rows.scalars.return_value.all.return_value = ["i-1", "i-2"]
+        db.execute = AsyncMock(return_value=rows)
+        svc = InventoryService(db)
+        low = AsyncMock(return_value=[{"category_id": "c-1"}, {"category_id": "c-2"}])
+
+        with patch.object(svc, "get_low_stock_items", low):
+            ids = await svc.item_ids_in_low_stock_categories(
+                ORG_ID, exclude_item_types=MEDICAL_ITEM_TYPES
+            )
+
+        low.assert_awaited_once_with(ORG_ID, exclude_item_types=MEDICAL_ITEM_TYPES)
+        assert ids == ["i-1", "i-2"]
+        sql = str(db.execute.await_args.args[0])
+        assert "inventory_items.organization_id" in sql
+        assert "inventory_items.category_id IN" in sql
+
+    async def test_no_low_category_skips_the_item_query(self):
+        db = AsyncMock()
+        svc = InventoryService(db)
+
+        with patch.object(svc, "get_low_stock_items", AsyncMock(return_value=[])):
+            ids = await svc.item_ids_in_low_stock_categories(ORG_ID)
+
+        assert ids == []
+        db.execute.assert_not_awaited()
 
 
 def _category_item(item_id, item_type, quantity=1):

@@ -141,4 +141,36 @@ describe('MinutesDetailPage rich-text sections', () => {
     // The other sections are sent back as they were.
     expect(payload.sections.find((s) => s.key === 'new_business')?.format).toBe('html');
   });
+
+  it('names the version it loaded, and on a conflict keeps the text and offers a reload', async () => {
+    // MM5-4: someone else saved after this copy was loaded.
+    mockGetMinutes.mockResolvedValue({ ...draft, edit_version: 3 });
+    mockUpdateMinutes.mockRejectedValue(
+      Object.assign(new Error('conflict'), {
+        isAxiosError: true,
+        response: {
+          status: 409,
+          data: { detail: 'Someone else saved these minutes after you opened them.' },
+        },
+      })
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesDetailPage />);
+    await screen.findByText(/Note <5 bids/);
+
+    await user.click(screen.getByRole('button', { name: /Edit.*Old Business|Edit Old Business/ }));
+    const editor = await screen.findByRole('textbox', { name: 'Old Business content' });
+    await user.type(editor, ' Mine');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockUpdateMinutes).toHaveBeenCalledWith(MINUTES_ID, expect.objectContaining({ expected_version: 3 }))
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Someone else saved these minutes/);
+    expect(screen.getByRole('textbox', { name: 'Old Business content' })).toHaveTextContent('Mine');
+
+    mockGetMinutes.mockResolvedValue({ ...draft, edit_version: 4 });
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
 });

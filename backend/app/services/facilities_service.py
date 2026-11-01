@@ -1848,6 +1848,7 @@ class FacilitiesService:
         inspection_type: Optional[str] = None,
         result: Optional[str] = None,
         search: Optional[str] = None,
+        due_within_days: Optional[int] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> Tuple[List[FacilityInspection], int]:
@@ -1856,10 +1857,27 @@ class FacilitiesService:
         ``result`` is ``passed``, ``failed`` or ``pending`` (no result recorded
         yet). The list endpoint's ``passed`` filter cannot say "pending",
         because its ``None`` already means "no filter" (FAC2-5).
+
+        ``due_within_days`` is the dashboard's "Upcoming inspections" tile:
+        a next inspection from today through that many days ahead, on a
+        facility that is not archived. Its link carries ``dueWithin=30``, so
+        this must keep selecting what that tile's query in dashboard.py counts.
         """
         conditions = self._inspection_conditions(
             organization_id, facility_id=facility_id, inspection_type=inspection_type
         )
+        if due_within_days is not None:
+            today = await resolve_org_today(self.db, organization_id)
+            conditions.extend(
+                [
+                    FacilityInspection.next_inspection_date >= today,
+                    FacilityInspection.next_inspection_date
+                    <= today + timedelta(days=due_within_days),
+                    FacilityInspection.facility_id.in_(
+                        self._active_facility_ids(organization_id)
+                    ),
+                ]
+            )
         if result == "passed":
             conditions.append(FacilityInspection.passed.is_(True))
         elif result == "failed":
@@ -1895,6 +1913,13 @@ class FacilitiesService:
             .limit(limit)
         )
         return list(rows.scalars().all()), total
+
+    @staticmethod
+    def _active_facility_ids(organization_id: str):
+        return select(Facility.id).where(
+            Facility.organization_id == organization_id,
+            Facility.is_archived.is_(False),
+        )
 
     @staticmethod
     def _inspection_conditions(
@@ -3400,11 +3425,30 @@ class FacilitiesService:
         facility_id: Optional[str] = None,
         compliance_type: Optional[str] = None,
         is_completed: Optional[bool] = None,
+        due_within_days: Optional[int] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[FacilityComplianceChecklist]:
-        """List compliance checklists"""
+        """List compliance checklists
+
+        ``due_within_days`` is the dashboard's "Compliance deadlines" tile:
+        due from today through that many days ahead, on a facility that is not
+        archived. Combined with ``is_completed=False`` it selects what that
+        tile's query in dashboard.py counts, which its link relies on.
+        """
         conditions = [FacilityComplianceChecklist.organization_id == organization_id]
+        if due_within_days is not None:
+            today = await resolve_org_today(self.db, organization_id)
+            conditions.extend(
+                [
+                    FacilityComplianceChecklist.due_date >= today,
+                    FacilityComplianceChecklist.due_date
+                    <= today + timedelta(days=due_within_days),
+                    FacilityComplianceChecklist.facility_id.in_(
+                        self._active_facility_ids(organization_id)
+                    ),
+                ]
+            )
 
         if facility_id:
             conditions.append(FacilityComplianceChecklist.facility_id == facility_id)

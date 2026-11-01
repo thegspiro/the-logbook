@@ -252,6 +252,8 @@ export interface MeetingMinutes {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  /** Bumped by every content save; sent back as `expected_version` so a stale save is refused (409). */
+  edit_version?: number;
   motions: Motion[];
   action_items: ActionItem[];
 }

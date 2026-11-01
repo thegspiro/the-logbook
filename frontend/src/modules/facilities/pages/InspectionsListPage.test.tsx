@@ -6,11 +6,14 @@
  * "Commonwealth Mutual" named that firm nowhere on the result.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockLoadFacilities = vi.fn();
+const mockUseInspectionForm = vi.fn();
+const mockSetPage = vi.fn();
 let mockInspections: Record<string, unknown>[] = [];
 
 vi.mock('../store/facilitiesStore', () => ({
@@ -21,26 +24,30 @@ vi.mock('../store/facilitiesStore', () => ({
 }));
 
 vi.mock('../hooks/useInspectionForm', () => ({
-  useInspectionForm: () => ({
-    inspections: mockInspections,
-    isLoading: false,
-    loadError: null,
-    reload: vi.fn(),
-    searchQuery: '',
-    setSearchQuery: vi.fn(),
-    resultFilter: 'all',
-    setResultFilter: vi.fn(),
-    showModal: false,
-    setShowModal: vi.fn(),
-    editingInspection: null,
-    isSaving: false,
-    formData: {},
-    setFormData: vi.fn(),
-    openCreate: vi.fn(),
-    openEdit: vi.fn(),
-    handleSave: vi.fn(),
-    handleDelete: vi.fn(),
-  }),
+  useInspectionForm: (options: unknown) => {
+    mockUseInspectionForm(options);
+    return {
+      inspections: mockInspections,
+      setPage: mockSetPage,
+      isLoading: false,
+      loadError: null,
+      reload: vi.fn(),
+      searchQuery: '',
+      setSearchQuery: vi.fn(),
+      resultFilter: 'all',
+      setResultFilter: vi.fn(),
+      showModal: false,
+      setShowModal: vi.fn(),
+      editingInspection: null,
+      isSaving: false,
+      formData: {},
+      setFormData: vi.fn(),
+      openCreate: vi.fn(),
+      openEdit: vi.fn(),
+      handleSave: vi.fn(),
+      handleDelete: vi.fn(),
+    };
+  },
 }));
 
 import InspectionsListPage from './InspectionsListPage';
@@ -84,5 +91,56 @@ describe('InspectionsListPage', () => {
 
     expect(screen.getByText('R. Alvarez')).toBeInTheDocument();
     expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+  });
+});
+
+// The dashboard's "Upcoming inspections" tile links here as ?dueWithin=30 and
+// says "View filtered results"; the list used to ignore it.
+describe('InspectionsListPage dueWithin filter', () => {
+  beforeEach(() => {
+    mockInspections = [inspection({ title: 'Annual sprinkler test', nextInspectionDate: '2026-11-15' })];
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('asks for the window the tile counted and says so', () => {
+    window.history.pushState({}, '', '/facilities/inspections?dueWithin=30');
+
+    renderWithRouter(<InspectionsListPage />);
+
+    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: 30 });
+    expect(screen.getByText(/Showing only inspections next due in the next 30 days/)).toBeInTheDocument();
+    expect(screen.getByText('Annual sprinkler test')).toBeInTheDocument();
+  });
+
+  it('clears the window from the URL and returns to the first page', async () => {
+    window.history.pushState({}, '', '/facilities/inspections?dueWithin=30');
+    renderWithRouter(<InspectionsListPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show all inspections' }));
+
+    await waitFor(() => expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined }));
+    expect(mockSetPage).toHaveBeenCalledExactlyOnceWith(1);
+    expect(window.location.search).toBe('');
+    expect(screen.queryByText(/Showing only inspections/)).not.toBeInTheDocument();
+  });
+
+  it.each(['', 'soon', '-5', '400'])('ignores dueWithin=%s', (value) => {
+    window.history.pushState({}, '', `/facilities/inspections?dueWithin=${value}`);
+
+    renderWithRouter(<InspectionsListPage />);
+
+    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined });
+    expect(screen.queryByText(/Showing only inspections/)).not.toBeInTheDocument();
+  });
+
+  it('behaves as before with no parameter', () => {
+    renderWithRouter(<InspectionsListPage />);
+
+    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined });
+    expect(screen.queryByRole('button', { name: 'Show all inspections' })).not.toBeInTheDocument();
   });
 });

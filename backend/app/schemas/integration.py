@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 from app.core.utils import list_within_detail_limit
+from app.models.event import EventType
 
 # ============================================
 # Shared response config (camelCase)
@@ -187,6 +188,18 @@ class ICalConfig(BaseModel):
     # on rotate (see the ical-feed endpoints), so a client cannot pick a
     # guessable one. Empty included_event_types means every event type.
     included_event_types: List[str] = Field(default_factory=list)
+    # Scheduled (non-cancelled) shifts are published alongside events only when
+    # this is on: off is what every feed connected before it existed served.
+    include_shifts: bool = False
+
+    @field_validator("included_event_types")
+    @classmethod
+    def _known_event_types(cls, value: List[str]) -> List[str]:
+        known = {t.value for t in EventType}
+        unknown = sorted({v for v in value if v not in known})
+        if unknown:
+            raise ValueError(f"Unknown event type(s): {', '.join(unknown)}")
+        return list(dict.fromkeys(value))
 
 
 class CSVImportConfig(BaseModel):

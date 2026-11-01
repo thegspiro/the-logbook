@@ -73,6 +73,7 @@ import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { SupervisorSection } from '../components/member-profile/SupervisorSection';
 import { StatusChangeReason } from '../components/member-profile/StatusChangeReason';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
 import { VotingEligibilitySection } from '../components/member-profile/VotingEligibilitySection';
@@ -1442,6 +1443,12 @@ export const MemberProfilePage: React.FC = () => {
                 stint records how the member left, including an involuntary drop. */}
             {userId && (isSelf || canManageMembers) && (
               <ServiceHistorySection userId={userId} canEdit={canManageMembers} tz={tz} refreshKey={user.status} />
+            )}
+
+            {/* Who the member reports to, for the member and leadership,
+                matching the endpoint; members.manage sets and ends it. */}
+            {userId && (isSelf || canManageMembers) && (
+              <SupervisorSection userId={userId} memberName={displayNameOf(user)} canEdit={canManageMembers} tz={tz} />
             )}
 
             {/* What the member is certified to do, as shift eligibility reads
