@@ -474,6 +474,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/scheduling/checkin/print', label: 'Print shift check-in', module: 'scheduling' },
       { path: '/scheduling/shift-reports/print', label: 'Print shift report', module: 'scheduling' },
       {
+        path: '/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey',
+        label: 'Shift evaluation',
+        module: 'scheduling',
+      },
+      { path: '/scheduling/shift-evaluations/print', label: 'Print shift evaluation', module: 'scheduling' },
+      {
         path: '/scheduling/admin',
         label: 'Scheduling administration',
         permission: 'scheduling.manage',

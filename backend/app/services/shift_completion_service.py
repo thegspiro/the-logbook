@@ -1776,39 +1776,26 @@ class ShiftCompletionService:
         if requirements_progressed:
             report.requirements_progressed = requirements_progressed
 
-    async def _attach_shift_labels(
-        self,
-        reports: List[ShiftCompletionReport],
-        organization_id: UUID | str,
-    ) -> List[ShiftCompletionReport]:
-        """Say which shift each report covers.
+    async def shift_unit_labels(
+        self, shift_ids: set[str], organization_id: UUID | str
+    ) -> Dict[str, Optional[str]]:
+        """Each shift's apparatus label, keyed by shift id (None when it has none).
 
-        A report carried a person and a date and nothing else, so two reports
-        filed on one day were told apart by author alone — a reader could not
-        see which truck, or which of a day and night pair, either was about.
-        Two transient attributes, not columns: the response schema reads them
-        via `from_attributes` and nothing persists them.
-
-        - ``shift_label`` names the apparatus, and is None for a shift that has
-          none (an event or a detail).
-        - ``shift_start_time`` is the shift's start, in UTC like every other
-          datetime the API returns. The frontend renders it in the department's
-          timezone; formatting a time here would mean picking a zone in the
-          service layer. It is what tells a day shift from a night one on the
-          same apparatus and date, so it is sent even when the label is None.
-
-        Batched into two queries rather than a relationship: an eager
-        `Shift -> Apparatus` chain hanging off this model would load on every
-        query that touches a report, and a lazy one raises MissingGreenlet the
-        moment a response model reads it.
+        The shift report's own naming, shared with shift evaluations so the two
+        screens call a unit the same thing.
         """
-        for report in reports:
-            report.shift_label = None
-            report.shift_start_time = None
-        shift_ids = {r.shift_id for r in reports if r.shift_id}
         if not shift_ids:
-            return reports
+            return {}
+        shifts_by_id, labels = await self._shift_unit_labels(shift_ids, organization_id)
+        return {
+            shift_id: (labels.get(str(apparatus_id)) if apparatus_id else None)
+            for shift_id, (apparatus_id, _start) in shifts_by_id.items()
+        }
 
+    async def _shift_unit_labels(
+        self, shift_ids: set[str], organization_id: UUID | str
+    ) -> tuple[Dict[str, tuple], Dict[str, str]]:
+        """``({shift_id: (apparatus_id, start_time)}, {apparatus_id: label})``."""
         # Org-scoped even though the ids came from org-scoped reports: a
         # by-id fetch on a client-influenced id is scoped by default here.
         shift_rows = await self.db.execute(
@@ -1858,6 +1845,42 @@ class ShiftCompletionService:
             for row in basic_rows:
                 parts = [p for p in (row.unit_number, row.name) if p]
                 labels[str(row.id)] = " — ".join(parts)
+
+        return shifts_by_id, labels
+
+    async def _attach_shift_labels(
+        self,
+        reports: List[ShiftCompletionReport],
+        organization_id: UUID | str,
+    ) -> List[ShiftCompletionReport]:
+        """Say which shift each report covers.
+
+        A report carried a person and a date and nothing else, so two reports
+        filed on one day were told apart by author alone — a reader could not
+        see which truck, or which of a day and night pair, either was about.
+        Two transient attributes, not columns: the response schema reads them
+        via `from_attributes` and nothing persists them.
+
+        - ``shift_label`` names the apparatus, and is None for a shift that has
+          none (an event or a detail).
+        - ``shift_start_time`` is the shift's start, in UTC like every other
+          datetime the API returns. The frontend renders it in the department's
+          timezone; formatting a time here would mean picking a zone in the
+          service layer. It is what tells a day shift from a night one on the
+          same apparatus and date, so it is sent even when the label is None.
+
+        Batched into two queries rather than a relationship: an eager
+        `Shift -> Apparatus` chain hanging off this model would load on every
+        query that touches a report, and a lazy one raises MissingGreenlet the
+        moment a response model reads it.
+        """
+        for report in reports:
+            report.shift_label = None
+            report.shift_start_time = None
+        shift_ids = {r.shift_id for r in reports if r.shift_id}
+        if not shift_ids:
+            return reports
+        shifts_by_id, labels = await self._shift_unit_labels(shift_ids, organization_id)
 
         for report in reports:
             if not report.shift_id:

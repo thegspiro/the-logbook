@@ -20,7 +20,7 @@ the Chief position deliberately after the upgrade loses them too, the
 unavoidable cost of reversing a grant nothing distinguishes from the seed.
 
 Revision ID: b65eaef983b9
-Revises: db30a34afa5b
+Revises: 5781476f2012
 Create Date: 2026-10-31 20:54:00.000000
 """
 
@@ -32,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b65eaef983b9"
-down_revision: Union[str, None] = "db30a34afa5b"
+down_revision: Union[str, None] = "5781476f2012"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
