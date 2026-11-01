@@ -51,6 +51,7 @@ import { MySkillTestsList } from '../components/training/MySkillTestsList';
 import { useAuthStore } from '../stores/authStore';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
 import { buildUpcomingItems, UPCOMING_WINDOW_DAYS } from '../utils/trainingUpcoming';
+import { formatEvaluationAverage } from '../utils/shiftEvaluations';
 import {
   getProgressBarColor,
   getPercentageBarColor,
@@ -1138,33 +1139,47 @@ const MyTrainingPage: React.FC = () => {
               endpoint gated and returned these figures, the page never drew
               them, and the setting's own description promised members could
               see them. */}
-          {v?.show_shift_stats && data.shift_stats && data.shift_stats.shifts_completed > 0 && (
-            <Section title="Shift Statistics" icon={BarChart3}>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <StatCard
-                  icon={ClipboardList}
-                  label="Shifts Completed"
-                  value={data.shift_stats.shifts_completed}
-                  color="text-blue-700 dark:text-blue-400"
-                />
-                <StatCard
-                  icon={Clock}
-                  label="Hours Reported"
-                  value={formatHours(data.shift_stats.hours_reported)}
-                  color="text-green-700 dark:text-green-400"
-                />
-                <StatCard icon={AlertTriangle} label="Calls Responded" value={data.shift_stats.total_calls} />
-                {v?.show_performance_rating && data.shift_stats.avg_rating != null && (
+          {v?.show_shift_stats &&
+            data.shift_stats &&
+            (data.shift_stats.shifts_completed > 0 || (data.shift_stats.evaluation_averages?.length ?? 0) > 0) && (
+              <Section title="Shift Statistics" icon={BarChart3}>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                   <StatCard
-                    icon={Star}
-                    label="Average Rating"
-                    value={`${data.shift_stats.avg_rating}/5`}
-                    color="text-yellow-700 dark:text-yellow-400"
+                    icon={ClipboardList}
+                    label="Shifts Completed"
+                    value={data.shift_stats.shifts_completed}
+                    color="text-blue-700 dark:text-blue-400"
                   />
-                )}
-              </div>
-            </Section>
-          )}
+                  <StatCard
+                    icon={Clock}
+                    label="Hours Reported"
+                    value={formatHours(data.shift_stats.hours_reported)}
+                    color="text-green-700 dark:text-green-400"
+                  />
+                  <StatCard icon={AlertTriangle} label="Calls Responded" value={data.shift_stats.total_calls} />
+                  {v?.show_performance_rating && data.shift_stats.avg_rating != null && (
+                    <StatCard
+                      icon={Star}
+                      label="Average Rating"
+                      value={`${data.shift_stats.avg_rating}/5`}
+                      color="text-yellow-700 dark:text-yellow-400"
+                    />
+                  )}
+                  {/* One per evaluation form, on its own scale: the forms and the
+                    report rating above do not average into one number. */}
+                  {(data.shift_stats.evaluation_averages ?? []).map((average) => (
+                    <StatCard
+                      key={`${average.template_id ?? average.form_name}-${average.scale_max}`}
+                      icon={Star}
+                      label={average.form_name}
+                      value={formatEvaluationAverage(average)}
+                      hint={`${average.evaluations} ${average.evaluations === 1 ? 'evaluation' : 'evaluations'}`}
+                      color="text-violet-700 dark:text-violet-400"
+                    />
+                  ))}
+                </div>
+              </Section>
+            )}
 
           {/* Shift Reports */}
           {v?.show_shift_reports && data.shift_reports && data.shift_reports.length > 0 && (

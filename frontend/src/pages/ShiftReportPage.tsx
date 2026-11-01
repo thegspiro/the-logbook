@@ -23,6 +23,7 @@ import type { ShiftCompletionReport, TraineeShiftStats } from '../types/training
 import { StarRating } from '../modules/scheduling/components/StarRating';
 import { ReportContentDisplay } from '../modules/scheduling/components/ReportContentDisplay';
 import { attributionName } from '../utils/memberName';
+import { evaluationAverageLabel, formatEvaluationAverage } from '../utils/shiftEvaluations';
 
 // ==================== Report Card ====================
 
@@ -191,6 +192,15 @@ const ShiftReportPage: React.FC = () => {
               <div className="text-theme-text-primary text-2xl font-bold">{myStats.avg_rating || '-'}</div>
               <div className="text-theme-text-muted text-xs">Avg Rating</div>
             </div>
+            {(myStats.evaluation_averages ?? []).map((average) => (
+              <div
+                key={`${average.template_id ?? average.form_name}-${average.scale_max}`}
+                className="bg-theme-surface rounded-lg p-3 text-center"
+              >
+                <div className="text-theme-text-primary text-2xl font-bold">{formatEvaluationAverage(average)}</div>
+                <div className="text-theme-text-muted text-xs">{evaluationAverageLabel(average)}</div>
+              </div>
+            ))}
           </div>
         )}
 

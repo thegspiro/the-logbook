@@ -393,6 +393,46 @@ describe('MyTrainingPage', () => {
       expect(screen.getByText('11')).toBeInTheDocument();
     });
 
+    it('shows each evaluation form average on its own scale beside the report rating', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        shift_stats: {
+          shifts_completed: 4,
+          hours_reported: 48,
+          total_calls: 11,
+          avg_rating: 4.5,
+          evaluation_averages: [
+            { template_id: 't-1', form_name: 'EMT Shift Evaluation', scale_max: 4, average: 3.3, evaluations: 5 },
+          ],
+        },
+      });
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByText('EMT Shift Evaluation')).toBeInTheDocument();
+      expect(screen.getByText('3.3 / 4')).toBeInTheDocument();
+      expect(screen.getByText('5 evaluations')).toBeInTheDocument();
+      expect(screen.getByText('4.5/5')).toBeInTheDocument();
+    });
+
+    it('shows evaluation averages before any shift report exists', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        shift_stats: {
+          shifts_completed: 0,
+          hours_reported: 0,
+          total_calls: 0,
+          avg_rating: null,
+          evaluation_averages: [
+            { template_id: 't-1', form_name: 'EMT Shift Evaluation', scale_max: 4, average: 2, evaluations: 1 },
+          ],
+        },
+      });
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByText('2 / 4')).toBeInTheDocument();
+      expect(screen.getByText('1 evaluation')).toBeInTheDocument();
+    });
+
     it('omits shift statistics when show_shift_stats is off', async () => {
       mockGetMyTraining.mockResolvedValue({
         ...withVisibility({ show_shift_stats: false }),

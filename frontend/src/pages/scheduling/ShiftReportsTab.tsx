@@ -89,6 +89,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
 import { attributionName } from '../../utils/memberName';
+import { evaluationAverageLabel, formatEvaluationAverage } from '../../utils/shiftEvaluations';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -967,7 +968,8 @@ export const ShiftReportsTab: React.FC = () => {
   const monthLabel = (month: string) => formatCalendarDate(`${month}-15`, { month: 'short' });
 
   const renderTraineeDashboard = () => {
-    if (!traineeStats || traineeStats.total_reports === 0) return null;
+    const evaluationAverages = traineeStats?.evaluation_averages ?? [];
+    if (!traineeStats || (traineeStats.total_reports === 0 && evaluationAverages.length === 0)) return null;
     const maxHours = Math.max(...traineeStats.monthly.map((m) => m.hours), 1);
     return (
       <div className="card space-y-4 p-4 sm:p-5">
@@ -999,6 +1001,19 @@ export const ShiftReportsTab: React.FC = () => {
               <p className="text-theme-text-muted mt-0.5 text-xs">Avg Rating</p>
             </div>
           )}
+          {/* One per evaluation form, on its own scale — never pooled with the
+              report rating above or with another form. */}
+          {evaluationAverages.map((average) => (
+            <div
+              key={`${average.template_id ?? average.form_name}-${average.scale_max}`}
+              className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center"
+            >
+              <p className="text-2xl font-bold text-violet-700 dark:text-violet-400">
+                {formatEvaluationAverage(average)}
+              </p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">{evaluationAverageLabel(average)}</p>
+            </div>
+          ))}
         </div>
         {traineeStats.monthly.length > 1 && (
           <div>

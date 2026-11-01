@@ -435,4 +435,74 @@ describe('RequirementModal', () => {
       'policy_acknowledgment'
     );
   });
+
+  describe('shift evaluation types', () => {
+    it('creates an evaluated shifts requirement with its target and lowest-rating rule', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Evaluated field shifts');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'evaluated_shifts');
+      await user.type(screen.getByLabelText(/Required evaluated shifts/), '10');
+      await user.click(screen.getByRole('checkbox', { name: /no item at the lowest rating/ }));
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requirement_type: 'evaluated_shifts',
+          required_shifts: 10,
+          required_transports: null,
+          required_refusals: null,
+          evaluation_excludes_lowest_rating: true,
+        }),
+        false,
+        undefined
+      );
+    });
+
+    it('will not create a transports requirement without a count', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Transports');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'transports');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('clears the evaluation targets when the type is switched away', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({
+            requirement_type: 'refusals',
+            required_hours: undefined,
+            required_refusals: 5,
+          })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      expect(screen.getByLabelText(/Required refusals/)).toHaveValue(5);
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'hours');
+      await user.type(screen.getByLabelText(/^Required Hours/), '6');
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requirement_type: 'hours',
+          required_refusals: null,
+          evaluation_excludes_lowest_rating: false,
+        }),
+        true,
+        'req-1'
+      );
+    });
+  });
 });
