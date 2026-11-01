@@ -317,6 +317,47 @@ export const timeOffSeatReason = (shift: ShiftRecord, spans: readonly TimeOffSpa
     : null;
 
 /**
+ * A leave of absence, as `/users/leaves-of-absence/me` reports it. A null end
+ * is an open-ended leave, which covers every day from its start.
+ */
+export interface LeaveSpan {
+  start_date: string;
+  end_date: string | null;
+}
+
+/** Shown on a seat the member cannot take because they are on leave. */
+export const LEAVE_SEAT_REASON = 'You are on a leave of absence on this day.';
+
+/**
+ * Why the member cannot be seated on this shift because of their own leave
+ * of absence, or null when none covers it.
+ *
+ * Advisory, like `timeOffSeatReason`: it mirrors the leave check in the
+ * backend's `_validate_assignment_candidate`, which reads
+ * `MemberLeaveService.get_active_leaves_for_user` — an active leave with
+ * `start_date <= shift_date` and an end on or after it, or no end at all. The
+ * endpoint this is fed from returns active leaves only.
+ */
+export const leaveSeatReason = (shift: ShiftRecord, leaves: readonly LeaveSpan[]): string | null =>
+  leaves.some(
+    (leave) => leave.start_date <= shift.shift_date && (leave.end_date === null || shift.shift_date <= leave.end_date)
+  )
+    ? LEAVE_SEAT_REASON
+    : null;
+
+/**
+ * The member's own reason they cannot be seated on this shift, or null.
+ *
+ * Leave is checked first because the backend checks it first, so the board
+ * names the same reason the server's refusal would.
+ */
+export const memberUnavailableReason = (
+  shift: ShiftRecord,
+  leaves: readonly LeaveSpan[],
+  timeOff: readonly TimeOffSpan[]
+): string | null => leaveSeatReason(shift, leaves) ?? timeOffSeatReason(shift, timeOff);
+
+/**
  * `isShiftOpen` and the member signup window together — what a claim button
  * gates on.
  *

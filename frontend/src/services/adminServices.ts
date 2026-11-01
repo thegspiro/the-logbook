@@ -2,6 +2,7 @@
  * adminServices — extracted from services/api.ts
  */
 
+import type { AxiosRequestConfig } from 'axios';
 import api from './apiClient';
 import { dedupeInFlight } from '../utils/inFlight';
 import type { SecurityStatus, SecurityAlert } from './facilitiesServices';
@@ -934,8 +935,8 @@ export const memberStatusService = {
     return asArray(response.data);
   },
 
-  async getMyLeaves(): Promise<LeaveOfAbsenceResponse[]> {
-    const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence/me');
+  async getMyLeaves(config?: AxiosRequestConfig): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence/me', config);
     return asArray(response.data);
   },
 
