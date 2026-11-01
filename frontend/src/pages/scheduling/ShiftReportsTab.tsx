@@ -35,7 +35,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
-import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
+import { shiftCompletionService, shiftEvaluationService, trainingModuleConfigService } from '../../services/api';
+import { ShiftEvaluationStatusLine } from '../../components/training/ShiftEvaluationStatusLine';
 import { organizationService } from '../../services/api';
 import { offersShiftSignoffs } from '../../stores/practicalSkillsStore';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -50,6 +51,7 @@ import type {
   ShiftCompletionReportCreate,
   ShiftCompletionReportUpdate,
   ShiftCrewMember,
+  ShiftEvaluationRoster,
   TrainingModuleConfig,
   TraineeShiftStats,
   OfficerShiftAnalytics,
@@ -165,6 +167,9 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Batch create state
   const [crewMembers, setCrewMembers] = useState<ShiftCrewMember[]>([]);
+  // Who on the selected shift needs a shift evaluation; null until loaded or
+  // when the department has none to ask for.
+  const [evaluationRoster, setEvaluationRoster] = useState<ShiftEvaluationRoster | null>(null);
   // Department rule: only each shift's assigned officer files its reports.
   // The server enforces it; this only keeps the form from offering shifts the
   // viewer would be refused on.
@@ -372,6 +377,13 @@ export const ShiftReportsTab: React.FC = () => {
         toast.error('Failed to load crew members');
       } finally {
         setLoadingCrew(false);
+      }
+      // Loaded on its own so a failure here leaves the crew list working; the
+      // close-out check still names any evaluation that is missing.
+      try {
+        setEvaluationRoster(await shiftEvaluationService.getRoster(shiftId));
+      } catch {
+        setEvaluationRoster(null);
       }
     },
     [userId]
@@ -2020,18 +2032,36 @@ export const ShiftReportsTab: React.FC = () => {
                       const isSelected = selectedCrewIds.has(member.user_id);
                       const isExpanded = expandedTraineeId === member.user_id;
                       const eval_ = traineeEvals[member.user_id];
+                      // A member evaluated on a department form is evaluated on
+                      // its own page; the generic rating panel is not offered too.
+                      const memberEvaluations = (evaluationRoster?.requirements ?? []).filter(
+                        (r) => r.member_id === member.user_id
+                      );
+                      const evaluationLines = memberEvaluations.length > 0 && evaluationRoster && (
+                        <div className="space-y-2 px-4 pb-3">
+                          {memberEvaluations.map((r) => (
+                            <ShiftEvaluationStatusLine
+                              key={r.scope_key}
+                              shiftId={evaluationRoster.shift_id}
+                              requirement={r}
+                            />
+                          ))}
+                        </div>
+                      );
 
                       if (isReported) {
+                        // The report is on file, but a required evaluation is
+                        // not covered by it, so its line stays reachable.
                         return (
-                          <div
-                            key={member.user_id}
-                            className="bg-theme-surface-hover flex items-center gap-3 rounded-lg px-4 py-3 opacity-60"
-                          >
-                            <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-600" />
-                            <div className="min-w-0 flex-1">
-                              <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
-                              <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>
+                          <div key={member.user_id} className="bg-theme-surface-hover rounded-lg">
+                            <div className="flex items-center gap-3 px-4 py-3 opacity-60">
+                              <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-600" />
+                              <div className="min-w-0 flex-1">
+                                <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
+                                <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>
+                              </div>
                             </div>
+                            {evaluationLines}
                           </div>
                         );
                       }
@@ -2102,7 +2132,7 @@ export const ShiftReportsTab: React.FC = () => {
                               />
                             )}
                             {/* Expand/collapse for trainees */}
-                            {isTrainee && isSelected && (
+                            {isTrainee && isSelected && memberEvaluations.length === 0 && (
                               <button
                                 type="button"
                                 onClick={() => setExpandedTraineeId(isExpanded ? null : member.user_id)}
@@ -2114,8 +2144,10 @@ export const ShiftReportsTab: React.FC = () => {
                             )}
                           </div>
 
+                          {evaluationLines}
+
                           {/* Trainee evaluation panel */}
-                          {isTrainee && isSelected && isExpanded && (
+                          {isTrainee && isSelected && isExpanded && memberEvaluations.length === 0 && (
                             <div className="border-theme-surface-border space-y-4 border-t px-4 pt-3 pb-4">
                               {/* Per-trainee remarks */}
                               <div>

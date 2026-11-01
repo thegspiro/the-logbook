@@ -553,6 +553,10 @@ class TraineeReportRequirementResponse(BaseModel):
 
     required: bool
     missing: List[MissingTraineeReport]
+    # Shift evaluations still to be submitted. Listed whatever ``required``
+    # says: an evaluation is required by the form attached to a program, not
+    # by the report setting. ``name`` carries the program(s) in brackets.
+    missing_evaluations: List[MissingTraineeReport] = []
     # Whether the caller may close out without them (scheduling.manage).
     can_override: bool
 

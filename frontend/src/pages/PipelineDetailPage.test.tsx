@@ -26,7 +26,13 @@ const mockReopenEnrollment = vi.fn();
 const mockGetPrograms = vi.fn();
 const mockCompleteEnrollment = vi.fn();
 
+// The edit dialog loads the department's evaluation forms for its picker;
+// an empty list unless a test says otherwise.
+const mockListShiftEvaluationTemplates = vi.fn();
 vi.mock('../services/api', () => ({
+  shiftEvaluationTemplateService: {
+    list: (...a: unknown[]) => mockListShiftEvaluationTemplates(...a) as unknown,
+  },
   trainingProgramService: {
     getProgram: (...a: unknown[]) => mockGetProgram(...a) as unknown,
     getProgramPhases: (...a: unknown[]) => mockGetProgramPhases(...a) as unknown,
@@ -118,6 +124,8 @@ const certProgress = {
 
 describe('PipelineDetailPage — enrollment progress management', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockGetProgram.mockResolvedValue(program);
@@ -857,6 +865,8 @@ describe('PipelineDetailPage — requirements outside any phase', () => {
   };
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockGetProgram.mockResolvedValue({ ...program, structure_type: 'flexible' });
@@ -899,6 +909,8 @@ describe('PipelineDetailPage — an inactive requirement', () => {
   });
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockGetProgram.mockReset();
@@ -949,6 +961,8 @@ describe('PipelineDetailPage — checklist sign-off and expiry', () => {
   };
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockGetProgram.mockResolvedValue(program);
@@ -1026,6 +1040,8 @@ describe('PipelineDetailPage — checklist sign-off and expiry', () => {
 
 describe('PipelineDetailPage — enrollment rules', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockGetProgram.mockReset();
@@ -1088,6 +1104,8 @@ describe('PipelineDetailPage — reactivating an inactive pipeline', () => {
   const inactiveProgram = { ...program, active: false };
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockGetProgram.mockReset();
@@ -1209,6 +1227,8 @@ describe('PipelineDetailPage — no active requirements', () => {
   };
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockGetProgram.mockReset();
@@ -1292,6 +1312,8 @@ describe('PipelineDetailPage — mark pipeline complete', () => {
   });
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     vi.restoreAllMocks();
     mockHasPermission = true;
@@ -1437,6 +1459,8 @@ describe('PipelineDetailPage — progress dialog actions need training.manage', 
   });
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockPermissions = null;
@@ -1521,6 +1545,8 @@ describe('PipelineDetailPage — a pipeline completed by hand', () => {
   });
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockHasPermission = true;
     mockPermissions = null;

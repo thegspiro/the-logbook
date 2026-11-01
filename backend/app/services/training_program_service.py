@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.notification import NotificationCategory, NotificationChannel
+from app.models.shift_evaluation import ShiftEvaluationTemplate
 from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
@@ -86,7 +87,7 @@ from app.utils.checklist import (
 from app.utils.json_ids import json_array_contains, normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import PROGRAM_ENROLLMENT, lock_organization_scope
-from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_scoping import assert_all_in_org, is_in_org
 from app.utils.org_timezone import (
     local_date,
     resolve_org_today,
@@ -626,6 +627,22 @@ class TrainingProgramService:
             return str(exc)
         return None
 
+    async def _validate_evaluation_template(
+        self, template_id: Any, organization_id: UUID | str
+    ) -> Optional[str]:
+        """Refuse an evaluation template that is not this department's.
+
+        None is "no form" and always allowed. The message does not say whether
+        the id exists elsewhere, so it is no cross-tenant oracle (XC-1).
+        """
+        if template_id is None:
+            return None
+        if not await is_in_org(
+            self.db, ShiftEvaluationTemplate, template_id, organization_id
+        ):
+            return "Invalid shift evaluation template"
+        return None
+
     async def _validate_target_roles(
         self, role_ids: Optional[List[Any]], organization_id: UUID | str
     ) -> Optional[str]:
@@ -1056,6 +1073,11 @@ class TrainingProgramService:
         )
         if prereq_error:
             return None, prereq_error
+        template_error = await self._validate_evaluation_template(
+            program_data.shift_evaluation_template_id, organization_id
+        )
+        if template_error:
+            return None, template_error
 
         # Create program
         program = TrainingProgram(
@@ -1081,6 +1103,11 @@ class TrainingProgramService:
             recert_anchor_day=program_data.recert_anchor_day,
             prerequisite_program_ids=prerequisite_ids or None,
             allows_concurrent_enrollment=program_data.allows_concurrent_enrollment,
+            shift_evaluation_template_id=(
+                str(program_data.shift_evaluation_template_id)
+                if program_data.shift_evaluation_template_id
+                else None
+            ),
             created_by=created_by,
         )
 
@@ -1148,6 +1175,12 @@ class TrainingProgramService:
         )
         if prereq_error:
             return None, prereq_error
+        build_template_id = getattr(prog, "shift_evaluation_template_id", None)
+        template_error = await self._validate_evaluation_template(
+            build_template_id, organization_id
+        )
+        if template_error:
+            return None, template_error
 
         program = TrainingProgram(
             organization_id=organization_id,
@@ -1167,6 +1200,9 @@ class TrainingProgramService:
             prerequisite_program_ids=prerequisite_ids or None,
             allows_concurrent_enrollment=getattr(
                 prog, "allows_concurrent_enrollment", True
+            ),
+            shift_evaluation_template_id=(
+                str(build_template_id) if build_template_id else None
             ),
             created_by=created_by,
         )
@@ -1457,6 +1493,16 @@ class TrainingProgramService:
             if prereq_error:
                 return None, prereq_error
             data["prerequisite_program_ids"] = list(prerequisite_ids) or None
+        if "shift_evaluation_template_id" in data:
+            template_error = await self._validate_evaluation_template(
+                data["shift_evaluation_template_id"], organization_id
+            )
+            if template_error:
+                return None, template_error
+            if data["shift_evaluation_template_id"] is not None:
+                data["shift_evaluation_template_id"] = str(
+                    data["shift_evaluation_template_id"]
+                )
         # Null would hide the program from every list (they match
         # ``active IS TRUE``) without being a deactivation anyone can undo.
         if "active" in data and data["active"] is None:
@@ -5873,6 +5919,7 @@ class TrainingProgramService:
             structure_type=source_program.structure_type,
             prerequisite_program_ids=source_program.prerequisite_program_ids,
             allows_concurrent_enrollment=source_program.allows_concurrent_enrollment,
+            shift_evaluation_template_id=source_program.shift_evaluation_template_id,
             time_limit_days=source_program.time_limit_days,
             warning_days_before=source_program.warning_days_before,
             reminder_conditions=source_program.reminder_conditions,
