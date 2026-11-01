@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**334 tables · 5475 columns · 1127 foreign keys**
+**335 tables · 5500 columns · 1132 foreign keys**
 
 ---
 
@@ -608,6 +608,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`security_alerts`](#security_alerts) | `SecurityAlertRecord` | 17 | Persistent security alert records |
 
+### Shift_Evaluation
+
+<sub>`app/models/shift_evaluation.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`shift_evaluation_templates`](#shift_evaluation_templates) | `ShiftEvaluationTemplate` | 21 | One evaluation form a department has defined. |
+
 ### Shift_History_Import
 
 <sub>`app/models/shift_history_import.py`</sub>
@@ -723,8 +731,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
 | [`training_courses`](#training_courses) | `TrainingCourse` | 20 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
-| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 46 | Training Module Configuration model |
-| [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
+| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 49 | Training Module Configuration model |
+| [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
@@ -8504,6 +8512,46 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_security_alerts_threat_level` (`threat_level`)
 - `ix_security_alerts_user_id` (`user_id`)
 
+## Shift_Evaluation
+
+### `shift_evaluation_templates`
+
+**ShiftEvaluationTemplate** · `app/models/shift_evaluation.py`
+
+> One evaluation form a department has defined.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(200) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `version` | INTEGER | no |  | `1` |  |
+| `scale` | JSON | no |  |  |  |
+| `allow_not_applicable` | BOOL | no |  | `1` |  |
+| `not_applicable_label` | VARCHAR(100) | no |  | `Not Observed` |  |
+| `comment_required_at_or_below` | INTEGER | yes |  |  |  |
+| `header_fields` | JSON | no |  |  |  |
+| `statistics` | JSON | no |  |  |  |
+| `sections` | JSON | no |  |  |  |
+| `closing_comments_label` | VARCHAR(200) | yes |  |  |  |
+| `closing_comments_hint` | VARCHAR(500) | yes |  |  |  |
+| `evaluator_rule` | VARCHAR(30) | no |  | `shift_officer` |  |
+| `evaluated_seats` | JSON | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `idx_shift_evaluation_template_org_active` (`organization_id`, `is_active`)
+
+**Constraints**
+
+- UNIQUE `uq_shift_evaluation_template_org_name` (`organization_id`, `name`)
+
 ## Shift_History_Import
 
 ### `shift_history_import_mappings`
@@ -10899,6 +10947,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `skills_result_disclosure` | VARCHAR(20) | yes |  | `full` |  |
 | `skills_result_release` | VARCHAR(20) | yes |  | `on_completion` |  |
 | `practical_skills_method` | VARCHAR(30) | yes |  |  |  |
+| `general_shift_evaluation_template_id` | VARCHAR(36) | yes | FK |  | → `shift_evaluation_templates.id` ON DELETE SET NULL |
+| `general_shift_evaluation_mode` | VARCHAR(20) | yes |  |  |  |
+| `one_shift_evaluation_for_multiple_programs` | BOOL | no |  | `0` |  |
 | `show_submission_history` | BOOL | no |  | `1` |  |
 | `allow_member_report_export` | BOOL | no |  | `0` |  |
 | `report_review_required` | BOOL | no |  | `0` |  |
@@ -10955,6 +11006,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `time_limit_days` | INTEGER | yes |  |  |  |
 | `warning_days_before` | INTEGER | yes |  | `30` |  |
 | `reminder_conditions` | JSON | yes |  |  |  |
+| `shift_evaluation_template_id` | VARCHAR(36) | yes | FK |  | → `shift_evaluation_templates.id` ON DELETE SET NULL |
 | `recert_enabled` | BOOL | no |  | `0` |  |
 | `recert_interval_months` | INTEGER | yes |  |  |  |
 | `recert_anchor_month` | INTEGER | yes |  |  |  |
@@ -11594,7 +11646,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (415 references)
+### → `users` (417 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11930,6 +11982,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_completion_reports` | `reviewed_by` | SET NULL | yes |
 | `shift_completion_reports` | `trainee_id` | CASCADE | no |
 | `shift_equipment_checks` | `checked_by` | SET NULL | yes |
+| `shift_evaluation_templates` | `created_by` | SET NULL | yes |
+| `shift_evaluation_templates` | `updated_by` | SET NULL | yes |
 | `shift_history_import_mappings` | `updated_by` | SET NULL | yes |
 | `shift_history_imports` | `committed_by` | SET NULL | yes |
 | `shift_history_imports` | `created_by` | SET NULL | yes |
@@ -12014,7 +12068,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (276 references)
+### → `organizations` (277 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12239,6 +12293,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_calls` | `organization_id` | CASCADE | no |
 | `shift_completion_reports` | `organization_id` | CASCADE | no |
 | `shift_equipment_checks` | `organization_id` | CASCADE | no |
+| `shift_evaluation_templates` | `organization_id` | CASCADE | no |
 | `shift_history_import_mappings` | `organization_id` | CASCADE | no |
 | `shift_history_imports` | `organization_id` | CASCADE | no |
 | `shift_pattern_occurrences` | `organization_id` | CASCADE | no |
@@ -13010,6 +13065,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `shift_equipment_check_items` | `check_id` | CASCADE | no |
 | `shift_equipment_check_seals` | `check_id` | CASCADE | no |
+
+### → `shift_evaluation_templates` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `training_module_configs` | `general_shift_evaluation_template_id` | SET NULL | yes |
+| `training_programs` | `shift_evaluation_template_id` | SET NULL | yes |
 
 ### → `store_order_windows` (2 references)
 

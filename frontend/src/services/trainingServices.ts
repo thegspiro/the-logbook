@@ -1506,6 +1506,76 @@ export const trainingSubmissionService = {
 };
 
 // ============================================
+// Shift Evaluation Templates Service
+// ============================================
+
+export const shiftEvaluationTemplateService = {
+  async list(): Promise<import('../types/training').ShiftEvaluationTemplate[]> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplate[]>(
+      '/training/shift-evaluation-templates'
+    );
+    return asArray(response.data);
+  },
+
+  async get(templateId: string): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplate>(
+      `/training/shift-evaluation-templates/${templateId}`
+    );
+    return response.data;
+  },
+
+  /** An unsaved starting point for the editor. */
+  async getExample(): Promise<import('../types/training').ShiftEvaluationTemplateWrite> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplateWrite>(
+      '/training/shift-evaluation-templates/example'
+    );
+    return response.data;
+  },
+
+  async create(
+    body: import('../types/training').ShiftEvaluationTemplateWrite
+  ): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.post<import('../types/training').ShiftEvaluationTemplate>(
+      '/training/shift-evaluation-templates',
+      body
+    );
+    return response.data;
+  },
+
+  async update(
+    templateId: string,
+    body: import('../types/training').ShiftEvaluationTemplateWrite
+  ): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.put<import('../types/training').ShiftEvaluationTemplate>(
+      `/training/shift-evaluation-templates/${templateId}`,
+      body
+    );
+    return response.data;
+  },
+
+  async remove(templateId: string): Promise<void> {
+    await api.delete(`/training/shift-evaluation-templates/${templateId}`);
+  },
+
+  async getSettings(): Promise<import('../types/training').ShiftEvaluationSettings> {
+    const response = await api.get<import('../types/training').ShiftEvaluationSettings>(
+      '/training/shift-evaluation-templates/settings'
+    );
+    return response.data;
+  },
+
+  async updateSettings(
+    updates: import('../types/training').ShiftEvaluationSettingsUpdate
+  ): Promise<import('../types/training').ShiftEvaluationSettings> {
+    const response = await api.patch<import('../types/training').ShiftEvaluationSettings>(
+      '/training/shift-evaluation-templates/settings',
+      updates
+    );
+    return response.data;
+  },
+};
+
+// ============================================
 // Shift Completion Reports Service
 // ============================================
 

@@ -21,6 +21,7 @@ import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
 import { blankToNull } from '../utils/formValues';
+import { ShiftEvaluationTemplateSelect } from '../components/training/ShiftEvaluationTemplateSelect';
 import {
   programRequirementSettingsError,
   programRequirementSettingsFrom,
@@ -154,6 +155,9 @@ export const EditProgramModal: React.FC<{
     program.prerequisite_programs?.map((p) => p.id) ?? program.prerequisite_program_ids ?? []
   );
   const [allowsConcurrent, setAllowsConcurrent] = useState(program.allows_concurrent_enrollment !== false);
+  const [shiftEvaluationTemplateId, setShiftEvaluationTemplateId] = useState(
+    program.shift_evaluation_template_id ?? ''
+  );
   const [submitting, setSubmitting] = useState(false);
   const { confirm } = useConfirm();
 
@@ -241,6 +245,8 @@ export const EditProgramModal: React.FC<{
         // Always sent: an emptied list must reach the server as [] to clear.
         prerequisite_program_ids: prerequisiteIds,
         allows_concurrent_enrollment: allowsConcurrent,
+        // Always sent, so choosing "No evaluation form" clears it.
+        shift_evaluation_template_id: blankToNull(shiftEvaluationTemplateId),
       });
       toast.success('Pipeline updated');
       onSaved();
@@ -305,6 +311,11 @@ export const EditProgramModal: React.FC<{
           </select>
         </div>
       </div>
+      <ShiftEvaluationTemplateSelect
+        id="ep-evaluation-template"
+        value={shiftEvaluationTemplateId}
+        onChange={setShiftEvaluationTemplateId}
+      />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="form-label" htmlFor="ep-target">
