@@ -16,10 +16,73 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #3904 (Feature 06, Elections & ballots, pass 14) merged
-(`eaa75b2cb`); row 06 is `✅` from that PR's own commit. Next is Feature 07
-(Users & organizations) — re-check `list_pull_requests` fresh rather than
+**PR [#3909](https://github.com/thegspiro/the-logbook/pull/3909)** (branch
+`claude/security-review-users-organizations-p14`) — Feature 07 (Users &
+organizations), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable per `ListAgents`). Step 0 (`list_pull_requests`,
+state=open) found 0 open PRs whose head branch starts with
+`claude/security-review-`: PR #3904 (Feature 06, Elections & ballots,
+pass 14) had already merged (`eaa75b2cb`); row 06 was already `✅` from
+that PR's own commit. Row 07 was the next `⬜`, confirmed fresh against the
+rotation table.
+
+See `docs/security-review/USR-07-users-organizations.md`'s **Pass 14**
+section for the full review: baseline `5e8fa0430` (PR #3810's merge,
+pass 13) to current `main`. Not a zero-delta pass — 4 non-merge commits
+touch this feature's declared scope: member class and status become two
+independent controls with a department's own membership tiers offered as
+statuses (and the probationary account-status mirror now judged on the
+ladder column rather than the legacy word that was collapsing
+administrative probationers off probation), `Position.kind`
+(office/committee/system, no permission change), the model support for a
+per-member-type voting waiting period (the two new routes it adds live in
+`elections.py` and were already reviewed under Feature 06 pass 14), and a
+small mypy fix.
+
+**1 fixed (USR-14, MED), 0 new OPEN/FLAGGED findings.** USR-14:
+`update_user_profile`'s `member_status` tier-id lookup (added this same
+window) ran before the function's own `members.manage` restricted-field
+check on a self-update, so any authenticated member could read the
+organization's configured membership tier ids — a list
+`GET /membership-tiers/config` itself gates on `members.manage` — by
+sending themselves a deliberately-invalid `member_status` and reading the
+400's own detail text. Fixed by running the same permission check, reusing
+its exact test and message, before the lookup rather than after it; a
+non-self update was already gated earlier in the function. Guarded by 2
+new tests, one confirmed to fail against the pre-fix code before the fix
+(Pitfall #37). USR-5/USR-8/USR-11/USR-12 re-confirmed unchanged by direct
+code read (all already in `docs/KNOWN_LIMITATIONS.md`).
+
+All 87 routes across the four principal files re-enumerated by AST,
+identical counts to pass 13 — no route added or removed this window.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 684 revisions, single head
+`5781476f2012`; `check_route_permissions.py --strict` (repo root) — 283
+routes, 0 errors/warnings; scoped backend tests (`-k "user_profile or
+users_update or member_status or membership_class_status or
+roles_users_update or user_service or organization"`, both the no-database
+and the `integration` marker sets) — 361 + 198 passed, 1 environment-only
+skip each; standing repo-wide guard suites — 232 passed (one transient
+`Deadlock found` under parallel contention in an unrelated
+agency-position-seeding test, confirmed a pre-existing flake by re-running
+alone and as a full batch — not a regression from this pass's diff);
+`test_mfa_policy.py` full suite — 48 passed (confirms `STEPUP_HANDLERS`
+untouched); frontend typecheck/lint clean.
+
+Rotation row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline) — re-check `list_pull_requests` fresh rather than
 trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 14, PR #3904, merged), preserved for history</summary>
+
+None. PR #3904 (Feature 06, Elections & ballots, pass 14) merged
+(`eaa75b2cb`); row 06 is `✅` from that PR's own commit. Next was Feature 07
+(Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 14, PR #3904, merged), preserved for history</summary>
