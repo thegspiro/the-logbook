@@ -343,9 +343,11 @@ def wait_ineligibility_reason(outcome: WaitOutcome) -> Optional[str]:
         return f"{label} members are not eligible to vote"
     if outcome.state == "waiting" and outcome.eligible_from is not None:
         day = outcome.eligible_from
+        # Month first ("Apr 30, 2027"), as the profile card's
+        # formatCalendarDate shows the same date; %-d is not portable.
         return (
             f"{label} members may vote {outcome.months} months after becoming "
-            f"{label.lower()}; eligible from {day.day} {day:%B %Y}"
+            f"{label.lower()}; eligible from {day:%b} {day.day}, {day.year}"
         )
     return None
 
