@@ -44,6 +44,7 @@ from app.services.member_service_history_service import (
 from app.utils.membership import (
     LEGACY_MEMBERSHIP_TYPES,
     VOTER_TYPE_LABELS,
+    MemberStatus,
     canonical_member_status,
     derive_membership_type,
     is_administrative,
@@ -568,6 +569,22 @@ class MembershipTierService:
             if canonical_member_status(tier.get("id")) == wanted:
                 return tier
         return None
+
+    @classmethod
+    def tier_for_member(
+        cls, tiers: List[Dict[str, Any]], member: Any
+    ) -> Optional[Dict[str, Any]]:
+        """The rung a member stands on, judged by their membership status.
+
+        Every reader of a tier's benefits goes through here rather than
+        ``membership_type``: the legacy word collapses an administrative or
+        social member onto their class, so a lookup keyed on it never finds
+        the Life tier for an administrative Life member. A member with nothing
+        recorded stands on the regular rung, as the legacy default did.
+        """
+        return cls.tier_for_status(
+            tiers, cls._current_standing(member) or MemberStatus.REGULAR
+        )
 
     @staticmethod
     def ranks_as_by_tier(organization: Optional[Organization]) -> Dict[str, str]:

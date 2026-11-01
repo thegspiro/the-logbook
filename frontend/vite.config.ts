@@ -62,11 +62,29 @@ function inlinePushWorkerPlugin(): Plugin {
     // it. The assertions below turn a wrong order into a failed build rather
     // than a silently un-inlined worker.
     enforce: 'post',
-    closeBundle() {
+    async closeBundle() {
       const outDir = path.resolve(import.meta.dirname, 'dist');
       const swPath = path.join(outDir, 'sw.js');
       const pushSource = fs.readFileSync(path.resolve(import.meta.dirname, 'public/push-sw.js'), 'utf8');
       const sw = fs.readFileSync(swPath, 'utf8');
+
+      // The Background Sync listener is TypeScript sharing the offline queues'
+      // storage modules with the app, so it is compiled here — one IIFE, no
+      // imports left — and concatenated like the push handlers. A request for
+      // a separate file would bring back the single point of failure that
+      // inlining the push handlers removed. See src/sw/backgroundSync.ts.
+      const { build } = await import('esbuild');
+      const compiled = await build({
+        entryPoints: [path.resolve(import.meta.dirname, 'src/sw/backgroundSyncWorker.ts')],
+        bundle: true,
+        write: false,
+        format: 'iife',
+        platform: 'browser',
+        target: 'es2020',
+        minify: true,
+        logLevel: 'silent',
+      });
+      const syncSource = compiled.outputFiles[0]?.text ?? '';
 
       if (/importScripts\(["'][^"']*push-sw\.js/.test(sw)) {
         throw new Error(
@@ -78,13 +96,16 @@ function inlinePushWorkerPlugin(): Plugin {
       // listeners when its module factory runs, and these must be attached
       // whatever that factory does. Wrapped in a block so a future top-level
       // declaration in push-sw.js cannot collide with the minified worker.
-      fs.writeFileSync(swPath, `{\n${pushSource}\n}\n${sw}`);
+      fs.writeFileSync(swPath, `{\n${pushSource}\n}\n${syncSource}\n${sw}`);
 
       const written = fs.readFileSync(swPath, 'utf8');
       for (const listener of ['push', 'notificationclick']) {
         if (!written.includes(`addEventListener('${listener}'`)) {
           throw new Error(`inline-push-worker: dist/sw.js is missing the '${listener}' handler after inlining.`);
         }
+      }
+      if (!/addEventListener\(["']sync["']/.test(written)) {
+        throw new Error("inline-push-worker: dist/sw.js is missing the background 'sync' handler after inlining.");
       }
     },
   };

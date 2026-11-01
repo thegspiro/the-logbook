@@ -8,6 +8,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'd
 const portArgument = process.argv.indexOf('--port');
 const port = Number(portArgument >= 0 ? process.argv[portArgument + 1] : 4173);
 let serveUpgradedWorker = false;
+/** Training submissions the stand-in API received, for the background-sync test. */
+const receivedSubmissions = [];
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -27,6 +29,25 @@ const server = createServer(async (request, response) => {
   if (request.method === 'POST' && url.pathname === '/__pwa-test/upgrade-worker') {
     serveUpgradedWorker = true;
     response.writeHead(204).end();
+    return;
+  }
+
+  // Test-only stand-ins for the two API calls the service worker's background
+  // sync makes for a queued training submission: who is signed in, and the
+  // submission itself, which is recorded with the CSRF header it carried.
+  if (request.method === 'GET' && url.pathname === '/api/v1/auth/me') {
+    response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: 'member-e2e' }));
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/api/v1/training/submissions') {
+    let raw = '';
+    for await (const chunk of request) raw += chunk;
+    receivedSubmissions.push({ body: JSON.parse(raw || 'null'), csrf: request.headers['x-csrf-token'] ?? null });
+    response.writeHead(201, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: 'submission-e2e' }));
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/__pwa-test/received') {
+    response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(receivedSubmissions));
     return;
   }
 

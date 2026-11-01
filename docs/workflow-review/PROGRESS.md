@@ -170,11 +170,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **Any run touching Finance Reports or the QuickBooks export settings** —
-  `FinanceReportsPage.tsx` and `QuickBooksExportSettingsPage.tsx` have table
-  cells with no `data-label`. Inside an `rwd-table` body, such a cell is
-  hidden under 768px; that is how W66-2 lost the dues actions on a phone.
-  Check those tables at 390×844.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -226,6 +221,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### Lead — Reflow table cells a phone hid — 2026-11-01
+
+Driven as: `admin` at 390×844. Fixed: every body cell of a `rwd-table` with no
+`data-label` is hidden below 768px, which took the row actions off the
+QuickBooks mapping tables and the pledges list, and every cell of the documents
+list view (a document row rendered as an empty card). Those cells now carry
+labels, and `rwdTableLabelIntegrity.test.ts` fails on the next unlabeled body
+cell, allowing only the inventory desktop actions cell (a phone gets its own)
+and the decorative bar in My Hours. Finance Reports, named in the lead, was
+clean: its unlabeled cells are in tables that do not reflow or in totals rows,
+which the rule leaves alone. Re-driven: the QuickBooks "Add a mapping", the
+pledge's Edit and a document's name, size, type and date all show on a phone;
+without the fix the document row showed nothing. Gate: typecheck and lint
+clean, and the tests for the changed pages pass.
+
 ### Lead — The dashboard asked two modules that were off — 2026-10-31
 
 Driven as: `admin` at 1280×900, with Integrations and Training switched off
@@ -275,7 +285,7 @@ expired leaves "Active"; it now shares the Waivers screen's rule) and MR-2 (LOW 
 the directory fired a refused tier-config request for every member). Flagged:
 MR-3 (LOW — members see built-in tier names; mirrored to KNOWN_LIMITATIONS),
 MR-4 (LOW — profile views crowd the audit history) and MR-7 (NIT — an unused
-membership store). Open: MR-5 and MR-6 (NIT). Gate: typecheck and lint clean;
+membership store). MR-5 and MR-6 (NIT) were fixed in a 2026-11-01 follow-up. Gate: typecheck and lint clean;
 lint needed a larger Node heap with the harness running. The touched suites
 pass. See W10-W15-membership-recheck.md.
 

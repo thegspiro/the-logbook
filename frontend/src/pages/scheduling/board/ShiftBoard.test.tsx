@@ -7,6 +7,7 @@ const mockRespond = vi.fn();
 const mockCancelSwap = vi.fn();
 const mockGetShifts = vi.fn();
 const mockTimeOff = vi.fn();
+const mockMyLeaves = vi.fn();
 
 vi.mock('../../../modules/scheduling', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../../../modules/scheduling');
@@ -23,6 +24,16 @@ vi.mock('../../../modules/scheduling', async () => {
       getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
       getApprovedTimeOffFor: (...args: unknown[]) => mockTimeOff(...args) as unknown,
       getCalendarFeed: () => Promise.resolve({ token: 't', feed_path: '/feed' }),
+    },
+  };
+});
+
+vi.mock('../../../services/api', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('../../../services/api');
+  return {
+    ...actual,
+    memberStatusService: {
+      getMyLeaves: (...args: unknown[]) => mockMyLeaves(...args) as unknown,
     },
   };
 });
@@ -124,6 +135,8 @@ beforeEach(() => {
   mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 1 });
   mockTimeOff.mockReset();
   mockTimeOff.mockResolvedValue([]);
+  mockMyLeaves.mockReset();
+  mockMyLeaves.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -379,7 +392,7 @@ describe('a day the member has off', () => {
     expect(screen.queryAllByRole('button', { name: /take a seat on this shift/i })).toHaveLength(0);
     expect(screen.queryAllByRole('button', { name: /^Take the .* seat on this shift$/ })).toHaveLength(0);
     expect(
-      screen.getAllByRole('button', { name: 'Driver/Operator seat — you have approved time off on this day' })[0]
+      screen.getAllByRole('button', { name: 'Driver/Operator seat — You have approved time off on this day.' })[0]
     ).toBeDisabled();
     expect(mockSignup).not.toHaveBeenCalled();
   });
@@ -420,6 +433,79 @@ describe('a day the member has off', () => {
 
   it('keeps the board usable when the time off cannot be loaded', async () => {
     mockTimeOff.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderBoard();
+    expect(await screen.findByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+    expect((await screen.findAllByRole('button', { name: /take a seat on this shift/i })).length).toBeGreaterThan(0);
+  });
+});
+
+describe('a day the member is on leave', () => {
+  const LEAVE = {
+    id: 'l1',
+    organization_id: 'org',
+    user_id: ME,
+    leave_type: 'leave_of_absence',
+    reason: null,
+    start_date: '2026-08-20',
+    end_date: '2026-08-25',
+    granted_by: null,
+    granted_at: null,
+    active: true,
+    exempt_from_training_waiver: false,
+    linked_training_waiver_id: null,
+    created_at: null,
+    updated_at: null,
+  };
+
+  beforeEach(() => {
+    mockMyLeaves.mockReset();
+    mockMyLeaves.mockResolvedValue([LEAVE]);
+  });
+
+  it("asks for the member's own leaves with the month", async () => {
+    renderBoard();
+    await waitFor(() => expect(mockMyLeaves).toHaveBeenCalledWith(undefined));
+  });
+
+  it('does not offer a seat on a day of leave, and says why', async () => {
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect((await screen.findAllByText('You are on a leave of absence on this day.')).length).toBeGreaterThan(0);
+    await waitFor(() => expect(mockEligible).toHaveBeenCalled());
+    expect(screen.queryAllByRole('button', { name: /take a seat on this shift/i })).toHaveLength(0);
+    expect(
+      screen.getAllByRole('button', { name: 'Driver/Operator seat — You are on a leave of absence on this day.' })[0]
+    ).toBeDisabled();
+    expect(mockSignup).not.toHaveBeenCalled();
+  });
+
+  it('treats a leave with no end date as covering every day from its start', async () => {
+    mockMyLeaves.mockResolvedValue([{ ...LEAVE, start_date: '2026-08-25', end_date: null }]);
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect((await screen.findAllByText('You are on a leave of absence on this day.')).length).toBeGreaterThan(0);
+  });
+
+  it('still offers seats once the leave has ended', async () => {
+    mockMyLeaves.mockResolvedValue([{ ...LEAVE, end_date: '2026-08-24' }]);
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect((await screen.findAllByRole('button', { name: /take a seat on this shift/i })).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the board usable when the leaves cannot be loaded', async () => {
+    mockMyLeaves.mockRejectedValue(new Error('offline'));
     const user = userEvent.setup();
     renderBoard();
     expect(await screen.findByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
