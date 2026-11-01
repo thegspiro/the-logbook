@@ -16,6 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3904](https://github.com/thegspiro/the-logbook/pull/3904)** (branch
+`claude/security-review-elections-ballots-p14`) — Feature 06 (Elections &
+ballots), pass 14, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session was reported unreachable by the
+watchdog that picked this task up). Step 0 (`list_pull_requests`,
+state=open) found 15 open PRs, none with a head branch starting
+`claude/security-review-`. PR #3890 (Feature 05, Finance & approvals, pass 14) had already merged (`43a63764`); row 05 was already `✅` from that PR's
+own commit. Row 06 was the next `⬜`, confirmed fresh against the rotation
+table on a freshly fetched `main`.
+
+See `docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 14**
+section for the full review: baseline `3f1d5b940` (PR #3809, pass 13's
+merge) to current `main`. Unlike pass 13's near-zero delta, a real feature
+delta: 8 non-merge commits touch this feature's declared scope (2,367
+insertions / 152 deletions across 10 files) adding election-wide
+voter-eligibility rules (meeting attendance, membership tenure), a
+per-member-type voting waiting period with a secretary override (2 new
+routes, both `elections.manage`-gated and org-scoped through `_org_member`),
+a second eligibility default set for elections held at the annual meeting,
+and a reader for the previously-inert `default_*` election settings
+(ELEC2-9, resolved). Three new migrations, all `create_all`-guarded,
+nullable/server-defaulted, no change to who may vote in an existing
+election on upgrade. All 75 routes in `elections.py` re-enumerated by AST
+(up from 73 — the 2 new voting-eligibility routes), every one carrying a
+`Depends(...)`; 63 `require_permission`-gated (62 single-permission + 1
+OR-gated `list_candidates`), 7 self-service/sign-in-only (matching
+`permissionless_route_baseline.txt`), 5 public/token-scoped.
+
+**1 fixed (ELEC-51, LOW), 0 new OPEN/FLAGGED findings.** ELEC-51:
+`_get_ineligibility_reason_for_user` (a pre-existing, unrelated-PR function
+building an admin-facing skip-reason message) duplicated the new
+`_universal_gate`'s override/tier check instead of calling it, and crashed
+with `AttributeError` on a malformed stored `membership_tiers` setting —
+reproduced against the pre-fix code, fixed by delegating to
+`_universal_gate`, guarded by 3 new tests. Display-only function (never
+consulted by the real vote-gating decision), so LOW rather than higher.
+ELEC-16/ELEC-40/ELEC-48/ELEC-49 re-confirmed unchanged (all already in
+`docs/KNOWN_LIMITATIONS.md`); ELEC2-9 re-verified resolved by this window's
+own feature commit (not by this security pass).
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 682 revisions, single head
+`db30a34afa5b`; `check_route_permissions.py --strict` — 281 routes, 0
+errors/warnings; scoped backend tests (`-k "election or ballot or vote or
+candidate"`) — 1,305 passed, 1 environment-only skip (`pywebpush`);
+`test_refusal_detail_sweep.py` — 24 passed; frontend typecheck/lint clean.
+
+Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 14, PR #3890, merged), preserved for history</summary>
+
 **PR [#3890](https://github.com/thegspiro/the-logbook/pull/3890)** (branch
 `claude/security-review-finance-approvals-p14`) — Feature 05 (Finance &
 approvals), pass 14, a watchdog pickup (the dedicated
@@ -70,6 +124,8 @@ near-zero-delta pass (12, 13, 14) for this module.
 Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
 (Elections & ballots) — re-check `list_pull_requests` fresh rather than
 trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 14, PR #3879, merged), preserved for history</summary>
@@ -24126,7 +24182,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
@@ -44880,3 +44936,86 @@ passed; frontend typecheck/lint — n/a, no frontend file in scope changed.
 Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend
 shared) — re-check `search_pull_requests`/`list_pull_requests` fresh rather
 than trusting this note.
+
+### 2026-11-01 — Feature 06 (Elections & ballots, pass 14) — watchdog pickup, real delta (election-wide voter eligibility rules, per-member voting-wait override, ELEC2-9 resolved), 1 fixed (LOW), 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session was
+reported unreachable by the watchdog that picked this task up. No open
+security-review PR — confirmed via `list_pull_requests` (state=open), 0
+results among `claude/security-review-*` head branches (15 unrelated
+feature PRs were open at the time). PR #3890 (Feature 05, Finance &
+approvals, pass 14) had already merged (`43a63764`); row 05 was already
+`✅` from that PR's own commit. Row 06 confirmed the next `⬜` row by
+reading the rotation table on a freshly fetched `main`, matching PR
+#3890's own "next feature" note.
+
+Real delta since this feature's own pass 13 (merge `3f1d5b940`, PR #3809):
+unlike pass 13's small three-item delta, a genuine feature delta landed in
+this window — 8 non-merge commits touching the declared scope (2,367
+insertions / 152 deletions across 10 files, out of 174 non-merge commits on
+`main` since baseline). The feature gained election-wide voter-eligibility
+rules (a meeting-attendance requirement and a minimum membership tenure,
+set on Election Settings and copied onto each election at create, enforced
+through a new shared `_universal_gate` helper that the in-app ballot check,
+item annotation, roster and turnout denominator all now read from), a
+per-member-type voting waiting period counted from when the member became
+that type (two new routes, `GET`/`PUT /elections/members/{user_id}/
+voting-eligibility`, both gated `elections.manage` and org-scoping the
+target member through a new `_org_member` helper), a second eligibility
+default set for elections held at the annual meeting, and a reader for the
+seven previously-inert `default_*` election settings the app-review
+rotation had flagged as ELEC2-9 (now resolved, and already marked so in
+`docs/KNOWN_LIMITATIONS.md` by the feature commit itself, not by this
+pass). Three new migrations (`e1a7c4b2d9f3`, `b3d58e0c71a4`, `c7e2a91f4d36`)
+are all additive, `create_all`-guarded, and nullable or server-defaulted —
+no existing election's or member's live eligibility changes on upgrade.
+All 75 routes in `elections.py` re-enumerated by AST (up from 73: the two
+new voting-eligibility routes), every one carrying a `Depends(...)` — 0
+unauthenticated routes; 63 `require_permission`-gated (62 single-permission
+plus 1 OR-gated `list_candidates`, both alternatives election-specific, not
+a Pitfall #23 broad-grant case), 7 self-service/sign-in-only (matching
+`permissionless_route_baseline.txt`'s 7 entries, unchanged), 5
+public/token-scoped (unchanged).
+
+**1 fixed (ELEC-51, LOW), 0 new OPEN/FLAGGED findings.** ELEC-51: a
+pre-existing function (`_get_ineligibility_reason_for_user`, from an
+unrelated earlier PR, building the admin-facing "why was this member
+skipped" message for the ballot-send skip list and the eligibility roster)
+duplicated the new `_universal_gate`'s override/tier check instead of
+calling it — a Pitfall #29 violation the new helper's own introduction
+created the opportunity for — and read a stored `membership_tiers` org
+setting without the `isinstance(dict)` guard its sibling helpers already
+carry, so a malformed stored value raised an unhandled `AttributeError`
+instead of degrading. Reproduced directly against the pre-fix code (a mock
+org with `settings={"membership_tiers": "not-a-dict"}` crashed the
+function), fixed by delegating to `_universal_gate`, and guarded by 3 new
+tests in `tests/test_election_eligibility_rules.py`, one of which was
+confirmed to fail against the pre-fix code per CLAUDE.md Pitfall #37.
+Display-only function — never consulted by the real vote-gating decision —
+so rated LOW rather than higher. Standing findings re-confirmed unchanged
+by direct re-read: ELEC-12 (fixed), ELEC-14 (fixed), ELEC-16 (accepted as
+is, no pagination), ELEC-28 (resolved, per pass 13), ELEC-40 (flagged,
+unchanged), ELEC-48 (flagged, unchanged — neither synchronous send endpoint
+gained a row lock this pass), ELEC-50 (fixed, guard unchanged); ELEC-49 is
+unchanged because `minutes_election_filing.py` has a byte-identical, empty
+diff since pass 13's baseline. All already-open items were already
+mirrored in `docs/KNOWN_LIMITATIONS.md` before this pass; nothing new to
+add there.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`'s
+**Pass 14** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean (isort 9.0.2, already installed under
+`/usr/bin/python3`); `validate_migrations.py --strict` — 682 revisions,
+single head `db30a34afa5b`; `check_route_permissions.py --strict` — 281
+routes, 0 errors/warnings; scoped backend tests
+(`-k "election or ballot or vote or candidate"`) — 1,305 passed, 1
+environment-only skip (`pywebpush`); `test_refusal_detail_sweep.py` — 24
+passed (re-run after the one cosmetic `list_within_detail_limit` commit in
+this window's diff); frontend `npm run typecheck`/`npm run lint` — 0
+errors, 0 warnings.
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
