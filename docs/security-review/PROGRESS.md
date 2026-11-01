@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR #3904 (Feature 06, Elections & ballots, pass 14) merged
+(`eaa75b2cb`); row 06 is `✅` from that PR's own commit. Next is Feature 07
+(Users & organizations) — re-check `list_pull_requests` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 14, PR #3904, merged), preserved for history</summary>
+
 **PR [#3904](https://github.com/thegspiro/the-logbook/pull/3904)** (branch
 `claude/security-review-elections-ballots-p14`) — Feature 06 (Elections &
 ballots), pass 14, a watchdog pickup (the dedicated
@@ -63,9 +71,10 @@ errors/warnings; scoped backend tests (`-k "election or ballot or vote or
 candidate"`) — 1,305 passed, 1 environment-only skip (`pywebpush`);
 `test_refusal_detail_sweep.py` — 24 passed; frontend typecheck/lint clean.
 
-Rotation row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
-organizations) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+Rotation row 06 → ✅ (merged as `eaa75b2cb`); next was Feature 07 (Users &
+organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 14, PR #3890, merged), preserved for history</summary>
@@ -24183,7 +24192,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -45019,3 +45028,71 @@ errors, 0 warnings.
 Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
 organizations) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+### 2026-11-01 — Feature 07 (Users & organizations, pass 14) — watchdog pickup, real delta (member class/status as two controls, tier ids on the ladder column, position `kind`, per-member-type voting wait), 1 fixed (USR-14, MED)
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+Step 0 (`list_pull_requests`, state=open) found 0 open PRs whose head
+branch starts with `claude/security-review-`. PR #3904 (Feature 06,
+Elections & ballots, pass 14) had already merged (`eaa75b2cb`); row 06 was
+already `✅` from that PR's own commit. Row 07 was the next `⬜`, confirmed
+fresh against the rotation table on a freshly fetched `main`.
+
+See `docs/security-review/USR-07-users-organizations.md`'s **Pass 14**
+section for the full review: baseline `5e8fa0430` (PR #3810's merge, pass 13) to current `main`. Not a zero-delta pass — 4 non-merge commits touch
+this feature's declared scope, each read in full: member class and status
+become two independent controls with a department's own membership tiers
+offered as statuses (`member_status` widened 20→50 chars to hold a tier id
+directly, migration `c4d7e2a91b60` settles existing rows, the probationary
+account-status mirror now judged on the ladder column rather than the
+legacy word that was collapsing administrative probationers off
+probation); `Position.kind` (office/committee/system, migration
+`d8f1a4c27b93`, no permission change, four grant-free committees seeded
+idempotently per org); the per-member-type voting waiting period's model
+support (`member_class_since`/`member_status_since`/`voting_wait_*`,
+migration `c7e2a91f4d36` — the two new routes this adds live in
+`elections.py` and were already reviewed under Feature 06 pass 14); and a
+2-line mypy fix.
+
+**1 fixed (USR-14, MED).** `update_user_profile`'s `member_status` tier-id
+lookup (added this same window, by `5ec1897d4`) ran before the function's
+own `members.manage` restricted-field check on a self-update, so any
+authenticated member could read the organization's configured membership
+tier ids — a list `GET /membership-tiers/config` itself gates on
+`members.manage` — by sending themselves a deliberately-invalid
+`member_status` and reading the resulting 400's detail text. Fixed by
+running the same permission check, reusing its exact test and message,
+before the lookup rather than after it; a non-self update was already
+gated earlier in the function and is unaffected. Guarded by 2 new tests in
+`test_user_profile_permissions.py::TestMemberStatusTierLookupGate`, one
+confirmed to fail against the pre-fix code before the fix (Pitfall #37).
+
+Standing findings USR-5 (LOW/MED, unbounded archived-members list),
+USR-8 (MED, unbounded `GET /users`), USR-11 (MED, no step-up on
+status-change/archive) and USR-12 (MED, no step-up on the Gmail
+delegated-service-account settings routes) re-confirmed unchanged by
+direct code read; all four remain open, owner-accepted, already mirrored
+in `docs/KNOWN_LIMITATIONS.md`.
+
+All 87 routes across the four principal files (`users.py` 34,
+`organizations.py` 30, `member_status.py` 16, `member_leaves.py` 7)
+re-enumerated by AST — identical counts to pass 13, no route added or
+removed this window; every one carries an auth dependency.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 684 revisions, single head
+`5781476f2012`; `scripts/check_route_permissions.py --strict` (repo root)
+— 283 routes, 0 errors/warnings; scoped backend tests (`-k "user_profile
+or users_update or member_status or membership_class_status or
+roles_users_update or user_service or organization"`, both the no-database
+and the `integration` marker sets) — 361 + 198 passed, 1 environment-only
+skip each; standing repo-wide guard suites — 232 passed (one
+`Deadlock found` under parallel contention in `test_agency_position_seeding.py`,
+confirmed a pre-existing, unrelated flake by re-running alone and as a
+full batch, not a regression from this pass's diff); frontend
+typecheck/lint clean.
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline) — re-check `list_pull_requests` fresh rather than trusting this
+note.

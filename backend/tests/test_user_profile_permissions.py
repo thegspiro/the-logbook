@@ -86,6 +86,46 @@ class TestColleagueProfileWrite:
         assert exc.value.status_code == 404
 
 
+class TestMemberStatusTierLookupGate:
+    """USR-14: an unrecognised ``member_status`` makes the org-tier lookup
+    raise with the organization's own tier ids in its 400 detail, and that
+    list is ``members.manage``-gated elsewhere (``get_membership_tier_config``).
+    A self-update without the permission must be refused before reaching
+    that lookup, not after."""
+
+    async def test_unauthorized_self_update_is_refused_before_the_tier_lookup(self):
+        caller = _caller([])
+        db = AsyncMock()
+        db.execute.side_effect = [_Result(caller)]
+
+        with pytest.raises(HTTPException) as exc:
+            await update_user_profile(
+                caller.id, UserUpdate(member_status="made-up-tier"), db, caller
+            )
+
+        assert exc.value.status_code == 403
+        # Only the permission lookup ran -- never the Organization tier
+        # lookup `_accepted_member_status_or_400` would otherwise issue.
+        assert db.execute.await_count == 1
+        db.commit.assert_not_awaited()
+
+    async def test_authorized_self_update_still_reaches_the_tier_lookup(self):
+        caller = _caller(["members.manage"])
+        organization = SimpleNamespace(
+            settings={"membership_tiers": {"tiers": [{"id": "senior"}]}}
+        )
+        db = AsyncMock()
+        db.execute.side_effect = [_Result(caller), _Result(organization)]
+
+        with pytest.raises(HTTPException) as exc:
+            await update_user_profile(
+                caller.id, UserUpdate(member_status="made-up-tier"), db, caller
+            )
+
+        assert exc.value.status_code == 400
+        assert "senior" in exc.value.detail
+
+
 class TestColleagueContactInfoWrite:
     async def test_users_edit_without_members_manage_is_refused(self):
         caller = _caller(["users.edit", "users.view"])

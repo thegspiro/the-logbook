@@ -2040,7 +2040,36 @@ async def update_user_profile(
     # (see the helper) and Organization-then-member is the order every other
     # writer of a member's standing uses; the reverse would deadlock against
     # the advancement scan.
+    #
+    # Gated on the restricted-field permission first, on a self-update
+    # specifically (USR-14): an unrecognised value makes the helper raise
+    # with the organization's own tier ids listed in the 400 detail, and
+    # that list is otherwise `members.manage`-gated (`get_membership_tier_config`
+    # requires it). Without this, a member with no special permission could
+    # read it by sending themselves a deliberately-invalid `member_status`
+    # and reading the error. A non-self update already required
+    # `members.manage` above, so only the self case needs the check repeated
+    # here, before the lookup rather than after it.
     if profile_update.member_status is not None:
+        if is_self:
+            perm_result = await db.execute(
+                select(User)
+                .where(User.id == current_user.id)
+                .options(selectinload(User.positions))
+            )
+            acting_member = perm_result.scalar_one_or_none()
+            if not acting_member or not _has_permission(
+                "members.manage", _collect_user_permissions(acting_member)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Only leadership, the secretary, or the membership "
+                        "coordinator can update hire date, rank, station, "
+                        "platoon, membership number, or membership class and "
+                        "status"
+                    ),
+                )
         profile_update.member_status = await _accepted_member_status_or_400(
             db, str(current_user.organization_id), profile_update.member_status
         )
