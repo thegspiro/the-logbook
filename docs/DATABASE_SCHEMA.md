@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**335 tables · 5513 columns · 1133 foreign keys**
+**336 tables · 5520 columns · 1136 foreign keys**
 
 ---
 
@@ -708,6 +708,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 25 | Individual item result within a completed equipment check. |
 | [`shift_equipment_check_seals`](#shift_equipment_check_seals) | `ShiftEquipmentCheckSeal` | 9 | The tamper seal a crew read on one sealed container during a check. |
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
+| [`shift_pattern_occurrences`](#shift_pattern_occurrences) | `ShiftPatternOccurrence` | 7 | One row per occurrence a pattern has generated: the durable key that stops |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
 | [`shift_pre_work_sessions`](#shift_pre_work_sessions) | `ShiftPreWorkSession` | 15 | Time a member spent preparing for a shift before its check-in opened. |
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
@@ -10237,6 +10238,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_shift_att_shift` (`shift_id`)
 - `idx_shift_att_user` (`user_id`)
 
+**Constraints**
+
+- UNIQUE `uq_shift_attendance_shift_user` (`shift_id`, `user_id`)
+
 ### `shift_calls`
 
 **ShiftCall** · `app/models/training.py`
@@ -10414,6 +10419,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_shift_equipment_check_client_submission` (`organization_id`, `client_submission_id`)
 - UNIQUE `uq_shift_equipment_check_shift_template` (`shift_id`, `template_id`)
+
+### `shift_pattern_occurrences`
+
+**ShiftPatternOccurrence** · `app/models/training.py`
+
+> One row per occurrence a pattern has generated: the durable key that stops generation recreating it. The older guard matches a shift from the pattern's template starting at the occurrence's date and time, so deleting a generated shift or moving its start left nothing for that guard to find and the next scheduled run put the original back with its full crew (KNOWN_LIMITATIONS, shifts-module review item 1). This row outlives both: deleting the shift only clears ``shift_id``. Removed with its pattern.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `pattern_id` | VARCHAR(36) | no | FK |  | → `shift_patterns.id` ON DELETE CASCADE |
+| `occurrence_date` | DATE | no |  |  |  |
+| `shift_type` | VARCHAR(16) | no |  |  |  |
+| `shift_id` | VARCHAR(36) | yes | FK, IDX |  | → `shifts.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_shift_pattern_occ_org` (`organization_id`)
+- `idx_shift_pattern_occ_shift` (`shift_id`)
+
+**Constraints**
+
+- UNIQUE `uq_shift_pattern_occurrence` (`pattern_id`, `occurrence_date`, `shift_type`)
 
 ### `shift_patterns`
 
@@ -12073,7 +12103,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (277 references)
+### → `organizations` (278 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12300,6 +12330,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_equipment_checks` | `organization_id` | CASCADE | no |
 | `shift_history_import_mappings` | `organization_id` | CASCADE | no |
 | `shift_history_imports` | `organization_id` | CASCADE | no |
+| `shift_pattern_occurrences` | `organization_id` | CASCADE | no |
 | `shift_patterns` | `organization_id` | CASCADE | no |
 | `shift_pre_work_sessions` | `organization_id` | CASCADE | no |
 | `shift_swap_requests` | `organization_id` | CASCADE | no |
@@ -12467,6 +12498,23 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `shifts` (12 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_pattern_occurrences` | `shift_id` | SET NULL | yes |
+| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+| `training_submissions` | `shift_id` | SET NULL | yes |
+
 ### → `meeting_minutes` (11 references)
 
 | From table | Column | On delete | Nullable |
@@ -12498,22 +12546,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_box_watchers` | `position_id` | CASCADE | yes |
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
-
-### → `shifts` (11 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `event_requests` | `staffing_shift_id` | SET NULL | yes |
-| `org_call_responses` | `shift_id` | SET NULL | yes |
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_pre_work_sessions` | `shift_id` | CASCADE | no |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
-| `training_submissions` | `shift_id` | SET NULL | yes |
 
 ### → `prospective_members` (10 references)
 
@@ -13410,6 +13442,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `shift_history_import_rows` | `import_id` | CASCADE | no |
+
+### → `shift_patterns` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_pattern_occurrences` | `pattern_id` | CASCADE | no |
 
 ### → `skill_templates` (1 references)
 

@@ -1314,3 +1314,134 @@ What has actually been run and reported, per round.
 | check_route_permissions.py --strict                | clean (no route added; CLAUDE.md pitfall 30a)                                                                                                                                                                    |
 | frontend tests (touched)                           | election suites: 143 passed after frontend round 1; clean after frontend round 2 (typecheck 0 errors, eslint 0 warnings, prettier clean, 269 election tests passed)                                              |
 | backend tests (touched)                            | election suite (`test_election_*`, `test_w50_*`): 622 passed; the CI unit selection (`pytest tests/ -m "not integration and not slow and not docker"`): 11977 passed — both after round 2 and the template carry |
+
+---
+
+# W50 re-drive — 2026-10-31: voter-eligibility rules and the lifecycle
+
+**Driven:** 2026-10-31 · **As:** `secretary`, `membership_coordinator`, `member`, `treasurer` · **Viewports:** 1280×900, 390×844
+**Database:** fresh (`start.sh --reset`, then `seed.mjs`)
+
+Since the 2026-09-30 runs the module gained department voter-eligibility
+defaults (regular and annual meeting), a waiting period per member type, the
+per-member override on the profile, and member class/status as two controls.
+This pass drove those end to end and repeated the core lifecycle.
+
+## What was driven
+
+1. Election Settings → Voter Eligibility: Regular members wait 6 months,
+   Probationary never; reload. Annual meeting → Use different rules: 2 of the
+   last 4 meetings, then 13 of 12.
+2. Create Election held at the annual meeting (Create double-clicked); a
+   regular-meeting election by API with no rules in the request.
+3. The regular election's Eligibility tab; Held at → Annual → confirm, back to
+   Regular, then Keep current rules.
+4. Profiles: waive Jordan Avery's wait (no reason, then a reason, Save
+   double-clicked); a count-from date of 2024-01-15 for Alex Brooks; a date of
+   2099-01-01.
+5. Candidates added in the UI, Open Election; rules and meeting kind PATCHed
+   while open; a waiver granted after opening.
+6. As `member` at 390×844: Cast Ballot double-clicked. As `treasurer`
+   (waiting): the page and the ballot POST.
+7. Four meetings recorded today (Jordan at two, Alex at one); the annual
+   roster.
+8. Close Election; results as `secretary`.
+9. As `membership_coordinator`: Alex's status Regular → Probationary.
+10. As `member`: every new endpoint (GET/PUT voting-eligibility for self,
+    another and a fake id; settings GET/PATCH; election PATCH).
+
+## Held up ✅
+
+- **Settings:** the section autosaves, every select is labelled, and a reload
+  keeps the values. 13 of 12 is refused inline ("the saved rule is still 6 of
+  the last 12"), and nothing is sent.
+- **Copying onto elections:** both elections carried exactly the set for
+  their meeting kind, and the create form summarised it before Create.
+  Double-click made one election. 9 AM / 9 PM read back in Chicago time
+  across the 11/1 DST change.
+- **Held at:** a switch asks first, and replaces the rules both ways.
+  Cancelling leaves the kind alone.
+- **Waiting period:** all 20 members read "eligible from 30 April 2027". The
+  waiver and the count-from date reached the draft roll (2 eligible), and the
+  reason was required in the form and on the server. A waiver did not lift
+  Never.
+- **Status change:** Regular → Probationary cleared the count-from date and
+  its reason, and Never then applied.
+- **Attendance, count mode:** Jordan (2 of 4) eligible; Alex "Attended 1 of
+  the last 4 meetings; 2 required to vote"; everyone else 0 of 4.
+- **Open:** rules and meeting kind are refused (400), the panel goes
+  read-only, and the waiver granted after opening did not add Blair Carter
+  ("Not on the voter roll frozen when the election opened").
+- **Voting:** a confirmation names the choice; a double-click made one vote,
+  with a receipt. `treasurer` was refused in the page and by the server
+  ("no votes were recorded").
+- **Close:** it asks first. Results were 1–0 with 50% turnout against the
+  frozen roll of 2, stamped with the time and the actor.
+- **Permissions:** `member` got 403 on all eight probes and does not see the
+  override card.
+- **Phone:** settings and the ballot have no sideways scroll.
+- **Signals:** no console error, page error or unexpected ≥ 400 in any
+  script.
+
+## Findings
+
+### W50-R1 — MED — Escape in the position suggestions discarded the whole create form — ✅ FIXED
+
+**Did:** Create Election; typed a title and dates, typed "Chi" in Positions
+(suggestions open), pressed Escape.
+**Saw:** the dialog closed and everything typed was lost.
+**Why:** the input closed its list but let Escape bubble to the overlay's
+`onKeyDown` and `useDialog`'s document listener.
+**Fix:** while the list is open, Escape stops propagation
+(`ElectionsPage.tsx`). A second Escape still closes the dialog. Covered by a
+new case in `ElectionsPage.w50-position-add.test.tsx`, red before the fix,
+and re-driven in the browser.
+
+### W50-R2 — LOW — A count-from date in the future was accepted — ✅ FIXED
+
+**Did:** a profile's Voting eligibility card, Count the wait from = 2099-01-01
+with a reason; the same by API.
+**Saw:** 200. The member was barred from voting until 2099 plus the wait,
+with nothing saying why.
+**Fix:**
+
+- `PUT /elections/members/{id}/voting-eligibility` refuses a date after the
+  department's today (400).
+- The date picker carries `max` and the form refuses one, with no request.
+
+Tests: `test_a_date_after_the_departments_today_is_refused` and a case in
+`VotingEligibilitySection.test.tsx`, both red first.
+
+### W50-R3 — LOW — An ineligible member is told only that they are not on the frozen roll — FLAGGED
+
+**Did:** as `treasurer` (waiting until 30 April 2027), opened the election.
+**Saw:** "You are not on the voter roll that was frozen when this election
+opened. Contact the election administrator if you believe this is an error."
+The real reason is known, and is on the roster.
+**Where:** `election_service.py`, the frozen-roll check returns before the
+eligibility gate.
+**Flagged:** which reason to show when they differ is a product choice. A
+member waived after opening is correctly told "not on the frozen roll".
+Showing the live reason only when it still fails would cover both cases.
+
+### W50-R4 — NIT — The roster's "eligible from" date is day-first — OPEN
+
+The roster reads "eligible from 30 April 2027". The profile card reads
+"Apr 30, 2027", and every other date is month-first. The string is composed
+in `membership_tier_service.py` (`{day.day} {day:%B %Y}`).
+
+### W50-R5 — NIT — The position input has no combobox semantics — OPEN
+
+`#election-position-input` drives a `role="listbox"` but carries no
+`role="combobox"`, `aria-expanded` or `aria-controls`. A screen reader is not
+told that suggestions opened.
+
+## Completion gate
+
+| Check                                                                                 | Result                                                               |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| npm run typecheck                                                                     | clean                                                                |
+| npm run lint                                                                          | clean (run with `--max-old-space-size=8192`; the default heap OOM'd) |
+| prettier / flake8 / black / isort                                                     | clean on changed files                                               |
+| backend: voting wait, eligibility rules, elections, voting flow, lifecycle, log shape | 262 passed                                                           |
+| frontend: election pages, module, member-profile, BallotBuilder                       | 52 files, 206 tests passed                                           |

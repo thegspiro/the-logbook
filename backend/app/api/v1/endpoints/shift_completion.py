@@ -71,6 +71,53 @@ def _manages_training(user: User) -> bool:
     return _has_permission("training.manage", _collect_user_permissions(user))
 
 
+# The reviewer-role picker offers training_officer, captain and chief. "chief"
+# is not itself a seeded position: the department's chiefs hold fire_chief,
+# deputy_chief or assistant_chief, and naming the rank should reach all three.
+REVIEW_ROLE_SLUGS: dict[str, frozenset[str]] = {
+    "chief": frozenset({"chief", "fire_chief", "deputy_chief", "assistant_chief"}),
+}
+
+
+async def _reviews_by_role(db: AsyncSession, user: User) -> bool:
+    """Whether ``user`` reviews shift reports through the department's
+    chosen reviewer role.
+
+    Owner decision 2026-10-31 (KNOWN_LIMITATIONS, "Scheduling — Settings That
+    Do Nothing", item 2): holders of the role chosen under Shift Reports →
+    Reviewer role may review reports in addition to ``training.manage``
+    holders, who keep the access they had. Only while review is required: the
+    role is chosen alongside that switch and means nothing without it.
+    """
+    config = await TrainingModuleConfigService(db).get_config(user.organization_id)
+    if not config.report_review_required:
+        return False
+    role = (config.report_review_role or "training_officer").strip().lower()
+    slugs = REVIEW_ROLE_SLUGS.get(role, frozenset({role}))
+    # A department may express captain or chief as an operational rank rather
+    # than a position; either counts.
+    if str(getattr(user, "rank", None) or "").strip().lower() in slugs:
+        return True
+    return any((p.slug or "").lower() in slugs for p in (user.positions or []))
+
+
+async def require_report_reviewer(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """``training.manage``, or the department's reviewer role."""
+    if _manages_training(current_user) or await _reviews_by_role(db, current_user):
+        return current_user
+    raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+def _not_about_reviewer(report, user: User) -> bool:
+    """A role reviewer does not review, or see in the queue, a report about
+    themselves: the second review exists to put another pair of eyes on it.
+    ``training.manage`` holders are not limited, as before."""
+    return _manages_training(user) or str(report.trainee_id) != str(user.id)
+
+
 async def _is_officer_of_shift(db: AsyncSession, user: User, shift_id) -> bool:
     """Whether ``user`` is the assigned Shift Officer of ``shift_id``.
 
@@ -288,6 +335,23 @@ async def batch_create_shift_reports(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+@router.get("/review-access")
+async def get_review_access(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Whether the caller may work the review queue, and why.
+
+    The Shift Reports screen asks rather than working it out, because the
+    answer depends on the reviewer role and the caller's positions, which
+    the server decides (``require_report_reviewer``).
+    """
+    if _manages_training(current_user):
+        return {"can_review": True, "by_role": False}
+    by_role = await _reviews_by_role(db, current_user)
+    return {"can_review": by_role, "by_role": by_role}
+
+
 @router.get("/my-reports", response_model=list[ShiftCompletionReportResponse])
 async def get_my_shift_reports(
     start_date: date | None = Query(None),
@@ -489,10 +553,11 @@ async def get_reports_by_status(
 )
 async def get_pending_review_reports(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(require_report_reviewer),
 ):
     """Get shift completion reports pending review for this organization."""
-    return await _get_reports_by_review_status("pending_review", db, current_user)
+    reports = await _get_reports_by_review_status("pending_review", db, current_user)
+    return [r for r in reports if _not_about_reviewer(r, current_user)]
 
 
 @router.get(
@@ -501,10 +566,11 @@ async def get_pending_review_reports(
 )
 async def get_flagged_reports(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(require_report_reviewer),
 ):
     """Get shift completion reports that have been flagged for follow-up."""
-    return await _get_reports_by_review_status("flagged", db, current_user)
+    reports = await _get_reports_by_review_status("flagged", db, current_user)
+    return [r for r in reports if _not_about_reviewer(r, current_user)]
 
 
 @router.get("/drafts", response_model=list[ShiftCompletionReportResponse])
@@ -613,8 +679,16 @@ async def get_shift_report(
     is_filing_officer = report.officer_id == user_id
     user_perms = _collect_user_permissions(current_user)
     has_manage = _has_permission("training.manage", user_perms)
+    # A role reviewer reads what the review queue shows them: a report awaiting
+    # review or flagged, about somebody else.
+    reviews_it = (
+        not has_manage
+        and not is_trainee
+        and report.review_status in ("pending_review", "flagged")
+        and await _reviews_by_role(db, current_user)
+    )
 
-    if not (is_trainee or is_filing_officer or has_manage):
+    if not (is_trainee or is_filing_officer or has_manage or reviews_it):
         raise HTTPException(status_code=404, detail="Report not found")
 
     # A report belongs to the officer until it is explicitly released. This is
@@ -733,7 +807,7 @@ async def review_report(
     report_id: str,
     review: ReportReview,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(require_report_reviewer),
 ):
     """Review a shift completion report.
 
@@ -741,6 +815,13 @@ async def review_report(
     fields before making the report visible to trainee.
     """
     service = ShiftCompletionService(db)
+    if not _manages_training(current_user):
+        existing = await service.get_report(report_id, current_user.organization_id)
+        if existing is not None and not _not_about_reviewer(existing, current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="A report about you is reviewed by someone else",
+            )
     report = await service.review_report(
         report_id=report_id,
         organization_id=current_user.organization_id,
@@ -773,14 +854,24 @@ async def review_report(
 async def batch_review_reports(
     data: BatchReviewRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(require_report_reviewer),
 ):
     """Review multiple shift completion reports at once."""
     service = ShiftCompletionService(db)
     reviewed = 0
     failed = 0
+    role_reviewer = not _manages_training(current_user)
     for report_id in data.report_ids:
         try:
+            if role_reviewer:
+                existing = await service.get_report(
+                    report_id, current_user.organization_id
+                )
+                if existing is not None and not _not_about_reviewer(
+                    existing, current_user
+                ):
+                    failed += 1
+                    continue
             report = await service.review_report(
                 report_id=report_id,
                 organization_id=current_user.organization_id,

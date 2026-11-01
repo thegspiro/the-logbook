@@ -22,6 +22,19 @@ were chosen deliberately and are open for the owner to confirm or change:
   used a different address than the one on their profile is left **No member
   match** for the treasurer.
 
+## Members — Members See the Built-In Tier Names (2026-10-31)
+
+The department's membership tiers ("Active Member", "Senior Member", …) come
+from `GET /users/membership-tiers/config`, which requires `members.manage`. A
+member without that grant sees the built-in names instead. In the directory's
+status filter and on profiles that is "Regular member" and "Life member", and a
+custom tier such as Senior is missing from the filter. Officers and members
+therefore describe the same person differently (workflow re-check MR-3).
+
+**Open decision:** expose the tier _names_ to members through a read-only
+endpoint (ids and names only, without the advancement rules), or decide that
+tier naming is officer-facing and leave it as it is.
+
 ## Members — No Supervisor or "Reports To" Relationship (2026-10-31)
 
 Nothing in the data model records who supervises whom. A member has a rank, a
@@ -2469,11 +2482,28 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    and the My Training settings page) show "Not in effect yet — anyone who can
    manage training can review reports, whatever is chosen here." Wiring it is
    still open.
+   **Resolved (2026-10-31), owner decision: also allow that role.** While
+   review is required, members holding the chosen position (or rank) may work
+   the review queue, read and review pending or flagged reports, and batch
+   review, in addition to `training.manage` holders, who keep what they had.
+   "Chief" covers `fire_chief`, `deputy_chief` and `assistant_chief`. A role
+   reviewer never sees or reviews a report about themselves. The screen asks
+   `GET /training/shift-reports/review-access`. Covered by
+   `tests/test_shift_report_reviewer_role.py`.
 3. **Department Defaults** (default duration, minimum staffing, overtime
    threshold). Stored and shown on the settings summary, but nothing applies
    them: new shifts and templates do not pick them up, and no overtime warning
    reads the threshold. **Labelled (2026-10-11):** the card shows "Not in
    effect yet". Applying the defaults is still open.
+   **Resolved (2026-10-31), owner decision: apply them, and merge the
+   overtime threshold into the Overtime advisory.** A new shift template
+   starts from the default length (end time that many hours after 08:00) and
+   minimum staffing, and the built-in Day/Night/24 Hour shift types staff to
+   that minimum. The weekly overtime threshold field is removed: the Overtime
+   advisory card (hours limit over a window of days) already drives the
+   assignment warning, and two limits that could disagree would be worse. Its
+   stored value is kept untouched, and the settings summary now reports the
+   advisory instead.
 4. **Start-of-shift reminder emails default on in the backend, off on the
    screen.** `scheduled_tasks.py` (~line 2358) reads
    `reminder_cfg.get("send_email", True)` ("sent by default"); the
@@ -2535,6 +2565,14 @@ recorded here rather than built.
    To change a generated shift's start, cancel it and create the replacement
    by hand. A fix needs a stored pattern/occurrence key on generated shifts (a
    column and a migration).
+   **Resolved (2026-10-31), owner decision: add the key.** Generation now
+   records every occurrence it makes in `shift_pattern_occurrences` (pattern,
+   date, day/night side), and both a manual Generate and the scheduled run skip
+   an occurrence already recorded, whatever happened to its shift since.
+   Deleting the shift clears only the row's `shift_id`. Shifts generated before
+   the table existed are not backfilled (nothing records which pattern made
+   them), so they rely on the start-time guard as before. Covered by
+   `TestOccurrenceLedger` in `tests/test_scheduling_generation_fixes.py`.
 2. **The nightly run reports skipped seats as a count in the server log
    only.** Generation now seats a member only where the seat, eligibility,
    seat cap, leave and overlap checks an officer's assignment runs would allow
@@ -2544,6 +2582,12 @@ recorded here rather than built.
    position configured sees crews left unseated with no on-screen notice.
    Surfacing it (a notification to schedulers, or a badge on the pattern) is
    open.
+   **Resolved (2026-10-31), owner decision: notify the schedulers.** After a
+   scheduled run, every `scheduling.manage` holder gets a bell entry listing
+   each pattern's empty seats (driver seats included), and those who keep
+   Scheduling officer duties email get the same list by email. Sent once per
+   run; the occurrence ledger (item 1) keeps a rerun from repeating it. Covered
+   by `test_the_scheduled_run_tells_the_schedulers_who_was_not_seated`.
 3. **Editing an approved shift report does not restate its training
    credit — narrowed 2026-10-27 (EC-17), still open where review is off.**
    An edit to an approved report now sends it back to `pending_review` in any
@@ -2567,6 +2611,12 @@ recorded here rather than built.
    `member_check_in` already did, but `shift_attendance` has no unique
    constraint on `(shift_id, user_id)`. Adding one needs a migration that first
    settles any duplicate rows already stored (CLAUDE.md Pitfall #35).
+   **Resolved (2026-10-31), owner decision: add the key.** Migration
+   `1740b4886e52` merges any duplicates into the earliest row (earliest
+   check-in, latest check-out, the largest minutes and call count — not the
+   sum, which would double-count a stint recorded twice), deletes the rest, and
+   adds `uq_shift_attendance_shift_user`. Covered by
+   `tests/test_shift_attendance_unique_migration.py`.
 6. **Shift cancellation notices are in-app only.** `cancel_shift` notifies the
    crew in the app and sends no email, and unlike the decline and assignment
    notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
@@ -2587,6 +2637,12 @@ recorded here rather than built.
    "Engineer" or "Driver/Operator" seats members without the required EVOC
    level, with no block or warning. A fix is a "drives apparatus" flag on the
    seat definition or an alias list.
+   **Resolved (2026-10-31), owner decision: a "Drives apparatus" flag.** Each
+   custom position under Scheduling Settings → Position Names carries a
+   **Drives apparatus** tick (`drivesApparatus`, off by default). A ticked seat
+   gets the driver EVOC check everywhere `driver` does: assignment, editing
+   an assignment, re-timing or re-vehicling a shift, and pattern generation.
+   `driver` is always checked. Covered by `tests/test_custom_driver_seats.py`.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
