@@ -50,6 +50,7 @@ import {
   CalendarClock,
   Wallet,
   CreditCard,
+  HandCoins,
   KeyRound,
   Bot,
   Mail,
@@ -182,6 +183,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     color: 'text-indigo-700 dark:text-indigo-400',
     bgColor: 'bg-indigo-500/10',
     features: ['Store payment matching', 'Auto-settles orders', 'Business account'],
+  },
+  zeffy: {
+    icon: <HandCoins className="h-6 w-6" />,
+    color: 'text-teal-700 dark:text-teal-400',
+    bgColor: 'bg-teal-500/10',
+    features: ['Donations, tickets & memberships', 'Refunds followed', 'Read-only'],
   },
   'google-workspace': {
     icon: <Mail className="h-6 w-6" />,
@@ -332,6 +339,7 @@ const CONFIG_TYPES = new Set([
   'documenso',
   'calcom',
   'paypal',
+  'zeffy',
   'claude-mcp',
   'google-workspace',
   'microsoft-365',
@@ -371,8 +379,8 @@ const labelClass = 'form-label';
 
 // Public inbound-webhook URL a department pastes into the provider's dashboard
 // so its events reach us: Documenso/Cal.com advance a prospect's pipeline stage,
-// PayPal settles a store order.
-const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integrationId: string): string =>
+// PayPal settles a store order, Zeffy records a fundraising payment.
+const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal' | 'zeffy', integrationId: string): string =>
   `${window.location.origin}/api/public/v1/webhooks/${provider}/${integrationId}`;
 
 // The members a link run leaves alone, and why, in one sentence each.
@@ -457,6 +465,8 @@ const IntegrationsPage: React.FC = () => {
   const [paypalClientSecret, setPaypalClientSecret] = useState('');
   const [paypalWebhookId, setPaypalWebhookId] = useState('');
   const [paypalAutoApply, setPaypalAutoApply] = useState(true);
+  const [zeffyApiKey, setZeffyApiKey] = useState('');
+  const [zeffyWebhookSecret, setZeffyWebhookSecret] = useState('');
   const [mcpAccessMode, setMcpAccessMode] = useState<'read_only' | 'read_write'>('read_only');
   const [mcpExposeFinance, setMcpExposeFinance] = useState(false);
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
@@ -655,6 +665,8 @@ const IntegrationsPage: React.FC = () => {
     setPaypalClientSecret('');
     setPaypalWebhookId(typeof stored['webhook_id'] === 'string' ? stored['webhook_id'] : '');
     setPaypalAutoApply(stored['auto_apply_payments'] !== false);
+    setZeffyApiKey('');
+    setZeffyWebhookSecret('');
     // Every switch on this add-on defaults to off; reopening the form on a
     // live connection must show what is stored, not the defaults.
     setMcpAccessMode(stored['access_mode'] === 'read_write' ? 'read_write' : 'read_only');
@@ -734,6 +746,12 @@ const IntegrationsPage: React.FC = () => {
           client_secret: paypalClientSecret.trim() || undefined,
           webhook_id: paypalWebhookId.trim() || undefined,
           auto_apply_payments: paypalAutoApply,
+        };
+      case 'zeffy':
+        return {
+          // Blank means "leave unchanged": neither is ever echoed back.
+          api_key: zeffyApiKey.trim() || undefined,
+          webhook_secret: zeffyWebhookSecret.trim() || undefined,
         };
       case 'google-workspace':
         return {
@@ -2108,6 +2126,59 @@ const IntegrationsPage: React.FC = () => {
                 </span>
               </span>
             </label>
+          </div>
+        );
+
+      case 'zeffy':
+        return (
+          <div className="space-y-3">
+            <p className="text-theme-text-secondary text-sm">
+              Read-only: the Logbook reads payments and campaigns from Zeffy and never changes anything there. Zeffy
+              keeps issuing tax receipts. After connecting, link each campaign under{' '}
+              <RouterLink to="/grants/zeffy" className="font-medium underline">
+                Grants &amp; Fundraising &rarr; Zeffy
+              </RouterLink>
+              .
+            </p>
+            <div>
+              <label htmlFor="zeffy-api-key" className={labelClass}>
+                API Key
+              </label>
+              <input
+                id="zeffy-api-key"
+                type="password"
+                value={zeffyApiKey}
+                onChange={(e) => setZeffyApiKey(e.target.value)}
+                placeholder="Leave blank to keep the current key"
+                className={inputClass}
+                autoComplete="off"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                The Zeffy organization owner generates it in Zeffy under Settings &rarr; Integrations.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="zeffy-webhook-secret" className={labelClass}>
+                Webhook Signing Secret (optional)
+              </label>
+              <input
+                id="zeffy-webhook-secret"
+                type="password"
+                value={zeffyWebhookSecret}
+                onChange={(e) => setZeffyWebhookSecret(e.target.value)}
+                placeholder="whsec_..."
+                className={inputClass}
+                autoComplete="off"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Without it, payments arrive on the hourly sync. For payments and refunds within seconds, add this URL as
+                a webhook in Zeffy&apos;s Integrations dialog, subscribe it to the payment events, and paste the signing
+                secret it shows here:
+              </p>
+              <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
+                {webhookCallbackUrl('zeffy', integration.id)}
+              </code>
+            </div>
           </div>
         );
 

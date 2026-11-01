@@ -102,6 +102,7 @@ from app.api.v1.endpoints import (
     training_submissions,
     training_waivers,
     users,
+    zeffy,
 )
 from app.core.security_middleware import verify_csrf_token
 
@@ -549,6 +550,12 @@ api_router.include_router(
 api_router.include_router(
     grants.router,
     prefix="/grants",
+    tags=["grants"],
+    dependencies=module_gate("grants", "Grants & Fundraising"),
+)
+api_router.include_router(
+    zeffy.router,
+    prefix="/grants/zeffy",
     tags=["grants"],
     dependencies=module_gate("grants", "Grants & Fundraising"),
 )
