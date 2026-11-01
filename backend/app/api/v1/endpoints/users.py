@@ -2056,9 +2056,9 @@ async def update_user_profile(
                 .where(User.id == current_user.id)
                 .options(selectinload(User.positions))
             )
-            acting_member = perm_result.scalar_one()
+            self_edit_actor = perm_result.scalar_one()
             if not _has_permission(
-                "members.manage", _collect_user_permissions(acting_member)
+                "members.manage", _collect_user_permissions(self_edit_actor)
             ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
