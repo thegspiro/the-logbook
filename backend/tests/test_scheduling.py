@@ -42,6 +42,7 @@ from app.models.training import (
 from app.models.user import User
 from app.schemas.scheduling import ShiftUpdate
 from app.services.scheduling_service import SchedulingService
+from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
 
 @pytest.fixture(autouse=True)
@@ -912,7 +913,11 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # get_summary reads the department's calendar directly rather than
+        # through resolve_org_today, so the autouse pin above does not reach
+        # it. On the department's last evening of a month, date.today() (UTC)
+        # is already next month and the shift landed outside "this month".
+        today = today_in(await resolve_scheduling_timezone(db_session, org_id))
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1349,11 +1354,15 @@ class TestPatternGeneration:
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day
-        assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (
-            shift.start_time.month != shift.end_time.month
-        )
+        # 07:00 the next day on the department's clock. Compared there, not in
+        # UTC: once US daylight saving ends, 19:00 local is exactly 00:00 UTC
+        # the following day, so start and end share a UTC date even though the
+        # shift runs overnight.
+        tz = await resolve_scheduling_timezone(db_session, org_id)
+        local_start = shift.start_time.astimezone(tz)
+        local_end = shift.end_time.astimezone(tz)
+        assert (local_start.hour, local_end.hour) == (19, 7)
+        assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):

@@ -27,6 +27,7 @@ from app.api.v1.endpoints import scheduling as scheduling_endpoint
 from app.models.training import Shift, ShiftAttendance
 from app.models.user import User
 from app.services.scheduling_service import SchedulingService
+from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
 
 def _uid() -> str:
@@ -69,6 +70,17 @@ async def _add_user(db_session: AsyncSession, org_id: str) -> str:
         },
     )
     return user_id
+
+
+async def _department_today(db_session: AsyncSession, org_id: str) -> date:
+    """Today on the department's calendar, which is what the service buckets by.
+
+    ``date.today()`` is the server's UTC date. From the department's evening
+    until UTC midnight passes there the two disagree, and on the last evening
+    of a month they disagree about the month: "this month" was then November
+    to the test and still October to the service.
+    """
+    return today_in(await resolve_scheduling_timezone(db_session, org_id))
 
 
 @pytest.fixture
@@ -322,7 +334,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        today = await _department_today(db_session, org_id)
         await _worked(db_session, org_id, user_id, today, 480, finalized=True, calls=2)
 
         history = await svc.get_my_hours_history(user_id, org_id, today.year - 6)
@@ -339,7 +351,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        today = await _department_today(db_session, org_id)
         previous_end = today.replace(day=1) - timedelta(days=1)
         await _worked(
             db_session, org_id, user_id, previous_end, 600, finalized=True, calls=3
