@@ -41,7 +41,8 @@ from app.models.training import (
 )
 from app.models.user import User
 from app.schemas.scheduling import ShiftUpdate
-from app.services.scheduling_service import SchedulingService
+from app.services.scheduling_service import SchedulingService, _as_utc
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 
 
 @pytest.fixture(autouse=True)
@@ -912,7 +913,9 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The department's date: "this month" is its month, which on the
+        # first is still the previous one in UTC's terms for a while.
+        today = await resolve_org_today(db_session, org_id)
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1349,11 +1352,17 @@ class TestPatternGeneration:
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day
+        # End time should be 07:00 the next day, on the department's clock.
+        # In UTC a 19:00 start already falls on the next day whenever the
+        # department is five or more hours behind (Eastern after the clocks
+        # go back), so the UTC dates prove nothing either way.
+        org_tz = await resolve_scheduling_timezone(db_session, org_id)
+        local_start = _as_utc(shift.start_time).astimezone(org_tz)
+        local_end = _as_utc(shift.end_time).astimezone(org_tz)
         assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (
-            shift.start_time.month != shift.end_time.month
-        )
+        assert local_start.hour == 19
+        assert local_end.hour == 7
+        assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):
