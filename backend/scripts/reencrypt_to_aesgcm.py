@@ -182,6 +182,7 @@ _PLAIN_COLUMNS = [
     ("scheduled_emails", "id", ["bcc_emails", "cc_emails", "to_emails"]),
     ("store_payment_events", "id", ["payer_email"]),
     ("xapi_statements", "id", ["actor_email"]),
+    ("zeffy_payments", "id", ["payer_email"]),
 ]
 
 
