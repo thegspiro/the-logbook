@@ -23,7 +23,10 @@ import {
   shiftPeriodLetter,
   shiftStatusInfo,
   statusBadgeLabel,
+  LEAVE_SEAT_REASON,
   TIME_OFF_SEAT_REASON,
+  leaveSeatReason,
+  memberUnavailableReason,
   timeOffSeatReason,
   toDateKey,
   weekDates,
@@ -103,6 +106,41 @@ describe('timeOffSeatReason', () => {
   it('checks every span, not only the first', () => {
     const other = { start_date: '2026-12-24', end_date: '2026-12-26' };
     expect(timeOffSeatReason(onDate('2026-12-25'), [span, other])).toBe(TIME_OFF_SEAT_REASON);
+  });
+});
+
+describe('leaveSeatReason', () => {
+  const onDate = (shift_date: string) => shift({ shift_date });
+  const leave = { start_date: '2026-11-06', end_date: '2026-11-08' };
+
+  it('covers both ends of the leave, as the backend check does', () => {
+    expect(leaveSeatReason(onDate('2026-11-06'), [leave])).toBe(LEAVE_SEAT_REASON);
+    expect(leaveSeatReason(onDate('2026-11-08'), [leave])).toBe(LEAVE_SEAT_REASON);
+  });
+
+  it('leaves the days either side of it open', () => {
+    expect(leaveSeatReason(onDate('2026-11-05'), [leave])).toBeNull();
+    expect(leaveSeatReason(onDate('2026-11-09'), [leave])).toBeNull();
+  });
+
+  it('treats a missing end as open-ended, but not as starting earlier', () => {
+    const open = { start_date: '2026-11-06', end_date: null };
+    expect(leaveSeatReason(onDate('2027-06-01'), [open])).toBe(LEAVE_SEAT_REASON);
+    expect(leaveSeatReason(onDate('2026-11-05'), [open])).toBeNull();
+  });
+});
+
+describe('memberUnavailableReason', () => {
+  const day = shift({ shift_date: '2026-11-07' });
+  const covering = { start_date: '2026-11-06', end_date: '2026-11-08' };
+
+  it('names the leave ahead of time off, as the server checks them', () => {
+    expect(memberUnavailableReason(day, [covering], [covering])).toBe(LEAVE_SEAT_REASON);
+  });
+
+  it('falls back to time off, and to null when neither covers the day', () => {
+    expect(memberUnavailableReason(day, [], [covering])).toBe(TIME_OFF_SEAT_REASON);
+    expect(memberUnavailableReason(day, [], [])).toBeNull();
   });
 });
 
