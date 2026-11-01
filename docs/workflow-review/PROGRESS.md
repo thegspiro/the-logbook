@@ -238,7 +238,7 @@ expired leaves "Active"; it now shares the Waivers screen's rule) and MR-2 (LOW 
 the directory fired a refused tier-config request for every member). Flagged:
 MR-3 (LOW — members see built-in tier names; mirrored to KNOWN_LIMITATIONS),
 MR-4 (LOW — profile views crowd the audit history) and MR-7 (NIT — an unused
-membership store). Open: MR-5 and MR-6 (NIT). Gate: typecheck and lint clean;
+membership store). MR-5 and MR-6 (NIT) were fixed in a 2026-11-01 follow-up. Gate: typecheck and lint clean;
 lint needed a larger Node heap with the harness running. The touched suites
 pass. See W10-W15-membership-recheck.md.
 
