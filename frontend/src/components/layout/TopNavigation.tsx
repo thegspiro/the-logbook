@@ -26,7 +26,7 @@ import { canOpenAdministrationSection } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
-import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { triggerAllOfflineDrains } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
@@ -709,7 +709,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   (pendingSyncCount > 0 && isOnline ? (
                     <button
                       onClick={() => {
-                        void triggerOfflineDrain();
+                        void triggerAllOfflineDrains();
                       }}
                       className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                       title="Click to retry syncing pending submissions"
@@ -931,7 +931,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   {isOnline && pendingSyncCount > 0 && (
                     <button
                       onClick={() => {
-                        void triggerOfflineDrain();
+                        void triggerAllOfflineDrains();
                       }}
                       className="flex w-full items-center space-x-2 rounded-md bg-blue-500/15 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                     >

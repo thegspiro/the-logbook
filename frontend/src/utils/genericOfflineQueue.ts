@@ -13,7 +13,7 @@
  */
 import type { AxiosInstance } from 'axios';
 import { openIndexedDb } from './offlineDb';
-import { isNetworkError } from './errorHandling';
+import { isNetworkError, isNonRetryableHttpError } from './errorHandling';
 import { isOwnedByCurrentMember, requireQueueOwner, type OwnedQueueEntry } from './offlineQueueOwner';
 
 export type GenericQueueKind = 'training-submission' | 'event-rsvp' | 'nfc-put-away' | 'nfc-shelf-audit';
@@ -222,7 +222,8 @@ export async function claimUntaggedGeneric(id: string, ownerId: string): Promise
  * (e.g. 4xx validation error after a schema change) doesn't block the
  * queue forever.
  *
- * A send that never reached the server is not one of those attempts. The
+ * A send that never reached the server is not one of those attempts, and
+ * neither is an answer that says nothing about the request (5xx, 408, 429). The
  * queue exists for weak signal, and counting a dropped connection as a
  * rejection discarded an item after five flaky reconnects without the server
  * ever having seen it.
@@ -245,7 +246,11 @@ export async function flushOne(
     onSynced?.(response.data);
     return true;
   } catch (err) {
-    if (isNetworkError(err)) return false;
+    // Only an explicit, permanent rejection is a strike. A 5xx during a deploy,
+    // a 429 or a 408 says nothing about the payload, and counting them deleted
+    // the only copy after five drains of an outage — the rule offline queues
+    // follow, set out on isNonRetryableHttpError and used by equipment checks.
+    if (isNetworkError(err) || !isNonRetryableHttpError(err)) return false;
     const message = err instanceof Error ? err.message : 'Sync failed';
     if (item.retries + 1 >= MAX_RETRIES) {
       await dequeueGeneric(item.id);
