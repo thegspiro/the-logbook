@@ -1,5 +1,22 @@
 # Screenshot currency
 
+## Queued by the October 31 – November 1 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 15 | **My Applicants** page | Create |
+| 15 | Status dialog as a case manager sees it (Withdraw only) | Create |
+| 02 | Training Admin → **Shift Evaluations** list and form editor | Create |
+| 02 | Edit-program dialog and create wizard with the evaluation form picker | Create |
+| 02 | Shift Completion Report with evaluation status lines | Replace |
+| 02 | Member evaluation page and its print view | Create |
+| 01 | Member profile leave section (Upcoming / Active / Ended badges) | Replace |
+| 00 | Onboarding IT Contacts step (recovery email refusal) | Re-check |
+| 03 | Scheduling Department Defaults card (overtime field removed) | Replace |
+
 ## Queued by the October 30 – 31 documentation pass
 
 No new screens. **Re-check:** the member profile **Voting eligibility** card
