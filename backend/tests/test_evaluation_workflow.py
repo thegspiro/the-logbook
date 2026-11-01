@@ -165,7 +165,7 @@ async def _user(
     await db.execute(
         text(
             "INSERT INTO users (id, organization_id, username, first_name, "
-            "last_name, email, password_hash, status, rank, hire_date, member_class) "
+            "last_name, email, password_hash, status, `rank`, hire_date, member_class) "
             "VALUES (:id, :org, :un, 'Eval', :ln, :em, 'hashed', 'active', :rank, "
             ":hire, 'operational')"
         ),
