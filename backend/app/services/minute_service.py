@@ -9,6 +9,7 @@ from datetime import datetime, time, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
+from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy import inspect as sa_inspect
@@ -1159,6 +1160,23 @@ class MinuteService:
             raise ValueError("Can only edit minutes in draft or rejected status")
 
         update_data = data.model_dump(exclude_unset=True)
+        expected_version = update_data.pop("expected_version", None)
+        # A locking read: under REPEATABLE READ a plain one answers from this
+        # transaction's first snapshot, which predates a save that committed
+        # while this request waited (CLAUDE.md pitfall #27).
+        current_version = await self.db.scalar(
+            select(MeetingMinutes.edit_version)
+            .where(MeetingMinutes.id == str(minutes.id))
+            .with_for_update()
+        )
+        if expected_version is not None and expected_version != current_version:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Someone else saved these minutes after you opened them. "
+                    "Reload to see their changes, then make yours again."
+                ),
+            )
 
         # Clear event_id if empty string
         if "event_id" in update_data and not update_data["event_id"]:
@@ -1225,6 +1243,7 @@ class MinuteService:
         apply_updates(
             minutes, update_data, skip={"id", "organization_id", "created_by"}
         )
+        minutes.edit_version = (current_version or 0) + 1
 
         # Reset to draft if was rejected
         if minutes.status == MinutesStatus.REJECTED.value:

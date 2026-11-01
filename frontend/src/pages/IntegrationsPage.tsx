@@ -68,7 +68,8 @@ import {
 } from '../services/api';
 import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
-import { ConnectionStatus } from '../constants/enums';
+import { ConnectionStatus, EventType } from '../constants/enums';
+import { getEventTypeLabel } from '../utils/eventHelpers';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -79,6 +80,9 @@ const WEBHOOK_EVENT_OPTIONS = [
   { value: 'shift.created', label: 'A shift is created' },
   { value: 'training.recorded', label: 'A training record is added' },
 ] as const;
+
+/** Event types the department feed can be limited to (backend EventType). */
+const ICAL_EVENT_TYPE_OPTIONS: readonly EventType[] = Object.values(EventType);
 
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
@@ -335,6 +339,7 @@ const CONFIG_TYPES = new Set([
   'nemsis-export',
   'generic-webhook',
   'epcr-import',
+  'ical',
   'salesforce',
   'documenso',
   'calcom',
@@ -473,6 +478,8 @@ const IntegrationsPage: React.FC = () => {
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
   const [mcpExposeMedicalSupplies, setMcpExposeMedicalSupplies] = useState(false);
   const [mcpOauthEnabled, setMcpOauthEnabled] = useState(false);
+  const [icalEventTypes, setIcalEventTypes] = useState<string[]>([]);
+  const [icalIncludeShifts, setIcalIncludeShifts] = useState(false);
   const [gwsServiceAccountKey, setGwsServiceAccountKey] = useState('');
   const [gwsKeyFileName, setGwsKeyFileName] = useState('');
   const [gwsAdminEmail, setGwsAdminEmail] = useState('');
@@ -675,6 +682,12 @@ const IntegrationsPage: React.FC = () => {
     setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
     setMcpExposeMedicalSupplies(stored['expose_medical_supplies'] === true);
     setMcpOauthEnabled(stored['oauth_enabled'] === true);
+    setIcalEventTypes(
+      Array.isArray(stored['included_event_types'])
+        ? stored['included_event_types'].filter((t): t is string => typeof t === 'string')
+        : []
+    );
+    setIcalIncludeShifts(stored['include_shifts'] === true);
     // The key is never echoed back; a blank one on save means "keep it".
     setGwsServiceAccountKey('');
     setGwsKeyFileName('');
@@ -725,6 +738,10 @@ const IntegrationsPage: React.FC = () => {
         return { url: genericWebhookUrl, secret: genericWebhookSecret, event_types: webhookEventTypes };
       case 'epcr-import':
         return { import_format: importFormat };
+      case 'ical':
+        // Both sent on every save: an empty list is "every event type", and
+        // omitting it would keep the previous selection.
+        return { included_event_types: icalEventTypes, include_shifts: icalIncludeShifts };
       case 'documenso':
         return {
           api_base_url: documensoBaseUrl.trim() || undefined,
@@ -1326,6 +1343,50 @@ const IntegrationsPage: React.FC = () => {
                 the X-Webhook-Event header.
               </p>
             </fieldset>
+          </div>
+        );
+
+      case 'ical':
+        return (
+          <div className="space-y-3">
+            <fieldset>
+              <legend className={labelClass}>Event types in the feed</legend>
+              <div className="mt-1 space-y-1">
+                {ICAL_EVENT_TYPE_OPTIONS.map((value) => (
+                  <label key={value} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={icalEventTypes.includes(value)}
+                      onChange={(e) =>
+                        setIcalEventTypes((current) =>
+                          e.target.checked ? [...current, value] : current.filter((t) => t !== value)
+                        )
+                      }
+                    />
+                    <span className="text-theme-text-primary">{getEventTypeLabel(value)}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Leave all unticked to publish every type. Drafts and cancelled events are never published.
+              </p>
+            </fieldset>
+            <label className="text-theme-text-primary flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={icalIncludeShifts}
+                onChange={(e) => setIcalIncludeShifts(e.target.checked)}
+                className="form-checkbox mt-0.5"
+              />
+              <span>
+                Include duty shifts
+                <span className="text-theme-text-muted block text-xs">
+                  Adds each scheduled shift&apos;s times and platoon. Who is assigned and shift notes are never
+                  published.
+                </span>
+              </span>
+            </label>
           </div>
         );
 
@@ -2396,6 +2457,7 @@ const IntegrationsPage: React.FC = () => {
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
                       {(integration.integration_type === 'claude-mcp' ||
+                        integration.integration_type === 'ical' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -3012,7 +3074,9 @@ const IntegrationsPage: React.FC = () => {
                             {editingSettings
                               ? isDirectory(selectedIntegration.integration_type)
                                 ? 'Saved settings apply to the next member converted. Accounts already created are not changed.'
-                                : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                : selectedIntegration.integration_type === 'ical'
+                                  ? 'Saved settings apply the next time a subscribed calendar refreshes. The feed link does not change.'
+                                  : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}

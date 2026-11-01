@@ -327,6 +327,7 @@ member in without showing their card.
 | **Emergency Contacts**  | The member's emergency contacts                                                          | **Only the member and officers who can manage members.** No setting can show it to others |
 | **Membership**          | Rank, member class and membership status, station, platoon and "Member since"            | Everyone; officers also see the status here                                               |
 | **Service History**     | Credited and earlier length of service, stint by stint                                   | The member, and officers who can manage members                                           |
+| **Reports To**          | Who the member reports to now, and who they reported to before                           | The member, and officers who can manage members                                           |
 | **Qualifications**      | What the member is certified to do (EMT, Paramedic, Driver / Operator, Firefighter I/II) | Officers who can manage members only                                                      |
 | **Quick Stats**         | Training, hours and equipment counts                                                     | Only the counts you are allowed to see                                                    |
 | **Leave of Absence**    | Any active leave periods                                                                 | The member, and officers who can manage members                                           |
@@ -339,6 +340,15 @@ added any, or your department keeps them private."
 
 **Service History** is explained in
 [Former Members Who Rejoin](#former-members-who-rejoin).
+
+**Reports To** _(2026-11-01)_. Officers who can manage members set a member's
+supervisor with **Set supervisor** or **Change supervisor**: pick a current
+member and a start date, which defaults to today. The previous supervisor's
+assignment ends the day before. Choosing the same start date as the current
+assignment corrects a mistake rather than recording a change. **End
+assignment** leaves the member with no supervisor as of today. A member cannot
+supervise themselves, and the supervisor must be a current member of the
+department.
 
 **Qualifications** marks each entry **In force** or **Not in force**, the way
 shift sign-up reads it today. It also says whether the entry is

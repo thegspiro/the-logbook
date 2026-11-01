@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import (
     PaginationParams,
     get_current_user,
+    require_all_permissions,
     require_permission,
     user_has_permission,
 )
@@ -48,6 +49,8 @@ from app.schemas.finance import (
     ApprovalChainStepResponse,
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
+    ApprovalEmailResendRequest,
+    ApprovalEmailResendResponse,
     ApprovalRoutePreviewResponse,
     ApprovalStepRecordResponse,
     ApproverCoverageResponse,
@@ -134,7 +137,10 @@ from app.schemas.finance import (
 from app.services import module_documents
 from app.services.documents_service import DocumentsService
 from app.services.expense_substantiation import incurred_day
-from app.services.finance_approver_matching import ApproverMismatchError
+from app.services.finance_approver_matching import (
+    ApproverMismatchError,
+    normalize_approver_type,
+)
 from app.services.finance_budget_ownership import (
     user_owns_any_budget,
     user_owns_budget,
@@ -163,6 +169,7 @@ from app.services.finance_service import (
     FinanceService,
     ManualApprovalConflictError,
     ReimportConfirmationRequired,
+    approval_email_delivery,
 )
 from app.services.functional_expenses import FunctionalClassifier
 from app.services.restricted_funds import (
@@ -3058,6 +3065,77 @@ async def deny_step(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/approvals/{step_record_id}/resend-email",
+    response_model=ApprovalEmailResendResponse,
+)
+async def resend_approval_email(
+    step_record_id: str,
+    data: ApprovalEmailResendRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_all_permissions("finance.approve", "finance.configure_approvals")
+    ),
+):
+    """
+    Email an external approver a fresh link for the step a request waits on
+
+    Mints a new link, which stops the old one working, emails it, and records
+    whether the send went out. The link itself is never returned: it is a
+    bearer token for someone else's approval. ``linkVersion`` names the link
+    the caller saw; when the step has already moved past it the call sends
+    nothing and reports ``resent: false``, so a double click mints one link.
+
+    **Authentication required**
+    **Requires permission: finance.approve, finance.configure_approvals**
+    """
+    org_id = str(current_user.organization_id)
+    service = FinanceService(db)
+    try:
+        record, resent = await service.resend_approval_email(
+            step_record_id, org_id, data.link_version
+        )
+    except FinanceEntityNotFoundError:
+        raise HTTPException(status_code=404, detail="Approval step not found")
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    step = record.step
+    delivery = approval_email_delivery(
+        step_type=step.step_type if step else None,
+        approver_type=normalize_approver_type(step.approver_type) if step else None,
+        has_link=record.approval_token is not None,
+        expires_at=record.token_expires_at,
+        email_status=record.email_status,
+    )
+    if resent:
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_link_resent",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "step_record_id": str(record.id),
+                "entity_type": record.entity_type.value,
+                "entity_id": str(record.entity_id),
+                "link_version": record.email_link_version,
+                "email_status": record.email_status,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=org_id,
+        )
+    return ApprovalEmailResendResponse(
+        step_record_id=str(record.id),
+        resent=resent,
+        email_delivery=delivery,
+        email_status_at=record.email_status_at,
+        email_link_version=record.email_link_version or 0,
+    )
 
 
 async def _with_reimbursement_links(

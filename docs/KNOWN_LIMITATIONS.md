@@ -36,10 +36,10 @@ pass (`docs/workflow-review/W01-onboarding.md`).
   stores it off while Settings → Modules lists it as enabled by default.
   Either offer it during setup or leave it at its default.
 
-Also open from the same pass, a smaller decision: the email step saves settings
-that have just failed their connection test, says "Email settings saved", and
-the completion page then reports the platform as configured (W01-27). Warn,
-confirm, or refuse.
+Also from the same pass, resolved 2026-11-01: the email step saved settings that
+had just failed their connection test without a word (W01-27). Owner decision:
+warn, but allow saving. The failure now stays on the page, and Continue asks
+before saving.
 
 ## Members — Members See the Built-In Tier Names (2026-10-31)
 
@@ -76,6 +76,35 @@ supervised a member is kept), and then decide which features read it —
 evaluator defaults, line-officer visibility of their own crew's evaluations,
 and approvals. Not started; it is a change to the member model and its editing
 screens, separate from the evaluations work.
+
+**Resolved (2026-11-01), owner decision: dated supervisor assignments.**
+`member_supervisor_assignments` (migration `a1c3e5f7b9d2`) records who a member
+reports to as inclusive date ranges.
+
+How the dates work:
+
+- A change from day D ends the previous assignment on D−1.
+- A change dated the day the current assignment began corrects it in place.
+- If a former supervisor's account is hard-deleted, the dates stay
+  (`SET NULL`).
+
+Rules:
+
+- One open assignment per member, held by a generated `open_marker` column
+  under a unique key and by a member-row lock.
+- The supervisor is a current member of the department, never the member.
+
+Members-managers set, change and end it on the profile (**Reports To**), and a
+member sees their own.
+
+**Still open:**
+
+- Only the evaluator default reads the relationship, and nothing calls it yet.
+  `MemberSupervisorService.default_evaluator_id` waits for the evaluation
+  drafting service and its evaluator permission, neither of which exists.
+- Line-officer views of their own crew, approvals and an org chart do not read
+  it.
+- Two members may supervise each other.
 
 ## Frontend API Cache — An Inventory Item's Detail Is Cacheable and Names the Holder (2026-10-31)
 
@@ -3430,6 +3459,26 @@ member's half of `CohortDetailPage` — a permissions decision plus a feature,
 not a correctness fix. This loop does not widen route guards, so it needs an
 owner.
 
+**Resolved (2026-11-01), owner decision: give members their own view.**
+
+- My Training shows a **My classes** section listing the caller's cohorts
+  (`GET /training/cohorts/mine`), each linking to `/training/cohorts/:cohortId`.
+- That route is now gated only on sign-in and the Training module. The API
+  is the authority: it returns 404 to a member not on the roster, and
+  `members: []` with no attendance counts to one who is.
+- Without `training.manage`, `CohortDetailPage` draws the class timeline only:
+  no roster, classmates, progress or officer actions. A 404 shows "Cohort not
+  found". Officers keep the full page at the same URL.
+
+Still open, each the owner's call:
+
+- The member response still carries the cohort's `notes` and creator ids.
+  They are not displayed, but they are sent.
+- `is_roster_member` admits a withdrawn member, while `/mine` lists only
+  active ones.
+- A `training.view_all` holder without `training.manage` sees the member view
+  rather than a read-only roster.
+
 **Deferred by the owner (2026-10-05):** the member's view of a cohort is not
 being built now; the cohort page stays officer-only until it is.
 
@@ -6434,6 +6483,13 @@ can't be attached from the app yet." A department that needs a file on an event
 attaches it through the API. Building the control, or dropping the endpoint, is
 an owner decision.
 
+**Resolved (2026-10-31), owner decision: add the control.** The event page's
+**Attachments** card shows **Attach file** and a remove button for each file
+to `events.manage` holders. It shows even when the event has no files yet.
+It uses the existing endpoints and the server's type and size rules (25 MB,
+also checked in the browser before sending). Removing asks first. Covered by
+`EventAttachmentsList.test.tsx`.
+
 ## Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)
 
 Workflow review W44 (`docs/workflow-review/W44-nfc.md`) and the NFC design left
@@ -6547,6 +6603,19 @@ affected shift the moment it deployed.
 Either way the gate stops depending on a reference nothing maintains. Until one
 is chosen, the log line is the only signal.
 
+**Resolved (2026-10-31), owner decision: resolve both tables and fail
+closed.** A foreign key turned out not to be possible: `shifts.apparatus_id`
+names a row in either `apparatus` or `basic_apparatus`, depending on the
+department, so a key to one table would reject the other. Both deletes
+already refuse a vehicle a shift still names (`apparatus_in_use`), so only
+references from before those guards can dangle. The gate now treats a
+`basic_apparatus` id as having no requirement, which matches what it did
+before. An id found in neither table is ineligible, with a message telling
+the officer to pick the shift's vehicle again. The department's enforcement
+setting still decides whether that blocks or only warns, and a chief's
+exception still applies. No migration was needed. Covered by
+`TestDriverEligibility` in `tests/test_evoc_level_service.py`.
+
 ## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Showed At Most 100 Records (2026-10-11, resolved 2026-10-25)
 
 **Resolved.** `GET /facilities/maintenance/page` and `GET /facilities/inspections/page`
@@ -6581,6 +6650,16 @@ is shown ("reload and re-apply" versus a merge). **Owner decision:** whether
 concurrent editing of one draft is a supported workflow (the per-section
 endpoint) or is to be refused with a conflict message (the precondition). Same
 lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
+
+**Resolved (2026-10-31), owner decision: refuse with a conflict.**
+`meeting_minutes.edit_version` (migration `e15d635bbb98`) goes up by one on
+every content save. The minutes page sends the version it loaded as
+`expected_version` with every section edit (save, not-taken-up, reorder, add,
+delete). If someone has saved since, `PUT /minutes-records/{id}` refuses with 409. The version is read with a locking read, so two saves racing each other
+cannot both pass. The page keeps whatever was in the editor and shows a
+**Reload** banner. A save that sends no version is unconditional, as before.
+Covered by `tests/test_minutes_edit_conflict_integration.py` and the
+rich-text page test.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 
@@ -6683,6 +6762,25 @@ W62-6 and W62-7).
   - which details the emailed page and the email may show. At least the title
     and amount are needed to make the decision; the requester's name and the
     description are more sensitive.
+
+**Resolved (2026-11-01), owner decisions: show send status, allow re-send, and
+show title, amount and requester.**
+
+- **Send status.** Each emailed link records whether its email was sent or
+  failed (`approval_step_records.email_status` and `email_status_at`, migration
+  `b2d4f6a8c0e3`). Expiry is read from `token_expires_at`. The Approvals queue
+  shows one of: "Email sent <date>", "Email could not be sent", "Link expired",
+  "No link has been emailed", or, for links sent before tracking began, "Link
+  emailed (sending not recorded)".
+- **Re-send.** An approvals admin (`finance.approve` plus
+  `finance.configure_approvals`) can **Re-send link**.
+  - A fresh 7-day link is minted, and the old one stops working.
+  - The send is recorded and audit-logged as `finance.approval_link_resent`.
+  - A repeated click sends nothing (`email_link_version`).
+  - Staff never see or copy the link.
+- **What the approver sees.** The emailed page and the email show the
+  request's title, amount and requester's name. The description, vendor and
+  lines stay behind the login, and an expired or used link shows none of it.
 
 ## Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)
 
@@ -6838,6 +6936,25 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
 
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
+
+**Resolved (2026-11-01), owner decision: build the department events feed.**
+Most of it had shipped on 2026-10-16, a day before this entry. Connecting
+issues a secret feed URL, shown on the card with Copy and a confirmed
+**Reset link**, and `GET /api/public/v1/calendar/org/{token}.ics` serves the
+department's published, non-cancelled events, 30 days back to 365 ahead,
+filtered by `included_event_types`.
+
+What was missing, and is now built:
+
+- Nothing read `include_shifts`; the schema refused it outright.
+- No screen set either filter.
+
+The connected card now has **Settings**: event types to publish (none ticked
+means all) and **Include duty shifts**, which adds scheduled shifts showing
+times and platoon only, never who is assigned or notes. An unknown event
+type is refused on save. A disconnected or disabled integration serves 404.
+Members' personal feeds are unchanged. Covered by
+`tests/test_department_ical_feed.py` and `IntegrationsPage.test.tsx`.
 
 ## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23, resolved 2026-10-27)
 
@@ -7152,6 +7269,47 @@ seven of eight `widgetRegistry.ts` `aggregatePath` values that resolved to no
 mounted route (now marked in the file, 2026-10-11). Server-supplied and registry-declared navigation targets have
 both drifted from the routes they name, for the same reason — nothing in the
 type system connects either to a `path=` string.
+
+**Resolved (2026-10-31), owner decision: the pages honour the filter.**
+
+Every parameterised target now lands on the rows its tile counted, and the
+filter is shown on the page with a way to clear it:
+
+- **Apparatus** (`serviceStatus`, `hasDeficiency`, `inspection`): new optional
+  `GET /apparatus` filters. The out-of-service codes are one shared constant.
+- **Inspections** (`dueWithin`): `due_within_days` on
+  `GET /facilities/inspections/page`.
+- **Facilities** (`compliance=due`): a "Compliance deadlines in the next 30
+  days" list, from `due_within_days` on `GET /facilities/compliance-checklists`.
+- **Low stock** (`stock=low`): `low_stock_categories` on the item list and its
+  export. These are the items in the categories the tile counts. The tile
+  counts categories, so its number differs from the row count.
+- **Overdue returns** (`status=overdue`): opens the Overdue tab.
+  - The tile and the tab now share one overdue rule,
+    `overdue_checkout_clause` (in `inventory_service.py`). The tile used to count loans
+    whose stored flag was set even after they were extended.
+  - The tab loads up to 200 loans.
+- **Admin hours** (`status=pending`): opens Pending Review.
+- **Notifications** (`status=failed`): `failed` on `GET /notifications/logs`.
+- **Action items** (`status=overdue`, `source`): `overdue` and `source` on
+  `GET /dashboard/action-items`.
+  - The meeting tile now links with `source=meeting`.
+  - Minutes items are overdue by the department's calendar day, not the clock.
+    This changed the minutes tile's and the admin summary's counts slightly: an
+    item due today is no longer overdue from 00:00 UTC.
+- **Members** (`status=active`): seeds the status filter.
+- **Events** (`range=next-30-days`): a "Next 30 days" chip over the same
+  department-calendar window.
+
+A neutral total tile (the Inventory count) now says only **Open**.
+
+**Residual limits:**
+
+- Event and compliance lists cap at 500 rows.
+- Action-item tiles are gated on the `.manage` permissions, while the page
+  lists by the `.view` ones.
+- The out-of-service tile's fleet summary does not exclude archived apparatus.
+  Archiving changes the status, so the two agree in practice.
 
 ## DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)
 

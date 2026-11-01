@@ -19,13 +19,18 @@ vi.mock('react-router', async () => {
 import EmailConfiguration from './EmailConfiguration';
 import { useOnboardingStore } from '../store';
 import { ThemeProvider } from '../../../contexts/ThemeContext';
+// The page asks useConfirm() before saving settings that failed their test;
+// the app mounts ConfirmProvider at its root, so the test does too.
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
 const renderPage = () =>
   render(
     <ThemeProvider>
-      <MemoryRouter>
-        <EmailConfiguration />
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter>
+          <EmailConfiguration />
+        </MemoryRouter>
+      </ConfirmProvider>
     </ThemeProvider>
   );
 

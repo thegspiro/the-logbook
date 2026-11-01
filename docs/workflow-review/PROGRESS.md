@@ -159,6 +159,7 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
+
 - **Dashboard, or any activity touching a module left off at setup** — on a
   fresh install with every module skipped, the administrator's first dashboard
   asked `GET /training/module-config/config` and was refused `403 LB-ORG-002`
@@ -235,6 +236,20 @@ pledge's Edit and a document's name, size, type and date all show on a phone;
 without the fix the document row showed nothing. Gate: typecheck and lint
 clean, and the tests for the changed pages pass.
 
+### Lead — The dashboard asked two modules that were off — 2026-10-31
+
+Driven as: `admin` at 1280×900, with Integrations and Training switched off
+over `PATCH /organization/modules` and back on afterwards. Fixed: the
+dashboard's severe-weather banner asks only while Integrations is on, and the
+side and top navigation and the command palette ask for the practical-skills
+setting only while Training is on (`usePracticalSkillsMethod` takes the module
+check from its caller; Training's own pages are behind its route gate already).
+Without the fix the dashboard sent three requests and all three were refused
+`403 LB-ORG-002`; with it, the dashboard, Events and the phone layout sent none.
+With the modules back on, both requests were sent again and answered. Gate:
+typecheck and lint clean; the 281 test files related to the changed files pass,
+and every new test fails without the fix.
+
 ### W01 third pass — Onboarding options and wording, as an IT manager — 2026-10-31
 
 Driven as: a fresh install, twice (find, then re-drive), anonymous → system
@@ -255,7 +270,9 @@ saved without a word). Resolved the dashboard lead's integrations half
 (W01-33). Gate: typecheck and lint clean, every new test seen failing first,
 the full frontend suite passes, flake8 and black clean on the two backend files.
 Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
-from onboarding and Settings (the stored field is kept, retired).
+from onboarding and Settings (the stored field is kept, retired). Owner decided
+W01-27: a failed email test now warns on the page and Continue asks before
+saving, but saving is allowed.
 
 ### Membership re-check (W08, W10–W15) — 2026-10-31
 

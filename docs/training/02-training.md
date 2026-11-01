@@ -399,6 +399,13 @@ A recruit school is one _course_ made up of many _classes_. Instead of creating
 fifteen training sessions by hand for every new intake, you describe the course
 once and generate each intake from it.
 
+**Your classes** _(2026-11-01)_. If you are on the roster of a multi-class
+course, such as a recruit school, it appears under **My classes** on My
+Training. Open it to see the class schedule: every class with its date, time,
+instructor and credit hours, and a link to its calendar event. You do not see
+the roster, your classmates or anyone's progress. Your own progress is under
+Pipeline Progress.
+
 There are two pieces:
 
 - A **syllabus** — the ordered list of classes, written once. It has no dates,

@@ -159,10 +159,15 @@ export const getTrainingRoutes = () => {
           </ProtectedRoute>
         }
       />
+      {/* No permission gate, like my-skill-tests: a member on the roster opens
+          their own class timeline here from My Training. The API is the
+          authority — it answers a member who is not on the roster with 404 and
+          withholds the roster, progress and attendance from one who is — and
+          the page draws the officer half only for training.manage. */}
       <Route
         path="/training/cohorts/:cohortId"
         element={
-          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <CohortDetailPage />
           </ProtectedRoute>
         }

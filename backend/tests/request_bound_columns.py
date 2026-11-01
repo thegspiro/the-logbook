@@ -375,6 +375,7 @@ COLUMN_BACKED = [
     "app.schemas.membership_pipeline:PipelineStepUpdate.sort_order=MembershipPipelineStep.sort_order",
     # app.schemas.minute
     "app.schemas.minute:MinutesBase.quorum_count=MeetingMinutes.quorum_count",
+    "app.schemas.minute:MinutesUpdate.expected_version=MeetingMinutes.edit_version",
     "app.schemas.minute:MinutesUpdate.quorum_count=MeetingMinutes.quorum_count",
     "app.schemas.minute:MotionBase.votes_abstain=Motion.votes_abstain",
     "app.schemas.minute:MotionBase.votes_against=Motion.votes_against",

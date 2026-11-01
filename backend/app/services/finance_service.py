@@ -47,6 +47,7 @@ from app.models.finance import (
     AdvanceReturn,
     ApprovalChain,
     ApprovalChainStep,
+    ApprovalEmailStatus,
     ApprovalEntityType,
     ApprovalStepRecord,
     ApprovalStepStatus,
@@ -310,6 +311,57 @@ class ManualApprovalConflictError(ValueError):
 
 class LateSubstantiationNotAcknowledgedError(ValueError):
     """Approving a report with late lines without confirming them (→ 400)."""
+
+
+# How long an emailed approval link works. The email and the public page both
+# tell the approver "7 days"; change them together.
+APPROVAL_LINK_TTL = timedelta(days=7)
+
+
+class ApprovalEmailDelivery:
+    """What the approvals queue says about an EMAIL step's link.
+
+    ``UNKNOWN`` is a live link minted before send status was recorded
+    (20261101_1210_b2d4f6a8c0e3); ``NOT_SENT`` is a reachable EMAIL step that
+    holds no link at all.
+    """
+
+    SENT = "sent"
+    FAILED = "failed"
+    EXPIRED = "expired"
+    NOT_SENT = "not_sent"
+    UNKNOWN = "unknown"
+
+
+def approval_email_delivery(
+    *,
+    step_type: Any,
+    approver_type: Optional[ApproverType],
+    has_link: bool,
+    expires_at: Optional[datetime],
+    email_status: Optional[str],
+    now: Optional[datetime] = None,
+) -> Optional[str]:
+    """The state of an EMAIL step's link, or None for any other step.
+
+    A failed send outranks expiry: a link that never arrived is the fact the
+    department needs, and both are answered by a re-send. Expiry is read from
+    ``token_expires_at`` rather than stored, so it cannot lag the clock.
+    """
+    if step_type != ApprovalStepType.APPROVAL or approver_type != ApproverType.EMAIL:
+        return None
+    if email_status == ApprovalEmailStatus.FAILED.value:
+        return ApprovalEmailDelivery.FAILED
+    if not has_link:
+        return ApprovalEmailDelivery.NOT_SENT
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < (now or datetime.now(timezone.utc)):
+            return ApprovalEmailDelivery.EXPIRED
+    if email_status == ApprovalEmailStatus.SENT.value:
+        return ApprovalEmailDelivery.SENT
+    return ApprovalEmailDelivery.UNKNOWN
 
 
 class ApprovalTokenNotValidError(ValueError):
@@ -3029,8 +3081,90 @@ class FinanceService:
 
         return records
 
+    async def approval_subject(
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
+    ) -> Optional[dict]:
+        """The title, amount and requester an external approver is shown.
+
+        Owner decision 2026-11-01: the emailed approval page and the email
+        carry these three and nothing else -- the description, vendor and
+        line items stay behind the login, because the link is a bearer token
+        and may be forwarded. Check requests are titled as the approvals queue
+        titles them ("Check to <payee>"). None for a request no longer in
+        ``org_id``.
+        """
+        mappings: dict[ApprovalEntityType, tuple[_FinanceDocument, Any, Any, Any]] = {
+            ApprovalEntityType.PURCHASE_REQUEST: (
+                PurchaseRequest,
+                PurchaseRequest.title,
+                PurchaseRequest.estimated_amount,
+                PurchaseRequest.requested_by,
+            ),
+            ApprovalEntityType.EXPENSE_REPORT: (
+                ExpenseReport,
+                ExpenseReport.title,
+                ExpenseReport.total_amount,
+                ExpenseReport.submitted_by,
+            ),
+            ApprovalEntityType.CHECK_REQUEST: (
+                CheckRequest,
+                literal("Check to ") + CheckRequest.payee_name,
+                CheckRequest.amount,
+                CheckRequest.requested_by,
+            ),
+        }
+        mapping = mappings.get(entity_type)
+        if mapping is None:
+            return None
+        model, title_col, amount_col, requester_col = mapping
+        result = await self.db.execute(
+            select(
+                title_col.label("title"),
+                amount_col.label("amount"),
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            )
+            .select_from(model)
+            .outerjoin(
+                User,
+                and_(
+                    User.id == requester_col,
+                    User.organization_id == org_id,
+                    User.deleted_at.is_(None),
+                ),
+            )
+            .where(model.id == entity_id, model.organization_id == org_id)
+        )
+        row = result.first()
+        if row is None:
+            return None
+        requester_name = (
+            format_display_name(row.first_name, row.last_name, row.preferred_name)
+            or row.username
+            or None
+        )
+        return {
+            "title": row.title,
+            "amount": row.amount,
+            "requester_name": requester_name,
+        }
+
+    @staticmethod
+    def _mint_approval_link(record: ApprovalStepRecord) -> None:
+        """Give an EMAIL step a fresh link, which also kills any earlier one.
+
+        The token column is unique and is what the public routes look a step
+        up by, so overwriting it is the invalidation: the old link answers
+        "not found" from this point on.
+        """
+        record.approval_token = secrets.token_urlsafe(32)
+        record.token_expires_at = datetime.now(timezone.utc) + APPROVAL_LINK_TTL
+        record.email_link_version = (record.email_link_version or 0) + 1
+
     async def send_approval_request_email(
-        self, record: ApprovalStepRecord, step: ApprovalChainStep
+        self, record: ApprovalStepRecord, step: ApprovalChainStep, org_id: str
     ) -> bool:
         """Email an external ("email" approver-type) approver a token link.
 
@@ -3038,17 +3172,63 @@ class FinanceService:
         calls the public approve/deny endpoints. Best-effort: returns False and
         logs on any problem rather than raising into the caller's transaction.
         Sends nothing when email delivery is disabled platform-wide.
-        """
-        approver_email = (step.approver_value or "").strip()
-        token = record.approval_token
-        if not approver_email or not token:
-            return False
 
+        The outcome is recorded on the record (``email_status`` /
+        ``email_status_at``) so the approvals queue can say a link never went
+        out instead of reading "waiting on <address>" either way. A step with
+        no link has nothing to send and records nothing.
+        """
+        token = record.approval_token
+        if not token:
+            return False
+        approver_email = (step.approver_value or "").strip()
+        sent = False
+        if approver_email:
+            sent = await self._deliver_approval_email(
+                record, step, org_id, approver_email, token
+            )
+        record.email_status = (
+            ApprovalEmailStatus.SENT if sent else ApprovalEmailStatus.FAILED
+        ).value
+        record.email_status_at = datetime.now(timezone.utc)
+        return sent
+
+    async def _deliver_approval_email(
+        self,
+        record: ApprovalStepRecord,
+        step: ApprovalChainStep,
+        org_id: str,
+        approver_email: str,
+        token: str,
+    ) -> bool:
         link = f"{settings.FRONTEND_URL.rstrip('/')}/finance/approvals/{token}"
-        safe_step = html.escape(step.name or "Approval")
         try:
             from app.services.email_service import EmailService, wrap_email_body
             from app.services.email_theme import ACCENT_AMBER, action
+
+            subject = await self.approval_subject(
+                record.entity_type, record.entity_id, org_id
+            )
+            # Every interpolated value is escaped: the title and the
+            # requester's name are typed by members, and this HTML goes to
+            # someone outside the department.
+            details = ""
+            if subject is not None:
+                details += (
+                    "<p><strong>Request:</strong> "
+                    f"{html.escape(str(subject['title'] or ''))}</p>"
+                )
+                if subject["amount"] is not None:
+                    amount = html.escape(f"${Decimal(subject['amount']):,.2f}")
+                    details += f"<p><strong>Amount:</strong> {amount}</p>"
+                if subject["requester_name"]:
+                    details += (
+                        "<p><strong>Requested by:</strong> "
+                        f"{html.escape(subject['requester_name'])}</p>"
+                    )
+            details += (
+                f"<p><strong>Step:</strong> {html.escape(step.name or 'Approval')}</p>"
+            )
 
             # No organization: this goes to someone outside the department,
             # and the send itself is made without one (see below).
@@ -3056,7 +3236,7 @@ class FinanceService:
                 None,
                 "Approval requested",
                 "<p>An approval is awaiting your response in The Logbook.</p>"
-                f"<p><strong>Step:</strong> {safe_step}</p>"
+                + details
                 + action(html.escape(link), "Review and respond")
                 + '<p class="fineprint">This link expires in 7 days and can be used once.</p>',
                 header_color=ACCENT_AMBER,
@@ -3072,9 +3252,62 @@ class FinanceService:
             return sent > 0
         except Exception as exc:
             logger.warning(
-                "Approval request email to {} failed: {}", approver_email, exc
+                "Approval request email for step record {} failed: {}",
+                record.id,
+                exc,
             )
             return False
+
+    async def resend_approval_email(
+        self, step_record_id: str, org_id: str, link_version: int
+    ) -> tuple[ApprovalStepRecord, bool]:
+        """Mint a fresh link for an EMAIL step, kill the old one, and email it.
+
+        Returns the record and whether anything was sent. ``link_version`` is
+        the ``email_link_version`` the caller saw: when the row has moved past
+        it, another re-send (a double click, a retried request) already
+        replaced the link, and this one sends nothing rather than minting a
+        third link and killing the second (CLAUDE.md pitfall #36). The row
+        lock serializes two requests racing on the same version.
+
+        Order: the link is minted, emailed, and committed by the caller in one
+        transaction. A crash after the send but before the commit leaves the
+        approver a dead link and the queue showing the old status, which a
+        second re-send repairs; the alternative order (commit, then send) can
+        leave a "sent" status for an email that never went out.
+        """
+        result = await self.db.execute(
+            select(ApprovalStepRecord)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .options(selectinload(ApprovalStepRecord.step))
+            .where(
+                ApprovalStepRecord.id == step_record_id,
+                ApprovalChain.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        record: ApprovalStepRecord | None = result.scalar_one_or_none()
+        if record is None:
+            raise FinanceEntityNotFoundError("Approval step not found")
+        step = record.step
+        if (
+            step is None
+            or step.step_type != ApprovalStepType.APPROVAL
+            or normalize_approver_type(step.approver_type) != ApproverType.EMAIL
+        ):
+            raise ValueError("This step does not email its approver")
+        if record.status != ApprovalStepStatus.PENDING:
+            raise ValueError("This step is no longer waiting on an approver")
+        await self._ensure_current_step(record, org_id)
+
+        if (record.email_link_version or 0) != link_version:
+            return record, False
+
+        self._mint_approval_link(record)
+        await self.db.flush()
+        await self.send_approval_request_email(record, step, org_id)
+        await self.db.flush()
+        return record, True
 
     async def get_approval_records(
         self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
@@ -3638,6 +3871,13 @@ class FinanceService:
                 ApprovalChainStep.step_type,
                 ApprovalChainStep.approver_type,
                 ApprovalChainStep.approver_value,
+                # Whether a link exists, never the link: it is a bearer token
+                # for someone else's approval, and nothing staff-facing reads it.
+                ApprovalStepRecord.approval_token.is_not(None).label("has_link"),
+                ApprovalStepRecord.token_expires_at,
+                ApprovalStepRecord.email_status,
+                ApprovalStepRecord.email_status_at,
+                ApprovalStepRecord.email_link_version,
                 User.first_name,
                 User.last_name,
                 User.preferred_name,
@@ -3680,6 +3920,7 @@ class FinanceService:
         directory = ApproverDirectory(self.db, org_id)
         verdicts: dict[tuple, tuple[bool, str]] = {}
         approvals = []
+        now = datetime.now(timezone.utc)
         for row in result.all():
             approver_type = normalize_approver_type(row.approver_type)
             # Transient and never added to the session: the matchers read only
@@ -3702,6 +3943,14 @@ class FinanceService:
                 row.first_name, row.last_name, row.preferred_name
             )
             requester_name = requester_name or row.username or "Unknown"
+            email_delivery = approval_email_delivery(
+                step_type=row.step_type,
+                approver_type=approver_type,
+                has_link=bool(row.has_link),
+                expires_at=row.token_expires_at,
+                email_status=row.email_status,
+                now=now,
+            )
             approvals.append(
                 {
                     "step_record_id": row.step_record_id,
@@ -3722,6 +3971,12 @@ class FinanceService:
                     "can_act": can_act,
                     "requires_override": not can_act,
                     "charges_fund": bool(row.charges_fund),
+                    "email_delivery": email_delivery,
+                    "email_status_at": row.email_status_at,
+                    "email_link_version": row.email_link_version or 0,
+                    # Re-sending is the approvals admin's, the same holder who
+                    # may already approve over the external approver's head.
+                    "can_resend_email": admin and email_delivery is not None,
                 }
             )
         if not admin:
@@ -4369,9 +4624,8 @@ class FinanceService:
                 and record.step.approver_type.value == "email"
                 and not record.approval_token
             ):
-                record.approval_token = secrets.token_urlsafe(32)
-                record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-                await self.send_approval_request_email(record, record.step)
+                self._mint_approval_link(record)
+                await self.send_approval_request_email(record, record.step, org_id)
 
     async def _check_all_steps_complete(
         self,

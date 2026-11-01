@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**338 tables · 5578 columns · 1146 foreign keys**
+**339 tables · 5591 columns · 1150 foreign keys**
 
 ---
 
@@ -279,7 +279,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`advance_returns`](#advance_returns) | `AdvanceReturn` | 12 | Unspent cash a member handed back against a cash advance. |
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
-| [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
+| [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 16 | Tracks actual approval step progression for a specific entity |
 | [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 14 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 13 | Budget category (hierarchical) |
 | [`budget_category_charge_positions`](#budget_category_charge_positions) | `BudgetCategoryChargePosition` | 5 | A position named as able to charge a restricted category's lines. |
@@ -458,7 +458,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 48 | Meeting Minutes model |
+| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 49 | Meeting Minutes model |
 | [`meeting_motions`](#meeting_motions) | `Motion` | 21 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
@@ -479,6 +479,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 14 | Meeting Action Item model |
 | [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 10 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
+
+### Member Supervisors
+
+<sub>`app/models/member_supervisor.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`member_supervisor_assignments`](#member_supervisor_assignments) | `MemberSupervisorAssignment` | 9 | One stretch of time during which ``supervisor_id`` supervised ``member_id``. |
 
 ### Membership Pipeline
 
@@ -4190,6 +4198,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notes` | TEXT | yes |  |  |  |
 | `approval_token` | VARCHAR(255) | yes | UQ |  |  |
 | `token_expires_at` | DATETIME | yes |  |  |  |
+| `email_status` | VARCHAR(16) | yes |  |  |  |
+| `email_status_at` | DATETIME | yes |  |  |  |
+| `email_link_version` | INTEGER | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -7081,6 +7092,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
+| `edit_version` | INTEGER | no |  | `0` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -7483,6 +7495,36 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_meetings_event_id` (`event_id`)
 - `ix_meetings_location_id` (`location_id`)
 - `ix_meetings_meeting_date` (`meeting_date`)
+
+## Member Supervisors
+
+### `member_supervisor_assignments`
+
+**MemberSupervisorAssignment** · `app/models/member_supervisor.py`
+
+> One stretch of time during which ``supervisor_id`` supervised ``member_id``. **At most one open row per member, enforced by the database.** MySQL has no partial unique index, so ``open_marker`` is a stored generated column that is 1 while ``ends_on`` is NULL and NULL once the row is closed; the unique key on ``(member_id, open_marker)`` then admits one open row and any number of closed ones, because MySQL treats NULLs as distinct. The expression reads ``ends_on`` only: MySQL refuses a stored generated column whose base column carries a foreign key with a referential action, and ``member_id`` is CASCADE. The service also takes the member's row lock before reading, so two concurrent changes queue rather than one failing on the key. **``supervisor_id`` is SET NULL, not CASCADE.** The rows are the *member's* history; hard-deleting the officer who once supervised them must not erase the record that the member had a supervisor over those dates. The row keeps its dates and reads "a former member". An open row left pointing at nobody is reported as no current supervisor, and setting a new one closes it as usual. ``member_id`` is CASCADE: the history belongs to the member and goes with them. "Never supervises themselves" is a service rule, not a CHECK, for the reason the ``Evaluation`` model gives: MySQL refuses a CHECK naming a column whose foreign key has a referential action.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `supervisor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `starts_on` | DATE | no |  |  |  |
+| `ends_on` | DATE | yes |  |  |  |
+| `open_marker` | INTEGER | yes |  | server default |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_member_supervisor_assignments_org_member` (`organization_id`, `member_id`, `starts_on`)
+- `ix_member_supervisor_assignments_org_supervisor` (`organization_id`, `supervisor_id`)
+
+**Constraints**
+
+- CHECK `ck_member_supervisor_assignments_date_order`: `ends_on IS NULL OR ends_on >= starts_on`
+- UNIQUE `uq_member_supervisor_assignments_open` (`member_id`, `open_marker`)
 
 ## Membership Pipeline
 
@@ -11790,7 +11832,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (420 references)
+### → `users` (423 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12049,6 +12091,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_service_periods` | `created_by` | SET NULL | yes |
 | `member_service_periods` | `user_id` | CASCADE | no |
 | `member_size_preferences` | `user_id` | CASCADE | no |
+| `member_supervisor_assignments` | `created_by` | SET NULL | yes |
+| `member_supervisor_assignments` | `member_id` | CASCADE | no |
+| `member_supervisor_assignments` | `supervisor_id` | SET NULL | yes |
 | `membership_pipelines` | `created_by` | RESTRICT | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
 | `minutes_action_items` | `assignee_id` | RESTRICT | yes |
@@ -12215,7 +12260,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (280 references)
+### → `organizations` (281 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12386,6 +12431,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_qualifications` | `organization_id` | CASCADE | no |
 | `member_service_periods` | `organization_id` | CASCADE | no |
 | `member_size_preferences` | `organization_id` | CASCADE | no |
+| `member_supervisor_assignments` | `organization_id` | CASCADE | no |
 | `membership_pipelines` | `organization_id` | CASCADE | no |
 | `message_history` | `organization_id` | CASCADE | yes |
 | `minutes_attachments` | `organization_id` | CASCADE | no |

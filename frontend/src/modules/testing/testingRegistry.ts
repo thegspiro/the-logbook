@@ -379,12 +379,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/training/admin', label: 'Training administration', permission: 'training.manage', module: 'training' },
       { path: '/training/cohorts', label: 'Cohorts', permission: 'training.manage', module: 'training' },
-      {
-        path: '/training/cohorts/:cohortId',
-        label: 'Cohort detail',
-        permission: 'training.manage',
-        module: 'training',
-      },
+      { path: '/training/cohorts/:cohortId', label: 'Cohort detail', module: 'training' },
       { path: '/training/log-shift', label: 'Manual shift report', permission: 'training.manage', module: 'training' },
       {
         path: '/training/compliance-config',

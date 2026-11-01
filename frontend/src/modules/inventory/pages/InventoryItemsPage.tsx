@@ -994,6 +994,12 @@ const InventoryItemsPage: React.FC = () => {
   // vendor scope. Only the literal 'true' turns it on: anything else is an
   // unrecognized value and degrades to the full list rather than an error.
   const lowStockOnly = searchParams.get('low_stock') === 'true';
+  // The dashboard's Low stock tile links here as ?stock=low. That tile counts
+  // categories whose summed stock is at or below the category's threshold —
+  // a different question from an item's own reorder point above — so it gets
+  // its own filter, backed by the tile's own scan, rather than being mapped
+  // onto `low_stock` and listing rows the tile never counted.
+  const lowStockCategoriesOnly = searchParams.get('stock') === 'low';
   // The type filter is URL-driven for the same reason vendor scoping is: the
   // inventory hub's supply-line cards link straight at one domain
   // (?item_type=uniform), and that only works if the list reads the URL.
@@ -1172,6 +1178,7 @@ const InventoryItemsPage: React.FC = () => {
       unassigned_location: fLoc === UNASSIGNED_LOCATION ? true : undefined,
       vendor_id: vendorFilter || undefined,
       low_stock: lowStockOnly || undefined,
+      low_stock_categories: lowStockCategoriesOnly || undefined,
       size: fSize || undefined,
       color: fColor || undefined,
       style: fStyle || undefined,
@@ -1189,6 +1196,7 @@ const InventoryItemsPage: React.FC = () => {
       fLoc,
       vendorFilter,
       lowStockOnly,
+      lowStockCategoriesOnly,
       fSize,
       fColor,
       fStyle,
@@ -1834,8 +1842,13 @@ const InventoryItemsPage: React.FC = () => {
   // of the rows shown. The low-stock filter has no print-page equivalent, so
   // under it "this list" is not offered rather than quietly labelling more.
   const listLabelPath = (() => {
-    if (!loadedParams || loadedParams.low_stock) return null;
-    const { group_by: _groupBy, low_stock: _lowStock, ...filters } = loadedParams;
+    if (!loadedParams || loadedParams.low_stock || loadedParams.low_stock_categories) return null;
+    const {
+      group_by: _groupBy,
+      low_stock: _lowStock,
+      low_stock_categories: _lowStockCategories,
+      ...filters
+    } = loadedParams;
     return buildLabelFilterPath(filters);
   })();
 
@@ -2000,6 +2013,24 @@ const InventoryItemsPage: React.FC = () => {
             className="touch-target-phone font-medium underline"
           >
             Show all items
+          </button>
+        </div>
+      )}
+
+      {/* Low-stock categories, arrived at from the dashboard tile */}
+      {lowStockCategoriesOnly && (
+        <div className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+          <span>Showing only items in categories at or below their low-stock threshold.</span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('stock');
+              setSearchParams(next, { replace: true });
+            }}
+            className="touch-target-phone font-medium underline"
+          >
+            Show all categories
           </button>
         </div>
       )}
@@ -2245,12 +2276,12 @@ const InventoryItemsPage: React.FC = () => {
                 <span className="text-theme-text-muted text-xs">
                   {formatNumber(total)} match — select-all is limited to {formatNumber(MAX_LABEL_BATCH)}
                 </span>
-                {total <= MAX_LABEL_ITEMS_TOTAL && loadedParams && (
+                {/* `listLabelPath`, not the raw filters: the print page has no
+                    low-stock filter, so under one this would print more
+                    labels than the list matched. */}
+                {total <= MAX_LABEL_ITEMS_TOTAL && listLabelPath && (
                   <button
-                    onClick={() => {
-                      const { group_by: _groupBy, ...filters } = loadedParams;
-                      void navigate(buildLabelFilterPath(filters));
-                    }}
+                    onClick={() => void navigate(listLabelPath)}
                     className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
                   >
                     Print labels for all {formatNumber(total)} matching
@@ -2380,7 +2411,8 @@ const InventoryItemsPage: React.FC = () => {
           fStyle ||
           fLabel ||
           vendorFilter ||
-          lowStockOnly ? (
+          lowStockOnly ||
+          lowStockCategoriesOnly ? (
           <EmptyState
             icon={Package}
             title="No items found"

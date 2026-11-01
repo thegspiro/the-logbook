@@ -550,6 +550,33 @@ export interface ServiceHistory {
   default_rejoin_credit: RejoinServiceCredit;
 }
 
+/** One dated supervisor assignment; dates are inclusive. */
+export interface SupervisorAssignment {
+  id: string;
+  /** Null once the supervisor's account has been removed. */
+  supervisor_id: string | null;
+  supervisor_name: string | null;
+  starts_on: string;
+  /** Null for the assignment in effect now. */
+  ends_on: string | null;
+  created_at: string | null;
+}
+
+/** `GET /users/{id}/supervisor`: who the member reports to, and the history. */
+export interface MemberSupervisor {
+  member_id: string;
+  current: SupervisorAssignment | null;
+  /** Newest first, the current assignment included. */
+  history: SupervisorAssignment[];
+}
+
+/** A current member who may be named as a supervisor. */
+export interface SupervisorCandidate {
+  id: string;
+  name: string;
+  membership_number: string | null;
+}
+
 /** One stint in a full replacement (`PUT /users/{id}/service-periods`). */
 export interface ServicePeriodInput {
   id?: string | undefined;

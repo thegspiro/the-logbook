@@ -61,6 +61,7 @@ DOMAIN_TITLES = {
     "location": "Locations",
     "medical_screening": "Medical Screening",
     "meeting": "Meetings",
+    "member_supervisor": "Member Supervisors",
     "membership_pipeline": "Membership Pipeline",
     "minute": "Meeting Minutes",
     "notification": "Notifications",

@@ -27,8 +27,14 @@ import {
   History,
   ClipboardCheck,
   CalendarClock,
+  CalendarRange,
 } from 'lucide-react';
-import { shiftEvaluationService, skillsTestingService, trainingModuleConfigService } from '../services/api';
+import {
+  courseCohortService,
+  shiftEvaluationService,
+  skillsTestingService,
+  trainingModuleConfigService,
+} from '../services/api';
 import { MyShiftEvaluationsList } from '../components/training/MyShiftEvaluationsList';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
@@ -37,9 +43,10 @@ import { countingWindowLabel } from '../utils/requirementMonths';
 import { UpcomingDueList } from '../components/training/UpcomingDueList';
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
-import { TRAINING_TYPE_LABELS } from '../constants/enums';
+import { COHORT_STATUS_COLORS, COHORT_STATUS_LABELS, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
 import type {
+  CourseCohort,
   MyTrainingSummary,
   ShiftEvaluationDetail,
   TrainingModuleConfig as TMConfig,
@@ -568,6 +575,9 @@ const MyTrainingPage: React.FC = () => {
   // read-only one, drawn only for a member who has results on file: switching
   // deleted nothing, and this page is where a member reads their own results.
   const [hasPastSkillTests, setHasPastSkillTests] = useState(false);
+  // The cohorts this member is on the roster for — their recruit school or
+  // other multi-class course. Empty hides the section.
+  const [myCohorts, setMyCohorts] = useState<CourseCohort[]>([]);
   const [data, setData] = useState<MyTrainingSummary | null>(null);
   const [shiftEvaluations, setShiftEvaluations] = useState<ShiftEvaluationDetail[]>([]);
   const [config, setConfig] = useState<TMConfig | null>(null);
@@ -643,6 +653,23 @@ const MyTrainingPage: React.FC = () => {
       cancelled = true;
     };
   }, [showsSkillsTesting, userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    courseCohortService
+      .getMyCohorts()
+      .then((cohorts) => {
+        if (!cancelled) setMyCohorts(cohorts);
+      })
+      .catch(() => {
+        // Supplementary, like the skills-test lookup above: a failed lookup
+        // leaves the section out rather than replacing the overview.
+        if (!cancelled) setMyCohorts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleConfigSave = async (updates: Partial<TMConfig>) => {
     const updated = await trainingModuleConfigService.updateConfig(updates);
@@ -791,6 +818,38 @@ const MyTrainingPage: React.FC = () => {
               }
             />
           </div>
+
+          {/* My classes: the cohorts this member is on. Each opens the
+              member's half of the cohort page — the class timeline, without
+              the roster. Not behind a show_* flag: it is the member's own
+              schedule, already on their calendar as events. */}
+          {myCohorts.length > 0 && (
+            <Section title="My classes" icon={CalendarRange}>
+              <ul className="space-y-2">
+                {myCohorts.map((cohort) => (
+                  <li key={cohort.id}>
+                    <Link
+                      to={`/training/cohorts/${cohort.id}`}
+                      className="card hover:bg-theme-surface-hover block p-4 transition-colors"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-theme-text-primary font-medium">{cohort.name}</span>
+                        <span className={`badge ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
+                          {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}
+                        </span>
+                      </div>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        {cohort.course_name ? `${cohort.course_name} · ` : ''}
+                        {formatDate(cohort.start_date, tz)}
+                        {cohort.end_date ? ` – ${formatDate(cohort.end_date, tz)}` : ''}
+                        {` · ${cohort.class_count} class${cohort.class_count === 1 ? '' : 'es'}`}
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
           {/* Upcoming expirations and due dates: what to act on in the next
               six months, drawn from the same requirement and certification

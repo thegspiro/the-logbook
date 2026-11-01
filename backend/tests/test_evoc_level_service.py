@@ -137,17 +137,15 @@ class TestDriverEligibility:
         assert out["eligible"] is True
         assert out["required_level"] is None
 
-    async def test_unresolvable_apparatus_is_logged(self):
-        """A dangling `shifts.apparatus_id` must not disable the gate silently.
+    async def test_unresolvable_apparatus_fails_closed(self):
+        """A shift naming a vehicle in neither table refuses the driver seat.
 
-        `shifts.apparatus_id` carries no foreign key and `delete_apparatus` is a
-        hard delete, so a retired engine leaves its shifts pointing at a missing
-        row. The verdict below is deliberately the current one — passing the
-        member — and changing it is the open AP2-4 decision; what this test
-        pins is that the case is distinguishable from "this apparatus has no
-        EVOC requirement" rather than vanishing into the same silent `True`.
+        AP2-4, owner decision 2026-10-31: this used to pass every member,
+        so the EVOC requirement of a vehicle deleted before the delete guards
+        silently stopped applying. It is now refused, and still logged.
         """
         db = _db([_one(None)])
+        db.scalar = AsyncMock(return_value=None)
         messages: list[str] = []
         sink_id = logger.add(messages.append, level="WARNING")
         try:
@@ -157,11 +155,23 @@ class TestDriverEligibility:
         finally:
             logger.remove(sink_id)
 
-        assert out["eligible"] is True
+        assert out["eligible"] is False
+        assert "no longer exists" in out["warning"]
         assert out["required_level"] is None
         logged = "".join(messages)
         assert "ap-gone" in logged
         assert "not found" in logged
+
+    async def test_a_basic_vehicle_has_no_requirement(self):
+        """A department on onboarding vehicles names a basic_apparatus row,
+        which has no EVOC level: that is no requirement, not a missing row."""
+        db = _db([_one(None)])
+        db.scalar = AsyncMock(return_value="basic-1")
+        out = await EvocLevelService(db).check_driver_evoc_eligibility(
+            "u", "basic-1", "o"
+        )
+        assert out["eligible"] is True
+        assert out["required_level"] is None
 
     async def test_dangling_required_level_fails_closed(self):
         """An apparatus whose required level row is gone is refused, not passed."""

@@ -217,6 +217,7 @@ class NotificationsService:
         skip: int = 0,
         limit: int = 100,
         cursor: Optional[str] = None,
+        failed_only: bool = False,
     ) -> Tuple[List[NotificationLog], int, Optional[str]]:
         """Get notification logs, by cursor when given and by offset otherwise.
 
@@ -232,12 +233,20 @@ class NotificationsService:
         ``skip`` stays supported because it is the published contract, and
         because the caller of a first page has no cursor to pass.
 
+        ``failed_only`` keeps the rows carrying a delivery error — the same
+        predicate the operations dashboard's Notification failures tile counts
+        (``error IS NOT NULL``), so the list that tile opens holds exactly what
+        it counted.
+
         Raises :class:`~app.utils.cursor_pagination.InvalidCursor` for a cursor
         this application did not issue.
         """
         query = select(NotificationLog).where(
             NotificationLog.organization_id == str(organization_id)
         )
+
+        if failed_only:
+            query = query.where(NotificationLog.error.is_not(None))
 
         if recipient_id is not None:
             query = query.where(NotificationLog.recipient_id == str(recipient_id))

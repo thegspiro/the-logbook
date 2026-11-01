@@ -867,9 +867,11 @@ of **Manage Events**.
 > its own start — a deadline two days before the first drill closes RSVPs two
 > days before each drill.
 
-> **Attachments cannot be added from The Logbook.** The attachments area says
-> _"Files can't be attached from the app yet."_ — and there is no upload on
-> the event page either.
+> **Attaching files** _(2026-10-31)_. Files are attached from the event's own
+> page, not this form. If you can manage events, the **Attachments** card
+> there has **Attach file**: PDF, Office documents, text, CSV or images, up to
+> 25 MB each. Anyone who can see the event can download them. The bin icon
+> beside a file removes it, after asking.
 
 **Mandatory attendance.** Ticking **Mandatory attendance** opens **Mandatory
 for**, a checklist of your department's membership types. The form will not
@@ -1688,6 +1690,12 @@ opening its own dialog.
 Executive, Annual and Other. Minutes written from a meeting keep its type.
 Each type starts with its own sections. **Executive** minutes cannot be read
 by members, even once approved.
+
+**Two people editing one draft** _(2026-10-31)_. If someone else saves the
+minutes after you opened them, your next section save is refused rather than
+writing their sections back as they were. A banner says so, and what you
+were typing stays in the editor. Select **Reload** to see their changes, then
+save yours again.
 
 ### Motions
 

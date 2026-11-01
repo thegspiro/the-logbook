@@ -66,6 +66,10 @@ vi.mock('../services/api', () => ({
     deleteReturn: (...args: unknown[]) => mockDeleteReturn(...args) as unknown,
   },
   financeSettingsService: { get: () => Promise.reject(new Error('not needed')) },
+  // Both form pages render ApprovalRoutePreview, which asks for the route on a
+  // debounce. Without this the call reached a mock with no such export, and
+  // only when the timer fired before teardown, so it failed intermittently.
+  approvalChainService: { routePreview: () => Promise.reject(new Error('not needed')) },
 }));
 
 import CheckRequestFormPage from './CheckRequestFormPage';
