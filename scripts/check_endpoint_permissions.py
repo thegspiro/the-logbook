@@ -63,10 +63,31 @@ ENDPOINT_GLOB = "backend/app/api/**/*.py"
 
 PERMISSION_HELPERS = {"require_permission", "require_all_permissions"}
 
+# Calls whose first string-literal argument is a permission name, found deep
+# inside a BODY_AUTHORIZERS function rather than at a route's own call site.
+# `_has_permission(required, user_permissions)` is the primitive
+# `_manages_training` (shift_completion.py) hardcodes "training.manage"
+# behind — it is not `user_has_permission`, so it needs its own entry here.
+PERMISSION_LITERAL_CALLS = PERMISSION_HELPERS | {
+    "user_has_permission",
+    "_has_permission",
+}
+
 # Helpers called in a route BODY that enforce a permission the signature does
 # not. They exist where the permission is not the only way in — the officer
 # named on a shift may manage it without holding scheduling.manage — so the
 # check needs a loaded row and cannot be a dependency. See enforced_permissions.
+#
+# Some of these delegate to another entry in this same set instead of
+# checking a permission literal directly — `_shift_for_filing`
+# (shift_evaluations.py) calls `_authorize_report_filing`
+# (shift_completion.py), which calls `_manages_training`
+# (shift_completion.py), which is the one that actually names
+# "training.manage". The three live in two different files, so no single
+# file's AST contains the whole chain; `analyze()` collects every
+# BODY_AUTHORIZERS function from every endpoint file first and resolves the
+# delegation globally, in `_resolve_authorizer_delegation`, before any route
+# is checked.
 BODY_AUTHORIZERS = {
     "_authorize_shift_management",
     "_authorize_assignment_management",
@@ -74,6 +95,11 @@ BODY_AUTHORIZERS = {
     "_authorize_test_write",
     # finance.view, or the member who owns the budget line (finance.py).
     "_authorize_budget_view",
+    # training.manage, or the shift's assigned officer (shift_completion.py /
+    # shift_evaluations.py — see the chain note above).
+    "_shift_for_filing",
+    "_authorize_report_filing",
+    "_manages_training",
 }
 
 # Per-applicant access dependencies (backend/app/api/prospect_access.py). A
@@ -188,8 +214,11 @@ def _call_name(node: ast.Call) -> str | None:
     return None
 
 
-def authorizer_permissions(tree: ast.AST) -> dict[str, set[str]]:
-    """Permissions each body authorizer in this module enforces internally.
+def authorizer_permissions(
+    tree: ast.AST,
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """Permissions, and other authorizers delegated to, per body authorizer
+    defined in this one module.
 
     ``_authorize_assignment_management(service, user, assignment_id)`` takes no
     permission argument — it hardcodes ``user_has_permission(user,
@@ -202,18 +231,29 @@ def authorizer_permissions(tree: ast.AST) -> dict[str, set[str]]:
     ``_authorize_shift_management`` does) contribute nothing here — the literal
     is at the call site, where it is already read — because a bare ``Name``
     reference is not a string constant.
+
+    A third shape: a body authorizer that names no permission literal itself
+    because it only calls another body authorizer (``_shift_for_filing`` calls
+    ``_authorize_report_filing``, which calls ``_manages_training``). The
+    second return value records those delegated-to names so ``analyze()`` can
+    fold the chain into a permission set once every module's authorizers are
+    known — which this function, given only one module's tree, cannot do on
+    its own when the chain crosses files.
     """
     found: dict[str, set[str]] = {}
+    delegates: dict[str, set[str]] = {}
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if node.name not in BODY_AUTHORIZERS:
             continue
         perms: set[str] = set()
+        other: set[str] = set()
         for sub in ast.walk(node):
-            if isinstance(sub, ast.Call) and _call_name(sub) in (
-                PERMISSION_HELPERS | {"user_has_permission"}
-            ):
+            if not isinstance(sub, ast.Call):
+                continue
+            name = _call_name(sub)
+            if name in PERMISSION_LITERAL_CALLS:
                 for arg in sub.args:
                     if (
                         isinstance(arg, ast.Constant)
@@ -221,8 +261,36 @@ def authorizer_permissions(tree: ast.AST) -> dict[str, set[str]]:
                         and PERM_TOKEN_RE.fullmatch(arg.value)
                     ):
                         perms.add(arg.value)
+            elif name in BODY_AUTHORIZERS and name != node.name:
+                other.add(name)
         found[node.name] = perms
-    return found
+        delegates[node.name] = other
+    return found, delegates
+
+
+def _resolve_authorizer_delegation(
+    direct: dict[str, set[str]], delegates: dict[str, set[str]]
+) -> dict[str, set[str]]:
+    """Fold a delegates-to-another-authorizer chain into one permission set.
+
+    ``_shift_for_filing`` -> ``_authorize_report_filing`` ->
+    ``_manages_training`` is three hops, so one pass is not enough. The chain
+    cannot be longer than the number of entries in ``BODY_AUTHORIZERS``, so
+    that many passes is always sufficient, and the loop also exits early once
+    a pass adds nothing.
+    """
+    resolved = {name: set(perms) for name, perms in direct.items()}
+    for _ in range(len(BODY_AUTHORIZERS)):
+        changed = False
+        for name, deps in delegates.items():
+            for dep in deps:
+                added = resolved.get(dep, set()) - resolved.setdefault(name, set())
+                if added:
+                    resolved[name] |= added
+                    changed = True
+        if not changed:
+            break
+    return resolved
 
 
 def module_permission_constants(tree: ast.AST) -> dict[str, set[str]]:
@@ -401,16 +469,28 @@ def analyze() -> tuple[list[Finding], int]:
     findings: list[Finding] = []
     checked = 0
 
+    # Parsed once, kept for a second pass: a body authorizer and the routes
+    # calling it are not always in the same file (_shift_for_filing calls
+    # _authorize_report_filing, a different module's function), so every
+    # authorizer in the codebase has to be known before any route is judged.
+    trees: dict[str, ast.AST] = {}
+    direct: dict[str, set[str]] = {}
+    delegates: dict[str, set[str]] = {}
     for path in sorted(glob.glob(ENDPOINT_GLOB, recursive=True)):
         try:
-            tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
+            trees[path] = ast.parse(open(path, encoding="utf-8").read(), filename=path)
         except SyntaxError as exc:  # pragma: no cover - a broken file fails lint
             print(f"{path}: could not parse: {exc}", file=sys.stderr)
             continue
+        file_direct, file_delegates = authorizer_permissions(trees[path])
+        for name, perms in file_direct.items():
+            direct.setdefault(name, set()).update(perms)
+        for name, deps in file_delegates.items():
+            delegates.setdefault(name, set()).update(deps)
 
-        # Resolved once per module: a body authorizer and the routes calling it
-        # always live in the same endpoint file.
-        authorizers = authorizer_permissions(tree)
+    authorizers = _resolve_authorizer_delegation(direct, delegates)
+
+    for path, tree in trees.items():
         constants = module_permission_constants(tree)
 
         for node in ast.walk(tree):

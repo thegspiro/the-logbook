@@ -14,19 +14,29 @@ import unittest
 from check_endpoint_permissions import (authorizer_permissions,
                                         documented_permissions,
                                         enforced_permissions,
-                                        module_permission_constants)
+                                        module_permission_constants,
+                                        _resolve_authorizer_delegation)
 
 
 def route(src: str):
-    """Parse a snippet and return (function node, module authorizer map)."""
+    """Parse a snippet and return (function node, module authorizer map).
+
+    `_resolve_authorizer_delegation` is the step `analyze()` performs across
+    every endpoint file's `authorizer_permissions()` output before checking
+    any route; a single-file test snippet is the degenerate case of that same
+    resolution, so the test helper runs it too rather than reading the two
+    raw dicts `authorizer_permissions()` now returns.
+    """
     tree = ast.parse(src)
     fn = next(
         n
         for n in ast.walk(tree)
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and not n.name.startswith("_authorize_")
+        and not n.name.startswith("_")
     )
-    return fn, authorizer_permissions(tree), module_permission_constants(tree)
+    direct, delegates = authorizer_permissions(tree)
+    authorizers = _resolve_authorizer_delegation(direct, delegates)
+    return fn, authorizers, module_permission_constants(tree)
 
 
 class DocstringSpellings(unittest.TestCase):
@@ -129,6 +139,22 @@ class BodyAuthorizers(unittest.TestCase):
             "async def r(): pass\n"
         )
         assert auth["_authorize_shift_management"] == set()
+
+    def test_a_helper_that_only_delegates_to_another_helper_resolves(self):
+        """`_authorize_report_filing` (shift_completion.py) names no
+        permission literal itself — it calls `_manages_training`, which does.
+        Reading only direct literal calls reported every route gated this way
+        as `undefended`, CI's actual failure on 2026-11-01."""
+        fn, auth, const = route(
+            "def _manages_training(u):\n"
+            "    return _has_permission('training.manage', u.permissions)\n"
+            "async def _authorize_report_filing(db, u, shift_id):\n"
+            "    if not _manages_training(u):\n"
+            "        raise HTTPException(403)\n"
+            "async def r(user=Depends(get_current_user)):\n"
+            "    await _authorize_report_filing(db, user, shift_id)\n"
+        )
+        assert enforced_permissions(fn, auth, const) == {"training.manage"}
 
     def test_unrecognised_helper_is_not_treated_as_enforcement(self):
         """A guard the checker does not know about must NOT read as protection —
