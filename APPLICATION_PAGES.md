@@ -744,27 +744,28 @@ only from a row of cards on the member-facing `/scheduling` page — so an
 administrator opened the schedule to find the settings, and the Administration
 section had no scheduling entry at all. That row is gone.
 
-| URL                                            | Page                           | Permission          |
-| ---------------------------------------------- | ------------------------------ | ------------------- |
-| `/scheduling/admin`                            | Scheduling Administration hub  | `scheduling.manage` |
-| `/scheduling/admin/planning`                   | Shift Planning — staffing gaps | `scheduling.manage` |
-| `/scheduling/admin/planning/templates`         | Shift Templates Management     | `scheduling.manage` |
-| `/scheduling/admin/planning/patterns`          | Shift Pattern Management       | `scheduling.manage` |
-| `/scheduling/admin/closeout`                   | Shift Close-Out — the queue    | `scheduling.manage` |
-| `/scheduling/admin/history-import`             | Shift History Import           | `scheduling.manage` |
-| `/scheduling/admin/history-import/:importId`   | Shift History Import — review  | `scheduling.manage` |
-| `/scheduling/admin/reports`                    | Scheduling Reports             | `scheduling.manage` |
-| `/scheduling/admin/platoons`                   | Platoon Management             | `scheduling.manage` |
-| `/scheduling/admin/positions`                  | Position Qualification Roster  | `scheduling.manage` |
-| `/scheduling/admin/settings`                   | `?tab=` → the section's route  | `scheduling.manage` |
-| `/scheduling/admin/settings/general`           | Scheduling Settings — General  | `scheduling.manage` |
-| `/scheduling/admin/settings/apparatus`         | Settings — Apparatus           | `scheduling.manage` |
-| `/scheduling/admin/settings/platoons`          | Settings — Platoons            | `scheduling.manage` |
-| `/scheduling/admin/settings/eligibility`       | Settings — Eligibility         | `scheduling.manage` |
-| `/scheduling/admin/settings/notifications`     | Settings — Notifications       | `scheduling.manage` |
-| `/scheduling/admin/settings/shift-reports`     | Settings — Shift Reports       | `scheduling.manage` |
-| `/scheduling/admin/settings/outside-apparatus` | Settings — Outside Apparatus   | `scheduling.manage` |
-| `/scheduling/checkin`                          | Shift Check-In                 | Authenticated       |
+| URL                                                                  | Page                           | Permission          |
+| -------------------------------------------------------------------- | ------------------------------ | ------------------- |
+| `/scheduling/admin`                                                  | Scheduling Administration hub  | `scheduling.manage` |
+| `/scheduling/admin/planning`                                         | Shift Planning — staffing gaps | `scheduling.manage` |
+| `/scheduling/admin/planning/templates`                               | Shift Templates Management     | `scheduling.manage` |
+| `/scheduling/admin/planning/patterns`                                | Shift Pattern Management       | `scheduling.manage` |
+| `/scheduling/admin/closeout`                                         | Shift Close-Out — the queue    | `scheduling.manage` |
+| `/scheduling/admin/history-import`                                   | Shift History Import           | `scheduling.manage` |
+| `/scheduling/admin/history-import/:importId`                         | Shift History Import — review  | `scheduling.manage` |
+| `/scheduling/admin/reports`                                          | Scheduling Reports             | `scheduling.manage` |
+| `/scheduling/admin/platoons`                                         | Platoon Management             | `scheduling.manage` |
+| `/scheduling/admin/positions`                                        | Position Qualification Roster  | `scheduling.manage` |
+| `/scheduling/admin/settings`                                         | `?tab=` → the section's route  | `scheduling.manage` |
+| `/scheduling/admin/settings/general`                                 | Scheduling Settings — General  | `scheduling.manage` |
+| `/scheduling/admin/settings/apparatus`                               | Settings — Apparatus           | `scheduling.manage` |
+| `/scheduling/admin/settings/platoons`                                | Settings — Platoons            | `scheduling.manage` |
+| `/scheduling/admin/settings/eligibility`                             | Settings — Eligibility         | `scheduling.manage` |
+| `/scheduling/admin/settings/notifications`                           | Settings — Notifications       | `scheduling.manage` |
+| `/scheduling/admin/settings/shift-reports`                           | Settings — Shift Reports       | `scheduling.manage` |
+| `/scheduling/admin/settings/outside-apparatus`                       | Settings — Outside Apparatus   | `scheduling.manage` |
+| `/scheduling/checkin`                                                | Shift Check-In                 | Authenticated       |
+| `/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey` | Shift Evaluation               | Authenticated       |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
@@ -1267,10 +1268,14 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Reports
 
-| URL              | Page          | Permission     |
-| ---------------- | ------------- | -------------- |
-| `/reports`       | Reports       | `reports.view` |
-| `/reports/saved` | Saved Reports | `reports.view` |
+| URL                                          | Page                        | Permission                                      |
+| -------------------------------------------- | --------------------------- | ----------------------------------------------- |
+| `/reports`                                   | Reports                     | `reports.view`                                  |
+| `/reports/saved`                             | Saved Reports               | `reports.view`                                  |
+| `/reports/evaluations`                       | Member Evaluations (setup)  | `evaluations.configure` or `evaluations.manage` |
+| `/reports/evaluations/templates/:templateId` | Evaluation Template Builder | `evaluations.configure`                         |
+
+> **Member Evaluations** _(added 2026-10-31)_. Templates for each member class and status (sections, evaluation tools with behavior descriptions, data blocks with scoring rules, rank-triggered officer sections, and a forward-only workflow with deadlines) and the review periods they are completed for. Setup only: drafting and completing evaluations arrives in a later change, and the page says so.
 
 ---
 
@@ -1562,6 +1567,7 @@ are opened from the corresponding module's list view.
 | `/training/print/compliance`            | Compliance matrix       | `training.manage`                                 |
 | `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                     |
 | `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                     |
+| `/scheduling/shift-evaluations/print`   | Shift evaluation        | Authenticated                                     |
 
 ---
 

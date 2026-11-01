@@ -71,6 +71,7 @@ import type {
   AssignmentRole,
   FollowUpAnswers,
   FollowUpFormRequest,
+  InterviewRequirementProgress,
   ProspectAccess,
   ProspectAssignment,
   PublicFollowUpForm,
@@ -693,6 +694,18 @@ export const applicantService = {
     return { ...response.data, roles: asArray(response.data.roles) };
   },
 
+  /**
+   * The applicant's current Interview Requirement stage as the server grades
+   * it, or null when they are not on one.
+   */
+  async getInterviewRequirement(applicantId: string): Promise<InterviewRequirementProgress | null> {
+    const response = await api.get<InterviewRequirementProgress | null>(
+      `/prospective-members/prospects/${applicantId}/interview-requirement`
+    );
+    const data = response.data;
+    return data ? { ...data, positions: asArray(data.positions) } : null;
+  },
+
   /** The applicants the caller is assigned to, with their roles on each. */
   async getMyApplicants(): Promise<ApplicantListItem[]> {
     const response = await api.get<BackendProspectListResponse[]>('/prospective-members/my-applicants');
@@ -729,6 +742,7 @@ export const applicantService = {
           // Omitted rather than sent as false, so the archive tabs' request
           // URLs (and their cache keys) are unchanged by this parameter.
           open_only: params?.openOnly ? true : undefined,
+          assigned_to_me: params?.filters?.assigned_to_me ? true : undefined,
           limit: pageSize,
           offset,
         },

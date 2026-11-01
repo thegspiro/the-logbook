@@ -73,7 +73,7 @@ describe('ElectionsPage create form', () => {
   // position was not added. The list now closes when the field loses focus.
   it('closes the suggestions when focus leaves the field', async () => {
     await openCreateDialog();
-    const input = screen.getByRole('textbox', { name: 'Position name' });
+    const input = screen.getByRole('combobox', { name: 'Position name' });
     await userEvent.type(input, 'Cap');
     expect(await screen.findByRole('listbox', { name: 'Available positions' })).toBeInTheDocument();
     await userEvent.tab();
@@ -82,7 +82,7 @@ describe('ElectionsPage create form', () => {
 
   it('adds a typed position with Add', async () => {
     await openCreateDialog();
-    const input = screen.getByRole('textbox', { name: 'Position name' });
+    const input = screen.getByRole('combobox', { name: 'Position name' });
     await userEvent.type(input, 'Engineer');
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(input).toHaveValue('');

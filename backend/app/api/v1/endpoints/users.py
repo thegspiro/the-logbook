@@ -2041,6 +2041,34 @@ async def update_user_profile(
     # writer of a member's standing uses; the reverse would deadlock against
     # the advancement scan.
     if profile_update.member_status is not None:
+        # member_status is also in `restricted_fields` below, which is where
+        # an unauthorized caller is normally refused — but that check runs
+        # after this validation, so without this guard a self-edit from a
+        # member who may not set member_status at all could use this
+        # validator's 400 (it names every unmatched tier id) to enumerate the
+        # organization's membership tiers: the same list
+        # `get_membership_tier_config` already restricts to members.manage.
+        # Checked only on a self-edit; a non-self edit already proved
+        # members.manage above.
+        if is_self:
+            perm_result = await db.execute(
+                select(User)
+                .where(User.id == current_user.id)
+                .options(selectinload(User.positions))
+            )
+            self_edit_actor = perm_result.scalar_one()
+            if not _has_permission(
+                "members.manage", _collect_user_permissions(self_edit_actor)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Only leadership, the secretary, or the membership "
+                        "coordinator can update hire date, rank, station, "
+                        "platoon, membership number, or membership class and "
+                        "status"
+                    ),
+                )
         profile_update.member_status = await _accepted_member_status_or_400(
             db, str(current_user.organization_id), profile_update.member_status
         )
