@@ -805,6 +805,7 @@ async def get_training_program(
         prerequisite_program_ids=program.prerequisite_program_ids,
         allows_concurrent_enrollment=program.allows_concurrent_enrollment,
         prerequisite_programs=program.prerequisite_programs,
+        shift_evaluation_template_id=program.shift_evaluation_template_id,
         is_template=program.is_template,
         active=program.active,
         created_at=program.created_at,

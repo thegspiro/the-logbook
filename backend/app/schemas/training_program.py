@@ -226,6 +226,9 @@ class TrainingProgramBase(BaseModel):
     recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
     recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
     recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
+    # The shift evaluation form a member enrolled in this program is evaluated
+    # on. Validated in-org by the service before it is stored.
+    shift_evaluation_template_id: Optional[UUID] = None
 
 
 class TrainingProgramCreate(TrainingProgramBase):
@@ -262,6 +265,8 @@ class TrainingProgramUpdate(RefusesNull):
     # Omitted leaves the setting alone; null is rejected by the service, since
     # the column has no "unset" meaning the enrollment checks could honour.
     allows_concurrent_enrollment: Optional[bool] = None
+    # Omitted leaves the form alone; null clears it.
+    shift_evaluation_template_id: Optional[UUID] = None
 
     null_refused = frozenset(
         {
