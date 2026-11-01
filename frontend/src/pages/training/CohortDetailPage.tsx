@@ -8,6 +8,14 @@
  * a make-up class gets added. Every one of those is an action here rather than
  * fifteen manual edits in the events UI: reschedule one class, cancel one,
  * add an ad-hoc class, or slide everything still to come by N days.
+ *
+ * A member on the roster opens the same URL from My Training and gets the
+ * class timeline only. The server decides who may read the cohort — it answers
+ * a member who is not on the roster with 404, and sends a roster member
+ * `members: []` with no attendance counts — so the route is not gated on
+ * `training.manage`. This page decides only which half to draw, from that same
+ * grant: without it there is nothing on the roster to show and no action the
+ * API would accept.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -46,7 +54,8 @@ import {
   COHORT_STATUS_LABELS,
   CohortClassStatus,
 } from '../../constants/enums';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../utils/errorHandling';
+import { useAuthStore } from '../../stores/authStore';
 import { displayNameOf } from '../../utils/memberName';
 import type { CourseCohortClass, CourseCohortDetail } from '../../types/training';
 
@@ -56,10 +65,13 @@ export const CohortDetailPage: React.FC = () => {
   const { cohortId } = useParams<{ cohortId: string }>();
   const navigate = useNavigate();
   const tz = useTimezone();
+  const canManage = useAuthStore((state) => state.checkPermission('training.manage'));
 
   const [cohort, setCohort] = useState<CourseCohortDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<TabId>('classes');
+  const [selectedTab, setTab] = useState<TabId>('classes');
+  // A member has no roster tab to be on.
+  const tab: TabId = canManage ? selectedTab : 'classes';
   const [busy, setBusy] = useState(false);
 
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
@@ -80,7 +92,13 @@ export const CohortDetailPage: React.FC = () => {
     try {
       setCohort(await courseCohortService.getCohort(cohortId));
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load the cohort'));
+      // 404 is the server's answer to a member who is not on the roster as
+      // well as to a removed cohort; the not-found state below says so, and a
+      // toast on top of it would read as a fault.
+      if (toAppError(err).status !== 404) {
+        toast.error(getErrorMessage(err, 'Failed to load the cohort'));
+      }
+      setCohort(null);
     } finally {
       setLoading(false);
     }
@@ -222,9 +240,10 @@ export const CohortDetailPage: React.FC = () => {
   // left over would suppress the trail entirely. One definition, all three
   // branches — the not-found branch most of all, since a removed cohort is
   // exactly where a member arrives from a stale link.
+  // A member's trail skips Cohorts: that list is officer-only.
   const trail = [
     { label: 'Training', path: '/training' },
-    { label: 'Cohorts', path: '/training/cohorts' },
+    ...(canManage ? [{ label: 'Cohorts', path: '/training/cohorts' }] : []),
     { label: cohort?.name || 'Cohort' },
   ];
 
@@ -246,12 +265,19 @@ export const CohortDetailPage: React.FC = () => {
           title="Cohort not found"
           description="It may have been removed, or you may not have access to it."
           actions={[
-            {
-              label: 'Back to cohorts',
-              onClick: () => {
-                void navigate('/training/cohorts');
-              },
-            },
+            canManage
+              ? {
+                  label: 'Back to cohorts',
+                  onClick: () => {
+                    void navigate('/training/cohorts');
+                  },
+                }
+              : {
+                  label: 'Back to My Training',
+                  onClick: () => {
+                    void navigate('/training/my-training');
+                  },
+                },
           ]}
         />
       </div>
@@ -276,38 +302,41 @@ export const CohortDetailPage: React.FC = () => {
             {cohort.program_name ? ` · ${cohort.program_name}` : ''}
           </>
         }
-        underHub="/training/admin"
-        parentCrumbs={[{ label: 'Cohorts', path: '/training/cohorts' }]}
+        {...(canManage
+          ? { underHub: '/training/admin', parentCrumbs: [{ label: 'Cohorts', path: '/training/cohorts' }] }
+          : { section: '/training/my-training' })}
         actions={
-          <>
-            <button
-              type="button"
-              onClick={() => setShowShift((s) => !s)}
-              disabled={busy}
-              className="btn-icon border-theme-surface-border flex items-center gap-2 border px-3 text-sm"
-            >
-              <CalendarClock className="h-4 w-4" />
-              <span>Shift remaining</span>
-            </button>
-            {missingEvents > 0 && (
+          canManage && (
+            <>
               <button
                 type="button"
-                onClick={() => void handleRegenerate()}
+                onClick={() => setShowShift((s) => !s)}
                 disabled={busy}
-                className="btn-icon flex items-center gap-2 border border-amber-500/40 px-3 text-sm text-amber-700 dark:text-amber-400"
+                className="btn-icon border-theme-surface-border flex items-center gap-2 border px-3 text-sm"
               >
-                <RefreshCw className="h-4 w-4" />
-                <span>
-                  Create {missingEvents} missing event
-                  {missingEvents === 1 ? '' : 's'}
-                </span>
+                <CalendarClock className="h-4 w-4" />
+                <span>Shift remaining</span>
               </button>
-            )}
-          </>
+              {missingEvents > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleRegenerate()}
+                  disabled={busy}
+                  className="btn-icon flex items-center gap-2 border border-amber-500/40 px-3 text-sm text-amber-700 dark:text-amber-400"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>
+                    Create {missingEvents} missing event
+                    {missingEvents === 1 ? '' : 's'}
+                  </span>
+                </button>
+              )}
+            </>
+          )
         }
       />
 
-      {showShift && (
+      {canManage && showShift && (
         <div className="card-secondary mb-6 flex flex-wrap items-end gap-3 p-4">
           <div>
             <label className="form-label" htmlFor="shift-days">
@@ -334,24 +363,28 @@ export const CohortDetailPage: React.FC = () => {
         </div>
       )}
 
-      <div className="tab-scroll mb-4">
-        {[
-          { id: 'classes' as const, label: `Classes (${cohort.classes.length})` },
-          { id: 'roster' as const, label: `Roster (${cohort.members.length})` },
-        ].map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            aria-current={tab === t.id ? 'page' : undefined}
-            className={`mobile-touch-target px-4 text-sm whitespace-nowrap ${
-              tab === t.id ? 'text-theme-text-primary border-b-2 border-red-500 font-medium' : 'text-theme-text-muted'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {canManage ? (
+        <div className="tab-scroll mb-4">
+          {[
+            { id: 'classes' as const, label: `Classes (${cohort.classes.length})` },
+            { id: 'roster' as const, label: `Roster (${cohort.members.length})` },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              aria-current={tab === t.id ? 'page' : undefined}
+              className={`mobile-touch-target px-4 text-sm whitespace-nowrap ${
+                tab === t.id ? 'text-theme-text-primary border-b-2 border-red-500 font-medium' : 'text-theme-text-muted'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Class schedule</h2>
+      )}
 
       {tab === 'classes' && (
         <ol className="space-y-2">
@@ -367,7 +400,7 @@ export const CohortDetailPage: React.FC = () => {
                       </span>
                       <span className="text-theme-text-primary font-medium">{item.title}</span>
                       <span className={`badge ${COHORT_CLASS_STATUS_COLORS[item.status] ?? ''}`}>{item.status}</span>
-                      {!item.event_id && !cancelled && (
+                      {canManage && !item.event_id && !cancelled && (
                         <span className="badge bg-amber-500/20 text-amber-800 dark:text-amber-400">No event</span>
                       )}
                     </div>
@@ -407,7 +440,7 @@ export const CohortDetailPage: React.FC = () => {
                     )}
                   </div>
 
-                  {!cancelled && (
+                  {canManage && !cancelled && (
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
@@ -434,7 +467,7 @@ export const CohortDetailPage: React.FC = () => {
                   )}
                 </div>
 
-                {reschedulingId === item.id && (
+                {canManage && reschedulingId === item.id && (
                   <div className="border-theme-surface-border mt-3 flex flex-wrap items-end gap-2 border-t pt-3">
                     <DateTimeQuarterHour
                       value={rescheduleValue}
@@ -461,7 +494,9 @@ export const CohortDetailPage: React.FC = () => {
             <EmptyState
               icon={CalendarRange}
               title="No classes on this cohort"
-              description="Generation may not have run yet."
+              description={
+                canManage ? 'Generation may not have run yet.' : 'Your training officer has not scheduled any yet.'
+              }
             />
           )}
         </ol>
@@ -558,45 +593,49 @@ export const CohortDetailPage: React.FC = () => {
         </div>
       )}
 
-      <ConfirmDialog
-        isOpen={cancelTarget !== null}
-        title="Cancel this class?"
-        message={`"${cancelTarget?.title ?? 'This class'}" will be marked cancelled and its calendar event cancelled too, so anyone signed up sees the change. The class stays on the cohort for the record.`}
-        confirmLabel="Cancel class"
-        variant="danger"
-        loading={busy}
-        onConfirm={() => void handleCancelClass()}
-        onClose={() => setCancelTarget(null)}
-      />
+      {canManage && (
+        <>
+          <ConfirmDialog
+            isOpen={cancelTarget !== null}
+            title="Cancel this class?"
+            message={`"${cancelTarget?.title ?? 'This class'}" will be marked cancelled and its calendar event cancelled too, so anyone signed up sees the change. The class stays on the cohort for the record.`}
+            confirmLabel="Cancel class"
+            variant="danger"
+            loading={busy}
+            onConfirm={() => void handleCancelClass()}
+            onClose={() => setCancelTarget(null)}
+          />
 
-      <MemberPickerModal
-        isOpen={pickingMember}
-        onClose={() => setPickingMember(false)}
-        onSelect={(member) => void handleAddMember(member)}
-        title="Add a member to this cohort"
-      />
+          <MemberPickerModal
+            isOpen={pickingMember}
+            onClose={() => setPickingMember(false)}
+            onSelect={(member) => void handleAddMember(member)}
+            title="Add a member to this cohort"
+          />
 
-      {cohortId && missedFor && (
-        <CohortMissedClassesModal
-          isOpen
-          cohortId={cohortId}
-          userId={missedFor.userId}
-          memberName={missedFor.name}
-          onClose={() => setMissedFor(null)}
-          onChanged={() => void refresh()}
-        />
+          {cohortId && missedFor && (
+            <CohortMissedClassesModal
+              isOpen
+              cohortId={cohortId}
+              userId={missedFor.userId}
+              memberName={missedFor.name}
+              onClose={() => setMissedFor(null)}
+              onChanged={() => void refresh()}
+            />
+          )}
+
+          <ConfirmDialog
+            isOpen={removeTarget !== null}
+            title="Remove from this cohort?"
+            message={`${removeTarget?.name ?? 'This member'} will be withdrawn from the roster and taken off the classes still to come. Their pipeline enrollment, training records, and any class they already attended are kept.`}
+            confirmLabel="Remove"
+            variant="warning"
+            loading={busy}
+            onConfirm={() => void handleRemoveMember()}
+            onClose={() => setRemoveTarget(null)}
+          />
+        </>
       )}
-
-      <ConfirmDialog
-        isOpen={removeTarget !== null}
-        title="Remove from this cohort?"
-        message={`${removeTarget?.name ?? 'This member'} will be withdrawn from the roster and taken off the classes still to come. Their pipeline enrollment, training records, and any class they already attended are kept.`}
-        confirmLabel="Remove"
-        variant="warning"
-        loading={busy}
-        onConfirm={() => void handleRemoveMember()}
-        onClose={() => setRemoveTarget(null)}
-      />
     </div>
   );
 };

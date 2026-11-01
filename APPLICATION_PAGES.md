@@ -406,7 +406,7 @@ A missing or unknown `?tab=` opens Create Event.
 | `/training/programs`                  | Training Programs                         | Authenticated     |
 | `/training/programs/:programId`       | Program Detail                            | Authenticated     |
 | `/training/cohorts`                   | Course Cohorts                            | `training.manage` |
-| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | `training.manage` |
+| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | Authenticated     |
 | `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)          | Authenticated     |
 | `/training/my-progress/:enrollmentId` | My Program Progress                       | Authenticated     |
 | `/training/approve/:token`            | Training Approval (officer credit review) | `training.manage` |
@@ -421,6 +421,14 @@ A missing or unknown `?tab=` opens Create Event.
 > approval's organization. The link had no route before this, so the email
 > bounced officers to the dashboard. An expired link is replaced by reopening the
 > event's attendance and finalizing it again.
+
+> **`/training/cohorts/:cohortId` is open to a cohort's own roster**
+> _(2026-11-01)_. A member reaches it from **My classes** on My Training and sees
+> the class timeline only — no roster, classmates, progress or officer actions.
+> The API is the authority: it returns 404 to a member who is not on the roster
+> and `members: []` with no attendance counts to one who is, so the route gates
+> on sign-in and the Training module only. A `training.manage` holder gets the
+> full management page at the same URL.
 
 > **`/training/my-progress/:enrollmentId` is where every training notification
 > now lands** _(2026-08-09)_. All eight `action_url`s previously pointed at
