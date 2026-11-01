@@ -20,6 +20,7 @@ import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
@@ -912,7 +913,11 @@ class TestCalendarHelpers:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The summary counts the department's local month, which it works out
+        # from the org's timezone rather than through ``resolve_org_today``, so
+        # the autouse fixture above does not reach it. Built on the UTC date,
+        # the shift fell in next month for the hours after midnight UTC.
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1349,11 +1354,17 @@ class TestPatternGeneration:
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day
+        # 07:00 the next day in the department's timezone. Compared in UTC,
+        # 19:00 Eastern is the next UTC day all winter, so start and end fell
+        # on the same UTC date from the end of daylight saving time to its
+        # return and the old day-number check failed for those months.
+        local = ZoneInfo("America/New_York")
+        start_local = shift.start_time.astimezone(local)
+        end_local = shift.end_time.astimezone(local)
         assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (
-            shift.start_time.month != shift.end_time.month
-        )
+        assert (start_local.hour, start_local.minute) == (19, 0)
+        assert (end_local.hour, end_local.minute) == (7, 0)
+        assert end_local.date() == start_local.date() + timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):
