@@ -12,9 +12,65 @@ import {
 } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
-import { getUserFacingModules, type ModuleDefinition } from '../config';
+import { ALWAYS_ON_MODULE_IDS, getUserFacingModules, type ModuleDefinition } from '../config';
 import { FeatureStatus } from '../../../constants/enums';
 import { nextStepName, nextStepPath } from '../config/steps';
+
+interface ModuleCardActionsProps {
+  module: ModuleDefinition;
+  isEnabled: boolean;
+  enableClass: string;
+  onAction: (moduleId: string, action: 'start' | 'ignore') => void;
+}
+
+/**
+ * Enable / Skip for an essential or recommended card. Enable reads "Enabled"
+ * once it is, as the optional cards always did: every card used to show the
+ * same Enable button whatever its state, and a 16px icon nobody's screen reader
+ * could see was the only difference. There is one way to leave a module off —
+ * a "Later" beside Skip did exactly the same thing.
+ */
+const ModuleCardActions: React.FC<ModuleCardActionsProps> = ({ module, isEnabled, enableClass, onAction }) => {
+  if (ALWAYS_ON_MODULE_IDS.includes(module.id)) {
+    return (
+      <p className="text-theme-accent-green flex items-center gap-1.5 text-sm font-medium">
+        <CheckCircle aria-hidden="true" className="h-4 w-4" />
+        Always on
+        <span className="text-theme-text-muted font-normal">— every department uses this</span>
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col space-y-2">
+      <button
+        onClick={() => onAction(module.id, 'start')}
+        aria-pressed={isEnabled}
+        aria-label={`${isEnabled ? 'Enabled' : 'Enable'} ${module.name}`}
+        className={
+          isEnabled
+            ? 'touch-target-phone flex w-full items-center justify-center gap-1.5 rounded-lg bg-green-700 px-4 py-2 font-medium text-white transition-colors hover:bg-green-800'
+            : `${enableClass} w-full font-medium`
+        }
+      >
+        {isEnabled ? (
+          <>
+            <CheckCircle aria-hidden="true" className="h-4 w-4" />
+            Enabled
+          </>
+        ) : (
+          'Enable'
+        )}
+      </button>
+      <button
+        onClick={() => onAction(module.id, 'ignore')}
+        aria-label={`Skip ${module.name}`}
+        className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted touch-target-phone w-full rounded-lg px-4 py-2 text-sm transition-colors"
+      >
+        Skip
+      </button>
+    </div>
+  );
+};
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -49,7 +105,21 @@ const ModuleOverview: React.FC = () => {
     }
   }, [modules, moduleStatuses, setModuleStatuses]);
 
-  const handleModuleAction = (moduleId: string, action: 'start' | 'skip' | 'ignore') => {
+  // The server keeps these on whatever is saved, so a stored "skipped" from an
+  // earlier session would only make this page and the completion summary
+  // disagree with the app.
+  React.useEffect(() => {
+    if (Object.keys(moduleStatuses).length === 0) return;
+    const stale = ALWAYS_ON_MODULE_IDS.filter((id) => moduleStatuses[id] !== 'enabled');
+    if (stale.length > 0) {
+      setModuleStatuses({
+        ...moduleStatuses,
+        ...Object.fromEntries(stale.map((id) => [id, 'enabled' as const])),
+      });
+    }
+  }, [moduleStatuses, setModuleStatuses]);
+
+  const handleModuleAction = (moduleId: string, action: 'start' | 'ignore') => {
     const module = modules.find((m) => m.id === moduleId);
 
     if (action === 'start') {
@@ -59,10 +129,7 @@ const ModuleOverview: React.FC = () => {
       // step, which now follows this one.
       setModuleStatus(moduleId, 'enabled');
       toast.success(`${module?.name} enabled`);
-    } else if (action === 'skip') {
-      setModuleStatus(moduleId, 'skipped');
-      toast.success(`${module?.name} left off for now`);
-    } else if (action === 'ignore') {
+    } else {
       setModuleStatus(moduleId, 'ignored');
       toast.success(`${module?.name} skipped`);
     }
@@ -164,7 +231,8 @@ const ModuleOverview: React.FC = () => {
             <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Choose Your Modules</h1>
             <p className="text-theme-text-secondary mb-2 text-xl">Turn on the features your department will use</p>
             <p className="text-theme-text-muted mx-auto max-w-2xl text-sm">
-              Only modules marked Enable are turned on. You can turn any module on or off later from Settings.
+              A module is on once its button reads Enabled. Members, Events and Documents are always on. You can turn
+              any other module on or off later from Settings → Modules.
             </p>
           </div>
 
@@ -214,6 +282,8 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
+                    role="group"
+                    aria-labelledby={`module-card-${module.id}`}
                     className="bg-theme-surface rounded-lg border-2 border-red-500/30 p-6 backdrop-blur-xs transition-all hover:border-red-500/50"
                   >
                     <div className="mb-4 flex items-start justify-between">
@@ -229,33 +299,16 @@ const ModuleOverview: React.FC = () => {
                         ESSENTIAL
                       </span>
                     </div>
-                    <h3 className="text-theme-text-primary mb-2 text-lg font-bold">{module.name}</h3>
+                    <h3 id={`module-card-${module.id}`} className="text-theme-text-primary mb-2 text-lg font-bold">
+                      {module.name}
+                    </h3>
                     <p className="text-theme-text-secondary mb-4 text-sm leading-relaxed">{module.description}</p>
-                    <div className="flex flex-col space-y-2">
-                      <button
-                        onClick={() => handleModuleAction(module.id, 'start')}
-                        aria-label={`Enable ${module.name}`}
-                        className="btn-primary w-full font-medium"
-                      >
-                        Enable
-                      </button>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleModuleAction(module.id, 'skip')}
-                          aria-label={`Set up ${module.name} later`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
-                        >
-                          Later
-                        </button>
-                        <button
-                          onClick={() => handleModuleAction(module.id, 'ignore')}
-                          aria-label={`Skip ${module.name}`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
-                        >
-                          Skip
-                        </button>
-                      </div>
-                    </div>
+                    <ModuleCardActions
+                      module={module}
+                      isEnabled={moduleStatuses[module.id] === FeatureStatus.ENABLED}
+                      enableClass="btn-primary"
+                      onAction={handleModuleAction}
+                    />
                   </div>
                 );
               })}
@@ -277,7 +330,12 @@ const ModuleOverview: React.FC = () => {
                 const Icon = module.icon;
                 const status = moduleStatuses[module.id];
                 return (
-                  <div key={module.id} className="card p-6 transition-all hover:border-blue-500/50">
+                  <div
+                    key={module.id}
+                    role="group"
+                    aria-labelledby={`module-card-${module.id}`}
+                    className="card p-6 transition-all hover:border-blue-500/50"
+                  >
                     <div className="mb-4 flex items-start justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600">
@@ -291,33 +349,16 @@ const ModuleOverview: React.FC = () => {
                         RECOMMENDED
                       </span>
                     </div>
-                    <h3 className="text-theme-text-primary mb-2 text-lg font-bold">{module.name}</h3>
+                    <h3 id={`module-card-${module.id}`} className="text-theme-text-primary mb-2 text-lg font-bold">
+                      {module.name}
+                    </h3>
                     <p className="text-theme-text-secondary mb-4 text-sm leading-relaxed">{module.description}</p>
-                    <div className="flex flex-col space-y-2">
-                      <button
-                        onClick={() => handleModuleAction(module.id, 'start')}
-                        aria-label={`Enable ${module.name}`}
-                        className="btn-info w-full font-medium"
-                      >
-                        Enable
-                      </button>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleModuleAction(module.id, 'skip')}
-                          aria-label={`Set up ${module.name} later`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
-                        >
-                          Later
-                        </button>
-                        <button
-                          onClick={() => handleModuleAction(module.id, 'ignore')}
-                          aria-label={`Skip ${module.name}`}
-                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted touch-target-phone flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
-                        >
-                          Skip
-                        </button>
-                      </div>
-                    </div>
+                    <ModuleCardActions
+                      module={module}
+                      isEnabled={moduleStatuses[module.id] === FeatureStatus.ENABLED}
+                      enableClass="btn-info"
+                      onAction={handleModuleAction}
+                    />
                   </div>
                 );
               })}
@@ -342,6 +383,8 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
+                    role="group"
+                    aria-labelledby={`module-card-${module.id}`}
                     className={`card-secondary p-5 backdrop-blur-xs transition-all ${isEnabled ? 'border-green-500/60 ring-1 ring-green-500/40' : 'hover:border-theme-surface-hover'}`}
                   >
                     <div className="mb-3 flex items-start justify-between">
@@ -352,7 +395,9 @@ const ModuleOverview: React.FC = () => {
                         {status && getStatusIcon(status)}
                       </div>
                     </div>
-                    <h3 className="text-theme-text-primary mb-2 text-base font-bold">{module.name}</h3>
+                    <h3 id={`module-card-${module.id}`} className="text-theme-text-primary mb-2 text-base font-bold">
+                      {module.name}
+                    </h3>
                     <p className="text-theme-text-muted mb-4 text-xs leading-relaxed">{module.description}</p>
                     <div className="flex flex-col space-y-2">
                       <button

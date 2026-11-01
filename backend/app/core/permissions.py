@@ -49,6 +49,7 @@ class PermissionCategory(str, Enum):
     NOTIFICATIONS = "notifications"
     SUGGESTIONS = "suggestions"
     REPORTS = "reports"
+    EVALUATIONS = "evaluations"
     PROSPECTIVE_MEMBERS = "prospective_members"
     ADMIN_HOURS = "admin_hours"
     FINANCE = "finance"
@@ -673,6 +674,22 @@ REPORTS_MANAGE = Permission(
     PermissionCategory.REPORTS,
 )
 
+# Member performance evaluations
+#
+# Only the grants something reads are registered (CLAUDE.md pitfall #19). The
+# member-facing and evaluator grants (view_own, conduct, view_all, delete) are
+# added with the endpoints that check them.
+EVALUATIONS_CONFIGURE = Permission(
+    "evaluations.configure",
+    "Build evaluation templates and their workflows",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_MANAGE = Permission(
+    "evaluations.manage",
+    "Open and close evaluation review periods",
+    PermissionCategory.EVALUATIONS,
+)
+
 # Members (additional)
 #
 # Despite the name, this does NOT gate creating a member: POST /users requires
@@ -894,6 +911,9 @@ ALL_PERMISSIONS: list[Permission] = [
     # Reports
     REPORTS_VIEW,
     REPORTS_MANAGE,
+    # Member performance evaluations
+    EVALUATIONS_CONFIGURE,
+    EVALUATIONS_MANAGE,
     # Members (additional)
     MEMBERS_CREATE,
     # Training (additional)
@@ -1541,6 +1561,10 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
             SUGGESTIONS_MANAGE.name,
+            # Evaluations are personnel records; setting up the forms and
+            # periods starts with the Chief, who delegates by position.
+            EVALUATIONS_CONFIGURE.name,
+            EVALUATIONS_MANAGE.name,
             ADMIN_ACCESS.name,
             APPARATUS_MANAGE_NFC_TAGS.name,
             LOCATIONS_MANAGE_NFC_TAGS.name,

@@ -1952,6 +1952,11 @@ to confirm. It never repeats a reminder, so running it early does no harm.
 
 ## Leave of Absence
 
+> **Leave badges _(2026-10-31)_.** A leave on the member profile is badged by
+> its dates, not just "Active": **Upcoming** before it starts, **Active** while
+> it runs, **Ended** after. The Waivers screen uses the same rule.
+> Re-capture any profile screenshot that shows a leave badge.
+
 **Who can do this:**
 
 - To see, edit or end a leave: officers who can manage member profiles (the

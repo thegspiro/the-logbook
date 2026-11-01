@@ -25,7 +25,6 @@ import {
   ClipboardList,
   BarChart3,
   Bell,
-  Smartphone,
   FormInput,
   Plug,
   Shield,
@@ -59,6 +58,14 @@ export interface ModuleDefinition {
     defaultManagePositions: string[];
   };
 }
+
+/**
+ * Modules the server keeps on whatever is stored — the core list in
+ * `ModuleSettings.get_enabled_modules` (`schemas/organization.py`). The module
+ * step used to offer Skip on these, which changed nothing; it now shows them
+ * as always on. Keep the two lists in step.
+ */
+export const ALWAYS_ON_MODULE_IDS: readonly string[] = ['members', 'events', 'documents'];
 
 /**
  * All available modules in the application.
@@ -363,8 +370,13 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   // ============================================
   {
     id: 'notifications',
-    name: 'Email Notifications',
-    description: 'Automated email notifications for events, reminders, and important updates.',
+    // The switch gates /notifications: the bell and inbox, web push and the
+    // notification rules screen. Nothing on the sending side reads it, so the
+    // old name ("Email Notifications") told a department that skipping it
+    // stopped email, when it removed the bell and left every email going out.
+    name: 'In-App Notifications',
+    description:
+      'The notification bell and inbox, phone push notifications, and the notification rules screen. Notices are emailed whether or not this is on.',
     icon: Bell,
     priority: 'optional',
     category: 'Communication',
@@ -373,21 +385,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure notification templates and triggers',
       view: ['Receive notifications', 'Set personal preferences', 'View notification history'],
       manage: ['Configure templates', 'Set notification triggers', 'Manage global settings'],
-      defaultManagePositions: ['it_manager', 'communications_officer'],
-    },
-  },
-  {
-    id: 'mobile',
-    name: 'Mobile App Access',
-    description: 'Progressive web app for mobile access. Members can check in and view schedules from their phones.',
-    icon: Smartphone,
-    priority: 'optional',
-    category: 'Communication',
-    permissions: {
-      viewDescription: 'Access the platform from mobile devices',
-      manageDescription: 'Configure mobile-specific features and settings',
-      view: ['Use mobile app', 'Receive in-app notifications', 'Access mobile features'],
-      manage: ['Configure mobile settings', 'Manage notification preferences', 'Set mobile policies'],
       defaultManagePositions: ['it_manager', 'communications_officer'],
     },
   },

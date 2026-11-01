@@ -291,6 +291,31 @@ export const memberSignupClosedReason = (
   now: Date = new Date()
 ): string | null => signupClosedReason(shift, window, MEMBER_VIEWER, now);
 
+/** A stretch of approved time off, as `/scheduling/time-off` reports it. */
+export interface TimeOffSpan {
+  start_date: string;
+  end_date: string;
+}
+
+/** Shown on a seat the member cannot take because they asked for the day off. */
+export const TIME_OFF_SEAT_REASON = 'You have approved time off on this day.';
+
+/**
+ * Why the member cannot be seated on this shift because of their own approved
+ * time off, or null when none covers it.
+ *
+ * Advisory, like `signupClosedReason`: it mirrors the time-off check in the
+ * backend's `_validate_assignment_candidate` (approved, and `start_date <=
+ * shift_date <= end_date`, compared on the shift's own date), which is what
+ * actually refuses the signup. Without it the board offered a seat on a day
+ * off and the member only learned otherwise from the error after tapping it.
+ * Both sides are "YYYY-MM-DD", so a string comparison is a date comparison.
+ */
+export const timeOffSeatReason = (shift: ShiftRecord, spans: readonly TimeOffSpan[]): string | null =>
+  spans.some((span) => span.start_date <= shift.shift_date && shift.shift_date <= span.end_date)
+    ? TIME_OFF_SEAT_REASON
+    : null;
+
 /**
  * `isShiftOpen` and the member signup window together — what a claim button
  * gates on.

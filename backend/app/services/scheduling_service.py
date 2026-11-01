@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
-from app.core.utils import generate_uuid, list_within_detail_limit
+from app.core.utils import generate_uuid, list_within_detail_limit, utc_isoformat
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
@@ -1078,10 +1078,13 @@ class SchedulingService:
                     Shift.id.in_(list(shift_ids))
                 )
             )
+            # A column-tuple select skips the ORM load event that tags naive
+            # MySQL datetimes as UTC, so the offset is added here: without it
+            # the browser reads the start time as its own local time.
             for row in shift_result.all():
                 shift_info_map[str(row[0])] = {
                     "date": row[1],
-                    "start_time": str(row[2]) if row[2] else None,
+                    "start_time": utc_isoformat(row[2]),
                 }
 
         result = []
@@ -10569,6 +10572,27 @@ class SchedulingService:
                         [name for _, name in missing],
                         suffix=". File it, or ask a scheduling admin to close "
                         "out with an override.",
+                    )
+
+            # Shift evaluations are required whenever a program's form (or a
+            # required general form) calls for one, whatever the report
+            # setting says: attaching a form is the department's opt-in, and a
+            # department that has attached none sees no change. The same
+            # admin override, with its audited reason, closes out without them.
+            if not override_missing_reports:
+                from app.services.shift_evaluation_service import (
+                    ShiftEvaluationService,
+                )
+
+                missing_evaluations = await ShiftEvaluationService(
+                    self.db
+                ).missing_required(shift_id, organization_id)
+                if missing_evaluations:
+                    return None, list_within_detail_limit(
+                        "A shift evaluation is still needed for: ",
+                        [label for _, label in missing_evaluations],
+                        suffix=". Fill it in from the shift report, or ask a "
+                        "scheduling admin to close out with an override.",
                     )
 
             # Create attendance records for manually-entered hours
