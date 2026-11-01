@@ -36,6 +36,35 @@ evaluator defaults, line-officer visibility of their own crew's evaluations,
 and approvals. Not started; it is a change to the member model and its editing
 screens, separate from the evaluations work.
 
+**Resolved (2026-11-01), owner decision: dated supervisor assignments.**
+`member_supervisor_assignments` (migration `a1c3e5f7b9d2`) records who a member
+reports to as inclusive date ranges.
+
+How the dates work:
+
+- A change from day D ends the previous assignment on D−1.
+- A change dated the day the current assignment began corrects it in place.
+- If a former supervisor's account is hard-deleted, the dates stay
+  (`SET NULL`).
+
+Rules:
+
+- One open assignment per member, held by a generated `open_marker` column
+  under a unique key and by a member-row lock.
+- The supervisor is a current member of the department, never the member.
+
+Members-managers set, change and end it on the profile (**Reports To**), and a
+member sees their own.
+
+**Still open:**
+
+- Only the evaluator default reads the relationship, and nothing calls it yet.
+  `MemberSupervisorService.default_evaluator_id` waits for the evaluation
+  drafting service and its evaluator permission, neither of which exists.
+- Line-officer views of their own crew, approvals and an org chart do not read
+  it.
+- Two members may supervise each other.
+
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
 The member standing rework (class and status as two controls, tiers as
@@ -3364,6 +3393,26 @@ member's half of `CohortDetailPage` — a permissions decision plus a feature,
 not a correctness fix. This loop does not widen route guards, so it needs an
 owner.
 
+**Resolved (2026-11-01), owner decision: give members their own view.**
+
+- My Training shows a **My classes** section listing the caller's cohorts
+  (`GET /training/cohorts/mine`), each linking to `/training/cohorts/:cohortId`.
+- That route is now gated only on sign-in and the Training module. The API
+  is the authority: it returns 404 to a member not on the roster, and
+  `members: []` with no attendance counts to one who is.
+- Without `training.manage`, `CohortDetailPage` draws the class timeline only:
+  no roster, classmates, progress or officer actions. A 404 shows "Cohort not
+  found". Officers keep the full page at the same URL.
+
+Still open, each the owner's call:
+
+- The member response still carries the cohort's `notes` and creator ids.
+  They are not displayed, but they are sent.
+- `is_roster_member` admits a withdrawn member, while `/mine` lists only
+  active ones.
+- A `training.view_all` holder without `training.manage` sees the member view
+  rather than a read-only roster.
+
 **Deferred by the owner (2026-10-05):** the member's view of a cohort is not
 being built now; the cohort page stays officer-only until it is.
 
@@ -6648,6 +6697,25 @@ W62-6 and W62-7).
     and amount are needed to make the decision; the requester's name and the
     description are more sensitive.
 
+**Resolved (2026-11-01), owner decisions: show send status, allow re-send, and
+show title, amount and requester.**
+
+- **Send status.** Each emailed link records whether its email was sent or
+  failed (`approval_step_records.email_status` and `email_status_at`, migration
+  `b2d4f6a8c0e3`). Expiry is read from `token_expires_at`. The Approvals queue
+  shows one of: "Email sent <date>", "Email could not be sent", "Link expired",
+  "No link has been emailed", or, for links sent before tracking began, "Link
+  emailed (sending not recorded)".
+- **Re-send.** An approvals admin (`finance.approve` plus
+  `finance.configure_approvals`) can **Re-send link**.
+  - A fresh 7-day link is minted, and the old one stops working.
+  - The send is recorded and audit-logged as `finance.approval_link_resent`.
+  - A repeated click sends nothing (`email_link_version`).
+  - Staff never see or copy the link.
+- **What the approver sees.** The emailed page and the email show the
+  request's title, amount and requester's name. The description, vendor and
+  lines stay behind the login, and an expired or used link shows none of it.
+
 ## Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)
 
 Found driving W63 (`docs/workflow-review/W63-purchase-request-approval.md`,
@@ -6802,6 +6870,25 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
 
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
+
+**Resolved (2026-11-01), owner decision: build the department events feed.**
+Most of it had shipped on 2026-10-16, a day before this entry. Connecting
+issues a secret feed URL, shown on the card with Copy and a confirmed
+**Reset link**, and `GET /api/public/v1/calendar/org/{token}.ics` serves the
+department's published, non-cancelled events, 30 days back to 365 ahead,
+filtered by `included_event_types`.
+
+What was missing, and is now built:
+
+- Nothing read `include_shifts`; the schema refused it outright.
+- No screen set either filter.
+
+The connected card now has **Settings**: event types to publish (none ticked
+means all) and **Include duty shifts**, which adds scheduled shifts showing
+times and platoon only, never who is assigned or notes. An unknown event
+type is refused on save. A disconnected or disabled integration serves 404.
+Members' personal feeds are unchanged. Covered by
+`tests/test_department_ical_feed.py` and `IntegrationsPage.test.tsx`.
 
 ## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23, resolved 2026-10-27)
 
