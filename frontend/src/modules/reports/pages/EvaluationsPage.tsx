@@ -364,7 +364,7 @@ const EvaluationsPage: React.FC = () => {
                         {period.evaluations_count}
                       </td>
                       {canManage && (
-                        <td className="px-4 py-3">
+                        <td data-label="Actions" className="px-4 py-3">
                           <div className="flex flex-wrap justify-end gap-2">
                             <button
                               type="button"
