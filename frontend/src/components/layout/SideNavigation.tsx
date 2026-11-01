@@ -61,7 +61,7 @@ import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
-import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { triggerAllOfflineDrains } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
@@ -1013,7 +1013,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             {isOnline && pendingSyncCount > 0 && (
               <button
                 onClick={() => {
-                  void triggerOfflineDrain();
+                  void triggerAllOfflineDrains();
                 }}
                 className={`focus:ring-theme-focus-ring touch:min-h-[44px] flex w-full items-center rounded-lg bg-blue-500/15 text-blue-700 transition-colors hover:bg-blue-500/25 focus:ring-2 focus:outline-hidden dark:text-blue-300 ${
                   collapsed ? 'justify-center p-2' : 'px-3 py-2'

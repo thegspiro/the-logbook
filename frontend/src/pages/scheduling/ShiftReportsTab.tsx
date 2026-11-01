@@ -76,13 +76,8 @@ import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/
 import { getErrorMessage } from '../../utils/errorHandling';
 import { blankToNull } from '../../utils/formValues';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
-import {
-  enqueueShiftReport,
-  listOwnPendingReports,
-  dequeueShiftReport,
-  pendingReportCount,
-} from '../../utils/shiftReportOfflineQueue';
-import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
+import { enqueueShiftReport, pendingReportCount } from '../../utils/shiftReportOfflineQueue';
+import { SHIFT_REPORTS_SYNCED_EVENT } from '../../utils/shiftReportSync';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
@@ -536,33 +531,17 @@ export const ShiftReportsTab: React.FC = () => {
     }
   }, [form.shift_id, crewMembers.length, userId]);
 
-  // Sync offline queue when connectivity returns
+  // Queued reports are sent by the app-wide sync engine (shiftReportSync.ts),
+  // so they go on reconnect whatever page is open. This screen only refreshes
+  // its list and count when that happens.
   useEffect(() => {
-    if (!isOnline) return;
-    const syncQueue = async () => {
-      // Only this member's own reports go out under their session (FE3-34-5).
-      const pending = await listOwnPendingReports();
-      if (pending.length === 0) return;
-      let synced = 0;
-      for (const entry of pending) {
-        // Asked again per entry: the member can change while earlier ones send.
-        if (!isOwnedByCurrentMember(entry)) continue;
-        try {
-          await shiftCompletionService.batchCreateReports(entry.payload);
-          await dequeueShiftReport(entry.id);
-          synced++;
-        } catch {
-          // Will retry next time connectivity is restored
-        }
-      }
-      if (synced > 0) {
-        toast.success(`Synced ${synced} offline report${synced !== 1 ? 's' : ''}`);
-        void loadReports();
-      }
-      setPendingOfflineCount(await pendingReportCount());
+    const handleSynced = () => {
+      void loadReports();
+      void pendingReportCount().then(setPendingOfflineCount);
     };
-    void syncQueue();
-  }, [isOnline, loadReports]);
+    window.addEventListener(SHIFT_REPORTS_SYNCED_EVENT, handleSynced);
+    return () => window.removeEventListener(SHIFT_REPORTS_SYNCED_EVENT, handleSynced);
+  }, [loadReports]);
 
   // Track pending offline count
   useEffect(() => {

@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
+import { newRequestId } from '../utils/requestId';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { toAppError } from '../utils/errorHandling';
 import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
@@ -1354,7 +1355,10 @@ export const trainingSubmissionService = {
   },
 
   // Member submissions
-  async createSubmission(data: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+  async createSubmission(input: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+    // Chosen once, before the first attempt: a queued copy is resent whenever
+    // an answer goes missing, and the server stores a repeat of this key once.
+    const data: TrainingSubmissionCreate = { ...input, client_request_id: input.client_request_id || newRequestId() };
     // If the device is offline, persist the submission to IndexedDB so it
     // syncs when connectivity returns. This is the most-used action in the
     // product and must never silently drop because of weak station wifi.

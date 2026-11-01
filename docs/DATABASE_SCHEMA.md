@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**334 tables · 5475 columns · 1127 foreign keys**
+**334 tables · 5476 columns · 1127 foreign keys**
 
 ---
 
@@ -728,7 +728,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
-| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 28 | Training Submission model |
+| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 29 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
 | [`xapi_statements`](#xapi_statements) | `XAPIStatement` | 27 | xAPI (Experience API / Tin Can) Statement model |
 
@@ -11184,6 +11184,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
 | `submitted_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
+| `client_request_id` | VARCHAR(64) | yes |  |  |  |
 
 **Indexes**
 
@@ -11192,6 +11193,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_submission_user` (`submitted_by`, `status`)
 - `ix_training_submissions_crew_batch_id` (`crew_batch_id`)
 - `ix_training_submissions_status` (`status`)
+
+**Constraints**
+
+- UNIQUE `uq_submission_member_client_request` (`submitted_by`, `client_request_id`)
 
 ### `training_waivers`
 
