@@ -42,6 +42,14 @@ app/api/public/paypal_webhook.py::paypal_inbound_webhook::Integration::integrati
 #     public webhook: there is no caller org, and the integration id IS the credential
 app/api/public/salesforce_webhook.py::salesforce_inbound_webhook::Integration::integration_id
 
+# Reviewed 2026-10-31: safe.
+#   - zeffy_inbound_webhook::Integration::integration_id
+#     public webhook: there is no caller org. The id only selects whose signing
+#     secret to check; nothing is read or written until the HMAC over the raw
+#     body verifies under that integration's own secret, and every write is
+#     stamped with that integration's organization id
+app/api/public/zeffy_webhook.py::zeffy_inbound_webhook::Integration::integration_id
+
 # Reviewed 2026-10-06: safe (MCP OAuth server).
 #   - authenticate_access_token / refresh / revoke_token::McpOAuthGrant::grant_id
 #     the grant id is parsed out of a bearer token, and the row is used only
