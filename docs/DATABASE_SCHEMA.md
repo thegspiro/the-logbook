@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**336 tables · 5527 columns · 1137 foreign keys**
+**338 tables · 5575 columns · 1146 foreign keys**
 
 ---
 
@@ -756,6 +756,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
 | [`users`](#users) | `User` | 70 | User model with comprehensive authentication and profile support. |
+
+### Zeffy
+
+<sub>`app/models/zeffy.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`zeffy_campaign_links`](#zeffy_campaign_links) | `ZeffyCampaignLink` | 15 | Routes one Zeffy campaign's payments to one Logbook record. |
+| [`zeffy_payments`](#zeffy_payments) | `ZeffyPayment` | 32 | A payment Zeffy reported, and what the Logbook applied for it. |
 
 ---
 
@@ -11691,13 +11700,94 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_users_password_reset_token` (`password_reset_token`)
 - `ix_users_status` (`status`)
 
+## Zeffy
+
+### `zeffy_campaign_links`
+
+**ZeffyCampaignLink** · `app/models/zeffy.py`
+
+> Routes one Zeffy campaign's payments to one Logbook record.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `zeffy_campaign_id` | VARCHAR(120) | no |  |  |  |
+| `zeffy_campaign_title` | VARCHAR(255) | yes |  |  |  |
+| `target_type` | ENUM(`fundraising_campaign`, `fundraising_event`, `dues_schedule`) | no |  |  |  |
+| `fundraising_campaign_id` | VARCHAR(36) | yes | FK |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
+| `fundraising_event_id` | VARCHAR(36) | yes | FK |  | → `fundraising_events.id` ON DELETE SET NULL |
+| `dues_schedule_id` | VARCHAR(36) | yes | FK |  | → `dues_schedules.id` ON DELETE SET NULL |
+| `apply_from` | DATETIME | no |  |  |  |
+| `synced_through` | DATETIME | yes |  |  |  |
+| `sync_window_end` | DATETIME | yes |  |  |  |
+| `sync_cursor` | VARCHAR(255) | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_zeffy_campaign_links_org_campaign` (`organization_id`, `zeffy_campaign_id`)
+
+### `zeffy_payments`
+
+**ZeffyPayment** · `app/models/zeffy.py`
+
+> A payment Zeffy reported, and what the Logbook applied for it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `zeffy_payment_id` | VARCHAR(120) | no |  |  |  |
+| `zeffy_campaign_id` | VARCHAR(120) | yes |  |  |  |
+| `zeffy_parent_campaign_id` | VARCHAR(120) | yes |  |  |  |
+| `campaign_title` | VARCHAR(255) | yes |  |  |  |
+| `campaign_category` | VARCHAR(30) | yes |  |  |  |
+| `payment_type` | VARCHAR(20) | yes |  |  |  |
+| `zeffy_status` | VARCHAR(30) | yes |  |  |  |
+| `refund_status` | VARCHAR(10) | yes |  |  |  |
+| `dispute_status` | VARCHAR(20) | yes |  |  |  |
+| `deleted_in_zeffy` | BOOL | no |  | `0` |  |
+| `amount` | NUMERIC(12, 2) | no |  | `0` |  |
+| `refunded_amount` | NUMERIC(12, 2) | no |  | `0` |  |
+| `currency` | VARCHAR(3) | no |  | `USD` |  |
+| `ticket_count` | INTEGER | no |  | `0` |  |
+| `paid_at` | DATETIME | yes |  |  |  |
+| `payer_name` | VARCHAR(200) | yes |  |  |  |
+| `payer_email` | TEXT | yes |  |  |  |
+| `receipt_url` | VARCHAR(500) | yes |  |  |  |
+| `state` | ENUM(`pending`, `ignored`, `unlinked`, `before_start`, `unmatched`, `applied`, `reversed`, `needs_review`) | no |  | `unlinked` |  |
+| `state_detail` | VARCHAR(255) | yes |  |  |  |
+| `applied_target_type` | ENUM(`fundraising_campaign`, `fundraising_event`, `dues_schedule`) | yes |  |  |  |
+| `donation_id` | VARCHAR(36) | yes | FK |  | → `donations.id` ON DELETE SET NULL |
+| `fundraising_event_id` | VARCHAR(36) | yes | FK |  | → `fundraising_events.id` ON DELETE SET NULL |
+| `member_dues_id` | VARCHAR(36) | yes | FK |  | → `member_dues.id` ON DELETE SET NULL |
+| `applied_amount` | NUMERIC(12, 2) | no |  | `0` |  |
+| `applied_tickets` | INTEGER | no |  | `0` |  |
+| `raw_payload` | JSON | yes |  |  |  |
+| `last_event_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_zeffy_payments_org_campaign` (`organization_id`, `zeffy_campaign_id`)
+- `ix_zeffy_payments_org_paid` (`organization_id`, `paid_at`)
+- `ix_zeffy_payments_org_state` (`organization_id`, `state`)
+
+**Constraints**
+
+- UNIQUE `uq_zeffy_payments_org_payment` (`organization_id`, `zeffy_payment_id`)
+
 ---
 
 ## Foreign key reference
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (419 references)
+### → `users` (420 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12120,8 +12210,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `webauthn_challenges` | `user_id` | CASCADE | no |
 | `xapi_statements` | `user_id` | SET NULL | yes |
+| `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (278 references)
+### → `organizations` (280 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12403,6 +12494,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `weather_alerts` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
+| `zeffy_campaign_links` | `organization_id` | CASCADE | no |
+| `zeffy_payments` | `organization_id` | CASCADE | no |
 
 ### → `inventory_items` (22 references)
 
@@ -12653,6 +12746,19 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_courses` | `program_id` | SET NULL | yes |
 | `training_sessions` | `program_id` | SET NULL | yes |
 
+### → `fundraising_campaigns` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_requests` | `fund_campaign_id` | SET NULL | yes |
+| `donations` | `campaign_id` | SET NULL | yes |
+| `expense_line_items` | `fund_campaign_id` | SET NULL | yes |
+| `fundraising_events` | `campaign_id` | CASCADE | yes |
+| `grant_applications` | `linked_campaign_id` | SET NULL | yes |
+| `pledges` | `campaign_id` | SET NULL | yes |
+| `purchase_requests` | `fund_campaign_id` | SET NULL | yes |
+| `zeffy_campaign_links` | `fundraising_campaign_id` | SET NULL | yes |
+
 ### → `training_records` (8 references)
 
 | From table | Column | On delete | Nullable |
@@ -12677,18 +12783,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `external_user_mappings` | `provider_id` | CASCADE | no |
 | `training_records` | `external_provider_id` | SET NULL | yes |
 | `xapi_statements` | `source_provider_id` | SET NULL | yes |
-
-### → `fundraising_campaigns` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_requests` | `fund_campaign_id` | SET NULL | yes |
-| `donations` | `campaign_id` | SET NULL | yes |
-| `expense_line_items` | `fund_campaign_id` | SET NULL | yes |
-| `fundraising_events` | `campaign_id` | CASCADE | yes |
-| `grant_applications` | `linked_campaign_id` | SET NULL | yes |
-| `pledges` | `campaign_id` | SET NULL | yes |
-| `purchase_requests` | `fund_campaign_id` | SET NULL | yes |
 
 ### → `inventory_categories` (7 references)
 
@@ -13059,6 +13153,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `donations` | `donor_id` | SET NULL | yes |
 | `pledges` | `donor_id` | SET NULL | yes |
 
+### → `dues_schedules` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `member_dues` | `dues_schedule_id` | CASCADE | no |
+| `zeffy_campaign_links` | `dues_schedule_id` | SET NULL | yes |
+
 ### → `event_rsvps` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -13087,6 +13188,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_rooms` | `parent_room_id` | SET NULL | yes |
 | `locations` | `facility_room_id` | SET NULL | yes |
 
+### → `fundraising_events` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `zeffy_campaign_links` | `fundraising_event_id` | SET NULL | yes |
+| `zeffy_payments` | `fundraising_event_id` | SET NULL | yes |
+
 ### → `integrations` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -13114,6 +13222,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `mcp_oauth_authorizations` | `client_pk` | CASCADE | no |
 | `mcp_oauth_grants` | `client_pk` | CASCADE | no |
+
+### → `member_dues` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `dues_payments` | `member_dues_id` | CASCADE | no |
+| `zeffy_payments` | `member_dues_id` | SET NULL | yes |
 
 ### → `org_chart_nodes` (2 references)
 
@@ -13196,11 +13311,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `course_cohort_missed_classes` | `cohort_member_id` | CASCADE | no |
 
-### → `dues_schedules` (1 references)
+### → `donations` (1 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `member_dues` | `dues_schedule_id` | CASCADE | no |
+| `zeffy_payments` | `donation_id` | SET NULL | yes |
 
 ### → `equipment_kits` (1 references)
 
@@ -13363,12 +13478,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `minutes_closed_sessions` | `motion_id` | SET NULL | yes |
-
-### → `member_dues` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `dues_payments` | `member_dues_id` | CASCADE | no |
 
 ### → `minutes_action_items` (1 references)
 

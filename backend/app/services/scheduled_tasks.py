@@ -123,6 +123,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 4:45 AM — recover PayPal store payments the webhook never recorded
 45 4 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=paypal_capture_backfill
 
+# Hourly at :35 — read linked Zeffy campaigns' payments into donations, event revenue and dues
+35 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=zeffy_payment_sync
+
 # Daily at 8:10 AM — remind budget-line owners before a draft year's request deadline
 10 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=budget_request_reminders
 
@@ -446,6 +449,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "04:45",
         "cron": "45 4 * * *",
+    },
+    "zeffy_payment_sync": {
+        "description": "Read the payments of every linked Zeffy campaign and apply them to their fundraising campaign, fundraising event or dues schedule",
+        "frequency": "hourly",
+        "recommended_time": "every hour at :35",
+        "cron": "35 * * * *",
     },
     "inventory_low_stock_alerts": {
         "description": "Send email alerts to admins when inventory items fall below their reorder point",
@@ -5023,6 +5032,97 @@ async def run_paypal_capture_backfill(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_zeffy_payment_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Read linked Zeffy campaigns' payments into the Logbook. Hourly.
+
+    The signed webhook is the fast path; this is what still records payments
+    when the department has not set the webhook up, or when Zeffy's three days
+    of retries ran out. Keyed on the integration like the PayPal backfill, and
+    each department is isolated: a refused API key is recorded on that
+    department's integration and the next one still runs. See
+    ``app/services/zeffy_sync_service.py``.
+    """
+    from app.models.integration import Integration
+    from app.services.integration_health import record_integration_run
+    from app.services.zeffy_sync_service import ZeffySyncService
+
+    result = await db.execute(
+        select(Integration)
+        .join(Organization, Organization.id == Integration.organization_id)
+        .where(
+            Integration.integration_type == "zeffy",
+            Integration.enabled.is_(True),
+            Integration.status == "connected",
+            Organization.active.isnot(False),
+        )
+    )
+    # Ids, not loaded rows: a rollback after one department fails expires
+    # every instance, and reading an expired one raises MissingGreenlet.
+    targets = [(str(i.id), str(i.organization_id)) for i in result.scalars().all()]
+
+    synced = 0
+    failed = 0
+    payments_read = 0
+    for integration_id, org_id in targets:
+        integration = (
+            await db.execute(
+                select(Integration).where(
+                    Integration.id == integration_id,
+                    Integration.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if integration is None:
+            continue
+        started = time.monotonic()
+        try:
+            counts = await ZeffySyncService(db).sync_integration(integration)
+            payments_read += int(counts.get("payments_read", 0))
+            integration.last_sync_at = datetime.now(timezone.utc)
+            await record_integration_run(
+                db,
+                integration,
+                operation="zeffy_payment_sync",
+                trigger="scheduled",
+                success=True,
+                summary=counts,
+                started_monotonic=started,
+                mark_synced=True,
+            )
+            await db.commit()
+            synced += 1
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "Zeffy payment sync failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "Zeffy payment sync", e)
+            try:
+                await db.refresh(integration)
+                await record_integration_run(
+                    db,
+                    integration,
+                    operation="zeffy_payment_sync",
+                    trigger="scheduled",
+                    success=False,
+                    error=e,
+                    started_monotonic=started,
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning("Could not record Zeffy sync failure for org {}", org_id)
+            failed += 1
+
+    return {
+        "task": "zeffy_payment_sync",
+        "integrations": len(targets),
+        "synced": synced,
+        "payments_read": payments_read,
+        "failed": failed,
+    }
+
+
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Alert inventory officers when items drop below their reorder point.
@@ -8033,6 +8133,7 @@ TASK_RUNNERS = {
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
     "paypal_capture_backfill": run_paypal_capture_backfill,
+    "zeffy_payment_sync": run_zeffy_payment_sync,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
@@ -8131,6 +8232,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,
+    "zeffy_payment_sync": 3600,
     "compliance_auto_reports": 86400,
     # Daily; idempotent per (requirement, deadline, offset) and per unmet set
     # through a sent-log (compliance_member_notices).
