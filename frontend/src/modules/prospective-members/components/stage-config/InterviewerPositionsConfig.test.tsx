@@ -77,6 +77,16 @@ describe('InterviewerPositionsConfig', () => {
     expect(await screen.findByLabelText('Chief (not a current position)')).toBeChecked();
   });
 
+  it('unticks a padded position the department no longer has', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<InterviewerPositionsConfig value={[' chief ', 'president']} onChange={onChange} />);
+
+    await user.click(await screen.findByLabelText('Chief (not a current position)'));
+
+    expect(onChange).toHaveBeenCalledWith(['president']);
+  });
+
   it('says so when positions cannot be loaded, and still lists what is required', async () => {
     mocks.getRoles.mockRejectedValue(new Error('Network Error'));
     render(<InterviewerPositionsConfig value={['fire_chief']} onChange={vi.fn()} />);

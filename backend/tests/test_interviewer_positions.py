@@ -474,6 +474,21 @@ class TestInterviewerTitle:
 
         assert interviewer_title(positions) == "Treasurer"
 
+    async def test_an_office_outranks_a_higher_priority_committee(self):
+        positions = [
+            SimpleNamespace(
+                name="Board of Directors",
+                slug="board_of_directors",
+                kind="committee",
+                priority=80,
+            ),
+            SimpleNamespace(
+                name="Treasurer", slug="treasurer", kind="office", priority=40
+            ),
+        ]
+
+        assert interviewer_title(positions) == "Treasurer"
+
     async def test_the_baseline_member_position_is_no_title(self):
         positions = [
             SimpleNamespace(name="Member", slug="member", kind="system", priority=1)

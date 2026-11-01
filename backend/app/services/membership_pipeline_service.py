@@ -33,7 +33,11 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG, office_label
-from app.core.permissions import POSITION_KIND_SYSTEM
+from app.core.permissions import (
+    POSITION_KIND_COMMITTEE,
+    POSITION_KIND_OFFICE,
+    POSITION_KIND_SYSTEM,
+)
 from app.core.security import email_fingerprints
 from app.core.utils import list_within_detail_limit
 from app.models.election import Election, ElectionStatus
@@ -563,6 +567,15 @@ def _required_interviewer_positions(config: Optional[Dict[str, Any]]) -> List[st
     return [str(p).strip() for p in raw]
 
 
+# Office over committee over platform position, before priority is compared.
+# A position with no kind predates the column and is an office.
+_TITLE_KIND_RANK = {
+    POSITION_KIND_OFFICE: 2,
+    POSITION_KIND_COMMITTEE: 1,
+    POSITION_KIND_SYSTEM: 0,
+}
+
+
 def interviewer_title(positions: Iterable[Any]) -> Optional[str]:
     """The title an interviewer signs an interview with, from their positions.
 
@@ -578,10 +591,7 @@ def interviewer_title(positions: Iterable[Any]) -> Optional[str]:
         return None
     best = max(
         candidates,
-        key=lambda p: (
-            p.kind != POSITION_KIND_SYSTEM,
-            p.priority or 0,
-        ),
+        key=lambda p: (_TITLE_KIND_RANK.get(p.kind, 2), p.priority or 0),
     )
     return str(best.name)
 

@@ -65,9 +65,11 @@ const InterviewerPositionsConfig: React.FC<InterviewerPositionsConfigProps> = ({
 
   const selected = new Set(value.map((key) => key.trim().toLowerCase()));
 
+  // Compared trimmed and case-blind, as the server matches, so a padded
+  // stored value (" chief ") can still be unticked.
   const toggle = (key: string, checked: boolean) => {
-    const folded = key.toLowerCase();
-    onChange(checked ? [...value, key] : value.filter((v) => v.trim().toLowerCase() !== folded));
+    const folded = key.trim().toLowerCase();
+    onChange(checked ? [...value, key.trim()] : value.filter((v) => v.trim().toLowerCase() !== folded));
   };
 
   return (

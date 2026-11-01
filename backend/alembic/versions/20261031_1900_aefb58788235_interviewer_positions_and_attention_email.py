@@ -102,14 +102,6 @@ _EXISTING_TEMPLATE_TYPES = _PREV_BASE[:-1] + (
     "application_contact_changed",
     "application_follow_up_reminder",
     "application_follow_up_submitted",
-    "custom",
-)
-
-_EXISTING_TEMPLATE_TYPES = _PREV_BASE[:-1] + (
-    "application_follow_up_form",
-    "application_contact_changed",
-    "application_follow_up_reminder",
-    "application_follow_up_submitted",
     "application_assigned",
     "custom",
 )
