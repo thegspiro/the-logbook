@@ -48,11 +48,15 @@ What the sweep can and cannot see:
   indexed and keys when iterated. Code outside ``app/`` is not read, but the
   library calls that hand back one of app's own objects are known by shape:
   a SQLAlchemy ``select(Model)``, built up and executed, then
-  ``.scalar_one_or_none()`` and its kin (a ``Model``) or ``.scalars()``
-  iterated or ``.all()``'d (``Model`` items); ``session.get(Model, ...)``,
+  ``.scalar_one_or_none()``, ``.scalar_one()`` or ``.scalar()`` on the
+  result, or ``.one()``, ``.one_or_none()`` or ``.first()`` on its
+  ``.scalars()`` (a ``Model``; the result's own ``.one()`` and ``.first()``
+  are a ``Row``), or ``.scalars()`` iterated or ``.all()``'d (``Model``
+  items); ``session.get(Model, ...)``,
   ``session.scalar(stmt)`` and ``session.merge(obj)``; Pydantic's
   ``Model.model_validate(...)`` and kin, and ``obj.model_copy()``; and
-  ``typing.cast`` and ``copy.copy``/``deepcopy``. Any other library call, a
+  ``typing.cast`` and ``copy.copy``/``deepcopy``, recognised by what the
+  module imported rather than by name. Any other library call, a
   select of a column or of several entities, and a container nothing in the
   source fills, are not followed.
 * A message produced by a call is not text the first check can read, and is
@@ -182,6 +186,8 @@ class _ModuleFacts(ast.NodeVisitor):
         self.module = module
         self.class_defs = []
         self.imports = {}
+        self.library_imports = {}
+        self.module_aliases = {}
         self.owners = {}
         self._functions = [None]
         self._classes = [None]
@@ -209,9 +215,17 @@ class _ModuleFacts(ast.NodeVisitor):
         self._classes.pop()
 
     def visit_ImportFrom(self, node):
-        if (node.module or "").startswith("app"):
-            for alias in node.names:
-                self.imports[alias.asname or alias.name] = (node.module, alias.name)
+        imports = (
+            self.imports
+            if (node.module or "").startswith("app")
+            else self.library_imports
+        )
+        for alias in node.names:
+            imports[alias.asname or alias.name] = (node.module, alias.name)
+
+    def visit_Import(self, node):
+        for alias in node.names:
+            self.module_aliases[alias.asname or alias.name] = alias.name
 
     def visit_Raise(self, node):
         if isinstance(node.exc, ast.Call):
@@ -285,10 +299,12 @@ _STATEMENT_BUILDERS = frozenset(
         "correlate",
     }
 )
-#: On a Result or ScalarResult, or on the session with a statement: one entity.
-_ONE_ENTITY_METHODS = frozenset(
-    {"scalar_one_or_none", "scalar_one", "scalar", "first", "one", "one_or_none"}
-)
+#: The entity, from an executed Result. Its own one(), first() and
+#: one_or_none() return a Row, not the entity (SQLAlchemy 2.x Result).
+_RESULT_ENTITY_METHODS = frozenset({"scalar_one_or_none", "scalar_one", "scalar"})
+#: The entity, from a ScalarResult, which has no scalar_* methods of its own.
+_SCALARS_ENTITY_METHODS = frozenset({"one", "one_or_none", "first"})
+_TYPING_MODULES = frozenset({"typing", "typing_extensions"})
 #: Pydantic class methods that build an instance of the class they are called on.
 _PYDANTIC_CONSTRUCTORS = frozenset(
     {
@@ -545,6 +561,8 @@ class _Index:
         self.methods = {}
         self.owners = {}
         self.imports = {}
+        self.library_imports = {}
+        self.module_aliases = {}
         self.class_defs = {}
         self._module_scopes = {}
         self._local_scopes = {}
@@ -552,6 +570,8 @@ class _Index:
         for name, tree, facts in modules:
             self.trees[name] = tree
             self.imports[name] = facts.imports
+            self.library_imports[name] = facts.library_imports
+            self.module_aliases[name] = facts.module_aliases
             self.owners.update(facts.owners)
             functions = {}
             for node in tree.body:
@@ -1083,50 +1103,69 @@ class _Index:
                 return shape
         return None
 
+    def is_library_function(self, func, module, libraries, name):
+        """Whether ``func`` names ``name`` from one of ``libraries``, as imported.
+
+        ``from copy import deepcopy`` then ``deepcopy(...)``, or ``import copy``
+        then ``copy.deepcopy(...)``. A function of the same name defined in
+        app, or imported from anywhere else (``sqlalchemy.cast``), is not it.
+        """
+        if isinstance(func, ast.Name):
+            target = self.library_imports.get(module, {}).get(func.id)
+            return target is not None and target[0] in libraries and (target[1] == name)
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == name
+            and isinstance(func.value, ast.Name)
+        ):
+            return self.module_aliases.get(module, {}).get(func.value.id) in libraries
+        return False
+
     def library_instance_class(self, call, frame, seen):
         """The app class of an object a library call hands back, if shown.
 
         Only the library calls that return one of app's own objects matter
         here, since only app code can build a refusal message; they are the
-        ones listed beside ``_ONE_ENTITY_METHODS`` and
-        ``_PYDANTIC_CONSTRUCTORS``, plus ``typing.cast`` and ``copy``.
+        ones listed beside ``_RESULT_ENTITY_METHODS``,
+        ``_SCALARS_ENTITY_METHODS`` and ``_PYDANTIC_CONSTRUCTORS``, plus
+        ``typing.cast`` and ``copy.copy``/``deepcopy`` as the module imports
+        them.
         """
-        func = call.func
-        name = _base_name(func)
-        if name == "cast" and len(call.args) == 2:
-            return self.class_named(call.args[0], frame.module)
+        func, module = call.func, frame.module
         if (
-            name in ("copy", "deepcopy")
-            and len(call.args) == 1
-            and (
-                isinstance(func, ast.Name)
-                or (isinstance(func.value, ast.Name) and func.value.id == "copy")
-            )
+            self.is_library_function(func, module, _TYPING_MODULES, "cast")
+            and len(call.args) == 2
+        ):
+            return self.class_named(call.args[0], module)
+        if len(call.args) == 1 and any(
+            self.is_library_function(func, module, {"copy"}, name)
+            for name in ("copy", "deepcopy")
         ):
             return self.class_of(call.args[0], frame, seen)
         if not isinstance(func, ast.Attribute):
             return None
         if func.attr in _PYDANTIC_CONSTRUCTORS:
-            return self.class_named(func.value, frame.module)
+            return self.class_named(func.value, module)
         if func.attr == "model_copy":
             return self.class_of(func.value, frame, seen)
         if func.attr == "get" and len(call.args) >= 2:
             # session.get(Model, id); a mapping's .get(key) names no class.
-            return self.class_named(call.args[0], frame.module)
+            return self.class_named(call.args[0], module)
         if func.attr == "merge" and len(call.args) == 1:
             return self.class_of(call.args[0], frame, seen)
-        if func.attr in _ONE_ENTITY_METHODS:
-            shape = (
-                self.query_shape(call.args[0], frame, seen)
-                if func.attr == "scalar" and call.args
-                else self.query_shape(func.value, frame, seen)
-            )
-            if shape is None:
-                return None
-            if func.attr == "scalar" and call.args:
-                return shape[1] if shape[0] == "stmt" else None
-            return shape[1] if shape[0] in ("result", "scalars") else None
-        return None
+        if func.attr == "scalar" and call.args:
+            # session.scalar(stmt)
+            shape = self.query_shape(call.args[0], frame, seen)
+            return shape[1] if shape is not None and shape[0] == "stmt" else None
+        wanted = (
+            "result"
+            if func.attr in _RESULT_ENTITY_METHODS
+            else "scalars" if func.attr in _SCALARS_ENTITY_METHODS else None
+        )
+        if wanted is None or call.args:
+            return None
+        shape = self.query_shape(func.value, frame, seen)
+        return shape[1] if shape is not None and shape[0] == wanted else None
 
     def callee_frame(self, callee, call, frame, implicit_first, expression):
         """A frame reading ``expression`` inside ``callee`` as ``call`` invoked it."""
@@ -2031,6 +2070,8 @@ def test_the_join_check_follows_objects_libraries_hand_back():
         "copy.deepcopy(Describer())",
     ):
         assert refusing(
+            "from typing import cast\n"
+            "import copy\n"
             f"def refuse(ids, data):\n    raise ValueError({made}.describe(ids))\n"
         ) == ["names"], made
 
@@ -2047,6 +2088,34 @@ def test_library_calls_that_return_no_model_are_not_followed():
             "    raise ValueError(\n"
             "        one.describe(ids) + two.describe(ids)\n"
             "        + three.describe(ids) + four.describe(ids)\n"
+            "    )\n"
+        )
+        == []
+    )
+
+
+def test_a_result_row_and_lookalike_functions_are_not_followed():
+    # Result.one(), .first() and .one_or_none() return a Row, not the entity.
+    for read in ("result.one()", "result.first()", "result.one_or_none()"):
+        assert (
+            _joins(
+                _DESCRIBER + "async def refuse(db, ids):\n"
+                "    result = await db.execute(select(Describer))\n"
+                f"    raise ValueError({read}.describe(ids))\n"
+            )
+            == []
+        ), read
+    # sqlalchemy's cast is not typing's, and an app function named copy is
+    # not the copy module's.
+    assert (
+        _joins(
+            _DESCRIBER + "from sqlalchemy import cast\n"
+            "def copy(value):\n"
+            "    return lookup(value)\n"
+            "def refuse(ids, data):\n"
+            "    raise ValueError(\n"
+            '        cast("Describer", data).describe(ids)\n'
+            "        + copy(Describer()).describe(ids)\n"
             "    )\n"
         )
         == []
