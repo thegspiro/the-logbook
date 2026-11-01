@@ -28,7 +28,8 @@ import {
   ClipboardCheck,
   CalendarClock,
 } from 'lucide-react';
-import { skillsTestingService, trainingModuleConfigService } from '../services/api';
+import { shiftEvaluationService, skillsTestingService, trainingModuleConfigService } from '../services/api';
+import { MyShiftEvaluationsList } from '../components/training/MyShiftEvaluationsList';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementMonthlyHours } from '../components/training/RequirementMonthlyHours';
@@ -38,7 +39,12 @@ import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/date
 import { formatHours } from '../utils/hoursFormatting';
 import { TRAINING_TYPE_LABELS } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
-import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
+import type {
+  MyTrainingSummary,
+  ShiftEvaluationDetail,
+  TrainingModuleConfig as TMConfig,
+  RequirementDetail,
+} from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import { MySkillTestsList } from '../components/training/MySkillTestsList';
@@ -562,6 +568,7 @@ const MyTrainingPage: React.FC = () => {
   // deleted nothing, and this page is where a member reads their own results.
   const [hasPastSkillTests, setHasPastSkillTests] = useState(false);
   const [data, setData] = useState<MyTrainingSummary | null>(null);
+  const [shiftEvaluations, setShiftEvaluations] = useState<ShiftEvaluationDetail[]>([]);
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -581,6 +588,14 @@ const MyTrainingPage: React.FC = () => {
       setError(null);
       const trainingData = await trainingModuleConfigService.getMyTraining();
       setData(trainingData);
+
+      // Caught on its own, like the settings below: an evaluation list that
+      // fails to load must not replace the overview with a full-page error.
+      try {
+        setShiftEvaluations(await shiftEvaluationService.listMine());
+      } catch {
+        setShiftEvaluations([]);
+      }
 
       if (canConfigure) {
         // Deliberately caught separately. This request only feeds the
@@ -1207,6 +1222,14 @@ const MyTrainingPage: React.FC = () => {
             </Section>
           )}
 
+          {/* Shift Evaluations: behind the same switch as the shift reports,
+              which they are filled out beside. */}
+          {v?.show_shift_reports && shiftEvaluations.length > 0 && (
+            <Section title="Shift Evaluations" icon={ClipboardCheck} defaultOpen={false}>
+              <MyShiftEvaluationsList evaluations={shiftEvaluations} />
+            </Section>
+          )}
+
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
@@ -1257,6 +1280,7 @@ const MyTrainingPage: React.FC = () => {
           {!data.training_records?.length &&
             !data.enrollments?.length &&
             !data.shift_reports?.length &&
+            !shiftEvaluations.length &&
             !data.submissions?.length &&
             !data.certifications?.length && (
               <section className="card-secondary p-6" aria-labelledby="training-getting-started">

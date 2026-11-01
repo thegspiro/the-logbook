@@ -1576,6 +1576,66 @@ export const shiftEvaluationTemplateService = {
 };
 
 // ============================================
+// Shift Evaluations Service
+// ============================================
+
+const evaluationPath = (shiftId: string, memberId: string, scopeKey: string) =>
+  `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}/members/${encodeURIComponent(
+    memberId
+  )}/${encodeURIComponent(scopeKey)}`;
+
+export const shiftEvaluationService = {
+  /** Who on a shift needs an evaluation, and where each one stands. */
+  async getRoster(shiftId: string): Promise<import('../types/training').ShiftEvaluationRoster> {
+    const response = await api.get<import('../types/training').ShiftEvaluationRoster>(
+      `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}`
+    );
+    return response.data;
+  },
+
+  async getForm(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    templateId?: string
+  ): Promise<import('../types/training').ShiftEvaluationFormResponse> {
+    const response = await api.get<import('../types/training').ShiftEvaluationFormResponse>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      templateId ? { params: { template_id: templateId } } : undefined
+    );
+    return response.data;
+  },
+
+  async save(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    body: import('../types/training').ShiftEvaluationSaveBody
+  ): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.put<import('../types/training').ShiftEvaluationDetail>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      body
+    );
+    return response.data;
+  },
+
+  async get(evaluationId: string): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail>(
+      `/training/shift-evaluations/${encodeURIComponent(evaluationId)}`
+    );
+    return response.data;
+  },
+
+  /** The caller's own submitted evaluations they may see yet. */
+  async listMine(): Promise<import('../types/training').ShiftEvaluationDetail[]> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail[]>(
+      '/training/shift-evaluations/mine'
+    );
+    return asArray(response.data);
+  },
+};
+
+// ============================================
 // Shift Completion Reports Service
 // ============================================
 

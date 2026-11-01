@@ -84,6 +84,7 @@ from app.api.v1.endpoints import (
     security_monitoring,
     shift_completion,
     shift_evaluation_templates,
+    shift_evaluations,
     shift_history_import,
     skill_evaluations,
     skills_testing,
@@ -315,6 +316,12 @@ api_router.include_router(
     external_training.router,
     prefix="/training/external",
     tags=["external-training"],
+    dependencies=module_gate("training", "Training"),
+)
+api_router.include_router(
+    shift_evaluations.router,
+    prefix="/training/shift-evaluations",
+    tags=["shift-evaluations"],
     dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
