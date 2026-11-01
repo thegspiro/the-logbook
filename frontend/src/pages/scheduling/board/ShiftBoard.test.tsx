@@ -6,6 +6,7 @@ const mockMyOffers = vi.fn();
 const mockRespond = vi.fn();
 const mockCancelSwap = vi.fn();
 const mockGetShifts = vi.fn();
+const mockTimeOff = vi.fn();
 
 vi.mock('../../../modules/scheduling', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../../../modules/scheduling');
@@ -20,6 +21,7 @@ vi.mock('../../../modules/scheduling', async () => {
       respondToSwapOffer: (...args: unknown[]) => mockRespond(...args) as unknown,
       cancelSwapRequest: (...args: unknown[]) => mockCancelSwap(...args) as unknown,
       getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
+      getApprovedTimeOffFor: (...args: unknown[]) => mockTimeOff(...args) as unknown,
       getCalendarFeed: () => Promise.resolve({ token: 't', feed_path: '/feed' }),
     },
   };
@@ -120,6 +122,8 @@ beforeEach(() => {
   // reach the empty month of the next.
   mockGetShifts.mockReset();
   mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 1 });
+  mockTimeOff.mockReset();
+  mockTimeOff.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -340,6 +344,87 @@ describe('offers waiting on the member', () => {
     mockMyOffers.mockRejectedValue(new Error('offline'));
     renderBoard();
     expect(await screen.findByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
+  });
+});
+
+describe('a day the member has off', () => {
+  const DAY_OFF = {
+    id: 't1',
+    start_date: '2026-08-24',
+    end_date: '2026-08-25',
+    status: 'approved',
+    created_at: '2026-08-10T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    mockTimeOff.mockReset();
+    mockTimeOff.mockResolvedValue([DAY_OFF]);
+  });
+
+  it("asks for the member's own approved time off with the month", async () => {
+    renderBoard();
+    await waitFor(() => expect(mockTimeOff).toHaveBeenCalledWith(ME, undefined));
+  });
+
+  it('does not offer a seat on a day off, and says why', async () => {
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect((await screen.findAllByText('You have approved time off on this day.')).length).toBeGreaterThan(0);
+    // Eligibility has answered — the driver and firefighter seats would be
+    // takeable — so the absent buttons are the time off, not a lookup pending.
+    await waitFor(() => expect(mockEligible).toHaveBeenCalled());
+    expect(screen.queryAllByRole('button', { name: /take a seat on this shift/i })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /^Take the .* seat on this shift$/ })).toHaveLength(0);
+    expect(
+      screen.getAllByRole('button', { name: 'Driver/Operator seat — you have approved time off on this day' })[0]
+    ).toBeDisabled();
+    expect(mockSignup).not.toHaveBeenCalled();
+  });
+
+  it('still offers seats on a day the time off does not cover', async () => {
+    mockTimeOff.mockResolvedValue([{ ...DAY_OFF, start_date: '2026-08-01', end_date: '2026-08-24' }]);
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect((await screen.findAllByRole('button', { name: /take a seat on this shift/i })).length).toBeGreaterThan(0);
+  });
+
+  it('withholds "Take the shift" on an offer for a day off, but still lets them decline', async () => {
+    mockMyOffers.mockResolvedValue([
+      {
+        id: 'sw1',
+        offering_shift_id: 'day-25',
+        requesting_user_id: 'u2',
+        requesting_user_name: 'Dana Ruiz',
+        target_user_id: ME,
+        status: 'pending',
+        created_at: '2026-08-20T00:00:00Z',
+      },
+    ]);
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect((await screen.findAllByText(/Dana Ruiz offered you this seat/i)).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('button', { name: /take the shift/i })).toHaveLength(0);
+    const [decline] = screen.getAllByRole('button', { name: /^decline$/i });
+    await user.click(decline as HTMLElement);
+    await waitFor(() => expect(mockRespond).toHaveBeenCalledWith('sw1', false));
+  });
+
+  it('keeps the board usable when the time off cannot be loaded', async () => {
+    mockTimeOff.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderBoard();
+    expect(await screen.findByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+    expect((await screen.findAllByRole('button', { name: /take a seat on this shift/i })).length).toBeGreaterThan(0);
   });
 });
 
