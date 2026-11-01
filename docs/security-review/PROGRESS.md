@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-membership-pipeline-p15`) —
+**PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910)** (branch
+`claude/security-review-membership-pipeline-p15`) —
 Feature 08 (Membership pipeline), pass 15, a watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable). Step 0 (`list_pull_requests`, state=open, all 15 open
