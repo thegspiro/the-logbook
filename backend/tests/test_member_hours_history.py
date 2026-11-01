@@ -16,6 +16,7 @@ invariants carry that:
 import json
 import uuid
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import text
@@ -27,6 +28,17 @@ from app.api.v1.endpoints import scheduling as scheduling_endpoint
 from app.models.training import Shift, ShiftAttendance
 from app.models.user import User
 from app.services.scheduling_service import SchedulingService
+
+
+def _department_today() -> date:
+    """Today in the test department's timezone, as the service reckons it.
+
+    ``date.today()`` is the machine's date. For four or five hours after
+    midnight UTC it is already tomorrow in UTC and still today in New York,
+    so a test built on it disagreed with the service and failed for that
+    stretch of every day.
+    """
+    return datetime.now(ZoneInfo("America/New_York")).date()
 
 
 def _uid() -> str:
@@ -322,7 +334,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        today = _department_today()
         await _worked(db_session, org_id, user_id, today, 480, finalized=True, calls=2)
 
         history = await svc.get_my_hours_history(user_id, org_id, today.year - 6)
@@ -339,7 +351,7 @@ class TestMyHoursHistory:
         org_id, user_id = org_and_member
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        today = _department_today()
         previous_end = today.replace(day=1) - timedelta(days=1)
         await _worked(
             db_session, org_id, user_id, previous_end, 600, finalized=True, calls=3
