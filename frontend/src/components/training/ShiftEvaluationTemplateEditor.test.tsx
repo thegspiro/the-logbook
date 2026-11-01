@@ -73,6 +73,18 @@ describe('ShiftEvaluationTemplateEditor', () => {
     expect(lastSaved().scale.map((l) => l.value)).toEqual([1, 3, 4]);
   });
 
+  it('moves the comment threshold with a rating whose value is changed', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    const value = screen.getByLabelText('Rating 2 value');
+    await user.clear(value);
+    await user.type(value, '5');
+    await save(user);
+
+    expect(lastSaved().comment_required_at_or_below).toBe(5);
+  });
+
   it('adds a choice header field with its options', async () => {
     const user = userEvent.setup();
     renderEditor();
@@ -114,6 +126,12 @@ describe('ShiftEvaluationTemplateEditor', () => {
 });
 
 describe('shiftEvaluationTemplateProblems', () => {
+  it('flags a comment threshold that names no rating', () => {
+    expect(shiftEvaluationTemplateProblems({ ...filled(), comment_required_at_or_below: 7 })).toContain(
+      '"Comment required at or below" must be one of the rating values.'
+    );
+  });
+
   it('passes a complete template', () => {
     expect(shiftEvaluationTemplateProblems(filled())).toEqual([]);
   });

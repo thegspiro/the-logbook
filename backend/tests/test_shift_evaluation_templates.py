@@ -449,3 +449,67 @@ class TestProgramLink:
         assert error is None
         assert copy is not None
         assert copy.shift_evaluation_template_id == template.id
+
+
+class TestProgramDetailEndpoint:
+    async def test_the_detail_response_carries_the_programs_form(self, db_session):
+        """The edit dialog is seeded from this response, so a form left out of
+        it is sent back as null and removed by the next unrelated edit."""
+        from app.api.v1.endpoints.training_programs import get_training_program
+
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        template = await _template(db_session, org, user)
+        program, _ = await TrainingProgramService(db_session).create_training_program(
+            TrainingProgramCreate(
+                name="Driver Candidate", shift_evaluation_template_id=template.id
+            ),
+            org.id,
+            user.id,
+        )
+        assert program is not None
+
+        body = await get_training_program(
+            program_id=uuid.UUID(program.id), db=db_session, current_user=user
+        )
+
+        assert str(body.shift_evaluation_template_id) == template.id
+
+
+class TestConcurrentEdits:
+    async def test_an_edit_reads_the_template_under_a_row_lock(self, db_session):
+        """Two saves at once must take turns, or both write the same version."""
+        from unittest.mock import patch
+
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        template = await _template(db_session, org, user)
+        service = ShiftEvaluationTemplateService(db_session)
+        seen: list[bool] = []
+        original = service.get_template
+
+        async def spy(template_id, organization_id, *, for_update=False):
+            seen.append(for_update)
+            return await original(template_id, organization_id, for_update=for_update)
+
+        with patch.object(service, "get_template", spy):
+            await service.update_template(
+                template.id, org.id, _write("Driver Evaluation"), user.id
+            )
+
+        assert seen[0] is True
+
+    async def test_each_saved_edit_raises_the_version_by_one(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        template = await _template(db_session, org, user)
+        service = ShiftEvaluationTemplateService(db_session)
+
+        for _ in range(3):
+            await service.update_template(
+                template.id, org.id, _write("Driver Evaluation"), user.id
+            )
+
+        reloaded = await service.get_template(template.id, org.id)
+        assert reloaded is not None
+        assert reloaded.version == 4

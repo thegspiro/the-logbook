@@ -94,6 +94,36 @@ const ShiftEvaluationSettingsPanel: React.FC = () => {
     setDraftSettings(current);
   }, []);
 
+  const refreshTemplates = useCallback(async () => {
+    setTemplates(await shiftEvaluationTemplateService.list());
+  }, []);
+
+  /**
+   * A delete can change the saved settings too (the server turns the general
+   * form off when it was that template). Take the new saved values as the
+   * baseline, but keep the officer's unsaved choices, dropping only a choice
+   * of the template that no longer exists.
+   */
+  const refreshAfterDelete = useCallback(async (deletedId: string) => {
+    const [list, current] = await Promise.all([
+      shiftEvaluationTemplateService.list(),
+      shiftEvaluationTemplateService.getSettings(),
+    ]);
+    setTemplates(list);
+    setSettings(current);
+    setDraftSettings((prev) => {
+      if (!prev) return current;
+      if (prev.general_shift_evaluation_template_id === deletedId) {
+        return {
+          ...prev,
+          general_shift_evaluation_template_id: null,
+          general_shift_evaluation_mode: GeneralShiftEvaluationMode.OFF,
+        };
+      }
+      return prev;
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     load()
@@ -135,7 +165,8 @@ const ShiftEvaluationSettingsPanel: React.FC = () => {
         toast.success('Template created');
       }
       setEditor(null);
-      await load();
+      // Only the list: the settings card may hold unsaved choices.
+      await refreshTemplates();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save the template'));
     } finally {
@@ -167,7 +198,7 @@ const ShiftEvaluationSettingsPanel: React.FC = () => {
     try {
       await shiftEvaluationTemplateService.remove(template.id);
       toast.success('Template deleted');
-      await load();
+      await refreshAfterDelete(template.id);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete the template'));
     }
@@ -185,7 +216,8 @@ const ShiftEvaluationSettingsPanel: React.FC = () => {
       setSettings(saved);
       setDraftSettings(saved);
       toast.success('Shift evaluation settings saved');
-      await load();
+      // The list's "General form" badge follows the saved choice.
+      await refreshTemplates();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save settings'));
     } finally {
