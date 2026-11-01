@@ -196,9 +196,11 @@ Both left the module off; only the enabled list is sent (`saveModuleConfig`), an
 **Saw:** the module was described as "Automated email notifications for events, reminders, and important updates". Skipped at setup, it removed the notification bell from the navigation, while nothing on the sending side reads it (`grep` for `notifications` module checks in the senders: none). It gates `/notifications`: the in-app inbox and bell, web push, and the notification rules screen. A department skipping it to hold off on email would lose the bell and keep every email. Members also have their own "Email Notifications" preference, which really does stop reminder emails, so the two shared a name.
 **Fix:** renamed **In-App Notifications** and described as what it gates, in onboarding and in Settings → Modules (and the backend field description). Test: `ModuleOverview.choices.test.tsx`.
 
-### W01-23 — MED — "Mobile App Access" is a switch nothing reads — FLAGGED
+### W01-23 — MED — "Mobile App Access" is a switch nothing reads — ✅ FIXED (owner decision 2026-11-01: remove it)
 
-Offered on the Modules step and in Settings → Modules ("Progressive web app for mobile access…"). No frontend or backend code reads `modules.mobile`; the app is installable and works on phones whatever it says. CLAUDE.md pitfall 19. **Why not fixed:** withdrawing the option or giving it a meaning is the owner's call. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+Offered on the Modules step and in Settings → Modules ("Progressive web app for mobile access…"). No frontend or backend code reads `modules.mobile`; the app is installable and works on phones whatever it says. CLAUDE.md pitfall 19.
+
+**Fixed (2026-11-01, owner decision: remove it from onboarding and Settings).** Gone from the Modules step (`moduleRegistry.ts`), from Settings → Modules (`SettingsPage.tsx`), from the unused module catalogue (`types/modules.ts`), and from the Communications Officer's specialties. On the backend it moves from the offered list to `ONBOARDING_RETIRED_MODULES`. The `ModuleSettings.mobile` field stays, so stored settings and the modules API are unchanged, and the id stays accepted so a setup session saved before the change still validates. A stored value remains inert, as it always was. Tests: `test_onboarding_module_parity.py` (neither screen offers a retired module), `ModuleOverview.choices.test.tsx`. `test_module_checkbox_grants.py` found its no-permission example by scanning the registry, where Mobile App Access was the only one; it now names `mobile` directly.
 
 ### W01-24 — LOW — Onboarding turns Public Information off without asking — FLAGGED
 

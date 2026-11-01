@@ -2,14 +2,13 @@
 
 ## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
 
-**Open (owner decision needed).** Found in the workflow review's W01 third
+**Partly resolved (Mobile App Access removed 2026-11-01); Public Information still open.** Found in the workflow review's W01 third
 pass (`docs/workflow-review/W01-onboarding.md`).
 
-- **Mobile App Access (W01-23).** Offered on the setup wizard's Modules step and
-  under Settings → Modules as the progressive web app. No code reads
-  `modules.mobile`: the app installs and works on a phone whatever the switch
-  says. Either withdraw the option from both screens or give it a meaning;
-  until then it is the switch CLAUDE.md pitfall 19 describes.
+- **Mobile App Access (W01-23) — resolved 2026-11-01.** Owner decision: remove
+  it. It is no longer offered by the setup wizard or by Settings → Modules. The
+  `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
+  stored settings and the modules API do not change; nothing reads it.
 - **Public Information (W01-24).** The Modules step never offers it, but
   saving the step writes every configurable module, so a new installation
   stores it off while Settings → Modules lists it as enabled by default.

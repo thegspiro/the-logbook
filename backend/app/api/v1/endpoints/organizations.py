@@ -95,7 +95,6 @@ MODULES_WITHOUT_SETUP_CHECKLIST_ITEM: dict[str, str] = {
     "elections": "nothing to configure ahead of time; an election is created when one is called",
     "minutes": "nothing to configure ahead of time; minutes are recorded per meeting",
     "reports": "reads what the other modules record; there is nothing to seed",
-    "mobile": "the PWA needs no department-side setup",
 }
 
 
@@ -1063,7 +1062,6 @@ async def update_module_settings(
     - minutes: Meeting Minutes
     - reports: Reports & Analytics
     - notifications: In-App Notifications (bell, inbox, push, rules)
-    - mobile: Mobile App Access
     - forms: Custom Forms
     - integrations: External Integrations
     - facilities: Facilities Management

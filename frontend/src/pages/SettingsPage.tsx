@@ -20,7 +20,6 @@ import {
   FileText,
   BarChart3,
   Bell,
-  Smartphone,
   ClipboardList,
   Plug,
   Loader2,
@@ -262,12 +261,6 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     name: 'Elections & Voting',
     description: 'Ballot creation, voting management, and election results',
     icon: <Vote className="h-5 w-5" />,
-  },
-  {
-    key: 'mobile',
-    name: 'Mobile App Access',
-    description: 'Mobile-optimized access with pull-to-refresh and responsive UI',
-    icon: <Smartphone className="h-5 w-5" />,
   },
   {
     key: 'incidents',

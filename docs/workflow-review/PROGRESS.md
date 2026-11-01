@@ -244,6 +244,8 @@ without offering it), W01-27 (LOW, email settings that failed their test are
 saved without a word). Resolved the dashboard lead's integrations half
 (W01-33). Gate: typecheck and lint clean, every new test seen failing first,
 the full frontend suite passes, flake8 and black clean on the two backend files.
+Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
+from onboarding and Settings (the stored field is kept, retired).
 
 ### W01 follow-up — The open onboarding findings — 2026-10-31
 

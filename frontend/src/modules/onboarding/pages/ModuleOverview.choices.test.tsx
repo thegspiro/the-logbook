@@ -100,4 +100,14 @@ describe('ModuleOverview choices', () => {
     expect(notifications.getByText(/emailed whether or not/i)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Email Notifications' })).not.toBeInTheDocument();
   });
+
+  // Owner decision 2026-11-01 (W01-23): Mobile App Access was a switch nothing
+  // read — the app installs and works on a phone either way — so setup no
+  // longer offers it.
+  it('does not offer Mobile App Access', () => {
+    renderPage();
+
+    expect(screen.queryByRole('group', { name: 'Mobile App Access' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mobile App Access/ })).not.toBeInTheDocument();
+  });
 });
