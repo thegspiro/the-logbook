@@ -4,12 +4,14 @@ External approvers configured on an approval step (approver_type "email") act on
 a purchase/expense/check request from an emailed link, without a Logbook login.
 The unguessable per-step token (256 bits, 7-day expiry) is the authentication;
 these routes are otherwise unauthenticated, so they are rate-limited and expose
-only the minimal detail the approver needs to decide.
+only the minimal detail the approver needs to decide: the step, the request's
+title, amount and requester's name.
 
 Wraps the pre-existing FinanceService.approve_by_token / deny_by_token, which
 enforce token validity, single-use (status must be PENDING), and expiry.
 """
 
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
@@ -53,6 +55,14 @@ class ApprovalDetailResponse(BaseModel):
     status: str
     actionable: bool
     expired: bool
+    # What the approver is deciding on (owner decision 2026-11-01): the
+    # request's title, amount and requester, and nothing more -- the
+    # description, vendor and lines stay behind the login, since this link is
+    # a bearer token that may be forwarded. Filled only while the link can
+    # still be acted on; a used or expired link describes nothing.
+    title: Optional[str] = None
+    amount: Optional[Decimal] = None
+    requester_name: Optional[str] = None
     # Expense reports: lines submitted after the substantiation deadline. A
     # count only; the page shows no amounts or names.
     late_line_count: int = 0
@@ -104,7 +114,10 @@ async def _load_record(db: AsyncSession, token: str) -> ApprovalStepRecord:
     result = await db.execute(
         select(ApprovalStepRecord)
         .where(ApprovalStepRecord.approval_token == token)
-        .options(selectinload(ApprovalStepRecord.step))
+        .options(
+            selectinload(ApprovalStepRecord.step),
+            selectinload(ApprovalStepRecord.chain),
+        )
     )
     record: ApprovalStepRecord | None = result.scalar_one_or_none()
     # A token whose step has since been reassigned away from an email
@@ -139,14 +152,28 @@ async def get_approval_detail(
     if expires_at and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     expired = bool(expires_at and expires_at < datetime.now(timezone.utc))
+    actionable = record.status == ApprovalStepStatus.PENDING and not expired
+    service = FinanceService(db)
+    subject = (
+        await service.approval_subject(
+            record.entity_type,
+            record.entity_id,
+            str(record.chain.organization_id),
+        )
+        if actionable and record.chain is not None
+        else None
+    ) or {}
     return ApprovalDetailResponse(
         step_name=record.step.name if record.step else "Approval",
         entity_type=record.entity_type.value,
         status=record.status.value,
-        actionable=record.status == ApprovalStepStatus.PENDING and not expired,
+        actionable=actionable,
         expired=expired,
+        title=subject.get("title"),
+        amount=subject.get("amount"),
+        requester_name=subject.get("requester_name"),
         late_line_count=(
-            await FinanceService(db).late_line_count(record.entity_id)
+            await service.late_line_count(record.entity_id)
             if record.entity_type == ApprovalEntityType.EXPENSE_REPORT
             else 0
         ),

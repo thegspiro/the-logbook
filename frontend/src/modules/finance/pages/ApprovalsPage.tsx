@@ -13,21 +13,29 @@
  * own page instead (`GET /finance/approvals/unrouted`): ones no approval chain
  * applies to, and ones the dual-approval threshold holds for a second approver
  * (`awaitingSecondApproval`, the backend's reading).
+ *
+ * A step that emails an outside approver says what became of the link
+ * (`emailDelivery`, the backend's reading: sent, failed, expired), and an
+ * approvals admin (`canResendEmail`) can re-send it. The link itself never
+ * reaches this page — it is a bearer token for someone else's approval.
  */
 
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { approvalService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { Link } from 'react-router';
-import { AlertTriangle, CheckCircle, ClipboardCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ClipboardCheck, Mail, XCircle } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { formatDate } from '@/utils/dateFormatting';
+import { formatDate, formatDateCustom } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { ApprovalEmailDelivery } from '../types';
 import type { PendingApproval, UnroutedApproval } from '../types';
 import { ApprovalDecisionDialog } from '../components/ApprovalDecisionDialog';
 import { LateLinesBadge } from '../components/LateLinesBadge';
@@ -108,6 +116,94 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
         <XCircle className="h-4 w-4" />
         Deny as admin
       </button>
+    </div>
+  );
+};
+
+const EMAIL_BADGE: Record<string, string> = {
+  [ApprovalEmailDelivery.FAILED]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
+  [ApprovalEmailDelivery.EXPIRED]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+  [ApprovalEmailDelivery.NOT_SENT]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+};
+
+const emailDeliveryText = (row: PendingApproval, tz: string): string | null => {
+  switch (row.emailDelivery) {
+    case ApprovalEmailDelivery.SENT:
+      return row.emailStatusAt
+        ? `Email sent ${formatDateCustom(row.emailStatusAt, { month: 'short', day: 'numeric' }, tz)}`
+        : 'Email sent';
+    case ApprovalEmailDelivery.FAILED:
+      return 'Email could not be sent';
+    case ApprovalEmailDelivery.EXPIRED:
+      return 'Link expired';
+    case ApprovalEmailDelivery.NOT_SENT:
+      return 'No link has been emailed';
+    case ApprovalEmailDelivery.UNKNOWN:
+      return 'Link emailed (sending not recorded)';
+    default:
+      return null;
+  }
+};
+
+interface EmailLinkStatusProps {
+  row: PendingApproval;
+  onResent: () => void;
+}
+
+const EmailLinkStatus: React.FC<EmailLinkStatusProps> = ({ row, onResent }) => {
+  const tz = useTimezone();
+  const { confirm } = useConfirm();
+  const [sending, setSending] = useState(false);
+  const text = emailDeliveryText(row, tz);
+  if (!text) return null;
+
+  const resend = async () => {
+    const confirmed = await confirm({
+      title: 'Re-send the approval link?',
+      message: `A new link will be emailed to ${row.assigneeLabel}. The link already sent will stop working.`,
+      confirmLabel: 'Re-send link',
+      cancelLabel: 'Keep the current link',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
+    setSending(true);
+    try {
+      const result = await approvalService.resendEmail(row.stepRecordId, row.emailLinkVersion ?? 0);
+      if (!result.resent) {
+        toast.success('A new link had already been sent.');
+      } else if (result.emailDelivery === ApprovalEmailDelivery.FAILED) {
+        toast.error('The new link could not be emailed.');
+      } else {
+        toast.success('A new link was emailed.');
+      }
+      onResent();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not re-send the link'));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const badge = row.emailDelivery ? EMAIL_BADGE[row.emailDelivery] : undefined;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      {badge ? (
+        <span className={`badge ${badge}`}>{text}</span>
+      ) : (
+        <span className="text-theme-text-secondary text-xs">{text}</span>
+      )}
+      {row.canResendEmail && (
+        <button
+          type="button"
+          onClick={() => void resend()}
+          disabled={sending}
+          aria-label={`Re-send the approval link for ${row.entityTitle}`}
+          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium"
+        >
+          <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+          {sending ? 'Sending…' : 'Re-send link'}
+        </button>
+      )}
     </div>
   );
 };
@@ -356,6 +452,7 @@ const ApprovalsPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      <EmailLinkStatus row={row} onResent={() => void fetchPendingApprovals()} />
                     </td>
                     <td
                       data-label="Submitted"
