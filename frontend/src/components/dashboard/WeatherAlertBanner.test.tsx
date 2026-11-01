@@ -10,6 +10,15 @@ vi.mock('../../services/api', () => ({
 }));
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 
+let mockIntegrationsOn = true;
+vi.mock('../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    enabledModules: null,
+    isModuleOn: (key: string) => key !== 'integrations' || mockIntegrationsOn,
+    isLoading: false,
+  }),
+}));
+
 import WeatherAlertBanner from './WeatherAlertBanner';
 
 const tornado = {
@@ -26,6 +35,20 @@ const tornado = {
 describe('WeatherAlertBanner', () => {
   beforeEach(() => {
     mockGetAlerts.mockReset();
+    mockIntegrationsOn = true;
+  });
+
+  // Workflow review W01, 2026-10-31: the alerts live behind the Integrations
+  // module, and a fresh install that left it off saw the dashboard refused
+  // (403) on every load.
+  it('does not ask for alerts when the Integrations module is off', async () => {
+    mockIntegrationsOn = false;
+    mockGetAlerts.mockResolvedValue([tornado]);
+    const { container } = render(<WeatherAlertBanner />);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockGetAlerts).not.toHaveBeenCalled();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('shows each active alert with what to do', async () => {

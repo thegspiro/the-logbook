@@ -231,6 +231,9 @@ class TrainingService:
             try:
                 from app.models.user import Organization as _Org
                 from app.models.user import User as _User
+                from app.services.membership_tier_service import (
+                    MembershipTierService,
+                )
 
                 user_result = await self.db.execute(
                     select(_User).where(
@@ -247,11 +250,8 @@ class TrainingService:
                     if _org:
                         _tier_cfg = (_org.settings or {}).get("membership_tiers", {})
                         _tiers = _tier_cfg.get("tiers", [])
-                        _member_tier_id = (
-                            getattr(_member, "membership_type", None) or "active"
-                        )
-                        _tier_def = next(
-                            (t for t in _tiers if t.get("id") == _member_tier_id), None
+                        _tier_def = MembershipTierService.tier_for_member(
+                            _tiers, _member
                         )
                         if _tier_def:
                             _benefits = _tier_def.get("benefits", {})

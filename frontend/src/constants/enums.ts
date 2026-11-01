@@ -183,6 +183,28 @@ export const UserStatus = {
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
 /**
+ * How an account status reads on screen, in the roster's own words: the
+ * stored values are identifiers, and `leave` or `dropped_voluntary` printed
+ * as-is is not something to put on a member's ID card.
+ */
+export const USER_STATUS_LABELS: Record<UserStatus, string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+  suspended: 'Suspended',
+  probationary: 'Probationary',
+  leave: 'On Leave',
+  retired: 'Retired',
+  dropped_voluntary: 'Dropped (voluntary)',
+  dropped_involuntary: 'Dropped (involuntary)',
+  archived: 'Archived',
+};
+
+/** The label for a stored account status; an unknown value is shown as sent, underscores spaced. */
+export function userStatusLabel(status: string): string {
+  return USER_STATUS_LABELS[status as UserStatus] ?? status.replace(/_/g, ' ');
+}
+
+/**
  * Statuses whose holder is a current member: signs in, is scheduled, trains.
  * Mirrors `ACTIVE_ACCOUNT_STATUSES` in `backend/app/models/user.py`. A
  * probationary member is on the roster today, not a former one, so a list of

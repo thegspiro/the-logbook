@@ -446,6 +446,7 @@ class TestMyApplicants:
             "can_manage": False,
             "can_see_full": True,
             "can_log_interview": True,
+            "interviewer_title": None,
         }
 
 

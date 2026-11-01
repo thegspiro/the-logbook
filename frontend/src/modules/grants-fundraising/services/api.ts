@@ -29,6 +29,14 @@ import type {
   GrantsDashboard,
   GrantReport,
   FundraisingReport,
+  ZeffyCampaign,
+  ZeffyDuesScheduleOption,
+  ZeffyLink,
+  ZeffyLinkPayload,
+  ZeffyPaymentPage,
+  ZeffyPaymentState,
+  ZeffyStatus,
+  ZeffySyncResult,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -443,5 +451,68 @@ export const fundraisingService = {
   async updateFundraisingEvent(id: string, data: FundraisingEventUpdatePayload): Promise<FundraisingEvent> {
     const response = await api.put<FundraisingEvent>(`/grants/fundraising-events/${id}`, data);
     return response.data;
+  },
+};
+
+// =============================================================================
+// Zeffy Service
+// =============================================================================
+
+export const zeffyService = {
+  async getStatus(): Promise<ZeffyStatus> {
+    const response = await api.get<ZeffyStatus>('/grants/zeffy/status');
+    return response.data;
+  },
+
+  /** Read live from Zeffy; `fundraising.manage`. */
+  async listCampaigns(): Promise<ZeffyCampaign[]> {
+    const response = await api.get<ZeffyCampaign[]>('/grants/zeffy/campaigns');
+    return asArray(response.data);
+  },
+
+  async listLinks(): Promise<ZeffyLink[]> {
+    const response = await api.get<ZeffyLink[]>('/grants/zeffy/links');
+    return asArray(response.data);
+  },
+
+  async saveLink(zeffyCampaignId: string, data: ZeffyLinkPayload): Promise<ZeffyLink> {
+    const response = await api.put<ZeffyLink>(`/grants/zeffy/links/${encodeURIComponent(zeffyCampaignId)}`, data);
+    return response.data;
+  },
+
+  async deleteLink(zeffyCampaignId: string): Promise<void> {
+    await api.delete(`/grants/zeffy/links/${encodeURIComponent(zeffyCampaignId)}`);
+  },
+
+  async listPayments(params: {
+    state?: ZeffyPaymentState | undefined;
+    limit: number;
+    offset: number;
+  }): Promise<ZeffyPaymentPage> {
+    const response = await api.get<ZeffyPaymentPage>('/grants/zeffy/payments', {
+      params: { state: params.state, limit: params.limit, offset: params.offset },
+    });
+    return { items: asArray(response.data.items), total: response.data.total };
+  },
+
+  async syncNow(): Promise<ZeffySyncResult> {
+    const response = await api.post<ZeffySyncResult>('/grants/zeffy/sync');
+    return response.data;
+  },
+
+  /** Dues schedules to link a membership campaign to; needs finance access. */
+  async listDuesSchedules(): Promise<ZeffyDuesScheduleOption[]> {
+    // The endpoint pages (at most 1000 a page); an older schedule past the
+    // first page may still be active and must be offered.
+    const pageSize = 1000;
+    const schedules: ZeffyDuesScheduleOption[] = [];
+    for (let skip = 0; ; skip += pageSize) {
+      const response = await api.get<ZeffyDuesScheduleOption[]>('/finance/dues-schedules', {
+        params: { skip, limit: pageSize },
+      });
+      const page = asArray(response.data);
+      schedules.push(...page);
+      if (page.length < pageSize) return schedules;
+    }
   },
 };

@@ -84,7 +84,7 @@ const storeState = {
   totalApplicants: 2,
   currentPage: 1,
   totalPages: 1,
-  filters: { pipeline_id: 'pipe-1' },
+  filters: { pipeline_id: 'pipe-1' } as { pipeline_id: string; assigned_to_me?: boolean },
   viewMode: 'table',
   activeTab: 'active',
   detailDrawerOpen: false,
@@ -416,5 +416,41 @@ describe('ProspectiveMembersPage — adding an applicant who already exists', ()
       )
     );
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Applicant added to pipeline'));
+  });
+});
+
+describe('ProspectiveMembersPage — My applicants', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    storeState.activeTab = 'active';
+    storeState.filters = { pipeline_id: 'pipe-1' };
+  });
+  afterEach(() => {
+    storeState.filters = { pipeline_id: 'pipe-1' };
+  });
+
+  it('narrows the board and table to the caller’s applicants', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    const toggle = screen.getByRole('button', { name: 'My applicants' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await user.click(toggle);
+
+    expect(vi.mocked(storeState.setFilters).mock.lastCall?.[0]).toStrictEqual({ assigned_to_me: true });
+  });
+
+  it('shows everyone again when switched off', async () => {
+    storeState.filters = { pipeline_id: 'pipe-1', assigned_to_me: true };
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    const toggle = screen.getByRole('button', { name: 'My applicants' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await user.click(toggle);
+
+    // Strict and last: the page's mount effects also call setFilters with
+    // other keys set to undefined, which a loose match would accept.
+    expect(vi.mocked(storeState.setFilters).mock.lastCall?.[0]).toStrictEqual({ assigned_to_me: undefined });
   });
 });

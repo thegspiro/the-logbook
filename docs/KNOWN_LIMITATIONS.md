@@ -1,5 +1,46 @@
 # Known Limitations & Open Decisions
 
+## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
+
+The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies
+Zeffy payments to donations, fundraising-event revenue and member dues. These
+were chosen deliberately and are open for the owner to confirm or change:
+
+- **A refund of dues already credited is flagged, not reversed.** The dues
+  ledger has no reversal entry, so the payment shows **Needs review** and the
+  treasurer adjusts the dues by hand. Donations and event revenue are adjusted
+  automatically.
+- **Linking starts "from now on" by default.** Earlier Zeffy payments are
+  recorded but applied only if the link's start date is moved back, so nothing
+  the treasurer already typed in is counted twice.
+- **A payment stays on the record it was first applied to** when its campaign's
+  link is pointed elsewhere.
+- **A refund made more than 7 days after the sale arrives only by webhook.**
+  Zeffy's payment list has no "changed since" filter, so the hourly sync cannot
+  find it. Departments without the webhook will not see such refunds.
+- **Membership payments are matched to members by email only.** A payer who
+  used a different address than the one on their profile is left **No member
+  match** for the treasurer.
+
+## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
+
+**Partly resolved (Mobile App Access removed 2026-11-01); Public Information still open.** Found in the workflow review's W01 third
+pass (`docs/workflow-review/W01-onboarding.md`).
+
+- **Mobile App Access (W01-23) — resolved 2026-11-01.** Owner decision: remove
+  it. It is no longer offered by the setup wizard or by Settings → Modules. The
+  `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
+  stored settings and the modules API do not change; nothing reads it.
+- **Public Information (W01-24).** The Modules step never offers it, but
+  saving the step writes every configurable module, so a new installation
+  stores it off while Settings → Modules lists it as enabled by default.
+  Either offer it during setup or leave it at its default.
+
+Also open from the same pass, a smaller decision: the email step saves settings
+that have just failed their connection test, says "Email settings saved", and
+the completion page then reports the platform as configured (W01-27). Warn,
+confirm, or refuse.
+
 ## Members — Members See the Built-In Tier Names (2026-10-31)
 
 The department's membership tiers ("Active Member", "Senior Member", …) come
@@ -35,6 +76,27 @@ supervised a member is kept), and then decide which features read it —
 evaluator defaults, line-officer visibility of their own crew's evaluations,
 and approvals. Not started; it is a change to the member model and its editing
 screens, separate from the evaluations work.
+
+## Frontend API Cache — An Inventory Item's Detail Is Cacheable and Names the Holder (2026-10-31)
+
+`GET /inventory/items/{id}` fills in `assigned_to_name` — who currently holds the
+item — for a caller who manages inventory or who holds it themselves. The shared
+API cache (`frontend/src/utils/apiCache.ts`) keeps GET responses for 30 seconds
+fresh and 90 stale, and `/inventory/items/{id}` is not in `UNCACHEABLE_PREFIXES`,
+although `/inventory/checkout/` and `/inventory/users/` are excluded for exactly
+this reason (who holds what is PII).
+
+It is left as it is because an earlier decision (FE9-34, pinned by a test in
+`apiCache.test.ts`) deliberately keeps the item list and detail cacheable and
+excludes only the maintenance sub-resource. Excluding the detail needs a prefix
+that would also uncache the item's other sub-routes, which is a performance
+change to a hot screen. Choosing between that and the current exposure is an
+owner decision.
+
+Owner decision: either (a) keep it — the response is already redacted per
+viewer on the server, and the cache is cleared on logout; or (b) exclude
+`/inventory/items/{id}` itself (a narrower pattern than a prefix) and update the
+FE9-34 test to match.
 
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
@@ -1148,6 +1210,10 @@ Still open:
 
 - **OneDrive / SharePoint and "Other" are still unread.** The screen says
   files stay on the server for them, and lists what can be connected.
+  **Onboarding now says so too (2026-10-31, W01-29/W01-30):** the setup
+  wizard's OneDrive card and settings page used to say files would be stored
+  there; they now say it is not connected yet and files stay on the server.
+  The Local Storage page marks its path field as recorded but not used.
   **Resolved 2026-10-23: Google Drive works** (decision 32), through a
   service account and a Shared Drive. It needs Google Workspace; a personal
   Google account has no Shared Drives.

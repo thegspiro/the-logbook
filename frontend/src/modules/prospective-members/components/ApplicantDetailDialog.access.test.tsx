@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     currentElectionPackage: null,
   },
   getMyAccess: vi.fn(),
+  getInterviewRequirement: vi.fn(),
   getActivity: vi.fn(),
   getLinkedEvents: vi.fn(),
 }));
@@ -37,6 +38,7 @@ vi.mock('../services/api', () => ({
     getDocuments: () => Promise.resolve([]),
     getActivity: (...a: unknown[]) => mocks.getActivity(...a) as unknown,
     getMyAccess: (...a: unknown[]) => mocks.getMyAccess(...a) as unknown,
+    getInterviewRequirement: (...a: unknown[]) => mocks.getInterviewRequirement(...a) as unknown,
   },
   assignmentService: { list: () => Promise.resolve([]) },
   eventLinkService: {
@@ -117,6 +119,8 @@ describe('ApplicantDetailDialog for an assigned member', () => {
     mocks.getLinkedEvents.mockReset();
     mocks.getActivity.mockResolvedValue([]);
     mocks.getLinkedEvents.mockResolvedValue([]);
+    mocks.getInterviewRequirement.mockReset();
+    mocks.getInterviewRequirement.mockResolvedValue(null);
   });
 
   it('asks for the caller’s access to this applicant', async () => {
@@ -187,5 +191,38 @@ describe('ApplicantDetailDialog for an assigned member', () => {
     await settle();
     expect(mocks.getMyAccess).toHaveBeenCalledWith('app-1');
     expect(screen.queryByRole('button', { name: /Advance/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDialog on an interview stage', () => {
+  beforeEach(() => {
+    mocks.getMyAccess.mockReset();
+    mocks.getMyAccess.mockResolvedValue(caseManager);
+    mocks.getActivity.mockReset();
+    mocks.getActivity.mockResolvedValue([]);
+    mocks.getLinkedEvents.mockReset();
+    mocks.getLinkedEvents.mockResolvedValue([]);
+    mocks.getInterviewRequirement.mockReset();
+    mocks.getInterviewRequirement.mockResolvedValue({
+      step_id: 'step-b',
+      required_count: 2,
+      recorded_count: 2,
+      required_recommendation: null,
+      recommendation_met: null,
+      positions: [{ position: 'president', label: 'President', satisfied: true }],
+      complete: true,
+    });
+  });
+
+  // The section used to read an interview count nothing ever wrote, so it
+  // showed "0 of 2" however many interviews had been logged.
+  it('shows the server’s count and positions for the stage', async () => {
+    renderDialog(false, { current_stage_type: 'interview_requirement' });
+
+    const panel = await screen.findByRole('region', { name: 'Interview requirement' });
+    expect(mocks.getInterviewRequirement).toHaveBeenCalledWith('app-1');
+    expect(panel).toHaveTextContent('2 of 2 interviews recorded');
+    expect(panel).toHaveTextContent('Interview by PresidentDone');
+    expect(panel).toHaveTextContent('Requirement met');
   });
 });

@@ -121,8 +121,9 @@ describe('ModuleOverview touch targets', () => {
   it('gives every card action and Continue the phone touch minimum', () => {
     renderPage();
 
+    // Later was removed on 2026-10-31 (it did what Skip does), so the card
+    // actions are Enable/Enabled and Skip.
     const actions = [
-      ...screen.getAllByRole('button', { name: /^set up .* later$/i }),
       ...screen.getAllByRole('button', { name: /^skip /i }),
       ...screen.getAllByRole('button', { name: /^enable /i }),
       screen.getByRole('button', { name: /^continue to/i }),

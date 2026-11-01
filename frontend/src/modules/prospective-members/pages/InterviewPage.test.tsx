@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   deleteInterview: vi.fn(),
   fetchApplicant: vi.fn(),
   fetchInterviews: vi.fn(),
+  getMyAccess: vi.fn(),
+  getInterviewRequirement: vi.fn(),
   storeState: {},
 }));
 
@@ -38,19 +40,22 @@ vi.mock('../services/api', () => ({
     list: () => Promise.resolve([]),
     getAnswers: () => Promise.resolve(null),
   },
-  // A coordinator, who may log an interview for any applicant they can see.
   applicantService: {
-    getMyAccess: () =>
-      Promise.resolve({
-        roles: [],
-        view_all: true,
-        can_work: true,
-        can_manage: true,
-        can_see_full: true,
-        can_log_interview: true,
-      }),
+    getMyAccess: (...a: unknown[]) => mocks.getMyAccess(...a) as unknown,
+    getInterviewRequirement: (...a: unknown[]) => mocks.getInterviewRequirement(...a) as unknown,
   },
 }));
+
+// A coordinator, who may log an interview for any applicant they can see.
+const coordinatorAccess = {
+  roles: [],
+  view_all: true,
+  can_work: true,
+  can_manage: true,
+  can_see_full: true,
+  can_log_interview: true,
+  interviewer_title: null,
+};
 
 import { InterviewPage } from './InterviewPage';
 
@@ -89,6 +94,10 @@ describe('InterviewPage interview form', () => {
       fn.mockReset();
       fn.mockResolvedValue(undefined);
     }
+    mocks.getMyAccess.mockReset();
+    mocks.getMyAccess.mockResolvedValue(coordinatorAccess);
+    mocks.getInterviewRequirement.mockReset();
+    mocks.getInterviewRequirement.mockResolvedValue(null);
     mocks.storeState = {
       currentApplicant: applicant,
       isLoadingApplicant: false,
@@ -141,5 +150,87 @@ describe('InterviewPage interview form', () => {
         interviewer_role: undefined,
       });
     });
+  });
+});
+
+describe('InterviewPage for an interviewer holding an office', () => {
+  beforeEach(() => {
+    for (const fn of [mocks.createInterview, mocks.fetchApplicant, mocks.fetchInterviews]) {
+      fn.mockReset();
+      fn.mockResolvedValue(undefined);
+    }
+    mocks.getMyAccess.mockReset();
+    mocks.getMyAccess.mockResolvedValue({ ...coordinatorAccess, interviewer_title: 'Fire Chief' });
+    mocks.getInterviewRequirement.mockReset();
+    mocks.getInterviewRequirement.mockResolvedValue({
+      step_id: 'step-b',
+      required_count: 2,
+      recorded_count: 1,
+      required_recommendation: null,
+      recommendation_met: null,
+      positions: [
+        { position: 'fire_chief', label: 'Fire Chief', satisfied: true },
+        { position: 'board_of_directors', label: 'Board of Directors', satisfied: false },
+      ],
+      complete: false,
+    });
+    mocks.storeState = {
+      currentApplicant: applicant,
+      isLoadingApplicant: false,
+      interviews: [],
+      isLoadingInterviews: false,
+      fetchApplicant: mocks.fetchApplicant,
+      fetchInterviews: mocks.fetchInterviews,
+      createInterview: mocks.createInterview,
+      updateInterview: mocks.updateInterview,
+      deleteInterview: mocks.deleteInterview,
+      error: null,
+    };
+  });
+
+  it('offers their position as the title, and they can change it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InterviewPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Interview' }));
+    const title = screen.getByPlaceholderText(/Membership Coordinator/);
+    expect(title).toHaveValue('Fire Chief');
+
+    await user.clear(title);
+    await user.type(title, 'Acting Chief');
+    await user.click(screen.getByRole('button', { name: 'Submit Interview' }));
+
+    await waitFor(() => {
+      expect(mocks.createInterview).toHaveBeenCalledWith('app-1', {
+        notes: undefined,
+        recommendation: undefined,
+        recommendation_notes: undefined,
+        interviewer_role: 'Acting Chief',
+      });
+    });
+  });
+
+  it('shows which required positions have interviewed', async () => {
+    renderWithRouter(<InterviewPage />);
+
+    const panel = await screen.findByRole('region', { name: 'Interview requirement' });
+    expect(mocks.getInterviewRequirement).toHaveBeenCalledWith('app-1');
+    expect(panel).toHaveTextContent('1 of 2 interviews recorded');
+    expect(panel).toHaveTextContent('Interview by Fire ChiefDone');
+    expect(panel).toHaveTextContent('Interview by Board of DirectorsMissing');
+    expect(panel).toHaveTextContent('In progress');
+  });
+
+  it('re-reads the requirement after an interview is submitted', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InterviewPage />);
+
+    await screen.findByRole('region', { name: 'Interview requirement' });
+    await user.click(await screen.findByRole('button', { name: 'New Interview' }));
+    await user.type(screen.getByPlaceholderText(/Record your observations/), 'Met with the board');
+    await user.click(screen.getByRole('button', { name: 'Submit Interview' }));
+
+    await waitFor(() => expect(mocks.createInterview).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.getInterviewRequirement).toHaveBeenCalledTimes(2));
   });
 });

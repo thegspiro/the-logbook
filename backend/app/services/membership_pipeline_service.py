@@ -33,6 +33,11 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG, office_label
+from app.core.permissions import (
+    POSITION_KIND_COMMITTEE,
+    POSITION_KIND_OFFICE,
+    POSITION_KIND_SYSTEM,
+)
 from app.core.security import email_fingerprints
 from app.core.utils import list_within_detail_limit
 from app.models.election import Election, ElectionStatus
@@ -72,6 +77,7 @@ from app.services.email_policy import (
 )
 from app.services.file_storage_service import StorageArea
 from app.services.integration_services.directory_common import DirectoryProviderInfo
+from app.services.prospect_assignment_service import ProspectAssignmentService
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEACTIVATED_EMAIL_MESSAGE,
@@ -546,6 +552,48 @@ def _required_approver_roles(config: Optional[Dict[str, Any]]) -> List[str]:
     approvers, which would let it complete without any sign-off at all.
     """
     return [str(r).strip() for r in (config or {}).get("required_approvers") or []]
+
+
+def _required_interviewer_positions(config: Optional[Dict[str, Any]]) -> List[str]:
+    """An interview stage's required interviewer positions, as matched.
+
+    Stripped and blank-keeping for the reason :func:`_required_approver_roles`
+    gives: a blank entry nobody can hold keeps the stage closed rather than
+    quietly dropping a requirement.
+    """
+    raw = (config or {}).get("required_interviewer_positions") or []
+    if not isinstance(raw, list):
+        return []
+    return [str(p).strip() for p in raw]
+
+
+# Office over committee over platform position, before priority is compared.
+# A position with no kind predates the column and is an office.
+_TITLE_KIND_RANK = {
+    POSITION_KIND_OFFICE: 2,
+    POSITION_KIND_COMMITTEE: 1,
+    POSITION_KIND_SYSTEM: 0,
+}
+
+
+def interviewer_title(positions: Iterable[Any]) -> Optional[str]:
+    """The title an interviewer signs an interview with, from their positions.
+
+    The most senior office, then committee, by ``priority``; a platform
+    position (a rank mirror, the owner) only when the member holds nothing
+    else. The baseline ``member`` position is never a title: every member
+    holds it, so it says nothing about who conducted the interview.
+    """
+    candidates = [
+        p for p in positions if p.name and (p.slug or "").casefold() != "member"
+    ]
+    if not candidates:
+        return None
+    best = max(
+        candidates,
+        key=lambda p: (_TITLE_KIND_RANK.get(p.kind, 2), p.priority or 0),
+    )
+    return str(best.name)
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -1264,6 +1312,7 @@ class MembershipPipelineService:
                         row.completed_by = None
                     await self.ensure_election_package_on_entry(prospect, fallback_step)
                     await self._send_follow_up_on_entry(prospect, fallback_step)
+                    await self._notify_case_managers_on_entry(prospect, fallback_step)
                 await self._log_activity(
                     prospect_id=prospect.id,
                     action="step_deleted_auto_moved",
@@ -2244,29 +2293,30 @@ class MembershipPipelineService:
         step_type = effective_step_type(step)
 
         if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
-            required_count = config.get("required_count", 1)
-            required_rec = config.get("required_recommendation")
-            interviews = [
-                i
-                for i in getattr(prospect, "interviews", [])
-                if str(i.step_id) == str(step.id)
-            ]
-            if len(interviews) < required_count:
+            progress = await self.interview_requirement_progress(prospect, step)
+            required_count = progress["required_count"]
+            recorded = progress["recorded_count"]
+            if recorded < required_count:
                 raise ValueError(
                     f"This step requires at least {required_count} "
-                    f"interview(s); only {len(interviews)} recorded."
+                    f"interview(s); only {recorded} recorded."
                 )
-            if required_rec:
-                matching = [
-                    i
-                    for i in interviews
-                    if i.recommendation and i.recommendation.value == required_rec
-                ]
-                if not matching:
-                    raise ValueError(
-                        f"At least one interview must have a "
-                        f"'{required_rec}' recommendation."
+            if progress["recommendation_met"] is False:
+                raise ValueError(
+                    f"At least one interview must have a "
+                    f"'{progress['required_recommendation']}' recommendation."
+                )
+            missing_positions = [
+                p["label"] for p in progress["positions"] if not p["satisfied"]
+            ]
+            if missing_positions:
+                raise ValueError(
+                    list_within_detail_limit(
+                        "An interview is still needed from: ",
+                        missing_positions,
+                        ".",
                     )
+                )
 
         elif step_type == PipelineStepType.CHECKLIST:
             items = config.get("items", [])
@@ -3444,6 +3494,7 @@ class MembershipPipelineService:
 
         await self.ensure_election_package_on_entry(prospect, step, assigned_by)
         await self._send_follow_up_on_entry(prospect, step)
+        await self._notify_case_managers_on_entry(prospect, step)
 
         await self._log_activity(
             prospect_id=prospect.id,
@@ -4064,6 +4115,7 @@ class MembershipPipelineService:
 
         await self.ensure_election_package_on_entry(prospect, prev_step, regressed_by)
         await self._send_follow_up_on_entry(prospect, prev_step)
+        await self._notify_case_managers_on_entry(prospect, prev_step)
 
         await self._log_activity(
             prospect_id=prospect_id,
@@ -4145,6 +4197,7 @@ class MembershipPipelineService:
                     return (str(next_step.id), "stage_email_sent")
 
             await self._send_follow_up_on_entry(prospect, next_step)
+            await self._notify_case_managers_on_entry(prospect, next_step)
 
             if is_status_page_stage(next_step):
                 await self.db.flush()
@@ -7770,6 +7823,34 @@ class MembershipPipelineService:
         )
         return request is not None
 
+    # The stages that wait on people other than the coordinators, so arriving
+    # at one is news to the applicant's case managers.
+    _CASE_MANAGER_ENTRY_NOTICES = {
+        PipelineStepType.INTERVIEW_REQUIREMENT: "interview_stage",
+        PipelineStepType.MULTI_APPROVAL: "approval_stage",
+    }
+
+    async def _notify_case_managers_on_entry(
+        self, prospect: ProspectiveMember, step: Optional[MembershipPipelineStep]
+    ) -> int:
+        """Tell the applicant's case managers they reached an interview or
+        sign-off stage.
+
+        Called beside _send_follow_up_on_entry on every path that moves an
+        existing applicant onto a stage. Creation is not one of them: nobody
+        can be assigned to an applicant before the applicant exists. Sent
+        within the entry, as the stage's own emails are; best-effort, so a
+        mail failure never undoes the move.
+        """
+        if step is None:
+            return 0
+        event = self._CASE_MANAGER_ENTRY_NOTICES.get(effective_step_type(step))
+        if event is None or prospect.status != ProspectStatus.ACTIVE:
+            return 0
+        return await ProspectAssignmentService(self.db).notify_case_managers(
+            prospect, event, detail=step.name
+        )
+
     async def ensure_election_package_on_entry(
         self,
         prospect: ProspectiveMember,
@@ -8178,7 +8259,10 @@ class MembershipPipelineService:
             by_applicant=True,
         )
         await self.db.commit()
-        await self._notify_coordinators_of_withdrawal(prospect, reason)
+        told = await self._notify_coordinators_of_withdrawal(prospect, reason)
+        await ProspectAssignmentService(self.db).notify_case_managers(
+            prospect, "withdrew", already_told=told
+        )
         await self._confirm_withdrawal_to_applicant(prospect)
         return prospect
 
@@ -8277,13 +8361,15 @@ class MembershipPipelineService:
 
     async def _notify_coordinators_of_withdrawal(
         self, prospect: ProspectiveMember, reason: Optional[str]
-    ) -> None:
+    ) -> List[str]:
         """Tell the membership coordinators that an applicant withdrew: a bell
         entry for each, and the email for those who receive it.
 
         Best-effort and after the withdrawal has committed: the applicant's
         decision stands whether or not the email goes out, so a mail failure is
-        logged rather than raised back to the public status page.
+        logged rather than raised back to the public status page. Returns the
+        ids of the members emailed, so the case managers' notice can skip
+        them.
         """
         import html as _html
 
@@ -8293,7 +8379,7 @@ class MembershipPipelineService:
             )
             org = org_result.scalar_one_or_none()
             if not org:
-                return
+                return []
 
             coordinators = await self._withdrawal_notice_recipients(
                 str(prospect.organization_id)
@@ -8303,7 +8389,7 @@ class MembershipPipelineService:
                     f"No coordinator to notify of withdrawal by prospect "
                     f"{prospect.id} in org {prospect.organization_id}"
                 )
-                return
+                return []
 
             from app.core.config import settings as app_settings
             from app.services.email_service import EmailService, build_email_logo_html
@@ -8348,7 +8434,7 @@ class MembershipPipelineService:
                     },
                 )
                 await self.db.commit()
-                return
+                return []
 
             e_name = _html.escape(applicant_name)
             rows = [f"<li><strong>Applicant:</strong> {e_name}</li>"]
@@ -8405,11 +8491,13 @@ class MembershipPipelineService:
                 },
             )
             await self.db.commit()
+            return [str(u.id) for u in recipients] if success else []
         except Exception as e:
             logger.warning(
                 f"Failed to notify coordinators of withdrawal by prospect "
                 f"{prospect.id}: {e}"
             )
+            return []
 
     @staticmethod
     def _build_current_stage_action(step: Any) -> Optional[Dict[str, Any]]:
@@ -9076,6 +9164,138 @@ class MembershipPipelineService:
     # Interview Management
     # =========================================================================
 
+    async def _interviewer_roles_by_interview(
+        self, interviews: List[ProspectInterview], organization_id: str
+    ) -> Dict[str, set[str]]:
+        """The roles each interview counts for, keyed by interview id.
+
+        An interview logged since the snapshot column existed counts for what
+        its interviewer held that day. An older one has no snapshot and counts
+        for what its interviewer holds now, which is the only evidence left;
+        an interviewer since removed from the department counts for nothing.
+        """
+        unsnapshotted = {
+            str(i.interviewer_id)
+            for i in interviews
+            if i.interviewer_positions is None and i.interviewer_id
+        }
+        current: Dict[str, set[str]] = {}
+        if unsnapshotted:
+            result = await self.db.execute(
+                select(User)
+                .where(
+                    User.id.in_(unsnapshotted),
+                    User.organization_id == organization_id,
+                    User.deleted_at.is_(None),
+                )
+                .options(selectinload(User.positions))
+            )
+            current = {
+                str(u.id): _approval_roles_held(u.positions)
+                for u in result.scalars().all()
+            }
+        held: Dict[str, set[str]] = {}
+        for interview in interviews:
+            if interview.interviewer_positions is not None:
+                held[str(interview.id)] = {
+                    str(r).casefold() for r in interview.interviewer_positions if r
+                }
+            else:
+                held[str(interview.id)] = current.get(
+                    str(interview.interviewer_id), set()
+                )
+        return held
+
+    async def _position_labels(
+        self, organization_id: str, keys: List[str]
+    ) -> Dict[str, str]:
+        """Display labels for required-position keys, keyed as stored.
+
+        An office key reads as the catalog label ("chief" -> "Chief"); a
+        department position as its own name ("board_of_directors" -> "Board
+        of Directors"); anything else is humanized by :func:`office_label`.
+        """
+        office_keys = {str(o["key"]).casefold() for o in OFFICE_CATALOG}
+        wanted = {k.casefold() for k in keys if k and k.casefold() not in office_keys}
+        names: Dict[str, str] = {}
+        if wanted:
+            result = await self.db.execute(
+                select(Role.slug, Role.name).where(
+                    Role.organization_id == organization_id,
+                    func.lower(Role.slug).in_(wanted),
+                )
+            )
+            names = {str(slug).casefold(): str(name) for slug, name in result.all()}
+        labels: Dict[str, str] = {}
+        for key in keys:
+            folded = key.casefold()
+            if folded in office_keys or folded not in names:
+                labels[key] = office_label(key) if key else "(blank position)"
+            else:
+                labels[key] = names[folded]
+        return labels
+
+    async def interview_requirement_progress(
+        self, prospect: ProspectiveMember, step: MembershipPipelineStep
+    ) -> Dict[str, Any]:
+        """Where an Interview Requirement stage stands for this applicant.
+
+        The single grading of the stage: completion (_validate_step_completion)
+        refuses on exactly what this reports as unmet, and the applicant's
+        page shows this, so the two cannot disagree about what is missing.
+        Only interviews logged against this stage count.
+        """
+        config = step.config or {}
+        try:
+            required_count = int(config.get("required_count", 1) or 0)
+        except (TypeError, ValueError):
+            required_count = 1
+        required_rec = config.get("required_recommendation") or None
+        interviews = [
+            i
+            for i in getattr(prospect, "interviews", [])
+            if str(i.step_id) == str(step.id)
+        ]
+
+        recommendation_met: Optional[bool] = None
+        if required_rec:
+            recommendation_met = any(
+                i.recommendation and i.recommendation.value == required_rec
+                for i in interviews
+            )
+
+        required_positions = _required_interviewer_positions(config)
+        positions: List[Dict[str, Any]] = []
+        if required_positions:
+            organization_id = str(prospect.organization_id)
+            held = await self._interviewer_roles_by_interview(
+                interviews, organization_id
+            )
+            labels = await self._position_labels(organization_id, required_positions)
+            for key in required_positions:
+                folded = key.casefold()
+                positions.append(
+                    {
+                        "position": key,
+                        "label": labels[key],
+                        # A blank key matches nothing: no role is ever "".
+                        "satisfied": bool(folded)
+                        and any(folded in roles for roles in held.values()),
+                    }
+                )
+
+        return {
+            "step_id": str(step.id),
+            "required_count": required_count,
+            "recorded_count": len(interviews),
+            "required_recommendation": required_rec,
+            "recommendation_met": recommendation_met,
+            "positions": positions,
+            "complete": len(interviews) >= required_count
+            and recommendation_met is not False
+            and all(p["satisfied"] for p in positions),
+        }
+
     async def list_interviews(
         self,
         prospect_id: str,
@@ -9152,6 +9372,17 @@ class MembershipPipelineService:
                     "do_not_recommend, undecided"
                 )
 
+        interviewer = await self.db.scalar(
+            select(User)
+            .where(User.id == interviewer_id, User.organization_id == organization_id)
+            .options(selectinload(User.positions))
+        )
+        # What the interviewer held today, so a stage naming required
+        # positions grades this interview by the office it was given in.
+        interviewer_positions = (
+            sorted(_approval_roles_held(interviewer.positions)) if interviewer else []
+        )
+
         interview = ProspectInterview(
             id=generate_uuid(),
             prospect_id=prospect_id,
@@ -9160,6 +9391,7 @@ class MembershipPipelineService:
             or (str(prospect.current_step_id) if prospect.current_step_id else None),
             interviewer_id=interviewer_id,
             interviewer_role=interviewer_role,
+            interviewer_positions=interviewer_positions,
             notes=notes,
             recommendation=rec_enum,
             recommendation_notes=recommendation_notes,

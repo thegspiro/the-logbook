@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     email_templates,
     equipment_check,
     error_logs,
+    evaluations,
     event_attendance_petitions,
     event_requests,
     events,
@@ -101,6 +102,7 @@ from app.api.v1.endpoints import (
     training_submissions,
     training_waivers,
     users,
+    zeffy,
 )
 from app.core.security_middleware import verify_csrf_token
 
@@ -426,6 +428,13 @@ api_router.include_router(
     tags=["reports"],
     dependencies=module_gate("reports", "Reports"),
 )
+# Member evaluations sit in the Reports area, so they follow its module switch.
+api_router.include_router(
+    evaluations.router,
+    prefix="/evaluations",
+    tags=["evaluations"],
+    dependencies=module_gate("reports", "Reports"),
+)
 api_router.include_router(
     notifications.router,
     prefix="/notifications",
@@ -541,6 +550,12 @@ api_router.include_router(
 api_router.include_router(
     grants.router,
     prefix="/grants",
+    tags=["grants"],
+    dependencies=module_gate("grants", "Grants & Fundraising"),
+)
+api_router.include_router(
+    zeffy.router,
+    prefix="/grants/zeffy",
     tags=["grants"],
     dependencies=module_gate("grants", "Grants & Fundraising"),
 )

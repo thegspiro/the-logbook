@@ -1988,7 +1988,8 @@ the form is described in
 The membership types on a profile are worked out from the member's **Member
 class** and **Membership status**: **life** means an operational member with
 life status, while **administrative** covers every administrative member and
-**honorary** every social member, whatever their status.
+**honorary** every social member, whatever their status. **junior** matches a
+member whose status is Junior _(2026-11-01; it matched nobody before)_.
 
 **When a member matches more than one profile**, only the one with the highest
 **Priority** grades them; the others are ignored, not combined. Give each
@@ -2702,6 +2703,40 @@ many sign-offs have been recorded.
 | No skills are defined under Skill Evaluations                   | Every apparatus skill shows amber. Add skills under [Skill Evaluations](#skill-evaluations).                              |
 
 ---
+
+## Shift Evaluations _(2026-10-31 / 11-01)_
+
+A shift evaluation is the department's own form, filled out for a member after
+a shift. It is not the same as a skills evaluation or a member's yearly
+performance evaluation (that is still being built; only its storage exists).
+
+**Building the forms.** **Training Admin → Settings & Data → Shift
+Evaluations** lists the department's forms (needs `training.configure` or
+`training.manage`). A form holds the rating scale and labels, an N/A option, the
+rating below which a comment is required, header fields, statistics, and
+sections of items. **Start from the example** gives a ready template. Set the
+**general form**, whether it is optional or required, and whether one combined
+evaluation may cover several programs.
+
+**Linking a form to a program.** The create-pipeline wizard and the
+edit-program dialog have a **Shift evaluation form** picker. Leaving it blank
+means no form. A form from another department is refused.
+
+**After a shift.** In the **Shift Completion Report**, each member who needs an
+evaluation has a status line (not started, in progress, submitted, optional)
+linking to their evaluation page. A member enrolled in a program with a form is
+evaluated on it, once per program (or once for all, if combined). A member in
+no such program, in a seat the general form covers, gets the general form.
+
+- The shift officer or a `training.manage` holder fills it out; **never your own**.
+- Rating buttons are full-size touch targets; required comments open by themselves.
+- Drafts autosave. **Submit** locks the evaluation.
+- A **print** view gives the paper layout.
+- Ratings and comments are encrypted at rest.
+
+> **Screenshots to create:** the Shift Evaluations settings screen; the form
+> editor; the program picker; the report's status lines; the evaluation page;
+> the print view.
 
 ## Manual Shift Report Entry
 
@@ -3427,18 +3462,18 @@ Configuration**).
 
 ### Compliance Calculation
 
-| What happened                                                                 | What it means                                                                                                                                                                                                                                                                                                                                          |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The member's membership tier has **Exempt from training requirements** ticked | The member is exempt from all training requirements and shows green whatever their hours. _(2026-10-29)_ The tier is found from the member's **Membership status** only for operational members; an administrative or social member is looked up as Administrative or Honorary, whatever their status, so a Life tier's exemption does not reach them. |
-| The membership tier is exempt from some training types                        | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                                                                                            |
-| The membership tier's settings cannot be read                                 | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the tier under **Members Admin → Settings → Membership Tiers**.                                                                                                                                          |
-| A **Courses** requirement with no courses picked                              | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                                                                                        |
-| A **Certification** requirement                                               | Credited through a course linked on the requirement, the training type, or the registry code in the certification number. Older requirements also match by course name, but only for records completed before they were upgraded. If nothing matches, the member shows non-compliant.                                                                  |
-| An **Every 2 Years** requirement with an expired certification                | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                                                                                         |
-| The member joined before an **Exempt existing members** cutoff                | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                                                                                                |
-| The same, with a catch-up deadline not yet passed                             | Shown as catching up, due on the deadline. It counts neither for nor against the member until the deadline passes; then it counts normally.                                                                                                                                                                                                            |
-| The department has no requirements                                            | Department compliance reads **Not set up** / "no requirements set up yet", not 100%.                                                                                                                                                                                                                                                                   |
-| A **One Time** requirement                                                    | No date window: every training record the member has ever had counts. (**Every 2 Years** counts the requirement's year and the year before.)                                                                                                                                                                                                           |
+| What happened                                                                 | What it means                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The member's membership tier has **Exempt from training requirements** ticked | The member is exempt from all training requirements and shows green whatever their hours. _(2026-10-29)_ The tier is found from the member's **Membership status**, whatever their class, so an administrative or social Life member gets the Life tier's exemption _(2026-11-01)_.   |
+| The membership tier is exempt from some training types                        | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                           |
+| The membership tier's settings cannot be read                                 | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the tier under **Members Admin → Settings → Membership Tiers**.                                                                         |
+| A **Courses** requirement with no courses picked                              | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                       |
+| A **Certification** requirement                                               | Credited through a course linked on the requirement, the training type, or the registry code in the certification number. Older requirements also match by course name, but only for records completed before they were upgraded. If nothing matches, the member shows non-compliant. |
+| An **Every 2 Years** requirement with an expired certification                | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                        |
+| The member joined before an **Exempt existing members** cutoff                | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                               |
+| The same, with a catch-up deadline not yet passed                             | Shown as catching up, due on the deadline. It counts neither for nor against the member until the deadline passes; then it counts normally.                                                                                                                                           |
+| The department has no requirements                                            | Department compliance reads **Not set up** / "no requirements set up yet", not 100%.                                                                                                                                                                                                  |
+| A **One Time** requirement                                                    | No date window: every training record the member has ever had counts. (**Every 2 Years** counts the requirement's year and the year before.)                                                                                                                                          |
 
 ### Waiver Behavior
 

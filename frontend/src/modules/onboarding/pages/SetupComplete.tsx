@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import axios from 'axios';
 import { PartyPopper, CheckCircle2, Circle, ArrowRight, LayoutDashboard, Loader2 } from 'lucide-react';
 import { OnboardingHeader } from '../components';
 import { useOnboardingStore } from '../store';
@@ -35,6 +36,11 @@ const SetupComplete: React.FC = () => {
   const itTeamMembers = useOnboardingStore((state) => state.itTeamMembers);
 
   const [remaining, setRemaining] = useState<SetupChecklistItem[] | null>(null);
+  // Whether the server can sign people in through the chosen provider. The
+  // credentials live in the server's .env, not in setup, so choosing Google
+  // on a server without them leaves members on passwords — and the summary
+  // used to report "Google" regardless. null: not asked, or no answer.
+  const [providerLive, setProviderLive] = useState<boolean | null>(null);
   const [checklistState, setChecklistState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
 
   useEffect(() => {
@@ -61,6 +67,26 @@ const SetupComplete: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const flag = authPlatform ? OAUTH_FLAGS[authPlatform] : undefined;
+    if (!flag) return undefined;
+    let cancelled = false;
+    // The same public endpoint the sign-in page reads to decide its buttons.
+    axios
+      .get<Record<string, boolean>>('/api/v1/auth/oauth-config')
+      .then((response) => {
+        if (!cancelled) setProviderLive(response.data[flag] === true);
+      })
+      .catch(() => {
+        // Unknown: name the choice without claiming either way.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authPlatform]);
+
+  const authLabel = AUTH_LABELS[authPlatform ?? ''] || 'Username & password';
+
   const modules = useMemo(() => getUserFacingModules(), []);
 
   const enabledModuleNames = useMemo(
@@ -74,7 +100,10 @@ const SetupComplete: React.FC = () => {
   const summary: Array<{ label: string; value: string }> = [
     { label: 'Modules enabled', value: String(enabledModuleNames.length) },
     { label: 'Positions defined', value: String(positionCount) },
-    { label: 'Sign-in method', value: AUTH_LABELS[authPlatform ?? ''] || 'Username & password' },
+    {
+      label: 'Sign-in method',
+      value: providerLive === false ? `${authLabel} — passwords until the server is configured` : authLabel,
+    },
     { label: 'Email platform', value: EMAIL_LABELS[emailPlatform ?? ''] || 'Not set up yet' },
     { label: 'File storage', value: STORAGE_LABELS[fileStoragePlatform ?? ''] || 'Local storage' },
     { label: 'IT contacts', value: String(itContactCount) },
@@ -198,6 +227,13 @@ const SetupComplete: React.FC = () => {
       </main>
     </div>
   );
+};
+
+/** The `/auth/oauth-config` field reporting each SSO provider live. */
+const OAUTH_FLAGS: Record<string, string> = {
+  google: 'googleEnabled',
+  microsoft: 'microsoftEnabled',
+  authentik: 'authentikEnabled',
 };
 
 const AUTH_LABELS: Record<string, string> = {

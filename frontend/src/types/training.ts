@@ -1929,6 +1929,11 @@ export interface TrainingSubmissionCreate {
   attachments?: string[] | undefined;
   /** Park the submission in the member's own list instead of sending it for review. */
   save_as_draft?: boolean | undefined;
+  /**
+   * Repeated on every send of this one submission, so a resend after a lost
+   * answer is stored once. Set by trainingSubmissionService.createSubmission.
+   */
+  client_request_id?: string | undefined;
 }
 
 /**

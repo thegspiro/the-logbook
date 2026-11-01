@@ -1206,6 +1206,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/grants/donations/new', label: 'Record donation', permission: 'fundraising.manage', module: 'grants' },
       { path: '/grants/pledges', label: 'Pledges', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/events', label: 'Fundraising events', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/zeffy', label: 'Zeffy', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/reports', label: 'Fundraising reports', permission: 'fundraising.view', module: 'grants' },
     ],
   },
@@ -1229,6 +1230,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/reports', label: 'Reports', permission: 'reports.view', module: 'reports' },
       { path: '/reports/saved', label: 'Saved reports', permission: 'reports.view', module: 'reports' },
+      {
+        path: '/reports/evaluations',
+        label: 'Member evaluations (setup)',
+        anyPermission: ['evaluations.configure', 'evaluations.manage'],
+        module: 'reports',
+      },
+      {
+        path: '/reports/evaluations/templates/:templateId',
+        label: 'Evaluation template builder',
+        permission: 'evaluations.configure',
+        module: 'reports',
+      },
       { path: '/admin/analytics', label: 'Analytics dashboard', permission: 'analytics.view' },
       { path: '/admin/platform-analytics', label: 'Platform analytics', permission: 'settings.manage' },
     ],

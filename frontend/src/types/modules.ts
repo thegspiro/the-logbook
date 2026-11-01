@@ -466,18 +466,4 @@ export const AVAILABLE_MODULES: Module[] = [
       'Grant deadline reminders',
     ],
   },
-  {
-    id: 'mobile',
-    name: 'Mobile App Access',
-    description: 'Mobile-optimized access with pull-to-refresh and responsive UI',
-    longDescription:
-      'Enable mobile-optimized access for members on the go. Includes pull-to-refresh, responsive layouts, and installable PWA support.',
-    category: 'optional',
-    enabled: false,
-    canDisable: true,
-    icon: 'Smartphone',
-    route: '/mobile',
-    features: ['Mobile-optimized interface', 'Pull-to-refresh on key pages', 'Installable PWA (add to home screen)'],
-    comingSoon: true,
-  },
 ];

@@ -662,6 +662,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/grants/zeffy',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/grants/reports',
     source: 'src/modules/grants-fundraising/routes.tsx',
     coverage: 'exempt',
@@ -1266,6 +1272,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/reports/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet — saved and scheduled reports',
+  },
+  {
+    path: '/reports/evaluations',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — member evaluation setup',
+  },
+  {
+    path: '/reports/evaluations/templates/:templateId',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
     path: '/scheduling',

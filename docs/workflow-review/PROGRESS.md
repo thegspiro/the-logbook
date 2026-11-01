@@ -161,19 +161,14 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   in `AppLayout` (W20).
 - **Dashboard, or any activity touching a module left off at setup** — on a
   fresh install with every module skipped, the administrator's first dashboard
-  asks `GET /integrations/weather/active-alerts` and
-  `GET /training/module-config/config`, and both are refused `403 LB-ORG-002`
-  ("module is not enabled"). The dashboard should not ask a disabled module.
-  Seen driving the W01 follow-up (2026-10-31).
+  asked `GET /training/module-config/config` and was refused `403 LB-ORG-002`
+  ("module is not enabled"). The weather and `/integrations/connected` half of
+  this lead was fixed in the W01 third pass (W01-33); the training call was not
+  seen there, because that install had Training on.
 - **Any run touching the app shell** — nothing keeps `TopNavigation` and
   `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
   whole Forms & Comms admin group present only in the side layout. A test
   comparing the two link sets would catch the next one (W55).
-- **Any run touching Finance Reports or the QuickBooks export settings** —
-  `FinanceReportsPage.tsx` and `QuickBooksExportSettingsPage.tsx` have table
-  cells with no `data-label`. Inside an `rwd-table` body, such a cell is
-  hidden under 768px; that is how W66-2 lost the dues actions on a phone.
-  Check those tables at 390×844.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -225,6 +220,43 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### Lead — Reflow table cells a phone hid — 2026-11-01
+
+Driven as: `admin` at 390×844. Fixed: every body cell of a `rwd-table` with no
+`data-label` is hidden below 768px, which took the row actions off the
+QuickBooks mapping tables and the pledges list, and every cell of the documents
+list view (a document row rendered as an empty card). Those cells now carry
+labels, and `rwdTableLabelIntegrity.test.ts` fails on the next unlabeled body
+cell, allowing only the inventory desktop actions cell (a phone gets its own)
+and the decorative bar in My Hours. Finance Reports, named in the lead, was
+clean: its unlabeled cells are in tables that do not reflow or in totals rows,
+which the rule leaves alone. Re-driven: the QuickBooks "Add a mapping", the
+pledge's Edit and a document's name, size, type and date all show on a phone;
+without the fix the document row showed nothing. Gate: typecheck and lint
+clean, and the tests for the changed pages pass.
+
+### W01 third pass — Onboarding options and wording, as an IT manager — 2026-10-31
+
+Driven as: a fresh install, twice (find, then re-drive), anonymous → system
+owner, at 1280×900, in the review database only. Covered what the first two
+passes left out: every option on every step against what the app did after
+(stored rows, first sign-in, navigation, Settings), the email and storage
+configuration forms, the logo upload, and the sign-in choice on a server with
+no SSO client. Held: organization and logo stored as entered, member numbering,
+IT-contact accounts without duplicates, seat lists, the SMTP test's error, and
+W01-11 (choosing an unconfigured provider keeps passwords and reset; now
+resolved). Fixed: W01-17 to W01-22, W01-25, W01-26, W01-28 to W01-33. One
+HIGH (W01-29: the OneDrive card and page said files would be stored in
+OneDrive; nothing reads that choice), now worded truthfully; the limitation
+stands per the owner's 2026-10-08 decision. Flagged: W01-23 (MED, Mobile App
+Access has no reader), W01-24 (LOW, onboarding turns Public Information off
+without offering it), W01-27 (LOW, email settings that failed their test are
+saved without a word). Resolved the dashboard lead's integrations half
+(W01-33). Gate: typecheck and lint clean, every new test seen failing first,
+the full frontend suite passes, flake8 and black clean on the two backend files.
+Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
+from onboarding and Settings (the stored field is kept, retired).
+
 ### Membership re-check (W08, W10–W15) — 2026-10-31
 
 Driven as: `admin`, `member` and `member2` on a fresh install, at 1280×900 and
@@ -238,7 +270,7 @@ expired leaves "Active"; it now shares the Waivers screen's rule) and MR-2 (LOW 
 the directory fired a refused tier-config request for every member). Flagged:
 MR-3 (LOW — members see built-in tier names; mirrored to KNOWN_LIMITATIONS),
 MR-4 (LOW — profile views crowd the audit history) and MR-7 (NIT — an unused
-membership store). Open: MR-5 and MR-6 (NIT). Gate: typecheck and lint clean;
+membership store). MR-5 and MR-6 (NIT) were fixed in a 2026-11-01 follow-up. Gate: typecheck and lint clean;
 lint needed a larger Node heap with the harness running. The touched suites
 pass. See W10-W15-membership-recheck.md.
 
@@ -1296,7 +1328,7 @@ Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a f
 
 - Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
 - Flagged: W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll).
-- Open: W50-R4, W50-R5 (NIT).
+- Fixed 2026-11-01: W50-R4 and W50-R5 (NIT).
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 

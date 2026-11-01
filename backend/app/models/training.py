@@ -3118,6 +3118,15 @@ class TrainingSubmission(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # Chosen by the device before its first attempt to send, and repeated on
+    # every resend. A submission queued offline is sent again whenever its
+    # answer did not arrive (a dropped connection, the client's 30s timeout),
+    # including when the server had already stored it; under auto-approval
+    # that second copy became a second training record and the hours counted
+    # twice. Unique per member, and NULL for submissions made without one,
+    # which MySQL's unique index allows any number of.
+    client_request_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     # Relationships
     training_record: Mapped[Optional["TrainingRecord"]] = relationship("TrainingRecord")
 
@@ -3125,6 +3134,11 @@ class TrainingSubmission(Base):
         Index("idx_submission_org_status", "organization_id", "status"),
         Index("idx_submission_user", "submitted_by", "status"),
         Index("idx_submission_date", "completion_date"),
+        UniqueConstraint(
+            "submitted_by",
+            "client_request_id",
+            name="uq_submission_member_client_request",
+        ),
     )
 
     def __repr__(self):

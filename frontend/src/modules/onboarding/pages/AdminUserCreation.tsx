@@ -427,7 +427,14 @@ const SystemOwnerCreation: React.FC = () => {
                   onChange={handleChange}
                   className="form-input placeholder-theme-text-muted py-3 transition-all"
                   placeholder="e.g., FF-1234"
+                  aria-describedby="membershipNumber-help"
                 />
+                {/* Blank is not "no number": with member numbers on, the server
+                    gives this account the first one in the sequence. */}
+                <p id="membershipNumber-help" className="text-theme-text-muted mt-1 text-xs">
+                  Leave blank to be given the first number in your department&apos;s sequence, if you turned member
+                  numbers on in the previous step.
+                </p>
               </div>
             </div>
 

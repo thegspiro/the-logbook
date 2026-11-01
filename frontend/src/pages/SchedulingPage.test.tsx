@@ -66,6 +66,9 @@ vi.mock('../services/api', () => ({
   trainingModuleConfigService: {
     getConfig: vi.fn().mockResolvedValue({ shift_reports_enabled: true }),
   },
+  memberStatusService: {
+    getMyLeaves: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 // Mock auth store

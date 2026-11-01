@@ -26,7 +26,7 @@ columns dropped. Which requirements had the new types, and the ledger rows,
 are lost on the way down; the progress values those credits added stay.
 
 Revision ID: e059227da2c0
-Revises: 5781476f2012
+Revises: 4262144ac214
 Create Date: 2026-11-01 20:12:00
 
 """
@@ -38,7 +38,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e059227da2c0"
-down_revision: Union[str, None] = "5781476f2012"
+down_revision: Union[str, None] = "4262144ac214"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

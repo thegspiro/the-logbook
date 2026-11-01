@@ -255,7 +255,11 @@ export interface ChecklistConfig {
 export interface InterviewRequirementConfig {
   required_count: number;
   required_recommendation?: InterviewRecommendation | undefined;
-  interviewer_roles?: string[] | undefined;
+  /**
+   * Position slugs the stage needs an interview from, graded server-side
+   * against the positions each interviewer held when they interviewed.
+   */
+  required_interviewer_positions?: string[] | undefined;
   auto_advance?: boolean | undefined;
 }
 
@@ -1012,6 +1016,8 @@ export interface ApplicantListFilters {
   include_inactive?: boolean | undefined;
   /** Only applicants linked to this event — what one open house brought in. */
   event_id?: string | undefined;
+  /** Only the applicants the caller is assigned to as case manager or interviewer. */
+  assigned_to_me?: boolean | undefined;
 }
 
 /** An event applicants are linked to, for the "came from" filter. */
@@ -1547,4 +1553,29 @@ export interface ProspectAccess {
   can_manage: boolean;
   can_see_full: boolean;
   can_log_interview: boolean;
+  /** The caller's most senior position, suggested as the title they interview under. */
+  interviewer_title?: string | null | undefined;
+}
+
+/** One required interviewer position of an Interview Requirement stage. */
+export interface InterviewPositionProgress {
+  position: string;
+  label: string;
+  satisfied: boolean;
+}
+
+/**
+ * Where the applicant's current Interview Requirement stage stands, as the
+ * server grades it — the same grading that decides whether the stage may
+ * complete. `recommendation_met` is null when the stage asks for none, and
+ * for a caller who sees only their own interview.
+ */
+export interface InterviewRequirementProgress {
+  step_id: string;
+  required_count: number;
+  recorded_count: number;
+  required_recommendation: string | null;
+  recommendation_met: boolean | null;
+  positions: InterviewPositionProgress[];
+  complete: boolean;
 }

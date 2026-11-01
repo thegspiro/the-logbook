@@ -17,6 +17,7 @@ import { CloudLightning } from 'lucide-react';
 import { integrationsService } from '../../services/api';
 import type { ActiveWeatherAlert } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
+import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { formatDateTime } from '../../utils/dateFormatting';
 
 const REFRESH_MS = 5 * 60 * 1000;
@@ -24,8 +25,16 @@ const REFRESH_MS = 5 * 60 * 1000;
 export const WeatherAlertBanner: React.FC = () => {
   const tz = useTimezone();
   const [alerts, setAlerts] = useState<ActiveWeatherAlert[]>([]);
+  // The alerts endpoint is behind the Integrations module gate; with the module
+  // off it answers 403 on every dashboard load.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const integrationsOn = !modulesLoading && isModuleOn('integrations');
 
   useEffect(() => {
+    if (!integrationsOn) {
+      setAlerts([]);
+      return undefined;
+    }
     let active = true;
     const load = () => {
       integrationsService
@@ -43,7 +52,7 @@ export const WeatherAlertBanner: React.FC = () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [integrationsOn]);
 
   if (alerts.length === 0) return null;
 
