@@ -16,10 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3923](https://github.com/thegspiro/the-logbook/pull/3923)** (branch
+`claude/security-review-facilities-p14`) — Feature 12 (Facilities), pass 14,
+a watchdog pickup. See the Log entry above for the full review summary.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 14, PR #3919, merged), preserved for history</summary>
+
+**PR [#3919](https://github.com/thegspiro/the-logbook/pull/3919)** (branch
+`claude/security-review-inventory-p14`) — Feature 11 (Inventory), pass 14, a
+watchdog pickup. This row was never updated when #3919 opened — it stayed on
+#3913 until this pickup corrected it. See the Log entry for the full review
+summary.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 14, PR #3913, merged), preserved for history</summary>
+
 **PR [#3913](https://github.com/thegspiro/the-logbook/pull/3913)** (branch
 `claude/security-review-documents-legal-p14`) — Feature 10 (Documents &
 legal), pass 14, a watchdog pickup. See the Log entry above for the full
 review summary.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 14, PR #3911, merged), preserved for history</summary>
@@ -24274,7 +24294,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -24304,6 +24324,42 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-01 — Feature 12 (Facilities, pass 14) — watchdog pickup, 0 fixed, 0 new findings; dashboard-tile deep-link filters reviewed and found sound
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+PR #3919 (Feature 11, Inventory, pass 14) had already merged; row 11 was
+already ✅. Row 12 (Facilities) was the next `⬜`. While this iteration was in
+progress, PR #3894 (unrelated feature work) merged into `main`; the review was
+re-synced to the new head before writing it up, so nothing here is against a
+stale baseline.
+
+**Real delta since pass 13** (`4b84046b4`, PR #3832): one feature landed in
+this feature's declared scope — two existing paginated endpoints
+(`GET /facilities/inspections/page`, the compliance-checklists list) gained an
+optional, server-bounded `due_within_days` filter so the facilities
+dashboard's "Upcoming inspections"/"Compliance deadlines" tiles can deep-link
+to the exact rows they counted. Both filters extend an already org-scoped
+condition list (no new by-id surface, XC-3 holds); no new route, no permission
+change (102 routes, 204 `Depends(` unchanged); no migration touches a
+`facility_*` table. Full write-up: `FAC-12-facilities.md`'s **Pass 14**.
+
+**Findings: 0 fixed, 0 new.** FAC-30 (P2, owner-accepted) re-confirmed OPEN,
+unchanged.
+
+**Completion gate:** flake8/black/isort clean; `validate_migrations.py
+--strict` — 692 revisions, single head; `check_route_permissions.py --strict`
+— 286 routes, 0 errors/warnings; `pytest -k "facilit"` — 307 passed, 1
+environment-only skip; frontend typecheck/lint clean; `npx vitest run
+src/modules/facilities` — 162 passed (20 files, up from 147/19 at pass 13).
+
+Also corrected: the **Open PR** row had been left pointing at #3913
+(Documents & legal, already merged) through the entire Inventory pass-14
+cycle — #3919 never updated it. Collapsed both into history and cleared it.
+
+Rotation row 12 → ✅ (pending this PR's merge). Next: Feature 13 (Apparatus &
+NFC).
 
 ### 2026-11-01 — Feature 11 (Inventory, pass 14) — watchdog pickup, 0 fixed, 0 new findings; row 00's stale 🔄 corrected
 
