@@ -1335,33 +1335,36 @@ class TestPatternGeneration:
             uuid.UUID(user_id),
         )
 
+        local = ZoneInfo("America/New_York")
+        start = datetime.now(local).date()
         pattern, _ = await svc.create_pattern(
             uuid.UUID(org_id),
             {
                 "name": "Nightly",
                 "pattern_type": PatternType.DAILY,
                 "template_id": template.id,
-                "start_date": date.today(),
+                "start_date": start,
             },
             uuid.UUID(user_id),
         )
 
-        start = date.today()
         shifts, err = await svc.generate_shifts_from_pattern(
             uuid.UUID(pattern.id), uuid.UUID(org_id), start, start, uuid.UUID(user_id)
         )
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day
+        # 07:00 the next day *in the department's timezone*. Compared in UTC,
+        # a 19:00 New York start is 23:00 UTC under daylight time but 00:00
+        # UTC the next day under standard time, so the start and end shared a
+        # UTC date all winter and the old day-arithmetic check failed.
         assert shift.end_time > shift.start_time
         # 19:00 and 07:00 are the department's wall-clock times. In UTC the two
         # fall on the same calendar day whenever New York is on standard time
         # (19:00 EST is 00:00Z the next day), so compare in the department's
         # zone, where "the next day" is what the template means.
-        tz = ZoneInfo("America/New_York")
-        local_start = shift.start_time.astimezone(tz)
-        local_end = shift.end_time.astimezone(tz)
+        local_start = shift.start_time.astimezone(local)
+        local_end = shift.end_time.astimezone(local)
         assert (local_start.hour, local_end.hour) == (19, 7)
         assert local_end.date() == local_start.date() + timedelta(days=1)
 
