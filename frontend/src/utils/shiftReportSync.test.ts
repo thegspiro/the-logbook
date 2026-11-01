@@ -17,6 +17,7 @@ vi.mock('../stores/authStore', () => ({
 import { enqueueShiftReport, listPendingReports } from './shiftReportOfflineQueue';
 import { SHIFT_REPORT_REFUSALS_BEFORE_NOTICE, drainShiftReports } from './shiftReportSync';
 import type { BatchShiftReportCreate } from '@/types/training';
+import { OFFLINE_DRAIN_LOCK } from '../sw/backgroundSyncProtocol';
 
 const payload = (shift_date: string): BatchShiftReportCreate => ({
   shift_date,
@@ -109,6 +110,24 @@ describe('drainShiftReports', () => {
     finish();
 
     expect(await first).toBe(await second);
+    expect(mockBatchCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('drains under the lock the service worker takes for background sync', async () => {
+    // Without it, a reconnect could have the page and the worker post the
+    // same report at once.
+    const request = vi.fn(<T>(_name: string, fn: () => Promise<T>) => fn());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+    mockBatchCreate.mockResolvedValue({ created: 1, skipped: 0, report_ids: [] });
+    await enqueueShiftReport(payload('2026-10-30'));
+
+    try {
+      await drainShiftReports();
+    } finally {
+      Reflect.deleteProperty(navigator, 'locks');
+    }
+
+    expect(request).toHaveBeenCalledWith(OFFLINE_DRAIN_LOCK, expect.any(Function));
     expect(mockBatchCreate).toHaveBeenCalledTimes(1);
   });
 });
