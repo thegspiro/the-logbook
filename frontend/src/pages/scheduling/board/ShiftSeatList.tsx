@@ -34,8 +34,9 @@ export interface ShiftSeatListProps {
   eligiblePositions: string[];
   /**
    * Why the member cannot be seated on this shift even though they are
-   * cleared for it — their own approved time off. Disables every claim and
-   * says so, rather than offering a seat the server will refuse.
+   * cleared for it — their own leave of absence or approved time off.
+   * Disables every claim and says so, rather than offering a seat the server
+   * will refuse.
    */
   unavailableReason?: string | null;
   /** True while a claim or release on this shift is in flight. */
@@ -146,7 +147,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
                     : !info.isOpen
                       ? `${seat.position ? label : 'Open'} seat — this shift is closed to signups`
                       : unavailableReason
-                        ? `${seat.position ? label : 'Open'} seat — you have approved time off on this day`
+                        ? `${seat.position ? label : 'Open'} seat — ${unavailableReason}`
                         : `${seat.position ? label : 'Open'} seat — you are not cleared for it`
                 }
                 title={

@@ -335,22 +335,22 @@ export interface EmergencyContact {
 
 export interface UserProfileUpdate {
   first_name?: string | undefined;
-  middle_name?: string | undefined;
+  middle_name?: string | null | undefined;
   last_name?: string | undefined;
   // `| null`: clearing a preferred name sends an explicit null (CLAUDE.md #1).
   preferred_name?: string | null | undefined;
-  phone?: string | undefined;
-  mobile?: string | undefined;
+  phone?: string | null | undefined;
+  mobile?: string | null | undefined;
   personal_email?: string | null | undefined;
-  membership_number?: string | undefined;
+  membership_number?: string | null | undefined;
   // `| null` on the two dates: this is an update payload, and the backend
   // rejects `''` for an `Optional[date]`. Clearing a date has to send an
   // explicit null, which `exclude_unset` then writes through as a clear.
   date_of_birth?: string | null | undefined;
   hire_date?: string | null | undefined;
   rank?: string | undefined;
-  station?: string | undefined;
-  platoon?: string | undefined;
+  station?: string | null | undefined;
+  platoon?: string | null | undefined;
   /**
    * The two independent facts the legacy `membership_type` fuses. Sent as a
    * pair, always both: the backend treats a write to either as a statement

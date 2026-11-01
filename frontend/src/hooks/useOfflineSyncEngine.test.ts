@@ -23,6 +23,7 @@ vi.mock('../utils/genericOfflineQueue', () => ({
 }));
 vi.mock('../modules/inventory/utils/nfcOfflineSync', () => ({ describeNfcSync: vi.fn() }));
 vi.mock('../utils/shiftReportSync', () => ({
+  SHIFT_REPORTS_SYNCED_EVENT: 'logbook:shift-reports-synced',
   drainShiftReports: () => mockDrainShiftReports() as unknown,
 }));
 vi.mock('../utils/skillsTestOffline', () => ({
@@ -42,7 +43,8 @@ vi.mock('../stores/skillsTestingStore', () => ({
   useSkillsTestingStore: { getState: () => ({ handleSynced: vi.fn() }) },
 }));
 
-import { triggerAllOfflineDrains, useOfflineSyncEngine } from './useOfflineSyncEngine';
+import { triggerAllOfflineDrains, triggerOfflineDrain, useOfflineSyncEngine } from './useOfflineSyncEngine';
+import { BACKGROUND_SYNC_MESSAGE, OFFLINE_DRAIN_LOCK } from '../sw/backgroundSyncProtocol';
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -114,5 +116,76 @@ describe('useOfflineSyncEngine', () => {
     await triggerAllOfflineDrains();
 
     expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it('drains the generic queue under the lock the service worker takes', async () => {
+    const request = vi.fn(<T>(_name: string, fn: () => Promise<T>) => fn());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+
+    try {
+      await triggerOfflineDrain();
+    } finally {
+      Reflect.deleteProperty(navigator, 'locks');
+    }
+
+    expect(request).toHaveBeenCalledWith(OFFLINE_DRAIN_LOCK, expect.any(Function));
+  });
+
+  describe('when the service worker reports a background sync', () => {
+    function installWorkerMessages(): EventTarget {
+      const container = new EventTarget();
+      Object.defineProperty(navigator, 'serviceWorker', { value: container, configurable: true });
+      return container;
+    }
+
+    function post(container: EventTarget, data: unknown): void {
+      container.dispatchEvent(new MessageEvent('message', { data }));
+    }
+
+    it('says what it sent, names refused reports, and tells Shift Reports to refresh', async () => {
+      const container = installWorkerMessages();
+      const synced = vi.fn();
+      window.addEventListener('logbook:shift-reports-synced', synced);
+      try {
+        renderHook(() => useOfflineSyncEngine());
+        await flush();
+        mockToastSuccess.mockClear();
+
+        post(container, {
+          type: BACKGROUND_SYNC_MESSAGE,
+          genericSynced: 2,
+          genericDiscarded: 0,
+          shiftReportsSynced: 1,
+          shiftReportsRefused: [{ shiftDate: '2026-12-01', message: 'Shift date is in the future' }],
+        });
+        await flush();
+
+        expect(mockToastSuccess).toHaveBeenCalledWith('Sent 3 items saved on this device while you were offline');
+        expect(mockToastError).toHaveBeenCalledWith(
+          'Shift report for 2026-12-01 was not accepted: Shift date is in the future It is still saved on this device.',
+          { duration: 10_000 }
+        );
+        expect(synced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('logbook:shift-reports-synced', synced);
+        Reflect.deleteProperty(navigator, 'serviceWorker');
+      }
+    });
+
+    it('ignores messages that are not its own', async () => {
+      const container = installWorkerMessages();
+      try {
+        renderHook(() => useOfflineSyncEngine());
+        await flush();
+        mockToastSuccess.mockClear();
+
+        post(container, { type: 'something-else', genericSynced: 5 });
+        await flush();
+
+        expect(mockToastSuccess).not.toHaveBeenCalled();
+      } finally {
+        Reflect.deleteProperty(navigator, 'serviceWorker');
+      }
+    });
   });
 });

@@ -42,12 +42,13 @@ def _org(tiers=None):
     return SimpleNamespace(id="org-1", settings=settings)
 
 
-def _member(uid="u1", membership_type="active"):
+def _member(uid="u1", membership_type="active", member_status=None):
     return SimpleNamespace(
         id=uid,
         full_name="Jane Smith",
         display_name="Jane Smith",
         membership_type=membership_type,
+        member_status=member_status,
         hire_date=None,
         last_name="Smith",
         first_name="Jane",
@@ -194,6 +195,18 @@ class TestVotingEligibility:
         ]
         assert row["voting_eligible"] is False
         assert "not eligible to vote" in row["voting_blocked_reason"]
+
+    async def test_tier_is_found_by_status_for_an_administrative_member(self):
+        # An administrative Life member's legacy value is "administrative";
+        # the Life tier's rule must still apply to them.
+        tiers = [{"id": "life", "benefits": {"voting_eligible": False}}]
+        member = _member(membership_type="administrative", member_status="life")
+        db = _dash_db(_org(tiers), [member], [], [], [])
+        row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
+            0
+        ]
+        assert row["voting_eligible"] is False
+        assert row["membership_tier"] == "life"
 
     async def test_attendance_threshold_blocks_voting(self):
         tiers = [
