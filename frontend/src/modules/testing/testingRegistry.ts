@@ -1229,6 +1229,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/reports', label: 'Reports', permission: 'reports.view', module: 'reports' },
       { path: '/reports/saved', label: 'Saved reports', permission: 'reports.view', module: 'reports' },
+      {
+        path: '/reports/evaluations',
+        label: 'Member evaluations (setup)',
+        anyPermission: ['evaluations.configure', 'evaluations.manage'],
+        module: 'reports',
+      },
+      {
+        path: '/reports/evaluations/templates/:templateId',
+        label: 'Evaluation template builder',
+        permission: 'evaluations.configure',
+        module: 'reports',
+      },
       { path: '/admin/analytics', label: 'Analytics dashboard', permission: 'analytics.view' },
       { path: '/admin/platform-analytics', label: 'Platform analytics', permission: 'settings.manage' },
     ],

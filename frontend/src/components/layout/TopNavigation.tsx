@@ -334,7 +334,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               ...(isModuleOn('integrations')
                 ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]
                 : []),
-              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports', permission: 'reports.view' }] : []),
+              ...(isModuleOn('reports')
+                ? [
+                    { label: 'Reports', path: '/reports', permission: 'reports.view' },
+                    {
+                      label: 'Member Evaluations',
+                      path: '/reports/evaluations',
+                      anyPermission: ['evaluations.configure', 'evaluations.manage'],
+                    },
+                  ]
+                : []),
               DIV,
               { label: 'Organization', path: '/settings', permission: 'settings.manage' },
               { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },

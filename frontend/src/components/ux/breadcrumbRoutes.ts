@@ -105,6 +105,10 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/onboarding': {},
   '/prospective-members': { permissions: ['prospective_members.manage'] },
   '/reports': { permissions: ['reports.view'] },
+  '/reports/evaluations': {
+    label: 'Member Evaluations',
+    permissions: ['evaluations.configure', 'evaluations.manage'],
+  },
   '/scheduling': {},
   '/settings': { permissions: ['settings.manage'] },
   '/store': { permissions: ['storefront.view'] },
