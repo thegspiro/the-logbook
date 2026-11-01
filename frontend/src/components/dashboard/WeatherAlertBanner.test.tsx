@@ -9,13 +9,13 @@ vi.mock('../../services/api', () => ({
   },
 }));
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
-
-let mockIntegrationsOn = true;
+const mockIsModuleOn = vi.fn();
+let modulesLoading = false;
 vi.mock('../../hooks/useEnabledModules', () => ({
   useEnabledModules: () => ({
     enabledModules: null,
-    isModuleOn: (key: string) => key !== 'integrations' || mockIntegrationsOn,
-    isLoading: false,
+    isLoading: modulesLoading,
+    isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean,
   }),
 }));
 
@@ -35,20 +35,29 @@ const tornado = {
 describe('WeatherAlertBanner', () => {
   beforeEach(() => {
     mockGetAlerts.mockReset();
-    mockIntegrationsOn = true;
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockImplementation((key: string) => key === 'integrations');
+    modulesLoading = false;
   });
 
-  // Workflow review W01, 2026-10-31: the alerts live behind the Integrations
-  // module, and a fresh install that left it off saw the dashboard refused
-  // (403) on every load.
-  it('does not ask for alerts when the Integrations module is off', async () => {
-    mockIntegrationsOn = false;
-    mockGetAlerts.mockResolvedValue([tornado]);
+  // The server refuses the read while Integrations is off, so a department
+  // that never turned it on drew a 403 every five minutes.
+  it('does not ask for alerts while the Integrations module is off', async () => {
+    mockIsModuleOn.mockReturnValue(false);
     const { container } = render(<WeatherAlertBanner />);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockIsModuleOn).toHaveBeenCalledWith('integrations');
     expect(mockGetAlerts).not.toHaveBeenCalled();
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('waits for the module list before asking', async () => {
+    modulesLoading = true;
+    render(<WeatherAlertBanner />);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockGetAlerts).not.toHaveBeenCalled();
   });
 
   it('shows each active alert with what to do', async () => {

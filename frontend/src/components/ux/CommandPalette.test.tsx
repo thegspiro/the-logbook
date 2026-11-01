@@ -20,8 +20,12 @@ vi.mock('../../stores/authStore', () => ({
 }));
 
 const practicalSkillsMethod = { current: null as 'skills_testing' | 'shift_signoffs' | null };
+const practicalSkillsAsked = vi.fn();
 vi.mock('../../stores/practicalSkillsStore', () => ({
-  usePracticalSkillsMethod: () => practicalSkillsMethod.current,
+  usePracticalSkillsMethod: (...args: unknown[]) => {
+    practicalSkillsAsked(...args);
+    return practicalSkillsMethod.current;
+  },
 }));
 
 vi.mock('../../hooks/useEnabledModules', () => ({
@@ -255,5 +259,29 @@ describe('CommandPalette hub destinations', () => {
 
     expect(screen.getByRole('option', { name: /Skills Test Records/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Skill Evaluations/ })).not.toBeInTheDocument();
+  });
+});
+
+// The palette is on every page; asking for the Training module's setting while
+// that module is off drew a refused request on each one.
+describe('CommandPalette practical-skills lookup', () => {
+  beforeEach(() => {
+    practicalSkillsAsked.mockReset();
+    practicalSkillsMethod.current = null;
+  });
+
+  it('does not ask for the setting while Training is off', () => {
+    enabledModules.current = new Set(['members', 'events']);
+    renderWithRouter(<CommandPalette />);
+
+    expect(practicalSkillsAsked).toHaveBeenCalled();
+    expect(practicalSkillsAsked.mock.calls.every(([enabled]) => enabled === false)).toBe(true);
+  });
+
+  it('asks while Training is on', () => {
+    enabledModules.current = new Set(['members', 'training']);
+    renderWithRouter(<CommandPalette />);
+
+    expect(practicalSkillsAsked).toHaveBeenLastCalledWith(true);
   });
 });
