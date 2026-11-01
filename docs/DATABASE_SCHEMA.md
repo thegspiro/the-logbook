@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**336 tables · 5526 columns · 1137 foreign keys**
+**336 tables · 5529 columns · 1137 foreign keys**
 
 ---
 
@@ -735,7 +735,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 49 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 50 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 28 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
@@ -10225,7 +10225,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `progress_id` | VARCHAR(36) | no | FK |  | → `requirement_progress.id` ON DELETE CASCADE |
-| `source_type` | ENUM(`training_session`, `shift_report`, `external_import`, `officer_apply`) | no |  |  |  |
+| `source_type` | ENUM(`training_session`, `shift_report`, `external_import`, `officer_apply`, `shift_evaluation`) | no |  |  |  |
 | `source_id` | VARCHAR(64) | no |  |  |  |
 | `units` | FLOAT | no |  | `0.0` |  |
 | `previous_status` | VARCHAR(50) | yes |  |  |  |
@@ -11145,7 +11145,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`) | no | IDX |  |  |
+| `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`, `evaluated_shifts`, `transports`, `refusals`) | no | IDX |  |  |
 | `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | yes |  |  |  |
 | `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
@@ -11158,6 +11158,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `required_courses` | JSON | yes |  |  |  |
 | `required_shifts` | INTEGER | yes |  |  |  |
 | `required_calls` | INTEGER | yes |  |  |  |
+| `required_transports` | INTEGER | yes |  |  |  |
+| `required_refusals` | INTEGER | yes |  |  |  |
+| `evaluation_excludes_lowest_rating` | BOOL | no |  | `0` |  |
 | `required_call_types` | JSON | yes |  |  |  |
 | `required_skills` | JSON | yes |  |  |  |
 | `checklist_items` | JSON | yes |  |  |  |

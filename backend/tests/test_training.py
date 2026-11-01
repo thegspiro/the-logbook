@@ -96,7 +96,10 @@ class TestTrainingEnums:
         assert RequirementType.SKILLS_EVALUATION.value == "skills_evaluation"
         assert RequirementType.CHECKLIST.value == "checklist"
         assert RequirementType.KNOWLEDGE_TEST.value == "knowledge_test"
-        assert len(RequirementType) == 8
+        assert RequirementType.EVALUATED_SHIFTS.value == "evaluated_shifts"
+        assert RequirementType.TRANSPORTS.value == "transports"
+        assert RequirementType.REFUSALS.value == "refusals"
+        assert len(RequirementType) == 11
 
     def test_requirement_source_values(self):
         """Verify RequirementSource values"""
