@@ -32,6 +32,12 @@ export interface ShiftSeatListProps {
   timezone: string;
   /** Positions the member is cleared for; empty disables claiming. */
   eligiblePositions: string[];
+  /**
+   * Why the member cannot be seated on this shift even though they are
+   * cleared for it — their own approved time off. Disables every claim and
+   * says so, rather than offering a seat the server will refuse.
+   */
+  unavailableReason?: string | null;
   /** True while a claim or release on this shift is in flight. */
   pending?: boolean;
   /** Take a specific seat. `position` is null for an unnamed open seat. */
@@ -52,6 +58,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
   currentUserId,
   timezone,
   eligiblePositions,
+  unavailableReason = null,
   pending = false,
   onClaim,
   onRelease,
@@ -68,6 +75,8 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
   // The server's own answer where the detail response supplied one, so the
   // panel and the API cannot disagree about why the button is gone.
   const signupClosed = shift.signup_closed_reason ?? memberSignupClosedReason(shift, signupWindow);
+  // Accepting an offer seats the member, so it is refused for either reason.
+  const acceptBlocked = signupClosed ?? unavailableReason;
   const isSheet = variant === 'sheet';
   const avatar = isSheet ? 'h-6 w-6 text-[10px]' : 'h-[26px] w-[26px] text-[10px]';
 
@@ -120,7 +129,8 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
             );
           }
 
-          const takeable = !pending && info.isOpen && canTakeSeat(seat.position, eligiblePositions);
+          const takeable =
+            !pending && info.isOpen && !unavailableReason && canTakeSeat(seat.position, eligiblePositions);
           return (
             <li key={key}>
               <button
@@ -133,11 +143,15 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
                 aria-label={
                   takeable
                     ? `Take the ${seat.position ? label : 'open'} seat on this shift`
-                    : info.isOpen
-                      ? `${seat.position ? label : 'Open'} seat — you are not cleared for it`
-                      : `${seat.position ? label : 'Open'} seat — this shift is closed to signups`
+                    : !info.isOpen
+                      ? `${seat.position ? label : 'Open'} seat — this shift is closed to signups`
+                      : unavailableReason
+                        ? `${seat.position ? label : 'Open'} seat — you have approved time off on this day`
+                        : `${seat.position ? label : 'Open'} seat — you are not cleared for it`
                 }
-                title={!takeable && !info.isOpen && signupClosed ? signupClosed : undefined}
+                title={
+                  takeable ? undefined : !info.isOpen ? (signupClosed ?? undefined) : (unavailableReason ?? undefined)
+                }
               >
                 <span
                   className={`border-theme-input-border text-theme-text-muted flex shrink-0 items-center justify-center rounded-full border border-dashed ${avatar}`}
@@ -170,13 +184,13 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
               signing up — it *is* the offerer withdrawing and the accepter
               signing up — so past it the server refuses. Declining stays
               available: the offerer is owed an answer either way. */}
-          {signupClosed && (
+          {acceptBlocked && (
             <p className="text-theme-text-secondary mt-2 text-xs font-medium">
-              {signupClosed} You can still decline so they know.
+              {acceptBlocked} You can still decline so they know.
             </p>
           )}
           <div className="mt-2.5 flex flex-wrap gap-2">
-            {!signupClosed && (
+            {!acceptBlocked && (
               <button
                 type="button"
                 disabled={pending}
@@ -251,6 +265,10 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
       ) : info.capacity !== null && info.openSeats === 0 ? (
         <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
           This crew is full. Nothing to claim here.
+        </p>
+      ) : unavailableReason ? (
+        <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
+          {unavailableReason}
         </p>
       ) : claimable ? (
         <button

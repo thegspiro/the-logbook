@@ -23,6 +23,8 @@ import {
   shiftPeriodLetter,
   shiftStatusInfo,
   statusBadgeLabel,
+  TIME_OFF_SEAT_REASON,
+  timeOffSeatReason,
   toDateKey,
   weekDates,
 } from './shiftBoard';
@@ -77,6 +79,31 @@ const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   updated_at: '2026-08-01T00:00:00Z',
   roster: [],
   ...overrides,
+});
+
+describe('timeOffSeatReason', () => {
+  const onDate = (shift_date: string) => shift({ shift_date });
+  const span = { start_date: '2026-11-06', end_date: '2026-11-08' };
+
+  it('covers both ends of the span, as the backend check does', () => {
+    expect(timeOffSeatReason(onDate('2026-11-06'), [span])).toBe(TIME_OFF_SEAT_REASON);
+    expect(timeOffSeatReason(onDate('2026-11-07'), [span])).toBe(TIME_OFF_SEAT_REASON);
+    expect(timeOffSeatReason(onDate('2026-11-08'), [span])).toBe(TIME_OFF_SEAT_REASON);
+  });
+
+  it('leaves the days either side of it open', () => {
+    expect(timeOffSeatReason(onDate('2026-11-05'), [span])).toBeNull();
+    expect(timeOffSeatReason(onDate('2026-11-09'), [span])).toBeNull();
+  });
+
+  it('is null when the member has no time off', () => {
+    expect(timeOffSeatReason(onDate('2026-11-07'), [])).toBeNull();
+  });
+
+  it('checks every span, not only the first', () => {
+    const other = { start_date: '2026-12-24', end_date: '2026-12-26' };
+    expect(timeOffSeatReason(onDate('2026-12-25'), [span, other])).toBe(TIME_OFF_SEAT_REASON);
+  });
 });
 
 describe('shiftCapacity', () => {
