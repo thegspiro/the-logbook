@@ -20352,6 +20352,256 @@ class Seeder:
             created += 1
         return created
 
+    BACKLOG_07_SENSITIVE_FORM = "Driver Background Disclosure"
+    #: (label, type, required, sensitive, applicant field). The two sensitive
+    #: questions are the guide's own examples; the two pre-filled ones are
+    #: what the field editor's "Pre-fill from applicant" picture opens.
+    BACKLOG_07_SENSITIVE_FIELDS = [
+        ("Full name", "text", True, False, None),
+        ("Mobile phone", "phone", False, False, "mobile"),
+        ("Street address", "text", False, False, "address_street"),
+        ("Driver's license number", "text", True, False, None),
+        ("Moving violations in the last five years", "textarea", True, True, None),
+        ("Criminal convictions", "textarea", True, True, None),
+    ]
+    BACKLOG_07_SENSITIVE_ANSWERS = [
+        {
+            "Full name": "Nadia Belhaj",
+            "Mobile phone": "(703) 555-0171",
+            "Street address": "14 Linden Court",
+            "Driver's license number": "T41-882-109",
+            "Moving violations in the last five years": "One speeding ticket, 2023.",
+            "Criminal convictions": "None.",
+        },
+        {
+            "Full name": "Saoirse Nolan",
+            "Mobile phone": "(703) 555-0172",
+            "Street address": "302 Mill Race Road",
+            "Driver's license number": "N20-551-736",
+            "Moving violations in the last five years": "None.",
+            "Criminal convictions": "None.",
+        },
+    ]
+
+    def seed_backlog_07_sensitive_form(self) -> str:
+        """A published form with two Sensitive questions, answered twice.
+
+        Guide 07 pictures a Sensitive field in the editor, its badge in the
+        builder, the answers behind a lock icon for a viewer holding
+        ``sensitive_answers.view`` (the administrator's IT Manager position
+        has every permission) and the Restricted note for one who manages
+        forms without it (the Secretary). Two of its other fields pre-fill
+        from an applicant record, for the field editor's Pre-fill picture.
+        Answered by two ordinary members, so the rows name real submitters.
+        """
+        forms = items(self.api.get("/forms"), "forms")
+        form = next(
+            (f for f in forms if pick(f, "name") == self.BACKLOG_07_SENSITIVE_FORM),
+            None,
+        )
+        if form is None:
+            form = self.api.post(
+                "/forms",
+                {
+                    "name": self.BACKLOG_07_SENSITIVE_FORM,
+                    "description": (
+                        "For members asking to drive apparatus: your licence, "
+                        "driving record and any convictions."
+                    ),
+                    "category": "operations",
+                    "is_public": False,
+                    "require_authentication": True,
+                    "fields": [
+                        {
+                            "label": label,
+                            "field_type": field_type,
+                            "required": required,
+                            "sort_order": order,
+                            "is_sensitive": sensitive,
+                            **({"applicant_field": prefill} if prefill else {}),
+                        }
+                        for order, (
+                            label,
+                            field_type,
+                            required,
+                            sensitive,
+                            prefill,
+                        ) in enumerate(self.BACKLOG_07_SENSITIVE_FIELDS)
+                    ],
+                },
+            )
+        form_id = str(pick(form, "id"))
+        detail = self.api.get(f"/forms/{form_id}")
+        if str(pick(detail, "status") or "").lower() != "published":
+            detail = self.api.post(f"/forms/{form_id}/publish")
+        if items(self.api.get(f"/forms/{form_id}/submissions"), "submissions"):
+            return form_id
+        field_ids = {
+            pick(f, "label"): str(pick(f, "id")) for f in items(detail, "fields")
+        }
+        for username, answers in zip(
+            (DEMO_MEMBER_USERNAME, "snolan"), self.BACKLOG_07_SENSITIVE_ANSWERS
+        ):
+            submitter = self.member_session(
+                self.base_url, self._user_id(username), username
+            )
+            submitter.post(
+                f"/forms/{form_id}/submit",
+                {"data": {field_ids[label]: value for label, value in answers.items()}},
+            )
+        return form_id
+
+    BACKLOG_07_EMBED_ORIGIN = "https://www.oakvillefire.example.org"
+    BACKLOG_07_EMBED_FORM = "Community Event Request"
+
+    def seed_backlog_07_form_embedding(self) -> bool:
+        """List the department's website and let one public form embed.
+
+        The Share window's embed code and Settings → Forms are pictured with
+        one site listed and the community event form allowed on it. The
+        address is a reserved example domain, so nothing can actually frame
+        the form. Leaves an origin list someone has already changed alone.
+        """
+        forms_settings = (self.api.get("/organization/settings") or {}).get(
+            "forms"
+        ) or {}
+        if not forms_settings.get("embed_allowed_origins"):
+            self.api.patch(
+                "/organization/settings/forms",
+                {"embed_allowed_origins": [self.BACKLOG_07_EMBED_ORIGIN]},
+            )
+        form = next(
+            (
+                f
+                for f in items(self.api.get("/forms"), "forms")
+                if pick(f, "name") == self.BACKLOG_07_EMBED_FORM
+            ),
+            None,
+        )
+        if not form:
+            return False
+        if not pick(self.api.get(f"/forms/{pick(form, 'id')}"), "allow_embed"):
+            self.api.patch(f"/forms/{pick(form, 'id')}", {"allow_embed": True})
+        return True
+
+    BACKLOG_11_RETIRED_PARENT = "Public Education"
+    BACKLOG_11_RETIRED_CHILD = "Smoke alarm giveaway"
+    BACKLOG_11_DRAFT_TITLE = "Smoke alarms for the spring giveaway"
+
+    def seed_backlog_11_inactive_category(self) -> str:
+        """A deactivated category, a sub-line closed by it, and a draft on it.
+
+        Guide 11 pictures the category list with **Inactive** on the parent
+        and **Inactive through** on its still-active sub-category, and the
+        budget picker of a draft request already on that sub-line, which
+        names it "(inactive category)". The draft and the line are made
+        before the parent is deactivated, since an inactive category's lines
+        take no new charges.
+        """
+        categories = items(self.api.get("/finance/budget-categories"), "categories")
+        by_name = {pick(c, "name"): c for c in categories}
+        parent = by_name.get(self.BACKLOG_11_RETIRED_PARENT)
+        if parent is None:
+            parent = self.api.post(
+                "/finance/budget-categories",
+                {
+                    "name": self.BACKLOG_11_RETIRED_PARENT,
+                    "description": "School visits and community fire safety.",
+                },
+            )
+        child = by_name.get(self.BACKLOG_11_RETIRED_CHILD)
+        if child is None:
+            child = self.api.post(
+                "/finance/budget-categories",
+                {
+                    "name": self.BACKLOG_11_RETIRED_CHILD,
+                    "description": "Smoke alarms handed out at open houses.",
+                    "parent_category_id": str(pick(parent, "id")),
+                },
+            )
+        child_id = str(pick(child, "id"))
+        years = items(self.api.get("/finance/fiscal-years"), "fiscal_years")
+        year = next((y for y in years if pick(y, "status") == "active"), None)
+        if year is None:
+            self.blocked.append("backlog 11: no active fiscal year")
+            return ""
+        year_id = str(pick(year, "id"))
+        budget = next(
+            (
+                b
+                for b in items(self.api.get("/finance/budgets"), "budgets")
+                if str(pick(b, "category_id", "categoryId")) == child_id
+            ),
+            None,
+        )
+        if budget is None:
+            budget = self.api.post(
+                "/finance/budgets",
+                {
+                    "fiscal_year_id": year_id,
+                    "category_id": child_id,
+                    "amount_budgeted": 0,
+                    "notes": "Spring open house giveaway.",
+                },
+            )
+        requests = items(
+            self.api.get("/finance/purchase-requests"), "purchase_requests"
+        )
+        draft = next(
+            (r for r in requests if pick(r, "title") == self.BACKLOG_11_DRAFT_TITLE),
+            None,
+        )
+        if draft is None and pick(parent, "is_active", "isActive") is not False:
+            draft = self.api.post(
+                "/finance/purchase-requests",
+                {
+                    "fiscal_year_id": year_id,
+                    "budget_id": str(pick(budget, "id")),
+                    "title": self.BACKLOG_11_DRAFT_TITLE,
+                    "description": "Forty ten-year alarms for the spring open house.",
+                    "vendor": "Kidde Direct",
+                    "estimated_amount": 860,
+                    "priority": "low",
+                },
+            )
+        if pick(parent, "is_active", "isActive") is not False:
+            self.api.put(
+                f"/finance/budget-categories/{pick(parent, 'id')}",
+                {"is_active": False},
+            )
+        return str(pick(draft, "id")) if draft else ""
+
+    BACKLOG_12_RETIRED_OPPORTUNITY = "Volunteer Fire Assistance Grant"
+
+    def seed_backlog_12_retired_opportunity(self) -> bool:
+        """A retired program, for the library's Show retired view."""
+        names = {
+            pick(o, "name")
+            for o in items(self.api.get("/grants?active_only=false"), "opportunities")
+        }
+        if self.BACKLOG_12_RETIRED_OPPORTUNITY in names:
+            return False
+        created = self.api.post(
+            "/grants",
+            {
+                "name": self.BACKLOG_12_RETIRED_OPPORTUNITY,
+                "agency": "Virginia Department of Forestry",
+                "category": "equipment",
+                "description": (
+                    "Matching funds for wildland gear at volunteer departments. "
+                    "Closed after the 2025 round."
+                ),
+                "typicalAwardMin": 1_000,
+                "typicalAwardMax": 10_000,
+                "matchRequired": True,
+                "matchPercentage": 50,
+                "deadlineType": "recurring",
+                "eligibleUses": "Wildland PPE, hand tools and portable pumps.",
+            },
+        )
+        self.api.put(f"/grants/{pick(created, 'id')}", {"isActive": False})
+        return True
+
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
@@ -20604,6 +20854,14 @@ class Seeder:
             self.seed_backlog_04_upcoming_guest_event,
         )
         self.step("guide 01 leave badges", self.seed_backlog_01_leave_badges)
+        self.step("backlog 07 sensitive form", self.seed_backlog_07_sensitive_form)
+        self.step("backlog 07 form embedding", self.seed_backlog_07_form_embedding)
+        self.step(
+            "backlog 11 inactive category", self.seed_backlog_11_inactive_category
+        )
+        self.step(
+            "backlog 12 retired opportunity", self.seed_backlog_12_retired_opportunity
+        )
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

@@ -252,9 +252,7 @@
 07-01-documents
 07-02-new-folder-dialog
 07-03-upload-documents
-07-05-form-sharing
 07-07-form-submissions
-07-08-notification-rules
 07-09-notification-send-log
 07-11-new-message-form
 07-12-acknowledgment-report
@@ -340,7 +338,6 @@
 11-02-fiscal-year-settings
 11-05-budget-detail
 12-02-grants-dashboard
-12-03-opportunities
 12-04-create-application
 12-05-applications-pipeline
 12-06-application-budget-tab
@@ -391,8 +388,6 @@
 17-03-profile-as-officer
 17-04-profile-as-member
 18-01-member-storefront
-18-02-store-admin
-18-03-order-windows
 18-04-my-orders-unpaid
 19-01-platoons-permission-error
 19-03-privacy-header

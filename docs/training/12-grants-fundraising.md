@@ -145,6 +145,8 @@ To correct a program, such as a mistyped deadline, select the pencil (**Edit**)
 on its card. The same form opens as **Edit Grant Opportunity**. Change what you
 need and select **Save changes**. A field you clear is saved empty.
 
+![Edit Grant Opportunity for the Assistance to Firefighters Grant: its program name, agency, category and description, the award range and local match, the deadline and links, with Save changes](./images/12-16-edit-opportunity.png)
+
 When a program closes, select **Retire** on its card and confirm. A retired
 program:
 
@@ -155,7 +157,7 @@ To see retired programs, tick **Show retired**. They are marked **Retired** and
 have no **Start Application** button. Select **Reinstate** on one to bring it
 back.
 
-![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
+![The opportunities library with Show retired ticked: the department's programs, each card with its edit (pencil) and Retire buttons and Start Application, and the Volunteer Fire Assistance Grant marked Retired with Reinstate and no Start Application](./images/12-03-opportunities.png)
 
 ---
 
@@ -497,6 +499,8 @@ business and organization that supports the department.
    organization by its name among the surnames and leads with that name when
    there is no contact.
 4. Save.
+
+![The New Donor form with Donor Type Business: Organization Name Oakville Lumber & Supply filled in, Contact First Name and Contact Last Name left empty because a contact is optional, and the email and address fields](./images/12-17-donor-business.png)
 
 ### What the donor list shows
 

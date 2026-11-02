@@ -562,6 +562,8 @@ day, listed under **N need attention** as "Left, but still in a group".
 
 When an account is waiting on something The Logbook could not finish — a departed member's suspension, an account never created, a password that never arrived — the Google Workspace card shows **N need attention**. It lists each member with the reason and a link to their profile. Anything waiting over a day is also emailed each morning to administrators (`admin.access`).
 
+![Microsoft 365 accounts needing attention: three members, one who left but whose account is not suspended (Over a day), one whose account was not created, and one suspended over 90 days and still in the directory, each with their department address and since when](./images/16-21-directory-attention-list.png)
+
 ### Members Who Joined Earlier
 
 Only accounts The Logbook created or linked are suspended. To cover members who were on the roster before the integration, an administrator clicks **Link existing members** on the Google Workspace card. It shows how many members have an account at exactly their Logbook email and why the others are skipped, then links them once confirmed. Members who have already left are not linked. Nothing changes in Google.
@@ -584,7 +586,11 @@ See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) f
 
 The app registration needs the Microsoft Graph application permissions `User.ReadWrite.All`, `User-PasswordProfile.ReadWrite.All`, `User.RevokeSessions.All`, `GroupMember.ReadWrite.All` and, with a license, `LicenseAssignment.ReadWrite.All`, with admin consent, and the **User Administrator** role.
 
+![The Microsoft 365 connect form with demo values: Directory (tenant) ID, Application (client) ID, the client secret, Client secret expires on, Domain, Usage location US, a License SKU ID, two groups, and Block sign-in when a member retires ticked, above the Graph permissions it needs](./images/16-19-microsoft-365-connect.png)
+
 Enter the secret's **Expires** date as **Client secret expires on**. From 30 days before it, the card shows the days left and administrators get a morning email at 30 days, 7 days and on the day. A new secret needs its new date entered with it. The Microsoft setting is **Block sign-in when a member retires**, and a group that assigns licenses is never edited, because removing the member would remove the license. Accounts still in the directory 90 days after suspension are listed under **N need attention** for information only; The Logbook never deletes an account.
+
+![The Microsoft 365 card connected, with Client secret expires in 12 days, 3 need attention, Link existing members, Settings and Details](./images/16-20-microsoft-365-card.png)
 
 Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
 
@@ -620,6 +626,8 @@ its client ID and secret on the integration.
    it cannot see or change any other calendar in the account.
 3. You come back to the Integrations page. The card shows the account, the
    new calendar's name and **Last published**.
+
+![The Google Calendar card connected: the Google account, the calendar Oakville Fire Department Events, Last published a few minutes ago, Sync event descriptions switched off, and Disconnect](./images/16-22-google-calendar-connected.png)
 
 The sign-in must be finished within ten minutes, in the same browser, by the
 person who started it.
@@ -675,6 +683,8 @@ its client ID, client secret and tenant ID on the integration.
    (it needs an Exchange Online mailbox), and accept the permissions.
 3. You come back to the Integrations page. The card shows the account, the
    new calendar's name and **Last published**.
+
+![The Microsoft Outlook card connected: the Microsoft 365 account, the calendar Oakville Fire Department Events, Last published a few minutes ago, Sync event descriptions switched off, and Disconnect](./images/16-23-outlook-connected.png)
 
 The sign-in must be finished within ten minutes, in the same browser, by the
 person who started it. **What is published**, **Sync event descriptions** and

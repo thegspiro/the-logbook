@@ -3026,6 +3026,187 @@ let memberSignInAdminPage = null;
 let publicFormSignInRestore = null;
 let memberEmailsRestore = null;
 let draftFormCleanup = null;
+let tempRuleCleanup = null;
+
+const DRIVER_FORM_NAME = "Driver Background Disclosure";
+
+/** The Forms tab card of the form `seed_backlog_07_sensitive_form` makes. */
+function driverFormCard(page) {
+  return page.locator("div.card-hover", {
+    has: page.locator("h3", { hasText: DRIVER_FORM_NAME }),
+  });
+}
+
+/** Open the builder for the Driver Background Disclosure form, then one field's editor. */
+async function openDriverFormField(page, label) {
+  await driverFormCard(page)
+    .getByRole("button", { name: "Edit Fields" })
+    .click({ timeout: 20_000 });
+  await page
+    .getByRole("button", { name: `Edit ${label}`, exact: true })
+    .click({ timeout: 20_000 });
+  await page
+    .locator('[aria-labelledby="field-editor-title"]')
+    .waitFor({ timeout: 10_000 });
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(400);
+}
+
+/** Submissions for the Driver Background Disclosure form, Nadia Belhaj's opened. */
+async function openDriverFormSubmission(page) {
+  await driverFormCard(page)
+    .getByRole("button", { name: "Submissions" })
+    .click({ timeout: 20_000 });
+  await page
+    .getByRole("button", { name: "Submission by Nadia Belhaj" })
+    .click({ timeout: 20_000 });
+  await page.getByText("Driver's license number").first().waitFor();
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Answer GET /integrations with the server's own rows, `patch` applied to the
+ * named types. The demo cannot connect Microsoft 365, Google Calendar or
+ * Outlook — each needs a real tenant or account, and the calendar cards are
+ * Coming Soon until the server's CALENDAR_SYNC_ENABLED is on — so the guide
+ * 16 shots of a connected card show the page's real rendering of a row in
+ * that state. Nothing is written; the route lasts one shot.
+ */
+async function mockIntegrationRows(page, patches) {
+  await page.route(/\/api\/v1\/integrations(\?.*)?$/, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const body = await response.json();
+    const rows = Array.isArray(body) ? body : (body.integrations ?? []);
+    const patched = rows.map((row) =>
+      patches[row.integration_type]
+        ? { ...row, ...patches[row.integration_type](row) }
+        : row,
+    );
+    await route.fulfill({
+      response,
+      body: JSON.stringify(
+        Array.isArray(body) ? patched : { ...body, integrations: patched },
+      ),
+    });
+  });
+}
+
+const DEMO_SECRET_DAYS_LEFT = 12;
+
+/** A Microsoft 365 row as the server reports one connected with a secret 12 days from expiry. */
+function connectedMicrosoft365(row) {
+  const expires = new Date(Date.now() + DEMO_SECRET_DAYS_LEFT * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  return {
+    status: "connected",
+    enabled: true,
+    config: {
+      ...(row.config ?? {}),
+      tenant_id: "3f2a8c1e-5b7d-4e90-a1c2-6d8e9f0a1b2c",
+      client_id: "9c4e7a21-0d3b-4f68-b5a9-2e1c7d8f6a40",
+      domain: "oakvillefd.example.org",
+      usage_location: "US",
+      client_secret_expires_on: expires,
+      suspend_on_retirement: true,
+    },
+    credential_days_left: DEMO_SECRET_DAYS_LEFT,
+    credential_expiring: true,
+    last_sync_at: new Date(Date.now() - 3_600_000).toISOString(),
+  };
+}
+
+/**
+ * Three members the directory list names, with the reasons the backend words
+ * (ATTENTION_LABELS in directory_account_service.py). Real member ids, so each
+ * name links to a real profile.
+ */
+async function mockDirectoryAttention(page) {
+  const users = await apiCall(page, "GET", "users?limit=200");
+  const list = Array.isArray(users.json)
+    ? users.json
+    : (users.json?.users ?? users.json?.items ?? []);
+  const pick = (username) => list.find((u) => u.username === username);
+  const day = 86_400_000;
+  const entries = [
+    [
+      "vbrennan",
+      "not_suspended",
+      "Left, but the account is not suspended",
+      "Microsoft did not answer the sign-in block. Retry from the member's profile.",
+      3,
+      true,
+    ],
+    ["tlindqvist", "not_created", "Account not created", null, 0.2, false],
+    [
+      "ecaldwell",
+      "long_suspended",
+      "Suspended over 90 days, still in the directory",
+      null,
+      97,
+      false,
+    ],
+  ];
+  const items = entries
+    .map(([username, issue, label, detail, daysAgo, overdue]) => {
+      const user = pick(username);
+      if (!user) return null;
+      const first = user.first_name ?? "";
+      const last = user.last_name ?? "";
+      return {
+        user_id: user.id,
+        member_name: `${first} ${last}`.trim(),
+        primary_email:
+          `${first.charAt(0)}${last}`.toLowerCase() + "@oakvillefd.example.org",
+        issue,
+        label,
+        detail,
+        since: new Date(Date.now() - daysAgo * day).toISOString(),
+        overdue,
+      };
+    })
+    .filter(Boolean);
+  if (items.length !== 3)
+    throw new Error("demo members for the attention list are missing");
+  await page.route(
+    "**/api/v1/integrations/google-workspace/attention",
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items }),
+      }),
+  );
+}
+
+/** A calendar card's row once its provider sign-in has finished. */
+function connectedCalendar(accountEmail) {
+  return (row) => ({
+    status: "connected",
+    enabled: true,
+    config: {
+      ...(row.config ?? {}),
+      account_email: accountEmail,
+      calendar_name: "Oakville Fire Department Events",
+      sync_descriptions: false,
+    },
+    last_sync_at: new Date(Date.now() - 4 * 60_000).toISOString(),
+    consecutive_error_count: 0,
+    last_error: null,
+  });
+}
+
+/** The Share window of the public Community Event Request form. */
+async function openCommunityFormShare(page) {
+  await page
+    .locator("div.card-hover", {
+      has: page.locator("h3", { hasText: /^Community Event Request$/ }),
+    })
+    .getByRole("button", { name: /^Share$/ })
+    .click({ timeout: 20_000 });
+  await page.locator("#share-public-url").waitFor({ timeout: 15_000 });
+}
 
 async function apiCall(page, method, path, body) {
   return page.evaluate(
@@ -9607,8 +9788,9 @@ export const SHOTS = [
     line: 247,
     anchor:
       "Screenshot of the Notification Rules & Logs page showing the three tabs,",
-    alt: "Notification rules and logs page with summary cards and the rules list",
-    route: "/notifications",
+    alt: "Notification rules and logs page with summary cards and the rules list, each rule with its on/off switch and its edit and delete icons",
+    route: "/notifications?tab=rules",
+    expect: { selector: 'button[aria-label^="Edit Drill reminder"]' },
     fullPage: true,
   },
   {
@@ -10732,11 +10914,45 @@ export const SHOTS = [
     line: 498,
     anchor:
       "The Create Purchase Request form showing all fields: title, fiscal year dropdown,",
-    alt: "Create Purchase Request form with budget, vendor, and priority fields",
+    alt: "New Purchase Request with a title, vendor and estimated amount filled in, priority and fiscal year chosen, the Budget picker, Who will approve this naming the chain's two steps, and under the form the line Draft saved at with Discard draft, Close and Save Draft",
     route: "/finance/purchase-requests/new",
     // "No budget linked" is the Budget picker's first option, not an empty page.
     allowEmptyState: true,
-    expect: "New Purchase Request",
+    expect: "Draft saved at",
+    // The form saves a draft by itself once it has a title and an amount.
+    // That save is answered here instead of reaching the server, so the
+    // demo gains no draft (purchase requests cannot be deleted); everything
+    // else on the screen, the "Draft saved at" line included, is the page's
+    // own response to a successful save.
+    prepare: async (page) => {
+      await page.route(
+        /\/api\/v1\/finance\/purchase-requests(\/demo-draft)?(\?.*)?$/,
+        async (route) => {
+          const method = route.request().method();
+          if (method !== "POST" && method !== "PUT") return route.fallback();
+          const sent = route.request().postDataJSON() ?? {};
+          await route.fulfill({
+            status: method === "POST" ? 201 : 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ...sent,
+              id: "demo-draft",
+              status: "draft",
+              requestNumber: "PR-DRAFT",
+            }),
+          });
+        },
+      );
+      await page
+        .locator("#pr-title")
+        .fill("Hose tester for the annual service");
+      await page.locator("#pr-vendor").fill("Atlantic Fire Equipment");
+      await page.locator("#pr-estimatedAmount").fill("1450");
+      await page.getByText(/^Draft saved at /).waitFor({ timeout: 15_000 });
+      await page.mouse.move(5, 5);
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
     fullPage: true,
   },
   {
@@ -10928,8 +11144,68 @@ export const SHOTS = [
     line: 103,
     anchor:
       "Screenshot of the Opportunities Library showing a grid of grant program cards",
-    alt: "Grant opportunities library showing available grant programs",
+    alt: "The opportunities library with Show retired ticked: the department's programs, each card with its edit (pencil) and Retire buttons and Start Application, and the Volunteer Fire Assistance Grant marked Retired with Reinstate and no Start Application",
     route: "/grants/opportunities",
+    expect: "Volunteer Fire Assistance Grant",
+    // The retired program is `seed_backlog_12_retired_opportunity`.
+    prepare: async (page) => {
+      await page.getByLabel("Show retired").check({ timeout: 20_000 });
+      await page
+        .getByText("Volunteer Fire Assistance Grant")
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(400);
+    },
+    fullPage: true,
+  },
+  {
+    id: "12-16-edit-opportunity",
+    doc: "12-grants-fundraising.md",
+    line: 148,
+    anchor: "Edit Grant Opportunity for the Assistance to Firefighters Grant",
+    alt: "Edit Grant Opportunity for the Assistance to Firefighters Grant: its program name, agency, category and description, the award range and local match, the deadline and links, with Save changes",
+    route: "/grants/opportunities",
+    expect: "Edit Grant Opportunity",
+    // Opened and photographed, never saved.
+    prepare: async (page) => {
+      const listed = await apiCall(page, "GET", "grants?limit=100");
+      const rows = Array.isArray(listed.json) ? listed.json : [];
+      const afg = rows.find(
+        (row) => row.name === "Assistance to Firefighters Grant",
+      );
+      if (!afg?.id) throw new Error("no Assistance to Firefighters Grant");
+      await page.goto(
+        new URL(`/grants/opportunities/${afg.id}/edit`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.locator("#opportunity-name").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "12-17-donor-business",
+    doc: "12-grants-fundraising.md",
+    line: 505,
+    anchor: "The New Donor form with Donor Type set to Business",
+    alt: "The New Donor form with Donor Type Business: Organization Name Oakville Lumber & Supply filled in, Contact First Name and Contact Last Name left empty because a contact is optional, and the email and address fields",
+    route: "/grants/donors",
+    expect: "Contact First Name",
+    // Filled in and photographed, never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Add Donor" })
+        .click({ timeout: 20_000 });
+      await page.locator("#donor-donorType").selectOption("business");
+      await page.locator("#donor-companyName").fill("Oakville Lumber & Supply");
+      await page
+        .locator("#donor-email")
+        .fill("office@oakvillelumber.example.org");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+    selector: "form:has(#donor-donorType)",
   },
   {
     id: "12-04-create-application",
@@ -11193,6 +11469,144 @@ export const SHOTS = [
     selector: 'div.card:has([aria-label="Calendar subscription URL"])',
   },
 
+  // ── 16 backlog (2026-11-02). The demo cannot connect a directory or a
+  // calendar account, so the connected cards are the page's own rendering of
+  // a mocked row (`mockIntegrationRows`); the connect form is the real one,
+  // filled with demo values and never submitted.
+  {
+    id: "16-19-microsoft-365-connect",
+    doc: "16-integrations.md",
+    line: 591,
+    anchor: "The Microsoft 365 connect form filled in with demo values",
+    alt: "The Microsoft 365 connect form with demo values: Directory (tenant) ID, Application (client) ID, the client secret, Client secret expires on, Domain, Usage location US, a License SKU ID, two groups, and Block sign-in when a member retires ticked, above the Graph permissions it needs",
+    route: "/integrations",
+    expect: "Block sign-in when a member retires",
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 2400 },
+    selector: '[aria-labelledby="integration-connect-title"]',
+    prepare: async (page) => {
+      await page
+        .locator('[data-testid="integration-card-microsoft-365"]')
+        .getByRole("button", { name: "Connect" })
+        .click({ timeout: 20_000 });
+      await page
+        .locator("#ms-tenant")
+        .fill("3f2a8c1e-5b7d-4e90-a1c2-6d8e9f0a1b2c");
+      await page
+        .locator("#ms-client")
+        .fill("9c4e7a21-0d3b-4f68-b5a9-2e1c7d8f6a40");
+      await page.locator("#ms-secret").fill("demo-secret-not-real");
+      const expires = new Date(Date.now() + 180 * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      await page.locator("#ms-secret-expires").fill(expires);
+      await page.locator("#ms-domain").fill("oakvillefd.example.org");
+      await page.locator("#ms-location").fill("US");
+      await page
+        .locator("#ms-sku")
+        .fill("06ebc4ee-1bb5-47dd-8120-11324bc54e06");
+      await page
+        .locator("#ms-groups")
+        .fill(
+          "members@oakvillefd.example.org\n5d0b6a3e-8f21-4c97-9e44-1a2b3c4d5e6f",
+        );
+      await page.getByText("Block sign-in when a member retires").click();
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "16-20-microsoft-365-card",
+    doc: "16-integrations.md",
+    line: 597,
+    anchor:
+      "The connected Microsoft 365 card with Client secret expires in 12 days",
+    alt: "The Microsoft 365 card connected, with Details and Settings, the amber Client secret expires in 12 days and 3 need attention, Link existing members, Test and Disconnect",
+    route: "/integrations",
+    expect: "Client secret expires in 12 days",
+    allowEmptyState: true,
+    selector: '[data-testid="integration-card-microsoft-365"]',
+    prepare: async (page) => {
+      await mockIntegrationRows(page, {
+        "microsoft-365": connectedMicrosoft365,
+      });
+      await mockDirectoryAttention(page);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByText("3 need attention").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "16-21-directory-attention-list",
+    doc: "16-integrations.md",
+    line: 565,
+    anchor:
+      "The accounts needing attention list opened from the directory card",
+    alt: "Microsoft 365 accounts needing attention: three members, one who left but whose account is not suspended (Over a day), one whose account was not created, and one suspended over 90 days and still in the directory, each with their department address and since when",
+    route: "/integrations",
+    expect: "accounts needing attention",
+    allowEmptyState: true,
+    selector: 'div.card:has(ul[aria-label$="accounts needing attention"])',
+    prepare: async (page) => {
+      await mockIntegrationRows(page, {
+        "microsoft-365": connectedMicrosoft365,
+      });
+      await mockDirectoryAttention(page);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: "3 need attention" })
+        .click({ timeout: 20_000 });
+      await page
+        .locator('ul[aria-label$="accounts needing attention"]')
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "16-22-google-calendar-connected",
+    doc: "16-integrations.md",
+    line: 636,
+    anchor: "The Google Calendar card after Connect with Google",
+    alt: "The Google Calendar card connected: the Google account, the calendar Oakville Fire Department Events, when it last published, Sync event descriptions switched off, and Disconnect",
+    route: "/integrations",
+    expect: "Sync event descriptions",
+    allowEmptyState: true,
+    selector: '[data-testid="integration-card-google-calendar"]',
+    prepare: async (page) => {
+      await mockIntegrationRows(page, {
+        "google-calendar": connectedCalendar("calendar@oakvillefd.example.org"),
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .locator('[data-testid="integration-card-google-calendar"]')
+        .getByText("Last published")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "16-23-outlook-connected",
+    doc: "16-integrations.md",
+    line: 695,
+    anchor: "The Microsoft Outlook card after Connect with Microsoft",
+    alt: "The Microsoft Outlook card connected: the Microsoft 365 account, the calendar Oakville Fire Department Events, when it last published, Sync event descriptions switched off, and Disconnect",
+    route: "/integrations",
+    expect: "Sync event descriptions",
+    allowEmptyState: true,
+    selector: '[data-testid="integration-card-outlook"]',
+    prepare: async (page) => {
+      await mockIntegrationRows(page, {
+        outlook: connectedCalendar("events@oakvillefd.example.org"),
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .locator('[data-testid="integration-card-outlook"]')
+        .getByText("Last published")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+
   // ── 17 Privacy & Data Rights ────────────────────────────────────────
   {
     id: "17-01-privacy-choices",
@@ -11226,9 +11640,69 @@ export const SHOTS = [
     line: 311,
     anchor:
       "Screenshot of the Settings tab showing the payment method checkboxes with the",
-    alt: "Store administration settings with the payment method options",
-    route: "/inventory/admin/store",
-    fullPage: true,
+    alt: "The Department Store console on Store Settings: the activity counts, the four area cards with Store Settings chosen, and the Settings page with Store is live for members, the storefront details, the payment method checkboxes and the three choices under What happens to an unpaid order?",
+    route: "/inventory/admin/store?tab=settings",
+    expect: "Store is live for members",
+    // "No payment gate" is one of the unpaid-order rules, not an empty page.
+    allowEmptyState: true,
+    // The page runs past 4,700px with the notices and metrics below; the
+    // frame stops after the payment methods the placeholder is about.
+    viewport: { width: 1440, height: 1500 },
+    fullPage: false,
+  },
+  {
+    id: "18-05-store-offline-overview",
+    doc: "18-storefront.md",
+    line: 122,
+    anchor: "The console's Overview with the store switched off",
+    alt: "The Department Store console's Overview with the store switched off: the amber Store is offline · turn on in Settings button beside the header, and the Fall 2026 Order Window card saying members can't order yet, because the store is switched off they see The store is closed, with Turn it on in Settings",
+    route: "/inventory/admin/store?tab=overview",
+    expect: "Members can't order yet",
+    viewport: { width: 1440, height: 1200 },
+    // The store is one department-wide switch and other shots picture the
+    // live store, so the switch is not turned off: the dashboard's answer is
+    // read from the server and only its isEnabled flag is set to false, for
+    // this page alone.
+    prepare: async (page) => {
+      await page.route("**/api/v1/store/dashboard", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({
+          response,
+          body: JSON.stringify({ ...body, isEnabled: false }),
+        });
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText("Members can't order yet", { exact: false })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+  },
+  {
+    id: "18-06-catalog-item-form",
+    doc: "18-storefront.md",
+    line: 416,
+    anchor:
+      "The New item form from the console's Catalog page, with Status on Draft",
+    alt: "The New item form: Name, SKU, Description, Category, Price and Department cost, Status on Draft with the note that draft items aren't shown to members and to choose Active to sell it, then the stock, tax, option and personalization settings",
+    route: "/inventory/admin/store?tab=catalog",
+    expect: "Draft items aren't shown to members.",
+    viewport: { width: 1440, height: 2400 },
+    // Opened and photographed, never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "New item" })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Draft items aren't shown to members.", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(400);
+    },
+    selector: '[data-testid="modal-panel"]',
   },
 
   // ── Additional route-level and detail-page shots ────────────────────
@@ -11670,7 +12144,7 @@ export const SHOTS = [
     line: 176,
     anchor:
       "The Budget Categories section on the Settings page showing a hierarchical list",
-    alt: "Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it",
+    alt: "Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it; Public Education is marked Inactive and its sub-category Smoke alarm giveaway Inactive through Public Education",
     route: "/finance/settings",
     // Officer brass and Station boots sit under Personal Protective Equipment
     // (`seed_guide11_finance_states`), so the list reads as a tree. Lines with
@@ -12644,9 +13118,9 @@ export const SHOTS = [
     line: 412,
     anchor:
       "Screenshot of the Order Windows tab showing an open window card with",
-    alt: "Store order windows tab with the open window and its order totals",
-    route: "/inventory/admin/store",
-    prepare: clickByName(/window/i),
+    alt: "The Department Store console on Order Windows, under the Selling area card: New order window, and the open Fall 2026 Order Window with its dates, order totals and Record vendor order, Close ordering, Tally and Edit",
+    route: "/inventory/admin/store?tab=windows",
+    expect: "New order window",
     fullPage: true,
   },
   {
@@ -14096,31 +14570,19 @@ export const SHOTS = [
     line: 193,
     anchor:
       "Screenshot showing the form sharing options with the internal link, the public",
-    alt: "Form sharing dialog with the public URL and its QR code",
+    alt: "The Share Form window for Community Event Request: Public Access on, the public URL and its QR code with the download buttons, and Allow embedding on your website ticked with the embed code beneath",
     route: "/forms",
+    expect: "Allow embedding on your website",
+    // The community form is public, published and allowed to embed
+    // (`seed_backlog_07_form_embedding`). "Share link", on the card itself,
+    // copies to the clipboard and opens nothing; the Share button opens this.
+    // A tall frame so the whole window fits; the panel alone is pictured.
     prepare: async (page) => {
-      // Every form has a Share button, but the public URL and QR code this
-      // placeholder is about only render for a form with public access on.
-      // Open them in turn until the URL field appears. ("Share link", on the
-      // card itself, copies to the clipboard and opens nothing — hence the
-      // anchored pattern.)
-      const shares = page.getByRole("button", { name: /^Share$/ });
-      const count = await shares.count();
-      for (let index = 0; index < count; index += 1) {
-        await shares.nth(index).click({ timeout: 10_000 });
-        const url = page.locator("#share-public-url");
-        const shown = await url
-          .waitFor({ state: "visible", timeout: 2_000 })
-          .then(() => true)
-          .catch(() => false);
-        if (shown) return;
-        await page
-          .getByRole("button", { name: /^Done$/ })
-          .click({ timeout: 10_000 });
-      }
-      throw new Error("no form has public access enabled");
+      await openCommunityFormShare(page);
+      await page.waitForTimeout(400);
     },
-    fullPage: false,
+    viewport: { width: 1440, height: 2200 },
+    selector: '[aria-labelledby="share-form-title"] div.max-w-lg',
   },
   {
     id: "07-07-form-submissions",
@@ -23089,6 +23551,176 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
   },
+  // ── 11 backlog (2026-11-02). Every dialog here is opened and photographed,
+  // never confirmed. The deactivated Public Education category, its
+  // sub-line and the draft on it are `seed_backlog_11_inactive_category`.
+  {
+    id: "11-27-category-delete-confirm",
+    doc: "11-finance.md",
+    line: 365,
+    anchor: "The Delete category confirmation for a category budget lines use",
+    alt: "The Delete category confirmation for Fuel: if budget lines, budget requests or approval chains use it, it is deactivated instead of deleted, they keep it and new budget lines cannot choose it; otherwise it is deleted, which cannot be undone",
+    route: "/finance/settings",
+    expect: "it is deactivated instead of deleted",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Delete Fuel", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("it is deactivated instead of deleted")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-28-budget-picker-inactive",
+    doc: "11-finance.md",
+    line: 369,
+    anchor:
+      "A draft purchase request reopened for editing, its Budget picker showing",
+    alt: "Editing the draft purchase request Smoke alarms for the spring giveaway: its Budget picker still shows the line it was saved on, Smoke alarm giveaway, marked (inactive category) because its parent Public Education was deactivated",
+    route: "/finance/purchase-requests",
+    // The option text sits inside a closed <select>, which is never
+    // "visible"; the prepare waits on the chosen option itself.
+    expect: { selector: "#pr-budgetId" },
+    // Opening a draft for editing saves nothing until a field changes.
+    prepare: async (page) => {
+      const listed = await apiCall(page, "GET", "finance/purchase-requests");
+      const rows = Array.isArray(listed.json)
+        ? listed.json
+        : (listed.json?.purchase_requests ?? listed.json?.items ?? []);
+      const draft = rows.find(
+        (r) => r.title === "Smoke alarms for the spring giveaway",
+      );
+      if (!draft?.id) throw new Error("no draft on the inactive category");
+      // A reopened draft reads "Saving soon…" and would save itself again
+      // after a moment even with nothing changed, so that save is answered
+      // here and never reaches the seeded draft. The frame stops above the
+      // save-status line for the same reason.
+      await page.route(
+        new RegExp(`/api/v1/finance/purchase-requests/${draft.id}$`),
+        async (route) => {
+          if (route.request().method() !== "PUT") return route.fallback();
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(draft),
+          });
+        },
+      );
+      await page.goto(
+        new URL(
+          `/finance/purchase-requests/${draft.id}/edit`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .locator("#pr-budgetId option:checked", {
+          hasText: "(inactive category)",
+        })
+        .waitFor({ state: "attached", timeout: 20_000 });
+      await page.locator("#pr-budgetId").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+    allowEmptyState: true,
+    selector: "form:has(#pr-budgetId) > div.grid",
+  },
+  {
+    id: "11-29-approval-chain-range-refused",
+    doc: "11-finance.md",
+    line: 718,
+    anchor: "The New Chain form with a Min Amount above its Max Amount",
+    alt: "The New Chain form filled in with Min Amount 5000 and Max Amount 500, the note that both ends are included, and the message The minimum amount cannot be above the maximum amount; nothing is created",
+    route: "/finance/settings/approval-chains",
+    expect: "The minimum amount cannot be above the maximum amount.",
+    viewport: { width: 1440, height: 1000 },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "New Chain" })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.locator("#new-chain-min").waitFor({ timeout: 10_000 });
+      await page.locator("#new-chain-name").fill("Large equipment purchases");
+      await page.locator("#new-chain-min").fill("5000");
+      await page.locator("#new-chain-max").fill("500");
+      await page.getByRole("button", { name: "Create Chain" }).click();
+      await page
+        .getByText("The minimum amount cannot be above the maximum amount.")
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page
+        .locator("#new-chain-min")
+        .evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(300);
+    },
+    fullPage: false,
+  },
+  {
+    id: "11-30-purchase-request-leave-prompt",
+    doc: "11-finance.md",
+    line: 1042,
+    anchor:
+      "Leave without saving? over a new purchase request that has no title",
+    alt: "Leave without saving? over a new purchase request with only a description typed: a draft is saved once the request has a title and an amount, so what has been entered so far will be lost, with Keep editing and Leave",
+    route: "/finance/purchase-requests/new",
+    expect: "Leave without saving?",
+    prepare: async (page) => {
+      await page
+        .locator("#pr-description")
+        .fill("Replacement nozzles for Engine 2's crosslays.");
+      await page
+        .getByRole("button", { name: "Back to Purchase Requests" })
+        .click({ timeout: 10_000 });
+      await page
+        .getByRole("button", { name: "Keep editing" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-31-dues-overpayment-donation",
+    doc: "11-finance.md",
+    line: 1541,
+    anchor:
+      "Record the extra as a donation? after entering more than a member owes",
+    alt: "Record the extra as a donation? after entering $150.00 for a member who owes $120.00: $120.00 will be recorded against their dues and $30.00 as a donation from them, with Change the amount and Record with donation",
+    route: "/finance/dues",
+    expect: "Record the extra as a donation?",
+    // The administrator cannot settle their own dues, so another member's
+    // row is chosen. Change the amount is the way out; nothing is recorded.
+    prepare: async (page) => {
+      const buttons = page.getByRole("button", {
+        name: /^Record a payment for /,
+      });
+      await buttons.first().waitFor({ timeout: 20_000 });
+      const me = await apiCall(page, "GET", "auth/me");
+      const myName =
+        `${me.json?.first_name ?? ""} ${me.json?.last_name ?? ""}`.trim();
+      const count = await buttons.count();
+      for (let index = 0; index < count; index += 1) {
+        const label =
+          (await buttons.nth(index).getAttribute("aria-label")) ?? "";
+        if (myName && label.includes(myName)) continue;
+        await buttons.nth(index).click();
+        break;
+      }
+      await page.locator("#dues-payment-amount").fill("150");
+      await page
+        .getByRole("button", { name: "Record payment" })
+        .last()
+        .click({ timeout: 10_000 });
+      await page
+        .getByRole("button", { name: "Change the amount" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    selector:
+      '[data-testid="modal-panel"]:has-text("Record the extra as a donation?")',
+  },
   {
     id: "00-32-dashboard-needs-you-sign-off",
     doc: "00-getting-started.md",
@@ -23629,6 +24261,203 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     fullPage: false,
+  },
+  // ── 07 backlog (2026-11-02): sensitive and pre-filled fields, embedding,
+  // editing and deleting notification rules. The Driver Background
+  // Disclosure form and the embedding state are `seed_backlog_07_*`.
+  {
+    id: "07-40-field-prefill-applicant",
+    doc: "07-documents-forms.md",
+    line: 330,
+    anchor:
+      "The Edit Field window for Mobile phone on the Driver Background Disclosure form",
+    alt: "The Edit Field window for Mobile phone, a Phone field: Required unticked, Full Width, Sensitive greyed out with the note that it is not available while the field pre-fills, and Pre-fill from applicant (follow-up forms) set to Mobile with its note that a Follow-up Form stage opens the field with what the applicant record holds",
+    route: "/forms",
+    expect: "Pre-fill from applicant (follow-up forms)",
+    viewport: { width: 1440, height: 2200 },
+    selector: '[aria-labelledby="field-editor-title"] .modal-panel',
+    // Opened and photographed, never saved.
+    prepare: async (page) => {
+      await openDriverFormField(page, "Mobile phone");
+    },
+  },
+  {
+    id: "07-41-field-sensitive",
+    doc: "07-documents-forms.md",
+    line: 342,
+    anchor:
+      "The Edit Field window for a Driver Background Disclosure question with Sensitive ticked",
+    alt: "The Edit Field window for Criminal convictions, a Text Area question: Required and Sensitive ticked, the note that its answers are stored encrypted, shown only to staff allowed to view sensitive answers and left out of CSV downloads, and Pre-fill from applicant unavailable",
+    route: "/forms",
+    expect: "Answers are stored encrypted",
+    viewport: { width: 1440, height: 2200 },
+    selector: '[aria-labelledby="field-editor-title"] .modal-panel',
+    prepare: async (page) => {
+      await openDriverFormField(page, "Criminal convictions");
+    },
+  },
+  {
+    id: "07-42-builder-sensitive-badge",
+    doc: "07-documents-forms.md",
+    line: 346,
+    anchor:
+      "The form builder for the Driver Background Disclosure form, its two sensitive questions",
+    alt: "The form builder for Driver Background Disclosure: Mobile phone and Street address badged Pre-fills: Mobile and Pre-fills: Street address, and Moving violations in the last five years and Criminal convictions badged Sensitive with a lock",
+    route: "/forms",
+    expect: "Pre-fills: Street address",
+    prepare: async (page) => {
+      await driverFormCard(page)
+        .getByRole("button", { name: "Edit Fields" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Pre-fills: Street address")
+        .waitFor({ timeout: 20_000 });
+      await page
+        .getByText("Criminal convictions", { exact: true })
+        .first()
+        .scrollIntoViewIfNeeded();
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    id: "07-43-submission-sensitive-answers",
+    doc: "07-documents-forms.md",
+    line: 361,
+    anchor:
+      "Submissions for the Driver Background Disclosure form as the administrator",
+    alt: "Submissions for Driver Background Disclosure as the administrator, Nadia Belhaj's submission opened below Saoirse Nolan's: her name, phone, address and licence number, then Moving violations in the last five years and Criminal convictions, each with a lock icon beside the question",
+    route: "/forms",
+    expect: "Moving violations in the last five years",
+    prepare: async (page) => {
+      await openDriverFormSubmission(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-44-submission-restricted",
+    doc: "07-documents-forms.md",
+    line: 370,
+    anchor: "The same submission opened by the Secretary, who manages forms",
+    alt: "The same submission opened by the Secretary, who manages forms without sensitive_answers.view: name, phone, address and licence number, and below them, with a lock icon, Restricted: this submission has answers to sensitive questions, which you do not have permission to view",
+    route: "/forms",
+    auth: "secretary",
+    expect: "Restricted: this submission has answers to sensitive questions",
+    prepare: async (page) => {
+      await openDriverFormSubmission(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-48-settings-forms-sites",
+    doc: "07-documents-forms.md",
+    line: 520,
+    anchor:
+      "Organization Settings, Forms section: the list of websites allowed",
+    alt: "Organization Settings, Forms: Websites allowed to embed forms with https://www.oakvillefire.example.org on it, the note to give one site per line starting with https:// and without a page path, and Save",
+    route: "/settings?tab=forms",
+    expect: "Websites allowed to embed forms",
+    allowEmptyState: true,
+    fullPage: false,
+  },
+  {
+    id: "07-47-share-embed-code",
+    doc: "07-documents-forms.md",
+    line: 524,
+    anchor:
+      "The Share window for a public form with Allow embedding on your website ticked",
+    alt: "The embedding part of the Community Event Request Share window: Allow embedding on your website ticked, the Embed code box, Works on: https://www.oakvillefire.example.org and Copy embed code",
+    route: "/forms",
+    expect: "Copy embed code",
+    viewport: { width: 1440, height: 2200 },
+    selector: 'div.space-y-3:has(> label[for="share-allow-embed"])',
+    prepare: async (page) => {
+      await openCommunityFormShare(page);
+      await page.locator("#share-embed-code").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "07-46-rule-edit-dialog",
+    doc: "07-documents-forms.md",
+    line: 727,
+    anchor: "The Edit Notification Rule window for the drill reminder rule",
+    alt: "Edit Notification Rule for Drill reminder — 24 hours out: Rule Name, Trigger Event set to Event Reminder with its explanation, Description, and Save Changes",
+    route: "/notifications?tab=rules",
+    expect: "Edit Notification Rule",
+    viewport: { width: 1280, height: 1100 },
+    selector: '[aria-labelledby="create-rule-title"] div.max-w-lg',
+    // Opened and photographed, never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Drill reminder — 24 hours out" })
+        .click({ timeout: 20_000 });
+      await page
+        .locator('[aria-labelledby="create-rule-title"]')
+        .getByText("Edit Notification Rule")
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "07-45-rule-delete-warning",
+    doc: "07-documents-forms.md",
+    line: 731,
+    anchor: "Delete this rule? for the only rule for its trigger, switched off",
+    alt: "Delete this rule? for a switched-off rule, the only one for Equipment Request Update: the warning that those notifications are switched off by this rule and, with no rule left for the trigger, go out again for the whole department, the suggestion to edit the rule or switch it on or off instead, and Keep it beside Delete rule",
+    route: "/notifications?tab=rules",
+    expect: "Keep it",
+    // A switched-off rule that is the only one for its trigger is the case
+    // the warning is about. Made here, switched off, photographed with its
+    // Delete dialog (never confirmed) and removed in cleanup, so equipment
+    // request notices are off only for the seconds the shot takes.
+    prepare: async (page) => {
+      const created = await apiCall(page, "POST", "notifications/rules", {
+        name: "Gear request notices",
+        trigger: "equipment_request_update",
+        category: "general",
+        channel: "in_app",
+      });
+      if (created.status >= 300 || !created.json?.id) {
+        throw new Error(`could not create the rule (${created.status})`);
+      }
+      tempRuleCleanup = { page, id: created.json.id };
+      const off = await apiCall(
+        page,
+        "POST",
+        `notifications/rules/${created.json.id}/toggle?enabled=false`,
+      );
+      if (off.status >= 300) {
+        throw new Error(`could not switch the rule off (${off.status})`);
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: "Delete Gear request notices" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Keep it" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async () => {
+      const rule = tempRuleCleanup;
+      tempRuleCleanup = null;
+      if (!rule) return;
+      const result = await apiCall(
+        rule.page,
+        "DELETE",
+        `notifications/rules/${rule.id}`,
+      );
+      if (result.status >= 300) {
+        throw new Error(`could not delete the rule (${result.status})`);
+      }
+    },
+    selector: '[data-testid="modal-panel"]',
   },
   {
     id: "03-128-pattern-list-glyphs",
@@ -24415,6 +25244,9 @@ async function holdQuartermaster(page) {
   if (!position?.id || !me.body?.id) {
     throw new Error("could not resolve the Quartermaster position");
   }
+  // Granting and releasing a position both require a step-up (#3761); one
+  // confirmation lasts ten minutes, which also covers the release in cleanup.
+  await adminStepUp(page);
   quartermasterHeld = { userId: me.body.id, roleId: position.id, page };
   const granted = await apiFromPage(
     page,
