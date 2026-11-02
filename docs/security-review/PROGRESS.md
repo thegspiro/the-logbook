@@ -24295,7 +24295,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
@@ -24324,6 +24324,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-02 — Feature 13 (Apparatus & NFC, pass 21) — watchdog pickup, 0 fixed by this pass, 0 new findings; AP2-4 resolved by a feature commit, tracker row 13 corrected
+
+Watchdog pickup. PR #3923 (Feature 12, Facilities, pass 14) had just merged;
+`list_pull_requests` (state=open) found 0 PRs with a `claude/security-review-`
+head branch, and the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+Row 13 (Apparatus & NFC) was the next `⬜`.
+
+**Tracker correction.** Pass 20 (2026-10-29) was committed directly to `main`
+as `b6a86b4d4`, bypassing the branch/PR flow entirely — it updated
+`AP-13-apparatus-nfc.md` and this file's Open PR narrative, but left the
+narrative on a literal "PR (pending)" placeholder and never flipped this
+row's cell to ✅. That is why row 13 still read `⬜` despite pass 20's content
+already being on `main`. This pass's commit corrects the cell.
+
+**Real delta since pass 20** (`b6a86b4d4`): 3 non-merge commits in this
+feature's declared scope. The two with security content: (1) **AP2-4 is
+resolved** — `check_driver_evoc_eligibility` now resolves a shift's apparatus
+id against both `apparatus` and `basic_apparatus` (org-scoped) and fails
+closed (`eligible: False`) when it is in neither, instead of the old
+pass-everyone default; owner decision recorded 2026-10-31 in
+`KNOWN_LIMITATIONS.md` (this pass additionally corrected the stale 🚩 FLAGGED
+badge and undecided "Future development" item in `docs/app-review/
+apparatus.md`, which that commit didn't touch). (2) The dashboard-tiles
+commit (DASH-37, also reviewed under Facilities/Inventory) adds
+`service_status`/`has_deficiency`/`inspection` query filters to
+`GET /apparatus`, all appended to the same org-scoped `conditions` list the
+count and list queries already share — no new by-id surface, no new route
+(94 routes unchanged), no permission change. The third commit is test-only
+(a shared-header class-string refactor followed, not weakened). Full
+write-up: `AP-13-apparatus-nfc.md`'s **Pass 21**.
+
+**Findings: 0 fixed by this pass, 0 new.** AP2-4 — resolved (by the feature
+commit, not by this review). No other standing item.
+
+**Completion gate:** flake8/black/isort clean; `validate_migrations.py
+--strict` — 693 revisions, single head; `check_route_permissions.py --strict`
+— 286 routes, 0 errors/warnings; `pytest -k "apparatus or nfc or evoc or
+driver_exception"` — 1388 passed, 1 environment-only skip; frontend
+typecheck/lint clean; `npx vitest run src/modules/apparatus` — 119 passed
+(15 files, up from 114 at pass 20).
 
 ### 2026-11-01 — Feature 12 (Facilities, pass 14) — watchdog pickup, 0 fixed, 0 new findings; dashboard-tile deep-link filters reviewed and found sound
 

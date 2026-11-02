@@ -110,7 +110,7 @@ not describe its scope as having read a workflow "in full".
   authority and it is green.
 - **E712-free** — 0 `# noqa: E712` in `apparatus_service.py`, as pass 3 left it.
 
-### AP2-4 — MED — The EVOC gate fails open when the apparatus cannot be resolved — 🚩 FLAGGED
+### AP2-4 — MED — The EVOC gate fails open when the apparatus cannot be resolved — ✅ FIXED (2026-10-31)
 
 **What:** `check_driver_evoc_eligibility` returns `eligible: True` both when the
 apparatus has no EVOC requirement **and** when the apparatus cannot be found at
@@ -156,6 +156,19 @@ Two options for the decision:
    apparatus clears the reference and the shift legitimately has no EVOC
    requirement. Needs a migration and a decision about the other polymorphic
    `apparatus_id` columns that deliberately match it.
+
+**Resolved (2026-10-31), owner decision: option 1, with both vehicle tables
+checked.** A real FK (option 2) turned out not to be possible — `shifts.
+apparatus_id` names a row in either `apparatus` or `basic_apparatus`, so a key
+to one table would reject the other. `check_driver_evoc_eligibility` now
+checks `basic_apparatus` (no requirement, as before) before concluding an id
+is unresolvable; an id in neither table is **ineligible**, with a message to
+re-pick the shift's vehicle, instead of `eligible: True`. Enforcement-off and
+chief-exception behavior are unchanged downstream of this verdict. See
+`docs/KNOWN_LIMITATIONS.md`'s AP2-4 entry and
+`backend/app/services/evoc_level_service.py:check_driver_evoc_eligibility`.
+`test_unresolvable_apparatus_is_logged` now asserts the resolved (ineligible)
+verdict rather than the old flagged one.
 
 ### AP2-5 — LOW — Four no-op attachment "conversion" blocks — ✅ FIXED
 
@@ -279,8 +292,8 @@ not a side-effect of this one.
 
 ### Future development
 
-1. **AP2-4's decision** (above) — fail closed, or give `shifts.apparatus_id` a
-   real FK. The second option is the better fix and the more invasive one.
+1. ~~**AP2-4's decision**~~ **Resolved 2026-10-31** — fail closed, checking
+   both `apparatus` and `basic_apparatus` (above).
 2. ~~**No feature doc exists.**~~ **Closed 2026-10-08** by
    [docs/APPARATUS_MODULE.md](../APPARATUS_MODULE.md) — note the house convention
    is `<NAME>_MODULE.md`, which this pass named wrongly as `docs/APPARATUS.md`.
