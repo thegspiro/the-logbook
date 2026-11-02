@@ -46,6 +46,12 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
+import {
+  readAdminTotpSecret,
+  TOTP_PERIOD_SECONDS,
+  totpForStep,
+  totpStep,
+} from "./totp.mjs";
 
 export const DEMO_CREDENTIALS = {
   username: process.env.SCREENSHOT_ADMIN_USERNAME || "chief",
@@ -178,12 +184,13 @@ export const DEMO_TRAINING_OFFICER_CREDENTIALS = {
 };
 
 /**
- * The one account enrolled in TOTP, used to photograph the login page's
- * authentication-code step.
+ * The one account the seeder enrols in TOTP. It photographed the login page's
+ * authentication-code step until 2026-11-02, when 00-23 moved to a member
+ * holding a passkey as well (PASSKEY_MEMBER_CREDENTIALS); it is kept for a
+ * shot that wants the code step alone.
  *
  * Signing in as this account deliberately does *not* complete: it stops at the
- * code step, which is the shot. Never give it to `auth:` — it cannot produce a
- * session.
+ * code step. Never give it to `auth:` — it cannot produce a session.
  *
  * Must match TWO_FACTOR_USERNAME in seed_demo_data.py. It was hard-coded here
  * once and drifted the moment the seeder moved the enrolment to a different
@@ -6887,32 +6894,55 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 98,
     anchor: "The login page showing the two-factor",
-    alt: "The login page's two-factor step — the 6-digit code field and the Use a recovery code link",
+    alt: "The login page's second step for a member with both a passkey and an authenticator app: Use your passkey above the 6-digit code field, and the Use a recovery code link",
     route: "/login",
     auth: "anonymous",
+    expect: "Use your passkey, or enter the 6-digit code",
+    // The second step is one render branch keyed on `mfaRequired`, reached
+    // the same way whether the first factor was a password or a returning
+    // OAuth sign-in. The guide describes a member with both kinds of second
+    // step, which the page shows as the passkey button above the code box;
+    // whalloway (DEMO_TWO_FACTOR_CREDENTIALS) has only the app, so the
+    // passkey member is given both for the length of the shot. See
+    // PASSKEY_MEMBER_CREDENTIALS.
     prepare: async (page) => {
-      // The code step is one render branch keyed on `mfaRequired`, reached the
-      // same way whether the first factor was a password or a returning OAuth
-      // sign-in — so a password sign-in as the enrolled demo member puts the
-      // page in exactly the state the guide is describing. `signIn` cannot be
-      // reused: it waits to leave /login, which is precisely what a 2FA
-      // account does not do.
+      const device = await attachPasskeyDevice(page);
+      passkeyShot = { page, device, secret: null, lastStep: -1 };
+      const first = await passwordSignIn(page, PASSKEY_MEMBER_CREDENTIALS);
+      if (first !== "in") {
+        throw new Error(
+          "the passkey member already has a second step; run " +
+            "seed_backlog_00_passkey_member to reset it",
+        );
+      }
+      await addPasskeyOnCard(page, "My phone");
+      const setup = await apiFromPage(page, "POST", "/auth/mfa/setup");
+      if (setup.status !== 200 || !setup.body?.secret) {
+        throw new Error(`authenticator setup returned ${setup.status}`);
+      }
+      passkeyShot.secret = setup.body.secret;
+      const verified = await apiFromPage(
+        page,
+        "POST",
+        "/auth/mfa/verify-setup",
+        { code: await nextMemberTotp(page, passkeyShot) },
+      );
+      if (verified.status !== 200) {
+        throw new Error(`authenticator verify returned ${verified.status}`);
+      }
+      await signOutCompletely(page);
+      const second = await passwordSignIn(page, PASSKEY_MEMBER_CREDENTIALS);
+      if (second !== "second-step") {
+        throw new Error("the sign-in did not stop at the second step");
+      }
+      await page.locator("#mfa-code").waitFor({ timeout: 20_000 });
       await page
-        .getByLabel(/username|email/i)
-        .first()
-        .fill(DEMO_TWO_FACTOR_CREDENTIALS.username);
-      await page
-        .getByLabel(/password/i)
-        .first()
-        .fill(DEMO_TWO_FACTOR_CREDENTIALS.password);
-      await page
-        .getByRole("button", { name: /sign in|log ?in/i })
-        .first()
-        .click();
-      const code = page.locator("#mfa-code");
-      await code.waitFor({ timeout: 20_000 });
+        .getByRole("button", { name: "Use your passkey" })
+        .waitFor({ timeout: 20_000 });
+      await page.mouse.move(0, 0);
       await page.waitForTimeout(500);
     },
+    cleanup: tearDownPasskeyShot,
   },
   {
     id: "00-21-login-sso-options",
@@ -11126,7 +11156,7 @@ export const SHOTS = [
     line: 43,
     anchor:
       "Screenshot of Settings → Security showing the Privacy Choices section with three",
-    alt: "My Account, Privacy tab: Profile visibility for each contact detail, then the Privacy Choices checkboxes for photo use, public roster listing and text message notifications, and Your Data",
+    alt: "My Account, Privacy tab: Profile visibility for each contact detail, then Privacy Choices with a Yes / No pair for photo use and for public roster listing, both not answered, the Text message notifications checkbox, and Your Data",
     // Privacy Choices lives on the Privacy tab (it moved off Security). Note
     // the canonical path: /settings/account is a <Navigate to="/account"> with no query, so
     // React Router drops ?tab= on the redirect and the param never arrives.
@@ -17605,7 +17635,7 @@ export const SHOTS = [
     doc: "17-privacy-data-rights.md",
     line: 451,
     anchor: "for a Dropped (Voluntary) demo member: the Membership card",
-    alt: "The Membership card on a dropped member's profile, as an administrator: Rank, Member type, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it",
+    alt: "The Membership card on a dropped member's profile, as an administrator: Rank, Member class, Membership status, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it",
     route: "/members",
     expect: "Anonymize member",
     // The demo department has no departed member, and dropping one for real
@@ -22883,6 +22913,7 @@ export const SHOTS = [
     // permanently it would put this row on every later dashboard capture.
     prepare: async (page) => {
       const { userId, roleId } = await adminAndChiefIds(page);
+      await adminStepUp(page);
       const granted = await apiFromPage(
         page,
         "POST",
@@ -22903,6 +22934,134 @@ export const SHOTS = [
     },
     cleanup: releaseChiefPosition,
     selector: "section[aria-labelledby='needs-you-heading']",
+  },
+  {
+    id: "00-33-passkeys-card",
+    doc: "00-getting-started.md",
+    line: 510,
+    anchor: "A member on My Account, Security tab, just after adding a passkey",
+    alt: "My Account, Security tab, just after adding a passkey: the Passkeys card lists My phone (Syncs across your devices, and the date it was added) with its bin icon, then 10 recovery codes left and Generate new recovery codes, above the Authenticator app card",
+    route: "/login",
+    auth: "anonymous",
+    expect: { selector: 'button[aria-label="Remove passkey My phone"]' },
+    // A real passkey, made by a virtual authenticator for the length of the
+    // shot and removed again in cleanup; see PASSKEY_MEMBER_CREDENTIALS.
+    prepare: async (page) => {
+      const device = await attachPasskeyDevice(page);
+      passkeyShot = { page, device, secret: null, lastStep: -1 };
+      const signedIn = await passwordSignIn(page, PASSKEY_MEMBER_CREDENTIALS);
+      if (signedIn !== "in") {
+        throw new Error(
+          "the passkey member already has a second step; run " +
+            "seed_backlog_00_passkey_member to reset it",
+        );
+      }
+      await addPasskeyOnCard(page, "My phone");
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+    cleanup: tearDownPasskeyShot,
+  },
+  {
+    id: "00-34-step-up-code",
+    doc: "00-getting-started.md",
+    line: 473,
+    anchor: "An administrator who uses an authenticator app has just switched",
+    alt: "The Confirm it's you box over Settings → Authentication → MFA Policy, opened by switching Allow passkeys: This action needs a recent confirmation, the Authenticator code field, and Cancel / Confirm",
+    route: "/settings?tab=authentication&page=mfa",
+    expect: "Authenticator code",
+    viewport: { width: 1280, height: 900 },
+    // The switch asks the server first, and the server answers that a fresh
+    // confirmation is needed, which is the box. Cancel leaves the policy as
+    // it was. Should this session already be confirmed the switch would save,
+    // so the policy read before the click is put back in cleanup either way.
+    prepare: async (page) => {
+      const before = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      if (before.status !== 200) {
+        throw new Error(`reading the MFA policy returned ${before.status}`);
+      }
+      mfaPolicyBefore = { policy: before.body, page };
+      await page
+        .locator("[role='switch'][aria-labelledby='mfa-policy-passkeys-label']")
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("dialog")
+        .getByText("Authenticator code")
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const held = mfaPolicyBefore;
+      mfaPolicyBefore = null;
+      const cancel = page.getByRole("dialog").getByRole("button", {
+        name: "Cancel",
+      });
+      if (await cancel.count()) await cancel.click();
+      if (!held) return;
+      const now = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      if (now.body?.passkeys_enabled === held.policy.passkeys_enabled) return;
+      throw new Error(
+        "the MFA policy changed during 00-34 and could not be restored " +
+          "without a step-up; switch Allow passkeys back by hand",
+      );
+    },
+  },
+  {
+    id: "00-35-step-up-password",
+    doc: "00-getting-started.md",
+    line: 477,
+    anchor: "The secretary, who has not set up two-step sign-in yet",
+    alt: "The Confirm it's you box with a Password field over the Reset MFA dialog, shown to the secretary, who has not set up two-step sign-in yet, after selecting Reset MFA for a member",
+    route: "/members/admin",
+    auth: "secretary",
+    expect: { selector: "#stepup-proof[type='password']" },
+    // The roster's Former members card reads "No dropped member has property
+    // outstanding" behind the dialogs, which is not this shot's subject.
+    allowEmptyState: true,
+    // The secretary holds members.manage and has no second step, so the box
+    // asks for their password. Nobody types it: Cancel closes the box and the
+    // Reset MFA request it was holding is never sent again, so whalloway
+    // (the one member enrolled in the app) keeps it.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Reset MFA for .*Halloway/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Reset MFA", exact: true })
+        .click({ timeout: 15_000 });
+      await page.locator("#stepup-proof").waitFor({ timeout: 15_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    // Clipped to the Reset MFA dialog's overlay, which stops short of the
+    // scrollbar gutter: a plain viewport shot of the long roster leaves that
+    // gutter unpainted beside the dimmed page (audit_images.py "edges").
+    selector: "[role='dialog']:has-text('Reset MFA turns off')",
+    cleanup: async (page) => {
+      const confirmBox = page
+        .getByRole("dialog")
+        .filter({ hasText: "Confirm it's you" });
+      if (await confirmBox.count()) {
+        await confirmBox.getByRole("button", { name: "Cancel" }).click();
+      }
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    id: "00-36-mfa-grace-banner",
+    doc: "00-getting-started.md",
+    line: 457,
+    anchor:
+      "The secretary, whose position needs two-step sign-in, on the Dashboard",
+    alt: "The Dashboard as the secretary, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link",
+    route: "/dashboard",
+    auth: "secretary",
+    expect: "Your access requires two-factor authentication",
+    allowEmptyState: true,
   },
   {
     id: "08-114-security-report-fallback",
@@ -22950,6 +23109,7 @@ export const SHOTS = [
           "could not resolve the IT Manager position or a member",
         );
       }
+      await adminStepUp(page);
       itManagerHolder = { userId: holder.id, roleId: itManager.id, page };
       const granted = await apiFromPage(
         page,
@@ -22983,6 +23143,227 @@ export const SHOTS = [
         );
       }
     },
+  },
+  {
+    id: "08-118-mfa-policy-passkeys",
+    doc: "08-admin-reports.md",
+    line: 265,
+    anchor: "Administrator at Settings → Authentication → MFA Policy",
+    alt: "Settings → Authentication → MFA Policy: the Require two-factor authentication switch, off, and the Allow passkeys switch, on by default, each with its explanation",
+    route: "/settings?tab=authentication&page=mfa",
+    expect: "Allow passkeys",
+    viewport: { width: 1280, height: 900 },
+    prepare: async (page) => {
+      await page
+        .getByText("Allow passkeys")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "08-119-reset-mfa-passkeys",
+    doc: "08-admin-reports.md",
+    line: 269,
+    anchor:
+      "Administrator on Members administration with the Reset MFA dialog open",
+    alt: "The Reset MFA dialog for a member who has a passkey: Passkeys, with Lost one phone? Remove just that passkey, My phone listed with its Remove link, then what Reset MFA removes, and Cancel / Reset MFA",
+    route: "/members/admin",
+    expect: "Lost one phone? Remove just that passkey",
+    // The member's passkey is made in a second browser context, through the
+    // real card and a virtual authenticator, and removed there again in
+    // cleanup — the administrator never presses Remove or Reset MFA. See
+    // PASSKEY_MEMBER_CREDENTIALS.
+    prepare: async (page) => {
+      const context = await page
+        .context()
+        .browser()
+        .newContext({ viewport: { width: 1280, height: 900 } });
+      const memberPage = await context.newPage();
+      await memberPage.goto(new URL("/login", page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      const device = await attachPasskeyDevice(memberPage);
+      passkeyShot = {
+        page: memberPage,
+        device,
+        context,
+        secret: null,
+        lastStep: -1,
+      };
+      const signedIn = await passwordSignIn(
+        memberPage,
+        PASSKEY_MEMBER_CREDENTIALS,
+      );
+      if (signedIn !== "in") {
+        throw new Error(
+          "the passkey member already has a second step; run " +
+            "seed_backlog_00_passkey_member to reset it",
+        );
+      }
+      await addPasskeyOnCard(memberPage, "My phone");
+
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const reset = page.getByRole("button", {
+        name: /^Reset MFA for .*Adeyemi/,
+      });
+      await reset.first().click({ timeout: 20_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.getByText("My phone").waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      try {
+        await page.keyboard.press("Escape");
+      } finally {
+        await tearDownPasskeyShot();
+      }
+    },
+    selector: "[role='dialog']",
+  },
+  {
+    id: "08-120-email-templates-off-filter",
+    doc: "08-admin-reports.md",
+    line: 1725,
+    anchor:
+      "Administrator at Communications → Email Templates with the Off filter",
+    alt: "Email Templates on the Off filter: the list holds one template, Event Reminder, under Events & Scheduling, its subtitle reading Off and its dot grey",
+    route: "/communications/email-templates",
+    expect: { selector: "button[aria-pressed='true']:text-is('Off')" },
+    // One template is switched off for the shot and back on in cleanup; the
+    // demo department sends every email, so the filter is otherwise empty.
+    // Toggling `is_active` writes no template backup.
+    prepare: async (page) => {
+      const listed = await apiFromPage(page, "GET", "/email-templates");
+      const target = (listed.body ?? []).find(
+        (t) => t.name === OFF_FILTER_TEMPLATE_NAME,
+      );
+      if (!target?.id) {
+        throw new Error(
+          `no ${OFF_FILTER_TEMPLATE_NAME} template to switch off`,
+        );
+      }
+      templateSwitchedOff = { id: target.id, page };
+      const off = await apiFromPage(
+        page,
+        "PUT",
+        `/email-templates/${target.id}`,
+        { is_active: false },
+      );
+      if (off.status !== 200) {
+        throw new Error(`switching the template off returned ${off.status}`);
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: "Off", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText(OFF_FILTER_TEMPLATE_NAME)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+    cleanup: async () => {
+      const held = templateSwitchedOff;
+      templateSwitchedOff = null;
+      if (!held) return;
+      const on = await apiFromPage(
+        held.page,
+        "PUT",
+        `/email-templates/${held.id}`,
+        { is_active: true },
+      );
+      if (on.status !== 200) {
+        throw new Error(`switching the template back on returned ${on.status}`);
+      }
+    },
+  },
+  {
+    id: "08-121-template-always-sent",
+    doc: "08-admin-reports.md",
+    line: 1744,
+    anchor:
+      "Administrator at Communications → Email Templates with Password Reset",
+    alt: "The Password Reset template open in the editor: its header reads Always sent and the switch beside it is on and dimmed, because this email cannot be switched off",
+    route: "/communications/email-templates",
+    expect: "Always sent",
+    prepare: async (page) => {
+      await page
+        .getByPlaceholder(/filter templates/i)
+        .first()
+        .fill("Password Reset", { timeout: 15_000 });
+      await page
+        .getByRole("button", { name: /^Password Reset/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Always sent", { exact: true })
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    id: "08-122-gmail-app-password",
+    doc: "08-admin-reports.md",
+    line: 1535,
+    anchor:
+      "Administrator at Settings → Email with Gmail chosen and App Password",
+    alt: "Settings → Email with Gmail chosen and App Password selected: the From address and app password fields, and the notes on a dedicated sending account, a password change revoking app passwords, and DKIM on your own domain",
+    route: "/settings?tab=email",
+    expect: "Authentication",
+    // Choosing a platform is local state until Save, as in 08-38; nothing is
+    // written.
+    prepare: async (page) => {
+      await clickByName(/^Gmail/)(page);
+      await page
+        .getByRole("button", { name: /^App Password/ })
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-123-gmail-service-account",
+    doc: "08-admin-reports.md",
+    line: 1556,
+    anchor: "Administrator at Settings → Email with Gmail and Service account",
+    alt: "Settings → Email with Gmail and Service account chosen and a key file picked: Key chosen for client ID 104857392018475629301, the three setup steps naming that client ID and the gmail.send scope, and the warning that the key can send as anyone in the domain. The key is made up for the picture",
+    route: "/settings?tab=email",
+    expect: "Key chosen for client ID 104857392018475629301",
+    // The key is a made-up file read in the browser only: the form shows the
+    // client ID it finds and keeps the key in local state until Save, which
+    // is never pressed. Nothing reaches the server.
+    prepare: async (page) => {
+      await clickByName(/^Gmail/)(page);
+      await page
+        .getByRole("button", { name: /^Service account/ })
+        .click({ timeout: 15_000 });
+      await page.locator("#gmail-service-account-key").setInputFiles({
+        name: "logbook-mail-key.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(
+          JSON.stringify({
+            type: "service_account",
+            project_id: "oakville-fd-mail",
+            client_id: "104857392018475629301",
+            client_email:
+              "logbook-mail@oakville-fd-mail.iam.gserviceaccount.com",
+            private_key:
+              "-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----\n",
+          }),
+        ),
+      });
+      await page
+        .getByText("Key chosen for client ID 104857392018475629301")
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+    fullPage: true,
   },
   {
     id: "02-125-compliance-matrix-not-applicable",
@@ -23798,6 +24179,282 @@ async function releaseQuartermaster() {
 }
 
 let itManagerHolder = null;
+
+/**
+ * The member the passkey shots (00-23, 00-33, 08-119) give a passkey to.
+ *
+ * A passkey cannot be seeded: the server only stores one the browser created
+ * against a challenge it issued. So each shot signs this member in, has a
+ * Chrome virtual authenticator (DevTools' WebAuthn domain, the same mechanism
+ * browser test suites use) answer the real "Add a passkey" prompt, takes the
+ * picture, and removes the passkey again through the card, with the step-up
+ * box answered by the same authenticator. Nothing is mocked; the passkey
+ * simply lives for the length of one shot.
+ *
+ * Must match PASSKEY_MEMBER_USERNAME in seed_demo_data.py, whose
+ * `seed_backlog_00_passkey_member` clears the forced password change and
+ * resets any factor an interrupted run left behind.
+ */
+const PASSKEY_MEMBER_CREDENTIALS = {
+  username: "eadeyemi",
+  password: "DemoMember!2026",
+};
+
+/**
+ * Confirm the administrator's session the way the step-up box does, with an
+ * authenticator code, so a raw API call to a step-up-gated endpoint (granting
+ * or releasing a position) is not refused with 403 LB-AUTH-013. The
+ * confirmation lasts ten minutes on this session, which covers the shot's
+ * cleanup too.
+ *
+ * Each code is accepted once per account, and capture.mjs has just spent one
+ * signing this context in, so the code used here is always the next
+ * time-step's: waiting for it costs up to 30 seconds and never collides with
+ * the sign-in. A code another run spent first is refused, and the one after
+ * it is tried.
+ */
+async function adminStepUp(page) {
+  const secret = readAdminTotpSecret();
+  if (!secret) throw new Error("no administrator TOTP secret to confirm with");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const step = totpStep() + 1;
+    await page.waitForTimeout(
+      Math.max(0, step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1000),
+    );
+    const confirmed = await apiFromPage(page, "POST", "/auth/step-up", {
+      code: totpForStep(secret, step),
+    });
+    if (confirmed.status === 200) return;
+  }
+  throw new Error("the administrator's step-up was refused three times");
+}
+
+/** State a passkey shot's cleanup needs: the page, its authenticator, the TOTP secret. */
+let passkeyShot = null;
+
+/** The template 08-120 switches off for its picture, and switches on again. */
+const OFF_FILTER_TEMPLATE_NAME = "Event Reminder";
+let templateSwitchedOff = null;
+
+/** The MFA policy 00-34 read before clicking, to check nothing saved. */
+let mfaPolicyBefore = null;
+
+async function attachPasskeyDevice(page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send(
+    "WebAuthn.addVirtualAuthenticator",
+    {
+      options: {
+        protocol: "ctap2",
+        transport: "internal",
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+        // A phone's passkey is normally synced (iCloud Keychain, Google
+        // Password Manager), which the card reports as "Syncs across your
+        // devices". Left at the default the authenticator claims a
+        // single-device key, which is the rarer case.
+        defaultBackupEligibility: true,
+        defaultBackupState: true,
+      },
+    },
+  );
+  return { cdp, authenticatorId };
+}
+
+async function detachPasskeyDevice(device) {
+  if (!device) return;
+  await device.cdp.send("WebAuthn.removeVirtualAuthenticator", {
+    authenticatorId: device.authenticatorId,
+  });
+  await device.cdp.detach();
+}
+
+/**
+ * Password sign-in on the login page, waiting out the per-address login
+ * allowance (5 a minute, shared with every other capture on this machine)
+ * rather than reading a 429 as a failure. Resolves once the page has left
+ * /login or shows the second-step prompt.
+ */
+async function passwordSignIn(page, credentials) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await page.goto(new URL("/login", page.url()).toString(), {
+      waitUntil: "domcontentloaded",
+    });
+    await page
+      .getByLabel(/username|email/i)
+      .first()
+      .fill(credentials.username, { timeout: 20_000 });
+    await page
+      .getByLabel(/password/i)
+      .first()
+      .fill(credentials.password);
+    await page
+      .getByRole("button", { name: /sign in|log ?in/i })
+      .first()
+      .click();
+    const outcome = await Promise.race([
+      page
+        .waitForURL((url) => !url.pathname.startsWith("/login"), {
+          timeout: 30_000,
+        })
+        .then(() => "in"),
+      page
+        .getByRole("button", { name: "Use your passkey" })
+        .or(page.locator("#mfa-code"))
+        .first()
+        .waitFor({ timeout: 30_000 })
+        .then(() => "second-step"),
+      page
+        .getByText(/too many/i)
+        .first()
+        .waitFor({ timeout: 30_000 })
+        .then(() => "throttled"),
+    ]);
+    if (outcome !== "throttled") return outcome;
+    await page.waitForTimeout(35_000);
+  }
+  throw new Error(`${credentials.username} could not sign in: throttled`);
+}
+
+/** Sign out and forget the session, so the signed-out context stays signed out. */
+async function signOutCompletely(page) {
+  await apiFromPage(page, "POST", "/auth/logout");
+  await page.context().clearCookies();
+  await page.evaluate(() => localStorage.clear());
+}
+
+async function openSecurityTab(page) {
+  await page.goto(new URL("/account?tab=security", page.url()).toString(), {
+    waitUntil: "domcontentloaded",
+  });
+  await page
+    .getByRole("heading", { name: "Two-Factor Authentication" })
+    .waitFor({ timeout: 20_000 });
+  await page
+    .getByRole("button", { name: /^(Add a passkey|Remove passkey )/ })
+    .first()
+    .waitFor({ timeout: 20_000 });
+}
+
+/**
+ * Add a passkey through the real card: Add a passkey, name it, Create passkey,
+ * which the virtual authenticator answers. A first second factor shows the
+ * recovery codes once; Done dismisses them.
+ */
+async function addPasskeyOnCard(page, name) {
+  await openSecurityTab(page);
+  await page.getByRole("button", { name: "Add a passkey" }).click();
+  await page.locator("#passkey-name").fill(name, { timeout: 15_000 });
+  await page.getByRole("button", { name: "Create passkey" }).click();
+  const done = page.getByRole("button", { name: "Done", exact: true });
+  const removeButton = page.getByRole("button", {
+    name: `Remove passkey ${name}`,
+  });
+  await done.or(removeButton).first().waitFor({ timeout: 30_000 });
+  if (await done.isVisible()) await done.click();
+  await openSecurityTab(page);
+  await removeButton.waitFor({ timeout: 20_000 });
+}
+
+/**
+ * Remove every passkey on the signed-in member's card, the way the guide says
+ * to: the bin icon, Remove passkey, then the step-up box, answered with the
+ * passkey itself.
+ */
+async function removePasskeysOnCard(page) {
+  await openSecurityTab(page);
+  for (let guard = 0; guard < 4; guard += 1) {
+    const bin = page.getByRole("button", { name: /^Remove passkey / }).first();
+    if (!(await bin.count())) return;
+    await bin.click();
+    await page
+      .getByRole("button", { name: "Remove passkey", exact: true })
+      .click({ timeout: 15_000 });
+    const stepUp = page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Use your passkey" });
+    const removed = page.getByText("Passkey removed").first();
+    await stepUp.or(removed).first().waitFor({ timeout: 20_000 });
+    if (await stepUp.isVisible()) {
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("[role='dialog'] button")].some(
+            (b) => b.textContent?.includes("Use your passkey") && !b.disabled,
+          ),
+        null,
+        { timeout: 15_000 },
+      );
+      await stepUp.click();
+    }
+    await removed.waitFor({ timeout: 20_000 });
+    await openSecurityTab(page);
+  }
+  throw new Error("passkeys were still listed after four removals");
+}
+
+/** A TOTP code for a time-step later than the last one this secret spent. */
+async function nextMemberTotp(page, state) {
+  let step = totpStep();
+  if (step <= state.lastStep) {
+    step = state.lastStep + 1;
+    await page.waitForTimeout(
+      Math.max(0, step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1500),
+    );
+  }
+  state.lastStep = step;
+  return totpForStep(state.secret, step);
+}
+
+/**
+ * Undo whatever a passkey shot set up, from wherever it stopped: finish a
+ * sign-in left at the second step with the passkey, turn the authenticator
+ * app off with a fresh code, remove the passkeys, and sign out.
+ */
+async function tearDownPasskeyShot() {
+  const state = passkeyShot;
+  passkeyShot = null;
+  if (!state) return;
+  const { page } = state;
+  try {
+    const onLogin = new URL(page.url()).pathname.startsWith("/login");
+    if (onLogin) {
+      const usePasskey = page.getByRole("button", { name: "Use your passkey" });
+      if (await usePasskey.count()) {
+        await usePasskey.click();
+        await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+          timeout: 30_000,
+        });
+      }
+    }
+    if (state.secret) {
+      const status = await apiFromPage(page, "GET", "/auth/mfa/status");
+      if (status.body?.mfa_enabled) {
+        const off = await apiFromPage(page, "POST", "/auth/mfa/disable", {
+          code: await nextMemberTotp(page, state),
+        });
+        if (off.status !== 200) {
+          throw new Error(
+            `turning the authenticator off returned ${off.status}`,
+          );
+        }
+      }
+    }
+    if (state.device) await removePasskeysOnCard(page);
+  } finally {
+    try {
+      await signOutCompletely(page);
+    } finally {
+      try {
+        await detachPasskeyDevice(state.device);
+      } finally {
+        if (state.context) await state.context.close();
+      }
+    }
+  }
+}
 
 const PACKAGE_UNREACHED = ["pat.hale@example.org", "sam.ortiz@example.org"];
 

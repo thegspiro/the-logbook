@@ -170,6 +170,14 @@ COMPLIANCE_OFFICER_USERNAME = "lnakamura"
 # `_assert_two_factor_account_is_unused` checks that at seed time.
 TWO_FACTOR_USERNAME = "whalloway"
 
+# The member the passkey shots (00-23, 00-33, 08-119) register a passkey for,
+# in the browser through a virtual authenticator, and remove it from again in
+# the same shot. Chosen because no shot signs in as it and the seeder only
+# reaches it through the all-members loops, so the few seconds it holds a
+# second factor cannot strand another step at the code prompt. Must match
+# PASSKEY_MEMBER_CREDENTIALS in manifest.mjs.
+PASSKEY_MEMBER_USERNAME = "eadeyemi"
+
 
 def password_login_members(members: list[dict]) -> list[dict]:
     """Members a step may sign in as with a password.
@@ -1661,6 +1669,39 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"two-factor: enrol {TWO_FACTOR_USERNAME}: {exc}")
+
+    def seed_backlog_00_passkey_member(self) -> None:
+        """Ready the member the passkey shots sign in as.
+
+        The shots sign this member in with a password, add a passkey (and, for
+        00-23, an authenticator app), photograph the result and take both off
+        again. That needs the account to sign in with DEMO_MEMBER_PASSWORD
+        without the forced password change every `POST /users` account
+        carries, and to hold no second factor to begin with.
+
+        A capture interrupted before its cleanup leaves a factor behind, and a
+        password sign-in then stops at the code step. Resetting it here is the
+        recovery: the administrator's Reset MFA removes the authenticator app,
+        every passkey and the recovery codes in one call.
+        """
+        member = next(
+            (
+                m
+                for m in items(self.api.get("/users/with-roles"), "users")
+                if pick(m, "username") == PASSKEY_MEMBER_USERNAME
+            ),
+            None,
+        )
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return
+        if pick(member, "mfa_enabled") or pick(member, "has_passkey"):
+            ADMIN_RESET_THROTTLE.wait()
+            self.api.post(f"/users/{user_id}/reset-mfa", {})
+        try:
+            self.member_session(self.base_url, user_id, PASSKEY_MEMBER_USERNAME)
+        except ApiError as exc:
+            self.blocked.append(f"passkey member: sign in: {exc}")
 
     def _fill_in_the_administrator(self, members: list[dict]) -> None:
         """Give the demo administrator the contact details everyone else has.
@@ -20351,6 +20392,7 @@ class Seeder:
         self.step("photo consent", self.seed_photo_consent)
         self.step("waitlisted event", self.seed_waitlisted_event)
         self.step("out-of-stock size", self.seed_out_of_stock_size)
+        self.step("passkey member", self.seed_backlog_00_passkey_member)
         # Last: it parks two coats on a new shelf and issues gloves, which no
         # earlier step expects to find moved or issued.
         self.step("guide 05 states", self.seed_guide05_states)
