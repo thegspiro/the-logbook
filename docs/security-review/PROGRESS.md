@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3939](https://github.com/thegspiro/the-logbook/pull/3939)** (branch
+**PR [#3940](https://github.com/thegspiro/the-logbook/pull/3940)** (branch
 `claude/security-review-compliance`) — Feature 20 (Compliance), pass 13, a
 watchdog pickup. Near-zero delta since pass 12 (PR #3845): the only backend
 change in scope was a junior-member compliance-profile matching fix already
