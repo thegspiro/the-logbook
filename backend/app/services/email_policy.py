@@ -213,6 +213,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Your evaluation is ready for you to read and acknowledge",
             "A step of yours is due soon, or overdue",
             "Your evaluation is final",
+            "One of your evaluations was deleted",
         ),
         rationale=(
             "A personnel record the member is asked to act on by a deadline, "

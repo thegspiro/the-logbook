@@ -7,8 +7,8 @@
  * submitted part cannot be changed.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { ArrowLeft, Download, PenLine, RefreshCw } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router';
+import { ArrowLeft, Download, PenLine, RefreshCw, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -16,6 +16,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { saveBlob } from '../../../utils/saveBlob';
+import { DeleteEvaluationDialog } from '../components/evaluations/DeleteEvaluationDialog';
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
 import { SignDialog } from '../components/evaluations/SignDialog';
@@ -63,6 +64,8 @@ const EvaluationDetailPage: React.FC = () => {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signing, setSigning] = useState<SigningOption | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   const signerName = useAuthStore((state) => state.user?.full_name ?? '');
   // Edits made while a save is in flight must not be replaced by the older
   // response the save returns.
@@ -201,6 +204,18 @@ const EvaluationDetailPage: React.FC = () => {
     }
   };
 
+  const remove = async (reason: string) => {
+    setBusy(true);
+    try {
+      await evaluationsService.remove(detail.id, reason);
+      toast.success('Evaluation deleted');
+      void navigate('/reports/evaluations/conduct');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not delete the evaluation.'));
+      setBusy(false);
+    }
+  };
+
   const download = async () => {
     setBusy(true);
     try {
@@ -271,6 +286,17 @@ const EvaluationDetailPage: React.FC = () => {
             {detail.viewer.can_calibrate && (
               <button type="button" className="btn-primary text-sm" disabled={busy} onClick={() => void calibrate()}>
                 Mark calibration complete
+              </button>
+            )}
+            {detail.viewer.can_delete && (
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2 text-sm"
+                disabled={busy}
+                onClick={() => setDeleting(true)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Delete
               </button>
             )}
           </div>
@@ -397,6 +423,14 @@ const EvaluationDetailPage: React.FC = () => {
         busy={busy}
         onClose={() => setSigning(null)}
         onSign={(signature) => void sign(signature)}
+      />
+      <DeleteEvaluationDialog
+        isOpen={deleting}
+        memberName={detail.member.name}
+        finalized={detail.status === 'finalized'}
+        busy={busy}
+        onClose={() => setDeleting(false)}
+        onDelete={(reason) => void remove(reason)}
       />
     </div>
   );

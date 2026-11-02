@@ -1355,6 +1355,7 @@ WAITING = EmailTemplateType.EVALUATION_STEP_WAITING
 REMINDER = EmailTemplateType.EVALUATION_DEADLINE_REMINDER
 OVERDUE = EmailTemplateType.EVALUATION_OVERDUE
 FINALIZED = EmailTemplateType.EVALUATION_FINALIZED
+DELETED = EmailTemplateType.EVALUATION_DELETED
 
 # The workflow suite's period ends 2025-12-31, so its steps fall due in
 # January and February 2026.
@@ -1775,3 +1776,308 @@ def test_the_scan_is_scheduled_daily():
         is scheduled_tasks.run_evaluation_due_notices
     )
     assert scheduled_tasks.SCHEDULE["evaluation_due_notices"]["frequency"] == "daily"
+
+
+# --------------------------------------------------------- bulk drafting
+
+
+class TestBulkDrafting:
+    async def _preview(self, client: AsyncClient, dept: _Dept) -> dict:
+        response = await client.get(
+            "/evaluations/bulk-preview", params={"period_id": dept.period.id}
+        )
+        assert response.status_code == 200, response.text
+        return {row["member"]["id"]: row for row in response.json()["rows"]}
+
+    async def test_the_preview_says_what_each_member_would_get(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        manager = await make_client(dept.manager)
+        drafted = await _user(dept.db, dept.org, [])
+        await _draft(manager, dept, member=drafted)
+
+        rows = await self._preview(manager, dept)
+
+        member = rows[dept.member.id]
+        assert member["template"]["name"] == dept.template.name
+        # No supervisor who conducts: the drafting manager evaluates.
+        assert member["evaluator"]["id"] == dept.manager.id
+        assert member["skip_reason"] is None
+        assert rows[drafted.id]["skip_reason"] == (
+            "Already has an evaluation for this period."
+        )
+        # The manager is a member too, and cannot be their own evaluator.
+        assert rows[dept.manager.id]["evaluator"] is None
+        assert rows[dept.manager.id]["skip_reason"] is None
+
+    async def test_drafting_the_kept_members_reports_each_one(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        manager = await make_client(dept.manager)
+        already = await _user(dept.db, dept.org, [])
+        await _draft(manager, dept, member=already)
+
+        response = await manager.post(
+            "/evaluations/bulk",
+            json={
+                "period_id": dept.period.id,
+                "items": [
+                    {"member_id": dept.member.id, "evaluator_id": dept.evaluator.id},
+                    {"member_id": dept.reader.id},
+                    {"member_id": already.id},
+                ],
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["drafted"] == 2
+        results = {r["member_id"]: r for r in body["results"]}
+        assert results[already.id]["error"].endswith(
+            "already has an evaluation for " f"'{dept.period.name}'."
+        )
+
+        evaluations = {
+            e.member_id: e
+            for e in (
+                await dept.db.execute(
+                    select(Evaluation).where(Evaluation.period_id == dept.period.id)
+                )
+            )
+            .scalars()
+            .all()
+        }
+        assert evaluations[dept.member.id].evaluator_id == dept.evaluator.id
+        assert evaluations[dept.reader.id].evaluator_id == dept.manager.id
+        assert (
+            results[dept.member.id]["evaluation_id"] == evaluations[dept.member.id].id
+        )
+
+    async def test_only_a_manager_drafts_in_bulk(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        conductor = await make_client(dept.evaluator)
+        preview = await conductor.get(
+            "/evaluations/bulk-preview", params={"period_id": dept.period.id}
+        )
+        assert preview.status_code == 403
+        drafted = await conductor.post(
+            "/evaluations/bulk",
+            json={
+                "period_id": dept.period.id,
+                "items": [{"member_id": dept.member.id}],
+            },
+        )
+        assert drafted.status_code == 403
+
+    async def test_a_member_listed_twice_is_refused(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        response = await (await make_client(dept.manager)).post(
+            "/evaluations/bulk",
+            json={
+                "period_id": dept.period.id,
+                "items": [{"member_id": dept.member.id}, {"member_id": dept.member.id}],
+            },
+        )
+        assert response.status_code == 422
+
+    async def test_another_departments_period_is_not_found(
+        self, dept: _Dept, make_client: ClientFactory, db_session
+    ):
+        other_org = await _org(db_session)
+        other_period = await _period(db_session, other_org)
+        manager = await make_client(dept.manager)
+
+        preview = await manager.get(
+            "/evaluations/bulk-preview", params={"period_id": other_period.id}
+        )
+        assert preview.status_code == 400
+        assert "not found" in preview.json()["detail"]
+        drafted = await manager.post(
+            "/evaluations/bulk",
+            json={
+                "period_id": other_period.id,
+                "items": [{"member_id": dept.member.id}],
+            },
+        )
+        assert drafted.status_code == 400
+
+
+# ---------------------------------------------------------------- deletion
+
+
+class TestDeletion:
+    async def _deleter(self, dept: _Dept) -> User:
+        return await _user(
+            dept.db, dept.org, ["evaluations.delete", "evaluations.view_all"]
+        )
+
+    async def test_deleting_leaves_a_record_the_member_reads_and_emails_them(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        deleter_user = await self._deleter(dept)
+        deleter = await make_client(deleter_user)
+        assert (await deleter.get(url)).json()["viewer"]["can_delete"] is True
+        outbox.clear()
+
+        response = await deleter.post(
+            f"{url}/delete", json={"reason": "  Drafted for the wrong member.  "}
+        )
+        assert response.status_code == 200, response.text
+        record = response.json()
+        assert record["reason"] == "Drafted for the wrong member."
+        assert record["deleted_by_name"] == deleter_user.full_name
+        assert record["evaluator_name"] == dept.evaluator.full_name
+        assert record["was_finalized"] is False
+
+        assert (await deleter.get(url)).status_code == 404
+        steps = (
+            await dept.db.execute(
+                select(EvaluationStep).where(
+                    EvaluationStep.evaluation_id == detail["id"]
+                )
+            )
+        ).all()
+        assert steps == []
+
+        member = await make_client(dept.member)
+        mine = (await member.get("/evaluations/mine/removed")).json()
+        assert [(r["id"], r["reason"]) for r in mine] == [
+            (record["id"], "Drafted for the wrong member.")
+        ]
+        (notice,) = outbox.to(dept.member, DELETED)
+        assert notice["deleted_by_name"] == deleter_user.full_name
+        assert notice["evaluations_url"].endswith("/reports/evaluations/mine")
+        assert all("wrong member" not in str(v) for v in notice.values())
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(AuditLog.event_type == "evaluation_deleted")
+            )
+        ).scalar_one()
+        assert audit.event_data["evaluation_id"] == detail["id"]
+
+    async def test_a_finalized_evaluations_pdf_goes_with_it(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        from app.models.evaluation import EvaluationDocument
+        from app.services import file_storage_service as file_storage
+
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        member = await make_client(dept.member)
+        signed = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.status_code == 200, signed.text
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == detail["id"]
+                )
+            )
+        ).scalar_one()
+        stored = file_storage.resolve(
+            document.file_path, dept.org, file_storage.StorageArea.EVALUATIONS
+        )
+        assert stored is not None
+        assert await file_storage.exists(stored)
+
+        response = await (await make_client(await self._deleter(dept))).post(
+            f"{url}/delete", json={"reason": "Duplicate of the paper record."}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["was_finalized"] is True
+        assert not await file_storage.exists(stored)
+        remaining = (
+            await dept.db.execute(
+                select(EvaluationDocument.id).where(
+                    EvaluationDocument.evaluation_id == detail["id"]
+                )
+            )
+        ).all()
+        assert remaining == []
+
+    async def test_without_the_grant_nobody_deletes(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        manager = await make_client(dept.manager)
+        assert (await manager.get(url)).json()["viewer"]["can_delete"] is False
+        response = await manager.post(f"{url}/delete", json={"reason": "Mistake."})
+        assert response.status_code == 403
+
+    async def test_nobody_deletes_their_own_evaluation(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        own = await self._deleter(dept)
+        detail = await _draft(await make_client(dept.manager), dept, member=own)
+        client = await make_client(own)
+        url = f"/evaluations/{detail['id']}"
+        assert (await client.get(url)).json()["viewer"]["can_delete"] is False
+        response = await client.post(f"{url}/delete", json={"reason": "Not mine."})
+        assert response.status_code == 403
+        assert (await client.get(url)).status_code == 200
+
+    async def test_another_departments_evaluation_is_not_found(
+        self, dept: _Dept, make_client: ClientFactory, db_session
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        other_org = await _org(db_session)
+        outsider = await _user(db_session, other_org, ["evaluations.delete"])
+        response = await (await make_client(outsider)).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "Reach across."}
+        )
+        assert response.status_code == 404
+        assert (
+            await dept.db.execute(
+                select(Evaluation.id).where(Evaluation.id == detail["id"])
+            )
+        ).scalar_one_or_none() == detail["id"]
+
+    async def test_a_reason_is_required(self, dept: _Dept, make_client: ClientFactory):
+        detail = await _draft(await make_client(dept.manager), dept)
+        response = await (await make_client(await self._deleter(dept))).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "   "}
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.real_stepup
+    async def test_deleting_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        response = await (await make_client(await self._deleter(dept))).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "Mistake."}
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"
+
+    async def test_managers_read_the_departments_deletion_records(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        await (await make_client(await self._deleter(dept))).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "Mistake."}
+        )
+        manager = await make_client(dept.manager)
+        everyone = (await manager.get("/evaluations/removed")).json()
+        assert [r["member"]["id"] for r in everyone] == [dept.member.id]
+        others = (
+            await manager.get(
+                "/evaluations/removed", params={"member_id": dept.reader.id}
+            )
+        ).json()
+        assert others == []
+        assert (
+            await (await make_client(dept.evaluator)).get("/evaluations/removed")
+        ).status_code == 403

@@ -400,6 +400,9 @@ STEPUP_HANDLERS = {
     # Signatures (owner decision 2026-11-02): an evaluation's approver or
     # member re-verifies before their typed name is recorded as a signature.
     ("evaluations.py", "sign_evaluation"),
+    # Destructive personnel action: deleting an evaluation removes a
+    # personnel record for good (the deletion record stays).
+    ("evaluations.py", "delete_evaluation"),
 }
 
 

@@ -332,6 +332,8 @@ export interface EvaluationViewer {
   can_refresh_data: boolean;
   can_calibrate: boolean;
   can_sign?: SigningOption | null | undefined;
+  /** A holder of evaluations.delete, never on their own evaluation. */
+  can_delete?: boolean | undefined;
 }
 
 export interface EvaluationSignature {
@@ -401,4 +403,51 @@ export interface LiveData {
   sources: EvaluationDataSource[];
   data: Record<string, DataEntry>;
   note: string | null;
+}
+
+/** One current member as drafting a whole period would treat them. */
+export interface BulkDraftRow {
+  member: PersonRef;
+  template?: PersonRef | null | undefined;
+  /** Null with no skip_reason: nobody qualifies by default, so one is chosen. */
+  evaluator?: PersonRef | null | undefined;
+  skip_reason?: string | null | undefined;
+}
+
+export interface BulkDraftPreview {
+  period: { id: string; name: string; start_date: string; end_date: string };
+  kind: EvaluationTemplateKind;
+  rows: BulkDraftRow[];
+  evaluators: PersonRef[];
+}
+
+export interface BulkDraftItem {
+  member_id: string;
+  evaluator_id?: string | undefined;
+}
+
+export interface BulkDraftResult {
+  member_id: string;
+  evaluation_id?: string | null | undefined;
+  error?: string | null | undefined;
+}
+
+export interface BulkDraftResponse {
+  drafted: number;
+  results: BulkDraftResult[];
+}
+
+/** The permanent trace of a deleted evaluation, with the reason given. */
+export interface EvaluationDeletionRecord {
+  id: string;
+  member: PersonRef;
+  period_name?: string | null | undefined;
+  period_start: string;
+  period_end: string;
+  template_name: string;
+  evaluator_name?: string | null | undefined;
+  was_finalized: boolean;
+  reason: string;
+  deleted_by_name: string;
+  deleted_at: string;
 }

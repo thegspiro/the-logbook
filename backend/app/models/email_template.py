@@ -86,6 +86,7 @@ class EmailTemplateType(str, enum.Enum):
     EVALUATION_DEADLINE_REMINDER = "evaluation_deadline_reminder"
     EVALUATION_OVERDUE = "evaluation_overdue"
     EVALUATION_FINALIZED = "evaluation_finalized"
+    EVALUATION_DELETED = "evaluation_deleted"
     CUSTOM = "custom"
 
 

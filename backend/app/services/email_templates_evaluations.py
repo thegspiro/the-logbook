@@ -1,7 +1,7 @@
 """
 Default Email Templates — Member Performance Evaluations
 
-The four notices an evaluation sends, as editable templates (owner decision
+The five notices an evaluation sends, as editable templates (owner decision
 2026-11-02):
 
 - **Waiting on you** — a step opened and the recipient acts on it: the member's
@@ -12,6 +12,9 @@ The four notices an evaluation sends, as editable templates (owner decision
 - **Overdue** — the step is still open after its due date; sent to whoever acts
   on it and to the department's evaluation managers.
 - **Finalized** — the record is final and its PDF can be downloaded.
+- **Deleted** — one of the member's evaluations was deleted. The reason is not
+  in the email; it is on the member's own evaluations page, with who deleted
+  it and when.
 
 None of them carries anything from the evaluation itself. A rating or a
 comment copied into a mailbox is out of the department's hands for good, so
@@ -32,6 +35,7 @@ from app.services.email_theme import (
     ACCENT_BLUE,
     ACCENT_GREEN,
     ACCENT_RED,
+    ACCENT_SLATE,
     action,
     build_shell,
     fact,
@@ -155,6 +159,30 @@ Open the evaluation: {{evaluation_url}}
 
 {{footer_text}}"""
 
+DELETED_SUBJECT = "An evaluation of yours was deleted: {{period_name}}"
+DELETED_HTML = build_shell(
+    "An Evaluation Was Deleted",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{deleted_by_name}} deleted your evaluation for {{period_name}}.</p>
+        <p>The reason they gave is kept with the record of the deletion on
+        your evaluations page in the Logbook.</p>
+""" + action("{{evaluations_url}}", "Open my evaluations"),
+    accent=ACCENT_SLATE,
+    chip=_CHIP,
+)
+DELETED_TEXT = """An Evaluation Was Deleted
+
+Hello {{recipient_name}},
+
+{{deleted_by_name}} deleted your evaluation for {{period_name}}.
+
+The reason they gave is kept with the record of the deletion on your
+evaluations page in the Logbook.
+
+Open my evaluations: {{evaluations_url}}
+
+{{footer_text}}"""
+
 
 # ----------------------------------------------------------------------
 # Editor catalogue and samples
@@ -190,6 +218,15 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     EmailTemplateType.EVALUATION_DEADLINE_REMINDER.value: _STEP_VARS,
     EmailTemplateType.EVALUATION_OVERDUE.value: _STEP_VARS,
     EmailTemplateType.EVALUATION_FINALIZED.value: _COMMON_VARS,
+    EmailTemplateType.EVALUATION_DELETED.value: [
+        {"name": "recipient_name", "description": "The member's name"},
+        {"name": "period_name", "description": "The review period's name"},
+        {"name": "deleted_by_name", "description": "Who deleted the evaluation"},
+        {
+            "name": "evaluations_url",
+            "description": "Link to the member's own evaluations page",
+        },
+    ],
 }
 
 _SAMPLE_COMMON: Dict[str, str] = {
@@ -226,6 +263,12 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     EmailTemplateType.EVALUATION_FINALIZED.value: {
         **_SAMPLE_COMMON,
         "summary": "Alex Johnson's evaluation for 2026 Annual Review is final.",
+    },
+    EmailTemplateType.EVALUATION_DELETED.value: {
+        "recipient_name": "Alex Johnson",
+        "period_name": "2026 Annual Review",
+        "deleted_by_name": "Chief Dana Reyes",
+        "evaluations_url": "https://example.org/reports/evaluations/mine",
     },
 }
 
@@ -286,6 +329,17 @@ DEFAULT_TEMPLATE_DEFS: List[Dict[str, Any]] = [
         "description": (
             "Sent to the member and the evaluator when an evaluation is final "
             "and its PDF can be downloaded."
+        ),
+    },
+    {
+        "type": EmailTemplateType.EVALUATION_DELETED,
+        "name": "Evaluation Deleted",
+        "subject": DELETED_SUBJECT,
+        "html": DELETED_HTML,
+        "text": DELETED_TEXT,
+        "description": (
+            "Sent to a member when one of their evaluations is deleted. Names "
+            "who deleted it; the reason stays in the Logbook."
         ),
     },
 ]

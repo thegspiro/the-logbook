@@ -8,22 +8,25 @@ import { Link } from 'react-router';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
 import { evaluationsService } from '../services/evaluationsApi';
-import type { EvaluationSummary, LiveData } from '../types/evaluations';
+import type { EvaluationDeletionRecord, EvaluationSummary, LiveData } from '../types/evaluations';
 
 const MyEvaluationsPage: React.FC = () => {
   const [evaluations, setEvaluations] = useState<EvaluationSummary[] | null>(null);
   const [live, setLive] = useState<LiveData | null>(null);
+  const [removed, setRemoved] = useState<EvaluationDeletionRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([evaluationsService.mine(), evaluationsService.liveData()])
-      .then(([mine, figures]) => {
+    Promise.all([evaluationsService.mine(), evaluationsService.liveData(), evaluationsService.myRemoved()])
+      .then(([mine, figures, deleted]) => {
         if (cancelled) return;
         setEvaluations(mine);
         setLive(figures);
+        setRemoved(deleted);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(getErrorMessage(err, 'Could not load your evaluations.'));
@@ -82,6 +85,17 @@ const MyEvaluationsPage: React.FC = () => {
                   </li>
                 ))}
               </ul>
+            )}
+            {removed.length > 0 && (
+              <section aria-labelledby="removed-heading" className="mt-6">
+                <h2 id="removed-heading" className="text-theme-text-primary mb-1 text-xl font-semibold">
+                  Deleted evaluations
+                </h2>
+                <p className="text-theme-text-secondary mb-3 text-sm">
+                  Evaluations of yours that were deleted, by whom and why.
+                </p>
+                <DeletionRecordList records={removed} showMember={false} />
+              </section>
             )}
           </section>
 

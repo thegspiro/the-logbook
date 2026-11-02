@@ -20,6 +20,7 @@ const refreshData = vi.fn();
 const completeCalibration = vi.fn();
 const sign = vi.fn();
 const documentBlob = vi.fn();
+const remove = vi.fn();
 const saveBlob = vi.fn();
 vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
 vi.mock('../../../stores/authStore', () => ({
@@ -35,6 +36,7 @@ vi.mock('../services/evaluationsApi', () => ({
     completeCalibration: (...a: unknown[]) => completeCalibration(...a) as unknown,
     sign: (...a: unknown[]) => sign(...a) as unknown,
     document: (...a: unknown[]) => documentBlob(...a) as unknown,
+    remove: (...a: unknown[]) => remove(...a) as unknown,
   },
 }));
 
@@ -150,7 +152,7 @@ function renderPage() {
 
 describe('EvaluationDetailPage', () => {
   beforeEach(() => {
-    for (const m of [get, savePart, submitPart, refreshData, completeCalibration, sign, documentBlob, saveBlob])
+    for (const m of [get, savePart, submitPart, refreshData, completeCalibration, sign, documentBlob, saveBlob, remove])
       m.mockReset();
     get.mockResolvedValue(detail());
   });
@@ -373,5 +375,24 @@ describe('EvaluationDetailPage', () => {
     expect(screen.getByText('Reason: I dispute the rating.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Download PDF' }));
     await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(blob, 'evaluation-2026-12-31.pdf'));
+  });
+
+  it('deletes only with a reason, and only when the server offers it', async () => {
+    remove.mockResolvedValue({});
+    get.mockResolvedValue(detail({ viewer: { ...detail().viewer, can_delete: true } }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const confirmDelete = screen.getByRole('button', { name: 'Delete evaluation' });
+    expect(confirmDelete).toBeDisabled();
+    await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), '  Drafted twice.  ');
+    await user.click(confirmDelete);
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('ev1', 'Drafted twice.'));
+  });
+
+  it('offers no delete when the server does not', async () => {
+    renderPage();
+    await screen.findAllByText('11.5 h');
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });
 });

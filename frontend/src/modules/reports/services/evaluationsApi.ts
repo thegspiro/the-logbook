@@ -6,11 +6,16 @@ import { createApiClient } from '../../../utils/createApiClient';
 import { asArray } from '../../../utils/asArray';
 import type {
   BuilderOptions,
+  BulkDraftItem,
+  BulkDraftPreview,
+  BulkDraftResponse,
   DraftOptions,
   EvaluationCreate,
+  EvaluationDeletionRecord,
   EvaluationDetail,
   EvaluationPartKind,
   EvaluationSummary,
+  EvaluationTemplateKind,
   LiveData,
   PartContent,
   SignatureWrite,
@@ -188,5 +193,51 @@ export const evaluationsService = {
   async completeCalibration(id: string): Promise<EvaluationDetail> {
     const response = await api.post<EvaluationDetail>(`/evaluations/${id}/calibration/complete`);
     return response.data;
+  },
+
+  async bulkPreview(periodId: string, kind: EvaluationTemplateKind): Promise<BulkDraftPreview> {
+    const response = await api.get<Partial<BulkDraftPreview>>('/evaluations/bulk-preview', {
+      params: { period_id: periodId, kind },
+    });
+    const body = response.data;
+    // A missing list would read as "nobody to draft", which is a claim about
+    // the department; refuse it rather than show it.
+    if (!body.period || !Array.isArray(body.rows)) {
+      throw new Error('The drafting preview came back incomplete. Try again.');
+    }
+    return {
+      period: body.period,
+      kind: body.kind ?? kind,
+      rows: body.rows,
+      evaluators: asArray(body.evaluators ?? []),
+    };
+  },
+
+  async bulkDraft(periodId: string, kind: EvaluationTemplateKind, items: BulkDraftItem[]): Promise<BulkDraftResponse> {
+    const response = await api.post<Partial<BulkDraftResponse>>('/evaluations/bulk', {
+      period_id: periodId,
+      kind,
+      items,
+    });
+    return { drafted: response.data.drafted ?? 0, results: asArray(response.data.results ?? []) };
+  },
+
+  /** Delete an evaluation with a reason. The server asks for step-up
+   * re-verification first; the shared client shows that prompt and retries. */
+  async remove(id: string, reason: string): Promise<EvaluationDeletionRecord> {
+    const response = await api.post<EvaluationDeletionRecord>(`/evaluations/${id}/delete`, { reason });
+    return response.data;
+  },
+
+  async removed(memberId?: string): Promise<EvaluationDeletionRecord[]> {
+    const response = await api.get<EvaluationDeletionRecord[]>('/evaluations/removed', {
+      params: memberId ? { member_id: memberId } : {},
+    });
+    return asArray(response.data);
+  },
+
+  async myRemoved(): Promise<EvaluationDeletionRecord[]> {
+    const response = await api.get<EvaluationDeletionRecord[]>('/evaluations/mine/removed');
+    return asArray(response.data);
   },
 };
