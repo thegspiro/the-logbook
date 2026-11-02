@@ -23,7 +23,6 @@
 00-20-member-dashboard
 00-21-login-sso-options
 00-22-notification-card-expanded
-00-23-login-two-factor
 00-25-dashboard-organization
 01-01-member-directory
 01-02-member-profile
