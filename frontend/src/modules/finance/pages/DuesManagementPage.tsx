@@ -33,6 +33,7 @@ import { DuesScheduleDialog } from '../components/DuesScheduleDialog';
 import { DUES_FREQUENCY_LABELS } from '../utils/dues';
 import { DuesPaymentDialog } from '../components/DuesPaymentDialog';
 import { DuesLedgerDialog } from '../components/DuesLedgerDialog';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // =============================================================================
 // Constants
@@ -77,7 +78,7 @@ for (const tab of STATUS_TABS) {
 // =============================================================================
 
 const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
-  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+  <StatGrid columns={4} gap={4}>
     <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4" />
@@ -108,7 +109,7 @@ const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
       </div>
       <p className="text-theme-text-primary mt-1 text-xl font-bold">{summary.collectionRate.toFixed(1)}%</p>
     </div>
-  </div>
+  </StatGrid>
 );
 
 // =============================================================================
@@ -458,7 +459,7 @@ const DuesManagementPage: React.FC = () => {
                               type="button"
                               onClick={() => setDialog({ kind: 'payment', dues: md })}
                               className="btn-secondary inline-flex items-center gap-2"
-                              aria-label={`Record a payment for ${label}`}
+                              aria-label={`Record payment for ${label}`}
                             >
                               <Receipt className="h-4 w-4" />
                               Record payment
@@ -479,7 +480,7 @@ const DuesManagementPage: React.FC = () => {
                               type="button"
                               onClick={() => setDialog({ kind: 'unwaive', dues: md })}
                               className="btn-secondary"
-                              aria-label={`Reverse the waiver for ${label}`}
+                              aria-label={`Reverse waiver for ${label}`}
                             >
                               Reverse waiver
                             </button>
