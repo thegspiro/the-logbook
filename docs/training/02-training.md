@@ -236,7 +236,7 @@ filtered on screen. That is what an outside audit or a new employer wants.
 > **Member Visibility Settings**. If you do not see them, ask an officer to
 > export your records for you.
 
-![The History tab on My Training: all-time totals, the course search and Type filter, this year's records open and earlier years closed with their counts and hours](./images/02-107-my-training-history-tab.png)
+![The History tab on My Training: all-time totals, the course search and Type filter, the No completion date group above the years, this year's records open and earlier years closed with their counts and hours](./images/02-107-my-training-history-tab.png)
 
 ![My Training's Upcoming Expirations & Due Dates list, soonest first, with a row for each kind of item, including an hours requirement reading hours to go](./images/02-124-my-training-upcoming.png)
 
@@ -516,6 +516,11 @@ picture below.
 
 ![A cohort's class timeline with dates, credit hours and sign-up counts](./images/02-86-cohort-classes.png)
 
+**Shift remaining** opens a small panel above the tabs. Type the number of
+days and select **Apply**.
+
+![A cohort page with Shift remaining opened above its tabs: Move upcoming classes by, 7 typed, the note that it goes up to 14 days either way, and Apply](./images/02-143-cohort-shift-remaining.png)
+
 The **Roster** tab lists each member with their progress through the pipeline,
 a link to their full progress, and a **Remove** action. **Add member** puts
 someone on a cohort that is already running.
@@ -595,6 +600,8 @@ Requirements**; the standalone Training Programs page keeps it too.
 For training officers, the page's breadcrumb starts at **Training
 Administration**, one tap back to the admin page. Other members do not see that
 link.
+
+![Training Admin → Curriculum → Programs: the department's existing pipelines listed with their codes and phases, New Pipeline above them](./images/02-136-curriculum-programs.png)
 
 Training programs are structured courses of study in stages, such as
 "Probationary Firefighter Program" or "Officer Development". Each program has:
@@ -694,6 +701,8 @@ on the Programs list (training managers only) and select **Reactivate**, or use
 withdrawn enrollments stay withdrawn. Requirements created inside the pipeline go with it, unless
 another program uses them. A requirement the pipeline only linked from the
 library is not deleted. It stays in Training Requirements.
+
+![Curriculum → Programs with Show inactive ticked: the deactivated Rope Rescue Technician pipeline listed with its Inactive badge and a Reactivate button](./images/02-138-programs-show-inactive.png)
 
 #### Adding a requirement to a program members are already in
 
@@ -815,7 +824,9 @@ withdrawing the member clears the note.
 progress dialog also need **Manage training records**. Without it the dialog is
 read-only, and an expired enrollment still shows its deadline-passed note.
 
-> _Screenshot to be captured: the progress dialog with **Mark pipeline complete** and its reason prompt (queued in SCREENSHOT_CURRENCY.md)._
+![Ingrid Solberg's progress on the Hazmat Operations Refresher, which has no active requirements, with Mark pipeline complete selected: the prompt saying what completing her does, a reason typed, Keep in progress and Mark complete](./images/02-139-mark-pipeline-complete.png)
+
+![The Hazmat Operations Refresher's Enrollments tab: Priya Raman completed, with Completed by hand and the officer's reason, and Ingrid Solberg active, reading No active requirements, with Mark pipeline complete beside her](./images/02-140-completed-by-hand.png)
 
 ### Inactive Requirements and Pipelines
 
@@ -839,6 +850,10 @@ read-only, and an expired enrollment still shows its deadline-passed note.
   that pipeline, but the conversion goes ahead. Training officers get an email
   naming the member, the pipeline and what is missing. Manual enrollment from
   the old enrollment screen refuses the same way.
+
+![The Hazmat Operations Refresher pipeline page: the notice that it has no active requirements and completes nobody by itself, and its one requirement tagged Inactive — not currently required](./images/02-141-no-active-requirements.png)
+
+![The Deactivate pipeline confirmation for the EMT Field Internship: three members are in progress on it and will be withdrawn, graduates are kept, with Keep it active and Deactivate and withdraw](./images/02-142-deactivate-pipeline-confirm.png)
 
 ### Working Through a Checklist Requirement
 
@@ -1199,6 +1214,8 @@ operational member, whatever their status (see
 When all four are ticked, the button shows a check mark; selecting it again
 unticks those four. **Administrative** and **Honorary** are left as you set
 them either way, so tick them yourself if the requirement covers them too.
+
+![A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary, Life and Retired ticked while Administrative and Honorary are not](./images/02-135-requirement-operational-members.png)
 
 ### Never Use an Hours Requirement for a Required Topic
 
@@ -1585,15 +1602,15 @@ opens **Records → Sessions**.
 
 The areas are:
 
-| Area                     | What is in it                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------ |
-| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                             |
-| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status             |
-| **Curriculum**           | Requirements, Course Library, Programs                                                     |
-| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                    |
-| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports             |
-| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**    |
-| **Settings & Data**      | Manual Entry Rules, Practical Skills, Integrations, Import Past Training, Headline Metrics |
+| Area                     | What is in it                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                |
+| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                                |
+| **Curriculum**           | Requirements, Course Library, Programs                                                                        |
+| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                       |
+| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                |
+| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                       |
+| **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Integrations, Import Past Training, Headline Metrics |
 
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
@@ -1898,6 +1915,8 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   shared link opens on the same class. A member whose class is not recorded is
   listed only under **All**.
 
+![The Compliance Matrix with the member-class switch on Administrative: the summary line reading tracked administrative members, and only the department's two administrative members listed](./images/02-134-compliance-matrix-member-class.png)
+
 The actions available are **Print**, a CSV export, and links to each member's
 training records. Both **Print** and the CSV follow the class switch, and the
 CSV has a **Member class** column. With a class chosen, the printout carries
@@ -1978,6 +1997,8 @@ ride and life members who have stopped.
 3. Under **Applies to Members Holding a Position**, tick one or more positions.
    Leave them all unticked to apply the profile regardless of position.
 4. Select **Create Profile** or **Update Profile**.
+
+![A new compliance profile, Life Members (Non-Riding): life ticked under Applies to Membership Types and one position ticked under Applies to Members Holding a Position](./images/02-133-compliance-profile-positions.png)
 
 The profile's card then lists **Positions:** beside **Types:**. The rest of
 the form is described in
@@ -2424,7 +2445,7 @@ Logbook does record which values were carried over and which the officer typed.
 > files the rest), and close-out does not draft one for a trainee who closed
 > out that shift themselves and has no evaluator named on their training seat.
 
-![A shift completion report — the hours and calls carried over from the shift, its crew listed, and the buttons that file the batch](./images/02-102-shift-report-crew-form.png)
+![A shift completion report — the hours and calls carried over from the shift, its crew listed with a shift evaluation status line under each EMT intern, and the buttons that file the batch](./images/02-102-shift-report-crew-form.png)
 
 ### The crew comes from the shift
 
@@ -2725,9 +2746,17 @@ sections of items. **Start from the example** gives a ready template. Set the
 **general form**, whether it is optional or required, and whether one combined
 evaluation may cover several programs.
 
+![Training Admin → Settings & Data → Shift Evaluations: the general shift evaluation settings above the Evaluation templates list, with the EMT Field Internship Evaluation listed against the program that uses it](./images/02-126-shift-evaluation-settings.png)
+
+![The evaluation form editor open on the EMT Field Internship Evaluation: its name, the four-level rating scale and labels, the Not Observed option, the comment threshold and the first section's items](./images/02-127-shift-evaluation-form-editor.png)
+
 **Linking a form to a program.** The create-pipeline wizard and the
 edit-program dialog have a **Shift evaluation form** picker. Leaving it blank
 means no form. A form from another department is refused.
+
+![Edit pipeline details for the EMT Field Internship, with the Shift evaluation form picker set to the EMT Field Internship Evaluation and the note on where forms are built](./images/02-128-program-evaluation-form-picker.png)
+
+![The create-pipeline wizard's Program Info step with a program name typed and the EMT Field Internship Evaluation chosen in the Shift evaluation form picker](./images/02-129-pipeline-wizard-evaluation-form.png)
 
 **After a shift.** In the **Shift Completion Report**, each member who needs an
 evaluation has a status line (not started, in progress, submitted, optional)
@@ -2735,15 +2764,17 @@ linking to their evaluation page. A member enrolled in a program with a form is
 evaluated on it, once per program (or once for all, if combined). A member in
 no such program, in a seat the general form covers, gets the general form.
 
+![The Shift Completion Report's crew list with an EMT Field Internship Evaluation status line under each of three interns: Submitted with its average, In progress with how many items are rated, and Not started, required before close-out](./images/02-130-shift-evaluation-status-lines.png)
+
 - The shift officer or a `training.manage` holder fills it out; **never your own**.
 - Rating buttons are full-size touch targets; required comments open by themselves.
 - Drafts autosave. **Submit** locks the evaluation.
 - A **print** view gives the paper layout.
 - Ratings and comments are encrypted at rest.
 
-> **Screenshots to create:** the Shift Evaluations settings screen; the form
-> editor; the program picker; the report's status lines; the evaluation page;
-> the print view.
+![A shift evaluation in progress: the intern, shift and unit at the top, the Shift (A, B, C) choice, and each Clinical Performance item with its row of rating buttons, a required comment open beneath a low rating](./images/02-131-shift-evaluation-page.png)
+
+![The printable shift evaluation: the shift details and statistics, the rating key, Clinical Performance and Professionalism & Affect as tables of ratings and comments, and the closing comments](./images/02-132-shift-evaluation-print.png)
 
 ## Manual Shift Report Entry
 
@@ -3286,7 +3317,7 @@ Open **Training Admin → Program Management → Multi-Agency** to record joint
 training with other departments — joint training, mutual aid drills, regional
 exercises, tabletops and full-scale exercises.
 
-![Multi-agency exercises with participating departments and headcounts](./images/02-71-multi-agency-training.png)
+![Multi-agency exercises, each listing its participating agencies and their roles and a single total participant count](./images/02-71-multi-agency-training.png)
 
 Each card shows the exercise type, date and total participants. Each taking-part
 organization has a chip with its role (host, participant, observer,
@@ -3719,6 +3750,8 @@ each topic area. Importing also creates a training category for each topic area
 in your department, so courses and sessions can be tagged to them, and brings in
 the level's certification requirements (for example CPR/BLS).
 
+![The Import from Registry panel on Curriculum → Requirements, with a button for NFPA, Pro Board and each NREMT level](./images/02-137-requirements-registry-import.png)
+
 The registries are national ones; there is no Virginia-specific version. There
 is no separate NCCR progress card. Track category minimums the usual way — as
 requirements with an evaluation period — and see them on the Compliance
@@ -3826,7 +3859,7 @@ The printed matrix includes:
 - column headings repeated on every page when the matrix runs over several
   pages.
 
-![Print layout for the compliance matrix](./images/02-65-print-compliance.png)
+![The printed compliance matrix with All chosen: the summary counts, then an Operational Members table and an Administrative Members table, each with only the requirements that grade its members, and the key beneath](./images/02-65-print-compliance.png)
 
 The print is useful for:
 

@@ -3791,6 +3791,94 @@ const GUIDE08_RANK = {
 };
 const GUIDE08_ROLE = "Inventory Coordinator";
 
+// ── Guide 02 screenshot backlog (2026-11-02) ─────────────────────────
+// The programs, form and evaluations these open are made by
+// seed_backlog_02_pipeline_states and seed_backlog_02_shift_evaluations in
+// seed_demo_data.py; the names here must match the BACKLOG02_* constants there.
+const BACKLOG02_INTERNSHIP = "EMT Field Internship";
+const BACKLOG02_FORM = "EMT Field Internship Evaluation";
+const BACKLOG02_NO_ACTIVE = "Hazmat Operations Refresher";
+
+async function backlog02ProgramId(page, name) {
+  const response = await apiFromPage(
+    page,
+    "GET",
+    "/training/programs/programs?include_inactive=true",
+  );
+  const program = (Array.isArray(response.body) ? response.body : []).find(
+    (p) => p.name === name,
+  );
+  if (!program) {
+    throw new Error(`no "${name}" program: run seed_backlog_02_* first`);
+  }
+  return program.id;
+}
+
+async function openBacklog02Program(page, name, query = "") {
+  const id = await backlog02ProgramId(page, name);
+  await page.goto(
+    new URL(`/training/programs/${id}${query}`, page.url()).toString(),
+    { waitUntil: "domcontentloaded" },
+  );
+  await page
+    .getByRole("heading", { name, exact: true })
+    .first()
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(1200);
+}
+
+/** The internship's evaluations, and the one shift they were written on. */
+async function backlog02Evaluations(page) {
+  const programId = await backlog02ProgramId(page, BACKLOG02_INTERNSHIP);
+  const enrolled = await apiFromPage(
+    page,
+    "GET",
+    `/training/programs/programs/${programId}/enrollments`,
+  );
+  const evaluations = [];
+  for (const enrollment of enrolled.body ?? []) {
+    const mine = await apiFromPage(
+      page,
+      "GET",
+      `/training/shift-evaluations/members/${enrollment.user_id}`,
+    );
+    evaluations.push(...(Array.isArray(mine.body) ? mine.body : []));
+  }
+  const shiftId = evaluations.find((e) => e.shift_id)?.shift_id;
+  if (!shiftId) throw new Error("no internship evaluation is on file");
+  // The member list carries submitted evaluations only; the shift's roster
+  // also names the draft and the one not started.
+  const roster = await apiFromPage(
+    page,
+    "GET",
+    `/training/shift-evaluations/shifts/${shiftId}`,
+  );
+  const rows = (roster.body?.requirements ?? []).map((r) => ({
+    id: r.evaluation?.id ?? null,
+    status: r.evaluation?.status ?? "not_started",
+    member_id: r.member_id,
+    scope_key: r.scope_key,
+  }));
+  return { shiftId, evaluations: rows };
+}
+
+/** The Shift Completion Report form, opened on the internship's shift. */
+async function openInternshipShiftReport(page) {
+  const { shiftId } = await backlog02Evaluations(page);
+  await page.goto(
+    new URL(
+      `/scheduling?tab=shift-reports&view=create&shift=${shiftId}`,
+      page.url(),
+    ).toString(),
+    { waitUntil: "domcontentloaded" },
+  );
+  await page
+    .getByRole("link", { name: /Continue evaluation for/ })
+    .first()
+    .waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(1200);
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -5315,19 +5403,13 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 1000,
     anchor: "The shift report form with a shift chosen and its crew loaded",
-    alt: "A shift completion report — the hours and calls carried over from the shift, its crew listed, and the buttons that file the batch",
+    alt: "A shift completion report — the hours and calls carried over from the shift, its crew listed with a shift evaluation status line under each EMT intern, and the buttons that file the batch",
     route: "/scheduling?tab=shift-reports&view=create",
     prepare: async (page) => {
-      await page.waitForTimeout(3500);
-      // Shift-first: the form has nothing to show until a shift is picked, and
-      // picking one is what fills the hours and loads the crew.
-      // A shift with a crew, not the first row: a one-member shift pictures a
-      // batch form filing one report.
-      await page
-        .locator("button", { hasText: /[3-9] members ·/ })
-        .first()
-        .click({ timeout: 20_000 });
-      await page.waitForTimeout(2500);
+      // Re-shot 2026-11-02 on the shift seed_backlog_02_shift_evaluations
+      // evaluates, so the crew carries the evaluation status lines too. It is
+      // opened through ?shift=, which is what a shift's own link does.
+      await openInternshipShiftReport(page);
       const submit = page.getByRole("button", { name: /Submit Report/ });
       await submit.waitFor({ timeout: 20_000 });
       await submit.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -5335,6 +5417,7 @@ export const SHOTS = [
     },
     // Stops short of pressing Submit: filing the batch is finite, and the
     // shift's reports would exist on the next run.
+    expect: "Continue evaluation",
     selector:
       "div.card:has(h3:text-is('New Shift Completion Report')), div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
   },
@@ -5394,10 +5477,11 @@ export const SHOTS = [
   // shots below drive the form and stop before anything is saved.
   {
     id: "02-107-my-training-history-tab",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 238,
     anchor: "My Training → History tab: the three totals, the search and Type",
-    alt: "The History tab on My Training: all-time totals, the course search and Type filter with the export buttons, a record awaiting approval, this year's records open and last year closed with its count and hours",
+    alt: "The History tab on My Training: all-time totals, the course search and Type filter, the No completion date group above the years, this year's records open and earlier years closed with their counts and hours",
     auth: "member",
     route: "/training/my-training",
     prepare: async (page) => {
@@ -10673,6 +10757,28 @@ export const SHOTS = [
     expect: "Cancel test",
   },
   {
+    id: "09-34-skill-templates-phone",
+    doc: "09-skills-testing.md",
+    line: 92,
+    anchor:
+      "Officer on a phone, Training Admin > Evaluations > Skills Test Templates",
+    alt: "Skills Test Templates on a phone: each template a card with its name and description, category, status badge, section and criteria counts, and its action buttons along the bottom",
+    route: "/training/admin?page=evaluations&tab=templates",
+    viewport: "mobile",
+    prepare: async (page) => {
+      const firstCard = page.locator("table tbody tr").first();
+      await firstCard.waitFor({ timeout: 30_000 });
+      await firstCard.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -72);
+      });
+      await page.waitForTimeout(800);
+    },
+    // Not the word "Published": the closed status filter carries it as an
+    // <option>, which is never visible.
+    expect: { selector: "table tbody tr td[data-label='Status']" },
+  },
+  {
     id: "09-09-member-skills-testing",
     doc: "09-skills-testing.md",
     line: 187,
@@ -13305,9 +13411,25 @@ export const SHOTS = [
     line: 112,
     anchor:
       "The Add Requirement form/modal showing all fields filled out for an annual",
-    alt: "Add screening requirement form with type, frequency, and grace period",
+    alt: "The Add Screening Requirement form filled in for an annual physical: name, type, description, a 12-month frequency with its note, Applies to Positions with its explanation, and the grace period",
     route: "/medical-screening",
-    prepare: clickByName(/add requirement/i),
+    // Re-shot 2026-11-02: filled in for an annual requirement, as the
+    // placeholder asked, so the frequency field and its note are in frame.
+    // Typed and never saved.
+    prepare: async (page) => {
+      await clickByName(/add requirement/i)(page);
+      await page.locator("#req-name").fill("Annual Physical Exam");
+      await page
+        .locator("#req-desc")
+        .fill("NFPA 1582 physical for every interior-qualified member.");
+      await page
+        .getByLabel(/One-time requirement/)
+        .uncheck({ timeout: 15_000 });
+      await page.locator("#req-frequency").fill("12");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    expect: { selector: "#req-frequency-note" },
     fullPage: true,
   },
   {
@@ -13516,7 +13638,7 @@ export const SHOTS = [
     line: 1573,
     anchor:
       "Screenshot of the printed Compliance Matrix page showing the landscape grid with",
-    alt: "Print layout for the compliance matrix",
+    alt: "The printed compliance matrix with All chosen: the summary counts, then an Operational Members table and an Administrative Members table, each with only the requirements that grade its members, and the key beneath",
     route: "/training/print/compliance",
     fullPage: true,
   },
@@ -17235,6 +17357,41 @@ export const SHOTS = [
     selector: '[data-testid="modal-panel"]',
   },
   {
+    id: "13-09-compliance-by-frequency-waiver",
+    allowEmptyState: true,
+    doc: "13-medical-screening.md",
+    line: 491,
+    anchor:
+      "The Compliance tab with one member's panel open: a physical with no expiration date",
+    alt: "The Compliance tab with one member's panel open: the annual physical with no expiration date of its own reading due on a date (by frequency), the fitness assessment marked Waived and expiring soon, and the two requirements with no qualifying record",
+    route: "/medical-screening?tab=compliance",
+    // seed_backlog_13_compliance_states files both records on one member; the
+    // waiver is the only one in the department, so it names whose panel to open.
+    prepare: async (page) => {
+      const subject = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/medical-screening/expiring?days=60",
+          { credentials: "include" },
+        );
+        const rows = response.ok ? await response.json() : [];
+        return (
+          (Array.isArray(rows) ? rows : []).find((r) => r.status === "waived")
+            ?.user_name ?? null
+        );
+      });
+      if (!subject) throw new Error("13-09: no waived screening is expiring");
+      await page
+        .getByRole("button", { name: `View ${subject} compliance` })
+        .click({ timeout: 20_000 });
+      await page.getByText("(by frequency)").first().waitFor({
+        timeout: 20_000,
+      });
+      await page.waitForTimeout(600);
+    },
+    expect: "(by frequency)",
+    selector: "section[aria-labelledby='subject-compliance-heading']",
+  },
+  {
     id: "04-08-calendar-view",
     doc: "04-events-meetings.md",
     line: 218,
@@ -17338,7 +17495,7 @@ export const SHOTS = [
     line: 1288,
     anchor:
       "Screenshot of the Multi-Agency Training page showing a list of joint training",
-    alt: "Multi-agency exercises with participating departments and headcounts",
+    alt: "Multi-agency exercises, each listing its participating agencies and their roles and a single total participant count",
     route: "/training/admin?page=enhancements&tab=multi-agency",
     fullPage: true,
   },
@@ -24782,6 +24939,396 @@ export const SHOTS = [
         .click({ timeout: 20_000 });
       await page.waitForTimeout(600);
     },
+  },
+  // ── Guide 02 screenshot backlog (2026-11-02) ───────────────────────
+  {
+    id: "02-126-shift-evaluation-settings",
+    allowEmptyState: true,
+    doc: "02-training.md",
+    line: 2769,
+    anchor:
+      "Training Admin → Settings & Data → Shift Evaluations: the general-form settings card",
+    alt: "Training Admin → Settings & Data → Shift Evaluations: the general shift evaluation settings above the Evaluation templates list, with the EMT Field Internship Evaluation listed against the program that uses it",
+    route: "/training/admin?page=settings&tab=shift-evaluations",
+    // Not the form's name: it is also an <option> of the closed General form
+    // select, which is never "visible".
+    expect: `Used by ${BACKLOG02_INTERNSHIP}`,
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "02-127-shift-evaluation-form-editor",
+    doc: "02-training.md",
+    line: 2773,
+    anchor: "The evaluation form editor open on a department form",
+    alt: "The evaluation form editor open on the EMT Field Internship Evaluation: its details, the four-level rating scale with Not Observed and the comment threshold, the Shift (A, B, C) header field and shift statistics, three sections of items, the closing comments, and who fills it out and who is evaluated",
+    route: "/training/admin?page=settings&tab=shift-evaluations",
+    // Opened and never saved: Cancel leaves the form as the seeder made it.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: `Edit ${BACKLOG02_FORM}` })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("heading", { name: "Rating scale" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    expect: "Rating scale",
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "02-128-program-evaluation-form-picker",
+    allowEmptyState: true,
+    doc: "02-training.md",
+    line: 2781,
+    anchor:
+      "A pipeline's Edit pipeline details dialog with the Shift evaluation form picker",
+    alt: "Edit pipeline details for the EMT Field Internship, with the Shift evaluation form picker set to the EMT Field Internship Evaluation and the note on where forms are built",
+    route: "/training/programs",
+    // The dialog is opened and closed unsaved.
+    prepare: async (page) => {
+      await openBacklog02Program(page, BACKLOG02_INTERNSHIP);
+      await page
+        .getByRole("button", { name: "Edit", exact: true })
+        .first()
+        .click({ timeout: 20_000 });
+      await centre(page.locator("#ep-evaluation-template"));
+      await page.waitForTimeout(600);
+    },
+    expect: "Shift evaluation form",
+    selector: PROGRAM_REQUIREMENT_DIALOG,
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "02-129-pipeline-wizard-evaluation-form",
+    allowEmptyState: true,
+    doc: "02-training.md",
+    line: 2785,
+    anchor:
+      "The create-pipeline wizard's Program Info step, with a form chosen",
+    alt: "The create-pipeline wizard's Program Info step scrolled to its foot: the prerequisite programs, the concurrent-enrollment box, and the EMT Field Internship Evaluation chosen in the Shift evaluation form picker",
+    route: "/training/admin?page=curriculum&tab=pipelines&view=new",
+    // Typed into, never created: the wizard saves only on its last step.
+    prepare: async (page) => {
+      const picker = page.locator("#prog-evaluation-template");
+      await picker.waitFor({ timeout: 30_000 });
+      await page
+        .getByLabel(/Program Name/)
+        .first()
+        .fill("Paramedic Field Internship");
+      await picker.selectOption({ label: BACKLOG02_FORM });
+      await centre(picker);
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    expect: "Shift evaluation form",
+    viewport: { width: 1440, height: 1000 },
+  },
+  {
+    id: "02-130-shift-evaluation-status-lines",
+    doc: "02-training.md",
+    line: 2795,
+    anchor: "The Shift Completion Report's crew list for one shift",
+    alt: "The Shift Completion Report's crew list with an EMT Field Internship Evaluation status line under each of three interns: Submitted with its average, In progress with how many items are rated, and Not started, required before close-out",
+    route: "/scheduling?tab=shift-reports&view=create",
+    // Opened on the shift the seeder evaluated; the report is never filed.
+    prepare: async (page) => {
+      await openInternshipShiftReport(page);
+      await centre(page.getByText("Not started", { exact: true }).first());
+      await page.waitForTimeout(500);
+    },
+    expect: "Not started",
+    selector: 'div:has(> label:has-text("Crew Members"))',
+  },
+  {
+    id: "02-131-shift-evaluation-page",
+    doc: "02-training.md",
+    line: 2805,
+    anchor: "A member's shift evaluation page part-way through",
+    alt: "Priya Raman's EMT Field Internship Evaluation in progress: the three interns on the shift across the top, the Shift (A, B, C) choice, shift statistics, the rating key, and each Clinical Performance item with its rating buttons, a required comment open under a rating of 2, and Save draft and Submit evaluation along the bottom",
+    route: "/scheduling?tab=shift-reports",
+    // The draft the seeder left. Viewing it saves nothing: autosave fires only
+    // on a change.
+    prepare: async (page) => {
+      const { shiftId, evaluations } = await backlog02Evaluations(page);
+      const draft = evaluations.find((e) => e.status === "draft");
+      if (!draft) throw new Error("02-131: no draft internship evaluation");
+      await page.goto(
+        new URL(
+          `/scheduling/shift-reports/${shiftId}/evaluations/${draft.member_id}/${draft.scope_key}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.getByText("Clinical Performance").first().waitFor({
+        timeout: 30_000,
+      });
+      await page.waitForTimeout(1200);
+    },
+    expect: "Clinical Performance",
+    // Not fullPage: the page's sticky action bar is position: fixed, and a
+    // full-page capture paints it over an item halfway down.
+    viewport: { width: 1440, height: 1700 },
+  },
+  {
+    id: "02-132-shift-evaluation-print",
+    doc: "02-training.md",
+    line: 2809,
+    anchor: "The print view of a submitted shift evaluation",
+    alt: "The printable shift evaluation for Esme Caldwell: shift details and statistics, the rating key, each section as a table of ratings and comments, and the Preceptor Comments",
+    route: "/scheduling/shift-evaluations/print",
+    prepare: async (page) => {
+      const { evaluations } = await backlog02Evaluations(page);
+      const done = evaluations.find((e) => e.status === "submitted");
+      if (!done) throw new Error("02-132: no submitted internship evaluation");
+      await page.goto(
+        new URL(
+          `/scheduling/shift-evaluations/print?id=${done.id}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.getByText("Clinical Performance").first().waitFor({
+        timeout: 30_000,
+      });
+      await page.waitForTimeout(1500);
+    },
+    expect: "Professionalism & Affect",
+    fullPage: true,
+  },
+  {
+    id: "02-133-compliance-profile-positions",
+    doc: "02-training.md",
+    line: 2019,
+    anchor: "Compliance configuration, Profiles tab, Add Profile: life ticked",
+    alt: "A new compliance profile, Life Members (Non-Riding): life ticked under Applies to Membership Types and one position ticked under Applies to Members Holding a Position",
+    route: "/training/compliance-config?tab=profiles",
+    // Filled in, never created: the profile form is closed unsaved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Add Profile" })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .locator("#compliance-profile-name")
+        .fill("Life Members (Non-Riding)");
+      await page
+        .locator("#compliance-description")
+        .fill("Life members who no longer ride owe only the refresher set.");
+      await page.getByRole("button", { name: "life", exact: true }).click();
+      const positions = page.locator(
+        "[role='group'][aria-labelledby='compliance-positions-label']",
+      );
+      await positions.waitFor({ timeout: 20_000 });
+      await positions.locator("input[type='checkbox']").first().check();
+      await centre(page.locator("#compliance-positions-label"));
+      await page.waitForTimeout(600);
+    },
+    expect: "Applies to Members Holding a Position",
+    selector: "div.card:has(> h3:text-is('New Profile'))",
+  },
+  {
+    id: "02-134-compliance-matrix-member-class",
+    doc: "02-training.md",
+    line: 1934,
+    anchor:
+      "The Compliance Matrix with the member-class switch set to Administrative",
+    alt: "The Compliance Matrix with the member-class switch on Administrative: the summary line reading tracked administrative members, and only the department's two administrative members listed",
+    route: "/training/admin?page=dashboard&tab=compliance&class=administrative",
+    selector: 'div.card:has(h2:text-is("Compliance"))',
+    expect: "tracked administrative member",
+    allowEmptyState: true,
+  },
+  {
+    id: "02-135-requirement-operational-members",
+    doc: "02-training.md",
+    line: 1232,
+    anchor:
+      "The requirement form with Applies to all members unticked and Operational members selected",
+    alt: "A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary, Life and Retired ticked while Administrative and Honorary are not",
+    route: "/training/admin?page=curriculum&tab=requirements",
+    // Typed into and abandoned: Create Requirement is never pressed.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Create Requirement/i })
+        .first()
+        .click({ timeout: 20_000 });
+      const dialog = page.locator("div[role='dialog']");
+      await dialog
+        .getByText("Applies to all members", { exact: true })
+        .click({ timeout: 15_000 });
+      await dialog
+        .getByRole("button", { name: /Operational members/ })
+        .click({ timeout: 15_000 });
+      await centre(dialog.getByRole("group", { name: "Member categories" }));
+      await page.waitForTimeout(600);
+    },
+    expect: "Operational members",
+    selector: PROGRAM_REQUIREMENT_DIALOG,
+  },
+  {
+    id: "02-136-curriculum-programs",
+    doc: "02-training.md",
+    line: 606,
+    anchor: "Training officer, Training Admin → Curriculum → Programs",
+    alt: "Training Admin → Curriculum → Programs: the department's pipelines listed, each with its badges, description, time limit and how many are enrolled, with Import and New Pipeline above them",
+    route: "/training/admin?page=curriculum&tab=pipelines",
+    expect: "Probationary Firefighter Pipeline",
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "02-137-requirements-registry-import",
+    doc: "02-training.md",
+    line: 3787,
+    anchor:
+      "Training Admin → Curriculum → Requirements: the Import from Registry panel",
+    alt: "The Import from Registry panel on Curriculum → Requirements, with a button for NFPA, Pro Board and each NREMT level",
+    route: "/training/admin?page=curriculum&tab=requirements",
+    expect: "Import from Registry",
+    selector: "div.rounded-lg:has(> h3:text-is('Import from Registry'))",
+  },
+  {
+    id: "02-138-programs-show-inactive",
+    doc: "02-training.md",
+    line: 709,
+    anchor: "Training Admin → Curriculum → Programs with Show inactive ticked",
+    alt: "Curriculum → Programs with Show inactive ticked: the deactivated Rope Rescue Technician pipeline listed with its Inactive badge and a Reactivate button",
+    route: "/training/admin?page=curriculum&tab=pipelines",
+    // Ticking the box is a view filter; nothing is reactivated.
+    prepare: async (page) => {
+      await page.getByLabel("Show inactive").first().check({ timeout: 20_000 });
+      await page
+        .getByText("Rope Rescue Technician")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    expect: "Reactivate",
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "02-139-mark-pipeline-complete",
+    allowEmptyState: true,
+    doc: "02-training.md",
+    line: 833,
+    anchor:
+      "A member's progress dialog on a pipeline with no active requirements",
+    alt: "Ingrid Solberg's progress on the Hazmat Operations Refresher, which has no active requirements, with Mark pipeline complete selected: the prompt saying what completing her does, a reason typed, Keep in progress and Mark complete",
+    route: "/training/programs",
+    // The reason is typed and the prompt left open: Mark complete is never
+    // pressed, so she stays Active for the next run.
+    prepare: async (page) => {
+      await openBacklog02Program(page, BACKLOG02_NO_ACTIVE, "?tab=enrollments");
+      await page
+        .getByRole("button", { name: /Ingrid Solberg/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .locator("div[role='dialog']")
+        .getByRole("button", { name: "Mark pipeline complete" })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByPlaceholder("Why this member is complete")
+        .fill(
+          "Completed the refresher with Arlington County in October; certificate on file.",
+        );
+      await page.waitForTimeout(800);
+    },
+    expect: "Keep in progress",
+  },
+  {
+    id: "02-140-completed-by-hand",
+    allowEmptyState: true,
+    doc: "02-training.md",
+    line: 837,
+    anchor:
+      "The pipeline's Enrollments tab: one member reading Completed by hand",
+    alt: "The Hazmat Operations Refresher's Enrollments tab: Priya Raman completed at 0%, with Completed by hand and the officer's reason, and Ingrid Solberg active, reading No active requirements, with Mark pipeline complete beside her",
+    route: "/training/programs",
+    prepare: async (page) => {
+      await openBacklog02Program(page, BACKLOG02_NO_ACTIVE, "?tab=enrollments");
+      await page
+        .getByText(/Completed by hand:/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    expect: "Completed by hand:",
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "02-141-no-active-requirements",
+    allowEmptyState: true,
+    doc: "02-training.md",
+    line: 864,
+    anchor: "A pipeline page whose only requirement is deactivated",
+    alt: "The Hazmat Operations Refresher pipeline page: the No active requirements notice for the pipeline and for its one phase, and its only requirement tagged Inactive — not currently required",
+    route: "/training/programs",
+    prepare: async (page) => {
+      await openBacklog02Program(page, BACKLOG02_NO_ACTIVE);
+      await page
+        .getByText("Inactive — not currently required")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    expect: "Inactive — not currently required",
+    fullPage: true,
+  },
+  {
+    id: "02-142-deactivate-pipeline-confirm",
+    doc: "02-training.md",
+    line: 868,
+    anchor: "The Deactivate pipeline confirmation, opened by unticking Active",
+    alt: "The Deactivate pipeline confirmation for the EMT Field Internship: three members are in progress on it and will be withdrawn, graduates are kept, with Keep it active and Deactivate and withdraw",
+    route: "/training/programs",
+    // Saving is what asks; the confirmation is then left unanswered, so
+    // nothing is written.
+    prepare: async (page) => {
+      await openBacklog02Program(page, BACKLOG02_INTERNSHIP);
+      await page
+        .getByRole("button", { name: "Edit", exact: true })
+        .first()
+        .click({ timeout: 20_000 });
+      const dialog = page.locator("div[role='dialog']").first();
+      await dialog.getByLabel("Active", { exact: true }).uncheck();
+      await dialog
+        .getByRole("button", { name: /^Save/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Keep it active")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    expect: "Deactivate and withdraw",
+    selector:
+      "div[role='alertdialog'], div[role='dialog']:has-text('Keep it active')",
+  },
+  {
+    id: "02-143-cohort-shift-remaining",
+    doc: "02-training.md",
+    line: 522,
+    anchor: "A cohort page with Shift remaining opened",
+    alt: "A cohort page with Shift remaining opened above its tabs: Move upcoming classes by, 7 typed, the note that it goes up to 14 days either way, and Apply",
+    route: "/training/admin?tab=cohorts",
+    // Typed and never applied: the classes keep their dates.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/cohorts",
+        (id) => `/training/cohorts/${id}`,
+        "cohorts",
+      )(page);
+      await page
+        .getByRole("button", { name: /Shift remaining/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.locator("#shift-days").fill("7");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    expect: "Move upcoming classes by",
   },
   {
     id: "07-39-suggestion-review-phone",

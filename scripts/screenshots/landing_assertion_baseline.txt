@@ -46,7 +46,6 @@
 02-02-historical-import-preview
 02-09-program-detail
 02-101-expired-enrollment-reopen
-02-102-shift-report-crew-form
 02-103-shift-report-drafts
 02-104-cohort-preview-step
 02-105-program-enrollment-progress
@@ -346,7 +345,6 @@
 13-02-requirements-tab
 13-03-records-tab
 13-04-compliance-tab
-13-05-add-requirement
 13-06-expiring-screenings
 14-02-create-election
 14-04-ballot-configuration

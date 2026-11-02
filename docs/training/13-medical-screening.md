@@ -170,7 +170,7 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 4. Select **Add Requirement**. When you edit an existing one, the button reads
    **Save Changes**.
 
-![Add screening requirement form with type, frequency, and grace period](./images/13-05-add-requirement.png)
+![The Add Screening Requirement form filled in for an annual physical: name, type, description, a 12-month frequency with its note, Applies to Positions with its explanation, and the grace period](./images/13-05-add-requirement.png)
 
 ### Editing and Deleting Requirements
 
@@ -487,6 +487,8 @@ person. It shows:
 
 With no active requirements, the panel says so rather than reporting the person
 compliant. Each opening is recorded in the audit log.
+
+![The Compliance tab with one member's panel open: the annual physical with no expiration date of its own reading due on a date (by frequency), the fitness assessment marked Waived and expiring soon, and the two requirements with no qualifying record](./images/13-09-compliance-by-frequency-waiver.png)
 
 ---
 
