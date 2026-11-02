@@ -63,3 +63,45 @@ describe('ReportsPage generate button', () => {
     expect(mockGenerateReport).toHaveBeenCalledWith(expect.objectContaining({ report_type: 'member_roster' }));
   });
 });
+
+// Each report's export helper returns the report's own list as its rows, and
+// each renderer reads its report's own shape. A body without that shape took
+// the whole page down ("reading 'length'"); it now stays inside the dialog.
+describe('ReportsPage with a report body it cannot read', () => {
+  const REPORT_TYPES = [
+    'member_roster',
+    'training_summary',
+    'event_attendance',
+    'training_progress',
+    'annual_training',
+    'admin_hours',
+    'department_overview',
+    'certification_expiration',
+    'apparatus_status',
+    'inventory_status',
+    'compliance_status',
+    'call_volume',
+    'pipeline_overview',
+  ];
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  it.each(REPORT_TYPES)('%s says it could not be read and offers nothing to export', (reportType) => {
+    useReportsStore.setState({
+      generatingReportType: null,
+      activeReportType: reportType,
+      activeReportData: {} as never,
+      generateReport: vi.fn(),
+    });
+    renderWithRouter(<ReportsPage />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Reports' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent("This report's data could not be read.");
+    const enabledExports = screen
+      .queryAllByRole('button', { name: /CSV|Print \/ PDF/ })
+      .filter((button) => !(button as HTMLButtonElement).disabled);
+    expect(enabledExports).toEqual([]);
+  });
+});
