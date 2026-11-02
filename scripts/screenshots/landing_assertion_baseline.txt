@@ -110,13 +110,11 @@
 03-08-calls-runs-section
 03-09-log-call-form
 03-11-swap-requests-tab
-03-12-shift-templates
 03-13-shift-patterns
 03-14-scheduling-reports
 03-15-scheduling-settings
 03-16-platoon-management
 03-22-equipment-check-builder
-03-24-equipment-check-reports
 03-31-shift-edit-times
 03-32-settings-general-closeout
 03-33-settings-eligibility
