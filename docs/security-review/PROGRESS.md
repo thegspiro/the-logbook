@@ -16,8 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None open. PR #3930 (Feature 15, Scheduling, pass 13) merged since the last
-iteration; row 15 is ✅ below.
+**PR [#3931](https://github.com/thegspiro/the-logbook/pull/3931)** (branch
+`claude/friendly-babbage-dk80jn`) — Feature 16 (Events & requests), pass 13,
+a watchdog pickup. 1 fixed: EV-30 (MED) — the "is this file still
+referenced by another event?" count on attachment delete had no
+`organization_id` filter, letting a different org's event keep a victim
+org's own file on disk forever. See
+`docs/security-review/EV-16-events-requests.md`'s **Pass 13** section for
+the full review.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 13, PR #3930, merged), preserved for history</summary>

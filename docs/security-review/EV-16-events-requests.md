@@ -20,7 +20,8 @@ fixed, 0 flagged — new public guest-link surface reviewed clean),
 [#3841](https://github.com/thegspiro/the-logbook/pull/3841) (pass 12,
 watchdog pickup, 0 fixed, 0 flagged — two authorization-widening commits
 reviewed clean against all seven checklist dimensions),
-pass 13 (watchdog pickup, 1 fixed — EV-30, cross-org file-retention gap on
+[#3931](https://github.com/thegspiro/the-logbook/pull/3931) (pass 13,
+watchdog pickup, 1 fixed — EV-30, cross-org file-retention gap on
 attachment delete)
 
 **Backend:** `api/v1/endpoints/events.py` (61 routes, unchanged),
