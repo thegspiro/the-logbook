@@ -39,6 +39,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useReportsStore } from '../store/reportsStore';
 import type { ReportCardDefinition, ReportData, DatePreset } from '../types';
 import { ExportControls } from '../components/ExportControls';
+import { ReportContentBoundary } from '../components/ReportContentBoundary';
 import {
   MemberRosterRenderer,
   getMemberRosterExportData,
@@ -267,6 +268,50 @@ const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
 // Component
 // ============================================================================
 
+// ---- Export data resolver ----
+function getExportData(data: ReportData, reportType: string) {
+  const exportMap: Record<
+    string,
+    (d: ReportData) => { rows: Array<Record<string, unknown>>; columns: Array<{ key: string; header: string }> }
+  > = {
+    member_roster: (d) => getMemberRosterExportData(d as MemberRosterReport),
+    training_summary: (d) => getTrainingSummaryExportData(d as TrainingSummaryReport),
+    event_attendance: (d) => getEventAttendanceExportData(d as EventAttendanceReport),
+    training_progress: (d) => getTrainingProgressExportData(d as TrainingProgressReport),
+    annual_training: (d) => getAnnualTrainingExportData(d as AnnualTrainingReport),
+    admin_hours: (d) => getAdminHoursExportData(d as AdminHoursReport),
+    department_overview: (d) => getDepartmentOverviewExportData(d as DepartmentOverviewReport),
+    certification_expiration: (d) => getCertExpirationExportData(d as CertExpirationReport),
+    apparatus_status: (d) => getApparatusStatusExportData(d as ApparatusStatusReport),
+    inventory_status: (d) => getInventoryStatusExportData(d as InventoryStatusReport),
+    compliance_status: (d) => getComplianceStatusExportData(d as ComplianceStatusReport),
+    call_volume: (d) => getCallVolumeExportData(d as CallVolumeReport),
+    pipeline_overview: (d) => getPipelineOverviewExportData(d as PipelineOverviewReport),
+  };
+
+  const fn = exportMap[reportType];
+  if (!fn) return { rows: [], columns: [] };
+  const exported = fn(data);
+  // Each helper hands back the report's own list (`entries`, `members`,
+  // ...) as its rows, so a report body without that list would reach
+  // ExportControls as undefined; export nothing rather than crash.
+  return { ...exported, rows: Array.isArray(exported.rows) ? exported.rows : [] };
+}
+
+/**
+ * The export buttons for one report, computed where a malformed body can be
+ * contained: each helper reads its report's own shape, and one that throws
+ * must not take the page down with it (ReportContentBoundary around it).
+ */
+const ReportExport: React.FC<{ title: string; data: ReportData; reportType: string }> = ({
+  title,
+  data,
+  reportType,
+}) => {
+  const exportData = getExportData(data, reportType);
+  return <ExportControls reportTitle={title} rows={exportData.rows} columns={exportData.columns} />;
+};
+
 export const ReportsPage: React.FC = () => {
   const tz = useTimezone();
   const { formatRank } = useRanks();
@@ -412,33 +457,6 @@ export const ReportsPage: React.FC = () => {
         );
     }
   };
-
-  // ---- Export data resolver ----
-  const getExportData = (data: ReportData, reportType: string) => {
-    const exportMap: Record<
-      string,
-      (d: ReportData) => { rows: Array<Record<string, unknown>>; columns: Array<{ key: string; header: string }> }
-    > = {
-      member_roster: (d) => getMemberRosterExportData(d as MemberRosterReport),
-      training_summary: (d) => getTrainingSummaryExportData(d as TrainingSummaryReport),
-      event_attendance: (d) => getEventAttendanceExportData(d as EventAttendanceReport),
-      training_progress: (d) => getTrainingProgressExportData(d as TrainingProgressReport),
-      annual_training: (d) => getAnnualTrainingExportData(d as AnnualTrainingReport),
-      admin_hours: (d) => getAdminHoursExportData(d as AdminHoursReport),
-      department_overview: (d) => getDepartmentOverviewExportData(d as DepartmentOverviewReport),
-      certification_expiration: (d) => getCertExpirationExportData(d as CertExpirationReport),
-      apparatus_status: (d) => getApparatusStatusExportData(d as ApparatusStatusReport),
-      inventory_status: (d) => getInventoryStatusExportData(d as InventoryStatusReport),
-      compliance_status: (d) => getComplianceStatusExportData(d as ComplianceStatusReport),
-      call_volume: (d) => getCallVolumeExportData(d as CallVolumeReport),
-      pipeline_overview: (d) => getPipelineOverviewExportData(d as PipelineOverviewReport),
-    };
-
-    const fn = exportMap[reportType];
-    return fn ? fn(data) : { rows: [], columns: [] };
-  };
-
-  const exportData = activeReportData && activeReportType ? getExportData(activeReportData, activeReportType) : null;
 
   const closeModal = () => {
     clearActiveReport();
@@ -696,13 +714,9 @@ export const ReportsPage: React.FC = () => {
                     </div>
                     <div className="split-row-aside flex flex-wrap items-center gap-2">
                       {/* Export Controls */}
-                      {exportData && (
-                        <ExportControls
-                          reportTitle={activeCard.title}
-                          rows={exportData.rows}
-                          columns={exportData.columns}
-                        />
-                      )}
+                      <ReportContentBoundary resetKey={activeReportData} fallback={null}>
+                        <ReportExport title={activeCard.title} data={activeReportData} reportType={activeReportType} />
+                      </ReportContentBoundary>
                       {/* Compare button */}
                       {activeCard.usesDateRange && !comparisonData && (
                         <button
@@ -726,7 +740,9 @@ export const ReportsPage: React.FC = () => {
                   </div>
 
                   {/* Main report content */}
-                  {renderReportContent(activeReportData, activeReportType)}
+                  <ReportContentBoundary resetKey={activeReportData}>
+                    {renderReportContent(activeReportData, activeReportType)}
+                  </ReportContentBoundary>
 
                   {/* Comparison section */}
                   {comparisonData && comparisonPeriod && (
@@ -744,7 +760,9 @@ export const ReportsPage: React.FC = () => {
                           Remove comparison
                         </button>
                       </div>
-                      {renderReportContent(comparisonData, activeReportType)}
+                      <ReportContentBoundary resetKey={comparisonData}>
+                        {renderReportContent(comparisonData, activeReportType)}
+                      </ReportContentBoundary>
                     </div>
                   )}
                 </div>
