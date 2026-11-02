@@ -16,11 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3927](https://github.com/thegspiro/the-logbook/pull/3927)** (branch
+`claude/security-review-equipment-check-shifts-p14`) — Feature 14 (Equipment
+check & shifts), pass 14, a watchdog pickup. Real
+delta: `report_review_role` wired (a department's chosen reviewer role may
+now review shift reports alongside `training.manage`, with a verified
+self-review exclusion), plus the new Shift Evaluations feature's credit-sync
+hooks landing in this feature's own service file. 0 fixed, 0 new findings.
+See `docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 14**
+section for the full review.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 21, PR #3924, merged), preserved for history</summary>
+
 **PR [#3924](https://github.com/thegspiro/the-logbook/pull/3924)** (branch
 `claude/security-review-apparatus-nfc-p21`) — Feature 13 (Apparatus & NFC),
 pass 21, a watchdog pickup. Also corrects pass 20's stale tracker cell — pass
 20 landed directly on `main` (`b6a86b4d4`) without a branch or PR and never
 flipped row 13 to ✅. See the Log entry above for the full review summary.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 14, PR #3923, merged), preserved for history</summary>
@@ -24307,7 +24322,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ⬜     |
@@ -24335,6 +24350,51 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-02 — Feature 14 (Equipment check & shifts, pass 14) — watchdog pickup, 0 fixed, 0 new findings; reviewer-role widening and shift-evaluation credit hooks
+
+Watchdog pickup. PR #3924 (Feature 13, Apparatus & NFC, pass 21) had just
+merged; `list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-` head branch, and the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable per `ListAgents`. Row 14 (Equipment check & shifts) was
+the next `⬜`.
+
+**0 fixed, 0 new findings.** Baseline `44cec856c` (PR #3837's merge, pass
+13). 3 non-merge commits touch this feature's declared backend files. The
+substantive one wires a previously-dead org setting
+(`report_review_role`) so the department's chosen reviewer role may work the
+shift-report review queue alongside `training.manage`, with a verified,
+tested self-review exclusion (`_not_about_reviewer`) at the queue, single-
+review and batch-review sites — correctly composed with, not a replacement
+for, each site's existing org-scoped fetch. The other two commits are the
+new (not-yet-in-rotation) Shift Evaluations feature's hooks into this
+feature's own service file (a label-lookup refactor, and credit-sync calls
+whose underlying queries filter `organization_id` + `member_id`/`shift_id`
+together) — reviewed only for the dimensions this feature's scope covers,
+per the cross-feature scoping discipline prior passes use. Routes
+re-enumerated by AST: `equipment_check.py` 54 (unchanged),
+`shift_completion.py` 22 (up from 21 — the new, correctly permissionless-
+baselined `GET /review-access`). All prior standing findings (EC-8 open/
+accepted; EC-16, EC-6, EC-13, EC-7, EC-11 resolved/intact) re-confirmed
+unchanged. Full review: `docs/security-review/EC-14-equipment-check-shifts.md`'s
+**Pass 14** section.
+
+Completion gate: `flake8`/`black --check` (26.10.1, via
+`/usr/local/bin/black`)/`isort --check-only` on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 694 revisions, single head
+`e059227da2c0`; `check_route_permissions.py --strict` — 286 routes, 0
+errors; `generate_schema_docs.py --check` — up to date; scoped backend tests
+(`-k "equipment_check or shift_completion or shift_report or
+shift_evaluation"`) — 783 passed, 1 pre-existing skip (`py_vapid`) (this
+worktree's test database was one migration behind
+`e059227da2c0` and needed `alembic upgrade head` before the suite could run
+— not an application defect); frontend `npm run typecheck`/`npm run lint` —
+0 errors, 0 warnings.
+
+Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
+(Scheduling) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-02 — Feature 13 (Apparatus & NFC, pass 21) — watchdog pickup, 0 fixed by this pass, 0 new findings; AP2-4 resolved by a feature commit, tracker row 13 corrected
 
