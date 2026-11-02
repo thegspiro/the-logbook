@@ -112,7 +112,7 @@ deliberately never says what a screening found (it can be on a station kiosk).
 Tests: `tests/test_medical_screening_failed_result.py` (5 of 13 fail on the old
 grading) and `SubjectCompliancePanel.test.tsx`.
 
-### W71b-2 — HIGH — Converting a prospect to a member leaves their screenings behind — FLAGGED
+### W71b-2 — HIGH — Converting a prospect to a member leaves their screenings behind — ✅ FIXED (owner decision 2026-11-02: re-link, with a migration)
 
 **Did:** Rowan Vale passed both screenings as a prospect ("2 of 2 met"), then
 was transferred to membership.
@@ -130,6 +130,27 @@ on the prospect's records and keep `prospect_id`. A data migration would
 backfill every prospect already transferred (`transferred_user_id`). That
 needs the owner's approval, and a test with rows present (pitfall #35).
 Mirrored to KNOWN_LIMITATIONS.
+
+**Resolved:** the owner noted that departments screen both before the
+membership vote and after joining. Records filed after joining already belong
+to the member. For the other case, `_do_transfer` now calls
+`_relink_screenings_to_member`, which sets `user_id` on the prospect's records
+with none, org-scoped, and keeps `prospect_id`. Migration `beedcad5b36a` does the
+same for prospects transferred earlier. It joins `users` so a deleted or
+other-organization member is never named. Its downgrade is exact, because no
+other path creates a record with both ids. Verified on MariaDB:
+
+- the review database's real upgrade moved Rowan Vale from "0 of 2 met" to
+  "2 of 2 met · Compliant";
+- `downgrade -1` cleared exactly Rowan's two records;
+- `upgrade head` restored them;
+- a new transfer (Sasha Quill) carried their drug screen across.
+
+Tests: `tests/test_prospect_transfer_screenings.py` (fails on the old
+transfer) and `tests/test_relink_transferred_prospect_screenings_migration.py`,
+which runs against rows: a prospect still in the pipeline, a deleted member, a
+cross-organization member, a record already naming a member, a status stored
+by name, a second run, and the downgrade.
 
 ### W71b-3 — MED — The Members administration hub grades screenings its own way — FLAGGED
 
@@ -230,16 +251,16 @@ Test: `ScreeningForms.touchTargets.test.tsx` fails on the old forms.
 
 ## Checklist
 
-| Section                 | Result                                                                                              |
-| ----------------------- | --------------------------------------------------------------------------------------------------- |
-| 1. The job gets done    | ❌ a failed physical reads as cleared (W71b-1); a converted prospect's screenings are lost (W71b-2) |
-| 2. The right people     | ✅ a non-admin Medical Officer works; `member` refused; self-records labelled                       |
-| 3. Wrong input, failure | ⚠️ → ✅ failed result no longer given an expiration                                                 |
-| 4. Browser signals      | ✅ no unexpected 4xx/5xx                                                                            |
-| 5. Coming back to it    | ✅ delete checked after a reload                                                                    |
-| 6. On a phone           | ❌ → ✅ panel off-screen and 36px buttons fixed                                                     |
-| 7. Everyone can use it  | ✅ focus now moves to the opened panel                                                              |
-| 8. What happens around  | ❌ the admin hub disagrees (W71b-3); no expiry reminders (W71b-4)                                   |
+| Section                 | Result                                                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The job gets done    | ❌ → ✅ a failed physical read as cleared (W71b-1); a converted prospect's screenings were lost (W71b-2) — both fixed on owner decision |
+| 2. The right people     | ✅ a non-admin Medical Officer works; `member` refused; self-records labelled                                                           |
+| 3. Wrong input, failure | ⚠️ → ✅ failed result no longer given an expiration                                                                                     |
+| 4. Browser signals      | ✅ no unexpected 4xx/5xx                                                                                                                |
+| 5. Coming back to it    | ✅ delete checked after a reload                                                                                                        |
+| 6. On a phone           | ❌ → ✅ panel off-screen and 36px buttons fixed                                                                                         |
+| 7. Everyone can use it  | ✅ focus now moves to the opened panel                                                                                                  |
+| 8. What happens around  | ❌ the admin hub disagrees (W71b-3); no expiry reminders (W71b-4)                                                                       |
 
 ## Completion gate
 

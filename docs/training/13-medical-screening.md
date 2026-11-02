@@ -563,19 +563,25 @@ every active requirement, the same as members.
 
 ### Prospect-to-Member Transition
 
-> **Important — screenings stay with the prospect record.** When a prospect
-> becomes a member, their screening records are not moved to the new member
-> account. They do not count toward the member's compliance. Record the
-> screenings the member still needs against the member.
+Departments differ in when they screen. Some screen applicants before the
+membership vote; others bring them in as members first and screen afterwards.
+Both work:
+
+- **Screened as a prospect.** When the prospect becomes a member, their
+  screening records go with them. They count toward the new member's
+  compliance from the moment of the transfer, and the prospect's history still
+  shows them.
+- **Screened after joining.** Record the screenings against the member, as for
+  anyone else.
 
 **What if …?**
 
-| What happened                                     | What it means                                                                                |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| A prospect has no screening records               | Their detail shows 0 met out of every active requirement                                     |
-| A prospect is deleted or purged from the pipeline | Their screening records are deleted with them                                                |
-| A prospect becomes a member                       | Their records stay on the prospect and do not count for the member. Re-record what is needed |
-| You need pre-employment screenings                | Create one-time requirements for them and check each prospect's detail before they join      |
+| What happened                                     | What it means                                                                           |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| A prospect has no screening records               | Their detail shows 0 met out of every active requirement                                |
+| A prospect is deleted or purged from the pipeline | Their screening records are deleted with them                                           |
+| A prospect becomes a member                       | Their records go with them and count for the new member. Nothing needs re-recording     |
+| You need pre-employment screenings                | Create one-time requirements for them and check each prospect's detail before they join |
 
 > **Important.** Prospect screening records have the same health-information
 > protections as member records, under the same two permissions. Make sure
@@ -707,8 +713,8 @@ Three days later the results arrive. She edits the record:
 On the Compliance tab, Alex's detail shows "1 of 2 requirements met". The
 committee can see the pre-employment screening is done.
 
-When Alex becomes a member, Captain Alvarez re-records the drug screening
-against his member account, because prospect records do not carry over.
+When Alex becomes a member, the drug screening goes with the new member
+account. Captain Alvarez does not record it again.
 
 ---
 

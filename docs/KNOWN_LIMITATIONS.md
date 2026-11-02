@@ -23,7 +23,13 @@ each changes saved members' standing, writes PHI rows, or adds behaviour.
   - keep the grade but show "newer failed result" on the panel and roster;
   - leave as is.
 - **Converting a prospect to a member leaves their screenings behind
-  (W71b-2, HIGH).** `_do_transfer` does not re-link `screening_records`, so a
+  (W71b-2, HIGH).** ✅ **Resolved 2026-11-02 (owner decision: re-link, and
+  migrate the prospects already converted).** Departments screen both before
+  and after the membership vote; the transfer now adds the new member's id to
+  the prospect's records (keeping `prospect_id`), and migration `beedcad5b36a`
+  does the same for earlier transfers. `tests/test_prospect_transfer_screenings.py`,
+  `tests/test_relink_transferred_prospect_screenings_migration.py`. Original
+  finding: `_do_transfer` does not re-link `screening_records`, so a
   prospect who passed every pre-membership screening joins as "0 of N met".
   The records stay on a TRANSFERRED prospect that no roster shows. The
   proposed fix has two parts:
