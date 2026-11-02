@@ -266,14 +266,19 @@ def _grade(
         matching_records.sort(key=_recency, reverse=True)
 
         latest = matching_records[0] if matching_records else None
-        satisfied = latest is not None and latest.status in _SATISFYING_STATUSES
+        satisfying = (
+            latest
+            if latest is not None and latest.status in _SATISFYING_STATUSES
+            else None
+        )
+        satisfied = satisfying is not None
         is_compliant = False
         days_until_exp = None
         # A failed result has no expiration to report, even when a row saved
         # before W71b-7 carries one: a date beside it reads as a clearance.
         expires, from_frequency = (
-            _effective_expiration(latest, req, frequencies)
-            if satisfied
+            _effective_expiration(satisfying, req, frequencies)
+            if satisfying is not None
             else (None, False)
         )
 

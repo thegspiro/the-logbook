@@ -4349,6 +4349,7 @@ class MembershipPipelineService:
         foreign key.
         """
         from app.models.medical_screening import ScreeningRecord
+        from app.utils.sql_results import rows_affected
 
         result = await self.db.execute(
             update(ScreeningRecord)
@@ -4360,7 +4361,7 @@ class MembershipPipelineService:
             .values(user_id=user_id)
             .execution_options(synchronize_session=False)
         )
-        relinked = result.rowcount or 0
+        relinked = rows_affected(result)
         if relinked:
             logger.info(
                 "Re-linked {} screening record(s) of prospect {} to member {}",
