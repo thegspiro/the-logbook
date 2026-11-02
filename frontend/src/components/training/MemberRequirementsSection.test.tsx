@@ -85,6 +85,13 @@ describe('MemberRequirementsSection', () => {
     expect(screen.queryByText(/met$/)).not.toBeInTheDocument();
   });
 
+  it('treats a body that is not a requirements list as a failed load', async () => {
+    mockGetMemberRequirements.mockResolvedValue({});
+    render(<MemberRequirementsSection userId="member-1" timezone="UTC" />);
+    expect(await screen.findByText(/Unable to load this member’s requirements/)).toBeInTheDocument();
+    expect(screen.queryByText('No training requirements apply to this member.')).not.toBeInTheDocument();
+  });
+
   it('reports a failed load without hiding the rest of the page', async () => {
     mockGetMemberRequirements.mockRejectedValue(new Error('Network down'));
     render(<MemberRequirementsSection userId="member-1" timezone="UTC" />);

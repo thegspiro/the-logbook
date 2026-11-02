@@ -41,10 +41,18 @@ export const MemberRequirementsSection: React.FC<MemberRequirementsSectionProps>
     trainingModuleConfigService
       .getMemberRequirements(userId)
       .then((res) => {
+        // A body that is not this shape (a captive portal's page, an empty
+        // object) is a failed load, not "no requirements" and "no leave":
+        // both of those are claims about the member an officer acts on.
+        if (!Array.isArray(res?.requirements_detail) || !Array.isArray(res?.leaves_of_absence)) {
+          throw new TypeError('The member requirements response was not a requirements list');
+        }
         if (!cancelled) setData(res);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Unable to load this member’s requirements.'));
+        if (cancelled) return;
+        const fallback = 'Unable to load this member’s requirements. Refresh to try again.';
+        setError(err instanceof TypeError ? fallback : getErrorMessage(err, fallback));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
