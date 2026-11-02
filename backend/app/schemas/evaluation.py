@@ -770,6 +770,9 @@ class EvaluationDetail(EvaluationSummary):
     # Each source's entry as stored ({"available", "value", ...}); None when
     # the caller may not see the figures yet.
     data: Optional[dict] = None
+    # The catalog entries for the sources in ``data``, so the screens label
+    # and format figures from the server's catalog rather than a copy of it.
+    sources: List[DataSourceResponse] = Field(default_factory=list)
     suggested_scores: dict[str, int] = Field(default_factory=dict)
     data_taken_at: Optional[datetime] = None
     parts: List[EvaluationPartResponse]
@@ -795,3 +798,16 @@ class LiveDataResponse(BaseModel):
     sources: List[DataSourceResponse]
     data: dict
     note: Optional[str] = None
+
+
+class DraftPeriodOption(BaseModel):
+    id: str
+    name: str
+    start_date: date
+    end_date: date
+
+
+class DraftOptions(BaseModel):
+    members: List[PersonRef]
+    evaluators: List[PersonRef]
+    periods: List[DraftPeriodOption]

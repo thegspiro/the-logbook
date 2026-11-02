@@ -6,9 +6,9 @@
  * manager needs to see which form each member will get, and a template
  * builder needs the periods its deadlines count from.
  *
- * Drafting and completing evaluations arrives in a later change. Until then
- * nothing configured here reaches a member, and the page says so rather than
- * presenting setup as though it were in effect (CLAUDE.md pitfall #19).
+ * Drafting and completing evaluations happens on the Evaluations list. Signing
+ * is not yet built, and the page says so rather than presenting the workflow
+ * as complete (CLAUDE.md pitfall #19).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -203,9 +203,13 @@ const EvaluationsPage: React.FC = () => {
         <div className="alert-info mb-6 flex gap-3">
           <Info className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p className="text-theme-alert-info-text text-sm">
-            <span className="text-theme-alert-info-title font-medium">Setup only for now.</span> Templates and review
-            periods can be prepared here. Drafting, completing and signing evaluations arrives in a later update, so
-            nothing set up here is sent to members yet.
+            <span className="text-theme-alert-info-title font-medium">Signatures are not yet available.</span>{' '}
+            Evaluations can be drafted and completed from the{' '}
+            <Link to="/reports/evaluations/conduct" className="underline">
+              Evaluations
+            </Link>{' '}
+            list. Signing, the final PDF and email notices arrive in a later update, so an annual evaluation stops at
+            the member&apos;s acknowledgement for now.
           </p>
         </div>
 

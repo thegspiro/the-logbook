@@ -1276,14 +1276,17 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Reports
 
-| URL                                          | Page                        | Permission                                      |
-| -------------------------------------------- | --------------------------- | ----------------------------------------------- |
-| `/reports`                                   | Reports                     | `reports.view`                                  |
-| `/reports/saved`                             | Saved Reports               | `reports.view`                                  |
-| `/reports/evaluations`                       | Member Evaluations (setup)  | `evaluations.configure` or `evaluations.manage` |
-| `/reports/evaluations/templates/:templateId` | Evaluation Template Builder | `evaluations.configure`                         |
+| URL                                          | Page                        | Permission                                                            |
+| -------------------------------------------- | --------------------------- | --------------------------------------------------------------------- |
+| `/reports`                                   | Reports                     | `reports.view`                                                        |
+| `/reports/saved`                             | Saved Reports               | `reports.view`                                                        |
+| `/reports/evaluations`                       | Member Evaluations (setup)  | `evaluations.configure` or `evaluations.manage`                       |
+| `/reports/evaluations/templates/:templateId` | Evaluation Template Builder | `evaluations.configure`                                               |
+| `/reports/evaluations/conduct`               | Evaluations                 | `evaluations.conduct`, `evaluations.view_all` or `evaluations.manage` |
+| `/reports/evaluations/mine`                  | My Evaluations              | Authenticated                                                         |
+| `/reports/evaluations/:evaluationId`         | Evaluation                  | Authenticated                                                         |
 
-> **Member Evaluations** _(added 2026-10-31)_. Templates for each member class and status (sections, evaluation tools with behavior descriptions, data blocks with scoring rules, rank-triggered officer sections, and a forward-only workflow with deadlines) and the review periods they are completed for. Setup only: drafting and completing evaluations arrives in a later change, and the page says so.
+> **Member Evaluations** _(added 2026-10-31)_. Templates for each member class and status (sections, evaluation tools with behavior descriptions, data blocks with scoring rules, rank-triggered officer sections, and a forward-only workflow with deadlines) and the review periods they are completed for. Drafting, the data snapshot, the self-evaluation and evaluator parts and calibration _(added 2026-11-01)_ run from **Evaluations**; a member reads their own on **My Evaluations**, with their figures for the current period measured live. An evaluation's own page is open to any signed-in member because the server decides access: it admits only the evaluation's member, its evaluator, approvers at an open step and holders of the view-all or manage grants, and answers anyone else as not found. Signing, the final PDF and notices arrive in a later change, and the setup page says so.
 
 ---
 

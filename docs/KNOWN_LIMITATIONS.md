@@ -99,9 +99,10 @@ member sees their own.
 
 **Still open:**
 
-- Only the evaluator default reads the relationship, and nothing calls it yet.
-  `MemberSupervisorService.default_evaluator_id` waits for the evaluation
-  drafting service and its evaluator permission, neither of which exists.
+- Only the evaluator default reads the relationship: a manager who drafts an
+  evaluation without naming an evaluator gets the member's current supervisor
+  when the supervisor holds `evaluations.conduct`, and is the evaluator
+  otherwise (`EvaluationService.create`, owner decision 2026-11-01).
 - Line-officer views of their own crew, approvals and an org chart do not read
   it.
 - Two members may supervise each other.

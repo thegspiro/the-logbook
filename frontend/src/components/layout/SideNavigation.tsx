@@ -36,6 +36,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   ClipboardCheck,
+  ClipboardList,
   Activity,
   CreditCard,
   ScanLine,
@@ -313,6 +314,18 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'My ID Card',
             path: `/members/${currentUser.id}/id-card`,
             icon: CreditCard,
+          } as NavItem,
+        ]
+      : []),
+    ...(isModuleOn('reports')
+      ? [
+          { label: 'My Evaluations', path: '/reports/evaluations/mine', icon: ClipboardCheck } as NavItem,
+          // Gated like its route: the evaluations a member conducts, or all.
+          {
+            label: 'Evaluations',
+            path: '/reports/evaluations/conduct',
+            icon: ClipboardList,
+            anyPermission: ['evaluations.conduct', 'evaluations.view_all', 'evaluations.manage'],
           } as NavItem,
         ]
       : []),

@@ -229,3 +229,143 @@ export interface EvaluationPeriodUpdate {
   end_date?: string;
   is_closed?: boolean;
 }
+
+// ------------------------------------------------------------- evaluations
+
+export const EvaluationPartKind = {
+  SELF_EVALUATION: 'self_evaluation',
+  EVALUATOR: 'evaluator',
+} as const;
+export type EvaluationPartKind = (typeof EvaluationPartKind)[keyof typeof EvaluationPartKind];
+
+export const EvaluationStatus = {
+  IN_PROGRESS: 'in_progress',
+  FINALIZED: 'finalized',
+} as const;
+export type EvaluationStatus = (typeof EvaluationStatus)[keyof typeof EvaluationStatus];
+
+/** One item's answer, as the server stores it. */
+export interface ItemAnswer {
+  rating?: number | null | undefined;
+  na?: boolean | undefined;
+  checked?: string[] | undefined;
+  text?: string | null | undefined;
+  comment?: string | null | undefined;
+  example?: string | null | undefined;
+  justification?: string | null | undefined;
+}
+
+export interface PartContent {
+  answers: Record<string, ItemAnswer>;
+  overall_rating?: number | null | undefined;
+  overall_comment?: string | null | undefined;
+}
+
+export interface PersonRef {
+  id: string;
+  name: string;
+}
+
+export interface EvaluationStep {
+  key: string;
+  type: EvaluationStepType;
+  label: string;
+  order: number;
+  status: 'pending' | 'open' | 'completed' | 'skipped';
+  due_date: string | null;
+  completed_at: string | null;
+}
+
+export interface EvaluationPart {
+  kind: string;
+  status: 'draft' | 'submitted';
+  content: PartContent;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ExcludedRange {
+  start: string;
+  end: string;
+  reason: 'leave' | 'separation';
+}
+
+/** A data source's measured value: ``value`` is a number, a list of labels,
+ * or null when ``available`` is false and ``note`` says why. */
+export interface DataEntry {
+  available: boolean;
+  value: number | { label: string; expires_on?: string | null }[] | null;
+  note?: string;
+  [extra: string]: unknown;
+}
+
+export interface EvaluationSummary {
+  id: string;
+  member: PersonRef;
+  evaluator: PersonRef | null;
+  period_id: string | null;
+  period_name: string | null;
+  period_start: string;
+  period_end: string;
+  template_name: string;
+  kind: EvaluationTemplateKind;
+  status: EvaluationStatus;
+  current_step: string | null;
+  current_step_due: string | null;
+  created_at: string | null;
+}
+
+export interface EvaluationViewer {
+  is_member: boolean;
+  is_evaluator: boolean;
+  can_edit_self_evaluation: boolean;
+  can_edit_evaluation: boolean;
+  can_refresh_data: boolean;
+  can_calibrate: boolean;
+}
+
+export interface EvaluationDetail extends EvaluationSummary {
+  coverage_start: string | null;
+  coverage_end: string | null;
+  excluded_ranges: ExcludedRange[];
+  includes_officer_sections: boolean;
+  definition: TemplateDefinition;
+  overall_levels: ScaleLevel[];
+  steps: EvaluationStep[];
+  data: Record<string, DataEntry> | null;
+  sources: EvaluationDataSource[];
+  suggested_scores: Record<string, number>;
+  data_taken_at: string | null;
+  parts: EvaluationPart[];
+  weighted_overall: number | null;
+  viewer: EvaluationViewer;
+}
+
+export interface SubmitResult {
+  outcome: 'submitted' | 'sent_for_calibration' | 'finalized';
+  evaluation: EvaluationDetail;
+}
+
+export interface EvaluationCreate {
+  member_id: string;
+  period_id: string;
+  evaluator_id?: string | undefined;
+  kind: EvaluationTemplateKind;
+}
+
+export interface DraftOptions {
+  members: PersonRef[];
+  evaluators: PersonRef[];
+  periods: { id: string; name: string; start_date: string; end_date: string }[];
+}
+
+export interface LiveData {
+  period_id: string | null;
+  period_name: string | null;
+  coverage_start: string | null;
+  coverage_end: string | null;
+  excluded_ranges: ExcludedRange[];
+  sources: EvaluationDataSource[];
+  data: Record<string, DataEntry>;
+  note: string | null;
+}

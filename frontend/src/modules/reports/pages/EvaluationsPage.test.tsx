@@ -1,7 +1,7 @@
 /**
  * Member evaluation setup: templates for `evaluations.configure`, review
  * periods for `evaluations.manage`, each able to read the other's list, and a
- * page that says plainly that drafting evaluations has not arrived yet.
+ * page that says plainly that signing has not arrived yet.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -83,9 +83,10 @@ describe('EvaluationsPage', () => {
     listPeriods.mockResolvedValue([period()]);
   });
 
-  it('says that drafting evaluations has not arrived yet', async () => {
+  it('says signing has not arrived yet and points to where evaluations are drafted', async () => {
     renderWithRouter(<EvaluationsPage />);
-    expect(await screen.findByText(/nothing set up here is sent to members yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Signatures are not yet available/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Evaluations' })).toHaveAttribute('href', '/reports/evaluations/conduct');
   });
 
   it('shows each template with who it applies to and its version', async () => {
