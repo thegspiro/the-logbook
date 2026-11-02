@@ -849,6 +849,8 @@ class EvaluationDetail(EvaluationSummary):
     # A second PDF carrying the member's submitted response; the signed one
     # (``document_available``) is kept as it was.
     response_document_available: bool = False
+    # Keys of the evaluator's items the calibrator flagged to revisit.
+    calibration_flags: List[str] = Field(default_factory=list)
     viewer: EvaluationViewer
 
 
@@ -1008,3 +1010,15 @@ class ResponseWrite(BaseModel):
         if not v:
             raise ValueError("Write your response before saving it")
         return v
+
+
+# -------------------------------------------------------------- calibration
+
+
+class CalibrationComplete(BaseModel):
+    """Completing calibration, with the evaluator's items flagged for them to
+    revisit. Item keys only, never a note (owner decision 2026-11-02)."""
+
+    flagged_items: List[str] = Field(
+        default_factory=list, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
+    )

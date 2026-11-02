@@ -455,6 +455,12 @@ class EvaluationStep(Base):
     overdue_notice_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # On a calibration step: the keys of the evaluator's items the calibrator
+    # flagged for the evaluator to revisit (owner decision 2026-11-02). Ticks
+    # only, never a note: everything kept about a member is something the
+    # member may read, and the member sees these once the evaluation is
+    # released to them. NULL on every other step and when nothing is flagged.
+    flagged_items: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

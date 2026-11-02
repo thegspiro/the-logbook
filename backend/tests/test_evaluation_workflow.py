@@ -2501,3 +2501,77 @@ class TestMemberResponse:
         assert not any(p["kind"] == "member_response" for p in reopened["parts"])
         assert reopened["response_due"] is None
         assert reopened["response_document_available"] is False
+
+
+# ------------------------------------------------------- calibration flags
+
+
+class TestCalibrationFlags:
+    async def _at_calibration(self, dept: _Dept, make_client: ClientFactory) -> str:
+        template = await _template(
+            dept.db, dept.org, name="Calibrated", workflow=WITH_CALIBRATION
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        return url
+
+    async def test_flags_reach_the_evaluator_and_later_the_member(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        url = await self._at_calibration(dept, make_client)
+        outbox.clear()
+
+        calibrated = await (await make_client(dept.reader)).post(
+            f"{url}/calibration/complete",
+            json={"flagged_items": ["training", "training"]},
+        )
+        assert calibrated.status_code == 200, calibrated.text
+        assert calibrated.json()["calibration_flags"] == ["training"]
+
+        evaluator = await make_client(dept.evaluator)
+        assert (await evaluator.get(url)).json()["calibration_flags"] == ["training"]
+        (notice,) = outbox.to(dept.evaluator, WAITING)
+        assert "flagged for you to revisit" in notice["summary"]
+        assert "Training" not in notice["summary"]
+
+        member = await make_client(dept.member)
+        # Not released yet: the evaluator has not resubmitted.
+        assert (await member.get(url)).json()["calibration_flags"] == []
+        resubmitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert resubmitted.status_code == 200, resubmitted.text
+        assert (await member.get(url)).json()["calibration_flags"] == ["training"]
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "evaluation_calibration_completed"
+                )
+            )
+        ).scalar_one()
+        assert audit.event_data["flagged_items"] == 1
+
+    async def test_only_the_evaluators_items_can_be_flagged(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await self._at_calibration(dept, make_client)
+        reader = await make_client(dept.reader)
+        response = await reader.post(
+            f"{url}/calibration/complete", json={"flagged_items": ["no_such_item"]}
+        )
+        assert response.status_code == 400
+        assert (await reader.get(url)).json()["viewer"]["can_calibrate"] is True
+
+    async def test_without_flags_the_evaluator_is_told_to_go_on(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        url = await self._at_calibration(dept, make_client)
+        outbox.clear()
+        calibrated = await (await make_client(dept.reader)).post(
+            f"{url}/calibration/complete", json={"flagged_items": []}
+        )
+        assert calibrated.json()["calibration_flags"] == []
+        (notice,) = outbox.to(dept.evaluator, WAITING)
+        assert "flagged" not in notice["summary"]

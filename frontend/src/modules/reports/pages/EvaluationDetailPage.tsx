@@ -17,6 +17,7 @@ import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormattin
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { saveBlob } from '../../../utils/saveBlob';
 import { AmendEvaluationDialog } from '../components/evaluations/AmendEvaluationDialog';
+import { CalibrationDialog } from '../components/evaluations/CalibrationDialog';
 import { DeleteEvaluationDialog } from '../components/evaluations/DeleteEvaluationDialog';
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
@@ -68,6 +69,7 @@ const EvaluationDetailPage: React.FC = () => {
   const [signing, setSigning] = useState<SigningOption | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [amending, setAmending] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   const navigate = useNavigate();
   const signerName = useAuthStore((state) => state.user?.full_name ?? '');
   // Edits made while a save is in flight must not be replaced by the older
@@ -173,18 +175,11 @@ const EvaluationDetailPage: React.FC = () => {
     }
   };
 
-  const calibrate = async () => {
-    const ok = await confirm({
-      title: 'Mark calibration complete?',
-      message:
-        'The evaluator can then lock the evaluation. Discuss any changes with the evaluator directly; only the fact that calibration happened is recorded.',
-      confirmLabel: 'Mark complete',
-      cancelLabel: 'Not yet',
-    });
-    if (!ok) return;
+  const calibrate = async (flaggedItems: string[]) => {
     setBusy(true);
     try {
-      adopt(await evaluationsService.completeCalibration(detail.id), editRevision.current);
+      adopt(await evaluationsService.completeCalibration(detail.id, flaggedItems), editRevision.current);
+      setCalibrating(false);
       toast.success('Calibration recorded');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not record calibration.'));
@@ -344,7 +339,12 @@ const EvaluationDetailPage: React.FC = () => {
               </button>
             )}
             {detail.viewer.can_calibrate && (
-              <button type="button" className="btn-primary text-sm" disabled={busy} onClick={() => void calibrate()}>
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={busy}
+                onClick={() => setCalibrating(true)}
+              >
                 Mark calibration complete
               </button>
             )}
@@ -401,6 +401,7 @@ const EvaluationDetailPage: React.FC = () => {
                   sources={detail.sources}
                   suggested={detail.suggested_scores}
                   overallLevels={detail.overall_levels}
+                  flagged={detail.calibration_flags}
                 />
                 <div className="action-bar-safe flex flex-wrap justify-end gap-2">
                   <button type="button" className="btn-secondary" disabled={busy || !dirty} onClick={() => void save()}>
@@ -435,6 +436,7 @@ const EvaluationDetailPage: React.FC = () => {
                   sources={detail.sources}
                   suggested={detail.suggested_scores}
                   overallLevels={detail.overall_levels}
+                  flagged={detail.calibration_flags}
                 />
               </section>
             ))}
@@ -523,6 +525,13 @@ const EvaluationDetailPage: React.FC = () => {
         busy={busy}
         onClose={() => setSigning(null)}
         onSign={(signature) => void sign(signature)}
+      />
+      <CalibrationDialog
+        isOpen={calibrating}
+        definition={detail.definition}
+        busy={busy}
+        onClose={() => setCalibrating(false)}
+        onComplete={(flaggedItems) => void calibrate(flaggedItems)}
       />
       <AmendEvaluationDialog
         isOpen={amending}

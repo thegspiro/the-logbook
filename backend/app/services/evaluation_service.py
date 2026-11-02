@@ -701,6 +701,17 @@ class EvaluationService:
                 # who may see the evaluation sees it, the member included.
                 "amendments": list(amendments),
                 "response_due": response_due,
+                # The calibrator's ticks: for whoever reads the record, and
+                # for the member once it is released to them.
+                "calibration_flags": (
+                    list(calibration_step.flagged_items or [])
+                    if calibration_step is not None
+                    and (
+                        (roles.reads_content and not roles.is_member)
+                        or (roles.is_member and released)
+                    )
+                    else []
+                ),
                 "response_document_available": response_submitted
                 and document_available
                 and ((roles.reads_content and not roles.is_member) or released),
@@ -1583,10 +1594,17 @@ class EvaluationService:
         return "finalized" if outcome == "finalized" else "signed"
 
     async def complete_calibration(
-        self, organization_id: str, evaluation_id: str, actor: User
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        actor: User,
+        flagged_items: Sequence[str] = (),
     ) -> Optional[bool]:
-        """Record that calibration happened. Only the fact is kept: what was
-        discussed goes to the evaluator, not into the record."""
+        """Record that calibration happened, and which of the evaluator's
+        items the calibrator flagged for them to revisit (owner decision
+        2026-11-02). Ticks only: what was discussed goes to the evaluator in
+        person, not into the record, and the member sees the ticks once the
+        evaluation is released to them."""
         evaluation = await self._evaluation(
             organization_id, evaluation_id, for_update=True
         )
@@ -1603,12 +1621,20 @@ class EvaluationService:
         step = next((s for s in steps if s.step_type == _CALIBRATION), None)
         if step is None or step.status != EvaluationStepStatus.OPEN.value:
             raise ValueError("This evaluation is not waiting for calibration.")
+        items = form_items(
+            self._definition(evaluation), EvaluationPartKind.EVALUATOR.value
+        )
+        flagged = list(dict.fromkeys(flagged_items))
+        unknown = [key for key in flagged if key not in items]
+        if unknown:
+            raise ValueError("Flag only items on the evaluator's form.")
         step.status = EvaluationStepStatus.COMPLETED.value
         step.completed_at = datetime.now(timezone.utc)
         step.completed_by = actor.id
+        step.flagged_items = flagged or None
         await self.db.commit()
         await EvaluationNoticeService(self.db).calibration_completed(
-            organization_id, evaluation.id
+            organization_id, evaluation.id, flagged=bool(flagged)
         )
         return True
 

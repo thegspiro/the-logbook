@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**340 tables · 5603 columns · 1152 foreign keys**
+**340 tables · 5604 columns · 1152 foreign keys**
 
 ---
 
@@ -206,7 +206,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`evaluation_parts`](#evaluation_parts) | `EvaluationPart` | 11 | A block of authored content: the evaluator's ratings and narrative, the |
 | [`evaluation_periods`](#evaluation_periods) | `EvaluationPeriod` | 9 | A review period a manager opens, e.g. "2026 Annual Review". |
 | [`evaluation_signatures`](#evaluation_signatures) | `EvaluationSignature` | 14 | A signature given on one step of one revision. |
-| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 15 | The state of one workflow step on one revision of an evaluation. |
+| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 16 | The state of one workflow step on one revision of an evaluation. |
 | [`evaluation_template_versions`](#evaluation_template_versions) | `EvaluationTemplateVersion` | 11 | One version of a template's content and workflow. |
 | [`evaluation_templates`](#evaluation_templates) | `EvaluationTemplate` | 11 | A department's evaluation form for one kind of member. |
 | [`evaluations`](#evaluations) | `Evaluation` | 20 | One member's evaluation for one period. |
@@ -2936,6 +2936,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `overdue_notice_sent_at` | DATETIME | yes |  |  |  |
+| `flagged_items` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 

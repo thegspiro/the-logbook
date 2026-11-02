@@ -30,7 +30,7 @@ Member performance evaluation endpoints — setup.
 
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +46,7 @@ from app.schemas.evaluation import (
     BulkDraftPreview,
     BulkDraftRequest,
     BulkDraftResponse,
+    CalibrationComplete,
     DataSourceResponse,
     DraftOptions,
     EvaluationAmend,
@@ -659,14 +660,18 @@ async def refresh_evaluation_data(
 @router.post("/{evaluation_id}/calibration/complete", response_model=EvaluationDetail)
 async def complete_evaluation_calibration(
     evaluation_id: str,
+    data: Optional[CalibrationComplete] = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("evaluations.view_all")),
 ):
+    """Record that calibration happened. The body is optional: without one,
+    nothing is flagged, as before flags existed."""
+    flagged = data.flagged_items if data else []
     service = EvaluationService(db)
     async with handle_service_errors("Failed to complete calibration"):
         ensure_found(
             await service.complete_calibration(
-                current_user.organization_id, evaluation_id, current_user
+                current_user.organization_id, evaluation_id, current_user, flagged
             ),
             "Evaluation",
         )
@@ -674,7 +679,7 @@ async def complete_evaluation_calibration(
         db,
         current_user,
         "evaluation_calibration_completed",
-        {"evaluation_id": evaluation_id},
+        {"evaluation_id": evaluation_id, "flagged_items": len(set(flagged))},
     )
     return await _evaluation(service, current_user, evaluation_id)
 

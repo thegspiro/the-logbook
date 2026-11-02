@@ -205,8 +205,12 @@ export const evaluationsService = {
     return response.data;
   },
 
-  async completeCalibration(id: string): Promise<EvaluationDetail> {
-    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/calibration/complete`);
+  /** Complete calibration, flagging the evaluator's items to revisit (ticks
+   * only, never a note). */
+  async completeCalibration(id: string, flaggedItems: string[] = []): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/calibration/complete`, {
+      flagged_items: flaggedItems,
+    });
     return response.data;
   },
 

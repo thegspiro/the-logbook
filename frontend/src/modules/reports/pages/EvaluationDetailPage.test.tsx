@@ -292,7 +292,35 @@ describe('EvaluationDetailPage', () => {
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Mark calibration complete' }));
     await user.click(await screen.findByRole('button', { name: 'Mark complete' }));
-    await waitFor(() => expect(completeCalibration).toHaveBeenCalledWith('ev1'));
+    await waitFor(() => expect(completeCalibration).toHaveBeenCalledWith('ev1', []));
+  });
+
+  it('lets a calibrator flag the evaluator’s items to revisit', async () => {
+    get.mockResolvedValue(
+      detail({
+        viewer: {
+          is_member: false,
+          is_evaluator: false,
+          can_edit_self_evaluation: false,
+          can_edit_evaluation: false,
+          can_refresh_data: false,
+          can_calibrate: true,
+        },
+      })
+    );
+    completeCalibration.mockResolvedValue(detail());
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Mark calibration complete' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Training' }));
+    await user.click(screen.getByRole('button', { name: 'Mark complete, 1 flagged' }));
+    await waitFor(() => expect(completeCalibration).toHaveBeenCalledWith('ev1', ['training']));
+  });
+
+  it('marks the items the calibrator flagged on the evaluator’s form', async () => {
+    get.mockResolvedValue(detail({ calibration_flags: ['training'] }));
+    renderPage();
+    expect(await screen.findByText('Flagged at calibration')).toBeInTheDocument();
   });
 
   describe('signing', () => {

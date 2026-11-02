@@ -394,6 +394,8 @@ export interface EvaluationDetail extends EvaluationSummary {
   response_due?: string | null | undefined;
   /** A second PDF carries the member's submitted response. */
   response_document_available?: boolean | undefined;
+  /** Keys of the evaluator's items the calibrator flagged to revisit. */
+  calibration_flags?: string[] | undefined;
   viewer: EvaluationViewer;
 }
 

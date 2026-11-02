@@ -31,6 +31,8 @@ interface EvaluationFormProps {
   sources: EvaluationDataSource[];
   suggested: Record<string, number>;
   overallLevels: ScaleLevel[];
+  /** Evaluator items the calibrator flagged to revisit. */
+  flagged?: string[] | undefined;
 }
 
 const MEETS_LEVELS: ScaleLevel[] = [
@@ -60,8 +62,10 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
   sources,
   suggested,
   overallLevels,
+  flagged = [],
 }) => {
   const evaluator = kind === 'evaluator';
+  const flaggedKeys = new Set(evaluator ? flagged : []);
   const sourceByKey = new Map(sources.map((s) => [s.key, s]));
   const update = (key: string, patch: Partial<ItemAnswer>) => {
     if (onChange) onChange(withAnswer(content, key, patch));
@@ -84,7 +88,14 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
     return (
       <li key={item.key} className="border-theme-surface-border border-t pt-4 first:border-t-0 first:pt-0">
         <fieldset disabled={readOnly}>
-          <legend className="text-theme-text-primary font-medium">{item.label}</legend>
+          <legend className="text-theme-text-primary font-medium">
+            {item.label}
+            {flaggedKeys.has(item.key) && (
+              <span className="badge ml-2 bg-amber-500/15 align-middle text-amber-900 dark:text-amber-200">
+                Flagged at calibration
+              </span>
+            )}
+          </legend>
           {item.help_text && <p className="text-theme-text-secondary mt-1 text-sm">{item.help_text}</p>}
           {source && (
             <p className="text-theme-text-secondary mt-1 text-sm">
