@@ -16,6 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None open. PR #3930 (Feature 15, Scheduling, pass 13) merged since the last
+iteration; row 15 is ✅ below.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 13, PR #3930, merged), preserved for history</summary>
+
 **PR [#3930](https://github.com/thegspiro/the-logbook/pull/3930)** (branch
 `claude/security-review-scheduling-p13`) — Feature 15 (Scheduling), pass 13,
 a watchdog pickup. Real delta: the new Shift Evaluations feature's close-out
@@ -27,6 +33,8 @@ configurable driver-seat set for the EVOC check. 0 fixed, 0 new findings; all
 standing flags (SCH-10, SCH-15, SCH-16, SCH-17, SCH-19) re-confirmed
 unchanged. See `docs/security-review/SCH-15-scheduling.md`'s **Pass 13**
 section for the full review.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 14, PR #3927, merged), preserved for history</summary>
@@ -24341,7 +24349,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
@@ -24367,6 +24375,50 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-02 — Feature 16 (Events & requests, pass 13) — watchdog pickup, 1 fixed (EV-30, MED, cross-org file-retention gap)
+
+Watchdog pickup. PR #3930 (Feature 15, Scheduling, pass 13) had just
+merged; `list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-` head branch, and the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable per `ListAgents`. Row 16 (Events & requests) was the
+next `⬜`.
+
+**1 fixed (EV-30), 0 new flagged.** Baseline `63ecd45c5` (PR #3841's merge,
+pass 12). 351 non-merge commits landed repo-wide; only 5 files in this
+feature's declared scope carried a real diff, plus a scope gap (5 more
+frontend files this doc's own header had dropped, all pre-existing scope
+per earlier passes' corrections — now restored). The real content: a
+Pitfall #27-shaped race fix for double guest check-ins (locks the event row,
+then re-reads the existing-attendee check as a locking read), and a new
+manager-facing upload/delete UI wired onto the event-attachment endpoints
+that already carry the fixed EV-17 (HIGH) finding. Reviewing that UI's
+backend surface found **EV-30 (MED)**: `delete_event_attachment`'s "is this
+file still referenced by another event?" count had no `organization_id`
+filter, so an `events.manage` holder in a different org — using the same
+client-authored-`file_path` primitive EV-17 already established — could
+plant an event naming a victim org's exact attachment path and keep that
+file on the victim's disk forever (an availability/storage issue, not a data
+leak: the count itself is never returned to the caller). Fixed by
+org-scoping the count to match the already-org-scoped event fetch; guard
+test `test_event_attachment_cross_org_reference.py` confirmed red against
+the unfixed code first, per CLAUDE.md Pitfall #37. EV-17, EV-23, EV-26 and
+the unrated guest-link token all re-verified unchanged by direct read. No
+new route (289 full-repo, unchanged route counts per file). Full write-up:
+`docs/security-review/EV-16-events-requests.md`'s **Pass 13** section.
+
+Completion gate: flake8/black/isort on `app/ tests/ alembic/` clean;
+`validate_migrations.py --strict` — 696 revisions, single head
+`38e0f552242d`; `check_route_permissions.py --strict` — 289 routes, 0
+errors/warnings; `generate_schema_docs.py --check` — up to date; scoped
+backend tests (`-k "event or guest or rsvp or attendance"`) — 2157 passed,
+1 pre-existing skip (`pywebpush`); frontend `npm run typecheck` — 0 errors;
+`npm run lint` — 0 errors, 0 warnings.
+
+Rotation row 16 → ✅ (pending this PR's merge). Next: Feature 17 (Training
+core) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
 
 ### 2026-11-02 — Feature 15 (Scheduling, pass 13) — watchdog pickup, 0 fixed, 0 new findings; shift-evaluation close-out gate, a generation ledger, and a configurable driver seat
 
