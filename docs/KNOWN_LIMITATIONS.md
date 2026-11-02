@@ -1,5 +1,61 @@
 # Known Limitations & Open Decisions
 
+## Medical Screening — Gaps for the Owner (2026-11-02)
+
+From the medical-screening deep dive
+([W71b](workflow-review/W71b-medical-screening-deep-dive.md)). Each was seen in
+the browser except the last, which was read from code. None is fixed, because
+each changes saved members' standing, writes PHI rows, or adds behaviour.
+
+- **A failed screening does not count against the member (W71b-1, HIGH).**
+  ✅ **Resolved 2026-11-02 (owner decision: the latest result decides).** A
+  failure leaves the requirement unmet until a later pass, completion or
+  waiver; the panel reads "Failed — not cleared", and the older pass leaves
+  the expiring list. `tests/test_medical_screening_failed_result.py`. Original
+  finding:
+  `_grade` considers only passed, completed and waived records. A member who
+  failed their physical last week, but passed one eleven months ago, reads
+  **compliant** on the roster, in the per-member panel and on their own
+  dashboard ("Clear, with conditions"). None of them mentions the failure.
+  Options:
+  - the latest dated result decides, so a failure makes the requirement
+    unmet;
+  - keep the grade but show "newer failed result" on the panel and roster;
+  - leave as is.
+- **Converting a prospect to a member leaves their screenings behind
+  (W71b-2, HIGH).** ✅ **Resolved 2026-11-02 (owner decision: re-link, and
+  migrate the prospects already converted).** Departments screen both before
+  and after the membership vote; the transfer now adds the new member's id to
+  the prospect's records (keeping `prospect_id`), and migration `beedcad5b36a`
+  does the same for earlier transfers. `tests/test_prospect_transfer_screenings.py`,
+  `tests/test_relink_transferred_prospect_screenings_migration.py`. Original
+  finding: `_do_transfer` does not re-link `screening_records`, so a
+  prospect who passed every pre-membership screening joins as "0 of N met".
+  The records stay on a TRANSFERRED prospect that no roster shows. The
+  proposed fix has two parts:
+  - set `user_id` on the prospect's records at transfer, keeping
+    `prospect_id`;
+  - a migration that backfills prospects already transferred, through
+    `transferred_user_id`, with a test that runs against existing rows.
+- **The Members administration hub grades screenings its own way (W71b-3,
+  MED).** "Screenings current" counts anyone with one unexpired passed
+  record of any type. It ignores requirements, the frequency rule, position
+  scoping and waivers, and read 20% where the Compliance tab had 2 of 20
+  fully compliant. The "expired screenings" attention item ignores
+  frequency-derived lapses. It also says "blocks duty assignment", which
+  nothing implements. The proposal is to build both from
+  `MedicalScreeningService.get_compliance_roster` (pitfall #29), which
+  changes what the tile counts. Separately, decide whether a lapsed
+  screening should in fact block scheduling, or the claim should go.
+- **Nothing reminds anyone a screening is about to expire (W71b-4, MED).**
+  Certifications get tiered 90/60/30/7-day emails, and screenings get none.
+  A lapse is visible only on the Compliance tab and the member's dashboard.
+  If added, reminders would be email-first (pitfall #18).
+- **A new requirement starts as one-time (W71b-5, LOW).** The One-time box
+  starts ticked, though the hidden frequency is pre-filled with 12, so an
+  annual physical added in a hurry never falls due. The fix is one line,
+  `ScreeningRequirementForm.tsx:32`.
+
 ## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
 
 The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies

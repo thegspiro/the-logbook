@@ -224,6 +224,36 @@ announces. The end-of-shift checklist reminder is the notice that opens `/invent
 changed files, and the scheduling, swap, time-off and shift-completion suites
 pass.
 
+### W71b — Medical screening, deep dive — 2026-11-02
+
+Driven as `admin`, as `member2` holding a new Medical Officer position, and as
+`member`, on a fresh database at 1280×900 and 390×844. It covered what W71 left
+out (prospects, a prospect transferred to membership, deletion, a non-admin
+officer recording their own screening), and checked the module against the
+dashboard and the Members hub. Held: prospect recording, self-recording with
+its label, frequency grading of an undated record, waivers counting, the
+delete itself, and `member` refused. Fixed (LOW, each with a test seen to
+fail first):
+
+- View opened the member's panel off-screen, on a phone and on a laptop;
+- a Failed result was given a one-year expiration;
+- the delete confirmation did not say whose record it was;
+- dialog buttons were 36px on a phone.
+
+Flagged, mirrored to KNOWN_LIMITATIONS:
+
+- W71b-1 (HIGH): a newer failed physical leaves the member reading cleared
+  everywhere.
+- W71b-2 (HIGH): transferring a prospect leaves their screenings on the
+  prospect, so the new member owes them again.
+- W71b-3 (MED): the Members hub re-derives screening status and disagrees
+  with the Compliance tab. It also claims the lapse "blocks duty assignment".
+- W71b-4 (MED): no expiry reminders.
+- W71b-5 (LOW): new requirements default to one-time.
+
+Gate: typecheck and lint clean; 183 medical-screening and date-utility tests
+and 12 integrity tests pass.
+
 ### Leads — Navigation parity and dialog roles — 2026-11-02
 
 Driven as: `admin` in the top layout at 390×844, on a reseeded review

@@ -1548,6 +1548,22 @@ manager records it, and yours is refused with a message saying so. This is a
 same-person check only: any finance manager may record a payment for any other
 member.
 
+#### Dues paid through Zeffy
+
+If the department sells memberships through Zeffy and that Zeffy campaign is
+linked to a dues schedule, members' payments are recorded here by themselves.
+Each is credited to the paying member's oldest open dues on the schedule,
+matched by the email they paid with, and follows the rules above: an
+overpayment becomes a donation, and the same Zeffy payment is never credited
+twice. In **Payment history** it shows the method **zeffy** and a reference
+starting `zeffy:`, with no officer as the one who entered it.
+
+A payment The Logbook could not match to a member, or that Zeffy later
+refunded, is not changed here. It waits under **Grants & Fundraising → Zeffy**
+for the treasurer. Linking a campaign to dues needs both finance permissions as
+well as **Manage fundraising**. See
+[Zeffy in the Grants & Fundraising guide](./12-grants-fundraising.md#zeffy--online-donations-tickets-and-memberships).
+
 ### Payment History
 
 **Required Permission:** finance viewer

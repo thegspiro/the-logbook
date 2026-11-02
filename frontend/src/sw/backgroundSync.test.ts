@@ -13,6 +13,31 @@ import {
   type GenericQueuedItem,
 } from '../utils/genericOfflineStore';
 import { listPendingReports, openDB, STORE_REPORTS, type QueuedShiftReport } from '../utils/shiftReportOfflineStore';
+import {
+  CHECK_QUEUE_MAX_RETRIES,
+  listPendingChecks,
+  openCheckDb,
+  txStore,
+  type QueuedCheck,
+} from '../utils/equipmentCheckOfflineStore';
+import { STORE_PENDING, allRows, putRow, type SkillsPendingEntry } from '../utils/skillsTestOfflineStore';
+
+// fake-indexeddb's structured clone does not keep a jsdom Blob: it comes back
+// as an empty object (see offlineQueue.test.ts). A real browser keeps it, and
+// pwa.spec.ts proves that end to end. Here the photos read back from the queue
+// are given their Blobs again, by file name, so the upload can be asserted.
+const photoBlobs = new Map<string, Blob>();
+vi.mock('../utils/equipmentCheckOfflineStore', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../utils/equipmentCheckOfflineStore')>();
+  return {
+    ...real,
+    listPendingChecks: async () =>
+      (await real.listPendingChecks()).map((entry) => ({
+        ...entry,
+        photos: entry.photos.map((photo) => ({ ...photo, blob: photoBlobs.get(photo.fileName) ?? photo.blob })),
+      })),
+  };
+});
 
 const ME = 'member-1';
 
@@ -51,6 +76,47 @@ async function putReport(report: Partial<QueuedShiftReport> & { id: string }): P
     tx.onerror = () => reject(tx.error ?? new Error('put failed'));
   });
 }
+
+async function putCheck(check: Partial<QueuedCheck> & { id: string }): Promise<void> {
+  const full: QueuedCheck = {
+    shiftId: 'shift-1',
+    payload: { template_id: 'tpl', check_timing: 'start_of_shift', client_submission_id: check.id, items: [] },
+    photos: [],
+    queuedAt: 1_000,
+    retries: 0,
+    ownerId: ME,
+    ...check,
+  };
+  for (const photo of full.photos) photoBlobs.set(photo.fileName, photo.blob);
+  const db = await openCheckDb();
+  await new Promise<void>((resolve, reject) => {
+    const req = txStore(db, 'readwrite').put(full);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error ?? new Error('put failed'));
+  });
+}
+
+const photo = (itemId: string, fileName: string) => ({
+  itemId,
+  fileName,
+  blob: new Blob([fileName], { type: 'image/jpeg' }),
+});
+
+async function putSkills(entry: Partial<SkillsPendingEntry> & { testId: string }): Promise<void> {
+  const full: SkillsPendingEntry = {
+    label: 'Ladder raise — Sam Rivera',
+    queuedAt: 1_000,
+    updatedAt: 1_000,
+    rev: 1,
+    complete: false,
+    retries: 0,
+    ownerId: ME,
+    ...entry,
+  };
+  await putRow(STORE_PENDING, full);
+}
+
+const skillTest = (over: Record<string, unknown> = {}) => ({ id: 't1', status: 'in_progress', version: 2, ...over });
 
 type Route = (init: RequestInit) => Response | Promise<Response>;
 
@@ -94,6 +160,7 @@ const meOk = () => json(200, { id: ME });
 describe('runBackgroundSync', () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
+    photoBlobs.clear();
   });
 
   it('sends the signed-in member’s items and takes them off the device', async () => {
@@ -120,6 +187,10 @@ describe('runBackgroundSync', () => {
         genericDiscarded: 0,
         shiftReportsSynced: 1,
         shiftReportsRefused: [],
+        equipmentChecksSynced: [],
+        equipmentChecksDiscarded: [],
+        skillsSynced: [],
+        skillsFailed: [],
       },
     ]);
   });
@@ -282,5 +353,184 @@ describe('runBackgroundSync', () => {
     await runBackgroundSync(env);
 
     expect(notices).toEqual([]);
+  });
+
+  describe('equipment checks', () => {
+    it('submits the check, uploads each item’s photos as files, and takes it off the device', async () => {
+      await putCheck({ id: 'c1', photos: [photo('tpl-1', 'a.jpg'), photo('tpl-1', 'b.jpg'), photo('tpl-2', 'c.jpg')] });
+      const { env, calls, notices } = makeEnv({
+        'GET /auth/me': meOk,
+        'POST /equipment-checks/shifts/shift-1/checks': () =>
+          json(201, {
+            id: 'check-1',
+            items: [
+              { id: 'ci-1', templateItemId: 'tpl-1' },
+              { id: 'ci-2', templateItemId: 'tpl-2' },
+            ],
+          }),
+        'POST /equipment-checks/checks/check-1/items/ci-1/photos': () => json(201, { count: 2 }),
+        'POST /equipment-checks/checks/check-1/items/ci-2/photos': () => json(201, { count: 1 }),
+      });
+
+      await runBackgroundSync(env);
+
+      expect(await listPendingChecks()).toEqual([]);
+      const submit = calls.find((c) => c.path === '/equipment-checks/shifts/shift-1/checks');
+      expect(JSON.parse(submit?.init.body as string)).toMatchObject({ client_submission_id: 'c1' });
+      const upload = calls.find((c) => c.path.endsWith('/items/ci-1/photos'));
+      const form = upload?.init.body as FormData;
+      expect(form).toBeInstanceOf(FormData);
+      expect(form.getAll('files').map((f) => (f as File).name)).toEqual(['a.jpg', 'b.jpg']);
+      // The browser writes a multipart Content-Type with its boundary itself.
+      expect((upload?.init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+      expect((upload?.init.headers as Record<string, string>)['X-CSRF-Token']).toBe('csrf-123');
+      expect(notices[0]?.equipmentChecksSynced).toEqual(['c1']);
+    });
+
+    it('sends only the photos still missing from a check the server already accepted', async () => {
+      await putCheck({
+        id: 'c1',
+        submittedCheckId: 'check-1',
+        submittedItemIds: { 'tpl-2': 'ci-2' },
+        photos: [photo('tpl-2', 'c.jpg')],
+      });
+      const { env, calls } = makeEnv({
+        'GET /auth/me': meOk,
+        'POST /equipment-checks/checks/check-1/items/ci-2/photos': () => json(201, { count: 1 }),
+      });
+
+      await runBackgroundSync(env);
+
+      expect(calls.map((c) => c.path)).toEqual(['/auth/me', '/equipment-checks/checks/check-1/items/ci-2/photos']);
+      expect(await listPendingChecks()).toEqual([]);
+    });
+
+    it('keeps the accepted check’s checkpoint when a photo upload fails, and retries later', async () => {
+      await putCheck({ id: 'c1', photos: [photo('tpl-1', 'a.jpg')] });
+      const { env } = makeEnv({
+        'GET /auth/me': meOk,
+        'POST /equipment-checks/shifts/shift-1/checks': () =>
+          json(201, { id: 'check-1', items: [{ id: 'ci-1', templateItemId: 'tpl-1' }] }),
+        'POST /equipment-checks/checks/check-1/items/ci-1/photos': () => json(503),
+      });
+
+      await expect(runBackgroundSync(env)).rejects.toBeInstanceOf(BackgroundSyncRetryLater);
+
+      const [left] = await listPendingChecks();
+      expect(left?.submittedCheckId).toBe('check-1');
+      expect(left?.retries).toBe(0);
+    });
+
+    it('discards a check at the page’s cap of permanent refusals', async () => {
+      await putCheck({ id: 'c1', retries: CHECK_QUEUE_MAX_RETRIES - 1 });
+      const { env, notices } = makeEnv({
+        'GET /auth/me': meOk,
+        'POST /equipment-checks/shifts/shift-1/checks': () => json(422, { detail: 'Template deleted' }),
+      });
+
+      await runBackgroundSync(env);
+
+      expect(await listPendingChecks()).toEqual([]);
+      expect(notices[0]?.equipmentChecksDiscarded).toEqual(['c1']);
+    });
+
+    it('leaves another member’s check alone', async () => {
+      await putCheck({ id: 'c1', ownerId: 'member-2' });
+      const { env, calls } = makeEnv({ 'GET /auth/me': meOk });
+
+      await runBackgroundSync(env);
+
+      expect(calls.map((c) => c.path)).toEqual(['/auth/me']);
+      expect(await listPendingChecks()).toHaveLength(1);
+    });
+  });
+
+  describe('skills evaluations', () => {
+    it('creates, saves and completes a test begun offline, in that order', async () => {
+      await putSkills({
+        testId: 't1',
+        create: { id: 't1', template_id: 'tpl', candidate_id: 'cand' },
+        update: { notes: 'Steady' },
+        complete: true,
+      });
+      const { env, calls, notices } = makeEnv({
+        'GET /auth/me': meOk,
+        'POST /training/skills-testing/tests': () => json(201, skillTest({ version: 1, status: 'draft' })),
+        'PUT /training/skills-testing/tests/t1': () => json(200, skillTest({ version: 2 })),
+        'POST /training/skills-testing/tests/t1/complete': () =>
+          json(200, skillTest({ version: 3, status: 'completed' })),
+      });
+
+      await runBackgroundSync(env);
+
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+        'GET /auth/me',
+        'POST /training/skills-testing/tests',
+        'PUT /training/skills-testing/tests/t1',
+        'POST /training/skills-testing/tests/t1/complete',
+      ]);
+      const save = calls.find((c) => c.method === 'PUT');
+      expect(JSON.parse(save?.init.body as string)).toEqual({ notes: 'Steady', expected_version: 1 });
+      expect(await allRows(STORE_PENDING)).toEqual([]);
+      expect(notices[0]?.skillsSynced).toEqual([
+        { testId: 't1', test: skillTest({ version: 3, status: 'completed' }), completed: true },
+      ]);
+    });
+
+    it('keeps a refused evaluation, marked failed, and names it', async () => {
+      await putSkills({ testId: 't1', update: { notes: 'x' }, baseVersion: 2 });
+      const { env, notices } = makeEnv({
+        'GET /auth/me': meOk,
+        'PUT /training/skills-testing/tests/t1': () => json(409, { detail: 'This test was voided' }),
+      });
+
+      await runBackgroundSync(env);
+
+      const [kept] = await allRows<SkillsPendingEntry>(STORE_PENDING);
+      expect(kept?.failed).toMatchObject({ status: 409, message: 'This test was voided' });
+      expect(kept?.update).toEqual({ notes: 'x' });
+      expect(notices[0]?.skillsFailed).toEqual([
+        { testId: 't1', label: 'Ladder raise — Sam Rivera', message: 'This test was voided' },
+      ]);
+    });
+
+    it('skips an evaluation already marked failed and another member’s', async () => {
+      await putSkills({ testId: 't1', update: { notes: 'x' }, failed: { status: 409, message: 'no', at: 1 } });
+      await putSkills({ testId: 't2', update: { notes: 'y' }, ownerId: 'member-2' });
+      const { env, calls } = makeEnv({ 'GET /auth/me': meOk });
+
+      await runBackgroundSync(env);
+
+      expect(calls.map((c) => c.path)).toEqual(['/auth/me']);
+    });
+
+    it('asks the browser to try again after an outage, keeping the save', async () => {
+      await putSkills({ testId: 't1', update: { notes: 'x' }, baseVersion: 2 });
+      const { env } = makeEnv({
+        'GET /auth/me': meOk,
+        'PUT /training/skills-testing/tests/t1': () => json(503),
+      });
+
+      await expect(runBackgroundSync(env)).rejects.toBeInstanceOf(BackgroundSyncRetryLater);
+
+      const [kept] = await allRows<SkillsPendingEntry>(STORE_PENDING);
+      expect(kept?.update).toEqual({ notes: 'x' });
+      expect(kept?.failed).toBeUndefined();
+    });
+
+    it('stops at a lost connection without counting it against the evaluation', async () => {
+      await putSkills({ testId: 't1', update: { notes: 'x' }, baseVersion: 2 });
+      const { env } = makeEnv({
+        'GET /auth/me': meOk,
+        'PUT /training/skills-testing/tests/t1': () => {
+          throw new TypeError('Failed to fetch');
+        },
+      });
+
+      await expect(runBackgroundSync(env)).rejects.toBeInstanceOf(BackgroundSyncRetryLater);
+
+      const [kept] = await allRows<SkillsPendingEntry>(STORE_PENDING);
+      expect(kept?.retries).toBe(0);
+    });
   });
 });
