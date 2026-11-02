@@ -934,7 +934,7 @@ Daily scheduled task (06:00) → cert_expiration_alerts
 Leave of Absence created → auto-creates linked training waiver
   (unless exempt_from_training_waiver = true)
 Waiver active during evaluation period →
-  → Count months with ≥15 days covered as "waived"
+  → Count months the department's leave_month_rule excuses (any day under full_month)
   → active_months = MAX(total_months - waived_months, 1)
   → adjusted_required = base_required × (active_months / total_months)
   → Applies to hours, shifts, calls requirements
