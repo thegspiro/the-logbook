@@ -9,7 +9,7 @@
  * the server audit-logs.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { SCREENING_STATUS_LABELS, SCREENING_TYPE_LABELS, type ComplianceItem } from '../types';
@@ -54,6 +54,19 @@ export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ 
     else void fetchProspectCompliance(subject.id);
   }, [subject, fetchUserCompliance, fetchProspectCompliance, clearCompliance]);
 
+  const sectionRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const subjectKey = subject ? `${subject.type}:${subject.id}` : null;
+
+  // The panel renders below the whole roster, so without this a View tap
+  // opened it a screen or more under the row and appeared to do nothing.
+  // Focus follows so a screen reader lands on the name it asked for.
+  useEffect(() => {
+    if (!subjectKey) return;
+    sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    headingRef.current?.focus({ preventScroll: true });
+  }, [subjectKey]);
+
   // Only the summary for the subject on screen; a stale one from an earlier
   // pick is never shown under a new name.
   const shown =
@@ -64,9 +77,14 @@ export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ 
   if (!subject) return null;
 
   return (
-    <section aria-labelledby="subject-compliance-heading" className="space-y-3">
+    <section ref={sectionRef} aria-labelledby="subject-compliance-heading" className="scroll-mt-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 id="subject-compliance-heading" className="text-theme-text-primary text-sm font-medium">
+        <h3
+          ref={headingRef}
+          id="subject-compliance-heading"
+          tabIndex={-1}
+          className="text-theme-text-primary text-sm font-medium focus:outline-hidden"
+        >
           {subject.name}
         </h3>
         <button type="button" className="btn-secondary btn-sm" onClick={onClose}>

@@ -116,4 +116,26 @@ describe('SubjectCompliancePanel', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // Deep-dive review 2026-11-02: the panel renders below the whole roster, so
+  // on a 20-member department View opened it ~1,300px under the row tapped and
+  // the tap looked like it did nothing — on a phone and at 1280x900 alike.
+  it('brings itself into view and takes focus when someone is chosen', async () => {
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    scrollIntoView.mockClear();
+    const { rerender } = render(
+      <SubjectCompliancePanel subject={{ type: 'user', id: 'u-1', name: 'Jake Thompson' }} onClose={vi.fn()} />
+    );
+
+    const heading = screen.getByRole('heading', { name: 'Jake Thompson' });
+    expect(heading).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.instances[0]).toBe(screen.getByRole('region', { name: 'Jake Thompson' }));
+
+    rerender(
+      <SubjectCompliancePanel subject={{ type: 'prospect', id: 'p-1', name: 'Alex Rivera' }} onClose={vi.fn()} />
+    );
+    expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
 });

@@ -89,4 +89,44 @@ describe('ScreeningRecordForm — suggested expiration (W71)', () => {
 
     expect(screen.getByLabelText('Expiration Date')).toHaveValue('');
   });
+
+  // Deep-dive review 2026-11-02: a failed physical was saved "expiring" a year
+  // out. A failed or expired result satisfies nothing, so that date only
+  // invites the next reader to take it as a clearance.
+  it('suggests nothing for a failed result', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.selectOptions(screen.getByLabelText('Linked Requirement (optional)'), 'req-annual');
+    await user.selectOptions(screen.getByLabelText('Status'), 'failed');
+    await user.type(screen.getByLabelText('Completed Date'), '2026-10-25');
+
+    expect(screen.getByLabelText('Expiration Date')).toHaveValue('');
+  });
+
+  it('withdraws its suggestion when the result is changed to failed, and restores it after', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.selectOptions(screen.getByLabelText('Linked Requirement (optional)'), 'req-annual');
+    await user.type(screen.getByLabelText('Completed Date'), '2026-10-25');
+    expect(screen.getByLabelText('Expiration Date')).toHaveValue('2027-10-25');
+
+    await user.selectOptions(screen.getByLabelText('Status'), 'failed');
+    expect(screen.getByLabelText('Expiration Date')).toHaveValue('');
+
+    await user.selectOptions(screen.getByLabelText('Status'), 'passed');
+    expect(screen.getByLabelText('Expiration Date')).toHaveValue('2027-10-25');
+  });
+
+  it('keeps a date the officer typed when the result is changed to failed', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.selectOptions(screen.getByLabelText('Linked Requirement (optional)'), 'req-annual');
+    await user.type(screen.getByLabelText('Expiration Date'), '2026-12-31');
+    await user.selectOptions(screen.getByLabelText('Status'), 'failed');
+
+    expect(screen.getByLabelText('Expiration Date')).toHaveValue('2026-12-31');
+  });
 });
