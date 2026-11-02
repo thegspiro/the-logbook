@@ -3568,7 +3568,20 @@ async function backlog02Evaluations(page) {
   }
   const shiftId = evaluations.find((e) => e.shift_id)?.shift_id;
   if (!shiftId) throw new Error("no internship evaluation is on file");
-  return { shiftId, evaluations };
+  // The member list carries submitted evaluations only; the shift's roster
+  // also names the draft and the one not started.
+  const roster = await apiFromPage(
+    page,
+    "GET",
+    `/training/shift-evaluations/shifts/${shiftId}`,
+  );
+  const rows = (roster.body?.requirements ?? []).map((r) => ({
+    id: r.evaluation?.id ?? null,
+    status: r.evaluation?.status ?? "not_started",
+    member_id: r.member_id,
+    scope_key: r.scope_key,
+  }));
+  return { shiftId, evaluations: rows };
 }
 
 /** The Shift Completion Report form, opened on the internship's shift. */
@@ -5169,10 +5182,11 @@ export const SHOTS = [
   // shots below drive the form and stop before anything is saved.
   {
     id: "02-107-my-training-history-tab",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 238,
     anchor: "My Training → History tab: the three totals, the search and Type",
-    alt: "The History tab on My Training: all-time totals, the course search and Type filter with the export buttons, a record awaiting approval, this year's records open and last year closed with its count and hours",
+    alt: "The History tab on My Training: all-time totals, the course search and Type filter, the No completion date group above the years, this year's records open and earlier years closed with their counts and hours",
     auth: "member",
     route: "/training/my-training",
     prepare: async (page) => {
@@ -10452,7 +10466,7 @@ export const SHOTS = [
     line: 92,
     anchor:
       "Officer on a phone, Training Admin > Evaluations > Skills Test Templates",
-    alt: "Skills Test Templates on a phone: each template a card with its name and description, its status badge, and its action buttons along the bottom",
+    alt: "Skills Test Templates on a phone: each template a card with its name and description, category, status badge, section and criteria counts, and its action buttons along the bottom",
     route: "/training/admin?page=evaluations&tab=templates",
     viewport: "mobile",
     prepare: async (page) => {
@@ -10460,11 +10474,13 @@ export const SHOTS = [
       await firstCard.waitFor({ timeout: 30_000 });
       await firstCard.evaluate((el) => {
         el.scrollIntoView({ block: "start" });
-        window.scrollBy(0, -120);
+        window.scrollBy(0, -72);
       });
       await page.waitForTimeout(800);
     },
-    expect: "Published",
+    // Not the word "Published": the closed status filter carries it as an
+    // <option>, which is never visible.
+    expect: { selector: "table tbody tr td[data-label='Status']" },
   },
   {
     id: "09-09-member-skills-testing",
@@ -12805,9 +12821,25 @@ export const SHOTS = [
     line: 112,
     anchor:
       "The Add Requirement form/modal showing all fields filled out for an annual",
-    alt: "Add screening requirement form with type, frequency, and grace period",
+    alt: "The Add Screening Requirement form filled in for an annual physical: name, type, description, a 12-month frequency with its note, Applies to Positions with its explanation, and the grace period",
     route: "/medical-screening",
-    prepare: clickByName(/add requirement/i),
+    // Re-shot 2026-11-02: filled in for an annual requirement, as the
+    // placeholder asked, so the frequency field and its note are in frame.
+    // Typed and never saved.
+    prepare: async (page) => {
+      await clickByName(/add requirement/i)(page);
+      await page.locator("#req-name").fill("Annual Physical Exam");
+      await page
+        .locator("#req-desc")
+        .fill("NFPA 1582 physical for every interior-qualified member.");
+      await page
+        .getByLabel(/One-time requirement/)
+        .uncheck({ timeout: 15_000 });
+      await page.locator("#req-frequency").fill("12");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    expect: { selector: "#req-frequency-note" },
     fullPage: true,
   },
   {
@@ -13001,7 +13033,7 @@ export const SHOTS = [
     line: 1573,
     anchor:
       "Screenshot of the printed Compliance Matrix page showing the landscape grid with",
-    alt: "Print layout for the compliance matrix",
+    alt: "The printed compliance matrix with All chosen: the summary counts, then an Operational Members table and an Administrative Members table, each with only the requirements that grade its members, and the key beneath",
     route: "/training/print/compliance",
     fullPage: true,
   },
@@ -16350,6 +16382,7 @@ export const SHOTS = [
   },
   {
     id: "13-09-compliance-by-frequency-waiver",
+    allowEmptyState: true,
     doc: "13-medical-screening.md",
     line: 491,
     anchor:
@@ -23727,13 +23760,16 @@ export const SHOTS = [
   // ── Guide 02 screenshot backlog (2026-11-02) ───────────────────────
   {
     id: "02-126-shift-evaluation-settings",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 2769,
     anchor:
       "Training Admin → Settings & Data → Shift Evaluations: the general-form settings card",
     alt: "Training Admin → Settings & Data → Shift Evaluations: the general shift evaluation settings above the Evaluation templates list, with the EMT Field Internship Evaluation listed against the program that uses it",
     route: "/training/admin?page=settings&tab=shift-evaluations",
-    expect: BACKLOG02_FORM,
+    // Not the form's name: it is also an <option> of the closed General form
+    // select, which is never "visible".
+    expect: `Used by ${BACKLOG02_INTERNSHIP}`,
     selector: '[role="tabpanel"]',
   },
   {
@@ -23741,7 +23777,7 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 2773,
     anchor: "The evaluation form editor open on a department form",
-    alt: "The evaluation form editor open on the EMT Field Internship Evaluation: its name, the four-level rating scale and labels, the Not Observed option, the comment threshold and the first section's items",
+    alt: "The evaluation form editor open on the EMT Field Internship Evaluation: its details, the four-level rating scale with Not Observed and the comment threshold, the Shift (A, B, C) header field and shift statistics, three sections of items, the closing comments, and who fills it out and who is evaluated",
     route: "/training/admin?page=settings&tab=shift-evaluations",
     // Opened and never saved: Cancel leaves the form as the seeder made it.
     prepare: async (page) => {
@@ -23749,16 +23785,16 @@ export const SHOTS = [
         .getByRole("button", { name: `Edit ${BACKLOG02_FORM}` })
         .click({ timeout: 20_000 });
       await page
-        .getByText("Unsatisfactory")
-        .first()
+        .getByRole("heading", { name: "Rating scale" })
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(800);
     },
-    expect: "Unsatisfactory",
+    expect: "Rating scale",
     selector: '[role="tabpanel"]',
   },
   {
     id: "02-128-program-evaluation-form-picker",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 2781,
     anchor:
@@ -23776,16 +23812,17 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     expect: "Shift evaluation form",
-    selector: "div[role='dialog']",
+    selector: PROGRAM_REQUIREMENT_DIALOG,
     viewport: { width: 1440, height: 1100 },
   },
   {
     id: "02-129-pipeline-wizard-evaluation-form",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 2785,
     anchor:
       "The create-pipeline wizard's Program Info step, with a form chosen",
-    alt: "The create-pipeline wizard's Program Info step with a program name typed and the EMT Field Internship Evaluation chosen in the Shift evaluation form picker",
+    alt: "The create-pipeline wizard's Program Info step scrolled to its foot: the prerequisite programs, the concurrent-enrollment box, and the EMT Field Internship Evaluation chosen in the Shift evaluation form picker",
     route: "/training/admin?page=curriculum&tab=pipelines&view=new",
     // Typed into, never created: the wizard saves only on its last step.
     prepare: async (page) => {
@@ -23824,7 +23861,7 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 2805,
     anchor: "A member's shift evaluation page part-way through",
-    alt: "A shift evaluation in progress: the intern, shift and unit at the top, the Shift (A, B, C) choice, and each Clinical Performance item with its row of rating buttons, a required comment open beneath a low rating",
+    alt: "Priya Raman's EMT Field Internship Evaluation in progress: the three interns on the shift across the top, the Shift (A, B, C) choice, shift statistics, the rating key, and each Clinical Performance item with its rating buttons, a required comment open under a rating of 2, and Save draft and Submit evaluation along the bottom",
     route: "/scheduling?tab=shift-reports",
     // The draft the seeder left. Viewing it saves nothing: autosave fires only
     // on a change.
@@ -23845,14 +23882,16 @@ export const SHOTS = [
       await page.waitForTimeout(1200);
     },
     expect: "Clinical Performance",
-    fullPage: true,
+    // Not fullPage: the page's sticky action bar is position: fixed, and a
+    // full-page capture paints it over an item halfway down.
+    viewport: { width: 1440, height: 1700 },
   },
   {
     id: "02-132-shift-evaluation-print",
     doc: "02-training.md",
     line: 2809,
     anchor: "The print view of a submitted shift evaluation",
-    alt: "The printable shift evaluation: the shift details and statistics, the rating key, Clinical Performance and Professionalism & Affect as tables of ratings and comments, and the closing comments",
+    alt: "The printable shift evaluation for Esme Caldwell: shift details and statistics, the rating key, each section as a table of ratings and comments, and the Preceptor Comments",
     route: "/scheduling/shift-evaluations/print",
     prepare: async (page) => {
       const { evaluations } = await backlog02Evaluations(page);
@@ -23941,14 +23980,14 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     expect: "Operational members",
-    selector: "div[role='dialog']",
+    selector: PROGRAM_REQUIREMENT_DIALOG,
   },
   {
     id: "02-136-curriculum-programs",
     doc: "02-training.md",
     line: 606,
     anchor: "Training officer, Training Admin → Curriculum → Programs",
-    alt: "Training Admin → Curriculum → Programs: the department's existing pipelines listed with their codes and phases, New Pipeline above them",
+    alt: "Training Admin → Curriculum → Programs: the department's pipelines listed, each with its badges, description, time limit and how many are enrolled, with Import and New Pipeline above them",
     route: "/training/admin?page=curriculum&tab=pipelines",
     expect: "Probationary Firefighter Pipeline",
     selector: '[role="tabpanel"]',
@@ -23985,6 +24024,7 @@ export const SHOTS = [
   },
   {
     id: "02-139-mark-pipeline-complete",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 833,
     anchor:
@@ -24015,11 +24055,12 @@ export const SHOTS = [
   },
   {
     id: "02-140-completed-by-hand",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 837,
     anchor:
       "The pipeline's Enrollments tab: one member reading Completed by hand",
-    alt: "The Hazmat Operations Refresher's Enrollments tab: Priya Raman completed, with Completed by hand and the officer's reason, and Ingrid Solberg active, reading No active requirements, with Mark pipeline complete beside her",
+    alt: "The Hazmat Operations Refresher's Enrollments tab: Priya Raman completed at 0%, with Completed by hand and the officer's reason, and Ingrid Solberg active, reading No active requirements, with Mark pipeline complete beside her",
     route: "/training/programs",
     prepare: async (page) => {
       await openBacklog02Program(page, BACKLOG02_NO_ACTIVE, "?tab=enrollments");
@@ -24034,10 +24075,11 @@ export const SHOTS = [
   },
   {
     id: "02-141-no-active-requirements",
+    allowEmptyState: true,
     doc: "02-training.md",
     line: 864,
     anchor: "A pipeline page whose only requirement is deactivated",
-    alt: "The Hazmat Operations Refresher pipeline page: the notice that it has no active requirements and completes nobody by itself, and its one requirement tagged Inactive — not currently required",
+    alt: "The Hazmat Operations Refresher pipeline page: the No active requirements notice for the pipeline and for its one phase, and its only requirement tagged Inactive — not currently required",
     route: "/training/programs",
     prepare: async (page) => {
       await openBacklog02Program(page, BACKLOG02_NO_ACTIVE);

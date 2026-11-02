@@ -17170,13 +17170,34 @@ class Seeder:
             ),
             None,
         )
+        # The rotation crews two or three members a rig, so a shift already
+        # carrying two pool members is topped up to three with a third.
         for shift in reversed(past[1:-1]):
             if ladder and pick(shift, "id") == pick(ladder, "id"):
                 continue
-            crew = items(
-                self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
-            )
+            shift_id = pick(shift, "id")
+            crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
             mine = [c for c in crew if str(c.get("user_id")) in member_ids]
+            if len(mine) < 2:
+                continue
+            aboard = {str(c.get("user_id")) for c in crew}
+            for user_id in member_ids - aboard:
+                if len(mine) >= 3:
+                    break
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{shift_id}/assignments",
+                        {"user_id": user_id, "position": "firefighter"},
+                    )
+                except ApiError as exc:
+                    # Refused when already on another rig that day.
+                    if exc.code not in (400, 409):
+                        raise
+                    continue
+                crew = items(
+                    self.api.get(f"/training/shift-reports/shift-crew/{shift_id}")
+                )
+                mine = [c for c in crew if str(c.get("user_id")) in member_ids]
             if len(mine) >= 3:
                 return {"shift": shift, "crew": mine[:3]}
         return None
