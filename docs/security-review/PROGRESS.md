@@ -16,10 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3955 (Feature 21, Admin hours, pass 13) merged. Row 21 → ✅;
-next is Feature 22 (Grants & fundraising) — confirmed via `gh api
-search/issues` (`is:pr is:open head:claude/security-review`, 0 results)
-before starting this pass.
+**PR [#3962](https://github.com/thegspiro/the-logbook/pull/3962)** (branch
+`claude/security-review-grants-fundraising-p13`) — Feature 22 (Grants &
+fundraising), pass 13, a watchdog pickup. Substantial real delta this
+time — a complete new Zeffy payments integration (~2,900 lines) reviewed in
+full against all seven checklist dimensions: signed/rate-limited webhook
+that never trusts the body for money, org-scoped throughout, secrets and
+payer email encrypted at rest, idempotent via a unique
+`(organization_id, zeffy_payment_id)` constraint, every by-id financial
+mutation row-locked before read. 0 new findings. See
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 13** section
+for the full review.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 13, PR #3955, merged), preserved for history</summary>
