@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3930](https://github.com/thegspiro/the-logbook/pull/3930)** (branch
+`claude/security-review-scheduling-p13`) — Feature 15 (Scheduling), pass 13,
+a watchdog pickup. Real delta: the new Shift Evaluations feature's close-out
+gate hooked into `finalize_shift` (admin-only override, audit-logged,
+org-scoped), a durable per-occurrence generation ledger (new
+`shift_pattern_occurrences` table, race-protected by a unique constraint), a
+generation-skip notice to schedulers (capped, `html.escape`d), and a
+configurable driver-seat set for the EVOC check. 0 fixed, 0 new findings; all
+standing flags (SCH-10, SCH-15, SCH-16, SCH-17, SCH-19) re-confirmed
+unchanged. See `docs/security-review/SCH-15-scheduling.md`'s **Pass 13**
+section for the full review.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 14, PR #3927, merged), preserved for history</summary>
+
 **PR [#3927](https://github.com/thegspiro/the-logbook/pull/3927)** (branch
 `claude/security-review-equipment-check-shifts-p14`) — Feature 14 (Equipment
 check & shifts), pass 14, a watchdog pickup. Real
@@ -25,6 +40,8 @@ self-review exclusion), plus the new Shift Evaluations feature's credit-sync
 hooks landing in this feature's own service file. 0 fixed, 0 new findings.
 See `docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 14**
 section for the full review.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 21, PR #3924, merged), preserved for history</summary>
@@ -24323,7 +24340,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12)                                             | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -24350,6 +24367,53 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-02 — Feature 15 (Scheduling, pass 13) — watchdog pickup, 0 fixed, 0 new findings; shift-evaluation close-out gate, a generation ledger, and a configurable driver seat
+
+Watchdog pickup. PR #3927 (Feature 14, Equipment check & shifts, pass 14)
+had just merged; `list_pull_requests` (state=open) found 0 open PRs at all,
+and the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+Row 15 (Scheduling) was the next `⬜`.
+
+**0 fixed, 0 new findings.** Baseline `25f0085b8` (PR #3840's merge, pass
+12). 22 non-merge commits touch this feature's declared scope, almost all
+one feature — Shift Evaluations — landing its own close-out gate into
+`finalize_shift`: refuses close-out while a required evaluation is missing,
+bypassable only by a `scheduling.manage` holder (enforced at the route, not
+merely the service — a shift's own named officer cannot self-override),
+audit-logged with a required, length-capped reason. One unrelated commit
+(`d03f330de`) adds a durable per-occurrence generation ledger (new
+`shift_pattern_occurrences` table, `shift_id` correctly `SET NULL` +
+`nullable=True`, race-protected by a `UniqueConstraint` on
+`pattern_id`/`occurrence_date`/`shift_type`) and a generation-skip notice to
+schedulers (length-capped list, `html.escape`d at all three email-HTML
+interpolation sites) — both closing items already recorded in
+`KNOWN_LIMITATIONS.md` as resolved. A third (`36ee2bf55`) lets a department
+mark a custom seat "Drives apparatus" so the EVOC driver check applies to it
+too, read from the org's own settings, not a client-supplied id. One
+deliberate cap removal (`get_week_shifts`/`get_month_shifts`:
+`limit=500` → `limit=None`) is bounded by one org's one calendar week/month,
+not client input, so it is not the unbounded-table shape the Checklist's
+abuse-resistance item targets. Routes re-enumerated by AST:
+`scheduling.py` 109 (up from 108 — the new `GET
+/shifts/{shift_id}/trainee-reports`), `scheduling_module_config.py` 3
+(unchanged), `calcom_sync.py` 1 (unchanged). All five standing flags
+(SCH-10, SCH-15, SCH-16, SCH-17, SCH-19) re-confirmed unchanged — the two
+changed backend files' diffs read in full to confirm none of their
+code paths are touched. Full write-up:
+`docs/security-review/SCH-15-scheduling.md`'s **Pass 13** section.
+
+Completion gate green: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 696 revisions, single head
+`38e0f552242d`; `check_route_permissions.py --strict` — 289 routes, 0
+errors/warnings; `generate_schema_docs.py --check` — up to date; scoped
+backend tests (`-k "scheduling or calcom"`) — 580 passed, 1
+environment-only skip (`py_vapid`); frontend typecheck/lint clean.
+
+Rotation row 15 → ✅ (pending this PR's merge). Row 15 was the last `⬜` in
+the rotation table at the time of this pass — re-check `PROGRESS.md`'s table
+fresh rather than trusting this note for the next feature.
 
 ### 2026-11-02 — Feature 14 (Equipment check & shifts, pass 14) — watchdog pickup, 0 fixed, 0 new findings; reviewer-role widening and shift-evaluation credit hooks
 
