@@ -58,6 +58,10 @@ def _settle_key(value: Optional[str]) -> str:
     return value
 
 
+# Matches shift_evaluations.preceptor_name.
+MAX_PRECEPTOR_NAME_LENGTH = 200
+
+
 def _clean_text(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -338,11 +342,15 @@ class ShiftEvaluationSave(BaseModel):
     closing_comments: Optional[str] = Field(
         None, max_length=MAX_CLOSING_COMMENTS_LENGTH
     )
+    # The outside preceptor's name, as written on their form. Read only for an
+    # evaluation of a shift on an outside agency's unit.
+    preceptor_name: Optional[str] = Field(None, max_length=MAX_PRECEPTOR_NAME_LENGTH)
     submit: bool = False
 
     @model_validator(mode="after")
     def _settle(self) -> "ShiftEvaluationSave":
         self.closing_comments = _clean_text(self.closing_comments)
+        self.preceptor_name = _clean_text(self.preceptor_name)
         return self
 
 
@@ -376,7 +384,10 @@ class ShiftEvaluationRequirement(BaseModel):
 
 
 class ShiftEvaluationRoster(UTCResponseBase):
-    shift_id: str
+    # "shift" (shift_id set) or "external" (external_shift_id set).
+    occasion: str = "shift"
+    shift_id: Optional[str] = None
+    external_shift_id: Optional[str] = None
     shift_date: date
     shift_start: Optional[datetime] = None
     shift_end: Optional[datetime] = None
@@ -391,7 +402,10 @@ class ShiftEvaluationDetail(UTCResponseBase):
     member_name: Optional[str] = None
     evaluator_id: Optional[str] = None
     evaluator_name: Optional[str] = None
+    occasion: str = "shift"
     shift_id: Optional[str] = None
+    external_shift_id: Optional[str] = None
+    preceptor_name: Optional[str] = None
     shift_date: date
     shift_start: Optional[datetime] = None
     shift_end: Optional[datetime] = None
@@ -417,7 +431,9 @@ class ShiftEvaluationForm(UTCResponseBase):
     """Everything the evaluation page needs to open."""
 
     requirement: ShiftEvaluationRequirement
-    shift_id: str
+    occasion: str = "shift"
+    shift_id: Optional[str] = None
+    external_shift_id: Optional[str] = None
     shift_date: date
     shift_start: Optional[datetime] = None
     shift_end: Optional[datetime] = None
@@ -430,3 +446,18 @@ class ShiftEvaluationForm(UTCResponseBase):
     evaluation: Optional[ShiftEvaluationDetail] = None
     # Suggested values for a new evaluation, from the shift's records.
     prefill_statistics: dict[str, int] = Field(default_factory=dict)
+
+
+class OutsideShiftAwaitingEvaluation(UTCResponseBase):
+    """A logged outside shift still waiting on its evaluation."""
+
+    entry_id: str
+    member_id: str
+    member_name: Optional[str] = None
+    shift_date: date
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    agency_name: str
+    apparatus_name: str
+    # "needed" (none started) or "draft" (started, not submitted).
+    evaluation_status: str
