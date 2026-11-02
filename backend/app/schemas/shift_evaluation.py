@@ -461,3 +461,5 @@ class OutsideShiftAwaitingEvaluation(UTCResponseBase):
     apparatus_name: str
     # "needed" (none started) or "draft" (started, not submitted).
     evaluation_status: str
+    # The evaluation to open first: the first one not yet submitted.
+    scope_key: str

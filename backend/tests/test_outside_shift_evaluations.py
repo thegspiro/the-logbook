@@ -227,9 +227,9 @@ class TestOutstandingList:
             scene.org_id
         )
 
-        assert [(entry.id, state) for entry, state in rows] == [
-            (needed.id, "needed"),
-            (drafted.id, "draft"),
+        assert [(entry.id, state, key) for entry, state, key in rows] == [
+            (needed.id, "needed", scene.enrollment.id),
+            (drafted.id, "draft", scene.enrollment.id),
         ]
 
     async def test_the_shift_list_carries_the_status(self, db_session):

@@ -1269,6 +1269,12 @@ class ShiftEvaluationService:
     async def entry_statuses(
         self, entries: list[ExternalShiftHours], organization_id: UUID | str
     ) -> dict[str, Optional[str]]:
+        states = await self._entry_states(entries, organization_id)
+        return {entry_id: state for entry_id, (state, _) in states.items()}
+
+    async def _entry_states(
+        self, entries: list[ExternalShiftHours], organization_id: UUID | str
+    ) -> dict[str, tuple[Optional[str], Optional[str]]]:
         """Each logged outside shift's evaluation state, for the shift lists.
 
         ``needed`` while an evaluation the shift calls for is missing,
@@ -1278,7 +1284,10 @@ class ShiftEvaluationService:
         applies to one shift (``_program_scopes``, ``_Scope.started_by``).
         """
         org = str(organization_id)
-        statuses: dict[str, Optional[str]] = {str(e.id): None for e in entries}
+        # entry_id -> (status, the first scope still to submit)
+        statuses: dict[str, tuple[Optional[str], Optional[str]]] = {
+            str(e.id): (None, None) for e in entries
+        }
         if not entries:
             return statuses
         entry_ids = [str(e.id) for e in entries]
@@ -1326,24 +1335,31 @@ class ShiftEvaluationService:
                     for key in required
                     if key in evaluations and evaluations[key].status == "submitted"
                 ]
-                if len(done) == len(required):
-                    statuses[entry_id] = "submitted"
+                open_scope = next((k for k in required if k not in done), None)
+                if open_scope is None:
+                    statuses[entry_id] = ("submitted", None)
                 elif any(key in evaluations for key in required):
-                    statuses[entry_id] = "draft"
+                    statuses[entry_id] = ("draft", open_scope)
                 else:
-                    statuses[entry_id] = "needed"
+                    statuses[entry_id] = ("needed", open_scope)
             elif evaluations:
                 statuses[entry_id] = (
-                    "submitted"
-                    if all(e.status == "submitted" for e in evaluations.values())
-                    else "draft"
+                    (
+                        "submitted"
+                        if all(e.status == "submitted" for e in evaluations.values())
+                        else "draft"
+                    ),
+                    None,
                 )
         return statuses
 
     async def outstanding_entries(
         self, organization_id: UUID | str, limit: int = 200
-    ) -> list[tuple[ExternalShiftHours, str]]:
-        """Counted outside shifts still waiting on an evaluation, newest first."""
+    ) -> list[tuple[ExternalShiftHours, str, str]]:
+        """Counted outside shifts still waiting on an evaluation, newest first.
+
+        Each with its status and the scope to open first.
+        """
         org = str(organization_id)
         evaluated = await self._evaluated_apparatus_ids(org)
         if not evaluated:
@@ -1386,12 +1402,12 @@ class ShiftEvaluationService:
                 )
             ).scalars()
         )
-        statuses = await self.entry_statuses(entries, org)
-        outstanding = [
-            (entry, statuses[str(entry.id)] or "")
-            for entry in entries
-            if statuses[str(entry.id)] in ("needed", "draft")
-        ]
+        states = await self._entry_states(entries, org)
+        outstanding = []
+        for entry in entries:
+            state, scope_key = states[str(entry.id)]
+            if state in ("needed", "draft") and scope_key:
+                outstanding.append((entry, state, scope_key))
         return outstanding[:limit]
 
     async def sync_credit_for_organization(self, organization_id: UUID | str) -> None:

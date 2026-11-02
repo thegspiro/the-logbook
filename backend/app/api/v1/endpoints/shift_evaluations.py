@@ -222,7 +222,7 @@ async def list_outside_shifts_awaiting_evaluation(
     service = ShiftEvaluationService(db)
     rows = await service.outstanding_entries(current_user.organization_id)
     users = await service._users(
-        {str(entry.user_id) for entry, _ in rows}, current_user.organization_id
+        {str(entry.user_id) for entry, _, _ in rows}, current_user.organization_id
     )
     return [
         OutsideShiftAwaitingEvaluation(
@@ -239,8 +239,9 @@ async def list_outside_shifts_awaiting_evaluation(
             agency_name=entry.agency_name,
             apparatus_name=entry.apparatus_name,
             evaluation_status=state,
+            scope_key=scope_key,
         )
-        for entry, state in rows
+        for entry, state, scope_key in rows
     ]
 
 
