@@ -16,10 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3940 (Feature 20, Compliance, pass 13) merged. Row 20 → ✅;
-next is Feature 21 (Admin hours) — confirmed via `gh api search/issues`
-(`is:pr is:open head:claude/security-review`, 0 results) before starting
-this pass.
+**PR [#3955](https://github.com/thegspiro/the-logbook/pull/3955)** (branch
+`claude/security-review-admin-hours-p13`) — Feature 21 (Admin hours), pass
+13, a watchdog pickup. Zero backend delta since pass 12 (PR #3846): the
+only changes in scope were DASH-37's dashboard-tile deep link
+(`?status=pending`, still gated by `admin_hours.manage`) and a repo-wide
+layout-class swap. 0 new findings; feature remains at zero open items. See
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 13** section for the
+full review.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 13, PR #3940, merged), preserved for history</summary>
