@@ -1132,6 +1132,9 @@ class TestTrainingCreditReleaseBoundary:
         service = ShiftCompletionService(db)
         service.get_report = AsyncMock(return_value=report)
         service._trigger_deferred_progress = AsyncMock()
+        # Shift evaluation credit follows the review state; it has its own
+        # tests against real tables in test_shift_evaluation_credit.py.
+        service._sync_evaluation_credit = AsyncMock()
         return service, patch.object(
             TrainingModuleConfigService,
             "get_config",
@@ -1186,6 +1189,7 @@ class TestTrainingCreditReleaseBoundary:
         service.get_report = AsyncMock(return_value=report)
         service._trigger_deferred_progress = AsyncMock()
         service._send_notification = AsyncMock()
+        service._sync_evaluation_credit = AsyncMock()
 
         await service.review_report("report-1", org_id, "approving-officer", "approved")
 

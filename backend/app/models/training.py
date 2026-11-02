@@ -95,6 +95,10 @@ class RequirementType(str, enum.Enum):
     SKILLS_EVALUATION = "skills_evaluation"  # Skills checkoff/evaluation
     CHECKLIST = "checklist"  # Checklist items to complete
     KNOWLEDGE_TEST = "knowledge_test"  # Written/paper-based knowledge test
+    # Credited by submitted shift evaluations (app/services/shift_evaluation_service.py).
+    EVALUATED_SHIFTS = "evaluated_shifts"  # Shifts with a submitted evaluation
+    TRANSPORTS = "transports"  # Patient transports recorded on evaluations
+    REFUSALS = "refusals"  # Patient refusals recorded on evaluations
 
 
 class RequirementSource(str, enum.Enum):
@@ -620,6 +624,16 @@ class TrainingRequirement(Base):
     )  # For COURSES type - list of course IDs
     required_shifts: Mapped[Optional[int]] = mapped_column(Integer)  # For SHIFTS type
     required_calls: Mapped[Optional[int]] = mapped_column(Integer)  # For CALLS type
+    # EVALUATED_SHIFTS counts against required_shifts. TRANSPORTS and REFUSALS
+    # have targets of their own rather than borrowing required_calls, which
+    # the call-matching and grading code reads as a number of calls.
+    required_transports: Mapped[Optional[int]] = mapped_column(Integer)
+    required_refusals: Mapped[Optional[int]] = mapped_column(Integer)
+    # EVALUATED_SHIFTS only: count a shift only when no item on its evaluation
+    # was given the form's lowest rating ("Unsatisfactory" on a 1-4 form).
+    evaluation_excludes_lowest_rating: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
     required_call_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # Specific incident types required
@@ -2167,6 +2181,7 @@ class ProgressCreditSource(str, enum.Enum):
     SHIFT_REPORT = "shift_report"
     EXTERNAL_IMPORT = "external_import"
     OFFICER_APPLY = "officer_apply"
+    SHIFT_EVALUATION = "shift_evaluation"
 
 
 class RequirementProgressCredit(Base):

@@ -44,6 +44,12 @@ export function requirementTarget(record: RequirementProgressRecord): string | n
       return req.required_shifts ? `${done} / ${req.required_shifts} shifts` : null;
     case 'calls':
       return req.required_calls ? `${done} / ${req.required_calls} calls` : null;
+    case 'evaluated_shifts':
+      return req.required_shifts ? `${done} / ${req.required_shifts} evaluated shifts` : null;
+    case 'transports':
+      return req.required_transports ? `${done} / ${req.required_transports} transports` : null;
+    case 'refusals':
+      return req.required_refusals ? `${done} / ${req.required_refusals} refusals` : null;
     case 'courses':
       return req.required_courses?.length ? `${done} / ${req.required_courses.length} courses` : null;
     case 'checklist': {
@@ -77,6 +83,9 @@ const REQUIREMENT_ACTION: Record<RequirementType, string> = {
   certification: 'Earn or record the certification',
   checklist: 'Work through the checklist with your officer',
   knowledge_test: 'Pass the written test',
+  evaluated_shifts: 'Complete shifts with a shift evaluation from your officer',
+  transports: 'Transports count from your shift evaluations',
+  refusals: 'Refusals count from your shift evaluations',
 };
 
 /** Imperative "how to complete this" hint for a requirement, or null if unknown. */

@@ -38,6 +38,7 @@ from app.services.shift_completion_service import (
     ShiftCompletionService,
     reject_future_shift_date,
 )
+from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.training_module_config_service import TrainingModuleConfigService
 
 router = APIRouter()
@@ -403,6 +404,15 @@ async def get_my_shift_stats(
         stats["total_hours"] = None
         stats["total_calls"] = None
         stats["monthly"] = []
+    # Only evaluations the member can already read, on the same terms as
+    # /training/shift-evaluations/mine.
+    stats["evaluation_averages"] = await ShiftEvaluationService(db).averages_by_form(
+        current_user.id,
+        current_user.organization_id,
+        start_date=start_date,
+        end_date=end_date,
+        member_view=True,
+    )
 
     return stats
 
@@ -480,12 +490,19 @@ async def get_trainee_stats(
 ):
     """Get aggregate stats for a specific trainee (officers only)."""
     service = ShiftCompletionService(db)
-    return await service.get_trainee_stats(
+    stats = await service.get_trainee_stats(
         organization_id=current_user.organization_id,
         trainee_id=trainee_id,
         start_date=start_date,
         end_date=end_date,
     )
+    stats["evaluation_averages"] = await ShiftEvaluationService(db).averages_by_form(
+        trainee_id,
+        current_user.organization_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return stats
 
 
 @router.get("/all", response_model=list[ShiftCompletionReportResponse])

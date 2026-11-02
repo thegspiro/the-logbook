@@ -151,6 +151,25 @@ def prerequisite_refusal(missing_names: Sequence[str]) -> str:
     return f"Must first complete: {', '.join(missing_names)}"
 
 
+# Requirement types credited only by submitted shift evaluations, and the
+# column each one's target lives in. An evaluated-shift count reuses
+# required_shifts, as the form beside it does.
+EVALUATION_REQUIREMENT_TARGETS = {
+    RequirementType.EVALUATED_SHIFTS: "required_shifts",
+    RequirementType.TRANSPORTS: "required_transports",
+    RequirementType.REFUSALS: "required_refusals",
+}
+
+
+def _evaluation_requirement_target(requirement: Any) -> Optional[float]:
+    """The numeric target of a shift-evaluation requirement, else None."""
+    requirement_type = getattr(requirement, "requirement_type", None)
+    if requirement_type not in EVALUATION_REQUIREMENT_TARGETS:
+        return None
+    column = EVALUATION_REQUIREMENT_TARGETS[requirement_type]
+    return getattr(requirement, column, None) or None
+
+
 def _counts_as_prerequisite(program_active: Optional[bool]) -> bool:
     """Whether a prerequisite program with this ``active`` value is enforced.
 
@@ -908,6 +927,11 @@ class TrainingProgramService:
             required_courses=requirement_data.required_courses,
             required_shifts=requirement_data.required_shifts,
             required_calls=requirement_data.required_calls,
+            required_transports=getattr(requirement_data, "required_transports", None),
+            required_refusals=getattr(requirement_data, "required_refusals", None),
+            evaluation_excludes_lowest_rating=bool(
+                getattr(requirement_data, "evaluation_excludes_lowest_rating", False)
+            ),
             required_call_types=requirement_data.required_call_types,
             required_skills=requirement_data.required_skills,
             checklist_items=to_storage(requirement_data.checklist_items),
@@ -1009,6 +1033,8 @@ class TrainingProgramService:
             "required_hours",
             "required_shifts",
             "required_calls",
+            "required_transports",
+            "required_refusals",
             "required_courses",
             "checklist_items",
         }
@@ -1327,6 +1353,11 @@ class TrainingProgramService:
                 required_hours=req_input.required_hours,
                 required_shifts=req_input.required_shifts,
                 required_calls=req_input.required_calls,
+                required_transports=getattr(req_input, "required_transports", None),
+                required_refusals=getattr(req_input, "required_refusals", None),
+                evaluation_excludes_lowest_rating=bool(
+                    getattr(req_input, "evaluation_excludes_lowest_rating", False)
+                ),
                 required_call_types=getattr(req_input, "required_call_types", None),
                 passing_score=req_input.passing_score,
                 max_attempts=req_input.max_attempts,
@@ -1775,7 +1806,7 @@ class TrainingProgramService:
                 if getattr(requirement, "required_courses", None)
                 else None
             ),
-        }.get(requirement_type)
+        }.get(requirement_type) or _evaluation_requirement_target(requirement)
         if not target:
             # Status-based type (skills evaluation, certification, knowledge
             # test): nothing accrues, so it is worth nothing until marked done.
@@ -1815,7 +1846,9 @@ class TrainingProgramService:
                 else None
             ),
         }
-        target = numeric_targets.get(requirement.requirement_type)
+        target = numeric_targets.get(
+            requirement.requirement_type
+        ) or _evaluation_requirement_target(requirement)
         if not target:
             return  # status-based type, or no target set — nothing to recompute
 
@@ -3905,6 +3938,22 @@ class TrainingProgramService:
                 progress.progress_percentage = min(
                     100.0, (updates.progress_value / adj_required) * 100
                 )
+            elif evaluation_target := _evaluation_requirement_target(requirement):
+                adj_required, _, _ = (
+                    adjust_required(
+                        evaluation_target,
+                        enroll_start,
+                        enroll_end,
+                        user_waivers,
+                        str(requirement.id),
+                        period_months=get_rolling_period_months(requirement),
+                    )
+                    if user_waivers
+                    else (evaluation_target, 0, 0)
+                )
+                progress.progress_percentage = min(
+                    100.0, (updates.progress_value / adj_required) * 100
+                )
             elif (
                 requirement.requirement_type == RequirementType.COURSES
                 and requirement.required_courses
@@ -4607,6 +4656,14 @@ class TrainingProgramService:
         # quietly defeat it. An undated completion must fail closed when a
         # window is configured because its freshness cannot be verified.
         _, requirement = row
+        if requirement.requirement_type in EVALUATION_REQUIREMENT_TARGETS:
+            # Counted from submitted shift evaluations; a training record is
+            # neither an evaluated shift nor a transport, and the status
+            # sign-off path below would otherwise mark it complete outright.
+            return None, (
+                "That requirement is credited by shift evaluations, not by "
+                "training records"
+            )
         # The department's date: a completion from exactly N days ago is still
         # inside the window for the evening hours when UTC has moved on.
         cutoff = recency_cutoff(

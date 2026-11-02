@@ -993,6 +993,9 @@ export const REQUIREMENT_TYPE_LABELS: Record<string, string> = {
   knowledge_test: 'Knowledge test',
   checklist: 'Checklist',
   certification: 'Certification',
+  evaluated_shifts: 'Evaluated shifts',
+  transports: 'Transports',
+  refusals: 'Refusals',
 };
 
 /** Order the requirement-type picker offers, commonest first. */
@@ -1005,6 +1008,9 @@ export const REQUIREMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   'knowledge_test',
   'checklist',
   'certification',
+  'evaluated_shifts',
+  'transports',
+  'refusals',
 ].map((value) => ({ value, label: REQUIREMENT_TYPE_LABELS[value] ?? value }));
 
 /** Weekday numbers used by meeting patterns (0 = Monday, matching Python). */

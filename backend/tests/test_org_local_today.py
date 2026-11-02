@@ -389,9 +389,12 @@ class TestProgramRecencyWindow:
     async def test_the_window_is_measured_from_the_departments_date(self):
         """A 180-day window measured from Oct 6 still admits Apr 9; measured
         from the UTC date (Oct 7) it would reject it."""
+        from app.models.training import RequirementType
         from app.services.training_program_service import TrainingProgramService
 
-        requirement = SimpleNamespace(id="req-1", recency_days=180)
+        requirement = SimpleNamespace(
+            id="req-1", requirement_type=RequirementType.COURSES, recency_days=180
+        )
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[

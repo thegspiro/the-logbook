@@ -91,6 +91,7 @@ class TrainingModuleConfigService:
     ) -> TrainingModuleConfig:
         """Update configuration fields. Only supplied fields are changed."""
         config = await self.get_config(organization_id)
+        review_was_required = bool(config.report_review_required)
 
         apply_updates(config, kwargs)
 
@@ -99,6 +100,17 @@ class TrainingModuleConfigService:
 
         await self.db.commit()
         await self.db.refresh(config)
+
+        if bool(config.report_review_required) != review_was_required:
+            # Report review decides whether a shift evaluation is visible to
+            # its member, and program credit follows visibility. Imported here
+            # because the evaluation service reads this one's config.
+            from app.services.shift_evaluation_service import ShiftEvaluationService
+
+            await ShiftEvaluationService(self.db).sync_credit_for_organization(
+                organization_id
+            )
+            await self.db.refresh(config)
         return config
 
     async def get_member_visibility(
