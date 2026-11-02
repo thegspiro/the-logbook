@@ -57,6 +57,7 @@
 - [Meeting Minutes](Module-Meeting-Minutes)
 - [Prospective Members](Module-Prospective-Members)
 - [Medical Screening](Module-Medical-Screening)
+- [Performance Evaluations](Module-Evaluations)
 - [Compliance](Module-Compliance)
 - [Compliance Config](Compliance-Configuration)
 - [Governance — Legal Documents](Module-Governance-Legal)

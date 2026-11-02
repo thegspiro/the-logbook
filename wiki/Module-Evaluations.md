@@ -1,0 +1,248 @@
+# Member Performance Evaluations
+
+> The full engineering reference is [docs/EVALUATIONS_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/EVALUATIONS_MODULE.md).
+
+Yearly evaluations, and shorter check-ins, of each member against a form the
+department builds for that kind of member. The evaluation pulls the member's
+figures for the period from the rest of the Logbook (training, meetings,
+shifts, calls, certifications and more), goes through the steps the form sets
+out, is signed, and ends as a PDF with the department's logo and name. The
+member can read it, download it and attach a written response.
+
+An evaluation is a personnel record. Everything kept about a member is
+something the member may read: there is no officers-only note, and when an
+evaluation is changed or removed, the member is told and the reason is kept.
+
+---
+
+## Where it lives
+
+| Screen                 | Path                           | Who sees it                                                                                               |
+| ---------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Member Evaluations** | `/reports/evaluations`         | `evaluations.configure` or `evaluations.manage`: forms and review periods                                 |
+| **Evaluations**        | `/reports/evaluations/conduct` | `evaluations.conduct`, `view_all` or `manage`: the evaluations to work on                                 |
+| **My Evaluations**     | `/reports/evaluations/mine`    | every member: their own evaluations, deleted-evaluation records, and their figures for the current period |
+| An evaluation          | `/reports/evaluations/<id>`    | the member, the evaluator, approvers at their step, and `view_all` holders                                |
+
+## Who can do what
+
+| Permission              | Lets them                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `evaluations.configure` | build and publish the forms                                                                                                           |
+| `evaluations.manage`    | open and close review periods, draft for anyone (one at a time or a whole period), choose the evaluator, amend a finalized evaluation |
+| `evaluations.conduct`   | be the evaluator; draft an evaluation they will conduct themselves                                                                    |
+| `evaluations.view_all`  | read every member's evaluations, and complete calibration                                                                             |
+| `evaluations.delete`    | delete an evaluation, with a reason                                                                                                   |
+
+- All five are given to the **Chief** on install and upgrade. Everyone else is
+  granted them by position under **Administration → Organization Settings →
+  Role Management** — see [Role System](Role-System).
+- A member needs **no** permission to see their own evaluations.
+- **Nobody** reads, amends or deletes their own evaluation through these
+  grants. A Chief being evaluated sees their evaluation as a member.
+- `evaluations.manage` runs the process but does not, on its own, let someone
+  read what is written in an evaluation. That needs `view_all`, being the
+  evaluator, or being an approver at their step.
+- **Signing** and **deleting** ask the person to confirm their identity again
+  (password, passkey or authenticator), as other sensitive actions do — see
+  [Authentication](Security-Authentication).
+
+---
+
+## Setting up
+
+### 1. Build the forms
+
+**Member Evaluations → Templates → New template.** Choose:
+
+- **Annual evaluation** or **Check-in.** A check-in has only the
+  self-evaluation and the evaluator's part, and no signatures.
+- **Who it applies to:** a member class and/or member status, or everyone.
+  When an evaluation is drafted, the most specific matching form is used; if
+  two forms fit a member equally well, the drafter is asked to choose.
+
+A form has **sections** of **items**. Sections can be marked officer-only and
+shown only to members of the ranks you list. Each item is answered one way:
+
+- a **labelled scale** (each level with its own words, and optionally the
+  behaviour that earns it) or a **numbered scale**;
+- **meets / does not meet**;
+- a **checklist**;
+- **written** text, or **goals**.
+
+For each item you can also choose whether it may be N/A, whether a comment is
+optional, required or not offered, whether certain levels need a specific
+example, whether the member answers it in their self-evaluation, and its
+**weight** in the overall score.
+
+**Figures.** An item can show one of the member's figures beside it, and you
+can set score bands so the figure suggests a rating (for example, under 10
+training hours suggests level 2). An evaluator who rates differently from the
+suggestion must say why. The figures available are training hours, training
+requirements met, training session attendance, business meeting attendance,
+events attended, shift hours, shifts worked, shift performance rating, calls
+responded to, call response rate (hidden when call tracking is off),
+administrative hours, skills tests passed, certifications held, and positions
+held.
+
+**Overall rating:** worked out from the weighted items, chosen by the
+evaluator from a fixed five-level scale (Unsatisfactory, Needs improvement,
+Meets expectations, Exceeds expectations, Outstanding), or none.
+
+### 2. Set the steps
+
+Each form has its steps, always in this order:
+
+1. **Self-evaluation** — the member rates themselves.
+2. **Evaluator** — the assigned evaluator completes the evaluation.
+3. **Calibration** (optional) — a `view_all` holder reviews it before it goes
+   further.
+4. **Approvals** (optional, any number) — signed by whoever holds the
+   position you name, such as the Deputy Chief or the Board.
+5. **Member acknowledgement** — required on an annual evaluation.
+
+Each step is due a number of days after the review period ends. You also set
+how many days before a due date reminders go out (3 by default), whether the
+evaluator may go on when the member misses the self-evaluation deadline (yes
+by default), and how many days the member has to attach a written response
+after the evaluation is final (30 by default).
+
+**Save draft** keeps your changes without affecting anything in use.
+**Publish** freezes that version: an
+evaluation already under way keeps the version it started on, so editing a
+form never rewrites an evaluation in progress.
+
+### 3. Open a review period
+
+**Member Evaluations → Review periods → New period**, with a name and dates
+(for example, "2026 Annual Review", January 1 to December 31). Closing a
+period stops new evaluations being drafted for it.
+
+---
+
+## Drafting evaluations
+
+**Evaluations → New evaluation** drafts one: choose the member, the period
+and the kind. A manager may choose the evaluator; left blank, it goes to the
+member's supervisor if they may conduct evaluations, otherwise to the manager.
+Someone who only holds `conduct` drafts evaluations they will conduct
+themselves.
+
+**Evaluations → Draft a review period** (managers) drafts many at once:
+
+1. Choose the period and the kind, then **Preview members**.
+2. Every current member is listed with the form and evaluator they would get,
+   or why they are left out (already drafted, no form fits, or no full month
+   served in the period).
+3. Untick anyone you do not want drafted, and choose an evaluator wherever
+   none is filled in.
+4. **Draft**. Anyone who could not be drafted is listed with the reason.
+
+**Which time counts.** The figures cover the member's time in the period, not
+the whole period: they start from the first full month after the member joined
+or rejoined, and leaves of absence and gaps in membership are left out. The
+evaluation shows what was left out. A member who served no full month of the
+period cannot be evaluated for it.
+
+The figures are taken when the evaluation is drafted. The evaluator or a
+manager can update them with **Update figures** until the evaluator locks
+their part.
+
+---
+
+## Completing an evaluation
+
+- **The member** fills in the self-evaluation and submits it. The evaluator
+  never sees it before it is submitted. If the member misses the deadline and
+  the form allows it, the evaluator may go on without it; the record shows it
+  was not submitted.
+- **The evaluator** fills in their part beside the member's figures, saves as
+  they go, and submits it.
+- **Calibration**, if the form has it: a `view_all` holder opens the
+  evaluation, chooses **Mark calibration complete**, and may tick items for
+  the evaluator to revisit. Only the ticks are kept; talk through the changes
+  in person. The evaluator sees the ticked items marked **Flagged at
+  calibration**, and submits again.
+- **Approvals:** each approver opens the evaluation and chooses the button
+  named for their step (for example **Board approval**), types their name as
+  it appears on their account, confirms they intend it as their signature, and
+  confirms their identity.
+- **The member** can read the evaluation once everything before their step is
+  done. They **acknowledge receipt**, or **refuse to sign** and give a reason.
+  Either one finalizes the evaluation. Acknowledging is not agreeing, and the
+  PDF says so.
+
+## The PDF
+
+When the evaluation is final, a PDF is made once, with the department's logo
+and name, the figures, every answer, the signatures, any amendments and a
+fingerprint of the record, and it is kept exactly as signed. Anyone who may
+read the evaluation can **Download PDF**; every download is recorded.
+
+## After it is final
+
+- **The member's written response.** For the number of days the form allows
+  (30 by default), the member can write a response on the evaluation page.
+  A saved draft is theirs alone. **Submit response** makes it final: it is
+  added to the record, a second PDF with the response is made, and the signed
+  PDF is kept as it was (**Signed PDF, without response**).
+- **Amending** (managers). **Amend** reopens a finalized evaluation with a
+  reason. The evaluator's part comes back for changes with their earlier
+  answers filled in, and calibration, approvals and the member's
+  acknowledgement run again, with new due dates counted from the amendment.
+  The self-evaluation is kept. The earlier text and PDF are not kept; the
+  reason, who amended it and when are shown on the evaluation and printed on
+  the next PDF.
+- **Deleting** (`evaluations.delete`). **Delete** removes an evaluation, its
+  signatures and its PDF for good, with a reason. A record that it was
+  deleted, by whom and why stays on the member's history, where the member
+  reads it under **My Evaluations → Deleted evaluations**.
+
+---
+
+## Emails
+
+Every evaluation email can be reworded under **Communications → Email
+Templates → Performance Evaluations**, or switched off there. None of them
+contains a rating, a comment, a response or a reason: they name the member,
+the period and the step, and link to the evaluation.
+
+| Email                     | Goes to                                                                     |
+| ------------------------- | --------------------------------------------------------------------------- |
+| Evaluation Waiting on You | whoever acts on a step when it opens; the evaluator again after calibration |
+| Evaluation Step Due Soon  | whoever acts on a step, a few days before it is due (once per step)         |
+| Evaluation Step Overdue   | whoever acts on a step, and evaluation managers, the day after it is due    |
+| Evaluation Finalized      | the member and the evaluator                                                |
+| Evaluation Amended        | the member and everyone who signed                                          |
+| Evaluation Response       | the evaluator and evaluation managers                                       |
+| Evaluation Deleted        | the member                                                                  |
+
+Members always receive email about their own evaluation. Officers can turn off
+the emails they receive because of a role ("Evaluation duties") in their
+notification settings. Reminders and overdue notices are sent by a daily task
+and never go out twice for the same step.
+
+---
+
+## Questions
+
+**Can an evaluator see the member's self-evaluation before the member
+submits it?** No.
+
+**Can a supervisor see their crew's evaluations?** Only as the evaluator, an
+approver, or with `evaluations.view_all`. Being someone's supervisor does not,
+on its own, open their evaluations.
+
+**Why is a figure "not available"?** The Logbook could not measure it
+honestly for that member and period (for example, call tracking is off, or no
+meetings were held). It is never shown as zero or 100% instead.
+
+**Can a finalized evaluation be edited?** Only by amending it, which reopens
+it from the evaluator onward and records why.
+
+**What does the member see of calibration?** The items that were flagged, once
+the evaluation reaches them, and nothing else.
+
+**Known limitation:** "Positions held" counts the positions a member holds
+now and was assigned before the period ended; the Logbook does not keep a
+history of positions given up. See `docs/KNOWN_LIMITATIONS.md`.

@@ -377,6 +377,8 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 
 29a. **[MEDICAL_SUPPLIES_MODULE.md](./MEDICAL_SUPPLIES_MODULE.md)** - EMS consumables as dated lots, on their own page rather than in the gear catalog - Domain-scoped permissions, the EMS Supply Officer role, and the domain boundary that keeps the two supply lines apart
 
+29c. **[EVALUATIONS_MODULE.md](./EVALUATIONS_MODULE.md)** - Member performance evaluations: templates, figures, the workflow, signatures, frozen PDFs, notices - Amendments, deletion records, the member's written response and calibration flags
+
 29b. **[changelog/](./changelog/)** - Monthly archives of the project changelog through 2026-09-08, when the ledger was closed - Historical reference only; neither these archives nor `CHANGELOG.md` take new entries
 
 30. **[PUBLIC_PORTAL_MODULE.md](./PUBLIC_PORTAL_MODULE.md)**
@@ -638,6 +640,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Email templates / customization               | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#email-template-management)                                                                               |
 | Personal email / post-separation              | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#personal-email)                                                                                          |
 | Prospective members pipeline                  | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md)                                                                                         |
+| Member performance evaluations                | [EVALUATIONS_MODULE.md](./EVALUATIONS_MODULE.md)                                                                                                         |
 | Inactivity timeouts / purging                 | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system)                                                               |
 | Meeting minutes / templates                   | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md)                                                                                                 |
 | Document management / folders                 | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module)                                                                                |
