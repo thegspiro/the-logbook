@@ -13,6 +13,8 @@ import type {
   EvaluationSummary,
   LiveData,
   PartContent,
+  SignatureWrite,
+  SignResult,
   SubmitResult,
   EvaluationDataSource,
   EvaluationPeriod,
@@ -168,6 +170,18 @@ export const evaluationsService = {
 
   async refreshData(id: string): Promise<EvaluationDetail> {
     const response = await api.post<EvaluationDetail>(`/evaluations/${id}/refresh-data`);
+    return response.data;
+  },
+
+  /** Sign the step open to the caller. The server asks for step-up
+   * re-verification first; the shared client shows that prompt and retries. */
+  async sign(id: string, signature: SignatureWrite): Promise<SignResult> {
+    const response = await api.post<SignResult>(`/evaluations/${id}/sign`, signature);
+    return response.data;
+  },
+
+  async document(id: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/evaluations/${id}/document`, { responseType: 'blob' });
     return response.data;
   },
 

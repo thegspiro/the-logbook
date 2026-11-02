@@ -315,6 +315,15 @@ export interface EvaluationSummary {
   created_at: string | null;
 }
 
+export type SignatureDisposition = 'signed' | 'acknowledged' | 'refused';
+
+/** A signature the caller may give now. */
+export interface SigningOption {
+  step_key: string;
+  label: string;
+  dispositions: SignatureDisposition[];
+}
+
 export interface EvaluationViewer {
   is_member: boolean;
   is_evaluator: boolean;
@@ -322,6 +331,28 @@ export interface EvaluationViewer {
   can_edit_evaluation: boolean;
   can_refresh_data: boolean;
   can_calibrate: boolean;
+  can_sign?: SigningOption | null | undefined;
+}
+
+export interface EvaluationSignature {
+  step_key: string;
+  label: string;
+  signed_name: string;
+  disposition: SignatureDisposition;
+  comment: string | null;
+  signed_at: string;
+}
+
+export interface SignatureWrite {
+  signed_name: string;
+  disposition: SignatureDisposition;
+  comment?: string | undefined;
+  intent_confirmed: true;
+}
+
+export interface SignResult {
+  outcome: 'signed' | 'finalized';
+  evaluation: EvaluationDetail;
 }
 
 export interface EvaluationDetail extends EvaluationSummary {
@@ -338,6 +369,8 @@ export interface EvaluationDetail extends EvaluationSummary {
   data_taken_at: string | null;
   parts: EvaluationPart[];
   weighted_overall: number | null;
+  signatures: EvaluationSignature[];
+  document_available: boolean;
   viewer: EvaluationViewer;
 }
 

@@ -18,6 +18,14 @@ const savePart = vi.fn();
 const submitPart = vi.fn();
 const refreshData = vi.fn();
 const completeCalibration = vi.fn();
+const sign = vi.fn();
+const documentBlob = vi.fn();
+const saveBlob = vi.fn();
+vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: (selector: (s: { user: { full_name: string } }) => unknown) =>
+    selector({ user: { full_name: 'Pat Member' } }),
+}));
 vi.mock('../services/evaluationsApi', () => ({
   evaluationsService: {
     get: (...a: unknown[]) => get(...a) as unknown,
@@ -25,6 +33,8 @@ vi.mock('../services/evaluationsApi', () => ({
     submitPart: (...a: unknown[]) => submitPart(...a) as unknown,
     refreshData: (...a: unknown[]) => refreshData(...a) as unknown,
     completeCalibration: (...a: unknown[]) => completeCalibration(...a) as unknown,
+    sign: (...a: unknown[]) => sign(...a) as unknown,
+    document: (...a: unknown[]) => documentBlob(...a) as unknown,
   },
 }));
 
@@ -115,6 +125,8 @@ function detail(overrides: Partial<EvaluationDetail> = {}): EvaluationDetail {
     data_taken_at: '2026-11-01T12:00:00Z',
     parts: [],
     weighted_overall: null,
+    signatures: [],
+    document_available: false,
     viewer: {
       is_member: false,
       is_evaluator: true,
@@ -138,7 +150,8 @@ function renderPage() {
 
 describe('EvaluationDetailPage', () => {
   beforeEach(() => {
-    for (const m of [get, savePart, submitPart, refreshData, completeCalibration]) m.mockReset();
+    for (const m of [get, savePart, submitPart, refreshData, completeCalibration, sign, documentBlob, saveBlob])
+      m.mockReset();
     get.mockResolvedValue(detail());
   });
 
@@ -259,5 +272,106 @@ describe('EvaluationDetailPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Mark calibration complete' }));
     await user.click(await screen.findByRole('button', { name: 'Mark complete' }));
     await waitFor(() => expect(completeCalibration).toHaveBeenCalledWith('ev1'));
+  });
+
+  describe('signing', () => {
+    const memberViewer = {
+      is_member: true,
+      is_evaluator: false,
+      can_edit_self_evaluation: false,
+      can_edit_evaluation: false,
+      can_refresh_data: false,
+      can_calibrate: false,
+      can_sign: {
+        step_key: 'member_acknowledgement',
+        label: 'Member acknowledgement',
+        dispositions: ['acknowledged', 'refused'] as ('acknowledged' | 'refused')[],
+      },
+    };
+
+    beforeEach(() => {
+      get.mockResolvedValue(detail({ viewer: memberViewer }));
+    });
+
+    it('signs only once a name is typed and the intent confirmed', async () => {
+      sign.mockResolvedValue({
+        outcome: 'finalized',
+        evaluation: detail({
+          status: 'finalized',
+          document_available: true,
+          viewer: { ...memberViewer, can_sign: null },
+        }),
+      });
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Member acknowledgement' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByText(/does not mean you agree with it/)).toBeInTheDocument();
+      const submit = within(dialog).getByRole('button', { name: 'Acknowledge receipt' });
+      expect(submit).toBeDisabled();
+
+      await user.type(within(dialog).getByLabelText('Type your full name to sign'), 'Pat Member');
+      expect(submit).toBeDisabled();
+      await user.click(within(dialog).getByRole('checkbox', { name: /intend this typed name/ }));
+      await user.click(submit);
+
+      await waitFor(() =>
+        expect(sign).toHaveBeenCalledWith('ev1', {
+          signed_name: 'Pat Member',
+          disposition: 'acknowledged',
+          comment: undefined,
+          intent_confirmed: true,
+        })
+      );
+      expect(await screen.findByRole('button', { name: 'Download PDF' })).toBeInTheDocument();
+    });
+
+    it('asks for a reason before a refusal can be sent', async () => {
+      sign.mockResolvedValue({ outcome: 'finalized', evaluation: detail() });
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Member acknowledgement' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('radio', { name: /Refuse to sign/ }));
+      await user.type(within(dialog).getByLabelText('Type your full name to sign'), 'Pat Member');
+      await user.click(within(dialog).getByRole('checkbox', { name: /intend this typed name/ }));
+      const submit = within(dialog).getByRole('button', { name: 'Refuse to sign' });
+      expect(submit).toBeDisabled();
+      await user.type(within(dialog).getByLabelText(/Reason for refusing/), 'I dispute the rating.');
+      await user.click(submit);
+      await waitFor(() =>
+        expect(sign).toHaveBeenCalledWith(
+          'ev1',
+          expect.objectContaining({ disposition: 'refused', comment: 'I dispute the rating.' })
+        )
+      );
+    });
+  });
+
+  it('lists the signatures and downloads the frozen PDF', async () => {
+    const blob = new Blob(['%PDF'], { type: 'application/pdf' });
+    documentBlob.mockResolvedValue(blob);
+    get.mockResolvedValue(
+      detail({
+        status: 'finalized',
+        document_available: true,
+        signatures: [
+          {
+            step_key: 'member_acknowledgement',
+            label: 'Member acknowledgement',
+            signed_name: 'Pat Member',
+            disposition: 'refused',
+            comment: 'I dispute the rating.',
+            signed_at: '2027-01-20T14:15:00Z',
+          },
+        ],
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    expect(await screen.findByText(/Refused to sign by/)).toBeInTheDocument();
+    expect(screen.getByText('Reason: I dispute the rating.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Download PDF' }));
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(blob, 'evaluation-2026-12-31.pdf'));
   });
 });

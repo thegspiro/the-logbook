@@ -22,12 +22,14 @@ Member performance evaluation endpoints — setup.
 
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import get_current_user, require_permission, require_stepup
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.evaluation import (
@@ -47,9 +49,12 @@ from app.schemas.evaluation import (
     LiveDataResponse,
     PartWrite,
     PublishResult,
+    SignatureWrite,
+    SignResult,
     SubmitResult,
     TemplateDraftWrite,
 )
+from app.services.evaluation_document_service import EvaluationDocumentService
 from app.services.evaluation_service import EvaluationService
 from app.services.evaluation_template_service import EvaluationTemplateService
 
@@ -362,6 +367,26 @@ async def _evaluation(
     )
 
 
+async def _build_document(
+    db: AsyncSession, current_user: User, evaluation_id: str
+) -> None:
+    """Freeze the PDF the moment an evaluation finalizes.
+
+    A failure here does not undo the signature or the submission that
+    finalized it: it is logged as an error, and the download endpoint builds
+    the document on first request instead (``ensure_document`` is idempotent).
+    """
+    try:
+        await EvaluationDocumentService(db).ensure_document(
+            current_user.organization_id, evaluation_id, current_user
+        )
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "Could not build the PDF for evaluation {} at finalization", evaluation_id
+        )
+
+
 @router.get("", response_model=List[EvaluationSummary])
 async def list_evaluations(
     period_id: Optional[str] = Query(default=None, max_length=36),
@@ -506,6 +531,8 @@ async def submit_evaluation_part(
         "evaluation_part_submitted",
         {"evaluation_id": evaluation_id, "part": kind, "outcome": outcome},
     )
+    if outcome == "finalized":
+        await _build_document(db, current_user, evaluation_id)
     return SubmitResult(
         outcome=outcome,
         evaluation=await _evaluation(service, current_user, evaluation_id),
@@ -557,3 +584,87 @@ async def complete_evaluation_calibration(
         {"evaluation_id": evaluation_id},
     )
     return await _evaluation(service, current_user, evaluation_id)
+
+
+@router.post("/{evaluation_id}/sign", response_model=SignResult)
+async def sign_evaluation(
+    evaluation_id: str,
+    data: SignatureWrite,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _stepup: User = Depends(require_stepup),
+):
+    """Sign the step now open to the caller.
+
+    Requires a recent re-verification of the session (step-up) and the
+    caller's own name typed as the signature. An approver signs; the member
+    acknowledges receipt or refuses with a reason, and either finalizes.
+    """
+    service = EvaluationService(db)
+    async with handle_service_errors("Failed to record the signature"):
+        outcome = ensure_found(
+            await service.sign(
+                current_user.organization_id,
+                evaluation_id,
+                current_user,
+                signed_name=data.signed_name,
+                disposition=data.disposition,
+                comment=data.comment,
+                ip_address=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+            ),
+            "Evaluation",
+        )
+    await _audit(
+        db,
+        current_user,
+        "evaluation_signed",
+        {
+            "evaluation_id": evaluation_id,
+            "disposition": data.disposition,
+            "finalized": outcome == "finalized",
+        },
+    )
+    if outcome == "finalized":
+        await _build_document(db, current_user, evaluation_id)
+    return SignResult(
+        outcome=outcome,
+        evaluation=await _evaluation(service, current_user, evaluation_id),
+    )
+
+
+@router.get("/{evaluation_id}/document")
+async def download_evaluation_document(
+    evaluation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The finalized evaluation's frozen PDF, for whoever may read it."""
+    detail = await _evaluation(EvaluationService(db), current_user, evaluation_id)
+    if not detail["document_available"]:
+        raise HTTPException(status_code=404, detail="This evaluation has no PDF yet.")
+    documents = EvaluationDocumentService(db)
+    async with handle_service_errors("Failed to prepare the evaluation PDF"):
+        document = await documents.ensure_document(
+            current_user.organization_id, evaluation_id, current_user
+        )
+    document = ensure_found(document, "Evaluation PDF")
+    evaluation = ensure_found(
+        await documents.evaluations._evaluation(
+            current_user.organization_id, evaluation_id
+        ),
+        "Evaluation",
+    )
+    await _audit(
+        db,
+        current_user,
+        "evaluation_document_downloaded",
+        {"evaluation_id": evaluation_id, "revision": document.revision},
+    )
+    try:
+        return await documents.response(
+            current_user.organization_id, evaluation, document
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="The evaluation's PDF is missing.")

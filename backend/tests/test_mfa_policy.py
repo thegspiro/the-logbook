@@ -397,6 +397,9 @@ STEPUP_HANDLERS = {
     # Destructive member actions
     ("users.py", "delete_user"),
     ("users.py", "anonymize_member"),
+    # Signatures (owner decision 2026-11-02): an evaluation's approver or
+    # member re-verifies before their typed name is recorded as a signature.
+    ("evaluations.py", "sign_evaluation"),
 }
 
 

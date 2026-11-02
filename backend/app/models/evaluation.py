@@ -647,3 +647,40 @@ class EvaluationDeletionRecord(Base):
             "ix_evaluation_deletion_records_org_member", "organization_id", "member_id"
         ),
     )
+
+
+class EvaluationDocument(Base):
+    """The finalized PDF of one revision, frozen.
+
+    Generated once, when the last signature finalizes the revision, and served
+    as that exact file from then on: a layout or logo change afterwards must
+    not alter a signed record. ``file_sha256`` fingerprints the file bytes so
+    a copy can be checked against the original; ``content_hash`` is the hash
+    of the record every signature on the revision attested to, printed on the
+    document. One per revision, so an amendment's new revision gets its own.
+    """
+
+    __tablename__ = "evaluation_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    evaluation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("evaluations.id", ondelete="CASCADE"), nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "evaluation_id", "revision", name="uq_evaluation_documents_revision"
+        ),
+        Index("ix_evaluation_documents_org_eval", "organization_id", "evaluation_id"),
+    )
