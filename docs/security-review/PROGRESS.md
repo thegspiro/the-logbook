@@ -16,10 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3932 (Feature 17, Training core, pass 13) merged
-(`9cecb6fd2`). Row 17 was already ✅ from that PR's own commit. Feature 18
-(Training extended) is next — confirmed via a fresh GitHub check, 0 open
-PRs with a `claude/security-review-` head branch.
+**PR [see this branch's push below]** — Feature 18 (Training extended),
+pass 13, a watchdog pickup. Real delta since pass 12: a `client_request_id`
+idempotency key closing a genuine duplicate-credit bug in
+`TrainingSubmissionService.create_submission` (verified org-scoped,
+race-safe via `IntegrityError` rollback-and-relookup, `create_all`-
+tolerant migration), a requirement-crediting addition to
+`training_program_service.py` owned by Feature 17 and already reviewed
+there, an already-reviewed cross-cutting `safe_error_detail()` hygiene
+fix, and a frontend-only permission relaxation on the cohort detail page
+confirmed to match already-safe, unchanged backend authorization. 0 new
+findings; all standing TRX findings re-verified unchanged. See
+`docs/security-review/TRX-18-training-extended.md`'s **Pass 13** section
+for the full review.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 13, PR #3932, merged), preserved for history</summary>
@@ -24387,7 +24396,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | 🔄     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ⬜     |
@@ -24411,6 +24420,59 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-02 — Feature 18 (Training extended, pass 13) — watchdog pickup, real delta, 0 new findings
+
+Watchdog pickup. `list_pull_requests` (state=open, repo-wide): 0 results —
+no open PR anywhere in the repo. PR #3932 (Feature 17, Training core, pass 13) had already merged (`9cecb6fd2`); row 17 was already `✅` from that
+PR's own commit. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`
+("No reachable agents"). Row 18 (Training extended) was confirmed the next
+`⬜` by reading the rotation table on a freshly fetched `main`, matching PR
+#3932's own "next feature" note.
+
+**Real delta since pass 12** (baseline `28c7d9246`, PR #3843's merge): 207
+non-merge commits in the window, 5 of the 15 declared-scope files changed.
+The substantive one is this feature's own: `f561b59aa` ("Fix data loss and
+double-counting in the offline queues") adds a `client_request_id`
+idempotency key to `TrainingSubmission`/`TrainingSubmissionCreate`/
+`TrainingSubmissionService.create_submission`, closing a real duplicate-
+training-credit bug (an offline-queued resend was filed, and under
+auto-approval credited, twice). Verified directly rather than taken on
+trust: the pre-insert lookup filters `organization_id` **and**
+`submitted_by` (XC-3), the column is nullable with a `(submitted_by,
+client_request_id)` unique constraint (MySQL permits unlimited NULLs, so
+existing rows are untouched), and a race between two concurrent resends is
+closed by catching `IntegrityError`, rolling back, and re-querying before
+re-raising. Migration `e9bfa68963ce` is `create_all`-tolerant and
+idempotent. The other four changed files are out of this pass's own
+territory: a requirement-crediting addition to `training_program_service.py`
+(Feature 17's own file, already reviewed under that feature's pass 13) and
+an already-reviewed cross-cutting `safe_error_detail()` hygiene fix to
+`external_training_service.py` (SEC-00 pass 14). One frontend-only commit
+(`7ed3f1a6f`) relaxes `/training/cohorts/:id`'s route gate from
+`training.manage` to sign-in-only; confirmed the backend endpoint was
+already sign-in-gated with its own officer/roster check before and after
+this commit, so no new exposure. **0 new findings.** All standing TRX
+findings (TRX-1 through TRX-10 and sub-items) re-verified unchanged at
+their current citations; route count held at 100 across the six endpoint
+files (289 total application routes repo-wide, up from pass 12's 280 from
+other features merging in the interim).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` all clean; `validate_migrations.py --strict` — 696
+revisions, single head `38e0f552242d`; `check_route_permissions.py
+--strict` — 289 routes, 0 errors/warnings; `generate_schema_docs.py
+--check` — up to date; scoped backend tests (`-k "training or cohort or
+syllabus or waiver or external or enhancement or submission or xapi or
+crew"`) — 2,572 passed, 1 environment-only skip (`pywebpush`); frontend
+`npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Full write-up: `docs/security-review/TRX-18-training-extended.md`'s
+**Pass 13** section.
+
+Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing)
+— re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-02 — Feature 17 (Training core, pass 13) — watchdog pickup, scope correction (Shift Evaluations claimed and given a first full pass), 0 fixed, 0 new findings
 
