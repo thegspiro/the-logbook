@@ -1,8 +1,8 @@
 # Security Review 17 — Training Core
 
 **Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
-2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12) · **PR:** see
-`PROGRESS.md`'s **Open PR** row
+2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12), 2026-11-02
+(pass 13) · **PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py`,
 `api/v1/endpoints/training_programs.py`,
@@ -10,20 +10,36 @@
 `api/v1/endpoints/knowledge_tests.py` (added in pass 12 — see that pass's
 scope-correction note; closes the gap `docs/KNOWN_LIMITATIONS.md`'s "Training
 — Online Knowledge Tests Have No Owning Feature" entry flagged),
+`api/v1/endpoints/shift_evaluation_templates.py`,
+`api/v1/endpoints/shift_evaluations.py` (both added in pass 13 — see that
+pass's scope-correction note; EC-14 pass 14 explicitly disclaimed ownership
+of this surface and left it for whichever row claimed it),
 `services/training_service.py`, `services/training_program_service.py`,
 `services/training_session_service.py`, `services/training_compliance.py`,
 `services/training_requirement_removal.py`, `services/training_course_names.py`,
-`services/cert_alert_service.py`, `mcp/tools/training.py`,
+`services/cert_alert_service.py`, `services/shift_evaluation_service.py`
+(pass 13), `services/shift_evaluation_template_service.py` (pass 13),
+`mcp/tools/training.py`,
 `models/training.py`, `models/knowledge_test.py` (pass 12),
-`schemas/training_program.py`, `schemas/knowledge_test.py` (pass 12)
+`models/shift_evaluation.py` (pass 13),
+`schemas/training_program.py`, `schemas/knowledge_test.py` (pass 12),
+`schemas/shift_evaluation.py` (pass 13)
 **Frontend:** `modules/training`, and the pipeline/program pages under
 `src/pages/` and `src/components/training/` (spot-checked, not read
 line-by-line, in pass 11), including the knowledge-test pages
 (`MyKnowledgeTestsPage.tsx`, `KnowledgeTestAttemptPage.tsx`,
-`KnowledgeTestsTab.tsx`, `knowledgeTestService.ts`) added in pass 12
+`KnowledgeTestsTab.tsx`, `knowledgeTestService.ts`) added in pass 12, and the
+shift-evaluation pages/components added in pass 13
+(`pages/training/ShiftEvaluationSettingsPanel.tsx`,
+`pages/scheduling/ShiftEvaluation*.tsx`,
+`components/training/ShiftEvaluation*.tsx`,
+`components/training/EvaluationRequirementFields.tsx`,
+`utils/shiftEvaluations.ts`, `utils/shiftEvaluationTemplates.ts`)
 **Migrations:** `a0195b397bf3` (pass 11, `program_enrollments.
 completion_reason`), `7c2e9a41b6d3` (2026-10-05, the three knowledge-tests
-tables — reviewed for the first time in pass 12)
+tables — reviewed for the first time in pass 12), `3d0b6b6be048` (pass 13,
+shift evaluation templates), `5781476f2012` (pass 13, shift evaluations),
+`e059227da2c0` (pass 13, the three shift-evaluation requirement types)
 
 ---
 
@@ -2628,6 +2644,332 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 13 (2026-11-02) — 0 fixed, 0 new findings; scope gap closed (shift evaluations given first full pass), real delta (shift-evaluation credit hooks + a junior-member compliance-matching fix)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was confirmed unreachable
+(`ListAgents` → "No reachable agents"). PR #3931 (Feature 16, Events &
+requests, pass 13) had just merged (`cfce6ba25`) — confirmed via
+`pull_request_read` (CI green on all three workflows, `mergeable_state:
+clean`) and merged directly. A fresh `search/issues` query
+(`is:pr is:open head:claude/security-review`) returned 0 results. Row 17
+(Training core) was confirmed the next `⬜` on a freshly fetched `main`.
+
+### Scope correction: the Shift Evaluations surface is now this feature's, reviewed for the first time
+
+EC-14 (Equipment check & shifts) pass 14, landed just before this pass,
+explicitly declined ownership of the new "Shift Evaluations" feature
+(`shift_evaluation_templates`/`shift_evaluations` tables,
+`api/v1/endpoints/shift_evaluation_templates.py`,
+`api/v1/endpoints/shift_evaluations.py`,
+`services/shift_evaluation_service.py`,
+`services/shift_evaluation_template_service.py`,
+`models/shift_evaluation.py`, `schemas/shift_evaluation.py`) beyond the
+narrow touches landing inside its own two files, noting "most of its
+surface is Training's/Scheduling's own models and tables" and leaving it
+"for whichever rotation row eventually claims it." The surface is
+registered under `/training/shift-evaluation-templates` and
+`/training/shift-evaluations`, is gated by `training.configure`/
+`training.manage`, and its entire reason for existing is crediting
+`TrainingRequirement`/`RequirementProgress` rows this feature already owns
+— so, following the same precedent pass 12 set for `knowledge_tests.py`,
+this pass claims it and gives it a first full review against all seven
+checklist dimensions (2,503 lines read in full: 217 + 226 + 1,052 + 285 +
+291 + 432).
+
+- **1. Authentication coverage.** 13 routes across the two new endpoint
+  files, enumerated by `grep -c '^@router\.'` and confirmed by reading every
+  signature. All 7 template/settings routes carry
+  `Depends(require_permission("training.configure", "training.manage"))`.
+  Of the 6 evaluation routes: `GET /mine` carries `Depends(get_current_user)`
+  and returns only the caller's own evaluations (`list_for_member(current_user.id,
+...)`); `GET /members/{member_id}` is `training.manage`-gated;
+  `GET /shifts/{shift_id}`, `GET /shifts/{shift_id}/members/{member_id}/{scope_key}`
+  and `PUT` on the same path carry `get_current_user` but are immediately
+  re-authorized by `_shift_for_filing` → `_authorize_report_filing`
+  (imported from `shift_completion.py`, already reviewed under EC-14: the
+  shift's officer, or a `training.manage` holder — the same grant that may
+  file the shift's own completion report); `GET /{evaluation_id}` carries
+  `get_current_user` and does its own three-way check in the handler
+  (training.manage, the evaluator, or the evaluated member once visible —
+  see Authorization below). No route lacks an auth dependency. Both routers
+  mount under the same `module_gate("training", "Training")` every other
+  training route sits behind.
+- **2. Authorization & role fit.** The permission split matches sensitivity:
+  administering forms (which carry nothing sensitive by themselves — ratings
+  and comments live only on filled-out evaluations) is `training.configure`
+  or `training.manage`; filling one out is gated by being the shift's officer,
+  not a bare permission string, so a volunteer cannot write an evaluation
+  just by holding a broad grant. **Separation of duties, verified directly:**
+  `ShiftEvaluationService.save()` raises `ValueError("You cannot evaluate
+yourself")` before anything else runs when `member_id == evaluator.id`
+  (`shift_evaluation_service.py:711-712`), guarded by
+  `test_shift_evaluations.py::test_nobody_evaluates_themselves`. `GET
+/{evaluation_id}` answers 404 (not 403) when none of the three conditions
+  hold, "so a member must not learn that an evaluation exists before they may
+  read it" (`shift_evaluations.py:222-225`) — the same not-found-vs-forbidden
+  discipline the rest of the app uses for existence oracles. No
+  `require_permission` OR-gate with more than the two training alternatives
+  to enumerate, and both are already `training.manage`-equivalent in
+  sensitivity.
+- **3. Tenant isolation (XC-1/XC-3).** Every by-id read filters
+  `organization_id` directly: `ShiftEvaluationService.get_shift`,
+  `.get` (the evaluation), `ShiftEvaluationTemplateService.get_template`
+  all take `organization_id` as a required parameter and filter on it in the
+  `select()`, never a bare id lookup. `_find_requirement` (used by `form()`
+  and `save()`) resolves the member/scope pair only from
+  `requirements()`'s own org-scoped crew query — a path/body `member_id` that
+  is not actually on the shift's crew raises `LookupError`
+  (`test_a_member_nobody_asked_about_is_refused`), so it cannot be used to
+  create or address an evaluation for an arbitrary user id. **XC-1:**
+  `TrainingProgramService._validate_evaluation_template` (added this window,
+  reviewed above as part of the training.py diff) refuses a
+  `shift_evaluation_template_id` that is not `is_in_org` before it is stored
+  on a program, on both create and update, and the template service's own
+  `update_settings` does the equivalent in-org check before storing a general
+  form id. `sync_credit`'s `RequirementProgress`/`TrainingRequirement`/
+  `ProgramEnrollment`/`ProgramRequirement` join is filtered on
+  `ProgramEnrollment.organization_id == str(organization_id)` **and**
+  `ProgramEnrollment.user_id == evaluation.member_id` together — not a bare
+  by-id join. Guarded directly by
+  `test_shift_evaluations.py::test_another_departments_shift_is_not_found`,
+  `test_another_departments_evaluation_is_not_found`, and (template side)
+  `test_shift_evaluation_templates.py::test_another_department_cannot_reach_a_template`,
+  `test_another_departments_template_is_refused`,
+  `test_another_departments_template_is_refused_on_create`.
+- **4. Injection & untrusted output.** No raw SQL, no `.like()`/`.ilike()`, no
+  CSV export, no upload, no outbound URL. `ShiftEvaluationSave`'s header
+  values, statistics and per-item responses are all re-validated server-side
+  against the **snapshot the evaluation was actually filled out on**
+  (`_settle_answers`), not the live template — a rating off the form's scale,
+  a choice not among the header field's options, or a stray key the form does
+  not ask for all raise or are silently dropped
+  (`test_answers_the_form_does_not_ask_are_not_stored`,
+  `test_a_rating_off_the_scale_is_refused`,
+  `test_a_choice_must_be_one_of_its_options`). Every list/string length on the
+  write side is bounded in the schema (`MAX_SCALE_LEVELS`, `MAX_SECTIONS`,
+  `MAX_ITEMS_TOTAL` = 150, `MAX_COMMENT_LENGTH` = 2000, `MAX_STATISTIC_VALUE`
+  = 1000, etc.) — a department cannot store an unbounded JSON blob through
+  either the template editor or the evaluation form.
+- **5. Data exposure.** Ratings and comments can name patients ("68 y/o
+  syncope" is the module docstring's own example), so `responses` and
+  `closing_comments` are `EncryptedJSON`/`EncryptedText` at rest
+  (`models/shift_evaluation.py:245-250`) — confirmed by reading the column
+  types directly, not the comment. The computed `average_rating`/
+  `rated_count`/`low_rating_count` are plain columns, deliberately: they let
+  statistics be read without decrypting every row, and they carry no patient
+  detail. `visible_to_member` gates whether the evaluated member may see
+  their own evaluation at all (immediately, or once the shift's report is
+  approved, mirroring the shift report's own visibility rule) — a draft is
+  never visible (`test_a_draft_is_never_seen`); `/training/shift-evaluations/`
+  is already listed in `UNCACHEABLE_PREFIXES`
+  (`frontend/src/utils/apiCache.ts:60`, with its own comment citing "a
+  member's ratings and the officer's comments on them"). Every
+  `HTTPException` in both endpoint files raises a fixed, static `detail`
+  string or passes a `ValueError`/`LookupError` message through
+  `safe_error_detail()` — no interpolated exception text, SQL, or path.
+- **6. Abuse resistance.** Not public; every route requires authentication,
+  and the two write paths additionally require being the shift's officer or
+  `training.manage`. `save()`'s `IntegrityError` handler
+  (`shift_evaluation_service.py:767-780`) is the Pitfall #36 shape done
+  correctly: the unique constraint on `(shift_id, member_id, scope_key)`
+  catches two officers racing to create the same evaluation, and the handler
+  rolls back and re-applies the save to whichever row won rather than
+  raising or duplicating — guarded by
+  `test_saving_twice_keeps_one_evaluation`. `sync_credit` keys every ledger
+  row on `(source_type=SHIFT_EVALUATION, source_id=evaluation.id)`, so
+  re-running it (on every save, and from `sync_credit_for_shift_member`/
+  `sync_credit_for_organization` after an unrelated report-review or
+  settings change) restates rather than re-adds credit — guarded by
+  `test_saving_again_does_not_count_twice`,
+  `test_an_edit_restates_the_totals`, `test_an_edit_to_zero_takes_the_credit_back`.
+  No unbounded list endpoint: `list_for_member`/`averages_by_form` are
+  per-member, not org-wide, and `requirements()`'s crew/enrollment/template
+  queries are all scoped to one shift's own (small) crew.
+- **7. Schema & migration integrity.** All three migrations
+  (`3d0b6b6be048`, `5781476f2012`, `e059227da2c0`) are `create_all`-tolerant
+  (`_has_table`/`_column` checks before every `op.create_table`/
+  `op.add_column`/`op.create_foreign_key`, Pitfall #26) and read in full.
+  Every `ondelete="SET NULL"` column (`shift_evaluations.shift_id`/
+  `.evaluator_id`/`.template_id`, `shift_evaluation_templates.created_by`/
+  `.updated_by`, `training_programs.shift_evaluation_template_id`,
+  `training_module_configs.general_shift_evaluation_template_id`) is
+  `nullable=True` (Pitfall #2), confirmed column-by-column against the
+  model, not assumed. `e059227da2c0`'s native-ENUM widen reads the live
+  column's nullability/default before rewriting it (matching `6cf89b44dc08`'s
+  established pattern) and its downgrade re-maps the three new requirement
+  types to `checklist` before narrowing the ENUM back, so no row is left
+  holding a value the narrowed type cannot represent. No JSON-column
+  shallow-copy mutation: `update_template` builds fresh values for every JSON
+  column from `body.column_values()` rather than mutating
+  `template.scale`/`.sections` in place (Pitfall #12); `ShiftEvaluationSave`
+  settles to one canonical shape (Pitfall #20) via `_settle_answers`, and the
+  model docstring calls this out directly. `validate_migrations.py --strict`
+  (below) confirms a single head with this window's three revisions chained
+  correctly after the merge migration `f2c8d41a7e63` resolved the fork noted
+  in its own filename.
+
+**0 fixed, 0 new findings** on this surface — a first-principles review found
+nothing to flag. Test coverage is unusually direct for the properties that
+matter here: `test_nobody_evaluates_themselves`,
+`test_a_member_nobody_asked_about_is_refused`, four separate
+`test_another_departments_*`/`test_another_department_*` cross-tenant guards,
+and `test_saving_twice_keeps_one_evaluation`/`test_saving_again_does_not_count_twice`
+for the two race conditions a less careful implementation of this exact
+feature shape would have been vulnerable to.
+
+### Commits reviewed (training's originally-declared files)
+
+Baseline `91b4048a6` (pass 12's commit, landed directly on `main` — this
+feature's pass 12 PR had no separate merge commit to cite). Of 265 non-merge
+commits repo-wide in the window (`git log --oneline 91b4048a6..HEAD`), 7
+touch the originally-declared backend/frontend files with a real diff
+(filtered from a longer `git log --name-only` list that also matched several
+unrelated merge commits bringing `main` into feature branches):
+
+- **`d4e4cabea`** (Credit program requirements from shift evaluations) —
+  the backend half of the Shift Evaluations feature's landing inside
+  `training.py`/`training_programs.py`/`models/training.py`/
+  `schemas/training_program.py`/`services/training_program_service.py`/
+  `services/training_compliance.py`: three new `RequirementType` values
+  (`EVALUATED_SHIFTS`/`TRANSPORTS`/`REFUSALS`), two new numeric target
+  columns, one new boolean flag, `TrainingProgram.shift_evaluation_template_id`
+  (XC-1-validated by the new `_validate_evaluation_template`, reviewed
+  above), and a new progress-credit source
+  (`ProgressCreditSource.SHIFT_EVALUATION`). `update_requirement`'s mutable
+  field set gains `required_transports`/`required_refusals`
+  (`training_program_service.py:1033-1036`) so an update can actually change
+  them. The one behavioral guard worth calling out directly:
+  `mark_requirement_complete` (training's manual "mark done" path) now
+  explicitly refuses an `EVALUATED_SHIFTS`/`TRANSPORTS`/`REFUSALS`
+  requirement with "That requirement is credited by shift evaluations, not
+  by training records" (`training_program_service.py:4656-4663`) — read in
+  full, this closes off the obvious alternate route (an officer marking the
+  requirement complete by hand) from ever bypassing the evaluation-sourced
+  credit the rest of this pass verifies, rather than leaving it as an
+  unguarded side door.
+- **`c4c32153e`** (Offer the shift-evaluation requirement types in the
+  requirement editors) — `RequirementModal.tsx`/`EvaluationRequirementFields.tsx`
+  (new) add the three types to the admin editor's dropdown and the new
+  shared numeric-target fields. Pure form UI: the numeric fields use
+  `|| undefined` to coerce an empty box (Pitfall #1), the submit payload
+  zeroes out the field for whichever type is not currently selected (so
+  switching a requirement away from `transports` clears
+  `required_transports` rather than leaving a stale target behind, the same
+  discipline `required_call_types` already used), and client-side validation
+  before submit mirrors (does not replace) the service's own target
+  requirement. No new API call, no new permission.
+- **`83b208201`** (Find a member's tier by membership status; let the junior
+  chip match) — `training_compliance.py::_find_matching_profile` matched a
+  compliance profile's `membership_types` against
+  `member.membership_type` alone, which has no word for a junior member (the
+  legacy column derives junior members to `"probationary"`). A profile's
+  "junior" chip therefore never matched any junior member, silently grading
+  them against whatever profile `role_ids`/no-filter fell through to instead.
+  Fixed (in this commit, not by this pass) by also checking
+  `canonical_member_status(member.member_status) == MemberStatus.JUNIOR`
+  and widening the match to a set. Read in full: this is a grading-accuracy
+  fix with no new query shape, no permission change, and no tenancy
+  implication — both `member` and `profile` are already the caller's own
+  org's rows by the time this function runs (`_find_matching_profile` is a
+  pure in-memory match over already-fetched objects). Not a security finding,
+  but worth recording per the "a screen reports what the backend decided"
+  discipline (Pitfall #29) in case a later pass is tempted to re-derive this
+  match independently elsewhere: it belongs here, in the one function every
+  compliance reader already calls.
+- **`7ed3f1a6f`** (roster members see their own cohort's class schedule) —
+  touches `modules/training`-adjacent cohort pages, not the four
+  backend files in this feature's core scope; the permission/tenancy
+  substance of cohort access belongs to Feature 18 (Training extended, which
+  owns `course_cohorts.py`), not re-derived here.
+- **`2783073d9`/`523b1a0ea`** (Add shift evaluation templates/screen,
+  backend/frontend) and **`96d2c47ee`** (the apparatus-label refactor EC-14
+  pass 14 already reviewed for its touch inside `shift_completion_service.py`)
+  — the commits that introduced the Shift Evaluations surface itself,
+  reviewed first-principles above rather than as an incremental diff (there
+  being no prior pass's baseline for this surface).
+- A `training_service.py` diff (10 lines) replaces an inline
+  `membership_type`-keyed tier lookup with the shared
+  `MembershipTierService.tier_for_member(tiers, member)` — the same
+  junior/status-aware resolution `83b208201` gives `training_compliance.py`,
+  applied to the one other call site in this feature's scope that was still
+  doing it by hand. `MembershipTierService` itself is a shared utility
+  reviewed under Feature 07 (Users & organizations); this is a pure
+  call-site substitution with no new query and no behavior change beyond the
+  bug `83b208201` also fixes.
+
+### Re-verified standing items
+
+- **TR7-1 — unchanged, confirmed by the commit list above not touching
+  `enroll_member_in_program`.** `git diff 91b4048a6..HEAD --
+services/training_program_service.py | grep enroll_member_in_program`
+  returns nothing. Both remaining defects (the unlocked read-then-write
+  race on "existing active enrollment," and the function's incompleteness —
+  no `RequirementProgress`/phase/recert creation) are open exactly as pass 12
+  left them. **Disposition unchanged: OPEN, FLAGGED, not fixed here** — the
+  owner-decision reasoning pass 7/12 gave still applies.
+- TR-4's `year`-default semantics (owner-decision, acknowledged) — unchanged.
+- The certification-name-match cutoff (owner decision, 2026-10-05) —
+  unchanged; no commit in this window touches `training_course_names.py`.
+
+### Verified good ✅ (pass 13 additions)
+
+- **The Shift Evaluations surface holds up under a full first-principles
+  review** — see the seven-dimension review above. No self-evaluation path,
+  no cross-tenant by-id read, PHI-adjacent fields encrypted at rest, every
+  JSON write settled to one canonical shape, every migration
+  `create_all`-tolerant with correct `SET NULL`/`nullable` pairing.
+- **The credit ledger is idempotent in both directions** (restates on an
+  edit, zeroes out and revokes on a withdrawn rating) and is keyed so
+  re-running it from three different call sites
+  (`save`, `sync_credit_for_shift_member`, `sync_credit_for_organization`)
+  never double-counts.
+- **`mark_requirement_complete` correctly refuses the three new requirement
+  types** rather than leaving the manual completion path as an unguarded
+  bypass of evaluation-sourced credit.
+- **The junior-member compliance-matching fix is a pure grading-accuracy
+  correction** with no tenancy or exposure implication.
+
+## Schema & migration notes (pass 13)
+
+Three migrations this window, all reviewed above for the first time:
+`3d0b6b6be048` (shift evaluation templates + the two FK columns),
+`5781476f2012` (shift evaluations — a new table, no existing row to
+settle), `e059227da2c0` (the three new requirement types + two target
+columns + one boolean flag on `training_requirements`, plus the new
+`shift_evaluation` credit source on `requirement_progress_credits`). All
+three are `create_all`-tolerant and were merged cleanly past a since-resolved
+three-way fork (`f2c8d41a7e63`). No fix needed.
+
+## Guard tests added (pass 13)
+
+None new from this pass — the Shift Evaluations feature's own commits
+already shipped `test_shift_evaluations.py`, `test_shift_evaluation_credit.py`,
+`test_shift_evaluation_templates.py`,
+`test_shift_evaluation_template_schema.py` and
+`test_shift_evaluation_requirement_schema.py` (74 test methods total,
+enumerated above), which this pass verifies exercise the properties a
+first-principles review would otherwise have had to ask for by hand.
+
+## Completion gate (pass 13)
+
+| Check                                                                                | Result                                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/` (26.10.1)                                       | ✅ clean, 2833 files unchanged                    |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                    | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                                    | ✅ single head `38e0f552242d`, 696 revisions      |
+| `python3.13 scripts/check_route_permissions.py --strict` (run from repo root)        | ✅ 289 routes, 0 errors, 0 warnings               |
+| `python3.13 scripts/generate_schema_docs.py --check`                                 | ✅ up to date                                     |
+| `pytest tests/ -q -k "training or compliance or knowledge_test or shift_evaluation"` | ✅ 2565 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck`                                                                  | ✅ 0 errors                                       |
+| `npm run lint` (`--max-warnings 10`)                                                 | ✅ 0 errors, 0 warnings                           |
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended).
 
 ---
 
