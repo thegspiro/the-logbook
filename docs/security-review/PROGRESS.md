@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (pending)** (branch `claude/security-review-equipment-check-shifts-p14`)
-— Feature 14 (Equipment check & shifts), pass 14, a watchdog pickup. Real
+**PR [#3927](https://github.com/thegspiro/the-logbook/pull/3927)** (branch
+`claude/security-review-equipment-check-shifts-p14`) — Feature 14 (Equipment
+check & shifts), pass 14, a watchdog pickup. Real
 delta: `report_review_role` wired (a department's chosen reviewer role may
 now review shift reports alongside `training.manage`, with a verified
 self-review exclusion), plus the new Shift Evaluations feature's credit-sync
