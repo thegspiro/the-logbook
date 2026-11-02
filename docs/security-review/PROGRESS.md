@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [see this branch's push below]** — Feature 18 (Training extended),
-pass 13, a watchdog pickup. Real delta since pass 12: a `client_request_id`
+**PR [#3934](https://github.com/thegspiro/the-logbook/pull/3934)** (branch
+`claude/security-review-training-extended-p13`) — Feature 18 (Training
+extended), pass 13, a watchdog pickup. Real delta since pass 12: a `client_request_id`
 idempotency key closing a genuine duplicate-credit bug in
 `TrainingSubmissionService.create_submission` (verified org-scoped,
 race-safe via `IntegrityError` rollback-and-relookup, `create_all`-
