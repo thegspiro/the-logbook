@@ -1,7 +1,87 @@
 # Application Review — Scheduled Tasks & Cron
 
 **Prefix:** `CRON` · **Iteration:** A3 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-09-09 (pass 5)
+2026-08-08 (pass 2), 2026-09-09 (pass 5), 2026-11-02 (pass 6)
+
+## Pass 6 (2026-11-02) — the runners added since pass 5, and what a restart does to them
+
+Pass 5 recorded "the delta since is nil". That has reversed: the runner count went from 44 to 72 and
+the file has had 77 commits since, the newest this morning. Twenty of the 72 runners are not named in any
+review document. This pass reviewed the ones that send, with pitfall #36 as the lens: **if the task runs
+twice, does the member get two emails?** That is not a hypothetical, because of how the scheduler decides
+a task is due. **1 fixed, 1 flagged.**
+
+> **Finding ids:** CRON-41 and CRON-42 follow CRON-40 (the highest in use across both tracks). The shared
+> `CRON-` prefix problem recorded in Pass 5 stands.
+
+### The mechanism
+
+`_run_scheduled_task_cycles` (`main.py`) decides a task is due when `time.monotonic() - last_run >=
+interval`, and `last_run` is seeded to `0.0` **in memory**. Nothing is persisted. So every process start (a
+deploy, a container restart, a worker taking over after the claim moves) finds every task due at once and
+runs all of them back to back. The code comment at the claim renewal says as much ("on the first pass every
+task is due at once"). The consequence for a _sender_ is that the task's own code is the only thing standing
+between a restart and a duplicate email. The repository's reminder services know this and say so
+(`grant_reminder_notifications.py`: "the scheduler runs this daily and again whenever it restarts") and
+answer it with an email-channel `NotificationLog` sent-log.
+
+Measured, not assumed: of the 72 runners, 11 send from their own body. Four (post-event validation,
+post-shift validation, shift reminders, end-of-shift summary) are guarded by design: their docstrings say a
+second run sends nothing and they read a log or a flag first. Several delegate to services that carry a
+sent-log (evaluation notices, budget-request and grant reminders, the inventory audit digest). Four had
+nothing.
+
+### CRON-41 — MED — The overdue-gear email was re-sent to every member on every restart — ✅ FIXED
+
+`run_inventory_overdue_alerts` emails every member holding an overdue checkout and recorded nothing, so a
+routine deploy re-sent the "Overdue Equipment" mail to all of them, at whatever hour the deploy happened.
+It is the only one of the four that reaches **members** rather than officers.
+
+**Fix:** the same sent-log the grant and budget reminders use. A successful send is recorded as an
+email-channel `NotificationLog` row (category `inventory_overdue_checkout`), and a member recorded since the
+start of the department's current calendar day is skipped. The next day's run reminds them again, as before.
+The row is written **after** the send and committed per member (pitfall #36: a crash between the two repeats
+one reminder, where the other order could lose a member's only one). A send that reaches nobody
+(`success_count == 0`) is not recorded, so the next run retries. No migration: `NotificationLog` and its
+columns already exist.
+
+**Test:** `tests/test_inventory_overdue_alerts_once_a_day.py`, against a real database so the stored row is
+actually read back. Two runs on one day send once (red before: two); a run after the log is backdated to
+yesterday sends again (so the guard cannot become a permanent mute); a failed send leaves no log row. The
+three existing tests that mock the database pass unchanged.
+
+### CRON-42 — LOW — Three officer email digests are re-sent on every restart — 🚩 OPEN
+
+`run_inventory_low_stock_alerts` (daily), `run_supply_expiration_alerts` (weekly) and
+`run_nfpa_retirement_alerts` (weekly) email a digest to quartermasters and gear officers with no sent-log.
+They pass a `dedupe_key` to `officer_alert_copies`, but that de-duplicates the **bell entry** among unread
+ones; it does not guard the email. So after every restart the officers get the same digest again.
+
+Left open because it reaches officers only, the bell is already correct, and each runner resolves its own
+recipients and sends one email to a list, so the sent-log is per organisation and period rather than per
+member. That is a design choice (a marker row per org and category, with a day or week window, written after
+the send) that deserves its own change and its own test per runner, not a rider on this one.
+
+### Documentation drift (not changed)
+
+The docstrings of `run_inventory_overdue_alerts` ("Daily at 07:30") and `run_nfpa_retirement_alerts`
+("Weekly on Mondays at 08:00") describe a wall-clock time. The in-process scheduler runs them on an
+interval since the process started (`TASK_INTERVALS_SECONDS`: 86400 and 604800 seconds), so the time of day
+follows when the server was last restarted. The wall-clock times are only true if the external cron
+documented at the top of `scheduled_tasks.py` is what triggers them. Not corrected here because which of the
+two is the intended behaviour is a product decision.
+
+### Verified good
+
+`run_evaluation_due_notices` (added this morning) is the model for the rest: it names pitfall #36, chooses
+send-then-stamp on purpose, and locks and re-checks each step before sending. `run_zeffy_payment_sync` has a
+unique key on `(org, payment)` and handles `IntegrityError`. The claim fix from pass 5 (CRON-40) is in place.
+CRON-4 (raw exception strings returned to the System Owner) is unchanged and still open.
+
+**Completion gate (pass 6):** `flake8`, `black --check`, `isort --check-only` and `mypy` on the touched files;
+scheduled/overdue/inventory/notification/cron tests — see the PROGRESS entry.
+
+---
 
 ## Pass 5 (2026-09-09) — the scheduler's own claim, not the tasks it runs
 
