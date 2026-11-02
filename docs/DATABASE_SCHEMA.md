@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**340 tables · 5602 columns · 1152 foreign keys**
+**340 tables · 5604 columns · 1152 foreign keys**
 
 ---
 
@@ -202,11 +202,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`evaluation_amendments`](#evaluation_amendments) | `EvaluationAmendment` | 8 | A finalized evaluation reopened as a new revision, and why. |
 | [`evaluation_deletion_records`](#evaluation_deletion_records) | `EvaluationDeletionRecord` | 14 | The permanent trace of a deleted evaluation. |
-| [`evaluation_documents`](#evaluation_documents) | `EvaluationDocument` | 9 | The finalized PDF of one revision, frozen. |
+| [`evaluation_documents`](#evaluation_documents) | `EvaluationDocument` | 10 | The finalized PDF of one revision, frozen. |
 | [`evaluation_parts`](#evaluation_parts) | `EvaluationPart` | 11 | A block of authored content: the evaluator's ratings and narrative, the |
 | [`evaluation_periods`](#evaluation_periods) | `EvaluationPeriod` | 9 | A review period a manager opens, e.g. "2026 Annual Review". |
 | [`evaluation_signatures`](#evaluation_signatures) | `EvaluationSignature` | 14 | A signature given on one step of one revision. |
-| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 15 | The state of one workflow step on one revision of an evaluation. |
+| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 16 | The state of one workflow step on one revision of an evaluation. |
 | [`evaluation_template_versions`](#evaluation_template_versions) | `EvaluationTemplateVersion` | 11 | One version of a template's content and workflow. |
 | [`evaluation_templates`](#evaluation_templates) | `EvaluationTemplate` | 11 | A department's evaluation form for one kind of member. |
 | [`evaluations`](#evaluations) | `Evaluation` | 20 | One member's evaluation for one period. |
@@ -2637,7 +2637,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2700,7 +2700,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -2806,7 +2806,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **EvaluationDocument** · `app/models/evaluation.py`
 
-> The finalized PDF of one revision, frozen. Generated once, when the last signature finalizes the revision, and served as that exact file from then on: a layout or logo change afterwards must not alter a signed record. ``file_sha256`` fingerprints the file bytes so a copy can be checked against the original; ``content_hash`` is the hash of the record every signature on the revision attested to, printed on the document. One per revision, so an amendment's new revision gets its own.
+> The finalized PDF of one revision, frozen. Generated once, when the last signature finalizes the revision, and served as that exact file from then on: a layout or logo change afterwards must not alter a signed record. ``file_sha256`` fingerprints the file bytes so a copy can be checked against the original; ``content_hash`` is the hash of the record every signature on the revision attested to, printed on the document. One per revision, so an amendment's new revision gets its own. A member's written response, attached after finalization, is printed in a second document for the same revision (``includes_response``), and the first is kept as it was signed (owner decision 2026-11-02).
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -2818,6 +2818,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `file_sha256` | VARCHAR(64) | no |  |  |  |
 | `content_hash` | VARCHAR(64) | no |  |  |  |
 | `size_bytes` | INTEGER | no |  |  |  |
+| `includes_response` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -2826,7 +2827,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Constraints**
 
-- UNIQUE `uq_evaluation_documents_revision` (`evaluation_id`, `revision`)
+- UNIQUE `uq_evaluation_documents_variant` (`evaluation_id`, `revision`, `includes_response`)
 
 ### `evaluation_parts`
 
@@ -2935,6 +2936,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reminder_sent_at` | DATETIME | yes |  |  |  |
 | `overdue_notice_sent_at` | DATETIME | yes |  |  |  |
+| `flagged_items` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 

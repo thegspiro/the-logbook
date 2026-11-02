@@ -49,8 +49,9 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
     ``overall``, ``overall_comment``, ``self_status``, ``self_comment``,
     ``signatures`` (each ``{"label", "name", "disposition", "comment",
     "signed_at"}``), ``amendments`` (each ``{"revision", "by", "at",
-    "reason"}``, absent or empty when never amended), ``content_hash``,
-    ``generated_at``.
+    "reason"}``, absent or empty when never amended), ``response`` (``{"text",
+    "submitted_at"}`` for the PDF that carries the member's written response,
+    else None), ``content_hash``, ``generated_at``.
     """
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -223,6 +224,28 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
                         "signatures above are those given on this revision.",
                         styles["small"],
                     ),
+                ],
+                styles,
+            )
+        )
+    response = record.get("response")
+    if response:
+        story.append(
+            section(
+                "Member's written response",
+                [
+                    padded(
+                        [
+                            Paragraph(_multiline(response.get("text")), styles["body"]),
+                            Paragraph(
+                                f"Submitted {esc(response.get('submitted_at'))}, after "
+                                "the evaluation was final. The signatures above were "
+                                "given on the evaluation before this response; the "
+                                "fingerprint below does not cover it.",
+                                styles["small"],
+                            ),
+                        ]
+                    )
                 ],
                 styles,
             )

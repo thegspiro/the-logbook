@@ -770,6 +770,9 @@ class EvaluationViewer(BaseModel):
     can_delete: bool = False
     # A holder of evaluations.manage, on a finalized evaluation not their own.
     can_amend: bool = False
+    # The member, on their finalized evaluation, inside the response window,
+    # before their response is submitted.
+    can_respond: bool = False
 
 
 class AmendmentResponse(BaseModel):
@@ -840,6 +843,14 @@ class EvaluationDetail(EvaluationSummary):
     document_available: bool = False
     revision: int = 1
     amendments: List[AmendmentResponse] = Field(default_factory=list)
+    # The last day the member may attach a written response; None until the
+    # evaluation is finalized.
+    response_due: Optional[date] = None
+    # A second PDF carrying the member's submitted response; the signed one
+    # (``document_available``) is kept as it was.
+    response_document_available: bool = False
+    # Keys of the evaluator's items the calibrator flagged to revisit.
+    calibration_flags: List[str] = Field(default_factory=list)
     viewer: EvaluationViewer
 
 
@@ -982,3 +993,32 @@ class EvaluationAmend(BaseModel):
         if not v:
             raise ValueError("Give the reason for amending this evaluation")
         return v
+
+
+# ----------------------------------------------------------------- response
+
+
+class ResponseWrite(BaseModel):
+    """The member's written response to their finalized evaluation."""
+
+    text: str = Field(min_length=1, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("text")
+    @classmethod
+    def _text(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Write your response before saving it")
+        return v
+
+
+# -------------------------------------------------------------- calibration
+
+
+class CalibrationComplete(BaseModel):
+    """Completing calibration, with the evaluator's items flagged for them to
+    revisit. Item keys only, never a note (owner decision 2026-11-02)."""
+
+    flagged_items: List[str] = Field(
+        default_factory=list, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
+    )
