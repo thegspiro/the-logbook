@@ -261,14 +261,14 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
             <button
               type="button"
               onClick={onClose}
-              className="text-theme-text-secondary hover:text-theme-text-primary rounded-lg px-4 py-2 text-sm transition-colors"
+              className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 rounded-lg px-4 py-2 text-sm transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+              className="touch:min-h-11 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : requirement ? 'Save Changes' : 'Add Requirement'}
             </button>
