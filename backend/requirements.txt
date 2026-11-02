@@ -8,10 +8,10 @@
 fastapi==0.162.0
 # starlette pinned explicitly (normally transitive): the 1.x line carries
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
-starlette==1.9.0
+starlette==1.10.0
 uvicorn[standard]==0.54.0
-pydantic==2.14.1
-pydantic-settings==2.16.1
+pydantic==2.14.2
+pydantic-settings==2.16.2
 slowapi==0.1.10
 
 # ============================================
@@ -76,8 +76,8 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.118  # AWS S3
-azure-storage-blob==12.31.0
+boto3==1.43.122  # AWS S3
+azure-storage-blob==12.31.1
 google-cloud-storage==3.17.1
 python-magic==0.4.27
 
@@ -98,7 +98,7 @@ nh3==0.3.7  # Allowlist HTML sanitizer for rich-text minutes sections (app/utils
 httpx==0.28.1
 requests==2.34.2  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
 aiofiles==25.1.0
-websockets==17.3
+websockets==17.4
 
 # ============================================
 # Data Validation & Parsing
@@ -110,7 +110,7 @@ tzdata>=2026.5  # Timezone data for zoneinfo (Python 3.9+ built-in)
 # ============================================
 # Payments
 # ============================================
-stripe==16.0.0
+stripe==16.1.0
 
 # ============================================
 # Monitoring & Logging
@@ -142,13 +142,13 @@ google-api-python-client==2.201.0
 # ============================================
 # Development & Testing
 # ============================================
-pytest==9.1.1  # schemathesis 4.10+ requires >=9; clears PYSEC-2026-1845
-pytest-asyncio==1.4.0
+pytest==9.2.0  # schemathesis 4.10+ requires >=9; clears PYSEC-2026-1845
+pytest-asyncio==1.4.1
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.170.9  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.32.4
+hypothesis==6.170.14  # schemathesis 4.x requires >=6.130.12
+schemathesis==4.32.7
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -164,21 +164,21 @@ schemathesis==4.32.4
 # the same way). Read that range off the schemathesis release being pinned
 # before changing this line; the dependency bot does not read this comment and
 # has now proposed an out-of-range bump twice.
-jsonschema-rs==0.60.1
-faker==40.43.0
+jsonschema-rs==0.60.3
+faker==40.44.0
 # Stands in for a department's S3 bucket in tests; never imported by app/.
-moto[s3]==5.2.4
+moto[s3]==5.2.5
 
 # Code Quality
 black==26.10.1
-flake8==7.4.1
+flake8==7.5.0
 flake8-pytest-style==2.2.0
-mypy==2.4.0
+mypy==2.4.1
 # Type stubs for runtime dependencies that ship none. Each follows its
 # library's version line: move it when the library moves. httplib2 has no pin
 # above because it arrives through google-api-python-client.
 types-defusedxml==0.7.0.20260504
-types-httplib2==0.32.0.20260720
+types-httplib2==0.32.1.20261029
 types-python-dateutil==2.9.0.20261021
 types-reportlab==5.0.0.20261008
 isort==9.0.2
