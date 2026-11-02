@@ -28,6 +28,8 @@ import { isNetworkError, toAppError, getErrorMessage } from './errorHandling';
 import { currentQueueOwner, isOwnedByCurrentMember, requireQueueOwner } from './offlineQueueOwner';
 import type { SkillTemplate, SkillTest, SkillTestUpdate } from '../types/skillsTesting';
 import { flushSkillsEntry, type SkillsTransport } from './skillsTestFlush';
+import { requestBackgroundSync } from './backgroundSyncRegistration';
+import { withOfflineDrainLock } from '../sw/backgroundSyncProtocol';
 import {
   ALL_STORES,
   SKILLS_QUEUE_MAX_RETRIES,
@@ -118,6 +120,16 @@ function mutatePending(
   return mutatePendingAs(requireQueueOwner(), testId, change);
 }
 
+/** Write a queued step, then ask for a background sync to send it. */
+async function queueStep(
+  testId: string,
+  change: (existing: SkillsPendingEntry | undefined) => SkillsPendingEntry | null | undefined
+): Promise<SkillsPendingEntry | null> {
+  const entry = await mutatePending(testId, change);
+  void requestBackgroundSync();
+  return entry;
+}
+
 function fresh(testId: string, label: string): SkillsPendingEntry {
   const now = Date.now();
   return { testId, label, queuedAt: now, updatedAt: now, rev: 0, complete: false, retries: 0 };
@@ -140,7 +152,7 @@ export async function enqueueSkillsUpdate(
   test: { id: string; label: string; version?: number | undefined },
   update: SkillTestUpdate
 ): Promise<SkillsPendingEntry | null> {
-  return mutatePending(test.id, (existing) => {
+  return queueStep(test.id, (existing) => {
     const entry = existing ?? fresh(test.id, test.label);
     return {
       ...entry,
@@ -159,7 +171,7 @@ export async function enqueueSkillsUpdate(
 
 /** Queue the creation of a test started with no signal. */
 export async function enqueueSkillsCreate(create: OfflineSkillTestCreate, label: string): Promise<void> {
-  await mutatePending(create.id, (existing) => ({
+  await queueStep(create.id, (existing) => ({
     ...(existing ?? fresh(create.id, label)),
     create,
     baseVersion: 1,
@@ -170,7 +182,7 @@ export async function enqueueSkillsCreate(create: OfflineSkillTestCreate, label:
 
 /** Queue completion — it runs only after the entry's last save has landed. */
 export async function enqueueSkillsComplete(test: { id: string; label: string }): Promise<void> {
-  await mutatePending(test.id, (existing) => ({
+  await queueStep(test.id, (existing) => ({
     ...(existing ?? fresh(test.id, test.label)),
     complete: true,
     rev: (existing?.rev ?? 0) + 1,
@@ -238,7 +250,9 @@ let inFlight: Promise<SkillsDrainResult> | null = null;
  */
 export function drainSkillsQueue(axios: AxiosInstance): Promise<SkillsDrainResult> {
   if (inFlight) return inFlight;
-  inFlight = runDrain(axios).finally(() => {
+  // The lock is shared with the service worker's background sync, so a page
+  // drain and a worker drain never send the same evaluation at once.
+  inFlight = withOfflineDrainLock(() => runDrain(axios)).finally(() => {
     inFlight = null;
   });
   return inFlight;

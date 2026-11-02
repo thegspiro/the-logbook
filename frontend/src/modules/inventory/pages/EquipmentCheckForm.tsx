@@ -58,6 +58,7 @@ import {
 } from '../../../utils/offlineQueue';
 import { isOwnedByCurrentMember } from '../../../utils/offlineQueueOwner';
 import { flushEquipmentCheck } from '../../../utils/equipmentCheckFlush';
+import { isBackgroundSyncSummary, withOfflineDrainLock } from '../../../sw/backgroundSyncProtocol';
 import type {
   EquipmentCheckTemplate,
   CheckTemplateCompartment,
@@ -489,62 +490,66 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     setSyncStatus('syncing');
 
     try {
-      // The signed-in member's own checks only: another member's, or one queued
-      // before owners were recorded, must not go out under this session
-      // (FE3-34-5).
-      const pending = await listOwnPendingChecks();
-      let failed = 0;
-      let discarded = 0;
+      // Under the lock the service worker's background sync takes, so the two
+      // never upload the same photos at once.
+      await withOfflineDrainLock(async () => {
+        // The signed-in member's own checks only: another member's, or one queued
+        // before owners were recorded, must not go out under this session
+        // (FE3-34-5).
+        const pending = await listOwnPendingChecks();
+        let failed = 0;
+        let discarded = 0;
 
-      for (const entry of pending) {
-        // Asked again per entry: a sign-out and someone else's sign-in can
-        // land while an earlier entry's photos are still uploading, and this
-        // request would go out with their cookies.
-        if (!isOwnedByCurrentMember(entry)) continue;
-        const outcome = await flushEquipmentCheck(entry, {
-          submitCheck: (shiftId, payload) => equipmentCheckService.submitEquipmentCheck(shiftId, payload),
-          uploadPhotos: (checkId, checkItemId, photos) =>
-            equipmentCheckService.uploadCheckItemPhotos(
-              checkId,
-              checkItemId,
-              photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }))
-            ),
-          markCheckSubmitted: (id, checkId, itemIds) => markCheckSubmitted(id, checkId, itemIds),
-          markPhotosUploaded: (id, templateItemId) => markPhotosUploaded(id, templateItemId),
-          markRetry: (id) => markRetry(id),
-          dequeueCheck: (id) => dequeueCheck(id),
-          isRefusal: isNonRetryableHttpError,
-        });
-        if (outcome.kind === 'sent') {
-          setSubmissionOutcome((current) =>
-            current?.status === 'evidence_pending' && current.queueId === entry.id
-              ? { status: 'complete', photoCount: current.totalPhotoCount }
-              : current
-          );
-        } else if (outcome.kind === 'discarded') {
-          setSubmissionOutcome((current) =>
-            current?.status === 'evidence_pending' && current.queueId === entry.id
-              ? { status: 'evidence_failed', message: 'The retained evidence was rejected and has been discarded.' }
-              : current
-          );
-          discarded++;
-        } else {
-          failed++;
+        for (const entry of pending) {
+          // Asked again per entry: a sign-out and someone else's sign-in can
+          // land while an earlier entry's photos are still uploading, and this
+          // request would go out with their cookies.
+          if (!isOwnedByCurrentMember(entry)) continue;
+          const outcome = await flushEquipmentCheck(entry, {
+            submitCheck: (shiftId, payload) => equipmentCheckService.submitEquipmentCheck(shiftId, payload),
+            uploadPhotos: (checkId, checkItemId, photos) =>
+              equipmentCheckService.uploadCheckItemPhotos(
+                checkId,
+                checkItemId,
+                photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }))
+              ),
+            markCheckSubmitted: (id, checkId, itemIds) => markCheckSubmitted(id, checkId, itemIds),
+            markPhotosUploaded: (id, templateItemId) => markPhotosUploaded(id, templateItemId),
+            markRetry: (id) => markRetry(id),
+            dequeueCheck: (id) => dequeueCheck(id),
+            isRefusal: isNonRetryableHttpError,
+          });
+          if (outcome.kind === 'sent') {
+            setSubmissionOutcome((current) =>
+              current?.status === 'evidence_pending' && current.queueId === entry.id
+                ? { status: 'complete', photoCount: current.totalPhotoCount }
+                : current
+            );
+          } else if (outcome.kind === 'discarded') {
+            setSubmissionOutcome((current) =>
+              current?.status === 'evidence_pending' && current.queueId === entry.id
+                ? { status: 'evidence_failed', message: 'The retained evidence was rejected and has been discarded.' }
+                : current
+            );
+            discarded++;
+          } else {
+            failed++;
+          }
         }
-      }
 
-      const remaining = await getPendingCount();
-      setPendingQueueCount(remaining);
-      setSyncStatus(failed > 0 || discarded > 0 ? 'error' : 'idle');
+        const remaining = await getPendingCount();
+        setPendingQueueCount(remaining);
+        setSyncStatus(failed > 0 || discarded > 0 ? 'error' : 'idle');
 
-      if (pending.length > 0 && failed === 0 && discarded === 0) {
-        toast.success(`Synced ${pending.length} queued check(s)`);
-      } else if (failed > 0) {
-        toast.error(`${failed} check(s) failed to sync — will retry`);
-      }
-      if (discarded > 0) {
-        toast.error(`${discarded} queued check(s) were rejected repeatedly and have been discarded`);
-      }
+        if (pending.length > 0 && failed === 0 && discarded === 0) {
+          toast.success(`Synced ${pending.length} queued check(s)`);
+        } else if (failed > 0) {
+          toast.error(`${failed} check(s) failed to sync — will retry`);
+        }
+        if (discarded > 0) {
+          toast.error(`${discarded} queued check(s) were rejected repeatedly and have been discarded`);
+        }
+      });
     } catch {
       setSyncStatus('error');
     } finally {
@@ -566,6 +571,41 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       void syncPendingChecks();
     }
   }, [isOnline, previewMode, syncPendingChecks]);
+
+  // The service worker's background sync can send this device's queued checks
+  // while the form is open (sw/backgroundSync.ts). Follow it the way the
+  // form's own drain does: settle retained evidence it sent or discarded, and
+  // refresh the count.
+  useEffect(() => {
+    if (previewMode) return;
+    const container = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
+    if (!container) return;
+    let active = true;
+    const onMessage = (event: MessageEvent) => {
+      if (!isBackgroundSyncSummary(event.data)) return;
+      const sent = event.data.equipmentChecksSynced ?? [];
+      const discarded = event.data.equipmentChecksDiscarded ?? [];
+      if (sent.length === 0 && discarded.length === 0) return;
+      setSubmissionOutcome((current) => {
+        if (current?.status !== 'evidence_pending') return current;
+        if (sent.includes(current.queueId)) return { status: 'complete', photoCount: current.totalPhotoCount };
+        if (discarded.includes(current.queueId)) {
+          return { status: 'evidence_failed', message: 'The retained evidence was rejected and has been discarded.' };
+        }
+        return current;
+      });
+      void getPendingCount()
+        .then((count) => {
+          if (active) setPendingQueueCount(count);
+        })
+        .catch(() => {});
+    };
+    container.addEventListener('message', onMessage);
+    return () => {
+      active = false;
+      container.removeEventListener('message', onMessage);
+    };
+  }, [previewMode]);
 
   // Load pending count on mount
   useEffect(() => {
@@ -1923,59 +1963,69 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           .map((item) => [item.templateItemId as string, item.id])
       );
       const totalPhotoCount = itemsWithPhotos.reduce((count, item) => count + item.files.length, 0);
-      let photoQueueId: string | null = null;
 
-      // Keep the device's durable copy until every append-only photo upload is
-      // checkpointed. Once the check ID is stored this entry can only retry
-      // evidence; it must never create the already-accepted check again.
-      if (itemsWithPhotos.length > 0) {
-        // A standalone entry never reaches the check-submission branch in the
-        // drain because the accepted ID is checkpointed immediately below.
-        try {
-          photoQueueId = await enqueueCheck(shiftId ?? '', basePayload, itemsWithPhotos);
-          await markCheckSubmitted(photoQueueId, checkResult.id, submittedItemIds);
-        } catch {
-          // The check already exists. Continue the direct uploads, but never
-          // describe a later failure as a failed check submission or invite a
-          // second check submission when IndexedDB cannot retain the files.
-          photoQueueId = null;
-        }
-      }
+      // Queuing the photos below asks for a background sync, and the worker
+      // would upload them alongside these uploads but for the drain lock it
+      // takes. Held until every group is uploaded or the remainder is queued
+      // and the screen says so, so a worker that then sends it finds the
+      // outcome it has to update already showing.
+      const evidenceSent = await withOfflineDrainLock(async () => {
+        let photoQueueId: string | null = null;
 
-      let outstandingPhotoCount = totalPhotoCount;
-      try {
-        for (const { itemId, files } of itemsWithPhotos) {
-          const checkItemId = submittedItemIds[itemId];
-          if (!checkItemId) {
-            throw new Error(`Submitted check item not found for template item ${itemId}`);
+        // Keep the device's durable copy until every append-only photo upload is
+        // checkpointed. Once the check ID is stored this entry can only retry
+        // evidence; it must never create the already-accepted check again.
+        if (itemsWithPhotos.length > 0) {
+          // A standalone entry never reaches the check-submission branch in the
+          // drain because the accepted ID is checkpointed immediately below.
+          try {
+            photoQueueId = await enqueueCheck(shiftId ?? '', basePayload, itemsWithPhotos);
+            await markCheckSubmitted(photoQueueId, checkResult.id, submittedItemIds);
+          } catch {
+            // The check already exists. Continue the direct uploads, but never
+            // describe a later failure as a failed check submission or invite a
+            // second check submission when IndexedDB cannot retain the files.
+            photoQueueId = null;
           }
-          await equipmentCheckService.uploadCheckItemPhotos(checkResult.id, checkItemId, files);
-          outstandingPhotoCount -= files.length;
-          if (photoQueueId) await markPhotosUploaded(photoQueueId, itemId);
         }
-      } catch {
-        if (!photoQueueId) {
-          setSubmissionOutcome({
-            status: 'evidence_failed',
-            message: 'Photo upload failed and this device could not retain the evidence for retry.',
-          });
-          toast.error('Equipment check submitted, but evidence could not be retained');
-          return;
-        }
-        const count = await getPendingCount();
-        setPendingQueueCount(count);
-        setSubmissionOutcome({
-          status: 'evidence_pending',
-          photoCount: outstandingPhotoCount,
-          totalPhotoCount,
-          queueId: photoQueueId,
-        });
-        if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
-        toast.error('Equipment check submitted, but evidence was saved for retry');
-        return;
-      }
 
-      if (photoQueueId) await dequeueCheck(photoQueueId);
+        let outstandingPhotoCount = totalPhotoCount;
+        try {
+          for (const { itemId, files } of itemsWithPhotos) {
+            const checkItemId = submittedItemIds[itemId];
+            if (!checkItemId) {
+              throw new Error(`Submitted check item not found for template item ${itemId}`);
+            }
+            await equipmentCheckService.uploadCheckItemPhotos(checkResult.id, checkItemId, files);
+            outstandingPhotoCount -= files.length;
+            if (photoQueueId) await markPhotosUploaded(photoQueueId, itemId);
+          }
+        } catch {
+          if (!photoQueueId) {
+            setSubmissionOutcome({
+              status: 'evidence_failed',
+              message: 'Photo upload failed and this device could not retain the evidence for retry.',
+            });
+            toast.error('Equipment check submitted, but evidence could not be retained');
+            return false;
+          }
+          const count = await getPendingCount();
+          setPendingQueueCount(count);
+          setSubmissionOutcome({
+            status: 'evidence_pending',
+            photoCount: outstandingPhotoCount,
+            totalPhotoCount,
+            queueId: photoQueueId,
+          });
+          if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
+          toast.error('Equipment check submitted, but evidence was saved for retry');
+          return false;
+        }
+
+        if (photoQueueId) await dequeueCheck(photoQueueId);
+        return true;
+      });
+      if (!evidenceSent) return;
 
       if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
       setSubmissionOutcome({ status: 'complete', photoCount: totalPhotoCount });

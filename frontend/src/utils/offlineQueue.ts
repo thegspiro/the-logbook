@@ -9,6 +9,7 @@
 
 import type { ShiftEquipmentCheckCreate } from '@/modules/inventory/types/equipmentCheck';
 import { isOwnedByCurrentMember, requireQueueOwner } from './offlineQueueOwner';
+import { requestBackgroundSync } from './backgroundSyncRegistration';
 import {
   listPendingChecks,
   openCheckDb,
@@ -71,12 +72,17 @@ export async function enqueueCheck(
   };
 
   const db = await openCheckDb();
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const store = txStore(db, 'readwrite');
     const req = store.put(entry);
-    req.onsuccess = () => resolve(entry.id);
+    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
+  // The form also queues a check it has just submitted online, before
+  // uploading its photos; it holds the drain lock while it does, so a sync
+  // this fires waits and then finds only what the form could not send.
+  void requestBackgroundSync();
+  return entry.id;
 }
 
 /** The checks the signed-in member queued, which are the only ones to send. */
