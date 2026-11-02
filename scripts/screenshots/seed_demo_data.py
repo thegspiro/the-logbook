@@ -16856,6 +16856,373 @@ class Seeder:
                 },
             )
 
+    # -- screenshot backlog: guide 02 ----------------------------------
+
+    # Members no screenshot account and no other fixture leans on, so enrolling
+    # them in the backlog's programs changes nothing another shot pictures.
+    BACKLOG02_POOL = (
+        "ecaldwell",
+        "isolberg",
+        "mbell",
+        "praman",
+        "smarchetti",
+        "ytanaka",
+    )
+    BACKLOG02_FORM_NAME = "EMT Field Internship Evaluation"
+    BACKLOG02_INTERNSHIP = "EMT Field Internship"
+    BACKLOG02_NO_ACTIVE = "Hazmat Operations Refresher"
+    BACKLOG02_RETIRED = "Rope Rescue Technician"
+    BACKLOG02_HAND_REASON = (
+        "Completed the Fairfax County hazmat refresher in September; the "
+        "certificate is on file."
+    )
+
+    def _backlog02_program(self, name: str) -> dict | None:
+        return next(
+            (
+                p
+                for p in items(
+                    self.api.get("/training/programs/programs?include_inactive=true"),
+                    "programs",
+                )
+                if pick(p, "name") == name
+            ),
+            None,
+        )
+
+    def _backlog02_build(
+        self, name: str, code: str, requirement: str, hours: float, **extra: Any
+    ) -> dict:
+        """A one-phase pipeline with a single hours requirement."""
+        existing = self._backlog02_program(name)
+        if existing:
+            return existing
+        program = {
+            "name": name,
+            "code": code,
+            "description": f"{name}: one phase, completed on the hours it asks for.",
+            "structure_type": "phases",
+            "time_limit_days": 365,
+            **extra,
+        }
+        return self.api.post(
+            "/training/programs/programs/build",
+            {
+                "program": program,
+                "phases": [
+                    {
+                        "phase_number": 1,
+                        "name": "Coursework",
+                        "description": f"The {name.lower()} coursework.",
+                        "requires_manual_advancement": False,
+                        "requirements": [
+                            {
+                                "name": requirement,
+                                "requirement_type": "hours",
+                                "frequency": "one_time",
+                                "is_required": True,
+                                "sort_order": 0,
+                                "required_hours": hours,
+                            }
+                        ],
+                        "milestones": [],
+                    }
+                ],
+            },
+        )
+
+    def _backlog02_enroll(self, program_id: str, usernames: list[str]) -> list[dict]:
+        enrolled = items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+        have = {str(pick(e, "user_id")) for e in enrolled}
+        for username in usernames:
+            user_id = self._user_id(username)
+            if user_id and user_id not in have:
+                self.api.post(
+                    "/training/programs/enrollments",
+                    {"program_id": program_id, "user_id": user_id},
+                )
+        return items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+
+    def _backlog02_active_requirement_ids(self, program_id: str) -> list[str]:
+        detail = self.api.get(f"/training/programs/programs/{program_id}")
+        return [
+            str(pick(row, "id"))
+            for row in items(pick(detail, "requirements") or [])
+            if pick(row, "id") and pick(row, "active") is not False
+        ]
+
+    def seed_backlog_02_pipeline_states(self) -> None:
+        """The pipeline states guide 02's backlog screenshots picture.
+
+        - **Hazmat Operations Refresher**: its only requirement is deactivated,
+          so the pipeline reads "No active requirements" and the requirement
+          "Inactive — not currently required". Two members are enrolled: one
+          stays Active (the Mark pipeline complete control and its prompt),
+          the other was completed by hand ("Completed by hand: <reason>").
+        - **Rope Rescue Technician**: deactivated, nobody enrolled, so
+          **Show inactive** on the Programs list has an Inactive row with
+          **Reactivate**.
+        """
+        hazmat = self._backlog02_build(
+            self.BACKLOG02_NO_ACTIVE, "HAZ-REF", "Hazmat Operations Refresher", 8
+        )
+        hazmat_id = str(pick(hazmat, "id"))
+        enrollments = self._backlog02_enroll(hazmat_id, ["isolberg", "praman"])
+        for requirement_id in self._backlog02_active_requirement_ids(hazmat_id):
+            self.api.patch(
+                f"/training/requirements/{requirement_id}", {"active": False}
+            )
+        hand_done = self._user_id("praman")
+        target = next(
+            (e for e in enrollments if str(pick(e, "user_id")) == hand_done), None
+        )
+        if target and pick(target, "status") in ("active", "on_hold"):
+            self.api.post(
+                f"/training/programs/enrollments/{pick(target, 'id')}/complete",
+                {"reason": self.BACKLOG02_HAND_REASON},
+            )
+
+        rope = self._backlog02_build(
+            self.BACKLOG02_RETIRED, "ROPE-T", "Rope Rescue Technician Course", 40
+        )
+        if pick(rope, "active") is not False:
+            self.api.patch(
+                f"/training/programs/programs/{pick(rope, 'id')}", {"active": False}
+            )
+
+    def _backlog02_internship_shift(self, member_ids: set[str]) -> dict | None:
+        """A past, open shift with at least three pool members on its crew.
+
+        Neither the oldest past shift (closed out by seed_finalized_shift) nor
+        the newest (every shift-detail shot reaches for it), and not the first
+        Ladder 4 shift seed_batch_report_trainee crews a recruit onto.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        past = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+                and not pick(s, "is_finalized", "isFinalized")
+                and not pick(s, "is_cancelled", "isCancelled")
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+        )
+        ladder = next(
+            (
+                s
+                for s in past
+                if str(pick(s, "apparatus_unit_number", "apparatusUnitNumber")) == "L-4"
+            ),
+            None,
+        )
+        for shift in reversed(past[1:-1]):
+            if ladder and pick(shift, "id") == pick(ladder, "id"):
+                continue
+            crew = items(
+                self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
+            )
+            mine = [c for c in crew if str(c.get("user_id")) in member_ids]
+            if len(mine) >= 3:
+                return {"shift": shift, "crew": mine[:3]}
+        return None
+
+    def _backlog02_answers(self, template: dict, rated: int | None) -> dict:
+        """Ratings for the first `rated` items (all, when None)."""
+        threshold = pick(template, "comment_required_at_or_below")
+        top = max(int(level["value"]) for level in template["scale"])
+        responses: dict[str, dict] = {}
+        position = 0
+        for section in template["sections"]:
+            for item in section["items"]:
+                if rated is not None and position >= rated:
+                    break
+                rating = top if position % 3 == 0 else top - 1
+                if position == 4 and threshold is not None:
+                    rating = int(threshold)
+                comment = None
+                if item.get("comment_always_required"):
+                    comment = "Placed the 12-lead and spiked the bag for the medic."
+                elif threshold is not None and rating <= int(threshold):
+                    comment = (
+                        "Hesitated on the stair chair; we practised it at the station."
+                    )
+                responses[item["key"]] = {
+                    "rating": rating,
+                    "not_applicable": False,
+                    "comment": comment,
+                }
+                position += 1
+        return responses
+
+    def seed_backlog_02_shift_evaluations(self) -> None:
+        """A shift evaluation form, a program that uses it, and one shift's worth.
+
+        Three pool members on one past shift are enrolled in the EMT Field
+        Internship, whose form is the department's copy of the EMT example. The
+        first member's evaluation is submitted, the second's is a draft and the
+        third is not started, so the Shift Completion Report's status lines show
+        all three states. The administrator is the evaluator (training.manage),
+        never one of the three.
+        """
+        templates = items(self.api.get("/training/shift-evaluation-templates"))
+        form = next(
+            (t for t in templates if pick(t, "name") == self.BACKLOG02_FORM_NAME), None
+        )
+        if form is None:
+            body = self.api.get("/training/shift-evaluation-templates/example")
+            body["name"] = self.BACKLOG02_FORM_NAME
+            body["description"] = (
+                "Preceptor evaluation of an EMT intern after each duty shift."
+            )
+            form = self.api.post("/training/shift-evaluation-templates", body)
+        form_id = str(pick(form, "id"))
+
+        program = self._backlog02_build(
+            self.BACKLOG02_INTERNSHIP,
+            "EMT-FI",
+            "Field Internship Hours",
+            48,
+            shift_evaluation_template_id=form_id,
+        )
+        program_id = str(pick(program, "id"))
+        if str(pick(program, "shift_evaluation_template_id") or "") != form_id:
+            self.api.patch(
+                f"/training/programs/programs/{program_id}",
+                {"shift_evaluation_template_id": form_id},
+            )
+
+        pool_ids = {self._user_id(u): u for u in self.BACKLOG02_POOL}
+        pool_ids.pop("", None)
+        # A re-run finds the shift through the evaluations already on file, so
+        # the fixture does not wander to another shift as new ones are seeded.
+        shift_id = None
+        for user_id in pool_ids:
+            for evaluation in items(
+                self.api.get(f"/training/shift-evaluations/members/{user_id}")
+            ):
+                if pick(evaluation, "shift_id"):
+                    shift_id = str(pick(evaluation, "shift_id"))
+                    break
+            if shift_id:
+                break
+        if shift_id is None:
+            chosen = self._backlog02_internship_shift(set(pool_ids))
+            if chosen is None:
+                self.blocked.append(
+                    "shift evaluations: no past shift with three pool members"
+                )
+                return
+            shift_id = str(pick(chosen["shift"], "id"))
+            self._backlog02_enroll(
+                program_id, [pool_ids[str(c["user_id"])] for c in chosen["crew"]]
+            )
+
+        roster = self.api.get(f"/training/shift-evaluations/shifts/{shift_id}")
+        rows = sorted(
+            (
+                r
+                for r in items(pick(roster, "requirements") or [])
+                if self.BACKLOG02_INTERNSHIP in (pick(r, "program_names") or [])
+            ),
+            key=lambda r: str(pick(r, "member_name")),
+        )
+        template = self.api.get(f"/training/shift-evaluation-templates/{form_id}")
+        platoon = str(pick(roster, "platoon") or "")
+        header = {"platoon": platoon if platoon in ("A", "B", "C") else "B"}
+        plan = [(True, None), (False, 6)]
+        for row, (submit, rated) in zip(rows, plan):
+            if pick(row, "evaluation"):
+                continue
+            path = (
+                f"/training/shift-evaluations/shifts/{shift_id}/members/"
+                f"{pick(row, 'member_id')}/{pick(row, 'scope_key')}"
+            )
+            body: dict[str, Any] = {
+                "template_id": form_id,
+                "header_values": header,
+                "responses": self._backlog02_answers(template, rated),
+                "submit": submit,
+            }
+            if submit:
+                body["statistics"] = {"calls": 5, "transports": 3, "refusals": 1}
+                body["closing_comments"] = (
+                    "Steady shift. Took the lead on two BLS patients and handed "
+                    "off cleanly at the hospital. Next shift: practise stair-chair "
+                    "carries with the crew."
+                )
+            self.api.put(path, body)
+
+    BACKLOG13_WAIVER = "Waived while recovering from knee surgery."
+
+    def seed_backlog_13_compliance_states(self) -> None:
+        """A screening that falls due by frequency, and a waiver about to lapse.
+
+        Both on one member with no other screening records, so their row on the
+        Compliance tab carries a "(by frequency)" due date and a Waived record,
+        and both reach the Screenings Expiring Within 60 Days list.
+        """
+        requirements = items(
+            self.api.get("/medical-screening/requirements"), "requirements"
+        )
+        by_type = {pick(r, "screening_type"): r for r in requirements}
+        physical = by_type.get("physical_exam")
+        fitness = by_type.get("fitness_assessment")
+        if not physical or not fitness:
+            self.blocked.append("medical compliance states: requirements missing")
+            return
+        records = items(self.api.get("/medical-screening/records"), "records")
+        if any(pick(r, "result_summary") == self.BACKLOG13_WAIVER for r in records):
+            return
+        with_records = {str(pick(r, "user_id")) for r in records}
+        subject = next(
+            (
+                uid
+                for uid in (
+                    self._user_id(u) for u in ("ytanaka", "mbell", "smarchetti")
+                )
+                if uid and uid not in with_records
+            ),
+            None,
+        )
+        if subject is None:
+            self.blocked.append("medical compliance states: no member without records")
+            return
+        # Twelve-month frequency, no expiration date: due 35 days from now.
+        completed = TODAY - timedelta(days=365 - 35)
+        self.api.post(
+            "/medical-screening/records",
+            {
+                "screening_type": "physical_exam",
+                "status": "passed",
+                "completed_date": str(completed),
+                "provider_name": "Oakville Occupational Health",
+                "result_summary": "Cleared for full duty.",
+                "requirement_id": pick(physical, "id"),
+                "user_id": subject,
+            },
+        )
+        self.api.post(
+            "/medical-screening/records",
+            {
+                "screening_type": "fitness_assessment",
+                "status": "waived",
+                "completed_date": str(TODAY - timedelta(days=160)),
+                "expiration_date": str(TODAY + timedelta(days=18)),
+                "provider_name": "Health & Safety Officer",
+                "result_summary": self.BACKLOG13_WAIVER,
+                "requirement_id": pick(fitness, "id"),
+                "user_id": subject,
+            },
+        )
+
     def seed_meeting_stage_applicant(self) -> None:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         pipeline = next(
@@ -20128,6 +20495,15 @@ class Seeder:
         # earlier step expects to find moved or issued.
         self.step("guide 05 states", self.seed_guide05_states)
         self.step("guide 02 states", self.seed_guide02_states)
+        self.step("backlog 02 pipeline states", self.seed_backlog_02_pipeline_states)
+        # After scheduling and the shift reports: it enrolls three members found
+        # on one past shift's crew and evaluates them on it.
+        self.step(
+            "backlog 02 shift evaluations", self.seed_backlog_02_shift_evaluations
+        )
+        self.step(
+            "backlog 13 compliance states", self.seed_backlog_13_compliance_states
+        )
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

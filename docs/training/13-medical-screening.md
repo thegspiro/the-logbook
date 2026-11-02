@@ -488,6 +488,10 @@ person. It shows:
 With no active requirements, the panel says so rather than reporting the person
 compliant. Each opening is recorded in the audit log.
 
+<!-- Screenshot needed:
+The Compliance tab with one member's panel open: a physical with no expiration date reading due (by frequency), and a Waived fitness assessment expiring soon.
+-->
+
 ---
 
 ## Expiring Screenings

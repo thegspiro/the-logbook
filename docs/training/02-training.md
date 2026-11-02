@@ -516,6 +516,13 @@ picture below.
 
 ![A cohort's class timeline with dates, credit hours and sign-up counts](./images/02-86-cohort-classes.png)
 
+**Shift remaining** opens a small panel above the tabs. Type the number of
+days and select **Apply**.
+
+<!-- Screenshot needed:
+A cohort page with Shift remaining opened: the Move upcoming classes by field with a number typed, the note that it goes up to 14 days either way, and Apply.
+-->
+
 The **Roster** tab lists each member with their progress through the pipeline,
 a link to their full progress, and a **Remove** action. **Add member** puts
 someone on a cohort that is already running.
@@ -595,6 +602,10 @@ Requirements**; the standalone Training Programs page keeps it too.
 For training officers, the page's breadcrumb starts at **Training
 Administration**, one tap back to the admin page. Other members do not see that
 link.
+
+<!-- Screenshot needed:
+Training officer, Training Admin → Curriculum → Programs: the department's existing programs listed, with New Pipeline above the list.
+-->
 
 Training programs are structured courses of study in stages, such as
 "Probationary Firefighter Program" or "Officer Development". Each program has:
@@ -694,6 +705,10 @@ on the Programs list (training managers only) and select **Reactivate**, or use
 withdrawn enrollments stay withdrawn. Requirements created inside the pipeline go with it, unless
 another program uses them. A requirement the pipeline only linked from the
 library is not deleted. It stays in Training Requirements.
+
+<!-- Screenshot needed:
+Training Admin → Curriculum → Programs with Show inactive ticked: a deactivated pipeline listed with its Inactive badge and Reactivate.
+-->
 
 #### Adding a requirement to a program members are already in
 
@@ -815,7 +830,13 @@ withdrawing the member clears the note.
 progress dialog also need **Manage training records**. Without it the dialog is
 read-only, and an expired enrollment still shows its deadline-passed note.
 
-> _Screenshot to be captured: the progress dialog with **Mark pipeline complete** and its reason prompt (queued in SCREENSHOT_CURRENCY.md)._
+<!-- Screenshot needed:
+A member's progress dialog on a pipeline with no active requirements, with Mark pipeline complete selected and its reason prompt open, a reason typed.
+-->
+
+<!-- Screenshot needed:
+The pipeline's Enrollments tab: one member reading Completed by hand with the officer's reason, another still Active with Mark pipeline complete beside them.
+-->
 
 ### Inactive Requirements and Pipelines
 
@@ -839,6 +860,14 @@ read-only, and an expired enrollment still shows its deadline-passed note.
   that pipeline, but the conversion goes ahead. Training officers get an email
   naming the member, the pipeline and what is missing. Manual enrollment from
   the old enrollment screen refuses the same way.
+
+<!-- Screenshot needed:
+A pipeline page whose only requirement is deactivated: the No active requirements notice, and the requirement tagged Inactive — not currently required.
+-->
+
+<!-- Screenshot needed:
+The Deactivate pipeline confirmation, opened by unticking Active in the pipeline's Edit dialog, saying how many members are in progress and will be withdrawn.
+-->
 
 ### Working Through a Checklist Requirement
 
@@ -1199,6 +1228,10 @@ operational member, whatever their status (see
 When all four are ticked, the button shows a check mark; selecting it again
 unticks those four. **Administrative** and **Honorary** are left as you set
 them either way, so tick them yourself if the requirement covers them too.
+
+<!-- Screenshot needed:
+The requirement form with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary, Life and Retired ticked beneath it.
+-->
 
 ### Never Use an Hours Requirement for a Required Topic
 
@@ -1585,15 +1618,15 @@ opens **Records → Sessions**.
 
 The areas are:
 
-| Area                     | What is in it                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------ |
-| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                             |
-| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status             |
-| **Curriculum**           | Requirements, Course Library, Programs                                                     |
-| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                    |
-| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports             |
-| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**    |
-| **Settings & Data**      | Manual Entry Rules, Practical Skills, Integrations, Import Past Training, Headline Metrics |
+| Area                     | What is in it                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                |
+| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                                |
+| **Curriculum**           | Requirements, Course Library, Programs                                                                        |
+| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                       |
+| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                |
+| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                       |
+| **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Integrations, Import Past Training, Headline Metrics |
 
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
@@ -1898,6 +1931,10 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   shared link opens on the same class. A member whose class is not recorded is
   listed only under **All**.
 
+<!-- Screenshot needed:
+The Compliance Matrix with the member-class switch set to Administrative: the summary line naming the class, and only administrative members listed.
+-->
+
 The actions available are **Print**, a CSV export, and links to each member's
 training records. Both **Print** and the CSV follow the class switch, and the
 CSV has a **Member class** column. With a class chosen, the printout carries
@@ -1978,6 +2015,10 @@ ride and life members who have stopped.
 3. Under **Applies to Members Holding a Position**, tick one or more positions.
    Leave them all unticked to apply the profile regardless of position.
 4. Select **Create Profile** or **Update Profile**.
+
+<!-- Screenshot needed:
+Compliance configuration, Profiles tab, Add Profile: life ticked under Applies to Membership Types and one position ticked under Applies to Members Holding a Position.
+-->
 
 The profile's card then lists **Positions:** beside **Types:**. The rest of
 the form is described in
@@ -2725,9 +2766,25 @@ sections of items. **Start from the example** gives a ready template. Set the
 **general form**, whether it is optional or required, and whether one combined
 evaluation may cover several programs.
 
+<!-- Screenshot needed:
+Training Admin → Settings & Data → Shift Evaluations: the general-form settings card above the list of evaluation templates, one form listed with the program that uses it.
+-->
+
+<!-- Screenshot needed:
+The evaluation form editor open on a department form: name, rating scale and labels, the N/A option, the comment threshold and the first section's items.
+-->
+
 **Linking a form to a program.** The create-pipeline wizard and the
 edit-program dialog have a **Shift evaluation form** picker. Leaving it blank
 means no form. A form from another department is refused.
+
+<!-- Screenshot needed:
+A pipeline's Edit pipeline details dialog with the Shift evaluation form picker set to the department's form.
+-->
+
+<!-- Screenshot needed:
+The create-pipeline wizard's Program Info step, with a form chosen in the Shift evaluation form picker at the foot of the step.
+-->
 
 **After a shift.** In the **Shift Completion Report**, each member who needs an
 evaluation has a status line (not started, in progress, submitted, optional)
@@ -2735,15 +2792,23 @@ linking to their evaluation page. A member enrolled in a program with a form is
 evaluated on it, once per program (or once for all, if combined). A member in
 no such program, in a seat the general form covers, gets the general form.
 
+<!-- Screenshot needed:
+The Shift Completion Report's crew list for one shift: three members in a program with a form, their status lines reading Submitted, In progress and Not started.
+-->
+
 - The shift officer or a `training.manage` holder fills it out; **never your own**.
 - Rating buttons are full-size touch targets; required comments open by themselves.
 - Drafts autosave. **Submit** locks the evaluation.
 - A **print** view gives the paper layout.
 - Ratings and comments are encrypted at rest.
 
-> **Screenshots to create:** the Shift Evaluations settings screen; the form
-> editor; the program picker; the report's status lines; the evaluation page;
-> the print view.
+<!-- Screenshot needed:
+A member's shift evaluation page part-way through: the shift details, the rating buttons on each item, and a comment box opened under a low rating.
+-->
+
+<!-- Screenshot needed:
+The print view of a submitted shift evaluation: shift details, statistics, the rating key, each section as a table, and the closing comments.
+-->
 
 ## Manual Shift Report Entry
 
@@ -3286,7 +3351,7 @@ Open **Training Admin → Program Management → Multi-Agency** to record joint
 training with other departments — joint training, mutual aid drills, regional
 exercises, tabletops and full-scale exercises.
 
-![Multi-agency exercises with participating departments and headcounts](./images/02-71-multi-agency-training.png)
+![Multi-agency exercises, each listing its participating agencies and their roles and a single total participant count](./images/02-71-multi-agency-training.png)
 
 Each card shows the exercise type, date and total participants. Each taking-part
 organization has a chip with its role (host, participant, observer,
@@ -3718,6 +3783,10 @@ sets a total hours target for the level, and sets a minimum number of hours in
 each topic area. Importing also creates a training category for each topic area
 in your department, so courses and sessions can be tagged to them, and brings in
 the level's certification requirements (for example CPR/BLS).
+
+<!-- Screenshot needed:
+Training Admin → Curriculum → Requirements: the Import from Registry panel with a button for each registry (NFPA, Pro Board and the four NREMT levels).
+-->
 
 The registries are national ones; there is no Virginia-specific version. There
 is no separate NCCR progress card. Track category minimums the usual way — as

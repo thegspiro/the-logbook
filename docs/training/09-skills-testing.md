@@ -85,6 +85,14 @@ A template is a blank skill sheet, kept for reuse. Each one has:
 
 ![Skill sheet templates list with category and publication status](./images/09-01-skill-templates.png)
 
+On a phone the table becomes one card per template: its name and description,
+its status, and the row of action buttons (view, edit, publish, duplicate,
+print, delete) along the bottom of the card.
+
+<!-- Screenshot needed:
+Officer on a phone, Training Admin > Evaluations > Skills Test Templates: the templates shown as cards, each with its status badge and its action buttons.
+-->
+
 ### Template Statuses
 
 | Status        | What it means                                                                                         |
