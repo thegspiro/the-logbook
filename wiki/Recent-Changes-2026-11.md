@@ -5,6 +5,25 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 1 – 2, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+
+- **Member performance evaluations are live.** Draft one per member (or a whole
+  review period at once, previewing first), fill in the self-evaluation and
+  evaluator parts, calibrate, sign, and download a frozen PDF. Members read theirs
+  under **My Evaluations** and may add a written response within 30 days.
+- **Amend and delete.** A manager can reopen a finalized evaluation as a new
+  revision with a written reason; only the Chief can delete one, and a record of
+  why is kept.
+- **Emails.** Seven editable templates under Communications, plus daily due-soon
+  and overdue notices. They never include ratings or comments.
+- **Calibration** can tick items for the evaluator to revisit.
+- **Top navigation** now has Medical Screening and My ID Card like the side menu.
+- **Fixes:** Reports and Medical Supplies no longer show the error screen on a
+  malformed response.
+
 ## Recent changes: October 31 – November 1, 2026
 
 The engineering audit is

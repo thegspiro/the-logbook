@@ -5,6 +5,28 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 1 – 2, 2026
+
+Merged to `main` after `f57fd5a` (2026-11-01 12:47 UTC) through `8700f3cf`
+(2026-11-02 15:07 UTC). Security-review passes (scheduling, events-requests,
+training-core, training-extended, skills-testing, apparatus-nfc, facilities,
+equipment-check-shifts) are in `docs/security-review/PROGRESS.md`.
+`CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Guide  | Disposition                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------- |
+| Member performance evaluations ship end to end: screens (3b), supervisor as default evaluator and draft options, signatures, finalization and frozen PDF (4a), email notices and daily reminders (4b), bulk drafting and deletion with a kept record, new `evaluations.delete` (5a), amendment as a new revision (5b), member response and second PDF (5c), calibration flags (5d). Migrations `0ebd6603289b`, `38e0f552242d`, `857291750c67`, `6b2f0c9d4e71`, `9d3a71c5e2b8`, `4c8e2f61a9d7` | 02     | New section written; `APPLICATION_PAGES.md` note updated |
+| Evaluated shifts, Transports, Refusals requirement types credited from shift evaluations; offered in the requirement editors                                                                                                                                                                                                                                                                                                                                                                  | 02     | Already described under Shift Evaluations                |
+| Member supervisors (Reports To) with dates; finance approval emails record their send and can be re-sent                                                                                                                                                                                                                                                                                                                                                                                      | 01, 11 | Covered by an earlier docs commit (41e4cd45)             |
+| Top navigation gains Medical Screening and My ID Card, matching the side layout                                                                                                                                                                                                                                                                                                                                                                                                               | none   | Behaviour fix; parity test added                         |
+| Reports and medical-supplies pages no longer crash on a malformed body                                                                                                                                                                                                                                                                                                                                                                                                                        | none   | Bug fix                                                  |
+| Dialogs carry `role="dialog"` (#3937)                                                                                                                                                                                                                                                                                                                                                                                                                                                         | none   | Accessibility, no guide text                             |
+
+**Screenshots to create:** see `docs/training/SCREENSHOT_CURRENCY.md`.
+**Operator note:** the migration `857291750c67` adds `evaluations.delete` to the
+seeded `fire_chief` position; no new environment variables or boot-blocking
+changes.
+
 ## Change audit: October 31 – November 1, 2026
 
 Merged to `main` after `f9220b3` (2026-10-31 00:40 UTC) through `f57fd5a`
