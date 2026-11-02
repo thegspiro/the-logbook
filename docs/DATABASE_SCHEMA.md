@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**339 tables · 5591 columns · 1150 foreign keys**
+**340 tables · 5600 columns · 1152 foreign keys**
 
 ---
 
@@ -202,6 +202,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`evaluation_amendments`](#evaluation_amendments) | `EvaluationAmendment` | 8 | A finalized evaluation reopened as a new revision, and why. |
 | [`evaluation_deletion_records`](#evaluation_deletion_records) | `EvaluationDeletionRecord` | 14 | The permanent trace of a deleted evaluation. |
+| [`evaluation_documents`](#evaluation_documents) | `EvaluationDocument` | 9 | The finalized PDF of one revision, frozen. |
 | [`evaluation_parts`](#evaluation_parts) | `EvaluationPart` | 11 | A block of authored content: the evaluator's ratings and narrative, the |
 | [`evaluation_periods`](#evaluation_periods) | `EvaluationPeriod` | 9 | A review period a manager opens, e.g. "2026 Annual Review". |
 | [`evaluation_signatures`](#evaluation_signatures) | `EvaluationSignature` | 14 | A signature given on one step of one revision. |
@@ -2800,6 +2801,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_evaluation_deletion_records_evaluation` (`evaluation_id`)
+
+### `evaluation_documents`
+
+**EvaluationDocument** · `app/models/evaluation.py`
+
+> The finalized PDF of one revision, frozen. Generated once, when the last signature finalizes the revision, and served as that exact file from then on: a layout or logo change afterwards must not alter a signed record. ``file_sha256`` fingerprints the file bytes so a copy can be checked against the original; ``content_hash`` is the hash of the record every signature on the revision attested to, printed on the document. One per revision, so an amendment's new revision gets its own.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `evaluation_id` | VARCHAR(36) | no | FK |  | → `evaluations.id` ON DELETE CASCADE |
+| `revision` | INTEGER | no |  |  |  |
+| `file_path` | VARCHAR(500) | no |  |  |  |
+| `file_sha256` | VARCHAR(64) | no |  |  |  |
+| `content_hash` | VARCHAR(64) | no |  |  |  |
+| `size_bytes` | INTEGER | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_documents_org_eval` (`organization_id`, `evaluation_id`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_documents_revision` (`evaluation_id`, `revision`)
 
 ### `evaluation_parts`
 
@@ -12260,7 +12287,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (281 references)
+### → `organizations` (282 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12328,6 +12355,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_requests` | `organization_id` | CASCADE | no |
 | `evaluation_amendments` | `organization_id` | CASCADE | no |
 | `evaluation_deletion_records` | `organization_id` | CASCADE | no |
+| `evaluation_documents` | `organization_id` | CASCADE | no |
 | `evaluation_parts` | `organization_id` | CASCADE | no |
 | `evaluation_periods` | `organization_id` | CASCADE | no |
 | `evaluation_signatures` | `organization_id` | CASCADE | no |
@@ -12942,6 +12970,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
 | `scheduled_emails` | `template_id` | SET NULL | yes |
 
+### → `evaluations` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `evaluation_amendments` | `evaluation_id` | CASCADE | no |
+| `evaluation_documents` | `evaluation_id` | CASCADE | no |
+| `evaluation_parts` | `evaluation_id` | CASCADE | no |
+| `evaluation_signatures` | `evaluation_id` | CASCADE | no |
+| `evaluation_steps` | `evaluation_id` | CASCADE | no |
+
 ### → `suggestions` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -12988,15 +13026,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_equipment_checks` | `template_id` | SET NULL | yes |
 | `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
 | `template_change_logs` | `template_id` | CASCADE | no |
-
-### → `evaluations` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `evaluation_amendments` | `evaluation_id` | CASCADE | no |
-| `evaluation_parts` | `evaluation_id` | CASCADE | no |
-| `evaluation_signatures` | `evaluation_id` | CASCADE | no |
-| `evaluation_steps` | `evaluation_id` | CASCADE | no |
 
 ### → `forms` (4 references)
 

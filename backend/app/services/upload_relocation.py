@@ -41,6 +41,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.document import Document
 from app.models.email_template import EmailAttachment, EmailTemplate
+from app.models.evaluation import EvaluationDocument
 from app.models.event import Event
 from app.models.membership_pipeline import ProspectDocument, ProspectiveMember
 from app.models.minute import MinutesAttachment
@@ -376,6 +377,31 @@ async def collect_references(
                 row.file_path,
             )
         )
+    # Finalized evaluation PDFs, likewise born org-first; listed so a bucket
+    # migration carries the signed records with it.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    EvaluationDocument.id,
+                    EvaluationDocument.organization_id,
+                    EvaluationDocument.evaluation_id,
+                    EvaluationDocument.file_path,
+                ),
+                EvaluationDocument.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "evaluation_documents",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.EVALUATIONS,
+                str(row.evaluation_id),
+                row.file_path,
+            )
+        )
     return refs
 
 
@@ -463,6 +489,7 @@ _SCALAR_TABLES: dict[str, tuple[type[Any], str]] = {
     "suggestion_attachments": (SuggestionAttachment, "file_path"),
     "email_attachments": (EmailAttachment, "storage_path"),
     "minutes_attachments": (MinutesAttachment, "file_path"),
+    "evaluation_documents": (EvaluationDocument, "file_path"),
 }
 
 

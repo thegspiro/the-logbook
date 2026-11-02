@@ -24,6 +24,8 @@ do, is computed per viewer and returned with the evaluation.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -37,10 +39,12 @@ from app.api.dependencies import user_has_permission
 from app.core.utils import list_within_detail_limit
 from app.models.evaluation import (
     Evaluation,
+    EvaluationDocument,
     EvaluationPart,
     EvaluationPartKind,
     EvaluationPartStatus,
     EvaluationPeriod,
+    EvaluationSignature,
     EvaluationStatus,
     EvaluationStep,
     EvaluationStepStatus,
@@ -237,6 +241,45 @@ def _raise_if(errors: List[str]) -> None:
         )
 
 
+def normalized_name(value: Optional[str]) -> str:
+    """A name compared for a signature: case and spacing ignored."""
+    return " ".join((value or "").split()).casefold()
+
+
+def content_hash(evaluation: Evaluation, parts: Dict[str, EvaluationPart]) -> str:
+    """SHA-256 of the record a signature attests to.
+
+    The submitted parts, the figures as they were frozen, and who, what and
+    when the evaluation is about. A later change to any of them yields a
+    different hash, so a signature can be checked against the record it was
+    given on. Drafts and the member's post-finalization response are left
+    out: neither is part of what was signed.
+    """
+    signed_kinds = (
+        EvaluationPartKind.SELF_EVALUATION.value,
+        EvaluationPartKind.EVALUATOR.value,
+    )
+    payload = {
+        "evaluation_id": evaluation.id,
+        "revision": evaluation.revision,
+        "template_version_id": evaluation.template_version_id,
+        "member_id": evaluation.member_id,
+        "evaluator_id": evaluation.evaluator_id,
+        "period": [evaluation.period_start, evaluation.period_end],
+        "coverage": [evaluation.coverage_start, evaluation.coverage_end],
+        "excluded_ranges": evaluation.excluded_ranges or [],
+        "figures": (evaluation.data_snapshot or {}).get("values") or {},
+        "parts": {
+            kind: {"content": part.content, "submitted_at": part.submitted_at}
+            for kind, part in sorted(parts.items())
+            if kind in signed_kinds
+            and part.status == EvaluationPartStatus.SUBMITTED.value
+        },
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 # ------------------------------------------------------------------- roles
 
 
@@ -402,6 +445,28 @@ class EvaluationService:
         people = await self._people(
             organization_id, [evaluation.member_id, evaluation.evaluator_id]
         )
+        signatures = (
+            (
+                await self.db.execute(
+                    select(EvaluationSignature)
+                    .where(
+                        EvaluationSignature.evaluation_id == evaluation.id,
+                        EvaluationSignature.organization_id == organization_id,
+                        EvaluationSignature.revision == evaluation.revision,
+                    )
+                    .order_by(EvaluationSignature.signed_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        document_id = await self.db.scalar(
+            select(EvaluationDocument.id).where(
+                EvaluationDocument.evaluation_id == evaluation.id,
+                EvaluationDocument.organization_id == organization_id,
+                EvaluationDocument.revision == evaluation.revision,
+            )
+        )
         return self._detail_view(
             evaluation,
             steps,
@@ -409,6 +474,12 @@ class EvaluationService:
             roles,
             people,
             today_in(await resolve_scheduling_timezone(self.db, organization_id)),
+            viewer_positions={p.id for p in viewer.positions},
+            signatures=signatures,
+            # A finalized evaluation always has its PDF: it is made on
+            # finalization, or on first download if that failed.
+            document_available=bool(document_id)
+            or evaluation.status == EvaluationStatus.FINALIZED.value,
         )
 
     def _released_to_member(
@@ -430,6 +501,46 @@ class EvaluationService:
         ]
         return bool(before) and all(s.status in _DONE for s in before)
 
+    def _signable(
+        self,
+        evaluation: Evaluation,
+        steps: Sequence[EvaluationStep],
+        viewer_positions: set,
+        roles: Roles,
+    ) -> Optional[Dict[str, Any]]:
+        """The signature ``viewer`` may give now, if any.
+
+        An approval is signed by a holder of the step's position, never the
+        member; the acknowledgement is the member's own, given as an
+        acknowledgement of receipt or a refusal with a reason.
+        """
+        if evaluation.status != EvaluationStatus.IN_PROGRESS.value:
+            return None
+        workflow_steps = {ws.key: ws for ws in self._workflow(evaluation).steps}
+        for step in steps:
+            if step.status != EvaluationStepStatus.OPEN.value:
+                continue
+            ws = workflow_steps.get(step.step_key)
+            if ws is None:
+                continue
+            if (
+                ws.type == EvaluationStepType.APPROVAL
+                and not roles.is_member
+                and ws.actor.position_id in viewer_positions
+            ):
+                return {
+                    "step_key": ws.key,
+                    "label": ws.label,
+                    "dispositions": ["signed"],
+                }
+            if ws.type == EvaluationStepType.MEMBER_ACKNOWLEDGEMENT and roles.is_member:
+                return {
+                    "step_key": ws.key,
+                    "label": ws.label,
+                    "dispositions": ["acknowledged", "refused"],
+                }
+        return None
+
     def _detail_view(
         self,
         evaluation: Evaluation,
@@ -438,7 +549,12 @@ class EvaluationService:
         roles: Roles,
         people: Dict[str, User],
         today: date,
+        *,
+        viewer_positions: Optional[set] = None,
+        signatures: Sequence[EvaluationSignature] = (),
+        document_available: bool = False,
     ) -> Dict[str, Any]:
+        signable = self._signable(evaluation, steps, viewer_positions or set(), roles)
         definition = self._definition(evaluation)
         released = self._released_to_member(evaluation, steps)
         by_key = {s.step_key: s for s in steps}
@@ -485,6 +601,7 @@ class EvaluationService:
         calibration_step = by_key.get(_CALIBRATION)
         evaluator_locked = evaluator_step is None or evaluator_step.status in _DONE
 
+        labels_by_key = {ws.key: ws.label for ws in self._workflow(evaluation).steps}
         view = self._summary_view(evaluation, steps, people, roles)
         view.update(
             {
@@ -515,6 +632,25 @@ class EvaluationService:
                 ),
                 "data_taken_at": evaluation.snapshot_taken_at if show_data else None,
                 "parts": visible_parts,
+                # Signatures are part of the record: shown to whoever may read
+                # its content, and to the member once it is released to them.
+                "signatures": (
+                    [
+                        {
+                            "step_key": sig.step_key,
+                            "label": labels_by_key.get(sig.step_key, sig.step_key),
+                            "signed_name": sig.signed_name,
+                            "disposition": sig.disposition,
+                            "comment": sig.comment,
+                            "signed_at": sig.signed_at,
+                        }
+                        for sig in signatures
+                    ]
+                    if (roles.reads_content and not roles.is_member) or released
+                    else []
+                ),
+                "document_available": document_available
+                and ((roles.reads_content and not roles.is_member) or released),
                 "weighted_overall": (
                     weighted_overall(
                         PartContent.model_validate(evaluator_part.content),
@@ -539,6 +675,7 @@ class EvaluationService:
                     "can_calibrate": roles.view_all
                     and calibration_step is not None
                     and calibration_step.status == EvaluationStepStatus.OPEN.value,
+                    "can_sign": signable,
                 },
             }
         )
@@ -1295,6 +1432,79 @@ class EvaluationService:
             evaluation.finalized_at = now
             return "finalized"
         return "submitted"
+
+    async def sign(
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        actor: User,
+        *,
+        signed_name: str,
+        disposition: str,
+        comment: Optional[str],
+        ip_address: Optional[str],
+        user_agent: Optional[str],
+    ) -> Optional[str]:
+        """Record ``actor``'s signature on the step now open to them.
+
+        Returns ``signed``, or ``finalized`` when it was the last step. The
+        typed name must be the signer's own; the endpoint has already required
+        a recent re-verification of the session. The step is read under the
+        evaluation's row lock, so a second submission finds it completed, and
+        the unique key on (evaluation, revision, step) backs that up.
+        """
+        evaluation = await self._evaluation(
+            organization_id, evaluation_id, for_update=True
+        )
+        if evaluation is None:
+            return None
+        steps = await self._steps(evaluation, for_update=True)
+        roles = self._roles(evaluation, actor, steps)
+        if not roles.any:
+            return None
+        signable = self._signable(
+            evaluation, steps, {p.id for p in actor.positions}, roles
+        )
+        if signable is None:
+            raise PermissionError(
+                "There is nothing for you to sign on this evaluation."
+            )
+        if disposition not in signable["dispositions"]:
+            raise ValueError("That is not how this step is signed.")
+        if normalized_name(signed_name) != normalized_name(actor.full_name):
+            raise ValueError(
+                f"Type your name as it appears on your account: {actor.full_name}."
+            )
+        parts = await self._parts(evaluation, for_update=True)
+        now = datetime.now(timezone.utc)
+        self.db.add(
+            EvaluationSignature(
+                organization_id=organization_id,
+                evaluation_id=evaluation.id,
+                revision=evaluation.revision,
+                step_key=signable["step_key"],
+                signer_id=actor.id,
+                signed_name=" ".join(signed_name.split()),
+                disposition=disposition,
+                comment=comment,
+                intent_confirmed=True,
+                content_hash=content_hash(evaluation, parts),
+                ip_address=(ip_address or None) and ip_address[:45],
+                user_agent=(user_agent or None) and user_agent[:512],
+                signed_at=now,
+            )
+        )
+        step = next(s for s in steps if s.step_key == signable["step_key"])
+        step.status = EvaluationStepStatus.COMPLETED.value
+        step.completed_at = now
+        step.completed_by = actor.id
+        outcome = self._advance(evaluation, steps, now)
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            raise ValueError("This step has already been signed.") from exc
+        return "finalized" if outcome == "finalized" else "signed"
 
     async def complete_calibration(
         self, organization_id: str, evaluation_id: str, actor: User

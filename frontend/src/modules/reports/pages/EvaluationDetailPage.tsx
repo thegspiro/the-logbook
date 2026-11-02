@@ -8,17 +8,26 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, PenLine, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { saveBlob } from '../../../utils/saveBlob';
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
+import { SignDialog } from '../components/evaluations/SignDialog';
 import { StepList } from '../components/evaluations/StepList';
 import { evaluationsService } from '../services/evaluationsApi';
-import type { EvaluationDetail, EvaluationPartKind, PartContent } from '../types/evaluations';
+import type {
+  EvaluationDetail,
+  EvaluationPartKind,
+  PartContent,
+  SignatureWrite,
+  SigningOption,
+} from '../types/evaluations';
 import { emptyContent } from '../utils/evaluationRecord';
 
 const PART_TITLES: Record<string, string> = {
@@ -30,6 +39,12 @@ const SUBMIT_MESSAGES: Record<string, string> = {
   submitted: 'Submitted',
   sent_for_calibration: 'Sent to calibration',
   finalized: 'Submitted — the evaluation is complete',
+};
+
+const DISPOSITION_LABELS: Record<string, string> = {
+  signed: 'Signed',
+  acknowledged: 'Acknowledged receipt',
+  refused: 'Refused to sign',
 };
 
 function editableKind(detail: EvaluationDetail): EvaluationPartKind | null {
@@ -47,6 +62,8 @@ const EvaluationDetailPage: React.FC = () => {
   const [draft, setDraft] = useState<PartContent>(emptyContent());
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [signing, setSigning] = useState<SigningOption | null>(null);
+  const signerName = useAuthStore((state) => state.user?.full_name ?? '');
   // Edits made while a save is in flight must not be replaced by the older
   // response the save returns.
   const editRevision = useRef(0);
@@ -170,6 +187,31 @@ const EvaluationDetailPage: React.FC = () => {
     }
   };
 
+  const sign = async (signature: SignatureWrite) => {
+    setBusy(true);
+    try {
+      const result = await evaluationsService.sign(detail.id, signature);
+      adopt(result.evaluation, null);
+      setSigning(null);
+      toast.success(result.outcome === 'finalized' ? 'Signed — the evaluation is complete' : 'Signed');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not record your signature.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const download = async () => {
+    setBusy(true);
+    try {
+      saveBlob(await evaluationsService.document(detail.id), `evaluation-${detail.period_end}.pdf`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not download the PDF.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const backTo = detail.viewer.is_member ? '/reports/evaluations/mine' : '/reports/evaluations/conduct';
 
   return (
@@ -202,6 +244,28 @@ const EvaluationDetailPage: React.FC = () => {
               >
                 <RefreshCw className="h-4 w-4" aria-hidden="true" />
                 Update figures
+              </button>
+            )}
+            {detail.viewer.can_sign && (
+              <button
+                type="button"
+                className="btn-primary inline-flex items-center gap-2 text-sm"
+                disabled={busy}
+                onClick={() => setSigning(detail.viewer.can_sign ?? null)}
+              >
+                <PenLine className="h-4 w-4" aria-hidden="true" />
+                {detail.viewer.can_sign.label}
+              </button>
+            )}
+            {detail.document_available && (
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2 text-sm"
+                disabled={busy}
+                onClick={() => void download()}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Download PDF
               </button>
             )}
             {detail.viewer.can_calibrate && (
@@ -289,6 +353,30 @@ const EvaluationDetailPage: React.FC = () => {
 
           <div className="space-y-6">
             <StepList steps={detail.steps} />
+            {detail.signatures.length > 0 && (
+              <section aria-labelledby="signatures-heading" className="card p-4 sm:p-6">
+                <h2 id="signatures-heading" className="text-theme-text-primary text-lg font-semibold">
+                  Signatures
+                </h2>
+                <ul className="mt-3 space-y-3">
+                  {detail.signatures.map((signature) => (
+                    <li key={signature.step_key} className="text-sm">
+                      <span className="text-theme-text-primary font-medium">{signature.label}</span>
+                      <span className="text-theme-text-secondary block">
+                        {DISPOSITION_LABELS[signature.disposition] ?? signature.disposition} by{' '}
+                        <span className="font-serif italic">{signature.signed_name}</span>,{' '}
+                        {formatDateTime(signature.signed_at, tz)}
+                      </span>
+                      {signature.comment && (
+                        <span className="text-theme-text-primary block whitespace-pre-wrap">
+                          Reason: {signature.comment}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             {detail.data && (
               <FiguresPanel
                 title="Figures"
@@ -303,6 +391,13 @@ const EvaluationDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+      <SignDialog
+        option={signing}
+        signerName={signerName}
+        busy={busy}
+        onClose={() => setSigning(null)}
+        onSign={(signature) => void sign(signature)}
+      />
     </div>
   );
 };

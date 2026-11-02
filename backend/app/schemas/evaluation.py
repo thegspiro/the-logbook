@@ -746,6 +746,15 @@ class EvaluationSummary(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class SigningOption(BaseModel):
+    """A signature the caller may give now: the step, and the dispositions
+    open to them (an approver signs; the member acknowledges or refuses)."""
+
+    step_key: str
+    label: str
+    dispositions: List[Literal["signed", "acknowledged", "refused"]]
+
+
 class EvaluationViewer(BaseModel):
     """What the caller may do with this evaluation, decided by the server so
     the screens do not re-derive it (CLAUDE.md pitfall #29)."""
@@ -756,6 +765,38 @@ class EvaluationViewer(BaseModel):
     can_edit_evaluation: bool
     can_refresh_data: bool
     can_calibrate: bool
+    can_sign: Optional[SigningOption] = None
+
+
+class SignatureResponse(BaseModel):
+    step_key: str
+    label: str
+    signed_name: str
+    disposition: Literal["signed", "acknowledged", "refused"]
+    comment: Optional[str] = None
+    signed_at: datetime
+
+
+class SignatureWrite(BaseModel):
+    """A signature. The typed name must match the signer's own name; the
+    session must have re-verified recently (step-up)."""
+
+    signed_name: str = Field(min_length=1, max_length=200)
+    disposition: Literal["signed", "acknowledged", "refused"]
+    # Required when refusing: the member's reason, kept with the record.
+    comment: Optional[str] = Field(default=None, max_length=2000)
+    intent_confirmed: Literal[True]
+
+    @field_validator("comment")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+    @model_validator(mode="after")
+    def _reason_for_refusal(self) -> "SignatureWrite":
+        if self.disposition == "refused" and not self.comment:
+            raise ValueError("Give a reason for refusing to sign")
+        return self
 
 
 class EvaluationDetail(EvaluationSummary):
@@ -779,7 +820,15 @@ class EvaluationDetail(EvaluationSummary):
     # The evaluator's weighted overall, as a percentage of each item's scale,
     # when the template calculates one and the caller may read the part.
     weighted_overall: Optional[float] = None
+    signatures: List[SignatureResponse] = Field(default_factory=list)
+    # The finalized PDF can be downloaded.
+    document_available: bool = False
     viewer: EvaluationViewer
+
+
+class SignResult(BaseModel):
+    outcome: Literal["signed", "finalized"]
+    evaluation: "EvaluationDetail"
 
 
 class SubmitResult(BaseModel):

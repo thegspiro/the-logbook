@@ -95,11 +95,17 @@ app/api/v1/endpoints/elections.py::submit_member_ballot
 # admits only its member, its evaluator, an approver at an open approval step
 # or a holder of evaluations.view_all / manage, and answers anyone else 404;
 # each write further requires the author of that part (403 otherwise).
+# The PDF download (2026-11-02) admits exactly whom the evaluation page shows
+# the finalized record to; signing requires the signer the open step waits
+# on (an approval's position holder, or the member), a re-verified session,
+# and the signer's own name typed.
+app/api/v1/endpoints/evaluations.py::download_evaluation_document
 app/api/v1/endpoints/evaluations.py::get_evaluation
 app/api/v1/endpoints/evaluations.py::get_my_live_data
 app/api/v1/endpoints/evaluations.py::list_my_evaluations
 app/api/v1/endpoints/evaluations.py::refresh_evaluation_data
 app/api/v1/endpoints/evaluations.py::save_evaluation_part
+app/api/v1/endpoints/evaluations.py::sign_evaluation
 app/api/v1/endpoints/evaluations.py::submit_evaluation_part
 
 app/api/v1/endpoints/equipment_check.py::download_csv_sample

@@ -1051,3 +1051,285 @@ class TestDraftingDefaults:
 
         member = await make_client(dept.member)
         assert (await member.get("/evaluations/draft-options")).status_code == 403
+
+
+WITH_APPROVAL_STEPS = [
+    _step("self_evaluation", "self_evaluation", "member", 14),
+    _step("evaluator", "evaluator", "evaluator", 30),
+    {
+        "key": "chief_approval",
+        "type": "approval",
+        "label": "Chief approval",
+        "actor": {"kind": "position", "position_id": "__POSITION__"},
+        "due_days": 40,
+    },
+    _step("member_acknowledgement", "member_acknowledgement", "member", 58),
+]
+
+
+class TestSigning:
+    async def _released(
+        self, dept: _Dept, make_client: ClientFactory, **extra
+    ) -> tuple[str, AsyncClient, AsyncClient]:
+        """An annual evaluation whose evaluator has locked, waiting on the
+        next signature."""
+        detail = await _draft(await make_client(dept.manager), dept, **extra)
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        url = f"/evaluations/{detail['id']}"
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        response = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert response.status_code == 200, response.text
+        return url, member, evaluator
+
+    @staticmethod
+    def _signature(name: str, disposition: str = "acknowledged", **extra) -> dict:
+        return {
+            "signed_name": name,
+            "disposition": disposition,
+            "intent_confirmed": True,
+            **extra,
+        }
+
+    async def test_the_members_acknowledgement_finalizes_and_freezes_the_pdf(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        offered = (await member.get(url)).json()["viewer"]["can_sign"]
+        assert offered == {
+            "step_key": "member_acknowledgement",
+            "label": "Member_Acknowledgement",
+            "dispositions": ["acknowledged", "refused"],
+        }
+
+        response = await member.post(
+            f"{url}/sign",
+            json=self._signature(f"  eval   {dept.member.last_name.upper()} "),
+            headers={"user-agent": "pytest-signing"},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["outcome"] == "finalized"
+        assert body["evaluation"]["status"] == "finalized"
+        assert body["evaluation"]["document_available"] is True
+        assert [
+            (s["step_key"], s["disposition"]) for s in body["evaluation"]["signatures"]
+        ] == [("member_acknowledgement", "acknowledged")]
+
+        from app.models.evaluation import EvaluationDocument, EvaluationSignature
+
+        signature = (
+            await dept.db.execute(
+                select(EvaluationSignature).where(
+                    EvaluationSignature.evaluation_id == body["evaluation"]["id"]
+                )
+            )
+        ).scalar_one()
+        assert signature.user_agent == "pytest-signing"
+        assert signature.intent_confirmed is True
+        assert len(signature.content_hash) == 64
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == body["evaluation"]["id"]
+                )
+            )
+        ).scalar_one()
+        assert document.content_hash == signature.content_hash
+
+        download = await member.get(f"{url}/document")
+        assert download.status_code == 200
+        assert download.headers["content-type"] == "application/pdf"
+        assert download.content.startswith(b"%PDF")
+        import hashlib
+
+        assert hashlib.sha256(download.content).hexdigest() == document.file_sha256
+        # Served as the same file on every request, not rebuilt.
+        again = await (await make_client(dept.evaluator)).get(f"{url}/document")
+        assert again.content == download.content
+
+    async def test_the_typed_name_must_be_the_signers_own(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        response = await member.post(
+            f"{url}/sign", json=self._signature("Someone Else")
+        )
+        assert response.status_code == 400
+        assert (
+            "Type your name as it appears on your account" in response.json()["detail"]
+        )
+
+    async def test_a_refusal_needs_a_reason_and_still_finalizes(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        name = dept.member.full_name
+        missing = await member.post(
+            f"{url}/sign", json=self._signature(name, "refused")
+        )
+        assert missing.status_code == 422
+        refused = await member.post(
+            f"{url}/sign",
+            json=self._signature(
+                name, "refused", comment="I dispute the training rating."
+            ),
+        )
+        assert refused.status_code == 200
+        assert refused.json()["outcome"] == "finalized"
+        assert refused.json()["evaluation"]["signatures"][0]["comment"] == (
+            "I dispute the training rating."
+        )
+
+    async def test_only_the_person_the_step_waits_on_may_sign_it(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, evaluator = await self._released(dept, make_client)
+        assert (await evaluator.get(url)).json()["viewer"]["can_sign"] is None
+        response = await evaluator.post(
+            f"{url}/sign", json=self._signature(dept.evaluator.full_name)
+        )
+        assert response.status_code == 403
+        approving = await member.post(
+            f"{url}/sign", json=self._signature(dept.member.full_name, "signed")
+        )
+        assert approving.status_code == 400
+        stranger = await _user(dept.db, dept.org, [])
+        outside = await (await make_client(stranger)).post(
+            f"{url}/sign", json=self._signature(stranger.full_name)
+        )
+        assert outside.status_code == 404
+
+    async def test_a_step_is_signed_once(self, dept: _Dept, make_client: ClientFactory):
+        url, member, _ = await self._released(dept, make_client)
+        signature = self._signature(dept.member.full_name)
+        assert (await member.post(f"{url}/sign", json=signature)).status_code == 200
+        second = await member.post(f"{url}/sign", json=signature)
+        assert second.status_code == 403
+
+    async def test_an_approver_signs_before_the_member_is_asked(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        chief = await _user(dept.db, dept.org, [], position_name="Chief of Department")
+        position_id = chief.positions[0].id
+        steps = json.loads(
+            json.dumps(WITH_APPROVAL_STEPS).replace("__POSITION__", position_id)
+        )
+        approved = await _template(
+            dept.db,
+            dept.org,
+            name="With approval",
+            workflow={"steps": steps},
+            member_class="operational",
+        )
+        url, member, _ = await self._released(
+            dept, make_client, template_id=approved.id
+        )
+        assert (await member.get(url)).json()["viewer"]["can_sign"] is None
+
+        chief_client = await make_client(chief)
+        offered = (await chief_client.get(url)).json()["viewer"]["can_sign"]
+        assert offered["step_key"] == "chief_approval"
+        assert offered["dispositions"] == ["signed"]
+        signed = await chief_client.post(
+            f"{url}/sign", json=self._signature(chief.full_name, "signed")
+        )
+        assert signed.json()["outcome"] == "signed"
+        assert (await member.get(url)).json()["viewer"]["can_sign"]["step_key"] == (
+            "member_acknowledgement"
+        )
+
+    # conftest treats step-up as satisfied unless a test asks for the real
+    # check, which is what this one is about.
+    @pytest.mark.real_stepup
+    async def test_signing_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, _, _ = await self._released(dept, make_client)
+        unverified = await make_client(dept.member)
+        response = await unverified.post(
+            f"{url}/sign", json=self._signature(dept.member.full_name)
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"
+
+    async def test_a_check_in_gets_its_pdf_when_the_evaluator_locks(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        interim = await _template(
+            dept.db, dept.org, name="Check-in", kind="interim", workflow=INTERIM
+        )
+        detail = await _draft(
+            await make_client(dept.manager),
+            dept,
+            kind="interim",
+            template_id=interim.id,
+        )
+        url = f"/evaluations/{detail['id']}"
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        await evaluator.post(f"{url}/parts/evaluator/submit")
+        download = await member.get(f"{url}/document")
+        assert download.status_code == 200
+        assert download.content.startswith(b"%PDF")
+
+    async def test_no_pdf_before_finalization(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        assert (await member.get(f"{url}/document")).status_code == 404
+
+
+class TestContentHash:
+    def test_it_changes_with_the_record_and_ignores_drafts(self):
+        from types import SimpleNamespace
+
+        from app.services.evaluation_service import content_hash
+
+        evaluation = SimpleNamespace(
+            id="e1",
+            revision=1,
+            template_version_id="v1",
+            member_id="m1",
+            evaluator_id="x1",
+            period_start=date(2025, 1, 1),
+            period_end=date(2025, 12, 31),
+            coverage_start=date(2025, 1, 1),
+            coverage_end=date(2025, 12, 31),
+            excluded_ranges=[],
+            data_snapshot={
+                "values": {"training.hours": {"available": True, "value": 3}}
+            },
+        )
+        submitted = SimpleNamespace(
+            status="submitted",
+            content={"answers": {"t": {"rating": 2}}},
+            submitted_at=None,
+        )
+        base = content_hash(evaluation, {"evaluator": submitted})
+        draft = SimpleNamespace(
+            status="draft", content={"answers": {}}, submitted_at=None
+        )
+        assert (
+            content_hash(evaluation, {"evaluator": submitted, "self_evaluation": draft})
+            == base
+        )
+        changed = SimpleNamespace(
+            status="submitted",
+            content={"answers": {"t": {"rating": 3}}},
+            submitted_at=None,
+        )
+        assert content_hash(evaluation, {"evaluator": changed}) != base
+        evaluation.data_snapshot = {
+            "values": {"training.hours": {"available": True, "value": 4}}
+        }
+        assert content_hash(evaluation, {"evaluator": submitted}) != base
