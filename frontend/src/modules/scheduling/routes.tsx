@@ -383,6 +383,18 @@ export const getSchedulingRoutes = () => {
           </ProtectedRoute>
         }
       />
+      {/* An outside preceptor's evaluation, entered by a training officer.
+          The server requires training.manage. */}
+      <Route
+        path="/scheduling/outside-shifts/:entryId/evaluations/:scopeKey"
+        element={
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftEvaluationPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/scheduling/shift-evaluations/print"
         element={

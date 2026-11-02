@@ -116,4 +116,55 @@ describe('SubjectCompliancePanel', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // Deep-dive review 2026-11-02: the panel renders below the whole roster, so
+  // on a 20-member department View opened it ~1,300px under the row tapped and
+  // the tap looked like it did nothing — on a phone and at 1280x900 alike.
+  it('brings itself into view and takes focus when someone is chosen', async () => {
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    scrollIntoView.mockClear();
+    const { rerender } = render(
+      <SubjectCompliancePanel subject={{ type: 'user', id: 'u-1', name: 'Jake Thompson' }} onClose={vi.fn()} />
+    );
+
+    const heading = screen.getByRole('heading', { name: 'Jake Thompson' });
+    expect(heading).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.instances[0]).toBe(screen.getByRole('region', { name: 'Jake Thompson' }));
+
+    rerender(
+      <SubjectCompliancePanel subject={{ type: 'prospect', id: 'p-1', name: 'Alex Rivera' }} onClose={vi.fn()} />
+    );
+    expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  // W71b-1: a failed result now leaves the requirement unmet; the panel must
+  // say it failed, not that it "Expired", which sends an officer to book a
+  // routine renewal for a member who was found unfit.
+  it('labels a requirement unmet by a failed result as failed', async () => {
+    mockGetUserCompliance.mockResolvedValue(
+      summary({
+        compliant_count: 0,
+        non_compliant_count: 1,
+        expiring_soon_count: 0,
+        total_requirements: 1,
+        items: [
+          {
+            requirement_id: 'req-1',
+            requirement_name: 'Annual physical',
+            screening_type: 'physical_exam',
+            is_compliant: false,
+            last_screening_date: '2026-10-25',
+            status: 'failed',
+            self_recorded: false,
+          },
+        ],
+      })
+    );
+    render(<SubjectCompliancePanel subject={{ type: 'user', id: 'u-1', name: 'Jake Thompson' }} onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Failed — not cleared')).toBeInTheDocument();
+    expect(screen.queryByText('Expired')).not.toBeInTheDocument();
+  });
 });

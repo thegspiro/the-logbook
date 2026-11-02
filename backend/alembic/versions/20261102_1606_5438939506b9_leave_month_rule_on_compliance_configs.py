@@ -1,7 +1,7 @@
 """Leave month rule on compliance configs
 
 Revision ID: 5438939506b9
-Revises: 4c8e2f61a9d7
+Revises: bbe101d29964
 Create Date: 2026-11-02 16:06:00.000000
 
 ``compliance_configs`` gains ``leave_month_rule``: how a month that a leave of
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "5438939506b9"
-down_revision: Union[str, None] = "4c8e2f61a9d7"
+down_revision: Union[str, None] = "bbe101d29964"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

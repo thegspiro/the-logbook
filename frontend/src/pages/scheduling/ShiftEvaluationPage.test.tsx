@@ -7,11 +7,17 @@ import type { ShiftEvaluationFormResponse, ShiftEvaluationRoster } from '../../t
 const mockGetForm = vi.fn();
 const mockGetRoster = vi.fn();
 const mockSave = vi.fn();
+const mockGetOutsideForm = vi.fn();
+const mockGetOutsideRoster = vi.fn();
+const mockSaveOutside = vi.fn();
 vi.mock('../../services/api', () => ({
   shiftEvaluationService: {
     getForm: (...a: unknown[]) => mockGetForm(...a) as unknown,
     getRoster: (...a: unknown[]) => mockGetRoster(...a) as unknown,
     save: (...a: unknown[]) => mockSave(...a) as unknown,
+    getOutsideForm: (...a: unknown[]) => mockGetOutsideForm(...a) as unknown,
+    getOutsideRoster: (...a: unknown[]) => mockGetOutsideRoster(...a) as unknown,
+    saveOutside: (...a: unknown[]) => mockSaveOutside(...a) as unknown,
   },
 }));
 
@@ -28,7 +34,7 @@ vi.mock('../../stores/authStore', () => ({
 }));
 
 const mockNavigate = vi.fn();
-let params = { shiftId: 'sh1', memberId: 'u2', scopeKey: 'en-1' };
+let params: Record<string, string> = { shiftId: 'sh1', memberId: 'u2', scopeKey: 'en-1' };
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
   useParams: () => params,
@@ -50,7 +56,9 @@ const requirement = {
 
 const form = (overrides: Partial<ShiftEvaluationFormResponse> = {}): ShiftEvaluationFormResponse => ({
   requirement,
+  occasion: 'shift',
   shift_id: 'sh1',
+  external_shift_id: null,
   shift_date: '2026-10-23',
   shift_start: '2026-10-23T22:00:00Z',
   shift_end: '2026-10-24T10:00:00Z',
@@ -92,7 +100,9 @@ const form = (overrides: Partial<ShiftEvaluationFormResponse> = {}): ShiftEvalua
 });
 
 const roster: ShiftEvaluationRoster = {
+  occasion: 'shift',
   shift_id: 'sh1',
+  external_shift_id: null,
   shift_date: '2026-10-23',
   shift_start: null,
   shift_end: null,
@@ -201,7 +211,10 @@ describe('ShiftEvaluationPage', () => {
           member_name: 'Marcus Bell',
           evaluator_id: 'officer-1',
           evaluator_name: 'Sam Okafor',
+          occasion: 'shift',
           shift_id: 'sh1',
+          external_shift_id: null,
+          preceptor_name: null,
           shift_date: '2026-10-23',
           shift_start: null,
           shift_end: null,
@@ -246,5 +259,101 @@ describe('ShiftEvaluationPage', () => {
       'href',
       '/scheduling/shift-reports/sh1/evaluations/u3/en-2'
     );
+  });
+
+  describe('an outside shift', () => {
+    const outsideForm = () =>
+      form({
+        occasion: 'external',
+        shift_id: null,
+        external_shift_id: 'entry-1',
+        unit_label: 'ACFD Medic 101',
+        platoon: null,
+        prefill_statistics: {},
+      });
+
+    beforeEach(() => {
+      params = { entryId: 'entry-1', scopeKey: 'en-1' };
+      mockGetOutsideForm.mockReset();
+      mockGetOutsideForm.mockResolvedValue(outsideForm());
+      mockGetOutsideRoster.mockReset();
+      mockGetOutsideRoster.mockResolvedValue({
+        ...roster,
+        occasion: 'external',
+        shift_id: null,
+        external_shift_id: 'entry-1',
+        requirements: [requirement],
+      });
+      mockSaveOutside.mockReset();
+      mockSaveOutside.mockImplementation((_e: string, _k: string, body: { submit: boolean }) =>
+        Promise.resolve({
+          id: 'ev-1',
+          status: body.submit ? 'submitted' : 'draft',
+          template: outsideForm().template,
+          template_id: 'tpl-1',
+          preceptor_name: 'Pat Preceptor',
+          updated_at: '2026-10-24T11:00:00Z',
+        })
+      );
+    });
+
+    it('opens the logged shift, suggesting no calls', async () => {
+      renderWithRouter(<ShiftEvaluationPage />);
+
+      expect(await screen.findByRole('heading', { name: 'EMT Shift Evaluation — Marcus Bell' })).toBeInTheDocument();
+      expect(screen.getByText(/· ACFD Medic 101 · EMT Field Internship/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Number of Calls')).toHaveValue('');
+      expect(mockGetOutsideForm).toHaveBeenCalledWith('entry-1', 'en-1', undefined);
+      expect(mockGetForm).not.toHaveBeenCalled();
+      expect(screen.getByRole('link', { name: /Back to outside shifts/ })).toHaveAttribute(
+        'href',
+        '/training/admin?page=settings&tab=shift-evaluations'
+      );
+    });
+
+    it('asks for the preceptor before submitting', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ShiftEvaluationPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Submit evaluation/ }));
+
+      const alert = screen.getByRole('alert');
+      expect(within(alert).getByText('Enter the preceptor who evaluated the shift.')).toBeInTheDocument();
+      expect(mockSaveOutside).not.toHaveBeenCalled();
+    });
+
+    it('submits with the preceptor named and returns to the list', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ShiftEvaluationPage />);
+
+      await user.type(await screen.findByRole('textbox', { name: 'Preceptor' }), '  Pat Preceptor ');
+      await user.click(screen.getByRole('button', { name: 'B' }));
+      await user.type(screen.getByLabelText('Number of Calls'), '6');
+      await user.type(screen.getByLabelText('Number of Transports'), '4');
+      await user.type(screen.getByLabelText('Number of Refusals'), '1');
+      const als = screen.getByRole('radiogroup', { name: 'Assist with ALS skills rating' });
+      await user.click(within(als).getByRole('radio', { name: '3 – Meets Expectations' }));
+      await user.type(screen.getByLabelText(/^Comment/), 'IV start');
+      const vitals = screen.getByRole('radiogroup', { name: 'Vital Signs rating' });
+      await user.click(within(vitals).getByRole('radio', { name: '4 – Exceeds Expectations' }));
+      await user.click(screen.getByRole('button', { name: /Submit evaluation/ }));
+
+      await waitFor(() =>
+        expect(mockSaveOutside).toHaveBeenCalledWith('entry-1', 'en-1', {
+          template_id: 'tpl-1',
+          header_values: { platoon: 'B' },
+          statistics: { calls: 6, transports: 4, refusals: 1 },
+          responses: {
+            als: { rating: 3, not_applicable: false, comment: 'IV start' },
+            vitals: { rating: 4, not_applicable: false, comment: null },
+          },
+          closing_comments: null,
+          preceptor_name: 'Pat Preceptor',
+          submit: true,
+        })
+      );
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith('/training/admin?page=settings&tab=shift-evaluations');
+    });
   });
 });

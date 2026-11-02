@@ -14,6 +14,9 @@ Who may do what:
 - ``training.manage`` reads any member's evaluations over a date range,
   ratings and comments included. The annual evaluation module reads them
   through the same route.
+- A shift a member logged on an outside agency's unit has no officer here:
+  its preceptor belongs to the other agency. ``training.manage`` enters the
+  preceptor's evaluation (``/external/...``) and names the preceptor on it.
 
 Registered under ``/training/shift-evaluations``. The fixed paths are
 declared before ``/{evaluation_id}`` so they are not read as ids.
@@ -36,6 +39,7 @@ from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import User
 from app.schemas.shift_evaluation import (
+    OutsideShiftAwaitingEvaluation,
     ShiftEvaluationDetail,
     ShiftEvaluationForm,
     ShiftEvaluationRoster,
@@ -186,6 +190,137 @@ async def save_shift_evaluation(
                 "evaluation_id": evaluation.id,
                 "shift_id": str(shift_id),
                 "member_id": str(member_id),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return await service.detail(evaluation, current_user.organization_id)
+
+
+# ---------------------------------------------------------------------------
+# Shifts logged on an outside agency's units
+# ---------------------------------------------------------------------------
+
+
+async def _entry(service: ShiftEvaluationService, entry_id: UUID, organization_id):
+    return ensure_found(
+        await service.get_entry(entry_id, organization_id), "Outside shift"
+    )
+
+
+@router.get(
+    "/external/outstanding", response_model=list[OutsideShiftAwaitingEvaluation]
+)
+async def list_outside_shifts_awaiting_evaluation(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Logged outside shifts whose evaluation is missing or unfinished.
+
+    **Permissions required:** training.manage
+    """
+    service = ShiftEvaluationService(db)
+    rows = await service.outstanding_entries(current_user.organization_id)
+    users = await service._users(
+        {str(entry.user_id) for entry, _, _ in rows}, current_user.organization_id
+    )
+    return [
+        OutsideShiftAwaitingEvaluation(
+            entry_id=str(entry.id),
+            member_id=str(entry.user_id),
+            member_name=(
+                users[str(entry.user_id)].full_name
+                if str(entry.user_id) in users
+                else None
+            ),
+            shift_date=entry.shift_date,
+            start_at=entry.start_at,
+            end_at=entry.end_at,
+            agency_name=entry.agency_name,
+            apparatus_name=entry.apparatus_name,
+            evaluation_status=state,
+            scope_key=scope_key,
+        )
+        for entry, state, scope_key in rows
+    ]
+
+
+@router.get("/external/{entry_id}", response_model=ShiftEvaluationRoster)
+async def get_outside_shift_evaluation_roster(
+    entry_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """The evaluations a logged outside shift calls for, and their state.
+
+    **Permissions required:** training.manage
+    """
+    service = ShiftEvaluationService(db)
+    entry = await _entry(service, entry_id, current_user.organization_id)
+    return await service.entry_roster(entry, current_user.organization_id)
+
+
+@router.get("/external/{entry_id}/{scope_key}", response_model=ShiftEvaluationForm)
+async def get_outside_shift_evaluation_form(
+    entry_id: UUID,
+    scope_key: str,
+    template_id: Optional[UUID] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """The form to enter for a logged outside shift, with any saved answers.
+
+    **Permissions required:** training.manage
+    """
+    service = ShiftEvaluationService(db)
+    entry = await _entry(service, entry_id, current_user.organization_id)
+    try:
+        return await service.entry_form(
+            entry,
+            scope_key,
+            current_user.organization_id,
+            str(template_id) if template_id else None,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.put("/external/{entry_id}/{scope_key}", response_model=ShiftEvaluationDetail)
+async def save_outside_shift_evaluation(
+    entry_id: UUID,
+    scope_key: str,
+    body: ShiftEvaluationSave,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Save a draft of, or submit, an outside preceptor's evaluation.
+
+    **Permissions required:** training.manage
+    """
+    service = ShiftEvaluationService(db)
+    entry = await _entry(service, entry_id, current_user.organization_id)
+    member_id = str(entry.user_id)
+    try:
+        evaluation = await service.save_for_entry(
+            entry, scope_key, current_user.organization_id, body, current_user
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if body.submit:
+        await log_audit_event(
+            db=db,
+            event_type="shift_evaluation_submitted",
+            event_category="training",
+            severity="INFO",
+            event_data={
+                "organization_id": str(current_user.organization_id),
+                "evaluation_id": evaluation.id,
+                "external_shift_id": str(entry_id),
+                "member_id": member_id,
             },
             user_id=str(current_user.id),
             username=current_user.username,

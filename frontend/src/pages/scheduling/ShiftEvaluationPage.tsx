@@ -8,9 +8,19 @@
  *
  * URL: /scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey
  *
- * The server decides who may open it (the shift's officer or training.manage)
- * and whether the evaluation is still called for; this page shows what it
- * answers. Drafts save as the officer goes, so a locked phone loses nothing.
+ * The same page enters an outside preceptor's evaluation of a shift a member
+ * logged on another agency's unit (ACFD, say), from the training officer's
+ * list of outside shifts awaiting one:
+ *
+ * URL: /scheduling/outside-shifts/:entryId/evaluations/:scopeKey
+ *
+ * The preceptor has no account, so the training officer types the paper form
+ * in and names the preceptor on it.
+ *
+ * The server decides who may open it (the shift's officer or training.manage;
+ * training.manage alone for an outside shift) and whether the evaluation is
+ * still called for; this page shows what it answers. Drafts save as the
+ * officer goes, so a locked phone loses nothing.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -31,6 +41,8 @@ import type {
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import {
+  OUTSIDE_SHIFT_EVALUATIONS_LIST_PATH,
+  outsideShiftEvaluationPagePath,
   parseCount,
   shiftEvaluationPagePath,
   shiftEvaluationProblems,
@@ -69,7 +81,12 @@ function draftFrom(form: ShiftEvaluationFormResponse): ShiftEvaluationDraft {
   return { header_values, statistics, responses: {}, closing_comments: '' };
 }
 
-function bodyFrom(draft: ShiftEvaluationDraft, submit: boolean, templateId: string | null): ShiftEvaluationSaveBody {
+function bodyFrom(
+  draft: ShiftEvaluationDraft,
+  submit: boolean,
+  templateId: string | null,
+  preceptorName: string | null
+): ShiftEvaluationSaveBody {
   const statistics: ShiftEvaluationSaveBody['statistics'] = {};
   (Object.keys(draft.statistics) as ShiftEvaluationStatistic[]).forEach((stat) => {
     const count = parseCount(draft.statistics[stat]);
@@ -86,12 +103,16 @@ function bodyFrom(draft: ShiftEvaluationDraft, submit: boolean, templateId: stri
       ])
     ),
     closing_comments: draft.closing_comments.trim() || null,
+    ...(preceptorName !== null ? { preceptor_name: preceptorName.trim() || null } : {}),
     submit,
   };
 }
 
 const ShiftEvaluationPage: React.FC = () => {
-  const { shiftId = '', memberId = '', scopeKey = '' } = useParams();
+  const { shiftId = '', entryId = '', memberId: memberParam = '', scopeKey = '' } = useParams();
+  // An outside shift's evaluation is addressed by the logged entry; the
+  // member is whoever logged it, which the form names.
+  const outside = entryId !== '';
   const navigate = useNavigate();
   const tz = useTimezone();
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -105,24 +126,34 @@ const ShiftEvaluationPage: React.FC = () => {
   const [saving, setSaving] = useState<'draft' | 'submit' | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [preceptorName, setPreceptorName] = useState('');
   const dirty = useRef(false);
 
-  const reportPath = `/scheduling?tab=shift-reports&shift=${encodeURIComponent(shiftId)}&view=create`;
+  const backPath = outside
+    ? OUTSIDE_SHIFT_EVALUATIONS_LIST_PATH
+    : `/scheduling?tab=shift-reports&shift=${encodeURIComponent(shiftId)}&view=create`;
+  const backLabel = outside ? 'Back to outside shifts' : 'Back to shift report';
 
   const load = useCallback(
     async (chosenTemplate?: string) => {
-      const [loaded, shiftRoster] = await Promise.all([
-        shiftEvaluationService.getForm(shiftId, memberId, scopeKey, chosenTemplate),
-        shiftEvaluationService.getRoster(shiftId),
-      ]);
+      const [loaded, shiftRoster] = outside
+        ? await Promise.all([
+            shiftEvaluationService.getOutsideForm(entryId, scopeKey, chosenTemplate),
+            shiftEvaluationService.getOutsideRoster(entryId),
+          ])
+        : await Promise.all([
+            shiftEvaluationService.getForm(shiftId, memberParam, scopeKey, chosenTemplate),
+            shiftEvaluationService.getRoster(shiftId),
+          ]);
       setForm(loaded);
       setRoster(shiftRoster);
       setDraft(draftFrom(loaded));
+      setPreceptorName(loaded.evaluation?.preceptor_name ?? '');
       setTemplateId(loaded.template_id);
       setSavedAt(loaded.evaluation?.updated_at ?? null);
       dirty.current = false;
     },
-    [shiftId, memberId, scopeKey]
+    [outside, entryId, shiftId, memberParam, scopeKey]
   );
 
   useEffect(() => {
@@ -147,12 +178,18 @@ const ShiftEvaluationPage: React.FC = () => {
       if (!form) return false;
       setSaving(submit ? 'submit' : 'draft');
       try {
-        const saved = await shiftEvaluationService.save(
-          shiftId,
-          memberId,
-          scopeKey,
-          bodyFrom(draft, submit, templateId)
-        );
+        const saved = outside
+          ? await shiftEvaluationService.saveOutside(
+              entryId,
+              scopeKey,
+              bodyFrom(draft, submit, templateId, preceptorName)
+            )
+          : await shiftEvaluationService.save(
+              shiftId,
+              memberParam,
+              scopeKey,
+              bodyFrom(draft, submit, templateId, null)
+            );
         dirty.current = false;
         setSavedAt(saved.updated_at);
         setForm({ ...form, evaluation: saved, template: saved.template, template_id: saved.template_id });
@@ -166,7 +203,7 @@ const ShiftEvaluationPage: React.FC = () => {
         setSaving(null);
       }
     },
-    [form, draft, templateId, shiftId, memberId, scopeKey]
+    [form, draft, templateId, preceptorName, outside, entryId, shiftId, memberParam, scopeKey]
   );
 
   // Autosave a draft that has changed, on the app's usual cadence. A
@@ -187,7 +224,7 @@ const ShiftEvaluationPage: React.FC = () => {
 
   const submit = async () => {
     if (!form) return;
-    const problems = shiftEvaluationProblems(form.template, draft);
+    const problems = submitProblems();
     if (problems.length > 0) {
       setShowErrors(true);
       toast.error(problems[0] ?? 'Finish the evaluation first');
@@ -195,9 +232,17 @@ const ShiftEvaluationPage: React.FC = () => {
     }
     if (await save(true)) {
       toast.success('Evaluation submitted');
-      void navigate(reportPath);
+      void navigate(backPath);
     }
   };
+
+  // The form's own checks, plus the preceptor's name on an outside shift,
+  // which the server also refuses to submit without.
+  function submitProblems(): string[] {
+    if (!form) return [];
+    const problems = shiftEvaluationProblems(form.template, draft);
+    return outside && !preceptorName.trim() ? ['Enter the preceptor who evaluated the shift.', ...problems] : problems;
+  }
 
   if (loading) {
     return (
@@ -211,10 +256,10 @@ const ShiftEvaluationPage: React.FC = () => {
     return (
       <div className="mx-auto max-w-3xl space-y-4 p-4">
         <Link
-          to={reportPath}
+          to={backPath}
           className="inline-flex items-center gap-1 text-sm font-medium text-red-800 dark:text-red-400"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to shift report
+          <ArrowLeft className="h-4 w-4" /> {backLabel}
         </Link>
         <p role="alert" className="alert-danger text-theme-alert-danger-text">
           {loadError || 'This evaluation could not be opened'}
@@ -224,20 +269,18 @@ const ShiftEvaluationPage: React.FC = () => {
   }
 
   const requirement = form.requirement;
+  const memberId = requirement.member_id;
   const isSelf = currentUserId === memberId;
   const submitted = form.evaluation?.status === 'submitted';
-  const problems = showErrors ? shiftEvaluationProblems(form.template, draft) : [];
+  const problems = showErrors ? submitProblems() : [];
   const canSwitchTemplate = requirement.template_options.length > 1 && !submitted;
   const startTime = form.shift_start ? formatTime(form.shift_start, tz) : '';
   const endTime = form.shift_end ? formatTime(form.shift_end, tz) : '';
 
   return (
     <div className="pb-safe mx-auto max-w-4xl space-y-4 p-4">
-      <Link
-        to={reportPath}
-        className="inline-flex items-center gap-1 text-sm font-medium text-red-800 dark:text-red-400"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to shift report
+      <Link to={backPath} className="inline-flex items-center gap-1 text-sm font-medium text-red-800 dark:text-red-400">
+        <ArrowLeft className="h-4 w-4" /> {backLabel}
       </Link>
 
       <header className="flex flex-wrap items-start gap-3">
@@ -272,7 +315,11 @@ const ShiftEvaluationPage: React.FC = () => {
             return (
               <Link
                 key={`${r.member_id}-${r.scope_key}`}
-                to={shiftEvaluationPagePath(shiftId, r.member_id, r.scope_key)}
+                to={
+                  outside
+                    ? outsideShiftEvaluationPagePath(entryId, r.scope_key)
+                    : shiftEvaluationPagePath(shiftId, r.member_id, r.scope_key)
+                }
                 aria-current={current ? 'page' : undefined}
                 className={`touch-target-phone inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-sm font-semibold ${
                   current
@@ -335,13 +382,42 @@ const ShiftEvaluationPage: React.FC = () => {
         </div>
       )}
 
+      {outside && (
+        <div className="card p-4">
+          <label htmlFor="se-preceptor" className="form-label">
+            Preceptor{' '}
+            <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+              *
+            </span>
+          </label>
+          <input
+            id="se-preceptor"
+            className="form-input"
+            value={preceptorName}
+            maxLength={200}
+            autoComplete="off"
+            disabled={isSelf}
+            aria-required="true"
+            aria-describedby="se-preceptor-hint"
+            onChange={(e) => {
+              dirty.current = true;
+              setPreceptorName(e.target.value);
+            }}
+          />
+          <p id="se-preceptor-hint" className="text-theme-text-muted mt-1 text-xs">
+            The {form.unit_label ? `${form.unit_label} ` : ''}preceptor who filled out the paper form. You are recorded
+            as the person who entered it.
+          </p>
+        </div>
+      )}
+
       <fieldset disabled={isSelf} className="min-w-0">
         <ShiftEvaluationFields form={form.template} draft={draft} onChange={change} showErrors={showErrors} />
       </fieldset>
 
       <div className="surface-opaque border-theme-surface-border action-bar-safe sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border p-3 shadow-sm">
-        <Link to={reportPath} className="btn-secondary inline-flex items-center gap-1">
-          <ArrowLeft className="h-4 w-4" /> Back to report
+        <Link to={backPath} className="btn-secondary inline-flex items-center gap-1">
+          <ArrowLeft className="h-4 w-4" /> {outside ? 'Back' : 'Back to report'}
         </Link>
         <span className="flex-1" />
         {!submitted && (

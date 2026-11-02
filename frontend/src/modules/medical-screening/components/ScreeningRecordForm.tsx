@@ -38,6 +38,10 @@ function subjectPlaceholder(kind: SubjectKind, loaded: boolean, failed: boolean)
 }
 const labelClass = 'form-label mb-2';
 
+// A failed or expired result clears nobody, so a date it "expires" a year out
+// reads to the next officer as a clearance it never was.
+const RESULTS_WITHOUT_EXPIRATION: readonly string[] = [ScreeningStatus.FAILED, ScreeningStatus.EXPIRED];
+
 export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record, requirements, onSave, onClose }) => {
   const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
@@ -55,10 +59,13 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
   // W71: suggest the date the requirement's frequency implies, so the record
   // carries its own expiration; the officer can still change it. (One saved
   // without a date falls due by the same frequency when graded, W71-1.)
-  const suggestExpiration = (nextRequirementId: string, nextCompletedDate: string) => {
+  const suggestExpiration = (nextRequirementId: string, nextCompletedDate: string, nextStatus = recordStatus) => {
     const req = requirements.find((r) => r.id === nextRequirementId);
     const months = req?.frequency_months;
-    const suggestion = months && nextCompletedDate ? addCalendarMonths(nextCompletedDate, months) : '';
+    const suggestion =
+      months && nextCompletedDate && !RESULTS_WITHOUT_EXPIRATION.includes(nextStatus)
+        ? addCalendarMonths(nextCompletedDate, months)
+        : '';
     if (expirationDate === '' || expirationDate === suggestedExpiration) {
       setExpirationDate(suggestion);
       setSuggestedExpiration(suggestion);
@@ -261,7 +268,10 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
             <select
               id="rec-status"
               value={recordStatus}
-              onChange={(e) => setRecordStatus(e.target.value)}
+              onChange={(e) => {
+                setRecordStatus(e.target.value);
+                suggestExpiration(requirementId, completedDate, e.target.value);
+              }}
               className={inputClass}
             >
               {Object.entries(SCREENING_STATUS_LABELS).map(([value, label]) => (
@@ -370,14 +380,14 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
             <button
               type="button"
               onClick={onClose}
-              className="text-theme-text-secondary hover:text-theme-text-primary rounded-lg px-4 py-2 text-sm transition-colors"
+              className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 rounded-lg px-4 py-2 text-sm transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSaving || (!record && !subjectId)}
-              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+              className="touch:min-h-11 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : record ? 'Save Changes' : 'Add Record'}
             </button>

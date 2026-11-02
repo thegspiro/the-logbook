@@ -3522,8 +3522,13 @@ export interface ShiftEvaluationRequirement {
   evaluation: ShiftEvaluationSummary | null;
 }
 
+/** What an evaluation is about: a department shift, or a shift logged on an outside agency's unit. */
+export type ShiftEvaluationOccasion = 'shift' | 'external';
+
 export interface ShiftEvaluationRoster {
-  shift_id: string;
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
   shift_date: string;
   shift_start: string | null;
   shift_end: string | null;
@@ -3538,7 +3543,11 @@ export interface ShiftEvaluationDetail {
   member_name: string | null;
   evaluator_id: string | null;
   evaluator_name: string | null;
+  occasion: ShiftEvaluationOccasion;
   shift_id: string | null;
+  external_shift_id: string | null;
+  /** The outside preceptor named on an outside-shift evaluation. */
+  preceptor_name: string | null;
   shift_date: string;
   shift_start: string | null;
   shift_end: string | null;
@@ -3562,7 +3571,9 @@ export interface ShiftEvaluationDetail {
 
 export interface ShiftEvaluationFormResponse {
   requirement: ShiftEvaluationRequirement;
-  shift_id: string;
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
   shift_date: string;
   shift_start: string | null;
   shift_end: string | null;
@@ -3580,5 +3591,22 @@ export interface ShiftEvaluationSaveBody {
   statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
   responses: Record<string, ShiftEvaluationItemAnswer>;
   closing_comments?: string | null | undefined;
+  /** Outside shifts only: the preceptor who did the evaluating. */
+  preceptor_name?: string | null | undefined;
   submit: boolean;
+}
+
+/** A logged outside shift still waiting on its evaluation. */
+export interface OutsideShiftAwaitingEvaluation {
+  entry_id: string;
+  member_id: string;
+  member_name: string | null;
+  shift_date: string;
+  start_at: string | null;
+  end_at: string | null;
+  agency_name: string;
+  apparatus_name: string;
+  evaluation_status: 'needed' | 'draft';
+  /** The evaluation to open first: the first one not yet submitted. */
+  scope_key: string;
 }
