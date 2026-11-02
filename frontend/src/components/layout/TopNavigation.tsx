@@ -8,6 +8,8 @@ import {
   Contrast,
   ChevronDown,
   Bell,
+  ClipboardCheck,
+  ClipboardList,
   UserCog,
   WifiOff,
   RefreshCw,
@@ -419,6 +421,13 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   // off it is an entry to a refusal that can never show a number.
   const showNotifications = isModuleOn('notifications');
   const accountActive = isActive('/account');
+  const myEvaluationsActive = isActive('/reports/evaluations/mine');
+  const conductActive = isActive('/reports/evaluations/conduct');
+  // Gated like its route: the evaluations a member conducts, or all of them.
+  const canListEvaluations =
+    checkPermission('evaluations.conduct') ||
+    checkPermission('evaluations.view_all') ||
+    checkPermission('evaluations.manage');
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
     .filter((item) => item.path !== '#' && isActive(item.path))
@@ -959,6 +968,32 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                           {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
                         </span>
                       )}
+                    </a>
+                  )}
+                  {isModuleOn('reports') && (
+                    <a
+                      href="/reports/evaluations/mine"
+                      onClick={(e) => handleNavigation('/reports/evaluations/mine', e)}
+                      aria-current={myEvaluationsActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        myEvaluationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                      <span>My Evaluations</span>
+                    </a>
+                  )}
+                  {isModuleOn('reports') && canListEvaluations && (
+                    <a
+                      href="/reports/evaluations/conduct"
+                      onClick={(e) => handleNavigation('/reports/evaluations/conduct', e)}
+                      aria-current={conductActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        conductActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                      <span>Evaluations</span>
                     </a>
                   )}
                   <a

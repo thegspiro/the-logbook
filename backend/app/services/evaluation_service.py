@@ -501,6 +501,15 @@ class EvaluationService:
                     if not (roles.is_member and s.step_type == _CALIBRATION)
                 ],
                 "data": snapshot.get("values") if show_data else None,
+                "sources": (
+                    [
+                        self._source_view(s.key)
+                        for s in DATA_SOURCES
+                        if s.key in (snapshot.get("values") or {})
+                    ]
+                    if show_data
+                    else []
+                ),
                 "suggested_scores": (
                     (snapshot.get("suggested_scores") or {}) if show_data else {}
                 ),

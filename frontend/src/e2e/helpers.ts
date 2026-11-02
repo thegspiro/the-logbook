@@ -868,7 +868,63 @@ const memberRecordRoutes = (): [string, () => unknown][] => [
     }),
   ],
   ['**/api/v1/users/*/audit-history**', () => []],
+
+  // Member evaluations: one in progress, and the member's figures measured
+  // now, so the evaluation pages are measured with their content rather than
+  // an empty state.
+  ['**/api/v1/evaluations?**', () => [EVALUATION_SUMMARY]],
+  ['**/api/v1/evaluations', () => [EVALUATION_SUMMARY]],
+  ['**/api/v1/evaluations/mine', () => [EVALUATION_SUMMARY]],
+  [
+    '**/api/v1/evaluations/mine/live-data',
+    () => ({
+      period_id: 'e2e-period',
+      period_name: '2026 Annual Review',
+      coverage_start: '2026-01-01',
+      coverage_end: '2026-11-01',
+      excluded_ranges: [],
+      sources: [
+        {
+          key: 'training.hours',
+          label: 'Training hours',
+          unit: 'hours',
+          module: 'training',
+          description: 'Hours of completed training records in the period.',
+          scoreable: true,
+        },
+        {
+          key: 'events.meeting_attendance_pct',
+          label: 'Business meeting attendance',
+          unit: 'percent',
+          module: 'events',
+          description: 'Business meetings attended out of those held.',
+          scoreable: true,
+        },
+      ],
+      data: {
+        'training.hours': { available: true, value: 42.5 },
+        'events.meeting_attendance_pct': { available: true, value: 75, attended: 6, held: 8 },
+      },
+      note: null,
+    }),
+  ],
 ];
+
+const EVALUATION_SUMMARY = {
+  id: 'e2e-evaluation',
+  member: { id: TEST_USER.id, name: `${TEST_USER.first_name} ${TEST_USER.last_name}` },
+  evaluator: { id: 'e2e-evaluator', name: 'Jordan Captain' },
+  period_id: 'e2e-period',
+  period_name: '2026 Annual Review',
+  period_start: '2026-01-01',
+  period_end: '2026-12-31',
+  template_name: 'Operational Annual',
+  kind: 'annual',
+  status: 'in_progress',
+  current_step: 'Self-evaluation',
+  current_step_due: '2027-01-14',
+  created_at: '2026-11-01T12:00:00Z',
+};
 
 /**
  * Fulfil every `/api/v1/**` request with fixture data.

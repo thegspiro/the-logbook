@@ -968,6 +968,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: ['evaluations.configure', 'evaluations.manage'],
   },
+  {
+    path: '/reports/evaluations/conduct',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['evaluations.conduct', 'evaluations.manage'],
+  },
+  { path: '/reports/evaluations/mine', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/medical-screening', maxSmallTargets: 0, maxTinyText: 0, permissions: ['medical_screening.view'] },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
