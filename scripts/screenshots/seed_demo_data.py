@@ -424,6 +424,71 @@ def write_admin_totp_secret(secret: str) -> Path:
     return path
 
 
+# Members the captures sign in as whose positions require two-step sign-in.
+#
+# A privileged member who has not enrolled gets a grace period, and every page
+# they open carries a banner counting it down; once it lapses they are routed
+# to enrolment and reach nothing else. Left unenrolled, the secretary's dozen
+# shots each pictured that banner, and would all have broken two weeks after
+# seeding. They are enrolled like the administrator, and their secrets kept
+# beside its one — `Api._sign_in` completes the code step for any account
+# listed here, so the steps below that sign in as them need no change.
+#
+# Not every privileged member: the grace banner itself is pictured, as
+# MFA_GRACE_USERNAME, which must therefore stay unenrolled.
+ENROLLED_MEMBER_USERNAMES = ("okittredge",)
+
+# The privileged member the grace-period shots (00-35, 00-36) sign in as. An
+# assistant chief: the position requires two-step sign-in, and no other shot
+# signs in as this account, so its banner reaches no image but those two. Must
+# match DEMO_MFA_GRACE_CREDENTIALS in manifest.mjs, and must not be listed in
+# ENROLLED_MEMBER_USERNAMES.
+MFA_GRACE_USERNAME = "praman"
+
+
+def member_totp_path() -> Path:
+    return admin_totp_path().with_name("member-totp.env")
+
+
+def read_member_totp_secret(username: str) -> str | None:
+    """The stored TOTP secret for *username*, or None (`member_totp_path`)."""
+    try:
+        text = member_totp_path().read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() == username and value.strip():
+            return value.strip()
+    return None
+
+
+def write_member_totp_secret(username: str, secret: str) -> Path:
+    """Store *secret* for *username*, keeping every other member's line.
+
+    The same private, rename-into-place write as `write_admin_totp_secret`.
+    """
+    path = member_totp_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    kept: list[str] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, _ = line.partition("=")
+            if sep and key.strip() != username:
+                kept.append(line)
+    except FileNotFoundError:
+        pass
+    kept.append(f"{username}={secret}")
+    staging = path.with_name(path.name + ".tmp")
+    fd = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(kept) + "\n")
+    os.chmod(staging, 0o600)
+    os.replace(staging, path)
+    return path
+
+
 def is_stepup_required(code: int, headers: Any, body: str) -> bool:
     """Whether a refusal is `require_stepup` asking for re-verification."""
     if code != 403:
@@ -724,6 +789,8 @@ class Api:
         )
         if not (isinstance(result, dict) and result.get("mfa_required")):
             return False
+        if not self.totp_secret and username in ENROLLED_MEMBER_USERNAMES:
+            self.totp_secret = read_member_totp_secret(username)
         if not self.totp_secret:
             if username == DEMO_ADMIN_USERNAME:
                 raise SystemExit(
@@ -1702,6 +1769,45 @@ class Seeder:
             self.member_session(self.base_url, user_id, PASSKEY_MEMBER_USERNAME)
         except ApiError as exc:
             self.blocked.append(f"passkey member: sign in: {exc}")
+
+    def seed_capture_member_two_factor(self) -> None:
+        """Enrol ENROLLED_MEMBER_USERNAMES in TOTP and keep their secrets.
+
+        An account already enrolled whose secret is stored is left alone. One
+        enrolled with no stored secret (the file was deleted, or a run died
+        between enrolment and the write) cannot sign in at all, so its second
+        factor is reset with the administrator's Reset MFA and it is enrolled
+        again — the recovery the README gives for the administrator.
+        """
+        assert MFA_GRACE_USERNAME not in ENROLLED_MEMBER_USERNAMES
+        rows = {
+            str(pick(row, "username")): row
+            for row in items(self.api.get("/users/with-roles"), "users")
+        }
+        for username in ENROLLED_MEMBER_USERNAMES:
+            row = rows.get(username)
+            user_id = pick(row or {}, "id")
+            if not user_id:
+                self.blocked.append(f"two-factor: {username} is not on the roster")
+                continue
+            stored = read_member_totp_secret(username)
+            if pick(row, "mfa_enabled"):
+                if stored:
+                    continue
+                ADMIN_RESET_THROTTLE.wait()
+                self.api.post(f"/users/{user_id}/reset-mfa", {})
+            try:
+                session = self.member_session(self.base_url, user_id, username)
+                secret = session.post("/auth/mfa/setup")["secret"]
+                # Stored before verification, as for the administrator: once
+                # verify-setup succeeds a password alone no longer signs in.
+                write_member_totp_secret(username, secret)
+                session.totp_secret = secret
+                session.post(
+                    "/auth/mfa/verify-setup", {"code": session.fresh_totp_code()}
+                )
+            except ApiError as exc:
+                self.blocked.append(f"two-factor: enrol {username}: {exc}")
 
     def _fill_in_the_administrator(self, members: list[dict]) -> None:
         """Give the demo administrator the contact details everyone else has.
@@ -20393,6 +20499,7 @@ class Seeder:
         self.step("waitlisted event", self.seed_waitlisted_event)
         self.step("out-of-stock size", self.seed_out_of_stock_size)
         self.step("passkey member", self.seed_backlog_00_passkey_member)
+        self.step("capture member two-factor", self.seed_capture_member_two_factor)
         # Last: it parks two coats on a new shelf and issues gloves, which no
         # earlier step expects to find moved or issued.
         self.step("guide 05 states", self.seed_guide05_states)

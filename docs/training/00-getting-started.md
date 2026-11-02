@@ -454,7 +454,7 @@ get one email and a banner across the app counting the days down, and you can
 keep working. When the days run out you can reach only the setup screens until
 you enroll. The 14 days start again if you are later promoted into such a role.
 
-![The Dashboard as the secretary, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link](./images/00-36-mfa-grace-banner.png)
+![The Dashboard as an assistant chief, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link](./images/00-36-mfa-grace-banner.png)
 
 **Some actions ask you to prove it is you.** Exporting the audit or error log,
 changing roles, positions, security or integration settings, resetting another
@@ -470,7 +470,7 @@ two-step sign-in first.
 
 ![The Confirm it's you box over Settings → Authentication → MFA Policy, opened by switching Allow passkeys: This action needs a recent confirmation, the Authenticator code field, and Cancel / Confirm](./images/00-34-step-up-code.png)
 
-![The Confirm it's you box with a Password field over the Reset MFA dialog, shown to the secretary, who has not set up two-step sign-in yet, after selecting Reset MFA for a member](./images/00-35-step-up-password.png)
+![The Confirm it's you box with a Password field over the Reset MFA dialog, shown to an assistant chief who has not set up two-step sign-in yet, after selecting Reset MFA for a member](./images/00-35-step-up-password.png)
 
 ![My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture](./images/00-31-mfa-recovery-codes.png)
 

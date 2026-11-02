@@ -117,6 +117,22 @@ export const DEMO_SECRETARY_CREDENTIALS = {
 };
 
 /**
+ * A privileged member deliberately left without two-step sign-in, so the
+ * grace-period banner and the password step-up box have someone to picture.
+ *
+ * Shots marked `auth: "mfagrace"` sign in as this account. The secretary used
+ * to stand in, which put the banner on every secretary shot; the seeder now
+ * enrols the secretary (ENROLLED_MEMBER_USERNAMES) and leaves this account,
+ * which no other shot signs in as, unenrolled. Must match MFA_GRACE_USERNAME in
+ * seed_demo_data.py. The grace period runs from the seed, so these two shots
+ * are taken within two weeks of seeding.
+ */
+export const DEMO_MFA_GRACE_CREDENTIALS = {
+  username: "praman",
+  password: "DemoMember!2026",
+};
+
+/**
  * A member who reviews no suggestion box and has one suggestion forwarded to
  * them, so the Review tab reaches them through the forward alone.
  *
@@ -23013,15 +23029,15 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 477,
     anchor: "The secretary, who has not set up two-step sign-in yet",
-    alt: "The Confirm it's you box with a Password field over the Reset MFA dialog, shown to the secretary, who has not set up two-step sign-in yet, after selecting Reset MFA for a member",
+    alt: "The Confirm it's you box with a Password field over the Reset MFA dialog, shown to an assistant chief who has not set up two-step sign-in yet, after selecting Reset MFA for a member",
     route: "/members/admin",
-    auth: "secretary",
+    auth: "mfagrace",
     expect: { selector: "#stepup-proof[type='password']" },
     // The roster's Former members card reads "No dropped member has property
     // outstanding" behind the dialogs, which is not this shot's subject.
     allowEmptyState: true,
-    // The secretary holds members.manage and has no second step, so the box
-    // asks for their password. Nobody types it: Cancel closes the box and the
+    // The assistant chief holds members.manage and has no second step, so the
+    // box asks for their password. Nobody types it: Cancel closes the box and the
     // Reset MFA request it was holding is never sent again, so whalloway
     // (the one member enrolled in the app) keeps it.
     prepare: async (page) => {
@@ -23057,9 +23073,9 @@ export const SHOTS = [
     line: 457,
     anchor:
       "The secretary, whose position needs two-step sign-in, on the Dashboard",
-    alt: "The Dashboard as the secretary, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link",
+    alt: "The Dashboard as an assistant chief, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link",
     route: "/dashboard",
-    auth: "secretary",
+    auth: "mfagrace",
     expect: "Your access requires two-factor authentication",
     allowEmptyState: true,
   },
