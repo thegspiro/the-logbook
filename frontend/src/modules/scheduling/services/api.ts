@@ -1098,9 +1098,14 @@ export const schedulingService = {
   },
   async getMyAttendance(shiftId: string): Promise<ShiftAttendanceRecord | null> {
     try {
-      const response = await api.get<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/my-attendance`);
-      return response.data;
+      // The endpoint answers 200 with a null body for a member not yet
+      // checked in. It used to answer 404, which logged a failed request on
+      // every ordinary opening of the check-in page.
+      const response = await api.get<ShiftAttendanceRecord | null>(`/scheduling/shifts/${shiftId}/my-attendance`);
+      return response.data ?? null;
     } catch (err: unknown) {
+      // Still read as "not checked in": a backend from before the change
+      // answers 404, and a frontend can reach one during a rolling upgrade.
       if (err instanceof AxiosError && err.response?.status === 404) return null;
       throw err;
     }
