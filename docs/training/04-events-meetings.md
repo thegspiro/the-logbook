@@ -2134,7 +2134,7 @@ parts most often looked for from here:
 | Linking an election to a meeting or event       | [Meeting Attendance Integration](./14-elections.md#meeting-attendance-integration) |
 | Election problems                               | [Elections troubleshooting](./14-elections.md#troubleshooting)                     |
 
-![The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them](./images/04-42-cast-ballot.png)
+![The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, a write-in and Abstain, the bylaw amendment beneath it, and one Cast Ballot button for the whole ballot](./images/04-42-cast-ballot.png)
 
 ![The Create New Election dialog — title, description, voting window, and the victory-condition and runoff settings](./images/04-43-create-election.png)
 

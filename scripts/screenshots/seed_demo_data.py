@@ -6028,7 +6028,6 @@ class Seeder:
         self._deploy_lots(positions, catalog)
         self._report_one_used(positions, str(pick(medic, "id")))
         self._leave_one_short(positions)
-        self._expire_one_tourniquet()
         # Linking supply positions edits the template's items, which drafts it
         # again — and this step runs *after* `seed_equipment_checks`, so that
         # step's publish sweep has already been and gone. Without this the
@@ -6257,6 +6256,12 @@ class Seeder:
                         self.api.delete(f"/medical-supplies/lots/{pick(lot, 'id')}")
 
         templates = self._medical_checklists(apparatus, catalog)
+        # Here, not in `seed_supply_tracking`: the Rescue 7 checklist that
+        # carries the tourniquet is made just above, and supply tracking runs
+        # first, so on a fresh database it found no tourniquet and dated
+        # nothing. Before the publish, because dating the position drafts the
+        # checklist again.
+        self._expire_one_tourniquet()
         self._publish_seeded_templates()
         return {"created": created, "templates": templates}
 
@@ -7411,6 +7416,10 @@ class Seeder:
         published: list[str] = []
         for template in items(self.api.get("/equipment-checks/templates"), "templates"):
             if pick(template, "is_active", "isActive"):
+                continue
+            # Kept a draft on purpose: guide 03's builder shot pictures its
+            # dateless Date line, which publishing would refuse anyway.
+            if pick(template, "name") == self.BACKLOG_DRAFT_CHECKLIST:
                 continue
             template_id = pick(template, "id")
             if not template_id:
@@ -17202,6 +17211,243 @@ class Seeder:
                     {"status": wanted, "reason": reason},
                 )
 
+    # ── Guide 15 backlog: follow-up forms, case managers, stage emails ─────
+    #
+    # A fifth pipeline, for the same reason as the Reinstatement one: the
+    # default pipeline's board, builder and drawers are pictured elsewhere and
+    # must not gain a stage. It carries a Follow-up Form stage and an Automated
+    # Email stage whose saved Next Meeting event has already happened.
+    #
+    # The demo sends no email, so the follow-up link never reaches anyone and
+    # the applicant on that stage stays at "Not sent" with Send now offered.
+    # That is the real state a department whose email was down sees. A
+    # submitted form needs the link's token, which only the email carries, so
+    # this seeds none.
+    #
+    # The assignments go to the forwardee account (cfrazier), an ordinary
+    # member with no recruitment permission: the trustee the guide describes.
+    # Every other shot taken as that account is clipped to a panel, so the My
+    # Applicants entry the assignment adds to its menu is pictured nowhere else.
+    BACKLOG15_PIPELINE_NAME = "Junior Firefighter Pipeline"
+    BACKLOG15_FORM_NAME = "Applicant Details Confirmation"
+    BACKLOG15_FOLLOW_UP_STAGE = "Confirm Your Details"
+    BACKLOG15_EMAIL_STAGE = "Welcome Packet Email"
+    BACKLOG15_CASE_MANAGER = "cfrazier"
+    BACKLOG15_FOLLOW_UP_APPLICANT = ("Mateo", "Alvarez", "mateo.alvarez@example.org")
+    BACKLOG15_FIRST_APPLICANT = ("Grace", "Liu", "grace.liu@example.org")
+
+    def seed_backlog_15_follow_up(self) -> None:
+        form_id = self._backlog15_form()
+        pipeline = self._backlog15_pipeline(form_id)
+        pipeline_id = str(pick(pipeline, "id"))
+
+        first = self._backlog15_applicant(self.BACKLOG15_FIRST_APPLICANT, pipeline_id)
+        follow_up = self._backlog15_applicant(
+            self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+        )
+        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
+            self.api.post(
+                f"/prospective-members/prospects/{pick(follow_up, 'id')}/advance", {}
+            )
+            follow_up = self._backlog15_applicant(
+                self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+            )
+        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
+            self.blocked.append(
+                "guide 15 backlog: "
+                f"{self.BACKLOG15_FOLLOW_UP_APPLICANT[0]} is on "
+                f"{follow_up.get('current_step_name')!r}, not the follow-up stage"
+            )
+
+        user_id = self._user_id(self.BACKLOG15_CASE_MANAGER)
+        if not user_id:
+            self.blocked.append(
+                f"guide 15 backlog: no member {self.BACKLOG15_CASE_MANAGER}"
+            )
+            return
+        for prospect, role in (
+            (follow_up, "case_manager"),
+            (first, "interviewer"),
+        ):
+            path = f"/prospective-members/prospects/{pick(prospect, 'id')}/assignments"
+            held = {
+                (str(pick(a, "user_id")), pick(a, "role"))
+                for a in items(self.api.get(path), "assignments")
+            }
+            if (user_id, role) not in held:
+                self.api.post(path, {"user_id": user_id, "role": role})
+
+    BACKLOG15_INTEREST = {
+        "interest_reason": "My older brother volunteers here and I want to "
+        "join the junior program.",
+        "referral_source": "Family member",
+    }
+
+    def _backlog15_applicant(self, who: tuple[str, str, str], pipeline_id: str):
+        """A junior applicant, created through the guide-15 helper.
+
+        That helper fills in a returning member's interest answers, which the
+        drawer and the case manager's dialog show; a junior applicant's own
+        replace them, on a first run and on an earlier run's records alike.
+        """
+        prospect = self._guide15_applicant(who, pipeline_id)
+        prospect_id = pick(prospect, "id")
+        detail = self.api.get(f"/prospective-members/prospects/{prospect_id}")
+        if any(detail.get(k) != v for k, v in self.BACKLOG15_INTEREST.items()):
+            self.api.put(
+                f"/prospective-members/prospects/{prospect_id}",
+                dict(self.BACKLOG15_INTEREST),
+            )
+        return prospect
+
+    def _backlog15_form(self) -> str:
+        found = next(
+            (
+                f
+                for f in items(self.api.get("/forms?limit=200"), "forms")
+                if f.get("name") == self.BACKLOG15_FORM_NAME
+            ),
+            None,
+        )
+        if found is None:
+            fields = [
+                ("First name", "text", True, "first_name"),
+                ("Last name", "text", True, "last_name"),
+                ("Email", "email", True, "email"),
+                ("Mobile phone", "phone", False, "mobile"),
+                ("Street address", "text", False, "address_street"),
+                ("City", "text", False, "address_city"),
+                ("Parent or guardian name", "text", True, None),
+                ("Which school do you attend?", "text", False, None),
+            ]
+            found = self.api.post(
+                "/forms",
+                {
+                    "name": self.BACKLOG15_FORM_NAME,
+                    "description": "Sent to junior applicants to confirm what "
+                    "their interest form said.",
+                    "category": "other",
+                    "is_public": False,
+                    "require_authentication": False,
+                    "notify_on_submission": False,
+                    "fields": [
+                        {
+                            "label": label,
+                            "field_type": field_type,
+                            "required": required,
+                            "sort_order": order,
+                            **({"applicant_field": prefill} if prefill else {}),
+                        }
+                        for order, (label, field_type, required, prefill) in enumerate(
+                            fields
+                        )
+                    ],
+                },
+            )
+        form_id = str(pick(found, "id"))
+        if found.get("status") != "published":
+            self.api.post(f"/forms/{form_id}/publish")
+        return form_id
+
+    def _backlog15_pipeline(self, form_id: str) -> dict:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        found = next(
+            (p for p in pipelines if p.get("name") == self.BACKLOG15_PIPELINE_NAME),
+            None,
+        )
+        if found is not None:
+            return found
+        # The email stage saves a business meeting that has already happened,
+        # so its editor previews the fallback: "The saved event has passed or
+        # was cancelled. The email will include the next one instead".
+        now = datetime.now(timezone.utc).isoformat()
+        past_meeting = next(
+            (
+                e
+                for e in sorted(
+                    items(self.api.get("/events?limit=100"), "events"),
+                    key=lambda e: str(e.get("start_datetime") or ""),
+                    reverse=True,
+                )
+                if e.get("event_type") == "business_meeting"
+                and str(e.get("start_datetime") or "") < now
+                and not e.get("is_draft")
+            ),
+            None,
+        )
+        stages = [
+            (
+                "Interest Form Received",
+                "manual_approval",
+                "A coordinator reads the interest form.",
+                {"approver_roles": [], "require_notes": False},
+            ),
+            (
+                self.BACKLOG15_FOLLOW_UP_STAGE,
+                "follow_up_form",
+                "The applicant confirms their details and adds a guardian.",
+                {
+                    "follow_up_form_id": form_id,
+                    "follow_up_form_name": self.BACKLOG15_FORM_NAME,
+                    "custom_message": "Please check what we have on file and "
+                    "tell us who your parent or guardian is.",
+                    "auto_advance": True,
+                },
+            ),
+            (
+                "Board Interview",
+                "manual_approval",
+                "An interview with a board member.",
+                {"approver_roles": [], "require_notes": False},
+            ),
+            (
+                self.BACKLOG15_EMAIL_STAGE,
+                "automated_email",
+                "Welcome packet and the next business meeting.",
+                {
+                    "email_subject": "Welcome to the Junior Firefighter program",
+                    "include_welcome": True,
+                    "welcome_message": "Welcome aboard. Your packet is attached.",
+                    "include_faq_link": False,
+                    "faq_url": "",
+                    "include_next_meeting": True,
+                    "next_meeting_event_type": "business_meeting",
+                    **(
+                        {"next_meeting_event_id": str(pick(past_meeting, "id"))}
+                        if past_meeting
+                        else {}
+                    ),
+                    "next_meeting_details": "",
+                    "include_status_tracker": False,
+                    "custom_sections": [],
+                },
+            ),
+        ]
+        return self.api.post(
+            "/prospective-members/pipelines",
+            {
+                "name": self.BACKLOG15_PIPELINE_NAME,
+                "description": "Members aged 14 to 17, with a guardian's consent.",
+                "is_default": False,
+                "is_active": True,
+                "steps": [
+                    {
+                        "name": name,
+                        "description": description,
+                        "step_type": step_type,
+                        "is_first_step": order == 0,
+                        "is_final_step": order == len(stages) - 1,
+                        "sort_order": order,
+                        "required": True,
+                        "config": config,
+                    }
+                    for order, (name, step_type, description, config) in enumerate(
+                        stages
+                    )
+                ],
+            },
+        )
+
     def _guide15_pipeline(self) -> dict:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         found = next(
@@ -19886,8 +20132,12 @@ class Seeder:
         return {"outcomes": outcomes}
 
     # A lot of its own, so recalling it moves nothing the other medical shots
-    # count: the saline's in-date stock stays NS-5520.
-    RECALLED_LOT = ("Normal Saline 1000mL", "NS-4471", 4)
+    # count: the cannula's in-date stock stays NC-2602. It has to be a supply in
+    # a *medical* category: the saline and gauze of the supply-tracking catalog
+    # are filed as consumable gear, which the Medical Supplies page, its lot
+    # lookup and its recall endpoint all leave out, so a recall against them
+    # is refused and the lookup never finds them.
+    RECALLED_LOT = ("Nasal Cannula", "NC-2519", 5)
 
     def seed_lot_recall(self) -> str:
         """One active recall, for the Recalled lots panel and the Recalled row."""
@@ -19909,7 +20159,7 @@ class Seeder:
             None,
         )
         if not item:
-            return "saline not found"
+            return f"{name} not found"
         item_id = pick(item, "id")
         lots = items(self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots")
         if not any(pick(lot, "lot_number", "lotNumber") == lot_number for lot in lots):
@@ -19931,6 +20181,97 @@ class Seeder:
             },
         )
         return "recalled"
+
+    # A gear row for the low-stock email's link. Every reorder point the demo
+    # sets is on a medical supply, and Inventory Items narrowed with
+    # ?low_stock=true leaves medical items out (they link to Medical Supplies
+    # instead), so without one the notice sits over an empty list.
+    LOW_STOCK_GEAR = ("Firefighting Gloves", 10)
+
+    def seed_backlog_05_low_stock_gear(self) -> str:
+        """One gear item below its reorder point, for the low-stock notice."""
+        name, reorder_point = self.LOW_STOCK_GEAR
+        item = next(
+            (
+                i
+                for i in items(self.api.get("/inventory/items?limit=500"), "items")
+                if pick(i, "name") == name
+            ),
+            None,
+        )
+        if not item:
+            return f"{name} not found"
+        if pick(item, "reorder_point") == reorder_point:
+            return "already set"
+        self.api.patch(
+            f"/inventory/items/{pick(item, 'id')}", {"reorder_point": reorder_point}
+        )
+        return f"reorder point {reorder_point}"
+
+    # The recruit kit's lines are all single-size items, so neither the kit
+    # editor's "Member's size" choice nor the issue review's resolved size has
+    # anything to show. A sized product added on Member's size gives both: the
+    # coat is a variant group, and every demo member has a jacket size on file.
+    KIT_SIZED_LINE = ("New Recruit PPE Kit", "Structural Coat", "Structural PPE")
+
+    def seed_backlog_05_kit_member_size(self) -> str:
+        """Add Structural Coat on Member's size to the recruit kit."""
+        kit_name, product, category = self.KIT_SIZED_LINE
+        kit = next(
+            (
+                k
+                for k in items(self.api.get("/inventory/kits"), "kits")
+                if pick(k, "name") == kit_name
+            ),
+            None,
+        )
+        if not kit:
+            return f"{kit_name} not found"
+        detail = self.api.get(f"/inventory/kits/{pick(kit, 'id')}")
+        lines = sorted(
+            pick(detail, "line_items") or [],
+            key=lambda line: pick(line, "sort_order") or 0,
+        )
+        if any(pick(line, "item_name") == product for line in lines):
+            return "already sized"
+        variant = next(
+            (
+                i
+                for i in items(self.api.get("/inventory/items?limit=500"), "items")
+                if str(pick(i, "name") or "").startswith(f"{product} — ")
+                and pick(i, "variant_group_id")
+            ),
+            None,
+        )
+        if not variant:
+            return f"no {product} variant"
+        keep = [
+            {
+                key: pick(line, key)
+                for key in (
+                    "item_id",
+                    "category_id",
+                    "item_name",
+                    "quantity",
+                    "size_selectable",
+                    "optional",
+                )
+                if pick(line, key) is not None
+            }
+            for line in lines
+        ]
+        keep.insert(
+            0,
+            {
+                "item_id": pick(variant, "id"),
+                "category_id": pick(variant, "category_id"),
+                "item_name": product,
+                "quantity": 1,
+                "size_selectable": True,
+            },
+        )
+        self.api.patch(f"/inventory/kits/{pick(kit, 'id')}", {"line_items": keep})
+        return f"added {product} on Member's size"
 
     INACTIVE_TEMPLATE = "Reserve Engine — Out of Service"
     PAUSED_PATTERN = "Summer Reserve Rotation"
@@ -20779,6 +21120,7 @@ class Seeder:
         # vote outcomes above are the steps that assume one pipeline.
         self.step("meeting-stage applicant", self.seed_meeting_stage_applicant)
         self.step("guide 15 states", self.seed_guide15_states)
+        self.step("guide 15 follow-up forms", self.seed_backlog_15_follow_up)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
@@ -20819,6 +21161,8 @@ class Seeder:
         self.step("id cards", self.seed_id_cards)
         self.step("card taps", self.seed_card_taps)
         self.step("lot recall", self.seed_lot_recall)
+        self.step("low-stock gear", self.seed_backlog_05_low_stock_gear)
+        self.step("kit member size", self.seed_backlog_05_kit_member_size)
         self.step("paused scheduling", self.seed_paused_scheduling)
         self.step(
             "backlog 03 inactive basic apparatus",

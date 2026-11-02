@@ -168,7 +168,6 @@
 03-98-incomplete-check-warning
 03-99-checklists-resume
 04-01-events-list
-04-03-election-eligibility
 04-04-event-qr-code
 04-06-check-in-monitoring
 04-08-calendar-view
@@ -190,7 +189,6 @@
 04-38-rolling-recurrence
 04-40-end-event
 04-41-event-create-layout
-04-42-cast-ballot
 04-43-create-election
 04-44-reminder-audience
 04-45-checkin-flexible-default
@@ -210,7 +208,6 @@
 05-11-allowances
 05-12-new-allowance-modal
 05-25-admin-hub
-05-27-equipment-kit-modal
 05-31-equipment-kits
 05-32-variant-groups
 05-46-size-preferences
@@ -224,7 +221,6 @@
 05-55-member-picker
 05-56-item-barcode-value
 05-58-return-items-modal
-05-60-admin-hub-groups
 05-61-item-barcode-fields
 05-62-generate-variants
 05-63-variant-group-modal
@@ -352,12 +348,10 @@
 13-04-compliance-tab
 13-05-add-requirement
 13-06-expiring-screenings
-14-01-elections-list
 14-02-create-election
 14-04-ballot-configuration
 14-05-nominations-tab
 14-06-candidate-form
-14-16-election-settings
 14-17-election-results
 14-18-paper-batches
 14-19-forensics-report

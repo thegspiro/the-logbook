@@ -1392,8 +1392,13 @@ export function selectBoardPipeline(name) {
  * these shots name on a stage of that pipeline and nowhere else.
  */
 function openReinstatementApplicant(name) {
+  return openReinstatementApplicantIn("Reinstatement Pipeline", name);
+}
+
+/** The same, on any pipeline the guide-15 seed steps create. */
+function openReinstatementApplicantIn(pipeline, name) {
   return async (page) => {
-    await selectBoardPipeline("Reinstatement Pipeline")(page);
+    await selectBoardPipeline(pipeline)(page);
     await clickByName(/^table$/i)(page);
     const row = page.locator("tbody tr").filter({ hasText: name }).first();
     await row.waitFor({ timeout: 15_000 });
@@ -1614,6 +1619,98 @@ async function openStatusPageWithdrawDialog(page, { lookupPage }) {
     );
   await page.waitForTimeout(400);
 }
+
+/**
+ * Open one stage's editor on Pipeline Settings, unsaved. The pipeline is
+ * picked by its button and the stage by its row, as 15-15 does.
+ */
+function openStageEditor(pipelineName, stageName) {
+  return async (page) => {
+    await page
+      .getByRole("button", { name: new RegExp(pipelineName, "i") })
+      .first()
+      .click({ timeout: 15_000 });
+    const row = page
+      .locator("div")
+      .filter({ hasText: stageName })
+      .filter({ has: page.locator('button[title="Edit stage"]') })
+      .last();
+    await row
+      .locator('button[title="Edit stage"]')
+      .first()
+      .click({ timeout: 15_000 });
+    await page
+      .locator('[aria-labelledby="stage-config-modal-title"]')
+      .waitFor({ timeout: 10_000 });
+    await page.waitForTimeout(800);
+  };
+}
+
+/**
+ * The public status payload for one applicant, built from their real record
+ * the way `openStatusPageWithdrawDialog` builds it: the status token reaches
+ * an applicant only by email, which this environment does not send, so the
+ * page's one lookup is answered from the record itself.
+ */
+async function statusFixtureFor(admin, email) {
+  const found = await apiFromPage(
+    admin,
+    "GET",
+    `/prospective-members/prospects?limit=5&search=${encodeURIComponent(email)}`,
+  );
+  const rows = found.body?.items ?? found.body?.prospects ?? [];
+  const row = rows.find((p) => p.email === email);
+  if (!row) throw new Error(`no applicant ${email} to picture`);
+  const detail = (
+    await apiFromPage(admin, "GET", `/prospective-members/prospects/${row.id}`)
+  ).body;
+  const progress = [...(detail.step_progress ?? [])]
+    .filter((p) => p.step?.public_visible)
+    .sort((a, b) => (a.step.sort_order ?? 0) - (b.step.sort_order ?? 0));
+  return {
+    row,
+    detail,
+    fixture: {
+      first_name: detail.first_name,
+      last_name: detail.last_name,
+      status: detail.status,
+      current_stage_name: detail.current_step?.name ?? null,
+      current_stage_action: null,
+      pipeline_name: row.pipeline_name ?? null,
+      total_stages: progress.length,
+      stage_timeline: progress.map((p) => ({
+        stage_name: p.step.name,
+        status: p.status,
+        completed_at: p.completed_at,
+      })),
+      applied_at: detail.created_at,
+      can_withdraw: true,
+      next_meeting: null,
+    },
+  };
+}
+
+async function openStatusFixture(page, token, fixture) {
+  await page.route(
+    `**/api/public/v1/application-status/${token}/withdraw`,
+    (route) => route.abort(),
+  );
+  await page.route(`**/api/public/v1/application-status/${token}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(fixture),
+    }),
+  );
+  await page.goto(
+    new URL(`/application-status/${token}`, page.url()).toString(),
+    { waitUntil: "domcontentloaded" },
+  );
+  await page.getByText(fixture.first_name).first().waitFor({ timeout: 15_000 });
+  await page.waitForTimeout(600);
+}
+
+const FOLLOW_UP_FIXTURE_TOKEN = "demo-follow-up-link-fixture-only";
 
 export const isNominatingElection = (election) =>
   (election.status ?? "") === "nominations";
@@ -4152,9 +4249,26 @@ export const SHOTS = [
     line: 1279,
     anchor:
       "Screenshot of the Inventory Admin hub showing the low-stock banner",
-    alt: "The inventory admin hub with its cards grouped into sections",
+    alt: "Inventory Administration with the Catalog area chosen: its pages in the strip under the area cards (All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors, Print Labels) and the line naming the page open",
     route: "/inventory/admin",
-    fullPage: true,
+    expect: { selector: "[aria-label='Catalog pages']" },
+    allowEmptyState:
+      '"No location" is the items list\'s location summary card under the hub, not an empty page.',
+    // An area card opens the area's first page, so the strip under the cards
+    // lists that area's pages. The top of the page is the subject.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Catalog/ })
+        .or(page.getByRole("button", { name: /^Catalog/ }))
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .locator("[aria-label='Catalog pages']")
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
   },
   {
     id: "05-61-item-barcode-fields",
@@ -11305,6 +11419,7 @@ export const SHOTS = [
       "Screenshot of the Elections list page showing several elections with status badges",
     alt: "Elections list showing elections with status badges",
     route: "/elections",
+    expect: "Create elections, send ballots and publish results",
   },
   {
     id: "14-16-election-settings",
@@ -11312,8 +11427,9 @@ export const SHOTS = [
     line: 700,
     anchor:
       "Screenshot of the Election Settings page showing toggle switches for each setting,",
-    alt: "Election Settings open on Proxy Voting, with the Features, Test Ballot and Security sections beside it",
+    alt: "Election Settings open on Proxy Voting, with all six sections across the top: Proxy Voting, Voter Eligibility, Features, Defaults, Test Ballot and Security",
     route: "/elections/settings",
+    expect: "Voter Eligibility",
     fullPage: true,
   },
 
@@ -13329,9 +13445,24 @@ export const SHOTS = [
     line: 812,
     anchor:
       "Screenshot of the Equipment Kit create/edit modal showing a kit named 'New",
-    alt: "Equipment kit editor with its line items and quantities",
+    alt: "The Edit Kit window for New Recruit PPE Kit, scrolled to its lines: the single-size lines with their category, quantity and Optional box, and Structural Coat with its Size set to Member's size",
     route: "/inventory/admin/kits",
-    prepare: clickByName(/edit new recruit ppe kit/i),
+    expect: { selector: "select[id$='-size']" },
+    // The sized line is the subject (seed_backlog_05_kit_member_size), and it
+    // sits below the fold of the window. Opened and cancelled; nothing saved.
+    prepare: async (page) => {
+      await clickByName(/edit new recruit ppe kit/i)(page);
+      const size = page.locator("select[id^='kit-line-'][id$='-size']").first();
+      await size.waitFor({ timeout: 15_000 });
+      await size.evaluate((el) =>
+        el.closest(".rounded-lg, li, div")?.scrollIntoView({ block: "center" }),
+      );
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
     fullPage: false,
   },
   {
@@ -14286,47 +14417,24 @@ export const SHOTS = [
     line: 609,
     anchor:
       "Screenshot of the Cast Vote tab on an open election showing the position, its candidates with their statements",
-    alt: "The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them",
+    alt: "The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, a write-in and Abstain, the bylaw amendment beneath it, and one Cast Ballot button for the whole ballot",
     route: "/elections",
     // The member's own view, not an officer's: the ballot is what a voter sees.
     auth: "member",
-    // Not merely the first *open* election: the elections list carries no
-    // candidate count, so a list-level match cannot tell a contested race from
-    // an empty one — and the first open election is the restricted-ballot seat
-    // with no candidates, which rendered "No candidates for this position"
-    // under a caption about choosing between two. Resolved through each open
-    // election's candidates endpoint instead.
+    // The seeded Line Officer Election, by title: its Captain race is the one
+    // contested position on an open ballot. "The first open election with two
+    // accepted candidates" stopped meaning that once approval items were
+    // stored as candidates too: the Operations Committee seat's Approve and
+    // Deny count as two, so that restricted ballot was pictured instead.
+    expect: "Nine years on Engine 1",
     prepare: async (page) => {
-      const id = await page.evaluate(async () => {
-        const listed = await fetch("/api/v1/elections?limit=20", {
-          credentials: "include",
-        });
-        if (!listed.ok) return null;
-        const body = await listed.json();
-        const rows = Array.isArray(body) ? body : (body.elections ?? []);
-        for (const election of rows) {
-          if (String(election.status ?? "").toLowerCase() !== "open") continue;
-          const detail = await fetch(
-            `/api/v1/elections/${election.id}/candidates`,
-            { credentials: "include" },
-          );
-          if (!detail.ok) continue;
-          const listedCandidates = await detail.json();
-          const candidates = Array.isArray(listedCandidates)
-            ? listedCandidates
-            : (listedCandidates.candidates ?? []);
-          if (candidates.filter((c) => c.accepted).length >= 2) {
-            return election.id;
-          }
-        }
-        return null;
-      });
-      if (!id) {
-        throw new Error("04-42: no open election has a contested position");
-      }
-      await page.goto(new URL(`/elections/${id}`, page.url()).toString(), {
-        waitUntil: "domcontentloaded",
-      });
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) =>
+          (election.title ?? "") === "Line Officer Election — 2027 Term",
+      )(page);
       const tab = page.locator("#tab-voting");
       await tab.waitFor({ timeout: 10_000 });
       await tab.click({ timeout: 10_000 });
@@ -15786,6 +15894,113 @@ export const SHOTS = [
     expect: "Could not be sent to 2",
   },
   {
+    id: "14-31-voter-eligibility-annual",
+    doc: "14-elections.md",
+    line: 1390,
+    anchor: "Election Settings, Voter Eligibility, with Annual meeting chosen",
+    alt: "Election Settings on Voter Eligibility with Annual meeting chosen: the Use different rules at the annual meeting switch, off, and the line saying the annual meeting uses the regular business meeting rules, above the membership tier rules",
+    route: "/elections/settings?tab=eligibility",
+    expect: "Use different rules at the annual meeting",
+    // Annual meeting is a view switch, not a setting, so choosing it saves
+    // nothing. The switch is left as the demo has it (off): turning it on
+    // would save an annual rule set for the whole department.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Annual meeting", exact: true })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText(
+          "The annual meeting uses the regular business meeting rules.",
+        )
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    viewport: { width: 1440, height: 1100 },
+    fullPage: false,
+  },
+  {
+    id: "14-32-voting-eligibility-card",
+    doc: "14-elections.md",
+    line: 544,
+    anchor:
+      "A member's profile as an officer who manages elections, clipped to the Voting eligibility card",
+    alt: "The Voting eligibility card on a member's profile: Member type, Became this type and the outcome for each kind of meeting, then Override for this member with Count the wait from, Waive the waiting period, Reason and Save override",
+    route: "/members",
+    expect: "Count the wait from",
+    // Opened and read only: nothing is typed, so no override is saved.
+    prepare: async (page) => {
+      const { body } = await apiFromPage(page, "GET", "/users?limit=200");
+      const users = Array.isArray(body)
+        ? body
+        : (body?.users ?? body?.items ?? []);
+      const member = users.find(
+        (user) => user.username === DEMO_MEMBER_CREDENTIALS.username,
+      );
+      if (!member) throw new Error("14-32: the demo member is not listed");
+      await page.goto(new URL(`/members/${member.id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .locator("[data-testid='voting-eligibility-fields']")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "section[aria-labelledby='voting-eligibility-heading']",
+    allowEmptyState:
+      'Matches "No waiting period": the demo department sets none, which is ' +
+      "the default the guide describes, and the card is the subject.",
+  },
+  {
+    id: "14-33-ballot-send-progress",
+    doc: "14-elections.md",
+    line: 732,
+    anchor: "The Send Ballot Emails window while the background send runs",
+    alt: "The Send Ballot Emails window while the send runs: the note that a large roster can take a few minutes and that the send carries on if you leave the page, and the button reading Sending",
+    route: "/elections",
+    viewport: { width: 1280, height: 1000 },
+    // The send is answered by a job that never finishes, as 14-29 does for the
+    // package: no ballot is minted and no email is attempted.
+    beforeNavigate: (page) => mockBallotSend(page, "running"),
+    prepare: async (page) => {
+      await openBallotSendDialog(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Send Ballots", exact: true })
+        .click();
+      await page
+        .getByText("A large roster can take a few minutes.")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div[role='dialog']",
+    expect: "If you leave this page the send carries on",
+  },
+  {
+    id: "14-34-ballot-send-refused",
+    doc: "14-elections.md",
+    line: 732,
+    anchor: "__paired-with-14-33__",
+    alt: "The Send Ballot Emails window refusing a second send: Ballot emails for this election are already being sent. Wait for that send to finish before sending again.",
+    route: "/elections",
+    viewport: { width: 1280, height: 1000 },
+    // The start request is answered with the server's own 409 wording, as a
+    // send already running for the election would be. Nothing is sent.
+    beforeNavigate: (page) => mockBallotSend(page, "refused"),
+    prepare: async (page) => {
+      await openBallotSendDialog(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Send Ballots", exact: true })
+        .click();
+      await page
+        .getByText("are already being sent")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div[role='dialog']",
+    expect: "Wait for that send to finish before sending again.",
+  },
+  {
     id: "14-24-ballot-send-skipped",
     doc: "14-elections.md",
     line: 352,
@@ -16174,7 +16389,12 @@ export const SHOTS = [
     alt: "The Already an applicant warning: the person is already an active applicant with this email, naming their pipeline and stage, with Go back and Open existing applicant",
     route: "/prospective-members",
     expect: "Already an applicant",
-    fullPage: false,
+    // The warning's own dialog: a viewport shot left the stable scrollbar
+    // gutter unpainted beside the overlay, which the edge audit flags.
+    selector: "[role='dialog']:has-text('Already an applicant')",
+    allowEmptyState:
+      'Matches "No specific role", the Target Role picker\'s own default ' +
+      "behind the warning; the warning is the subject.",
     // Nothing is created: the warning answers before the create request,
     // and the cleanup takes Go back.
     prepare: async (page) => {
@@ -16207,6 +16427,300 @@ export const SHOTS = [
       if (await back.isVisible().catch(() => false)) await back.click();
       await page.keyboard.press("Escape");
     },
+  },
+  // ── 15 backlog (2026-11-02): follow-up forms, case managers, emails ──
+  //
+  // Built on the Junior Firefighter Pipeline that `seed_backlog_15_follow_up`
+  // creates, so the default pipeline and every earlier 15-* image stay as
+  // they were. Stage editors are opened and closed unsaved; boxes ticked in
+  // them are ticked in the browser only.
+  {
+    id: "15-31-my-applicants",
+    doc: "15-prospective-members.md",
+    line: 1314,
+    anchor: "My Applicants as a member with no recruitment permission",
+    alt: "My Applicants for a member with no recruitment permission: Mateo Alvarez on Confirm Your Details with the Case manager badge, Grace Liu on Interest Form Received with the Interviewer badge, each with Open and Interview",
+    route: "/prospective-members/my-applicants",
+    // Callum Frazier holds no prospective_members permission; the seeder
+    // assigns him to two Junior Firefighter applicants.
+    auth: "forwardee",
+    expect: "Applicants you are assigned to as case manager or interviewer.",
+    prepare: async (page) => {
+      await page.getByText("Mateo Alvarez").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    id: "15-32-case-manager-dialog",
+    doc: "15-prospective-members.md",
+    line: 1316,
+    anchor: "The applicant dialog opened from My Applicants by a case manager",
+    alt: "Mateo Alvarez's applicant dialog as his case manager: Callum Frazier named as case manager, and an action row offering Interview, Back, Withdraw, Skip and Advance, with no Hold or Reject",
+    route: "/prospective-members/my-applicants",
+    auth: "forwardee",
+    expect: { selector: "button[title='Withdraw application']" },
+    prepare: async (page) => {
+      const card = page.locator("li.card").filter({ hasText: "Mateo Alvarez" });
+      await card.getByRole("button", { name: "Open", exact: true }).click({
+        timeout: 15_000,
+      });
+      const dialog = page.getByRole("dialog", { name: "Applicant details" });
+      await dialog.waitFor({ timeout: 15_000 });
+      await dialog
+        .locator("button[title='Withdraw application']")
+        .waitFor({ timeout: 15_000 });
+      if (
+        await dialog
+          .locator("button[title*='Hold'], button[title*='Reject']")
+          .count()
+      ) {
+        throw new Error("15-32: a case manager was offered Hold or Reject");
+      }
+      await page.waitForTimeout(800);
+    },
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
+    allowEmptyState:
+      'Matches "No documents yet" in the drawer: an applicant two stages in ' +
+      "has uploaded nothing, and the action row is the subject.",
+  },
+  {
+    id: "15-33-assigned-section",
+    doc: "15-prospective-members.md",
+    line: 1318,
+    anchor: "The Assigned section of an applicant's drawer as a coordinator",
+    alt: "The Assigned section of Mateo Alvarez's drawer: Callum Frazier as case manager, with the control to assign another member",
+    route: "/prospective-members",
+    expect: "Callum Frazier",
+    prepare: async (page) => {
+      await openReinstatementApplicantIn(
+        "Junior Firefighter Pipeline",
+        "Mateo Alvarez",
+      )(page);
+    },
+    selector:
+      "div[aria-label='Applicant details'] div.p-4:has(> h3:has-text('Assigned'))",
+  },
+  {
+    id: "15-34-follow-up-drawer-send-now",
+    doc: "15-prospective-members.md",
+    line: 1192,
+    anchor:
+      "The applicant drawer's Follow-up Forms section for an applicant on",
+    alt: "The Follow-up Forms section of Mateo Alvarez's drawer: Confirm Your Details, Applicant Details Confirmation, Not sent, with Send now",
+    route: "/prospective-members",
+    expect: "Send now",
+    // Not sent is the real state: the demo sends no email, so the link email
+    // the stage tried to send on arrival never went out. Send now is not
+    // pressed.
+    prepare: openReinstatementApplicantIn(
+      "Junior Firefighter Pipeline",
+      "Mateo Alvarez",
+    ),
+    selector:
+      "div[aria-label='Applicant details'] div.p-4:has(> h3:has-text('Follow-up Forms'))",
+  },
+  {
+    id: "15-35-follow-up-stage-config",
+    doc: "15-prospective-members.md",
+    line: 1113,
+    anchor: "The stage settings of a Follow-up Form stage",
+    alt: "Editing the Confirm Your Details stage, a Follow-up Form stage: the Form picker set to Applicant Details Confirmation, the Message in the link email, and Advance the applicant when they submit the form ticked",
+    route: "/prospective-members/settings",
+    expect: "Advance the applicant when they submit the form",
+    viewport: { width: 1280, height: 2000 },
+    prepare: openStageEditor(
+      "Junior Firefighter Pipeline",
+      "Confirm Your Details",
+    ),
+    selector: '[aria-labelledby="stage-config-modal-title"] > div',
+  },
+  {
+    id: "15-36-election-vote-follow-up-answers",
+    doc: "15-prospective-members.md",
+    line: 1273,
+    anchor:
+      "An Election Vote stage's settings with Include follow-up form answers",
+    alt: "Election Package Contents on the Membership Vote stage, with Include follow-up form answers ticked and its note that answers to sensitive questions are never included",
+    route: "/prospective-members/settings",
+    expect: "Answers to questions marked sensitive are never included.",
+    viewport: { width: 1280, height: 2400 },
+    prepare: async (page) => {
+      await openStageEditor(
+        "Volunteer Membership Pipeline",
+        "Membership Vote",
+      )(page);
+      const box = page
+        .locator("label")
+        .filter({ hasText: "Include follow-up form answers" })
+        .locator("input[type='checkbox']");
+      if (!(await box.isChecked())) await box.check();
+      await box.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+    selector:
+      "[aria-labelledby='stage-config-modal-title'] div.border-t:has(> h4:text-is('Election Package Contents'))",
+  },
+  {
+    id: "15-37-notify-prospect",
+    doc: "15-prospective-members.md",
+    line: 227,
+    anchor: "The Prospect Communication part of a stage's settings",
+    alt: "Prospect Communication in a stage's settings: Notify prospect when this stage is completed, ticked, with its note that the applicant is emailed when they advance past the stage, and Show this stage on the public status page",
+    route: "/prospective-members/settings",
+    expect: "Notify prospect when this stage is completed",
+    viewport: { width: 1280, height: 2000 },
+    prepare: async (page) => {
+      await openStageEditor(
+        "Volunteer Membership Pipeline",
+        "Application Review",
+      )(page);
+      const box = page
+        .locator("label")
+        .filter({ hasText: "Notify prospect when this stage is completed" })
+        .locator("input[type='checkbox']");
+      if (!(await box.isChecked())) await box.check();
+      await page.waitForTimeout(400);
+    },
+    selector:
+      "[aria-labelledby='stage-config-modal-title'] div.border-t:has(h3:text-is('Prospect Communication'))",
+  },
+  {
+    id: "15-38-email-stage-next-meeting",
+    doc: "15-prospective-members.md",
+    line: 246,
+    anchor:
+      "An Automated Email stage's Next Meeting Details whose saved meeting has passed",
+    alt: "Next Meeting Details on the Welcome Packet Email stage: Pull from upcoming event set to Next Business Meeting, and the preview reading The saved event has passed or was cancelled. The email will include the next one instead, above the next business meeting",
+    route: "/prospective-members/settings",
+    expect: "The saved event has passed or was cancelled.",
+    viewport: { width: 1280, height: 2400 },
+    // The seeder saved a business meeting that has already happened on this
+    // stage, which is what makes the preview fall back.
+    prepare: openStageEditor(
+      "Junior Firefighter Pipeline",
+      "Welcome Packet Email",
+    ),
+    selector:
+      "[aria-labelledby='stage-config-modal-title'] div.space-y-3.rounded-lg:has(#email-meeting-event-type)",
+  },
+  {
+    id: "15-39-email-stage-template-picker",
+    doc: "15-prospective-members.md",
+    line: 248,
+    anchor: "The Automated Email stage editor with the Email Template picker",
+    alt: "Editing the Welcome Packet Email stage: the Email Template picker at the top reading None, build the email from the sections below, its note on the template variables, and the Email Subject and sections underneath",
+    route: "/prospective-members/settings",
+    expect: "Custom templates from Communications",
+    viewport: { width: 1280, height: 1300 },
+    prepare: async (page) => {
+      await openStageEditor(
+        "Junior Firefighter Pipeline",
+        "Welcome Packet Email",
+      )(page);
+      await page
+        .locator("label[for='stage-email-template']")
+        .evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    id: "15-41-status-follow-up-card",
+    doc: "15-prospective-members.md",
+    line: 1282,
+    anchor: "An applicant's status page on a Follow-up Form stage",
+    alt: "Mateo Alvarez's status page on the Confirm Your Details stage: the card reading Complete your form: Applicant Details Confirmation, The department needs a few more details from you, and Open the form",
+    // As 15-28: the lookup is answered from Mateo Alvarez's record, with the
+    // card the server builds for an applicant whose link was sent.
+    route: "/login",
+    auth: "anonymous",
+    expect: "Open the form",
+    prepare: async (page, { lookupPage }) => {
+      const { fixture } = await statusFixtureFor(
+        await lookupPage(),
+        "mateo.alvarez@example.org",
+      );
+      fixture.current_stage_action = {
+        type: "follow_up_form",
+        label: "Complete your form: Applicant Details Confirmation",
+        url: `/application-form/${FOLLOW_UP_FIXTURE_TOKEN}`,
+        message: "The department needs a few more details from you.",
+      };
+      await openStatusFixture(page, "demo-status-link-fixture-only", fixture);
+    },
+    fullPage: true,
+  },
+  {
+    id: "15-13-application-status",
+    doc: "15-prospective-members.md",
+    line: 1100,
+    anchor: "Screenshot of the public application status page",
+    alt: "Public application status page showing an applicant's progress through the pipeline, with the Your next step card naming the next business meeting, its time in the department's time zone, Add to calendar and Get directions",
+    // Priya Deshmukh sits on the Associate Member Pipeline's meeting stage,
+    // whose Auto-Link Event Type is Business Meeting. As 15-28, the lookup is
+    // answered from her record; the meeting is the next published business
+    // meeting, as the server chooses it.
+    route: "/login",
+    auth: "anonymous",
+    expect: "Your next step:",
+    prepare: async (page, { lookupPage }) => {
+      const admin = await lookupPage();
+      const { fixture, detail } = await statusFixtureFor(
+        admin,
+        "priya.deshmukh@example.org",
+      );
+      const events = (await apiFromPage(admin, "GET", "/events?limit=100"))
+        .body;
+      const now = new Date().toISOString();
+      const meeting = (events?.events ?? events?.items ?? events ?? [])
+        .filter(
+          (e) =>
+            e.event_type === "business_meeting" &&
+            !e.is_draft &&
+            !e.is_cancelled &&
+            String(e.start_datetime) > now,
+        )
+        .sort((a, b) =>
+          String(a.start_datetime).localeCompare(String(b.start_datetime)),
+        )[0];
+      if (!meeting) throw new Error("15-13: no upcoming business meeting");
+      fixture.next_meeting = {
+        stage_name: detail.current_step?.name ?? "Attend a Business Meeting",
+        title: meeting.title,
+        start_datetime: meeting.start_datetime,
+        end_datetime: meeting.end_datetime ?? null,
+        timezone: "America/New_York",
+        location_name: meeting.location_name ?? meeting.location ?? null,
+        location_address: null,
+      };
+      await openStatusFixture(page, "demo-status-link-fixture-only", fixture);
+    },
+    fullPage: true,
+  },
+  {
+    id: "15-42-applicant-email-templates",
+    doc: "15-prospective-members.md",
+    line: 1330,
+    anchor: "Email Templates filtered to Application",
+    alt: "Email Templates filtered to Application: the Prospective Members group listing Application Step Completed, Application Status Link and the other applicant templates",
+    route: "/communications/email-templates",
+    expect: "Application Status Link",
+    prepare: async (page) => {
+      await page
+        .getByPlaceholder(/filter templates/i)
+        .first()
+        .fill("Application", { timeout: 10_000 });
+      await page
+        .getByText("Application Step Completed")
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    // The template list only: the editor beside it opens on whichever
+    // template is first, which is not the subject.
+    viewport: { width: 1440, height: 1700 },
+    selector: "div.space-y-1:has(> h3:text-is('Email Templates'))",
   },
   {
     id: "15-09-bulk-action-result",
@@ -16940,6 +17454,7 @@ export const SHOTS = [
       "Screenshot of the election detail page showing voter eligibility breakdown",
     alt: "An election's voter-eligibility panel: which membership types may vote, and how many members each holds",
     route: "/elections",
+    expect: "Will Receive Ballot",
     prepare: async (page) => {
       // `?tab=eligibility` only started working on 2026-08-11 — plain state
       // before that, so this shot would have silently captured the Ballot tab.
@@ -16950,14 +17465,21 @@ export const SHOTS = [
         (election) => election.title === "Annual Officer Elections",
       )(page);
       await page.waitForTimeout(2_500);
-      // The roster is collapsed on arrival — it is a member-by-member list and
-      // the tab does not assume you want it open. The breakdown the caption
-      // names lives inside it.
-      await page
+      // The roster now opens expanded (14-07 says the same), so an
+      // unconditional click on its header folded it shut and the frame showed
+      // the "Rules every voter must meet" card above a closed bar. Opened only
+      // if it arrives closed.
+      const header = page
         .getByRole("button", { name: /Voter Eligibility Roster/ })
-        .first()
-        .click({ timeout: 15_000 });
-      await page.waitForTimeout(2_000);
+        .first();
+      await header.waitFor({ timeout: 15_000 });
+      if ((await header.getAttribute("aria-expanded")) !== "true") {
+        await header.click({ timeout: 15_000 });
+      }
+      await page.getByText("Will Receive Ballot").first().waitFor({
+        timeout: 15_000,
+      });
+      await page.waitForTimeout(1_000);
       // Two artifacts of driving the page rather than reading it: the click
       // leaves focus on the roster header, which reveals the "Skip to main
       // content" link, and a full-page shot paints the fixed sidebar once at
@@ -18459,6 +18981,12 @@ export const SHOTS = [
         { timeout: 20_000 },
       );
       await print.click();
+      // Since 2026-10-27 a browser print first shows the Before you print
+      // checklist (05-147) in a browser that has not been told to skip it;
+      // carry on through it as a quartermaster would.
+      await page
+        .getByRole("button", { name: "Open print dialog" })
+        .click({ timeout: 10_000 });
       await page.getByText("Did the labels print correctly?").waitFor();
       await page.evaluate(() => window.scrollTo(0, 0));
     },
@@ -21570,7 +22098,7 @@ export const SHOTS = [
     line: 570,
     anchor:
       'Quartermaster at /inventory/admin/kits: the "Issue <kit>?" confirmation',
-    alt: "The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte",
+    alt: "The Issue New Recruit PPE Kit? review after picking Rafael Duarte: Structural Coat resolved to M from his size on file (Member's size: M), the single-size lines asking for a choice, and Don't issue and Issue to Rafael Duarte",
     route: "/inventory/admin/kits",
     expect: "Don't issue",
     selector: '[data-testid="modal-panel"]',
@@ -23303,19 +23831,28 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 2765,
     anchor: "at 390px: the apparatus detail header and pinned tabs",
-    alt: "One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header",
-    expect: "Medic 3",
-    route: "/apparatus",
+    alt: "Medic 3 opened from Fleet Readiness on a phone: the unit name and its readiness (No checks yet) on one row, the recent-check strip at full width, and the Checks, Inventory, Findings and Check log tabs under the header",
+    expect: { selector: "[role='tab']" },
+    allowEmptyState:
+      "M-3 has no completed checks, which its readiness badge and the Checks tab say; the layout is the subject.",
+    route: "/inventory/checklists",
     viewport: "mobile",
+    // The rig as Fleet Readiness opens it (/inventory/checklists/apparatus/:id),
+    // which is the screen the guide describes; /apparatus/:id is the Apparatus
+    // module's vehicle record, a different page this shot pictured until
+    // 2026-11-02.
     prepare: async (page) => {
       await openFirstFromApi(
         "/apparatus",
-        (id) => `/apparatus/${id}`,
+        (id) => `/inventory/checklists/apparatus/${id}`,
         "apparatus",
         (rig) => (rig.unitNumber ?? rig.unit_number) === "M-3",
       )(page);
-      await page.getByText("Vehicle Details").waitFor({ timeout: 20_000 });
+      await page
+        .getByRole("tab", { name: "Checks" })
+        .waitFor({ timeout: 20_000 });
       await hideScanNotice(page);
+      await page.waitForTimeout(600);
     },
     fullPage: false,
   },
@@ -23327,8 +23864,20 @@ export const SHOTS = [
     alt: "The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons",
     route: "/inventory/admin/checklists/supply",
     viewport: "mobile",
-    expect: "Add stock",
-    prepare: hideScanNotice,
+    expect: "Needs restock",
+    allowEmptyState:
+      '"No stock" is a worklist row with nothing on the shelf to restock from, which the worklist exists to show.',
+    // The page now opens under the Inventory Administration header, which
+    // fills a phone's first screen; the worklist starts below it, so the
+    // frame is scrolled to the count chips.
+    prepare: async (page) => {
+      const chip = page.getByText("Needs restock").first();
+      await chip.waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await chip.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -150));
+      await page.waitForTimeout(500);
+    },
     fullPage: false,
   },
   {
@@ -23340,6 +23889,8 @@ export const SHOTS = [
     route: "/inventory/admin/checklists/supply",
     viewport: "mobile",
     expect: "Quantity",
+    allowEmptyState:
+      '"No stock" is a worklist row behind the sheet, not an empty page.',
     // Opened and photographed; nothing is added.
     prepare: async (page) => {
       await page
@@ -24486,7 +25037,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3041,
     anchor: "the Expiring tab with the shelf/truck split on its tiles",
-    alt: "The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile split into shelf and on-trucks counts, and the list carrying a shelf lot beside the tourniquet on Rescue 7",
+    alt: "The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 2, 1 shelf and 1 on trucks, the Recalled lots panel, and the list carrying the recalled cannula lot first, a shelf lot and the tourniquet on Rescue 7 with Swap or restock",
     route: "/medical-supplies",
     expect: "on trucks",
     viewport: { width: 1440, height: 1100 },
@@ -24739,16 +25290,24 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 1870,
     anchor: "The NFC Tag Register as a quartermaster",
-    alt: "The NFC Tag Register as a quartermaster: tags on coats, a cylinder and a shelf with what each names, its status (one Lost) and the last time it was tapped, with the kind, status and search filters and CSV",
+    alt: "The NFC Tag Register as a quartermaster: tags on a cylinder and on coats with what each names, its status (one Lost, offering Mark found) and the last time it was tapped, each with Mark lost, Move and Unlink, and two tags ticked with the 2 selected bar (Mark lost, Mark found, Clear selection) above the list",
     route: "/inventory/admin/nfc/tags",
-    expect: "NFC Tag Register",
+    expect: { selector: "[aria-label='Actions for selected tags']" },
+    viewport: { width: 1440, height: 1000 },
     fullPage: false,
+    // Two tags ticked to bring up the selection bar. Ticking is page state
+    // only: nothing is marked lost or found.
     prepare: withInventoryNfc(async (page) => {
-      await page
-        .getByRole("checkbox", { name: /^Select tag ending / })
-        .first()
-        .waitFor({ timeout: 20_000 });
+      const boxes = page.getByRole("checkbox", { name: /^Select tag ending / });
+      await boxes.first().waitFor({ timeout: 20_000 });
+      await boxes.nth(0).check();
+      await boxes.nth(1).check();
       await hideScanNotice(page);
+      await page
+        .locator("h1, h2", { hasText: "NFC Tag Register" })
+        .last()
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(400);
     }),
     cleanup: disableInventoryNfc,
   },
@@ -24783,7 +25342,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3196,
     anchor: "Find a lot on the Medical Supplies Expiring tab",
-    alt: "Find a lot on the Medical Supplies Expiring tab: the lot number GZ-9910 typed, the shelf lot it found, and the Recall lot button for it",
+    alt: "Find a lot on the Medical Supplies Expiring tab: the lot number HG-2607 typed, the Hemostatic Gauze lot it found on the shelf, and the Recall lot button for it",
     route: "/medical-supplies",
     expect: "with a lot number containing",
     fullPage: false,
@@ -24791,9 +25350,9 @@ export const SHOTS = [
       await page
         .getByRole("tab", { name: /^Expiring/ })
         .click({ timeout: 15_000 });
-      await page.getByLabel("Find a lot").fill("GZ-9910");
+      await page.getByLabel("Find a lot").fill("HG-2607");
       await page.getByRole("button", { name: "Find", exact: true }).click();
-      const recall = page.getByRole("button", { name: /^Recall lot GZ-9910/ });
+      const recall = page.getByRole("button", { name: /^Recall lot HG-2607/ });
       await recall.waitFor({ timeout: 15_000 });
       await hideScanNotice(page);
       await page
@@ -24807,20 +25366,22 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3200,
     anchor: "The Recall this lot dialog with a reason typed",
-    alt: "The Recall this lot dialog for Gauze lot GZ-9910, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot",
+    alt: "The Recall this lot dialog for Hemostatic Gauze lot HG-2607, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot",
     route: "/medical-supplies",
     expect: "stops counting as stock",
     fullPage: false,
     // Photographed with the reason typed and never submitted: Cancel in the
     // cleanup, so the gauze lot the other medical shots count stays stock.
+    // It has to be a medical supply's lot: the supply-tracking gauze (GZ-*) is
+    // filed as consumable gear, which the lookup leaves out.
     prepare: async (page) => {
       await page
         .getByRole("tab", { name: /^Expiring/ })
         .click({ timeout: 15_000 });
-      await page.getByLabel("Find a lot").fill("GZ-9910");
+      await page.getByLabel("Find a lot").fill("HG-2607");
       await page.getByRole("button", { name: "Find", exact: true }).click();
       await page
-        .getByRole("button", { name: /^Recall lot GZ-9910/ })
+        .getByRole("button", { name: /^Recall lot HG-2607/ })
         .click({ timeout: 15_000 });
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("Reason").fill("Manufacturer notice 2026-121");
@@ -24839,7 +25400,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3225,
     anchor: "The Recalled lots panel on the Expiring tab",
-    alt: "The Recalled lots panel on the Medical Supplies Expiring tab: Normal Saline lot NS-4471, the date it was recalled, how many are still to pull and Lift recall",
+    alt: "The Recalled lots panel on the Medical Supplies Expiring tab: Nasal Cannula lot NC-2519, the date it was recalled, how many are still to pull and Lift recall",
     route: "/medical-supplies",
     expect: { selector: "section[aria-label='Recalled lots'] h3" },
     prepare: async (page) => {
@@ -24847,7 +25408,7 @@ export const SHOTS = [
         .getByRole("tab", { name: /^Expiring/ })
         .click({ timeout: 15_000 });
       const panel = page.getByRole("region", { name: "Recalled lots" });
-      await panel.getByText("NS-4471").waitFor({ timeout: 15_000 });
+      await panel.getByText("NC-2519").waitFor({ timeout: 15_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
@@ -24868,6 +25429,253 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page.waitForTimeout(1200);
       await hideScanNotice(page);
+    },
+  },
+  {
+    id: "05-146-print-labels-menu",
+    doc: "05-inventory.md",
+    line: 1951,
+    anchor:
+      "The Print Labels menu opened beside Export on the inventory items list",
+    alt: "The Print Labels menu opened beside Export on the inventory items list: This list with its item count, Items that need a label with its count, and Choose by category or location",
+    route: "/inventory/items",
+    expect: "Choose by category or location",
+    allowEmptyState:
+      '"No location" is the location summary card and filter option, not an empty list.',
+    fullPage: false,
+    // Opened and photographed; choosing nothing leaves the list as it was.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Print Labels", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Choose by category or location")
+        .waitFor({ timeout: 10_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    id: "05-147-before-you-print",
+    doc: "05-inventory.md",
+    line: 2063,
+    anchor: 'The Before you print window for a Rollo / Thermal 2" x 1" roll',
+    alt: 'The Before you print window for a 2" x 1" roll: choose the label printer, paper size 2" x 1" under More settings, margins None and scale 100%, with the Don\'t show again box, Back and Open print dialog',
+    route: "/inventory/print-labels",
+    expect: "Open print dialog",
+    selector: '[data-testid="modal-panel"]',
+    // The checklist sits between Print Labels and the browser's print dialog,
+    // so it is photographed and answered Back: nothing prints and nothing is
+    // marked labelled. The label size is kept in this browser's storage and
+    // saved on the administrator's position, which the other label shots
+    // read, so the cleanup puts the default (Dymo 30252) back.
+    prepare: async (page) => {
+      await withIdsFromApi("/inventory/items?limit=3", "items", 3)(page);
+      await page
+        .getByRole("button", { name: "Settings", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Rollo \/ Thermal 2" x 1"/ })
+        .click({ timeout: 10_000 });
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("button")].some(
+            (b) => /Print\s*Labels/.test(b.textContent ?? "") && !b.disabled,
+          ),
+        null,
+        { timeout: 20_000 },
+      );
+      await page
+        .getByRole("button", { name: /Print\s*Labels/ })
+        .first()
+        .click();
+      await page
+        .getByRole("button", { name: "Open print dialog" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const back = page.getByRole("button", { name: "Back", exact: true });
+      if (await back.isVisible().catch(() => false)) await back.click();
+      // Settings stays open behind the window, so the size cards are there.
+      await page
+        .getByRole("button", { name: /^Dymo 30252/ })
+        .click({ timeout: 5_000 });
+      // The size is also saved on the administrator's position, 500ms after
+      // the last change; leaving sooner would keep 2" x 1" for 05-69 and
+      // 05-85 on the next run.
+      await page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/v1/inventory/label-preset") &&
+          r.request().method() === "PUT",
+        { timeout: 5_000 },
+      );
+    },
+  },
+  {
+    id: "05-148-folded-product-rename",
+    doc: "05-inventory.md",
+    line: 429,
+    anchor: "A folded product row on the inventory items list",
+    alt: "The inventory items list with the folded Structural Coat row: 5 loaded, its sizes L, M, S, XL and XXL on one line, and the pencil Rename button focused at the end of the row",
+    route: "/inventory/items",
+    allowEmptyState:
+      '"No location" is the location summary card and filter option, not an empty list.',
+    expect: { selector: "button[aria-label='Rename Structural Coat']" },
+    fullPage: false,
+    // Focus only, so the button's ring marks it; nothing is renamed.
+    prepare: async (page) => {
+      await unpinEverything(page);
+      const rename = page.getByRole("button", {
+        name: "Rename Structural Coat",
+      });
+      await rename.waitFor({ timeout: 20_000 });
+      await rename.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await rename.focus();
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-149-rename-product-dialog",
+    doc: "05-inventory.md",
+    line: 431,
+    anchor: "The Rename product window opened from a folded product row",
+    alt: "The Rename product window for Structural Coat: renames it on every size and variant while the size, colour and style part of each name stays, with Product name, Cancel and Rename",
+    route: "/inventory/items",
+    expect: "Product name",
+    selector: '[data-testid="modal-panel"]',
+    // Opened and cancelled: the product keeps its name.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Rename Structural Coat" })
+        .click({ timeout: 20_000 });
+      await page.getByLabel("Product name").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    id: "05-150-builder-crew-view",
+    doc: "05-inventory.md",
+    line: 3052,
+    anchor: "The Crew view panel beside the checklist builder",
+    alt: "The Crew view panel beside the checklist builder for Engine Daily Check: What the crew sees, updating as you edit, the checklist inside the phone frame as a crew gets it, and the expand button",
+    route: "/inventory/admin/checklists",
+    expect: "What the crew sees",
+    selector: 'div.card:has(h3:text-is("What the crew sees"))',
+    viewport: { width: 1440, height: 1300 },
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page
+        .getByRole("button", { name: "Crew view", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("heading", { name: "What the crew sees" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "05-151-builder-crew-view-full",
+    doc: "05-inventory.md",
+    line: 3054,
+    anchor: "The crew view opened full size from the builder",
+    alt: "The crew view opened full size from the checklist builder: Engine Daily Check in the large phone frame, as a crew sees it, with the round close button",
+    route: "/inventory/admin/checklists",
+    expect: { selector: "[aria-label='Crew view, full size']" },
+    viewport: { width: 1440, height: 1200 },
+    fullPage: false,
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page
+        .getByRole("button", { name: "Crew view", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Open crew view full size" })
+        .click({ timeout: 20_000 });
+      await page
+        .locator("[aria-label='Crew view, full size']")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      const close = page.getByRole("button", { name: "Close preview" });
+      if (await close.isVisible().catch(() => false)) await close.click();
+    },
+  },
+  {
+    id: "05-152-items-low-stock-notice",
+    doc: "05-inventory.md",
+    line: 1292,
+    anchor: "Inventory Items opened from the low-stock email link",
+    alt: "Inventory Items opened from the low-stock email link: the notice Showing only items at or below their reorder point with Show all items, above Firefighting Gloves, the one gear item at or below its reorder point",
+    // The address the email's "View low-stock gear and uniforms" link opens.
+    route: "/inventory/items?low_stock=true",
+    expect: "Showing only items at or below their reorder point",
+    allowEmptyState:
+      '"No location" is the location summary card and filter option, not an empty list.',
+    viewport: { width: 1440, height: 1100 },
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByText("Firefighting Gloves")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-153-checklist-settings-phone",
+    doc: "05-inventory.md",
+    line: 3004,
+    anchor: "Checklist settings on a phone",
+    alt: "Checklist Settings on a phone: the compact page top, then Start-of-shift and End-of-shift checklists as rows with their switches, and Opens before the start and Closes after the end with their hour boxes",
+    route: "/inventory/admin/checklists/settings",
+    expect: "Start-of-shift checklists",
+    viewport: "mobile",
+    fullPage: true,
+    prepare: async (page) => {
+      await page
+        .getByText("Start-of-shift checklists")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-154-medical-expiring-lookahead",
+    doc: "05-inventory.md",
+    line: 3221,
+    anchor: "The Expiring tab of Medical Supplies looking ahead 90 days",
+    alt: "The Expiring tab of Medical Supplies with Look ahead set to 90 days: the recalled Nasal Cannula lot listed first and marked Recalled, then shelf lots and the stock on trucks, each truck row naming its apparatus and compartment with a Swap or restock link",
+    route: "/medical-supplies",
+    expect: { selector: "#medical-expiry-window" },
+    viewport: { width: 1440, height: 1300 },
+    fullPage: false,
+    // The window is page state, not saved between visits.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Expiring/ })
+        .click({ timeout: 15_000 });
+      await page.locator("#medical-expiry-window").selectOption("90");
+      await page
+        .getByRole("cell", { name: "Recalled", exact: true })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page
+        .locator("#medical-expiry-window")
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -16));
+      await page.waitForTimeout(400);
     },
   },
   {
@@ -25620,6 +26428,72 @@ async function openPackageAndSend(page) {
   });
   await send.waitFor({ timeout: 15_000 });
   await send.click();
+}
+
+/**
+ * Answers a ballot send the way the server would, without one: "running" is a
+ * queued job that never finishes, "refused" is the 409 the server returns
+ * while another send for the election is running (SEND_IN_PROGRESS_DETAIL in
+ * ballot_send_jobs.py, copied word for word). No token is minted and no email
+ * is attempted, so the Line Officer Election stays as seeded.
+ */
+async function mockBallotSend(page, outcome) {
+  const job = {
+    id: "demo-ballot-job",
+    election_id: "demo",
+    kind: "ballots",
+    status: "running",
+    created_at: new Date().toISOString(),
+    started_at: new Date().toISOString(),
+    finished_at: null,
+    result: null,
+    error: null,
+  };
+  await page.route(/\/elections\/[^/]+\/ballot-send-jobs$/, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill(
+      outcome === "refused"
+        ? {
+            status: 409,
+            contentType: "application/json",
+            body: JSON.stringify({
+              detail:
+                "Ballot emails for this election are already being sent. " +
+                "Wait for that send to finish before sending again.",
+            }),
+          }
+        : {
+            status: 202,
+            contentType: "application/json",
+            body: JSON.stringify({ ...job, status: "queued" }),
+          },
+    );
+  });
+  await page.route(/\/ballot-send-jobs\/demo-ballot-job$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(job),
+    });
+  });
+}
+
+async function openBallotSendDialog(page) {
+  await openFirstFromApi(
+    "/elections?limit=50",
+    (id) => `/elections/${id}`,
+    "elections",
+    (election) =>
+      (election.title ?? "") === "Line Officer Election — 2027 Term",
+  )(page);
+  await page
+    .getByRole("button", { name: /^(Send|Resend) Ballot Emails$/ })
+    .first()
+    .click({ timeout: 20_000 });
+  await page.getByRole("dialog").waitFor({ timeout: 15_000 });
 }
 
 /**
