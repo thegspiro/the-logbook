@@ -83,10 +83,14 @@ describe('EvaluationsPage', () => {
     listPeriods.mockResolvedValue([period()]);
   });
 
-  it('says email notices have not arrived yet and points to where evaluations are drafted', async () => {
+  it('points to where evaluations are drafted and where their emails are worded', async () => {
     renderWithRouter(<EvaluationsPage />);
-    expect(await screen.findByText(/Email notices are not yet available/)).toBeInTheDocument();
+    expect(await screen.findByText(/Where evaluations happen/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Evaluations' })).toHaveAttribute('href', '/reports/evaluations/conduct');
+    expect(screen.getByRole('link', { name: 'Email Templates' })).toHaveAttribute(
+      'href',
+      '/communications/email-templates'
+    );
   });
 
   it('shows each template with who it applies to and its version', async () => {

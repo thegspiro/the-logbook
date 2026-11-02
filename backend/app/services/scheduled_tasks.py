@@ -341,6 +341,17 @@ SCHEDULE = {
         "recommended_time": "08:10",
         "cron": "10 8 * * *",
     },
+    "evaluation_due_notices": {
+        "description": (
+            "Email the people an open performance-evaluation step waits on "
+            "when it is due soon (the template's reminder days) and once it is "
+            "overdue, the overdue notice also to evaluation managers (once per "
+            "step and notice — safe to run more than once a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:20",
+        "cron": "20 8 * * *",
+    },
     "grant_reminders": {
         "description": (
             "Email grant compliance-task reminders (to the assignee, else the "
@@ -7509,6 +7520,20 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "officer_directory_sync", "organizations": synced}
 
 
+async def run_evaluation_due_notices(db: AsyncSession) -> Dict[str, Any]:
+    """Send performance-evaluation deadline reminders and overdue notices.
+
+    Email only (CLAUDE.md pitfall #18). The rules, and the per-step stamps
+    that make a second run send nothing, are in
+    EvaluationNoticeService.send_due_notices, which commits or rolls back each
+    step on its own.
+    """
+    from app.services.evaluation_notice_service import EvaluationNoticeService
+
+    counts = await EvaluationNoticeService(db).send_due_notices()
+    return {"task": "evaluation_due_notices", **counts}
+
+
 async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     """Remind line owners before a draft year's budget request deadline.
 
@@ -8173,6 +8198,7 @@ TASK_RUNNERS = {
     "prospect_attendance_advance": run_prospect_attendance_advance,
     "prospect_follow_up_reminders": run_prospect_follow_up_reminders,
     "budget_request_reminders": run_budget_request_reminders,
+    "evaluation_due_notices": run_evaluation_due_notices,
     "grant_reminders": run_grant_reminders,
 }
 
@@ -8271,6 +8297,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "prospect_follow_up_reminders": 3600,
     # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
     "budget_request_reminders": 86400,
+    # Daily; idempotent per step through reminder_sent_at and
+    # overdue_notice_sent_at (EvaluationNoticeService.send_due_notices).
+    "evaluation_due_notices": 86400,
     # Daily; idempotent per (item, due date, reminder, member) through a sent-log.
     "grant_reminders": 86400,
     # Weekly
