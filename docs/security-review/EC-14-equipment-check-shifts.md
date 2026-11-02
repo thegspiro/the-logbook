@@ -4,20 +4,176 @@
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26
-(pass 12), 2026-10-29 (pass 13) · **PR:**
+(pass 12), 2026-10-29 (pass 13), 2026-11-02 (pass 14) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), pass 13 PR recorded in `PROGRESS.md`
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 14 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
-pass 10), `api/v1/endpoints/shift_completion.py` (21 routes),
+pass 10), `api/v1/endpoints/shift_completion.py` (22 routes, up from 21 —
+`GET /review-access`),
 `services/equipment_check_service.py` (6,934 L),
 `services/shift_completion_service.py` (2,134 L)
 **Frontend:** in-app (no dedicated module directory)
-**Migrations:** none this iteration (no schema change to this feature's own
-tables)
+**Migrations:** none this iteration to this feature's own tables (a
+concurrently-landed migration adds columns to `TrainingRequirement` for the
+new, out-of-scope Shift Evaluations feature — see Pass 14 below)
+
+---
+
+## Pass 14 (2026-11-02) — real delta (role-based report review, shift-evaluation credit hooks), 0 fixed, 0 new findings
+
+**Watchdog pickup.** Dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) confirmed unreachable via `ListAgents`
+("No reachable agents"). PR #3924 (Feature 13, Apparatus & NFC, pass 21) had
+just merged; a fresh `list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-` head branch. Rotation row 14 confirmed the next
+`⬜` by reading the table directly (rows 00–13 all `✅`).
+
+**Baseline** `44cec856c` (PR #3837's merge, pass 13). Re-synced to current
+`main` before writing up. `git log --no-merges 44cec856c..HEAD` restricted
+to this feature's declared backend files (`equipment_check.py`,
+`shift_completion.py`, `equipment_check_service.py`,
+`shift_completion_service.py`, `schemas/equipment_check.py`,
+`schemas/shift_completion.py`) returns exactly 3 commits, all read in full.
+
+### `e36813ce6` — "Shift reports: the department's reviewer role may review reports"
+
+`report_review_role` (an org setting, previously saved and read by nothing —
+`docs/KNOWN_LIMITATIONS.md`'s Scheduling item 2) is now wired: while review
+is required, a member holding the chosen position or operational rank
+(`REVIEW_ROLE_SLUGS["chief"]` covers `fire_chief`/`deputy_chief`/
+`assistant_chief`) may list, read and review pending/flagged reports,
+alongside existing `training.manage` holders. New dependency
+`require_report_reviewer` replaces `require_permission("training.manage")`
+on `get_pending_review_reports`, `get_flagged_reports`, `review_report`, and
+`batch_review_reports` — read as an **authorization widening**, not a
+permission-string weakening (checklist item 2): it ORs in a second,
+config-driven path rather than loosening the existing grant, and
+`training.manage` holders keep exactly what they had.
+
+**Separation of duties (checklist item: "the reviewer cannot be the
+subject")** is the interesting part, and it is handled correctly:
+`_not_about_reviewer(report, user)` exempts `training.manage` holders
+(pre-existing behavior, unchanged — a training manager could already review
+their own report before this commit; not introduced here) but blocks a role
+reviewer from reviewing, or even seeing in the queue, a report about
+themselves. Verified at all three sites:
+
+- `get_pending_review_reports`/`get_flagged_reports`: the queue is
+  post-filtered (`[r for r in reports if _not_about_reviewer(r, current_user)]`)
+  after the existing org-scoped fetch.
+- `review_report`: for a non-`training.manage` caller, the report is
+  re-fetched org-scoped (`service.get_report(report_id,
+current_user.organization_id)`) and refused (403) before the review write if
+  it's about the caller.
+- `batch_review_reports`: same per-item check inside the loop; a self-report
+  in the batch is counted `failed`, not silently skipped or 500'd.
+
+New route `GET /review-access` (lets the UI ask rather than guess) carries
+only `get_current_user` — no permission dependency — and is correctly
+registered in `tests/permissionless_route_baseline.txt`
+(`shift_completion.py::get_review_access`), matching the commit's own claim
+that it reveals no report. Dedicated tests
+(`backend/tests/test_shift_report_reviewer_role.py`, 6 test methods)
+exercise the grant, the chief-rank/position equivalence, a wrong role being
+refused, the setting being inert when review is off, training managers
+keeping access, and — directly — the self-review exclusion for the queue,
+single review, and batch review. All ran green (see Completion gate).
+
+No tenant-isolation change: every new check composes with, rather than
+replaces, the org-scoped fetch each call site already had.
+`docs/KNOWN_LIMITATIONS.md`'s Scheduling item 2 is already correctly updated
+("Resolved (2026-10-31)") — no doc staleness to fix here, unlike AP2-4 at
+pass 21.
+
+### `96d2c47ee` / `d4e4cabea` — Shift Evaluations feature's hooks into this file
+
+A new, separate "Shift Evaluations" feature (its own table
+`shift_evaluations`, service `shift_evaluation_service.py`, endpoints under
+`/training/shift-evaluations`, frontend pages under `pages/training/` and
+`pages/scheduling/ShiftEvaluation*`) is not itself in this feature's declared
+scope or in `PROGRESS.md`'s rotation table — the bulk of both commits lives
+outside `equipment_check.py`/`shift_completion.py` and is left for whichever
+rotation row eventually claims it (most of its surface is Training's/
+Scheduling's own models and tables). Reviewed here only for the touches
+landing inside this feature's own files, per the scoping discipline prior
+passes use for cross-feature landings (e.g. Medical Supplies' lot-recall
+work in `equipment_check_service.py`, pass 10):
+
+- **`96d2c47ee`** — pure refactor of `shift_completion_service.py`'s
+  `_attach_shift_labels`: the apparatus-label lookup is lifted into a new
+  public `shift_unit_labels`/private `_shift_unit_labels` pair so Shift
+  Evaluations can name a unit the same way. Read in full: the org-scoped
+  `Shift`/`Apparatus` query shape is carried over unchanged (still "org-scoped
+  even though the ids came from org-scoped reports," per the existing
+  comment); no new query, no behavior change to the report path.
+- **`d4e4cabea`** — adds `_sync_evaluation_credit(report, organization_id)`,
+  called after every commit that changes a report's review state (create,
+  review, batch-review, edit-returns-to-review). It re-syncs the shift's
+  evaluation credit via `ShiftEvaluationService.sync_credit_for_shift_member`,
+  which filters strictly on `organization_id` + `shift_id` + `member_id`
+  (read in full, `shift_evaluation_service.py:888-910`) — no unscoped by-id
+  read. `get_my_shift_stats`/`get_trainee_stats` gain `evaluation_averages`
+  from `ShiftEvaluationService.averages_by_form`, whose underlying query
+  (`list_for_member`, `shift_evaluation_service.py:964-983`) filters both
+  `organization_id` and `member_id` together — not a bare by-id lookup, so a
+  cross-org `trainee_id` on `get_trainee_stats` (officers-only,
+  already-reviewed endpoint) returns zero rows rather than another org's
+  averages. `batch_create_shift_reports`'s new evaluation-sync loop only
+  calls `sync_credit_for_shift_member` with member ids already proven valid
+  by that same call's own successful report creation — no new unvalidated
+  client-supplied FK.
+
+Frontend touches inside this feature's own pages are display-only
+(`ShiftReportPage.tsx` renders `evaluation_averages`; `ShiftReportsTab.tsx`
+asks the server via `getReviewAccess()` rather than deciding client-side,
+consistent with the backend being the actual enforcement point). No
+`window.confirm`/`.alert`/`.prompt`, no `dangerouslySetInnerHTML`, no raw
+`fetch(` bypassing the module's axios instance, no `??` on a blank form
+value.
+
+### Route re-enumeration
+
+By AST (not grep): `equipment_check.py` **54** (unchanged), `shift_completion.py`
+**22** (up from 21 — `GET /review-access`, the one new route accounted for
+above; correctly auth-gated and in the permissionless baseline for a stated
+reason).
+
+### Re-verified: every prior open item
+
+EC-16 (SAVEPOINT duplicate-report guard), EC-6/EC-13 (in-org FK validation),
+EC-7/EC-11 (resolved 2026-10-11) — none of their code paths appear in this
+window's 3-commit diff; unchanged. **EC-8** (by-id reads for changelog text
+only, no org filter, owner-accepted harmless) — still open/accepted,
+untouched this window.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 14)
+
+| Check                                                                                        | Result                                          |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                        | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/` (26.10.1, via `/usr/local/bin/black`)                   | ✅ clean, 2825 files unchanged                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                            | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                            | ✅ single head `e059227da2c0`, 694 revisions    |
+| `python3 scripts/check_route_permissions.py --strict`                                        | ✅ 286 routes, 0 errors, 0 warnings             |
+| `python3 scripts/generate_schema_docs.py --check`                                            | ✅ up to date                                   |
+| `pytest tests/ -k "equipment_check or shift_completion or shift_report or shift_evaluation"` | ✅ 783 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                           | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                | ✅ 0 errors, 0 warnings                         |
+
+(The pytest run initially failed on `Unknown column 'required_transports'`
+— this worktree's database was one migration behind the concurrently-landed
+`e059227da2c0`; `alembic upgrade head` resolved it before re-running. Not an
+application defect.)
+
+Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
+(Scheduling) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 
