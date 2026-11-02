@@ -675,6 +675,10 @@ class EvaluationDocument(Base):
     a copy can be checked against the original; ``content_hash`` is the hash
     of the record every signature on the revision attested to, printed on the
     document. One per revision, so an amendment's new revision gets its own.
+
+    A member's written response, attached after finalization, is printed in a
+    second document for the same revision (``includes_response``), and the
+    first is kept as it was signed (owner decision 2026-11-02).
     """
 
     __tablename__ = "evaluation_documents"
@@ -691,13 +695,19 @@ class EvaluationDocument(Base):
     file_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    includes_response: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
         UniqueConstraint(
-            "evaluation_id", "revision", name="uq_evaluation_documents_revision"
+            "evaluation_id",
+            "revision",
+            "includes_response",
+            name="uq_evaluation_documents_variant",
         ),
         Index("ix_evaluation_documents_org_eval", "organization_id", "evaluation_id"),
     )

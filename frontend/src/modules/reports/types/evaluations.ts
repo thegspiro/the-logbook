@@ -235,6 +235,8 @@ export interface EvaluationPeriodUpdate {
 export const EvaluationPartKind = {
   SELF_EVALUATION: 'self_evaluation',
   EVALUATOR: 'evaluator',
+  /** The member's written response, attached after the evaluation is final. */
+  MEMBER_RESPONSE: 'member_response',
 } as const;
 export type EvaluationPartKind = (typeof EvaluationPartKind)[keyof typeof EvaluationPartKind];
 
@@ -336,6 +338,8 @@ export interface EvaluationViewer {
   can_delete?: boolean | undefined;
   /** A holder of evaluations.manage, on a finalized evaluation not their own. */
   can_amend?: boolean | undefined;
+  /** The member, inside the response window, before submitting a response. */
+  can_respond?: boolean | undefined;
 }
 
 /** A finalized evaluation reopened as a new revision, and why. */
@@ -386,6 +390,10 @@ export interface EvaluationDetail extends EvaluationSummary {
   document_available: boolean;
   revision?: number | undefined;
   amendments?: EvaluationAmendment[] | undefined;
+  /** Last day the member may attach a written response; null before it is final. */
+  response_due?: string | null | undefined;
+  /** A second PDF carries the member's submitted response. */
+  response_document_available?: boolean | undefined;
   viewer: EvaluationViewer;
 }
 

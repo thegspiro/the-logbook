@@ -575,6 +575,45 @@ class EvaluationNoticeService:
             )
             return 0
 
+    async def responded(self, organization_id: str, evaluation_id: str) -> int:
+        """Tell the evaluator and the evaluation managers that the member
+        attached a written response (owner decision 2026-11-02). The response
+        itself stays in the Logbook."""
+        try:
+            evaluation = await self._evaluation(organization_id, evaluation_id)
+            organization = await self.db.get(Organization, organization_id)
+            if evaluation is None or organization is None:
+                return 0
+            people = await self._people(organization_id, [evaluation.member_id])
+            member = people.get(evaluation.member_id)
+            member_name = member.full_name if member else "a former member"
+            summary = (
+                f"{member_name} attached a written response to their evaluation "
+                f"for {_period_name(evaluation)}."
+            )
+            officers = await self._own(organization_id, evaluation.evaluator_id)
+            officers += await self._holding(organization_id, "evaluations.manage")
+            recipients = [
+                _Recipient(user=user, kind=EmailKind.EVALUATION_DUTIES, summary=summary)
+                for user in officers
+                if user.id != evaluation.member_id
+            ]
+            return await self._send(
+                organization,
+                evaluation,
+                recipients,
+                EmailTemplateType.EVALUATION_RESPONSE,
+                member_name=member_name,
+            )
+        except Exception as e:
+            await self._settle(e)
+            logger.error(
+                "Failed to send response notices for evaluation {}: {}",
+                evaluation_id,
+                e,
+            )
+            return 0
+
     async def deleted(
         self,
         organization_id: str,

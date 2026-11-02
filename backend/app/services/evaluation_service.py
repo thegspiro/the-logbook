@@ -588,6 +588,12 @@ class EvaluationService:
     ) -> Dict[str, Any]:
         signable = self._signable(evaluation, steps, viewer_positions or set(), roles)
         definition = self._definition(evaluation)
+        response_due = self._response_due(evaluation)
+        response_part = parts.get(EvaluationPartKind.MEMBER_RESPONSE.value)
+        response_submitted = (
+            response_part is not None
+            and response_part.status == EvaluationPartStatus.SUBMITTED.value
+        )
         released = self._released_to_member(evaluation, steps)
         by_key = {s.step_key: s for s in steps}
 
@@ -607,6 +613,13 @@ class EvaluationService:
                         and part.status == EvaluationPartStatus.SUBMITTED.value
                     )
                     or (roles.is_member and released)
+                )
+            elif kind == EvaluationPartKind.MEMBER_RESPONSE.value:
+                # The member's own draft is theirs; everyone who reads the
+                # record sees the response once it is submitted.
+                show = roles.is_member or (
+                    roles.reads_content
+                    and part.status == EvaluationPartStatus.SUBMITTED.value
                 )
             else:
                 show = roles.reads_content and (not roles.is_member or released)
@@ -687,6 +700,10 @@ class EvaluationService:
                 # Why the record was reopened is part of the record: everyone
                 # who may see the evaluation sees it, the member included.
                 "amendments": list(amendments),
+                "response_due": response_due,
+                "response_document_available": response_submitted
+                and document_available
+                and ((roles.reads_content and not roles.is_member) or released),
                 "weighted_overall": (
                     weighted_overall(
                         PartContent.model_validate(evaluator_part.content),
@@ -715,6 +732,10 @@ class EvaluationService:
                     "can_delete": can_delete,
                     "can_amend": roles.manage
                     and evaluation.status == EvaluationStatus.FINALIZED.value,
+                    "can_respond": roles.is_member
+                    and response_due is not None
+                    and today <= response_due
+                    and not response_submitted,
                 },
             }
         )
@@ -2072,3 +2093,104 @@ class EvaluationService:
             [i for i in signer_ids if i],
         )
         return paths
+
+    # ------------------------------------------------------------ response
+
+    def _response_due(self, evaluation: Evaluation) -> Optional[date]:
+        """The last day the member may attach a written response: the
+        template's ``response_window_days`` after finalization (thirty by
+        default, after Cal. Gov. Code 3256). None before finalization, and
+        when the template allows no response.
+
+        Counted from the UTC day of finalization, which is at most a day off
+        the department's calendar, in the member's favour or against it by
+        the same margin as any other dated notice here."""
+        if (
+            evaluation.status != EvaluationStatus.FINALIZED.value
+            or evaluation.finalized_at is None
+        ):
+            return None
+        window = self._workflow(evaluation).response_window_days
+        if window <= 0:
+            return None
+        finalized = evaluation.finalized_at
+        if finalized.tzinfo is None:
+            finalized = finalized.replace(tzinfo=timezone.utc)
+        return finalized.date() + timedelta(days=window)
+
+    async def _respondable(
+        self, organization_id: str, evaluation_id: str, actor: User
+    ) -> Optional[Tuple[Evaluation, Optional[EvaluationPart]]]:
+        """The evaluation and the member's response part, locked, when
+        ``actor`` may still write it. None when they may not see it."""
+        evaluation = await self._evaluation(
+            organization_id, evaluation_id, for_update=True
+        )
+        if evaluation is None:
+            return None
+        steps = await self._steps(evaluation, for_update=True)
+        roles = self._roles(evaluation, actor, steps)
+        if not roles.any:
+            return None
+        if not roles.is_member:
+            raise PermissionError(
+                "Only the member writes a response to their evaluation."
+            )
+        due = self._response_due(evaluation)
+        if due is None:
+            raise ValueError("A response is added once the evaluation is final.")
+        today = today_in(await resolve_scheduling_timezone(self.db, organization_id))
+        if today > due:
+            raise ValueError(
+                f"Responses to this evaluation closed on {due.isoformat()}."
+            )
+        parts = await self._parts(evaluation, for_update=True)
+        part = parts.get(EvaluationPartKind.MEMBER_RESPONSE.value)
+        if part is not None and part.status == EvaluationPartStatus.SUBMITTED.value:
+            raise ValueError("Your response has already been submitted.")
+        return evaluation, part
+
+    async def save_response(
+        self, organization_id: str, evaluation_id: str, actor: User, text: str
+    ) -> Optional[bool]:
+        """Save the member's response as a draft, theirs alone until they
+        submit it."""
+        loaded = await self._respondable(organization_id, evaluation_id, actor)
+        if loaded is None:
+            return None
+        evaluation, part = loaded
+        content = PartContent(overall_comment=text).model_dump(mode="json")
+        if part is None:
+            self.db.add(
+                EvaluationPart(
+                    organization_id=organization_id,
+                    evaluation_id=evaluation.id,
+                    revision=evaluation.revision,
+                    kind=EvaluationPartKind.MEMBER_RESPONSE.value,
+                    author_id=actor.id,
+                    content=content,
+                    status=EvaluationPartStatus.DRAFT.value,
+                )
+            )
+        else:
+            part.content = content
+        await self.db.commit()
+        return True
+
+    async def submit_response(
+        self, organization_id: str, evaluation_id: str, actor: User
+    ) -> Optional[bool]:
+        """Submit the saved response. It is final: it joins the record, is
+        printed in a second PDF beside the signed one, and the evaluator and
+        the evaluation managers are told."""
+        loaded = await self._respondable(organization_id, evaluation_id, actor)
+        if loaded is None:
+            return None
+        evaluation, part = loaded
+        if part is None or not PartContent.model_validate(part.content).overall_comment:
+            raise ValueError("Save your response before submitting it.")
+        part.status = EvaluationPartStatus.SUBMITTED.value
+        part.submitted_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await EvaluationNoticeService(self.db).responded(organization_id, evaluation.id)
+        return True

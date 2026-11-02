@@ -64,6 +64,7 @@ from app.schemas.evaluation import (
     LiveDataResponse,
     PartWrite,
     PublishResult,
+    ResponseWrite,
     SignatureWrite,
     SignResult,
     SubmitResult,
@@ -729,17 +730,26 @@ async def sign_evaluation(
 @router.get("/{evaluation_id}/document")
 async def download_evaluation_document(
     evaluation_id: str,
+    version: Literal["latest", "signed"] = "latest",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """The finalized evaluation's frozen PDF, for whoever may read it."""
+    """The finalized evaluation's frozen PDF, for whoever may read it.
+
+    ``latest`` is the PDF carrying the member's written response once they
+    have submitted one, and the signed PDF otherwise; ``signed`` is always
+    the PDF as it was signed."""
     detail = await _evaluation(EvaluationService(db), current_user, evaluation_id)
     if not detail["document_available"]:
         raise HTTPException(status_code=404, detail="This evaluation has no PDF yet.")
+    with_response = version == "latest" and detail["response_document_available"]
     documents = EvaluationDocumentService(db)
     async with handle_service_errors("Failed to prepare the evaluation PDF"):
         document = await documents.ensure_document(
-            current_user.organization_id, evaluation_id, current_user
+            current_user.organization_id,
+            evaluation_id,
+            current_user,
+            with_response=with_response,
         )
     document = ensure_found(document, "Evaluation PDF")
     evaluation = ensure_found(
@@ -752,7 +762,11 @@ async def download_evaluation_document(
         db,
         current_user,
         "evaluation_document_downloaded",
-        {"evaluation_id": evaluation_id, "revision": document.revision},
+        {
+            "evaluation_id": evaluation_id,
+            "revision": document.revision,
+            "includes_response": document.includes_response,
+        },
     )
     try:
         return await documents.response(
@@ -831,4 +845,63 @@ async def amend_evaluation(
         {"evaluation_id": evaluation_id, "documents_removed": len(paths)},
         severity="warning",
     )
+    return await _evaluation(service, current_user, evaluation_id)
+
+
+@router.put("/{evaluation_id}/response", response_model=EvaluationDetail)
+async def save_evaluation_response(
+    evaluation_id: str,
+    data: ResponseWrite,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save the member's written response as a draft. Only the member, on
+    their finalized evaluation, inside the template's response window."""
+    service = EvaluationService(db)
+    async with handle_service_errors("Failed to save your response"):
+        ensure_found(
+            await service.save_response(
+                current_user.organization_id, evaluation_id, current_user, data.text
+            ),
+            "Evaluation",
+        )
+    return await _evaluation(service, current_user, evaluation_id)
+
+
+@router.post("/{evaluation_id}/response/submit", response_model=EvaluationDetail)
+async def submit_evaluation_response(
+    evaluation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Submit the saved response. It is final, joins the record, and is
+    printed in a second PDF beside the signed one; the evaluator and the
+    evaluation managers are emailed."""
+    service = EvaluationService(db)
+    async with handle_service_errors("Failed to submit your response"):
+        ensure_found(
+            await service.submit_response(
+                current_user.organization_id, evaluation_id, current_user
+            ),
+            "Evaluation",
+        )
+    await _audit(
+        db,
+        current_user,
+        "evaluation_response_submitted",
+        {"evaluation_id": evaluation_id},
+    )
+    try:
+        await EvaluationDocumentService(db).ensure_document(
+            current_user.organization_id,
+            evaluation_id,
+            current_user,
+            with_response=True,
+        )
+    except Exception:
+        # Built on first download instead; the response itself is saved.
+        await db.rollback()
+        logger.exception(
+            "Could not build the response PDF for evaluation {}", evaluation_id
+        )
     return await _evaluation(service, current_user, evaluation_id)

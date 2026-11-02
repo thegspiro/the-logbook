@@ -424,6 +424,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A step is overdue on any evaluation (evaluation managers)",
             "An evaluation you conducted is final",
             "An evaluation you signed was amended",
+            "A member responded to an evaluation you conducted, or as a manager",
         ),
         rationale=(
             "Reports > Evaluations lists every evaluation waiting on you, "

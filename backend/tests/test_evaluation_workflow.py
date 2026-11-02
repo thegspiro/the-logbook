@@ -2330,3 +2330,174 @@ class TestAmending:
             f"{url}/amend", json={"reason": "  "}
         )
         assert response.status_code == 422
+
+
+# --------------------------------------------------------------- response
+
+RESPONSE = EmailTemplateType.EVALUATION_RESPONSE
+
+
+def _pdf_text(content: bytes) -> str:
+    import io
+
+    from pypdf import PdfReader
+
+    return " ".join(
+        page.extract_text() for page in PdfReader(io.BytesIO(content)).pages
+    )
+
+
+class TestMemberResponse:
+    async def test_a_submitted_response_joins_the_record_and_a_second_pdf(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        from app.models.evaluation import EvaluationDocument
+
+        url = await _finalized(dept, make_client)
+        evaluation_id = url.rsplit("/", 1)[-1]
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        signed_pdf = await member.get(f"{url}/document")
+        assert signed_pdf.status_code == 200
+        assert (await member.get(url)).json()["viewer"]["can_respond"] is True
+        outbox.clear()
+
+        saved = await member.put(
+            f"{url}/response", json={"text": "  I led two drills the form missed.  "}
+        )
+        assert saved.status_code == 200, saved.text
+        # A draft is the member's alone.
+        assert not any(
+            p["kind"] == "member_response"
+            for p in (await evaluator.get(url)).json()["parts"]
+        )
+
+        submitted = await member.post(f"{url}/response/submit")
+        assert submitted.status_code == 200, submitted.text
+        body = submitted.json()
+        assert body["viewer"]["can_respond"] is False
+        assert body["response_document_available"] is True
+
+        as_evaluator = (await evaluator.get(url)).json()
+        (response,) = [
+            p for p in as_evaluator["parts"] if p["kind"] == "member_response"
+        ]
+        assert response["status"] == "submitted"
+        assert response["content"]["overall_comment"] == (
+            "I led two drills the form missed."
+        )
+
+        (to_evaluator,) = outbox.to(dept.evaluator, RESPONSE)
+        assert to_evaluator["summary"] == (
+            f"{dept.member.full_name} attached a written response to their "
+            f"evaluation for {dept.period.name}."
+        )
+        assert "drills" not in str(to_evaluator)
+        assert len(outbox.to(dept.manager, RESPONSE)) == 1
+        assert outbox.to(dept.member, RESPONSE) == []
+
+        latest = await evaluator.get(f"{url}/document")
+        assert "I led two drills the form missed." in _pdf_text(latest.content)
+        assert "with-response" in latest.headers["content-disposition"]
+        original = await evaluator.get(f"{url}/document", params={"version": "signed"})
+        assert original.content == signed_pdf.content
+        assert "I led two drills" not in _pdf_text(original.content)
+        documents = (
+            (
+                await dept.db.execute(
+                    select(EvaluationDocument).where(
+                        EvaluationDocument.evaluation_id == evaluation_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(d.includes_response for d in documents) == [False, True]
+        # The response is outside what the signatures attested to.
+        assert len({d.content_hash for d in documents}) == 1
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "evaluation_response_submitted"
+                )
+            )
+        ).scalar_one()
+        assert audit.event_data["evaluation_id"] == evaluation_id
+
+    async def test_a_response_is_final_once_submitted(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        await member.put(f"{url}/response", json={"text": "First."})
+        await member.post(f"{url}/response/submit")
+        again = await member.put(f"{url}/response", json={"text": "Second."})
+        assert again.status_code == 400
+        assert "already been submitted" in again.json()["detail"]
+        assert (await member.post(f"{url}/response/submit")).status_code == 400
+
+    async def test_the_window_closes(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        due = date.fromisoformat((await member.get(url)).json()["response_due"])
+        assert due == datetime.now(timezone.utc).date() + timedelta(days=30)
+
+        await _set_today(monkeypatch, due + timedelta(days=1))
+        assert (await member.get(url)).json()["viewer"]["can_respond"] is False
+        late = await member.put(f"{url}/response", json={"text": "Late."})
+        assert late.status_code == 400
+        assert "closed" in late.json()["detail"]
+
+    async def test_only_the_member_responds_and_only_once_it_is_final(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        member = await make_client(dept.member)
+        early = await member.put(
+            f"/evaluations/{detail['id']}/response", json={"text": "Too soon."}
+        )
+        assert early.status_code == 400
+
+        url = await _finalized(
+            dept, make_client, member=await _user(dept.db, dept.org, [])
+        )
+        for officer in (dept.evaluator, dept.manager):
+            response = await (await make_client(officer)).put(
+                f"{url}/response", json={"text": "Not mine to write."}
+            )
+            assert response.status_code == 403, officer.id
+        stranger = await _user(dept.db, dept.org, [])
+        assert (
+            await (await make_client(stranger)).put(
+                f"{url}/response", json={"text": "Who?"}
+            )
+        ).status_code == 404
+
+    async def test_nothing_to_submit_and_blank_text_are_refused(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        assert (await member.post(f"{url}/response/submit")).status_code == 400
+        assert (
+            await member.put(f"{url}/response", json={"text": "   "})
+        ).status_code == 422
+
+    async def test_an_amendment_takes_the_response_with_the_earlier_text(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        await member.put(f"{url}/response", json={"text": "About the old text."})
+        await member.post(f"{url}/response/submit")
+        await (await make_client(dept.manager)).post(
+            f"{url}/amend", json={"reason": "Rewritten after the response."}
+        )
+        reopened = (await member.get(url)).json()
+        assert not any(p["kind"] == "member_response" for p in reopened["parts"])
+        assert reopened["response_due"] is None
+        assert reopened["response_document_available"] is False
