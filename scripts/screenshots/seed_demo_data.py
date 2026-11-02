@@ -19889,6 +19889,61 @@ class Seeder:
             created += 1
         return created
 
+    BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE = "Community CPR Night"
+
+    def seed_backlog_04_upcoming_guest_event(self) -> str:
+        """An event a few days out with guest check-in switched on.
+
+        Guide 04 pictures the event QR page before check-in opens, when the
+        guest code is withheld and the card says when it will appear while
+        still offering Reset. The two guest events the demo already has are
+        slid into their check-in window on every run, so neither can show it.
+
+        No location: the room kiosk is not what is pictured, and a location
+        would refuse another booking in its window. Slid forward whenever it
+        has come within a day, so the window is never open on capture day.
+        """
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=200"), "events")
+                if e.get("title") == self.BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE
+            ),
+            None,
+        )
+        start = (NOW + timedelta(days=3)).replace(
+            hour=23, minute=0, second=0, microsecond=0
+        )
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=2)),
+        }
+        if existing and pick(existing, "id"):
+            starts = str(pick(existing, "start_datetime", "startDatetime") or "")
+            if starts and starts > iso(NOW + timedelta(days=1)):
+                return "present"
+            self.api.patch(f"/events/{pick(existing, 'id')}", window)
+            return "moved forward"
+        self.api.post(
+            "/events",
+            {
+                "title": self.BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE,
+                "description": (
+                    "Hands-only CPR for neighbours, taught by our EMTs. Open to "
+                    "anyone; no account or sign-up needed."
+                ),
+                "event_type": "public_education",
+                "location": "Oakville Community Center",
+                "requires_rsvp": False,
+                "is_mandatory": False,
+                "send_reminders": False,
+                "is_draft": False,
+                "allow_guest_check_in": True,
+                **window,
+            },
+        )
+        return "created"
+
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
@@ -20128,6 +20183,10 @@ class Seeder:
         # earlier step expects to find moved or issued.
         self.step("guide 05 states", self.seed_guide05_states)
         self.step("guide 02 states", self.seed_guide02_states)
+        self.step(
+            "backlog 04 upcoming guest event",
+            self.seed_backlog_04_upcoming_guest_event,
+        )
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

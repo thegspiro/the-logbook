@@ -4788,8 +4788,9 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 1151,
     anchor: "Screenshot of the delete series confirmation dialog",
-    alt: "The Delete Event dialog on a recurring event, with the single/series choice",
+    alt: "The Delete Event dialog on a recurring event: Delete only this event, Delete this and future events in this series (selected) and Delete all events in this series, with Keep Event and Delete This and Future",
     route: "/events",
+    expect: "Delete this and future events in this series",
     prepare: async (page) => {
       // The series choice only renders on a recurring event, so the shot has
       // to open one of those rather than whatever the list returns first.
@@ -4827,8 +4828,10 @@ export const SHOTS = [
         .first()
         .click({ timeout: 10_000 });
       await page.waitForTimeout(800);
+      // The middle choice, added 2026-10-21: it is the one that keeps the
+      // series' history, which the guide's note recommends.
       await page
-        .getByText("Delete all events in this series")
+        .getByText("Delete this and future events in this series")
         .click({ timeout: 10_000 });
       await page.waitForTimeout(500);
     },
@@ -8430,8 +8433,9 @@ export const SHOTS = [
     line: 423,
     anchor:
       "Screenshot of the minutes creation/editing page showing the meeting type selector, date,",
-    alt: "The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted",
+    alt: "The Meeting Minutes page under the Governance section header: Outlines, Settings, Attendance and Record Minutes, the summary tiles, the search box, and each meeting card listing its minutes with their state, one Circulated for review and one Draft",
     route: "/minutes",
+    expect: "Total Meetings",
   },
   {
     // "budget" is in the seeded Officer Meeting minutes, so the card has a hit.
@@ -8460,12 +8464,12 @@ export const SHOTS = [
     line: 1468,
     anchor:
       "Minutes Settings as a settings administrator: the section list (Attendance,",
-    alt: "Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row",
+    alt: "Minutes Settings under the Governance section header: the section tabs (Attendance, Signatures, Reminders, Publishing, Elections) above the Attendance section, How attendance is listed, and its Save button",
     route: "/minutes/settings",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: "How attendance is listed",
   },
   {
@@ -8490,10 +8494,10 @@ export const SHOTS = [
       "Minutes Settings, Publishing section: the public-copy switch and the",
     alt: "Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches",
     route: "/minutes/settings?tab=publishing",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: "Executive-session minutes",
   },
   {
@@ -8504,10 +8508,10 @@ export const SHOTS = [
       "Minutes Settings, Signatures section with the two default slots, Recording",
     alt: "Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes",
     route: "/minutes/settings?tab=signatures",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: { selector: "input[value='Recording Secretary']" },
   },
   {
@@ -8518,10 +8522,10 @@ export const SHOTS = [
       "Minutes Settings, Reminders section: the email switch, the first-reminder and",
     alt: "Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch",
     route: "/minutes/settings?tab=reminders",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: "Email reminders to assignees",
   },
   {
@@ -8577,7 +8581,9 @@ export const SHOTS = [
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    selector: "div:has(> p.alert-info:has-text('accepted these minutes'))",
+    // The page with the app shell rather than the note alone (cropped until
+    // 2026-11-02 to keep out the scanning-off notice); the note sits at the
+    // top of the first screen.
     expect: "accepted these minutes",
     // "No suggestions yet" is the Suggestions panel further down the page, not
     // an empty subject: the shot is the note at the top.
@@ -11495,8 +11501,13 @@ export const SHOTS = [
     line: 73,
     anchor:
       "Screenshot of an event detail page showing the event header (title, date,",
-    alt: "Event detail page with the header, description, and RSVP controls",
+    alt: "An upcoming Training event's page as a member: RSVP Now and Add to Calendar beside the title and no View QR Code, then the Event Details, Training Session Details, Requirements & Programs and Event Information cards",
     route: "/events",
+    // As a member since 2026-11-02: the section describes what a member
+    // sees, and an administrator's page carries View QR Code, Edit and the
+    // attendance tools, which a member is never offered.
+    auth: "member",
+    expect: "Event Details",
     prepare: openFirstFromApi(
       "/events?limit=100",
       (id) => `/events/${id}`,
@@ -12278,8 +12289,9 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 163,
     anchor: "The guest sign-in page as a visitor sees it on a",
-    alt: "The guest sign-in page on a phone, with the event name above the email field",
+    alt: "The guest sign-in page at a recruitment event on a phone: the event's name, time and place, then the Email field and Continue",
     route: "/login",
+    expect: { selector: "input[type='email']" },
     auth: "anonymous",
     viewport: "mobile",
     prepare: withDisplayCode(
@@ -12292,8 +12304,9 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 159,
     anchor: "The confirmation state after a guest signs in,",
-    alt: "The guest sign-in confirmation naming the event and the time signed in",
+    alt: "The guest sign-in confirmation for an applicant who had already signed in: You're already checked in, Rosa D., the event, where it is and the time signed in, and the note that her attendance was added to her application",
     route: "/login",
+    expect: "already checked in",
     auth: "anonymous",
     viewport: "mobile",
     // **This shot signs a guest in.** The confirmation is client state that no
@@ -12314,6 +12327,7 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page
         .getByText(/You're (already checked in|signed in)/i)
+        .first()
         .waitFor({ timeout: 15_000 });
     },
     fullPage: true,
@@ -17436,6 +17450,9 @@ export const SHOTS = [
     alt: "The Card taps section of the in-progress drill's event page, listing each ID card tap with its time, member, outcome and the check-in station it was made at",
     route: "/events",
     expect: { selector: "#event-card-taps-heading" },
+    // Wide, so the table's five columns are not squeezed into the event
+    // page's main column at 1440px, where Where wraps a word to a line.
+    viewport: { width: 1920, height: 1100 },
     prepare: async (page, helpers) => {
       await openFirstFromApi(
         "/events?limit=200",
@@ -17460,13 +17477,17 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 592,
     anchor: "The Card Check-ins tab of Events Admin",
-    alt: "The Card Check-ins tab of Events Admin: filters for outcome, reader and dates above every ID card tap across events, from the check-in station and the Volunteer Office kiosk",
+    alt: "Events Administration with the Check-ins area card chosen and its Card Check-ins page open: filters for outcome, reader and dates above the ID card taps, each with its outcome, member, card, the check-in station it was made at and its event",
     route: "/events/admin?tab=card_checkins",
-    expect: "Room kiosk",
-    fullPage: false,
+    expect: "Member ID card taps at stations and room kiosks",
+    // Full page: the hub's headline numbers, Needs attention and area cards
+    // fill the first screen, and the taps this pictures sit below them.
+    fullPage: true,
     prepare: async (page) => {
-      await page.getByText("Room kiosk").first().waitFor({ timeout: 20_000 });
-      await hideScanNotice(page);
+      await page
+        .locator("td", { hasText: "Check-in station" })
+        .first()
+        .waitFor({ timeout: 20_000 });
     },
   },
   {
@@ -17484,6 +17505,137 @@ export const SHOTS = [
         .check({ timeout: 20_000 });
       await page.getByText("Reader on").first().waitFor({ timeout: 10_000 });
       await hideScanNotice(page);
+    },
+  },
+  {
+    // The open house the seeder slides into its check-in window on every
+    // run, which has guest check-in on. Taken from the event page, not the
+    // QR page: at dffccc89 GET /events/{id}/qr-check-in-data never fills
+    // `allow_guest_check_in`, so the QR page tells a manager guest check-in
+    // is off on every event and its Print Guest QR Code cannot be reached.
+    id: "04-93-event-qr-guest-code",
+    doc: "04-events-meetings.md",
+    line: 709,
+    anchor: "The Guest Check-In card on an event page while check-in is open",
+    alt: "The Guest Check-In card on the Volunteer Interest Night's event page while check-in is open: the guest code, the guest check-in link with its copy button, Show full size and Reset code",
+    route: "/events",
+    expect: {
+      selector:
+        "[data-testid='guest-qr-card'] input[aria-label='Guest check-in link']",
+    },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Volunteer Interest Night",
+      )(page);
+      const card = page.locator("[data-testid='guest-qr-card']");
+      await card
+        .locator("input[aria-label='Guest check-in link']")
+        .waitFor({ timeout: 20_000 });
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "[data-testid='guest-qr-card']",
+  },
+  {
+    // seed_backlog_04_upcoming_guest_event keeps this event three days out,
+    // so its window is never open: the card withholds the code and says
+    // when it will appear. Reset is offered regardless. The event page for
+    // the same reason as 04-93.
+    id: "04-94-event-qr-guest-code-hidden",
+    doc: "04-events-meetings.md",
+    line: 711,
+    anchor: "The Guest Check-In card on the page of an event days away",
+    alt: "The Guest Check-In card on the page of an event three days away: the code hidden until check-in opens, the times guests can sign in, the note that the code appears when check-in opens, Show full size and Reset code",
+    route: "/events",
+    expect: "QR code hidden until check-in opens",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Community CPR Night",
+      )(page);
+      const card = page.locator("[data-testid='guest-qr-card']");
+      await card
+        .getByText("QR code hidden until check-in opens")
+        .waitFor({ timeout: 20_000 });
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "[data-testid='guest-qr-card']",
+  },
+  {
+    id: "04-95-event-guests-card",
+    doc: "04-events-meetings.md",
+    line: 722,
+    anchor: "The Guests card on the event page of an open house",
+    alt: "The Guests card on the Fall Recruitment Open House's page: Add guest beside the heading, the note that guests are not counted in attendance, and four guests signed in at the kiosk, each with email, phone and sign-in time",
+    route: "/events",
+    expect: { selector: "#event-guests-heading" },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Fall Recruitment Open House",
+      )(page);
+      const section = page.locator(
+        "section[aria-labelledby='event-guests-heading']",
+      );
+      await section.getByText("Rosa Delgado").waitFor({ timeout: 20_000 });
+      await section.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='event-guests-heading']",
+  },
+  {
+    // The Compliance Officer is the seeded alternate organizer of the next
+    // Monthly Officers Meeting (seed_guide04_event_states) and holds no
+    // events.manage, so this is the organizer pair's view of their own
+    // event: the attendance tools without Edit, End Event or More. A
+    // business meeting, so training.manage adds nothing here.
+    id: "04-96-event-organizer-view",
+    doc: "04-events-meetings.md",
+    line: 1060,
+    anchor: "An upcoming meeting's page as its alternate organizer",
+    alt: "The next Monthly Officers Meeting as its alternate organizer, who does not manage events: Going, View QR Code, Add to Calendar and Check In beside the title, no Edit or More, and the Organized by row naming her as the alternate",
+    route: "/events",
+    auth: "compliance",
+    // The meeting is weeks away, so its attendance list correctly reads
+    // empty; the subject is the row of actions.
+    allowEmptyState: true,
+    expect: "Monthly Officers Meeting",
+    viewport: { width: 1440, height: 1000 },
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/events?limit=200", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : body.events || [];
+        const now = Date.now();
+        const next = rows
+          .filter(
+            (e) =>
+              e.title === "Monthly Officers Meeting" &&
+              !e.is_cancelled &&
+              new Date(e.start_datetime).getTime() > now,
+          )
+          .sort((a, b) => a.start_datetime.localeCompare(b.start_datetime))[0];
+        return next ? next.id : null;
+      });
+      if (!id) throw new Error("no upcoming Monthly Officers Meeting");
+      await page.goto(new URL(`/events/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByRole("button", { name: /^Check In$/ })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
     },
   },
   {
