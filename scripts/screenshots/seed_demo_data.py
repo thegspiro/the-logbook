@@ -20312,6 +20312,46 @@ class Seeder:
         )
         return "created"
 
+    # One member with a leave behind them, one in force and one ahead, so the
+    # profile's Leave of Absence card shows its date badges side by side
+    # (Expired, Active, Future). Rafael Duarte, because he holds no shift
+    # seat in the coming month, so the leave in force cancels nothing another
+    # shot pictures. Each leave stays under 15 days in every calendar month it
+    # touches, so none reduces a requirement, and each is exempt from the
+    # linked training waiver, so the training waiver lists do not change.
+    BACKLOG_01_LEAVE_MEMBER = "rduarte"
+    BACKLOG_01_LEAVES = (
+        (-40, -30, "personal", "Family matter out of state."),
+        (-2, 9, "leave_of_absence", "Paternity leave."),
+        (45, 56, "military", "Annual reserve training."),
+    )
+
+    def seed_backlog_01_leave_badges(self) -> int:
+        user_id = self._user_id(self.BACKLOG_01_LEAVE_MEMBER)
+        if not user_id:
+            return 0
+        reasons = {
+            pick(lv, "reason")
+            for lv in items(self.api.get(f"/users/{user_id}/leaves-of-absence"))
+        }
+        created = 0
+        for start, end, kind, reason in self.BACKLOG_01_LEAVES:
+            if reason in reasons:
+                continue
+            self.api.post(
+                "/users/leaves-of-absence",
+                {
+                    "user_id": user_id,
+                    "leave_type": kind,
+                    "reason": reason,
+                    "start_date": str(TODAY + timedelta(days=start)),
+                    "end_date": str(TODAY + timedelta(days=end)),
+                    "exempt_from_training_waiver": True,
+                },
+            )
+            created += 1
+        return created
+
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
@@ -20563,6 +20603,7 @@ class Seeder:
             "backlog 04 upcoming guest event",
             self.seed_backlog_04_upcoming_guest_event,
         )
+        self.step("guide 01 leave badges", self.seed_backlog_01_leave_badges)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

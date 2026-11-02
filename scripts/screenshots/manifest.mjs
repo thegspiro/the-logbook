@@ -1871,7 +1871,18 @@ async function guide01RemoveFormerMember(page, kind) {
   const users = await guide08Api(page, "GET", "/users?limit=200");
   const list = Array.isArray(users) ? users : users.users || users.items || [];
   for (const user of list.filter((u) => u.username === username)) {
-    await guide08Api(page, "DELETE", `/users/${user.id}?hard=true`);
+    const path = `/users/${user.id}?hard=true`;
+    // A step-up lasts ten minutes on this session, so ask for a code only
+    // when the server says the last one has lapsed: every code spent here
+    // is one a parallel run's sign-in may have wanted.
+    try {
+      await guide08Api(page, "DELETE", path);
+    } catch (err) {
+      if (!String(err).includes("LB-AUTH-013")) throw err;
+      // A permanent delete has required a step-up since #3761.
+      await adminStepUp(page);
+      await guide08Api(page, "DELETE", path);
+    }
   }
 }
 
@@ -7146,8 +7157,9 @@ export const SHOTS = [
     line: 37,
     anchor:
       "Screenshot of the Members page showing the member list table with columns",
-    alt: "Member directory listing members with rank, status, and contact columns",
+    alt: "The Members roster: the member count tiles, the search with status, class and membership-status filters, and each member's name, rank, member number, status and hire date",
     route: "/members",
+    expect: "Membership Management",
   },
   {
     id: "01-02-member-profile",
@@ -7249,11 +7261,15 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 567,
     anchor: "The Members Admin hub — Member Management, Add Member",
-    alt: "The Members Admin hub — Member Management, Add Member and Import Members tabs",
+    alt: "Members Administration: the Active, Probationary, Inactive and Needs attention tiles, the Roster, Add & Import and Settings area cards with Roster open and its Member Management page beneath, and the start of the roster with rank, membership (class and status) and positions in separate columns",
     route: "/members/admin",
+    expect: "Add & Import",
+    // Tall enough to reach the roster's header and first row, which shows
+    // rank, membership (class and status) and positions as three columns.
+    viewport: { width: 1440, height: 1100 },
     // The hub's "Former members still holding property" card reads "No
     // dropped member has property outstanding" -- the normal state, and not
-    // this shot's subject, which is the hub's tabs.
+    // this shot's subject, which is the hub's area cards.
     allowEmptyState: true,
   },
   {
@@ -7281,8 +7297,9 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 345,
     anchor: "Screenshot of the Remove Member dialog's Permanently Delete tab",
-    alt: "The Permanently Delete tab of the Remove Member dialog, with its impact breakdown and typed confirmation",
+    alt: "The Permanently Delete tab of the Remove Member dialog for Nadia Belhaj: the warning, the Permanently deleted list with a count for each kind of record and the total, the Kept list, and the typed confirmation",
     route: "/members",
+    expect: "along with anything filed under",
     prepare: async (page) => {
       // Nadia Belhaj is the member the seeder kits out, so her impact
       // breakdown has a number against every row rather than a column of
@@ -7299,6 +7316,10 @@ export const SHOTS = [
         .click({ timeout: 10_000 });
       await page.waitForTimeout(600);
     },
+    // The itemized list runs to thirty-odd record types, and the panel is
+    // height-capped to the viewport: at 900px it scrolled the typed
+    // confirmation out of the picture.
+    viewport: { width: 1440, height: 2000 },
     selector: "div.fixed.inset-0",
   },
   {
@@ -7661,8 +7682,9 @@ export const SHOTS = [
     line: 500,
     anchor:
       "Screenshot of the Stage Configuration Modal showing the stage type selector",
-    alt: "The stage type picker in the Stage Configuration modal, showing all twelve stage types",
+    alt: "The stage type picker in the Stage Configuration modal, showing all thirteen stage types, the last of them Follow-up Form",
     route: "/prospective-members/settings",
+    expect: "Follow-up Form",
     prepare: async (page) => {
       // The page opens on "Select a pipeline" — the stage builder, and with
       // it Add Stage, only renders once one is chosen from the left list.
@@ -7686,7 +7708,7 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
     // Clipped to the picker's own block. The modal scrolls internally, so a
-    // viewport shot of it shows six of the twelve types and cuts the rest off
+    // viewport shot of it shows six of the thirteen types and cuts the rest off
     // at the fold — which is the one thing this placeholder is counting.
     selector: "div:has(> label:text-is('Stage Type *'))",
   },
@@ -13844,7 +13866,7 @@ export const SHOTS = [
     line: 1043,
     anchor:
       "Screenshot of the Department Information section on a member's admin edit page showing the auto-generated Membership Number",
-    alt: "The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, all editable",
+    alt: "The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, then Platoon, Hire Date, Member Class and Membership Status, all editable",
     route: "/members",
     prepare: openFirstFromApi(
       "/users?limit=1",
@@ -14002,7 +14024,7 @@ export const SHOTS = [
     line: 195,
     anchor:
       "Screenshot of the Admin Member Edit page showing the form sections: personal",
-    alt: "Admin member edit form with personal, department and access sections",
+    alt: "The Edit Member page: Personal Information, Department Information with Member Class and Membership Status, Contact Information, Address and Emergency Contacts, with Save Changes at the foot",
     route: "/members",
     prepare: openFirstFromApi(
       "/users?limit=1",
@@ -23781,13 +23803,15 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 2442,
     anchor: "The Coverage tab of Member ID Cards",
-    alt: "The Coverage tab of Member ID Cards: how many current members have a working card, the members without one with Issue card on each row, and the cards-held-by-former-members and unused-cards sections",
+    alt: "The Coverage tab of Member ID Cards: 3 of 22 current members have a working card, the nineteen without one each with Issue card, and the Cards held by former members and Active cards not used in 180 days sections, both empty",
     route: "/members/admin/id-cards?tab=coverage",
     expect: "Current members without a working card",
     // "None" under Cards held by former members is a real answer, not an
     // empty page.
     allowEmptyState: true,
-    fullPage: false,
+    // The whole page: the twenty members without a card fill the first
+    // screen, and the other two sections the caption names sit below them.
+    fullPage: true,
     prepare: async (page) => {
       await page
         .getByText("Current members without a working card")
@@ -23800,14 +23824,86 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 2444,
     anchor: "The Tap log tab of Member ID Cards",
-    alt: "The Tap log tab of Member ID Cards: taps at the check-in station for the in-progress drill, one checked in, one already checked in, one card not active and one unknown card, with the outcome and reader filters and Export CSV",
+    alt: "The Tap log tab of Member ID Cards: the outcome, reader and date filters with Export CSV, and the drill's taps at the check-in station (checked in, already checked in, checked out, a card not active and an unknown card) beside a tap refused at a room kiosk",
     route: "/members/admin/id-cards?tab=taps",
-    expect: "Unknown card",
+    // Scoped to the table: the outcome filter's closed <select> also holds
+    // an "Unknown card" option, which is never visible and matched first.
+    expect: { selector: "table td:has-text('Unknown card')" },
     fullPage: false,
     prepare: async (page) => {
-      await page.getByText("Unknown card").first().waitFor({ timeout: 20_000 });
+      await page
+        .locator("table td", { hasText: "Unknown card" })
+        .first()
+        .waitFor({ timeout: 20_000 });
       await hideScanNotice(page);
     },
+  },
+  {
+    id: "01-56-id-cards-settings",
+    doc: "01-membership.md",
+    line: 2590,
+    anchor: "The Settings tab of Member ID Cards",
+    alt: "The Settings tab of Member ID Cards: Keep the tap log for (months) set to 24, the note that it takes 3 to 84 months and that check-ins stay on their records, and Save",
+    route: "/members/admin/id-cards?tab=settings",
+    expect: "Keep the tap log for (months)",
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByLabel("Keep the tap log for (months)")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+      await hideScanNotice(page);
+    },
+  },
+
+  // ---- Queued by the October 29 and October 31 – November 1 passes ------
+  {
+    // Rafael Duarte's three leaves are seeded by
+    // `seed_backlog_01_leave_badges`: one ended, one running, one ahead.
+    id: "01-57-profile-leave-badges",
+    doc: "01-membership.md",
+    line: 2038,
+    anchor: "The Leave of Absence card on a member's profile with three leaves",
+    alt: "The Leave of Absence card on Rafael Duarte's profile: a military leave in December badged Future, a leave of absence running now badged Active, and a personal leave that ended in October badged Expired, each with its dates and reason",
+    route: "/members",
+    expect: { selector: "div.card:has(> h2:text-is('Leave of Absence'))" },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=100",
+        (id) => `/members/${id}`,
+        "users",
+        (user) => user.username === "rduarte",
+      )(page);
+      await page
+        .locator("div.card:has(> h2:text-is('Leave of Absence'))")
+        .getByText("Future", { exact: true })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(> h2:text-is('Leave of Absence'))",
+  },
+  {
+    id: "01-58-member-class-status",
+    doc: "01-membership.md",
+    line: 1557,
+    anchor:
+      "The Department Information block of an administrative member's edit page",
+    alt: "The Department Information block of Jonah Whitfield's edit page: Member class set to Administrative beside the hire date, Membership status below it, each with the line explaining it",
+    route: "/members",
+    expect: { selector: "select[id$='-member-class']" },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=100",
+        (id) => `/members/admin/edit/${id}`,
+        "users",
+        (user) => user.username === "jwhitfield",
+      )(page);
+      await page
+        .locator("select[id$='-member-class']")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> h2:text-is('Department Information'))",
   },
   {
     id: "05-140-nfc-tag-register",
@@ -24384,7 +24480,10 @@ const PASSKEY_MEMBER_CREDENTIALS = {
 async function adminStepUp(page) {
   const secret = readAdminTotpSecret();
   if (!secret) throw new Error("no administrator TOTP secret to confirm with");
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  // Two tries only: refused codes count toward the account lockout (five lock
+  // the administrator out of every capture for fifteen minutes), and parallel
+  // runs signing in as the same administrator already spend steps.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     const step = totpStep() + 1;
     await page.waitForTimeout(
       Math.max(0, step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1000),
@@ -24394,7 +24493,7 @@ async function adminStepUp(page) {
     });
     if (confirmed.status === 200) return;
   }
-  throw new Error("the administrator's step-up was refused three times");
+  throw new Error("the administrator's step-up was refused twice");
 }
 
 /** State a passkey shot's cleanup needs: the page, its authenticator, the TOTP secret. */
