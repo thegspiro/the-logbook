@@ -25,17 +25,13 @@
 00-22-notification-card-expanded
 00-23-login-two-factor
 00-25-dashboard-organization
-01-01-member-directory
 01-02-member-profile
 01-07-admin-member-edit
 01-10-prospective-pipeline
 01-11-create-waiver
-01-22-member-lifecycle
 01-23-print-member-badges
-01-24-delete-member-modal
 01-25-applicant-action-bar
 01-26-print-applicant-badges
-01-27-stage-type-picker
 01-28-stage-email-config
 01-29-status-change-modal
 01-30-evoc-operator-modal
