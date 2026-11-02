@@ -5,6 +5,24 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: Zeffy integration, November 2, 2026
+
+A targeted pass for one merge: the Zeffy integration (#3892, merged
+2026-11-01 18:23 UTC), which landed after the previous pass's range closed at
+`f57fd5a`. The rest of what merged since is left to the next full pass.
+`CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                           | Guide | Disposition                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------- |
+| Zeffy integration card: API key, optional webhook signing secret, signed webhook, hourly sync of linked campaigns (#3892)                                                                                        | 16    | Section written; catalog row and troubleshooting rows added            |
+| **Grants & Fundraising → Zeffy**: linking a Zeffy campaign to a fundraising campaign, fundraising event or dues schedule, the start date, the payments list and its eight statuses, refunds and disputes (#3892) | 12    | Section written; menu list, events note and troubleshooting rows added |
+| Zeffy membership payments credited to member dues (method `zeffy`, reference `zeffy:`); dues link needs both finance permissions (#3892)                                                                         | 11    | Note added under Recording Payments                                    |
+| Setup and operator detail: `docs/ZEFFY_INTEGRATION.md`; owner decisions in `docs/KNOWN_LIMITATIONS.md` (#3892)                                                                                                   | none  | Already written with the change                                        |
+
+**Screenshots to create:** Zeffy card and connect dialog; the Zeffy page; the
+link dialog. **Re-check:** the Grants & Fundraising menu. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 31 – November 1, 2026
 
 Merged to `main` after `f9220b3` (2026-10-31 00:40 UTC) through `f57fd5a`

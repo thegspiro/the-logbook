@@ -1,5 +1,17 @@
 # Screenshot currency
 
+## Queued by the November 2 Zeffy documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 16 | Integrations catalog with the **Zeffy** card, and its connect dialog (API key, signing secret, webhook address) | Create |
+| 12 | **Grants & Fundraising → Zeffy**: connection panel, campaign cards and the payments list | Create |
+| 12 | **Link Zeffy campaign** dialog | Create |
+| 12 | Grants & Fundraising menu with the **Zeffy** entry | Replace |
+
 ## Queued by the October 31 – November 1 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
