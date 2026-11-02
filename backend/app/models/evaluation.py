@@ -444,6 +444,17 @@ class EvaluationStep(Base):
     completed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # When the deadline reminder and the overdue notice went out. Each is
+    # sent once per step; the stamp is what makes a second scheduler run a
+    # no-op (CLAUDE.md pitfall #36). A step that opens already inside its
+    # reminder window is stamped then, because its opening notice gives the
+    # due date and a reminder the same day would repeat it.
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    overdue_notice_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -545,7 +556,11 @@ class EvaluationSignature(Base):
     signed_name: Mapped[str] = mapped_column(String(200), nullable=False)
     disposition: Mapped[str] = mapped_column(String(20), nullable=False)
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    intent_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # The sign path always writes True; the "0" default only means a row
+    # written any other way never claims an intent nobody confirmed.
+    intent_confirmed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
@@ -629,7 +644,9 @@ class EvaluationDeletionRecord(Base):
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     template_name: Mapped[str] = mapped_column(String(150), nullable=False)
     evaluator_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    was_finalized: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    was_finalized: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     deleted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

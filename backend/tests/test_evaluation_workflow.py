@@ -12,7 +12,7 @@ released to them, and the figures the snapshot records.
 import json
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import pytest
@@ -25,16 +25,24 @@ from app.api.dependencies import get_current_user
 from app.api.v1.endpoints import evaluations as endpoints
 from app.core.database import get_db
 from app.models.audit import AuditLog
+from app.models.email_template import EmailTemplateType
 from app.models.evaluation import (
     Evaluation,
     EvaluationPeriod,
+    EvaluationStep,
     EvaluationTemplate,
     EvaluationTemplateVersion,
 )
 from app.models.event import Event, EventRSVP, EventType
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.training import TrainingRecord, TrainingStatus, TrainingType
-from app.models.user import MemberLeaveOfAbsence, User
+from app.models.user import MemberLeaveOfAbsence, User, user_positions
+from app.services import evaluation_notice_service
+from app.services.email_service import EmailService
+from app.services.evaluation_notice_service import (
+    EvaluationNoticeService,
+    reminder_due,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -1333,3 +1341,437 @@ class TestContentHash:
             "values": {"training.hours": {"available": True, "value": 4}}
         }
         assert content_hash(evaluation, {"evaluator": submitted}) != base
+
+
+# ---------------------------------------------------------------- notices
+#
+# Who is emailed when a step opens, when the record is final, and the
+# deadline reminders and overdue notices the daily scan sends. Sending is
+# replaced by a recorder at ``EmailService.send_evaluation_notice``, so each
+# test asserts exactly who would have been emailed which template, and with
+# which sentence.
+
+WAITING = EmailTemplateType.EVALUATION_STEP_WAITING
+REMINDER = EmailTemplateType.EVALUATION_DEADLINE_REMINDER
+OVERDUE = EmailTemplateType.EVALUATION_OVERDUE
+FINALIZED = EmailTemplateType.EVALUATION_FINALIZED
+
+# The workflow suite's period ends 2025-12-31, so its steps fall due in
+# January and February 2026.
+SELF_DUE = date(2026, 1, 14)
+EVALUATOR_DUE = date(2026, 1, 30)
+
+
+class _Outbox:
+    def __init__(self) -> None:
+        self.sent: list[tuple[EmailTemplateType, str, dict[str, Any]]] = []
+
+    def to(self, user: User, template: Optional[EmailTemplateType] = None) -> list:
+        return [
+            context
+            for kind, email, context in self.sent
+            if email == user.email and (template is None or kind == template)
+        ]
+
+    def templates_to(self, user: User) -> list[EmailTemplateType]:
+        return [kind for kind, email, _ in self.sent if email == user.email]
+
+    def clear(self) -> None:
+        self.sent.clear()
+
+
+@pytest.fixture
+def outbox(monkeypatch) -> _Outbox:
+    box = _Outbox()
+
+    async def record(self, template_type, to_email, context, **_):
+        box.sent.append((template_type, to_email, dict(context)))
+        return True
+
+    monkeypatch.setattr(EmailService, "send_evaluation_notice", record)
+    return box
+
+
+def _set_notice_today(monkeypatch, day: date) -> None:
+    monkeypatch.setattr(evaluation_notice_service, "today_in", lambda tz: day)
+
+
+async def _lock_evaluator(dept: _Dept, make_client: ClientFactory, url: str) -> dict:
+    member = await make_client(dept.member)
+    evaluator = await make_client(dept.evaluator)
+    await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+    await member.post(f"{url}/parts/self_evaluation/submit")
+    await evaluator.put(f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS})
+    response = await evaluator.post(f"{url}/parts/evaluator/submit")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def _step(dept: _Dept, evaluation_id: str, key: str) -> EvaluationStep:
+    return (
+        await dept.db.execute(
+            select(EvaluationStep).where(
+                EvaluationStep.evaluation_id == evaluation_id,
+                EvaluationStep.step_key == key,
+            )
+        )
+    ).scalar_one()
+
+
+def _at(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, 12, tzinfo=timezone.utc)
+
+
+class TestReminderWindow:
+    @pytest.mark.parametrize(
+        ("today", "expected"),
+        [
+            (date(2026, 1, 10), False),
+            (date(2026, 1, 11), True),
+            (date(2026, 1, 14), True),
+            (date(2026, 1, 15), False),
+        ],
+    )
+    def test_the_window_runs_from_the_reminder_day_through_the_due_date(
+        self, today: date, expected: bool
+    ):
+        assert reminder_due(SELF_DUE, 3, today) is expected
+
+    def test_no_due_date_is_never_due(self):
+        assert reminder_due(None, 3, date(2026, 1, 14)) is False
+
+
+class TestWhenAStepOpens:
+    async def test_drafting_tells_the_member_and_the_evaluator(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+
+        (to_member,) = outbox.to(dept.member, WAITING)
+        assert to_member["summary"] == (
+            f"Your self-evaluation for {dept.period.name} is open."
+        )
+        assert to_member["step_label"] == "Self_Evaluation"
+        assert to_member["due_date"] == "January 14, 2026"
+        assert to_member["evaluation_url"].endswith(
+            f"/reports/evaluations/{detail['id']}"
+        )
+        (to_evaluator,) = outbox.to(dept.evaluator, WAITING)
+        assert to_evaluator["summary"] == (
+            f"You are evaluating {dept.member.full_name} for {dept.period.name}."
+        )
+        # The drafting manager acts on no step, so is not told.
+        assert outbox.to(dept.manager) == []
+
+    async def test_no_notice_carries_a_rating_or_a_comment(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        await _lock_evaluator(dept, make_client, f"/evaluations/{detail['id']}")
+        written = "Steady attendance."
+        for _, _, context in outbox.sent:
+            assert all(written not in str(v) for v in context.values())
+            assert set(context) <= {
+                "recipient_name",
+                "member_name",
+                "period_name",
+                "summary",
+                "evaluation_url",
+                "step_label",
+                "due_date",
+            }
+
+    async def test_the_evaluator_locking_asks_the_member_to_acknowledge(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        outbox.clear()
+        await _lock_evaluator(dept, make_client, f"/evaluations/{detail['id']}")
+
+        (notice,) = outbox.to(dept.member, WAITING)
+        assert notice["summary"] == (
+            f"Your evaluation for {dept.period.name} is ready for you to read "
+            "and acknowledge."
+        )
+        assert outbox.to(dept.evaluator) == []
+
+    async def test_calibration_tells_its_holders_and_then_the_evaluator(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        template = await _template(
+            dept.db, dept.org, name="Calibrated", workflow=WITH_CALIBRATION
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        outbox.clear()
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+
+        sentence = (
+            f"{dept.member.full_name}'s evaluation for {dept.period.name} is "
+            "ready for calibration."
+        )
+        assert [n["summary"] for n in outbox.to(dept.reader, WAITING)] == [sentence]
+        assert [n["summary"] for n in outbox.to(dept.manager, WAITING)] == [sentence]
+        assert outbox.to(dept.member) == []
+
+        outbox.clear()
+        response = await (await make_client(dept.reader)).post(
+            f"{url}/calibration/complete"
+        )
+        assert response.status_code == 200, response.text
+        (notice,) = outbox.to(dept.evaluator, WAITING)
+        assert notice["summary"].startswith("Calibration of ")
+        assert notice["step_label"] == "Evaluator"
+
+    async def test_an_approval_tells_the_positions_holders_but_not_the_member(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, db_session
+    ):
+        approver = await _user(db_session, dept.org, [], position_name="Board")
+        approver_position = approver.positions[0].id
+        # The member also holds the position; they never approve their own.
+        await db_session.execute(
+            user_positions.insert().values(
+                user_id=dept.member.id, position_id=approver_position
+            )
+        )
+        workflow = {
+            "steps": [
+                *ANNUAL["steps"][:2],
+                {
+                    "key": "board",
+                    "type": "approval",
+                    "label": "Board approval",
+                    "actor": {"kind": "position", "position_id": approver_position},
+                    "due_days": 45,
+                },
+                ANNUAL["steps"][2],
+            ]
+        }
+        template = await _template(
+            dept.db, dept.org, name="With approval", workflow=workflow
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        outbox.clear()
+        await _lock_evaluator(dept, make_client, f"/evaluations/{detail['id']}")
+
+        (notice,) = outbox.to(approver, WAITING)
+        assert notice["summary"] == (
+            f"{dept.member.full_name}'s evaluation for {dept.period.name} is "
+            "waiting for your approval."
+        )
+        assert notice["step_label"] == "Board approval"
+        assert outbox.to(dept.member) == []
+
+    async def test_a_failed_notice_does_not_undo_the_draft(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        async def broken(self, *args, **kwargs):
+            raise RuntimeError("mail server on fire")
+
+        monkeypatch.setattr(EmailService, "send_evaluation_notice", broken)
+        detail = await _draft(await make_client(dept.manager), dept)
+        response = await (await make_client(dept.manager)).get(
+            f"/evaluations/{detail['id']}"
+        )
+        assert response.status_code == 200
+
+    async def test_a_step_opening_inside_its_window_is_not_reminded_again(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, SELF_DUE - timedelta(days=1))
+        detail = await _draft(await make_client(dept.manager), dept)
+        step = await _step(dept, detail["id"], "self_evaluation")
+        assert step.reminder_sent_at is not None
+        # The evaluator's step is due later, outside the window: not stamped.
+        assert (await _step(dept, detail["id"], "evaluator")).reminder_sent_at is None
+
+        outbox.clear()
+        counts = await EvaluationNoticeService(dept.db).send_due_notices(
+            now=_at(SELF_DUE)
+        )
+        assert outbox.to(dept.member, REMINDER) == []
+        assert counts["reminders"] == 0
+
+
+class TestFinalized:
+    async def test_the_member_and_the_evaluator_are_told(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        outbox.clear()
+        member = await make_client(dept.member)
+        response = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        (to_member,) = outbox.to(dept.member, FINALIZED)
+        assert (
+            to_member["summary"] == f"Your evaluation for {dept.period.name} is final."
+        )
+        (to_evaluator,) = outbox.to(dept.evaluator, FINALIZED)
+        assert "which you conducted" in to_evaluator["summary"]
+        assert outbox.to(dept.manager) == []
+
+
+class TestPreferences:
+    async def test_an_officer_may_switch_duties_off_but_a_member_cannot_opt_out(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        dept.evaluator.notification_preferences = {
+            "email_kinds": {"evaluation_duties": False}
+        }
+        dept.member.notification_preferences = {"email_notifications": False}
+        await dept.db.flush()
+
+        await _draft(await make_client(dept.manager), dept)
+
+        assert outbox.to(dept.evaluator) == []
+        assert len(outbox.to(dept.member, WAITING)) == 1
+
+
+class TestTheDailyScan:
+    async def _drafted(self, dept: _Dept, make_client: ClientFactory) -> str:
+        detail = await _draft(await make_client(dept.manager), dept)
+        return detail["id"]
+
+    async def test_a_reminder_goes_out_once_inside_the_window(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        # Drafted long before anything is due, so no stamp at opening.
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        outbox.clear()
+        service = EvaluationNoticeService(dept.db)
+
+        early = await service.send_due_notices(now=_at(SELF_DUE - timedelta(days=4)))
+        assert outbox.sent == []
+        assert early["reminders"] == 0
+
+        await service.send_due_notices(now=_at(SELF_DUE - timedelta(days=3)))
+        (notice,) = outbox.to(dept.member, REMINDER)
+        assert notice["summary"] == (
+            f"Your self-evaluation for {dept.period.name} is due soon."
+        )
+        assert outbox.to(dept.evaluator) == []
+        assert (await _step(dept, evaluation_id, "self_evaluation")).reminder_sent_at
+
+        outbox.clear()
+        await service.send_due_notices(now=_at(SELF_DUE - timedelta(days=2)))
+        assert outbox.to(dept.member) == []
+
+    async def test_an_overdue_step_tells_the_actor_and_the_managers_once(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        outbox.clear()
+        service = EvaluationNoticeService(dept.db)
+
+        counts = await service.send_due_notices(
+            now=_at(EVALUATOR_DUE + timedelta(days=1))
+        )
+        assert counts["overdue"] == 2
+        assert [n["summary"] for n in outbox.to(dept.evaluator, OVERDUE)] == [
+            f"Your evaluation of {dept.member.full_name} for {dept.period.name} "
+            "is past its due date."
+        ]
+        to_manager = sorted(n["summary"] for n in outbox.to(dept.manager, OVERDUE))
+        assert to_manager == sorted(
+            f"The {label} step of {dept.member.full_name}'s evaluation for "
+            f"{dept.period.name} is past its due date."
+            for label in ("Self_Evaluation", "Evaluator")
+        )
+        # A reader holds view_all, not manage: not an evaluation manager.
+        assert outbox.to(dept.reader) == []
+        # Late is late: no "due soon" for a step already overdue.
+        assert outbox.to(dept.member, REMINDER) == []
+        step = await _step(dept, evaluation_id, "evaluator")
+        assert step.overdue_notice_sent_at is not None
+        assert step.reminder_sent_at is not None
+
+        outbox.clear()
+        again = await service.send_due_notices(
+            now=_at(EVALUATOR_DUE + timedelta(days=2))
+        )
+        assert outbox.sent == []
+        assert again["overdue"] == 0
+
+    async def test_a_mail_outage_leaves_the_step_to_be_tried_again(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        recorder = EmailService.send_evaluation_notice
+
+        async def down(self, *args, **kwargs):
+            raise ConnectionError("SMTP unreachable")
+
+        monkeypatch.setattr(EmailService, "send_evaluation_notice", down)
+        service = EvaluationNoticeService(dept.db)
+        day = _at(SELF_DUE - timedelta(days=1))
+        assert (await service.send_due_notices(now=day))["reminders"] == 0
+        step = await _step(dept, evaluation_id, "self_evaluation")
+        assert step.reminder_sent_at is None
+
+        monkeypatch.setattr(EmailService, "send_evaluation_notice", recorder)
+        outbox.clear()
+        assert (await service.send_due_notices(now=day))["reminders"] == 1
+        assert len(outbox.to(dept.member, REMINDER)) == 1
+
+    async def test_a_closed_step_is_not_chased(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        member = await make_client(dept.member)
+        url = f"/evaluations/{evaluation_id}"
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        outbox.clear()
+
+        await EvaluationNoticeService(dept.db).send_due_notices(
+            now=_at(SELF_DUE + timedelta(days=1))
+        )
+        assert outbox.to(dept.member) == []
+
+    async def test_a_departments_template_switch_is_honoured_by_the_sender(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        """Through the real sender: a switched-off template sends nothing."""
+        calls: list[str] = []
+
+        async def fake_send_email(self, **kwargs):
+            calls.append(kwargs["template_type"])
+            return 1, 0
+
+        async def switched_off(self, organization_id, template_type):
+            return template_type == WAITING
+
+        from app.services.email_template_service import EmailTemplateService
+
+        monkeypatch.setattr(EmailService, "send_email", fake_send_email)
+        monkeypatch.setattr(EmailTemplateService, "is_switched_off", switched_off)
+        await _draft(await make_client(dept.manager), dept)
+        assert WAITING.value not in calls
+
+
+def test_the_scan_is_scheduled_daily():
+    from app.services import scheduled_tasks
+
+    assert (
+        scheduled_tasks.TASK_RUNNERS["evaluation_due_notices"]
+        is scheduled_tasks.run_evaluation_due_notices
+    )
+    assert scheduled_tasks.SCHEDULE["evaluation_due_notices"]["frequency"] == "daily"

@@ -203,13 +203,17 @@ const EvaluationsPage: React.FC = () => {
         <div className="alert-info mb-6 flex gap-3">
           <Info className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p className="text-theme-alert-info-text text-sm">
-            <span className="text-theme-alert-info-title font-medium">Email notices are not yet available.</span>{' '}
-            Evaluations are drafted, completed and signed from the{' '}
+            <span className="text-theme-alert-info-title font-medium">Where evaluations happen.</span> Evaluations are
+            drafted, completed and signed from the{' '}
             <Link to="/reports/evaluations/conduct" className="underline">
               Evaluations
             </Link>{' '}
-            list, and each finalized evaluation keeps its signed PDF. Email notices and deadline reminders arrive in a
-            later update, so people are not yet told when a step is waiting on them.
+            list, and each finalized evaluation keeps its signed PDF. People are emailed when a step is waiting on them,
+            before it is due and once it is overdue. The wording of those emails is edited in{' '}
+            <Link to="/communications/email-templates" className="underline">
+              Email Templates
+            </Link>
+            .
           </p>
         </div>
 

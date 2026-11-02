@@ -71,6 +71,7 @@ from app.services.evaluation_data_service import (
     sources_used,
 )
 from app.services.evaluation_data_sources import DATA_SOURCES, DATA_SOURCES_BY_KEY
+from app.services.evaluation_notice_service import EvaluationNoticeService
 from app.services.member_supervisor_service import MemberSupervisorService
 from app.utils.membership import canonical_member_status, effective_member_class
 from app.utils.org_timezone import resolve_scheduling_timezone, today_in
@@ -399,6 +400,27 @@ class EvaluationService:
     @staticmethod
     def _workflow(evaluation: Evaluation) -> TemplateWorkflow:
         return TemplateWorkflow.model_validate(evaluation.template_version.workflow)
+
+    @staticmethod
+    def _open_keys(steps: Sequence[EvaluationStep]) -> set:
+        return {
+            s.step_key for s in steps if s.status == EvaluationStepStatus.OPEN.value
+        }
+
+    async def _announce(
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        opened: Sequence[str],
+        finalized: bool,
+    ) -> None:
+        """Email the people a transition concerns. After the commit, and
+        best-effort: the notice service logs a failure and never raises."""
+        notices = EvaluationNoticeService(self.db)
+        if opened:
+            await notices.steps_opened(organization_id, evaluation_id, opened)
+        if finalized:
+            await notices.finalized(organization_id, evaluation_id)
 
     def _roles(
         self, evaluation: Evaluation, viewer: User, steps: Sequence[EvaluationStep]
@@ -1199,6 +1221,7 @@ class EvaluationService:
                     due_date=period.end_date + timedelta(days=step.due_days),
                 )
             )
+        opened = sorted(self._open_keys(evaluation.steps))
         try:
             async with self.db.begin_nested():
                 self.db.add(evaluation)
@@ -1207,7 +1230,9 @@ class EvaluationService:
                 f"{member.full_name} already has an evaluation for '{period.name}'."
             ) from exc
         await self.db.commit()
-        return evaluation.id
+        evaluation_id = evaluation.id
+        await self._announce(organization_id, evaluation_id, opened, False)
+        return evaluation_id
 
     async def _take_snapshot(
         self,
@@ -1357,6 +1382,7 @@ class EvaluationService:
         if loaded is None:
             return None
         evaluation, steps, parts, step = loaded
+        was_open = self._open_keys(steps)
         part = parts.get(kind)
         if part is None:
             raise ValueError("Save the part before submitting it.")
@@ -1380,6 +1406,9 @@ class EvaluationService:
             ):
                 calibration.status = EvaluationStepStatus.OPEN.value
                 await self.db.commit()
+                await self._announce(
+                    organization_id, evaluation.id, [calibration.step_key], False
+                )
                 return "sent_for_calibration"
             if (
                 calibration is not None
@@ -1414,7 +1443,11 @@ class EvaluationService:
         outcome = "submitted"
         if kind == EvaluationPartKind.EVALUATOR.value:
             outcome = self._advance(evaluation, steps, now)
+        opened = sorted(self._open_keys(steps) - was_open)
         await self.db.commit()
+        await self._announce(
+            organization_id, evaluation.id, opened, outcome == "finalized"
+        )
         return outcome
 
     @staticmethod
@@ -1494,16 +1527,21 @@ class EvaluationService:
                 signed_at=now,
             )
         )
+        was_open = self._open_keys(steps)
         step = next(s for s in steps if s.step_key == signable["step_key"])
         step.status = EvaluationStepStatus.COMPLETED.value
         step.completed_at = now
         step.completed_by = actor.id
         outcome = self._advance(evaluation, steps, now)
+        opened = sorted(self._open_keys(steps) - was_open)
         try:
             await self.db.commit()
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError("This step has already been signed.") from exc
+        await self._announce(
+            organization_id, evaluation.id, opened, outcome == "finalized"
+        )
         return "finalized" if outcome == "finalized" else "signed"
 
     async def complete_calibration(
@@ -1531,4 +1569,7 @@ class EvaluationService:
         step.completed_at = datetime.now(timezone.utc)
         step.completed_by = actor.id
         await self.db.commit()
+        await EvaluationNoticeService(self.db).calibration_completed(
+            organization_id, evaluation.id
+        )
         return True

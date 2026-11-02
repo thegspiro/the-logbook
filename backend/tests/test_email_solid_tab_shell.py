@@ -80,6 +80,10 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED.value: "30e5b112ec00",
     EmailTemplateType.APPLICATION_ASSIGNED.value: "c588f525fdbb",
     EmailTemplateType.APPLICATION_NEEDS_ATTENTION.value: "aefb58788235",
+    EmailTemplateType.EVALUATION_STEP_WAITING.value: "38e0f552242d",
+    EmailTemplateType.EVALUATION_DEADLINE_REMINDER.value: "38e0f552242d",
+    EmailTemplateType.EVALUATION_OVERDUE.value: "38e0f552242d",
+    EmailTemplateType.EVALUATION_FINALIZED.value: "38e0f552242d",
 }
 
 

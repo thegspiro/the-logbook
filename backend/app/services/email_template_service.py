@@ -27,6 +27,7 @@ from app.models.email_template import (
     MessageHistory,
 )
 from app.services import email_footers as _footers
+from app.services import email_templates_evaluations as _evaluation_templates
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
@@ -1025,6 +1026,7 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
 # default bodies in their own module — ten more entries inline here would
 # bury the rest.
 TEMPLATE_VARIABLES.update(_storefront_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_evaluation_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -1735,6 +1737,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _storefront_templates.SAMPLE_CONTEXT.items()}
 )
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _evaluation_templates.SAMPLE_CONTEXT.items()}
+)
 
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
@@ -1817,6 +1822,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
         "customer_name": "legal_full",
     },
 }
+TEST_RECIPIENT_FIELDS.update(_evaluation_templates.TEST_RECIPIENT_FIELDS)
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
 _DATE = "%B %d, %Y"
@@ -1905,6 +1911,12 @@ TEST_SAMPLE_DATES: Dict[
         "shift_start": (1, time(6, 0), _strf("%H:%M")),
     },
 }
+TEST_SAMPLE_DATES.update(
+    {
+        key: {"due_date": (days, None, _strf(_DATE))}
+        for key, days in _evaluation_templates.SAMPLE_DUE_DAYS.items()
+    }
+)
 
 
 # Dates that sit inside a prose value rather than a variable of their own:
@@ -5267,6 +5279,9 @@ class EmailTemplateService:
         # email_templates_storefront.py for why they need raw-HTML
         # variables where other templates need none.
         *_storefront_templates.DEFAULT_TEMPLATE_DEFS,
+        # Performance evaluations' four notices; see
+        # email_templates_evaluations.py.
+        *_evaluation_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     # Stamp each definition with the colourway build_shell recorded for its
