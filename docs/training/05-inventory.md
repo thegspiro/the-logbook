@@ -426,9 +426,9 @@ stay. A size filed under a different name is left alone. If any new name would b
 over 255 characters, nothing changes. Generating more sizes afterward reuses the
 group by its new name.
 
-<!-- Screenshot needed: A folded product row on the inventory items list, its sizes listed on one line, with the pencil Rename button at the end of the row -->
+![The inventory items list with the folded Structural Coat row: 5 loaded, its sizes L, M, S, XL and XXL on one line, and the pencil Rename button focused at the end of the row](./images/05-148-folded-product-rename.png)
 
-<!-- Screenshot needed: The Rename product window opened from a folded product row, saying every size and variant is renamed and the size, colour and style part stays, with Product name and Rename -->
+![The Rename product window for Structural Coat: renames it on every size and variant while the size, colour and style part of each name stays, with Product name, Cancel and Rename](./images/05-149-rename-product-dialog.png)
 
 ### Generating sizes and styles
 
@@ -563,7 +563,7 @@ gear, uniforms and equipment** permission.
 
 A kit must have at least one item.
 
-![Equipment kit editor with its line items and quantities](./images/05-27-equipment-kit-modal.png)
+![The Edit Kit window for New Recruit PPE Kit, scrolled to its lines: the single-size lines with their category, quantity and Optional box, and Structural Coat with its Size set to Member's size](./images/05-27-equipment-kit-modal.png)
 
 ### Issuing a Kit
 
@@ -578,7 +578,7 @@ Each item in the kit is then given to the member on its own record: tracked
 items as assignments, counted items as issuances. The message says how many
 were issued.
 
-![The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte](./images/05-95-kit-issue-confirm.png)
+![The Issue New Recruit PPE Kit? review after picking Rafael Duarte: Structural Coat resolved to M from his size on file (Member's size: M), the single-size lines asking for a choice, and Don't issue and Issue to Rafael Duarte](./images/05-95-kit-issue-confirm.png)
 
 ![Equipment kit detail listing its component items](./images/05-50-equipment-kit-detail.png)
 
@@ -1289,7 +1289,7 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
   link to the **Low stock** tab of Medical Supplies instead, and an officer who
   sees only one kind gets only that link.
 
-  <!-- Screenshot needed: Inventory Items opened from the low-stock email link: the notice Showing only items at or below their reorder point with Show all items, above the one gear item that is low -->
+  ![Inventory Items opened from the low-stock email link: the notice Showing only items at or below their reorder point with Show all items, above Firefighting Gloves, the one gear item at or below its reorder point](./images/05-152-items-low-stock-notice.png)
 
 - Low-stock alerts are **email only**. No text message is sent, because
   reordering is a business-hours decision made from an item table a text
@@ -1903,9 +1903,9 @@ Moves and lost/found changes are recorded in the audit log.
 
 The page only appears while NFC tags are turned on.
 
-<!-- Screenshot needed: The NFC Tag Register as a quartermaster: item and shelf tags with their status and last tap, one tag marked Lost -->
+![The NFC Tag Register as a quartermaster: tags on a cylinder and on coats with what each names, its status (one Lost, offering Mark found) and the last time it was tapped, each with Mark lost, Move and Unlink, and two tags ticked with the 2 selected bar (Mark lost, Mark found, Clear selection) above the list](./images/05-140-nfc-tag-register.png)
 
-<!-- Screenshot needed: The Move tag dialog from the NFC Tag Register, searching for another item to move an item tag onto -->
+![The Move tag dialog for an item tag: a search for another item and the matching items to move the tag onto, with Move tag and Cancel](./images/05-141-nfc-move-tag.png)
 
 ### Items not seen
 
@@ -1949,7 +1949,7 @@ Needs the **Manage gear, uniforms and equipment** permission.
    - Open the print page with nothing selected and choose a category, location
      or storage area.
 
-   <!-- Screenshot needed: The Print Labels menu opened beside Export on the inventory items list, offering This list with its item count, Items that need a label with its count, and Choose by category or location -->
+   ![The Print Labels menu opened beside Export on the inventory items list: This list with its item count, Items that need a label with its count, and Choose by category or location](./images/05-146-print-labels-menu.png)
 
 2. Select **Settings** and choose a **Label Size**. The sizes are cards, not a
    list:
@@ -2061,7 +2061,7 @@ printer is registered, the window also points to **Settings → Label
 Printers**, where an administrator can register one and skip the print dialog
 altogether.
 
-<!-- Screenshot needed: The Before you print window for a Rollo / Thermal 2" x 1" roll: the printer, paper size, margins and scale to choose in the print dialog, the Don't show again box, Back and Open print dialog -->
+![The Before you print window for a 2" x 1" roll: choose the label printer, paper size 2" x 1" under More settings, margins None and scale 100%, with the Don't show again box, Back and Open print dialog](./images/05-147-before-you-print.png)
 
 The checklist is not shown for **PDF**, **Print to _printer name_**, or on a
 phone or tablet, where printing always downloads the PDF.
@@ -2841,7 +2841,7 @@ The red numbers count:
 
 ![Inventory admin hub with its area cards and page strip](./images/05-25-admin-hub.png)
 
-![The inventory admin hub with an area chosen and its pages listed](./images/05-60-admin-hub-groups.png)
+![Inventory Administration with the Catalog area chosen: its pages in the strip under the area cards (All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors, Print Labels) and the line naming the page open](./images/05-60-admin-hub-groups.png)
 
 ### Who sees which pages
 
@@ -2918,7 +2918,7 @@ the three can no longer offer different sections.
   apparatus** puts a heading per rig. **Add stock** opens a sheet with Quantity
   and Lot side by side and the amount on the truck now above them.
 
-![One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header](./images/05-129-apparatus-detail-phone.png)
+![Medic 3 opened from Fleet Readiness on a phone: the unit name and its readiness (No checks yet) on one row, the recent-check strip at full width, and the Checks, Inventory, Findings and Check log tabs under the header](./images/05-129-apparatus-detail-phone.png)
 
 ![The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons](./images/05-130-supply-worklist-phone.png)
 
@@ -3002,7 +3002,7 @@ outside the range is changed to the nearest allowed value.
 On a phone each setting is one row with its switch or number box at the right,
 under a compact page top.
 
-<!-- Screenshot needed: Checklist settings on a phone: the two prompt switches and the two check-in window boxes as rows, under the compact page top -->
+![Checklist Settings on a phone: the compact page top, then Start-of-shift and End-of-shift checklists as rows with their switches, and Opens before the start and Closes after the end with their hour boxes](./images/05-153-checklist-settings-phone.png)
 
 ### Building a checklist
 
@@ -3050,9 +3050,9 @@ Build checklists in the **Template builder**, from the checklist console.
 
 ![Copy checklist to an apparatus, opened from Tools → Clone checklist: the note that the copy starts switched off so it can be reviewed first, and Copy onto set to B-5 — Brush 5](./images/05-124-clone-checklist-dialog.png)
 
-<!-- Screenshot needed: The Crew view panel beside the checklist builder: What the crew sees, the phone frame showing the checklist as a crew gets it, and the expand button -->
+![The Crew view panel beside the checklist builder for Engine Daily Check: What the crew sees, updating as you edit, the checklist inside the phone frame as a crew gets it, and the expand button](./images/05-150-builder-crew-view.png)
 
-<!-- Screenshot needed: The crew view opened full size from the builder: the checklist in the large phone frame with its close button -->
+![The crew view opened full size from the checklist builder: Engine Daily Check in the large phone frame, as a crew sees it, with the round close button](./images/05-151-builder-crew-view-full.png)
 
 ### Catalog Links
 
@@ -3205,7 +3205,7 @@ total. Gear is unchanged: it is still judged on the shelf alone.
   The tab shows how many supplies wait on a count, and the list can be filtered
   to them.
 
-  <!-- Screenshot needed: The Not yet counted tab of Medical Supplies, each uncounted truck position linked to that truck's inventory -->
+  ![The Not yet counted tab of Medical Supplies: supplies whose truck positions nobody has counted, each naming the apparatus and compartment and linking to that truck's inventory](./images/05-145-medical-not-yet-counted.png)
 
 - The list (and its CSV export) can be sorted by **Next expiry**, shelf and
   trucks together; supplies with no date sort last. The supply export adds
@@ -3219,7 +3219,7 @@ total. Gear is unchanged: it is still judged on the shelf alone.
   compartment and links to that apparatus's inventory, where the swap and
   restock are done.
 
-<!-- Screenshot needed: The Expiring tab of Medical Supplies looking ahead 90 days: a recalled lot listed first and marked Recalled, then shelf lots and truck rows, each truck row linking to that apparatus's inventory -->
+![The Expiring tab of Medical Supplies with Look ahead set to 90 days: the recalled Nasal Cannula lot listed first and marked Recalled, then shelf lots and the stock on trucks, each truck row naming its apparatus and compartment with a Swap or restock link](./images/05-154-medical-expiring-lookahead.png)
 
 **Kept on apparatus only.** Some equipment has no spare in a stock room: a LUCAS
 device or a cardiac monitor lives on the ambulance. Tick **Kept on apparatus
@@ -3235,7 +3235,7 @@ value is refused rather than guessed).
 
 ![The medical supply form with Kept on apparatus only ticked and its explanation, for a supply that never goes through the stock room](./images/05-134-medical-supply-apparatus-only.png)
 
-![The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 1 shelf and 1 on trucks, and the list carrying a shelf lot beside the tourniquet carried on Rescue 7](./images/05-137-medical-expiring-split.png)
+![The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 2, 1 shelf and 1 on trucks, the Recalled lots panel, and the list carrying the recalled cannula lot first, a shelf lot and the tourniquet on Rescue 7 with Swap or restock](./images/05-137-medical-expiring-split.png)
 
 ### Deleting a medical supply category
 
@@ -3314,12 +3314,12 @@ delivery of the same lot.
    **Find**. It searches the shelves and every apparatus checklist, in date or
    not.
 
-   <!-- Screenshot needed: Find a lot on the Medical Supplies Expiring tab, with a lot found on the shelf and its Recall lot button -->
+   ![Find a lot on the Medical Supplies Expiring tab: the lot number HG-2607 typed, the Hemostatic Gauze lot it found on the shelf, and the Recall lot button for it](./images/05-142-find-lot-recall.png)
 
 3. Select **Recall lot _number_ of _supply_**. Add a reason if you like (for
    example the manufacturer's notice number) and select **Recall lot**.
 
-   <!-- Screenshot needed: The Recall this lot dialog with a reason typed and the Recall lot button -->
+   ![The Recall this lot dialog for Hemostatic Gauze lot HG-2607, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot](./images/05-143-recall-lot-dialog.png)
 
 **While a lot is recalled:**
 
@@ -3339,7 +3339,7 @@ at once.
 
 A lot with no lot number cannot be recalled.
 
-<!-- Screenshot needed: The Recalled lots panel on the Expiring tab, with the recalled cannula lot, how many are still to pull, and Lift recall -->
+![The Recalled lots panel on the Medical Supplies Expiring tab: Nasal Cannula lot NC-2519, the date it was recalled, how many are still to pull and Lift recall](./images/05-144-recalled-lots-panel.png)
 
 ---
 

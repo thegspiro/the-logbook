@@ -18030,12 +18030,11 @@ export const SHOTS = [
       );
       await print.click();
       // Since 2026-10-27 a browser print first shows the Before you print
-      // checklist (05-147); carry on through it as a quartermaster would.
-      const carryOn = page.getByRole("button", { name: "Open print dialog" });
-      await carryOn
-        .waitFor({ timeout: 5_000 })
-        .then(() => carryOn.click())
-        .catch(() => {});
+      // checklist (05-147) in a browser that has not been told to skip it;
+      // carry on through it as a quartermaster would.
+      await page
+        .getByRole("button", { name: "Open print dialog" })
+        .click({ timeout: 10_000 });
       await page.getByText("Did the labels print correctly?").waitFor();
       await page.evaluate(() => window.scrollTo(0, 0));
     },
@@ -21147,7 +21146,7 @@ export const SHOTS = [
     line: 570,
     anchor:
       'Quartermaster at /inventory/admin/kits: the "Issue <kit>?" confirmation',
-    alt: "The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte",
+    alt: "The Issue New Recruit PPE Kit? review after picking Rafael Duarte: Structural Coat resolved to M from his size on file (Member's size: M), the single-size lines asking for a choice, and Don't issue and Issue to Rafael Duarte",
     route: "/inventory/admin/kits",
     expect: "Don't issue",
     selector: '[data-testid="modal-panel"]',
@@ -23719,7 +23718,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3041,
     anchor: "the Expiring tab with the shelf/truck split on its tiles",
-    alt: "The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile split into shelf and on-trucks counts, and the list carrying a shelf lot beside the tourniquet on Rescue 7",
+    alt: "The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 2, 1 shelf and 1 on trucks, the Recalled lots panel, and the list carrying the recalled cannula lot first, a shelf lot and the tourniquet on Rescue 7 with Swap or restock",
     route: "/medical-supplies",
     expect: "on trucks",
     viewport: { width: 1440, height: 1100 },
@@ -24117,7 +24116,8 @@ export const SHOTS = [
     id: "05-146-print-labels-menu",
     doc: "05-inventory.md",
     line: 1951,
-    anchor: "The Print Labels menu opened beside Export on the inventory items list",
+    anchor:
+      "The Print Labels menu opened beside Export on the inventory items list",
     alt: "The Print Labels menu opened beside Export on the inventory items list: This list with its item count, Items that need a label with its count, and Choose by category or location",
     route: "/inventory/items",
     expect: "Choose by category or location",
@@ -24150,9 +24150,9 @@ export const SHOTS = [
     selector: '[data-testid="modal-panel"]',
     // The checklist sits between Print Labels and the browser's print dialog,
     // so it is photographed and answered Back: nothing prints and nothing is
-    // marked labelled. The label size lives in this browser's storage, which
-    // the later label shots in the same session read, so the cleanup puts the
-    // default (Dymo 30252) back.
+    // marked labelled. The label size is kept in this browser's storage and
+    // saved on the administrator's position, which the other label shots
+    // read, so the cleanup puts the default (Dymo 30252) back.
     prepare: async (page) => {
       await withIdsFromApi("/inventory/items?limit=3", "items", 3)(page);
       await page
@@ -24181,14 +24181,19 @@ export const SHOTS = [
     cleanup: async (page) => {
       const back = page.getByRole("button", { name: "Back", exact: true });
       if (await back.isVisible().catch(() => false)) await back.click();
-      const dymo = page.getByRole("button", { name: /^Dymo 30252/ });
-      if (!(await dymo.isVisible().catch(() => false))) {
-        await page
-          .getByRole("button", { name: "Settings", exact: true })
-          .click()
-          .catch(() => {});
-      }
-      await dymo.click({ timeout: 5_000 }).catch(() => {});
+      // Settings stays open behind the window, so the size cards are there.
+      await page
+        .getByRole("button", { name: /^Dymo 30252/ })
+        .click({ timeout: 5_000 });
+      // The size is also saved on the administrator's position, 500ms after
+      // the last change; leaving sooner would keep 2" x 1" for 05-69 and
+      // 05-85 on the next run.
+      await page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/v1/inventory/label-preset") &&
+          r.request().method() === "PUT",
+        { timeout: 5_000 },
+      );
     },
   },
   {
@@ -24205,7 +24210,9 @@ export const SHOTS = [
     // Focus only, so the button's ring marks it; nothing is renamed.
     prepare: async (page) => {
       await unpinEverything(page);
-      const rename = page.getByRole("button", { name: "Rename Structural Coat" });
+      const rename = page.getByRole("button", {
+        name: "Rename Structural Coat",
+      });
       await rename.waitFor({ timeout: 20_000 });
       await rename.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await rename.focus();

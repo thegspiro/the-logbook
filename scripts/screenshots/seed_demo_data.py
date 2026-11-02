@@ -19948,9 +19948,7 @@ class Seeder:
         item = next(
             (
                 i
-                for i in items(
-                    self.api.get("/inventory/items?limit=500"), "items"
-                )
+                for i in items(self.api.get("/inventory/items?limit=500"), "items")
                 if pick(i, "name") == name
             ),
             None,
