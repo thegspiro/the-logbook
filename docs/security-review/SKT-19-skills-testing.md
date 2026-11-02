@@ -2885,3 +2885,148 @@ scope files since pass 11's reviewed baseline. Every standing fix from passes
 1–11 re-confirmed present at its current citation. Route surface (29/29) and
 route-permission registry (280, 0 errors) unchanged in shape. No open findings
 remain in this feature.
+
+---
+
+## Pass 13 (2026-11-02) — watchdog pickup, zero backend delta, 0 new findings
+
+**Prefix:** `SKT13` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, per this scheduled
+task's own framing. `list_pull_requests` (state=open) returned a single open
+PR (#3933, an unrelated evaluations feature on branch
+`claude/yearly-performance-eval-reports-yb6i83`) — no open PR's head branch
+starts with `claude/security-review-`. PR #3934 (Feature 18, Training
+extended, pass 13) had already merged (`ff56376ee`); row 18 was already ✅
+from that PR's own commit, cleared at Step 0 as a ride-along rather than its
+own PR. Row 19 (Skills testing) confirmed the next `⬜` by reading the
+rotation table directly on a freshly fetched `main`.
+
+### Scope check — zero backend delta since pass 12
+
+Baseline: `f4bf20558` (pass 12's own content commit, merged as PR #3844 /
+`ec6340308`).
+
+```
+git diff f4bf20558..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Empty output — byte-identical across all four declared scope files, same as
+pass 12's own finding. No new migration touches a skills-testing table (single
+Alembic head `38e0f552242d`, unrelated to this feature).
+
+**Frontend — re-swept the call-site inventory from scratch**
+(`grep -rliE "skillsTestingService|skillsTestingStore|practicalSkillsStore"
+frontend/src`): 56 candidate files (up from pass 12's 54). Diffed every one
+against `f4bf20558`; 18 changed, all 18 traced directly and none is this
+feature's own surface:
+
+- **`frontend/src/stores/practicalSkillsStore.ts`/`.test.ts`** — the one
+  substantive hunk: `usePracticalSkillsMethod()` gained an `enabled` parameter
+  so a caller can defer loading the department's practical-skills method until
+  the Training module is confirmed on, avoiding a spurious 403 from a
+  Training-off org. This is a correctness/UX fix, not a security finding — no
+  new data exposure, no changed authorization, and the endpoint it calls
+  (`GET /training/practical-skills/config`) is unchanged. Both call sites that
+  adopted the new parameter (`SideNavigation.tsx`, `TopNavigation.tsx`) belong
+  to the shared nav shell (Feature 34), not this feature.
+- **`SkillsTestingTestRecordsTab.tsx`** — a CSS-class rename on the test-card
+  row (`flex flex-col …` → `split-row`/`split-row-main`/`split-row-aside`
+  utilities). Cosmetic layout only; no behavior change.
+- **`SideNavigation.tsx` / `TopNavigation.tsx`** — new nav entries for
+  "My Applicants" (prospective-members module) and "Evaluations"/"My
+  Evaluations" (Feature 29/reports), plus an unrelated rename
+  (`triggerOfflineDrain` → `triggerAllOfflineDrains`, see below). None of these
+  touch skills testing.
+- **`useOfflineSyncEngine.ts`/`.test.ts`** — adds a shift-report drain path and
+  a service-worker background-sync listener; the skills-test drain
+  (`drainSkillsTests`) it already aggregated is called unchanged. Feature 14's
+  surface (equipment check & shifts), not this one's.
+- **`TrainingAdminPage.tsx`** — adds a `shift-evaluations` tab routing to
+  `ShiftEvaluationSettingsPanel`. Feature 17's surface (shift evaluations),
+  unrelated to skills testing's own tabs.
+- **`services/api.ts` / `services/trainingServices.ts`** — re-export
+  `shiftEvaluationTemplateService`/`shiftEvaluationService`. Feature 17's
+  surface.
+- **`components/ux/CommandPalette.tsx`/`.test.ts`**,
+  **`components/layout/practicalSkillsLookup.test.tsx`**,
+  **`components/training/SkillSheetLibraryModal.tsx`**,
+  **`modules/scheduling/components/ShiftReportsSettingsPanel.tsx`**,
+  **`pages/MyTrainingPage.tsx`/`.test.tsx`**,
+  **`pages/scheduling/ShiftReportsTab.tsx`** — each checked by reading its own
+  diff rather than assumed from the import match; every one is cosmetic
+  (class renames, copy changes) or belongs to another feature's own change
+  (shift evaluations, shift reports, command-palette layout). None calls a
+  skills-testing endpoint or touches a skills-testing field.
+
+No genuine skills-testing backend-facing frontend change. `UNCACHEABLE_PREFIXES`'
+`/training/skills-testing/tests` entry (`frontend/src/utils/apiCache.ts`)
+re-confirmed present and unchanged.
+
+### Re-verification, by direct grep against current code
+
+Backend files are provably byte-identical to pass 12's reviewed state, so
+every standing mechanism is unchanged by construction:
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:763`).
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present at `create_test`, `validate_test`,
+  `void_test`, `return_test_for_correction`.
+- **SKT-4** — capacity locking (`lock_attempt_capacity` /
+  `.with_for_update()`) unchanged.
+- **SKT2-1** — zero `is_practice ==` literal comparisons.
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner.
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still scrubs
+  `waive_reason`.
+- **Pitfall #32** — `search_candidates` still uses
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, not a literal `== ACTIVE`.
+
+**Route surface.** AST-equivalent count (`grep -cE '^@router\.(get|post|put|
+patch|delete)'`): **29 routes** in `skills_testing.py`, identical to pass 12.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **289 total
+application routes, 0 errors, 0 warnings** — up from pass 12's 280 from other
+features merging in the interim, confirming no new top-level page from this
+feature (Pitfall #30a n/a).
+
+### Findings
+
+**0 new findings.** No code in this feature's declared backend scope changed
+since pass 12; all 18 frontend files the broadened substring sweep surfaced
+belong to other features or are cosmetic, confirmed by reading each diff
+directly. Every standing SKT fix re-verified present at its current citation.
+No open or flagged item existed coming into this pass, and none is newly
+opened.
+
+### Corrections to prior write-ups
+
+None.
+
+## Guard tests added
+
+None — no code change in scope.
+
+## Completion gate (pass 13)
+
+| Check                                                        | Result                                                   |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/`                         | ✅ 2833 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/`                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 696 revisions, single head `38e0f552242d`             |
+| `python3 scripts/check_route_permissions.py --strict` (root) | ✅ 289 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)      | ✅ 639 passed, 1 skipped (pre-existing `pywebpush` skip) |
+| `cd frontend && npm run typecheck`                           | ✅ 0 errors                                              |
+| `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings                                  |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** A true
+zero-delta pass on the backend — no commit touched any of the four declared
+scope files since pass 12's reviewed baseline. Every standing fix from passes
+1–12 re-confirmed present at its current citation. Route surface (29/29) and
+route-permission registry (289, 0 errors) unchanged in shape. No open findings
+remain in this feature.

@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3934 (Feature 18, Training extended, pass 13) merged
+(`ff56376ee`). Row 18 was already ✅ from that PR's own commit. Feature 19
+(Skills testing) is next — confirmed via a fresh GitHub check, 0 open PRs
+with a `claude/security-review-` head branch.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 13, PR #3934, merged), preserved for history</summary>
+
 **PR [#3934](https://github.com/thegspiro/the-logbook/pull/3934)** (branch
 `claude/security-review-training-extended-p13`) — Feature 18 (Training
 extended), pass 13, a watchdog pickup. Real delta since pass 12: a `client_request_id`
@@ -30,6 +38,8 @@ confirmed to match already-safe, unchanged backend authorization. 0 new
 findings; all standing TRX findings re-verified unchanged. See
 `docs/security-review/TRX-18-training-extended.md`'s **Pass 13** section
 for the full review.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 13, PR #3932, merged), preserved for history</summary>
@@ -24398,7 +24408,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                                                   | ⬜     |
@@ -24421,6 +24431,43 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-02 — Feature 19 (Skills testing, pass 13) — watchdog pickup, zero backend delta, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` ("No reachable agents"). `list_pull_requests` (state=open,
+repo-wide): 1 result, PR #3933 (an unrelated evaluations feature on branch
+`claude/yearly-performance-eval-reports-yb6i83`) — no open PR's head branch
+starts with `claude/security-review-`. PR #3934 (Feature 18, Training
+extended, pass 13) had already merged (`ff56376ee`); row 18 was already `✅`
+from that PR's own commit, cleared at Step 0 as a ride-along. Row 19 (Skills
+testing) was confirmed the next `⬜` by reading the rotation table on a
+freshly fetched `main`, matching PR #3934's own "next feature" note.
+
+**Backend scope is byte-identical** since pass 12's own baseline (`f4bf20558`,
+PR #3844's merge): `skills_testing.py`, `skills_testing_service.py`,
+`schemas/skills_testing.py` and `models/skills_testing.py` all diff empty.
+The frontend call-site sweep widened to 56 candidate files (up from 54); 18
+changed, and every one traced to another feature (shift evaluations, shift
+reports, offline sync, nav/command-palette layout, a new prospective-members
+nav entry) or is cosmetic — except `practicalSkillsStore.ts`'s
+`usePracticalSkillsMethod(enabled)` addition, a correctness fix (skip loading
+the practical-skills method while the Training module is off, avoiding a
+spurious 403) with no security implication. Every standing SKT fix
+re-verified present at its current citation; route surface unchanged at 29
+routes. 0 new findings. Full write-up:
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 13** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 696
+revisions, single head `38e0f552242d`; `check_route_permissions.py
+--strict` — 289 routes, 0 errors/warnings; scoped backend tests
+(`-k "skill or skt"`) — 639 passed, 1 environment-only skip (`py_vapid`);
+frontend `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-02 — Feature 18 (Training extended, pass 13) — watchdog pickup, real delta, 0 new findings
 
