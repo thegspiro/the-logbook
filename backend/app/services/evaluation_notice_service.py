@@ -512,6 +512,69 @@ class EvaluationNoticeService:
             )
             return 0
 
+    async def amended(
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        actor: User,
+        signer_ids: Sequence[str],
+    ) -> int:
+        """Tell the member and everyone who signed the previous revision that
+        the evaluation was reopened (owner decision 2026-11-02). The reason
+        is on the evaluation, not in the email; the evaluator has just been
+        told their part is open again."""
+        try:
+            evaluation = await self._evaluation(organization_id, evaluation_id)
+            organization = await self.db.get(Organization, organization_id)
+            if evaluation is None or organization is None:
+                return 0
+            people = await self._people(organization_id, [evaluation.member_id])
+            member = people.get(evaluation.member_id)
+            member_name = member.full_name if member else "a former member"
+            period = _period_name(evaluation)
+            recipients = [
+                _Recipient(
+                    user=user,
+                    kind=EmailKind.PERFORMANCE_EVALUATIONS,
+                    summary=(
+                        f"{actor.full_name} amended your evaluation for {period}. "
+                        "It goes back through its steps, and you will be asked to "
+                        "acknowledge it again."
+                    ),
+                )
+                for user in await self._own(organization_id, evaluation.member_id)
+            ]
+            for signer_id in dict.fromkeys(signer_ids):
+                if signer_id in (evaluation.member_id, actor.id):
+                    continue
+                recipients += [
+                    _Recipient(
+                        user=user,
+                        kind=EmailKind.EVALUATION_DUTIES,
+                        summary=(
+                            f"{actor.full_name} amended {member_name}'s evaluation "
+                            f"for {period}, which you signed. It goes back through "
+                            "its steps."
+                        ),
+                    )
+                    for user in await self._own(organization_id, signer_id)
+                ]
+            return await self._send(
+                organization,
+                evaluation,
+                recipients,
+                EmailTemplateType.EVALUATION_AMENDED,
+                member_name=member_name,
+            )
+        except Exception as e:
+            await self._settle(e)
+            logger.error(
+                "Failed to send amendment notices for evaluation {}: {}",
+                evaluation_id,
+                e,
+            )
+            return 0
+
     async def deleted(
         self,
         organization_id: str,

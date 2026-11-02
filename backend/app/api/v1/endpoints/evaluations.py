@@ -24,7 +24,8 @@ Member performance evaluation endpoints — setup.
 * ``/{evaluation_id}`` and its actions — open to anyone with a part in the
   evaluation. The service decides who that is and what each may read and do;
   anyone else is told it does not exist. ``/{evaluation_id}/delete`` needs
-  ``evaluations.delete`` and a re-verified session.
+  ``evaluations.delete`` and a re-verified session; ``/{evaluation_id}/amend``
+  needs ``evaluations.manage``.
 """
 
 from typing import List, Literal, Optional
@@ -47,6 +48,7 @@ from app.schemas.evaluation import (
     BulkDraftResponse,
     DataSourceResponse,
     DraftOptions,
+    EvaluationAmend,
     EvaluationCreate,
     EvaluationDelete,
     EvaluationDeletionRecordResponse,
@@ -799,3 +801,34 @@ async def delete_evaluation(
         severity="warning",
     )
     return record
+
+
+@router.post("/{evaluation_id}/amend", response_model=EvaluationDetail)
+async def amend_evaluation(
+    evaluation_id: str,
+    data: EvaluationAmend,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """Reopen a finalized evaluation as a new revision, from the evaluator
+    onward, with the reason kept on the evaluation and its PDF. The member
+    and everyone who signed are emailed; the earlier revision's text and PDF
+    are removed."""
+    service = EvaluationService(db)
+    async with handle_service_errors("Failed to amend the evaluation"):
+        paths = ensure_found(
+            await service.amend(
+                current_user.organization_id, evaluation_id, current_user, data.reason
+            ),
+            "Evaluation",
+        )
+    for path in paths:
+        await file_storage.delete_quietly(path)
+    await _audit(
+        db,
+        current_user,
+        "evaluation_amended",
+        {"evaluation_id": evaluation_id, "documents_removed": len(paths)},
+        severity="warning",
+    )
+    return await _evaluation(service, current_user, evaluation_id)

@@ -24,6 +24,7 @@ do, is computed per viewer and returned with the evaluation.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from dataclasses import dataclass
@@ -40,6 +41,7 @@ from app.api.dependencies import user_has_permission
 from app.core.utils import list_within_detail_limit
 from app.models.evaluation import (
     Evaluation,
+    EvaluationAmendment,
     EvaluationDeletionRecord,
     EvaluationDocument,
     EvaluationPart,
@@ -507,6 +509,7 @@ class EvaluationService:
             or evaluation.status == EvaluationStatus.FINALIZED.value,
             can_delete=not roles.is_member
             and user_has_permission(viewer, "evaluations.delete"),
+            amendments=await self._amendments(evaluation),
         )
 
     def _released_to_member(
@@ -581,6 +584,7 @@ class EvaluationService:
         signatures: Sequence[EvaluationSignature] = (),
         document_available: bool = False,
         can_delete: bool = False,
+        amendments: Sequence[Dict[str, Any]] = (),
     ) -> Dict[str, Any]:
         signable = self._signable(evaluation, steps, viewer_positions or set(), roles)
         definition = self._definition(evaluation)
@@ -679,6 +683,10 @@ class EvaluationService:
                 ),
                 "document_available": document_available
                 and ((roles.reads_content and not roles.is_member) or released),
+                "revision": evaluation.revision,
+                # Why the record was reopened is part of the record: everyone
+                # who may see the evaluation sees it, the member included.
+                "amendments": list(amendments),
                 "weighted_overall": (
                     weighted_overall(
                         PartContent.model_validate(evaluator_part.content),
@@ -705,6 +713,8 @@ class EvaluationService:
                     and calibration_step.status == EvaluationStepStatus.OPEN.value,
                     "can_sign": signable,
                     "can_delete": can_delete,
+                    "can_amend": roles.manage
+                    and evaluation.status == EvaluationStatus.FINALIZED.value,
                 },
             }
         )
@@ -1841,3 +1851,224 @@ class EvaluationService:
         )
         people = await self._people(organization_id, [r.member_id for r in records])
         return [self._deletion_view(r, people.get(r.member_id)) for r in records]
+
+    # ------------------------------------------------------------ amending
+
+    async def _amendments(self, evaluation: Evaluation) -> List[Dict[str, Any]]:
+        rows = (
+            (
+                await self.db.execute(
+                    select(EvaluationAmendment)
+                    .where(
+                        EvaluationAmendment.evaluation_id == evaluation.id,
+                        EvaluationAmendment.organization_id
+                        == evaluation.organization_id,
+                    )
+                    .order_by(EvaluationAmendment.to_revision)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        people = await self._people(
+            evaluation.organization_id, [r.amended_by for r in rows]
+        )
+        return [
+            {
+                "from_revision": r.from_revision,
+                "to_revision": r.to_revision,
+                "reason": r.reason,
+                "amended_by_name": (
+                    people[r.amended_by].full_name
+                    if r.amended_by in people
+                    else "Former member"
+                ),
+                "amended_at": r.amended_at,
+            }
+            for r in rows
+        ]
+
+    @staticmethod
+    def _reopened_due(
+        workflow: TemplateWorkflow, step_key: str, today: date
+    ) -> Optional[date]:
+        """A reopened step's due date: the template's spacing between steps,
+        counted from the day of the amendment rather than the period's end,
+        which has long passed. The evaluator gets the time the template gives
+        between the self-evaluation and their own step (fourteen days when
+        there is no self-evaluation), and each later step keeps its distance
+        from the evaluator's."""
+        by_key = {ws.key: ws for ws in workflow.steps}
+        step = by_key.get(step_key)
+        if step is None:
+            return None
+        evaluator = next(
+            ws for ws in workflow.steps if ws.type == EvaluationStepType.EVALUATOR
+        )
+        self_step = next(
+            (
+                ws
+                for ws in workflow.steps
+                if ws.type == EvaluationStepType.SELF_EVALUATION
+            ),
+            None,
+        )
+        lead = evaluator.due_days - self_step.due_days if self_step is not None else 14
+        return today + timedelta(days=max(lead, 1) + step.due_days - evaluator.due_days)
+
+    async def amend(
+        self, organization_id: str, evaluation_id: str, actor: User, reason: str
+    ) -> Optional[List[str]]:
+        """Reopen a finalized evaluation as a new revision (owner decision
+        2026-11-02: from the evaluator onward).
+
+        The member's self-evaluation carries into the new revision as it was;
+        the evaluator's part comes back as a draft for them to change; every
+        later step (calibration, approvals, the member's acknowledgement)
+        runs again, and a new PDF is frozen when it finalizes. The previous
+        revision's parts and PDF are removed: an amendment exists to take back
+        a statement that should not have been made, and a kept copy would
+        defeat it. Its signatures stay, as the record that it was signed.
+
+        Returns the stored PDF paths the caller removes after this commits,
+        or None when there is no such evaluation in the department. The row
+        lock and the unique key on (evaluation, to_revision) settle two
+        amendments racing.
+        """
+        evaluation = await self._evaluation(
+            organization_id, evaluation_id, for_update=True
+        )
+        if evaluation is None:
+            return None
+        if evaluation.member_id == actor.id:
+            raise PermissionError("Nobody amends their own evaluation.")
+        if evaluation.status != EvaluationStatus.FINALIZED.value:
+            raise ValueError("Only a finalized evaluation can be amended.")
+        steps = await self._steps(evaluation, for_update=True)
+        parts = await self._parts(evaluation, for_update=True)
+        workflow = self._workflow(evaluation)
+        today = today_in(await resolve_scheduling_timezone(self.db, organization_id))
+        old, new = evaluation.revision, evaluation.revision + 1
+        old_steps = {s.step_key: s for s in steps}
+
+        for order, ws in enumerate(workflow.steps):
+            previous = old_steps.get(ws.key)
+            if ws.type == EvaluationStepType.SELF_EVALUATION and previous is not None:
+                step = EvaluationStep(
+                    organization_id=organization_id,
+                    evaluation_id=evaluation.id,
+                    revision=new,
+                    step_key=ws.key,
+                    step_order=order,
+                    step_type=ws.type.value,
+                    status=previous.status,
+                    due_date=previous.due_date,
+                    completed_at=previous.completed_at,
+                    completed_by=previous.completed_by,
+                    reminder_sent_at=previous.reminder_sent_at,
+                    overdue_notice_sent_at=previous.overdue_notice_sent_at,
+                )
+            else:
+                step = EvaluationStep(
+                    organization_id=organization_id,
+                    evaluation_id=evaluation.id,
+                    revision=new,
+                    step_key=ws.key,
+                    step_order=order,
+                    step_type=ws.type.value,
+                    status=(
+                        EvaluationStepStatus.OPEN.value
+                        if ws.type == EvaluationStepType.EVALUATOR
+                        else EvaluationStepStatus.PENDING.value
+                    ),
+                    due_date=self._reopened_due(workflow, ws.key, today),
+                )
+            self.db.add(step)
+
+        for kind, part in parts.items():
+            if kind == EvaluationPartKind.MEMBER_RESPONSE.value:
+                continue
+            self.db.add(
+                EvaluationPart(
+                    organization_id=organization_id,
+                    evaluation_id=evaluation.id,
+                    revision=new,
+                    kind=kind,
+                    author_id=part.author_id,
+                    content=copy.deepcopy(part.content),
+                    status=(
+                        EvaluationPartStatus.DRAFT.value
+                        if kind == EvaluationPartKind.EVALUATOR.value
+                        else part.status
+                    ),
+                    submitted_at=(
+                        None
+                        if kind == EvaluationPartKind.EVALUATOR.value
+                        else part.submitted_at
+                    ),
+                )
+            )
+        for part in parts.values():
+            await self.db.delete(part)
+
+        documents = (
+            (
+                await self.db.execute(
+                    select(EvaluationDocument).where(
+                        EvaluationDocument.evaluation_id == evaluation.id,
+                        EvaluationDocument.organization_id == organization_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        paths = [d.file_path for d in documents]
+        for document in documents:
+            await self.db.delete(document)
+
+        evaluation.revision = new
+        evaluation.status = EvaluationStatus.IN_PROGRESS.value
+        evaluation.finalized_at = None
+        self.db.add(
+            EvaluationAmendment(
+                organization_id=organization_id,
+                evaluation_id=evaluation.id,
+                from_revision=old,
+                to_revision=new,
+                reason=reason,
+                amended_by=actor.id,
+                amended_at=datetime.now(timezone.utc),
+            )
+        )
+        signer_ids = list(
+            (
+                await self.db.execute(
+                    select(EvaluationSignature.signer_id).where(
+                        EvaluationSignature.evaluation_id == evaluation.id,
+                        EvaluationSignature.organization_id == organization_id,
+                        EvaluationSignature.revision == old,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        evaluator_keys = [
+            ws.key for ws in workflow.steps if ws.type == EvaluationStepType.EVALUATOR
+        ]
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            raise ValueError("This evaluation has just been amended.") from exc
+
+        notices = EvaluationNoticeService(self.db)
+        await notices.steps_opened(organization_id, evaluation.id, evaluator_keys)
+        await notices.amended(
+            organization_id,
+            evaluation.id,
+            actor,
+            [i for i in signer_ids if i],
+        )
+        return paths

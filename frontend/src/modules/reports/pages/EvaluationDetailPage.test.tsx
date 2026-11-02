@@ -21,6 +21,7 @@ const completeCalibration = vi.fn();
 const sign = vi.fn();
 const documentBlob = vi.fn();
 const remove = vi.fn();
+const amend = vi.fn();
 const saveBlob = vi.fn();
 vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
 vi.mock('../../../stores/authStore', () => ({
@@ -37,6 +38,7 @@ vi.mock('../services/evaluationsApi', () => ({
     sign: (...a: unknown[]) => sign(...a) as unknown,
     document: (...a: unknown[]) => documentBlob(...a) as unknown,
     remove: (...a: unknown[]) => remove(...a) as unknown,
+    amend: (...a: unknown[]) => amend(...a) as unknown,
   },
 }));
 
@@ -152,7 +154,18 @@ function renderPage() {
 
 describe('EvaluationDetailPage', () => {
   beforeEach(() => {
-    for (const m of [get, savePart, submitPart, refreshData, completeCalibration, sign, documentBlob, saveBlob, remove])
+    for (const m of [
+      get,
+      savePart,
+      submitPart,
+      refreshData,
+      completeCalibration,
+      sign,
+      documentBlob,
+      saveBlob,
+      remove,
+      amend,
+    ])
       m.mockReset();
     get.mockResolvedValue(detail());
   });
@@ -394,5 +407,32 @@ describe('EvaluationDetailPage', () => {
     renderPage();
     await screen.findAllByText('11.5 h');
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('amends only with a reason, and shows the amendment with its reason', async () => {
+    const amended = detail({
+      revision: 2,
+      amendments: [
+        {
+          from_revision: 1,
+          to_revision: 2,
+          reason: 'Corrected a comment.',
+          amended_by_name: 'Chief Reyes',
+          amended_at: '2027-02-01T15:00:00Z',
+        },
+      ],
+    });
+    amend.mockResolvedValue(amended);
+    get.mockResolvedValue(detail({ status: 'finalized', viewer: { ...detail().viewer, can_amend: true } }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Amend' }));
+    const confirmAmend = screen.getByRole('button', { name: 'Amend evaluation' });
+    expect(confirmAmend).toBeDisabled();
+    await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), ' Corrected a comment. ');
+    await user.click(confirmAmend);
+    await waitFor(() => expect(amend).toHaveBeenCalledWith('ev1', 'Corrected a comment.'));
+    expect(await screen.findByRole('heading', { name: 'Amendments' })).toBeInTheDocument();
+    expect(screen.getByText('Reason: Corrected a comment.')).toBeInTheDocument();
   });
 });

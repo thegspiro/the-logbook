@@ -1397,8 +1397,13 @@ def _set_notice_today(monkeypatch, day: date) -> None:
     monkeypatch.setattr(evaluation_notice_service, "today_in", lambda tz: day)
 
 
-async def _lock_evaluator(dept: _Dept, make_client: ClientFactory, url: str) -> dict:
-    member = await make_client(dept.member)
+async def _lock_evaluator(
+    dept: _Dept,
+    make_client: ClientFactory,
+    url: str,
+    member_user: Optional[User] = None,
+) -> dict:
+    member = await make_client(member_user or dept.member)
     evaluator = await make_client(dept.evaluator)
     await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
     await member.post(f"{url}/parts/self_evaluation/submit")
@@ -2081,3 +2086,247 @@ class TestDeletion:
         assert (
             await (await make_client(dept.evaluator)).get("/evaluations/removed")
         ).status_code == 403
+
+
+# ---------------------------------------------------------------- amending
+
+AMENDED = EmailTemplateType.EVALUATION_AMENDED
+
+
+async def _finalized(
+    dept: _Dept, make_client: ClientFactory, member: Optional[User] = None
+) -> str:
+    """An annual evaluation the member has acknowledged; returns its URL."""
+    member = member or dept.member
+    detail = await _draft(await make_client(dept.manager), dept, member=member)
+    url = f"/evaluations/{detail['id']}"
+    await _lock_evaluator(dept, make_client, url, member)
+    signed = await (await make_client(member)).post(
+        f"{url}/sign",
+        json={
+            "signed_name": member.full_name,
+            "disposition": "acknowledged",
+            "intent_confirmed": True,
+        },
+    )
+    assert signed.status_code == 200, signed.text
+    assert signed.json()["outcome"] == "finalized"
+    return url
+
+
+class TestAmending:
+    async def test_amending_reopens_from_the_evaluator_and_tells_the_member(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        from app.models.evaluation import EvaluationDocument
+        from app.services import file_storage_service as file_storage
+
+        url = await _finalized(dept, make_client)
+        evaluation_id = url.rsplit("/", 1)[-1]
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == evaluation_id
+                )
+            )
+        ).scalar_one()
+        stored = file_storage.resolve(
+            document.file_path, dept.org, file_storage.StorageArea.EVALUATIONS
+        )
+        assert stored is not None
+        manager = await make_client(dept.manager)
+        assert (await manager.get(url)).json()["viewer"]["can_amend"] is True
+        await _set_today(monkeypatch, date(2026, 3, 1))
+        outbox.clear()
+
+        response = await manager.post(
+            f"{url}/amend",
+            json={"reason": "  The meetings comment named the wrong year. "},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert (body["revision"], body["status"]) == (2, "in_progress")
+        steps = {s["key"]: s for s in body["steps"]}
+        assert steps["self_evaluation"]["status"] == "completed"
+        assert steps["evaluator"]["status"] == "open"
+        # The template's 16 days between the self-evaluation and the
+        # evaluator, counted from the amendment.
+        assert steps["evaluator"]["due_date"] == "2026-03-17"
+        assert steps["member_acknowledgement"]["status"] == "pending"
+        assert steps["member_acknowledgement"]["due_date"] == "2026-04-14"
+        assert body["signatures"] == []
+        (amendment,) = body["amendments"]
+        assert amendment["reason"] == "The meetings comment named the wrong year."
+        assert amendment["amended_by_name"] == dept.manager.full_name
+        assert (amendment["from_revision"], amendment["to_revision"]) == (1, 2)
+
+        evaluator = await make_client(dept.evaluator)
+        as_evaluator = (await evaluator.get(url)).json()
+        assert as_evaluator["viewer"]["can_edit_evaluation"] is True
+        evaluator_part = next(
+            p for p in as_evaluator["parts"] if p["kind"] == "evaluator"
+        )
+        assert evaluator_part["status"] == "draft"
+        assert evaluator_part["content"]["answers"]["meetings"]["text"] == (
+            "Steady attendance."
+        )
+
+        as_member = (await (await make_client(dept.member)).get(url)).json()
+        assert [a["reason"] for a in as_member["amendments"]] == [
+            "The meetings comment named the wrong year."
+        ]
+        # The earlier revision's PDF is gone with its text.
+        assert not await file_storage.exists(stored)
+        assert (
+            await dept.db.execute(
+                select(EvaluationDocument.id).where(
+                    EvaluationDocument.evaluation_id == evaluation_id
+                )
+            )
+        ).all() == []
+
+        (notice,) = outbox.to(dept.member, AMENDED)
+        assert notice["summary"].startswith(f"{dept.manager.full_name} amended your")
+        assert "wrong year" not in str(notice)
+        assert len(outbox.to(dept.evaluator, WAITING)) == 1
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(AuditLog.event_type == "evaluation_amended")
+            )
+        ).scalar_one()
+        assert audit.event_data["documents_removed"] == 1
+
+    async def test_the_new_revision_finalizes_with_the_reason_on_its_pdf(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        import io
+
+        from pypdf import PdfReader
+
+        url = await _finalized(dept, make_client)
+        manager = await make_client(dept.manager)
+        await manager.post(f"{url}/amend", json={"reason": "Corrected a comment."})
+        evaluator = await make_client(dept.evaluator)
+        resubmitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert resubmitted.status_code == 200, resubmitted.text
+        member = await make_client(dept.member)
+        assert (await member.get(url)).json()["viewer"]["can_sign"] is not None
+        signed = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized"
+
+        pdf = await member.get(f"{url}/document")
+        assert pdf.status_code == 200
+        text = " ".join(
+            page.extract_text() for page in PdfReader(io.BytesIO(pdf.content)).pages
+        )
+        assert "Amendments" in text
+        assert "Corrected a comment." in text
+
+    async def test_everyone_who_signed_is_told(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, db_session
+    ):
+        approver = await _user(db_session, dept.org, [], position_name="Board")
+        workflow = {
+            "steps": [
+                *ANNUAL["steps"][:2],
+                {
+                    "key": "board",
+                    "type": "approval",
+                    "label": "Board approval",
+                    "actor": {
+                        "kind": "position",
+                        "position_id": approver.positions[0].id,
+                    },
+                    "due_days": 45,
+                },
+                ANNUAL["steps"][2],
+            ]
+        }
+        template = await _template(
+            dept.db, dept.org, name="With approval", workflow=workflow
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        for signer, disposition in (
+            (approver, "signed"),
+            (dept.member, "acknowledged"),
+        ):
+            signed = await (await make_client(signer)).post(
+                f"{url}/sign",
+                json={
+                    "signed_name": signer.full_name,
+                    "disposition": disposition,
+                    "intent_confirmed": True,
+                },
+            )
+            assert signed.status_code == 200, signed.text
+        outbox.clear()
+
+        response = await (await make_client(dept.manager)).post(
+            f"{url}/amend", json={"reason": "Board asked for a correction."}
+        )
+        assert response.status_code == 200, response.text
+        (notice,) = outbox.to(approver, AMENDED)
+        assert "which you signed" in notice["summary"]
+        assert len(outbox.to(dept.member, AMENDED)) == 1
+
+    async def test_only_a_finalized_evaluation_is_amended(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        manager = await make_client(dept.manager)
+        url = f"/evaluations/{detail['id']}"
+        assert (await manager.get(url)).json()["viewer"]["can_amend"] is False
+        response = await manager.post(f"{url}/amend", json={"reason": "Too soon."})
+        assert response.status_code == 400
+        assert "finalized" in response.json()["detail"]
+
+    async def test_without_manage_nobody_amends(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        for user in (dept.evaluator, dept.reader, dept.member):
+            client = await make_client(user)
+            response = await client.post(f"{url}/amend", json={"reason": "Mine."})
+            assert response.status_code == 403, user.id
+            assert (await client.get(url)).json()["viewer"]["can_amend"] is False
+
+    async def test_nobody_amends_their_own_evaluation(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        own = await _user(dept.db, dept.org, ["evaluations.manage"])
+        url = await _finalized(dept, make_client, member=own)
+        response = await (await make_client(own)).post(
+            f"{url}/amend", json={"reason": "Improve my rating."}
+        )
+        assert response.status_code == 403
+
+    async def test_another_departments_evaluation_is_not_found(
+        self, dept: _Dept, make_client: ClientFactory, db_session
+    ):
+        url = await _finalized(dept, make_client)
+        outsider = await _user(
+            db_session, await _org(db_session), ["evaluations.manage"]
+        )
+        response = await (await make_client(outsider)).post(
+            f"{url}/amend", json={"reason": "Reach across."}
+        )
+        assert response.status_code == 404
+
+    async def test_a_reason_is_required(self, dept: _Dept, make_client: ClientFactory):
+        url = await _finalized(dept, make_client)
+        response = await (await make_client(dept.manager)).post(
+            f"{url}/amend", json={"reason": "  "}
+        )
+        assert response.status_code == 422

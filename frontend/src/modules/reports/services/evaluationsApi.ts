@@ -222,6 +222,12 @@ export const evaluationsService = {
     return { drafted: response.data.drafted ?? 0, results: asArray(response.data.results ?? []) };
   },
 
+  /** Reopen a finalized evaluation as a new revision, with the reason. */
+  async amend(id: string, reason: string): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/amend`, { reason });
+    return response.data;
+  },
+
   /** Delete an evaluation with a reason. The server asks for step-up
    * re-verification first; the shared client shows that prompt and retries. */
   async remove(id: string, reason: string): Promise<EvaluationDeletionRecord> {
