@@ -6028,7 +6028,6 @@ class Seeder:
         self._deploy_lots(positions, catalog)
         self._report_one_used(positions, str(pick(medic, "id")))
         self._leave_one_short(positions)
-        self._expire_one_tourniquet()
         # Linking supply positions edits the template's items, which drafts it
         # again — and this step runs *after* `seed_equipment_checks`, so that
         # step's publish sweep has already been and gone. Without this the
@@ -6257,6 +6256,12 @@ class Seeder:
                         self.api.delete(f"/medical-supplies/lots/{pick(lot, 'id')}")
 
         templates = self._medical_checklists(apparatus, catalog)
+        # Here, not in `seed_supply_tracking`: the Rescue 7 checklist that
+        # carries the tourniquet is made just above, and supply tracking runs
+        # first, so on a fresh database it found no tourniquet and dated
+        # nothing. Before the publish, because dating the position drafts the
+        # checklist again.
+        self._expire_one_tourniquet()
         self._publish_seeded_templates()
         return {"created": created, "templates": templates}
 
@@ -7411,6 +7416,10 @@ class Seeder:
         published: list[str] = []
         for template in items(self.api.get("/equipment-checks/templates"), "templates"):
             if pick(template, "is_active", "isActive"):
+                continue
+            # Kept a draft on purpose: guide 03's builder shot pictures its
+            # dateless Date line, which publishing would refuse anyway.
+            if pick(template, "name") == self.BACKLOG_DRAFT_CHECKLIST:
                 continue
             template_id = pick(template, "id")
             if not template_id:
