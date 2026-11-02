@@ -641,7 +641,7 @@ def count_waived_months(
 ) -> int
 ```
 
-Counts calendar months within the evaluation window covered by ≥15 days of waiver. Deduplicates overlapping waivers via a set of `(year, month)` tuples.
+Counts calendar months within the evaluation window that a waiver excuses any part of, by the department's `leave_month_rule` (`full_month` default, `proportional`, `half`; see `month_waivers`). Overlapping waivers are merged by day, so no day counts twice.
 
 ```python
 def adjust_required(

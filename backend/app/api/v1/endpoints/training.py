@@ -3124,6 +3124,10 @@ class RequirementStatusItem(BaseModel):
     # number nobody can account for.
     base_required: float | None = None
     waived_months: int = 0
+    # waived_months split by reason, so the cell can say "on leave" only when
+    # a leave of absence is why; a month both covered counts in both.
+    leave_months: int = 0
+    waiver_months: int = 0
     window_start: str | None = None
     window_end: str | None = None
     # The date THIS cell was judged against. Requirements can each override
@@ -3456,6 +3460,8 @@ async def get_compliance_matrix(
                     progress_unit=ev.progress_unit,
                     base_required=ev.base_required,
                     waived_months=ev.waived_months,
+                    leave_months=ev.leave_months,
+                    waiver_months=ev.waiver_months,
                     window_start=ev.window_start,
                     window_end=ev.window_end,
                     as_of=ev.as_of,

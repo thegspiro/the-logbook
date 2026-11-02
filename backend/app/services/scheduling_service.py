@@ -86,7 +86,11 @@ from app.services.training_compliance import (
     requirement_applies_to_member,
     requirement_as_of,
 )
-from app.services.training_waiver_service import fetch_org_waivers
+from app.services.training_waiver_service import (
+    SOURCE_LEAVE,
+    adjust_required,
+    fetch_org_waivers,
+)
 from app.utils.apparatus_ref import (
     apparatus_in_use,
     apparatus_ref_exists,
@@ -10076,6 +10080,7 @@ class SchedulingService:
 
         # 3. For each requirement, compute compliance
         compliance_data: List[Dict[str, Any]] = []
+        leaves_by_user: Optional[Dict[str, list]] = None
 
         for req in requirements:
             graded_by_shared_grader = counts_shift_attendance(req)
@@ -10200,21 +10205,16 @@ class SchedulingService:
                 and req.due_date_type == DueDateType.ROLLING
                 and req.rolling_period_months
             )
-            user_leave_months: Dict[str, int] = {}
-            if is_rolling:
-                leave_svc = MemberLeaveService(self.db)
-                leaves_by_user = await leave_svc.get_active_leaves_for_users(
-                    str(organization_id),
-                    user_ids,
-                    period_start,
-                    period_end,
-                )
-                for uid in user_ids:
-                    user_leave_months[uid] = MemberLeaveService.count_leave_months(
-                        leaves_by_user.get(uid, []),
-                        period_start,
-                        period_end,
-                    )
+            # Leaves of absence only, as this report has always counted, but
+            # measured by the department's leave month rule so a month here
+            # is excused exactly as it is on the member's training screen.
+            if is_rolling and leaves_by_user is None:
+                leaves_by_user = {
+                    uid: [w for w in periods if w.source == SOURCE_LEAVE]
+                    for uid, periods in (
+                        await fetch_org_waivers(self.db, str(organization_id))
+                    ).items()
+                }
 
             # Build member compliance list
             members = []
@@ -10233,7 +10233,21 @@ class SchedulingService:
                     + prep_map.get(str(user.id), 0)
                 )
                 total_hours = hours_from_minutes(total_minutes)
-                leave_months = user_leave_months.get(user.id, 0)
+                leave_months = 0
+                member_required = required_value
+                member_leaves = (leaves_by_user or {}).get(str(user.id), [])
+                if is_rolling and member_leaves:
+                    member_required, leave_months, _ = adjust_required(
+                        required_value,
+                        period_start,
+                        period_end,
+                        member_leaves,
+                        str(req.id),
+                        period_months=req.rolling_period_months,
+                        whole_units=(
+                            req.requirement_type == RequirementType.SHIFTS.value
+                        ),
+                    )
 
                 if graded_by_shared_grader:
                     ev = evaluate_member_requirement_detail(
@@ -10274,16 +10288,6 @@ class SchedulingService:
                     compliance_value = float(total_minutes) / 60.0
 
                 if not graded_by_shared_grader:
-                    # Adjust required value for rolling-period requirements
-                    # by excluding months the member was on leave.
-                    member_required = required_value
-                    if is_rolling and leave_months > 0 and req.rolling_period_months:
-                        active_months = max(req.rolling_period_months - leave_months, 1)
-                        member_required = round(
-                            required_value * active_months / req.rolling_period_months,
-                            1,
-                        )
-
                     percentage = round(
                         (
                             (completed_value / member_required * 100)

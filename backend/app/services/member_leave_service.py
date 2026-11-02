@@ -7,7 +7,7 @@ the training and shift modules to exclude months from
 rolling-period requirement calculations.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 
 from sqlalchemy import or_, select
@@ -367,51 +367,3 @@ class MemberLeaveService:
         for leave in result.scalars().all():
             leaves_by_user.setdefault(leave.user_id, []).append(leave)
         return leaves_by_user
-
-    @staticmethod
-    def count_leave_months(
-        leaves: List[MemberLeaveOfAbsence],
-        period_start: date,
-        period_end: date,
-    ) -> int:
-        """
-        Count the number of full calendar months covered by leave
-        records within a given period.
-
-        A month is considered "on leave" if the leave covers the
-        entire month (1st through last day).  Partial-month leaves
-        are not excluded so that members still get credit for months
-        where they were partially active.
-        """
-        if not leaves:
-            return 0
-
-        leave_months = set()
-        for leave in leaves:
-            # Clamp leave dates to the evaluation period
-            # Permanent leaves (end_date=None) are treated as extending to period_end
-            leave_end = leave.end_date or period_end
-            effective_start = max(leave.start_date, period_start)
-            effective_end = min(leave_end, period_end)
-
-            # Walk month-by-month
-            y, m = effective_start.year, effective_start.month
-            while (y, m) <= (effective_end.year, effective_end.month):
-                # Check if the entire month is covered
-                month_first = date(y, m, 1)
-                if m == 12:
-                    next_month_first = date(y + 1, 1, 1)
-                else:
-                    next_month_first = date(y, m + 1, 1)
-                month_last = next_month_first - timedelta(days=1)
-
-                if leave.start_date <= month_first and leave_end >= month_last:
-                    leave_months.add((y, m))
-
-                # Advance
-                m += 1
-                if m > 12:
-                    m = 1
-                    y += 1
-
-        return len(leave_months)

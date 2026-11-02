@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**340 tables · 5604 columns · 1152 foreign keys**
+**340 tables · 5605 columns · 1152 foreign keys**
 
 ---
 
@@ -130,7 +130,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`compliance_configs`](#compliance_configs) | `ComplianceConfig` | 15 | Organization-level compliance configuration. |
+| [`compliance_configs`](#compliance_configs) | `ComplianceConfig` | 16 | Organization-level compliance configuration. |
 | [`compliance_profiles`](#compliance_profiles) | `ComplianceProfile` | 15 | Role/membership-type specific compliance profile. |
 | [`compliance_reports`](#compliance_reports) | `ComplianceReport` | 15 | Stored compliance reports (auto-generated or manual). |
 
@@ -2073,6 +2073,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `at_risk_threshold` | FLOAT | no |  | `75.0` |  |
 | `grace_period_days` | INTEGER | no |  | `0` |  |
 | `include_current_month` | BOOL | no |  | `1` |  |
+| `leave_month_rule` | VARCHAR(20) | no |  | `full_month` |  |
 | `auto_report_frequency` | VARCHAR(20) | no |  | `none` |  |
 | `report_email_recipients` | TEXT | yes |  |  |  |
 | `report_day_of_month` | INTEGER | yes |  | `1` |  |
