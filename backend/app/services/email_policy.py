@@ -213,6 +213,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Your evaluation is ready for you to read and acknowledge",
             "A step of yours is due soon, or overdue",
             "Your evaluation is final",
+            "Your evaluation was amended",
             "One of your evaluations was deleted",
         ),
         rationale=(
@@ -422,6 +423,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A step you act on is due soon, or overdue",
             "A step is overdue on any evaluation (evaluation managers)",
             "An evaluation you conducted is final",
+            "An evaluation you signed was amended",
         ),
         rationale=(
             "Reports > Evaluations lists every evaluation waiting on you, "

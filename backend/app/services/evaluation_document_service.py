@@ -358,6 +358,15 @@ class EvaluationDocumentService:
                 }
                 for sig in signatures
             ],
+            "amendments": [
+                {
+                    "revision": a["to_revision"],
+                    "by": a["amended_by_name"],
+                    "at": _moment(a["amended_at"], tz),
+                    "reason": a["reason"],
+                }
+                for a in await self.evaluations._amendments(evaluation)
+            ],
             "content_hash": content_hash(evaluation, parts),
             "generated_at": _moment(datetime.now(timezone.utc), tz),
         }

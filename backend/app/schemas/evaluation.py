@@ -768,6 +768,19 @@ class EvaluationViewer(BaseModel):
     can_sign: Optional[SigningOption] = None
     # A holder of evaluations.delete, never on their own evaluation.
     can_delete: bool = False
+    # A holder of evaluations.manage, on a finalized evaluation not their own.
+    can_amend: bool = False
+
+
+class AmendmentResponse(BaseModel):
+    """A finalized evaluation reopened as a new revision, and why. Shown to
+    everyone who may see the evaluation, the member included."""
+
+    from_revision: int
+    to_revision: int
+    reason: str
+    amended_by_name: str
+    amended_at: datetime
 
 
 class SignatureResponse(BaseModel):
@@ -825,6 +838,8 @@ class EvaluationDetail(EvaluationSummary):
     signatures: List[SignatureResponse] = Field(default_factory=list)
     # The finalized PDF can be downloaded.
     document_available: bool = False
+    revision: int = 1
+    amendments: List[AmendmentResponse] = Field(default_factory=list)
     viewer: EvaluationViewer
 
 
@@ -949,3 +964,21 @@ class EvaluationDeletionRecordResponse(BaseModel):
     reason: str
     deleted_by_name: str
     deleted_at: datetime
+
+
+# ----------------------------------------------------------------- amending
+
+
+class EvaluationAmend(BaseModel):
+    """Why a finalized evaluation is reopened. Kept with the evaluation and
+    printed on its PDF; the member reads it."""
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Give the reason for amending this evaluation")
+        return v

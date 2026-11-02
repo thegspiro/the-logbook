@@ -85,6 +85,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.EVALUATION_OVERDUE.value: "38e0f552242d",
     EmailTemplateType.EVALUATION_FINALIZED.value: "38e0f552242d",
     EmailTemplateType.EVALUATION_DELETED.value: "857291750c67",
+    EmailTemplateType.EVALUATION_AMENDED.value: "6b2f0c9d4e71",
 }
 
 

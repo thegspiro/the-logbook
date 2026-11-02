@@ -48,7 +48,9 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
     answer is ``{"answer", "notes": [(label, text)]}`` or None),
     ``overall``, ``overall_comment``, ``self_status``, ``self_comment``,
     ``signatures`` (each ``{"label", "name", "disposition", "comment",
-    "signed_at"}``), ``content_hash``, ``generated_at``.
+    "signed_at"}``), ``amendments`` (each ``{"revision", "by", "at",
+    "reason"}``, absent or empty when never amended), ``content_hash``,
+    ``generated_at``.
     """
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -197,6 +199,34 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
             styles,
         )
     )
+    amendments = record.get("amendments") or []
+    if amendments:
+        amendment_rows: List[List[Any]] = [["Revision", "Amended by", "Date", "Reason"]]
+        for amendment in amendments:
+            amendment_rows.append(
+                [
+                    Paragraph(esc(amendment.get("revision")), styles["cell"]),
+                    Paragraph(esc(amendment.get("by")), styles["cell"]),
+                    Paragraph(esc(amendment.get("at")), styles["cell"]),
+                    Paragraph(_multiline(amendment.get("reason")), styles["cell"]),
+                ]
+            )
+        story.append(
+            section(
+                "Amendments",
+                [
+                    ruled_table(amendment_rows, [0.12, 0.22, 0.22, 0.44], []),
+                    Spacer(1, 6),
+                    Paragraph(
+                        "This evaluation was reopened after it was finalized. "
+                        "The text of each earlier revision was not kept; the "
+                        "signatures above are those given on this revision.",
+                        styles["small"],
+                    ),
+                ],
+                styles,
+            )
+        )
     story.append(
         Paragraph(
             f"Record fingerprint (SHA-256): {esc(record.get('content_hash'))}",

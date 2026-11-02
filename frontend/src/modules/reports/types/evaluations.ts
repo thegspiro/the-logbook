@@ -334,6 +334,17 @@ export interface EvaluationViewer {
   can_sign?: SigningOption | null | undefined;
   /** A holder of evaluations.delete, never on their own evaluation. */
   can_delete?: boolean | undefined;
+  /** A holder of evaluations.manage, on a finalized evaluation not their own. */
+  can_amend?: boolean | undefined;
+}
+
+/** A finalized evaluation reopened as a new revision, and why. */
+export interface EvaluationAmendment {
+  from_revision: number;
+  to_revision: number;
+  reason: string;
+  amended_by_name: string;
+  amended_at: string;
 }
 
 export interface EvaluationSignature {
@@ -373,6 +384,8 @@ export interface EvaluationDetail extends EvaluationSummary {
   weighted_overall: number | null;
   signatures: EvaluationSignature[];
   document_available: boolean;
+  revision?: number | undefined;
+  amendments?: EvaluationAmendment[] | undefined;
   viewer: EvaluationViewer;
 }
 
