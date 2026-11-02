@@ -262,8 +262,13 @@ class EvaluationNoticeService:
     async def _own(self, organization_id: str, user_id: Optional[str]) -> List[User]:
         if not user_id:
             return []
+        # The organization filter is repeated here, though _current adds it
+        # too, so the by-id lookup reads as scoped where it is written.
         return await self._current(
-            organization_id, select(User).where(User.id == str(user_id))
+            organization_id,
+            select(User).where(
+                User.id == str(user_id), User.organization_id == organization_id
+            ),
         )
 
     async def _actors(
