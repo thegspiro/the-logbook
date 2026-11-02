@@ -17055,6 +17055,243 @@ class Seeder:
                     {"status": wanted, "reason": reason},
                 )
 
+    # ── Guide 15 backlog: follow-up forms, case managers, stage emails ─────
+    #
+    # A fifth pipeline, for the same reason as the Reinstatement one: the
+    # default pipeline's board, builder and drawers are pictured elsewhere and
+    # must not gain a stage. It carries a Follow-up Form stage and an Automated
+    # Email stage whose saved Next Meeting event has already happened.
+    #
+    # The demo sends no email, so the follow-up link never reaches anyone and
+    # the applicant on that stage stays at "Not sent" with Send now offered.
+    # That is the real state a department whose email was down sees. A
+    # submitted form needs the link's token, which only the email carries, so
+    # this seeds none.
+    #
+    # The assignments go to the forwardee account (cfrazier), an ordinary
+    # member with no recruitment permission: the trustee the guide describes.
+    # Every other shot taken as that account is clipped to a panel, so the My
+    # Applicants entry the assignment adds to its menu is pictured nowhere else.
+    BACKLOG15_PIPELINE_NAME = "Junior Firefighter Pipeline"
+    BACKLOG15_FORM_NAME = "Applicant Details Confirmation"
+    BACKLOG15_FOLLOW_UP_STAGE = "Confirm Your Details"
+    BACKLOG15_EMAIL_STAGE = "Welcome Packet Email"
+    BACKLOG15_CASE_MANAGER = "cfrazier"
+    BACKLOG15_FOLLOW_UP_APPLICANT = ("Mateo", "Alvarez", "mateo.alvarez@example.org")
+    BACKLOG15_FIRST_APPLICANT = ("Grace", "Liu", "grace.liu@example.org")
+
+    def seed_backlog_15_follow_up(self) -> None:
+        form_id = self._backlog15_form()
+        pipeline = self._backlog15_pipeline(form_id)
+        pipeline_id = str(pick(pipeline, "id"))
+
+        first = self._backlog15_applicant(self.BACKLOG15_FIRST_APPLICANT, pipeline_id)
+        follow_up = self._backlog15_applicant(
+            self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+        )
+        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
+            self.api.post(
+                f"/prospective-members/prospects/{pick(follow_up, 'id')}/advance", {}
+            )
+            follow_up = self._backlog15_applicant(
+                self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+            )
+        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
+            self.blocked.append(
+                "guide 15 backlog: "
+                f"{self.BACKLOG15_FOLLOW_UP_APPLICANT[0]} is on "
+                f"{follow_up.get('current_step_name')!r}, not the follow-up stage"
+            )
+
+        user_id = self._user_id(self.BACKLOG15_CASE_MANAGER)
+        if not user_id:
+            self.blocked.append(
+                f"guide 15 backlog: no member {self.BACKLOG15_CASE_MANAGER}"
+            )
+            return
+        for prospect, role in (
+            (follow_up, "case_manager"),
+            (first, "interviewer"),
+        ):
+            path = f"/prospective-members/prospects/{pick(prospect, 'id')}/assignments"
+            held = {
+                (str(pick(a, "user_id")), pick(a, "role"))
+                for a in items(self.api.get(path), "assignments")
+            }
+            if (user_id, role) not in held:
+                self.api.post(path, {"user_id": user_id, "role": role})
+
+    BACKLOG15_INTEREST = {
+        "interest_reason": "My older brother volunteers here and I want to "
+        "join the junior program.",
+        "referral_source": "Family member",
+    }
+
+    def _backlog15_applicant(self, who: tuple[str, str, str], pipeline_id: str):
+        """A junior applicant, created through the guide-15 helper.
+
+        That helper fills in a returning member's interest answers, which the
+        drawer and the case manager's dialog show; a junior applicant's own
+        replace them, on a first run and on an earlier run's records alike.
+        """
+        prospect = self._guide15_applicant(who, pipeline_id)
+        prospect_id = pick(prospect, "id")
+        detail = self.api.get(f"/prospective-members/prospects/{prospect_id}")
+        if any(detail.get(k) != v for k, v in self.BACKLOG15_INTEREST.items()):
+            self.api.put(
+                f"/prospective-members/prospects/{prospect_id}",
+                dict(self.BACKLOG15_INTEREST),
+            )
+        return prospect
+
+    def _backlog15_form(self) -> str:
+        found = next(
+            (
+                f
+                for f in items(self.api.get("/forms?limit=200"), "forms")
+                if f.get("name") == self.BACKLOG15_FORM_NAME
+            ),
+            None,
+        )
+        if found is None:
+            fields = [
+                ("First name", "text", True, "first_name"),
+                ("Last name", "text", True, "last_name"),
+                ("Email", "email", True, "email"),
+                ("Mobile phone", "phone", False, "mobile"),
+                ("Street address", "text", False, "address_street"),
+                ("City", "text", False, "address_city"),
+                ("Parent or guardian name", "text", True, None),
+                ("Which school do you attend?", "text", False, None),
+            ]
+            found = self.api.post(
+                "/forms",
+                {
+                    "name": self.BACKLOG15_FORM_NAME,
+                    "description": "Sent to junior applicants to confirm what "
+                    "their interest form said.",
+                    "category": "other",
+                    "is_public": False,
+                    "require_authentication": False,
+                    "notify_on_submission": False,
+                    "fields": [
+                        {
+                            "label": label,
+                            "field_type": field_type,
+                            "required": required,
+                            "sort_order": order,
+                            **({"applicant_field": prefill} if prefill else {}),
+                        }
+                        for order, (label, field_type, required, prefill) in enumerate(
+                            fields
+                        )
+                    ],
+                },
+            )
+        form_id = str(pick(found, "id"))
+        if found.get("status") != "published":
+            self.api.post(f"/forms/{form_id}/publish")
+        return form_id
+
+    def _backlog15_pipeline(self, form_id: str) -> dict:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        found = next(
+            (p for p in pipelines if p.get("name") == self.BACKLOG15_PIPELINE_NAME),
+            None,
+        )
+        if found is not None:
+            return found
+        # The email stage saves a business meeting that has already happened,
+        # so its editor previews the fallback: "The saved event has passed or
+        # was cancelled. The email will include the next one instead".
+        now = datetime.now(timezone.utc).isoformat()
+        past_meeting = next(
+            (
+                e
+                for e in sorted(
+                    items(self.api.get("/events?limit=100"), "events"),
+                    key=lambda e: str(e.get("start_datetime") or ""),
+                    reverse=True,
+                )
+                if e.get("event_type") == "business_meeting"
+                and str(e.get("start_datetime") or "") < now
+                and not e.get("is_draft")
+            ),
+            None,
+        )
+        stages = [
+            (
+                "Interest Form Received",
+                "manual_approval",
+                "A coordinator reads the interest form.",
+                {"approver_roles": [], "require_notes": False},
+            ),
+            (
+                self.BACKLOG15_FOLLOW_UP_STAGE,
+                "follow_up_form",
+                "The applicant confirms their details and adds a guardian.",
+                {
+                    "follow_up_form_id": form_id,
+                    "follow_up_form_name": self.BACKLOG15_FORM_NAME,
+                    "custom_message": "Please check what we have on file and "
+                    "tell us who your parent or guardian is.",
+                    "auto_advance": True,
+                },
+            ),
+            (
+                "Board Interview",
+                "manual_approval",
+                "An interview with a board member.",
+                {"approver_roles": [], "require_notes": False},
+            ),
+            (
+                self.BACKLOG15_EMAIL_STAGE,
+                "automated_email",
+                "Welcome packet and the next business meeting.",
+                {
+                    "email_subject": "Welcome to the Junior Firefighter program",
+                    "include_welcome": True,
+                    "welcome_message": "Welcome aboard. Your packet is attached.",
+                    "include_faq_link": False,
+                    "faq_url": "",
+                    "include_next_meeting": True,
+                    "next_meeting_event_type": "business_meeting",
+                    **(
+                        {"next_meeting_event_id": str(pick(past_meeting, "id"))}
+                        if past_meeting
+                        else {}
+                    ),
+                    "next_meeting_details": "",
+                    "include_status_tracker": False,
+                    "custom_sections": [],
+                },
+            ),
+        ]
+        return self.api.post(
+            "/prospective-members/pipelines",
+            {
+                "name": self.BACKLOG15_PIPELINE_NAME,
+                "description": "Members aged 14 to 17, with a guardian's consent.",
+                "is_default": False,
+                "is_active": True,
+                "steps": [
+                    {
+                        "name": name,
+                        "description": description,
+                        "step_type": step_type,
+                        "is_first_step": order == 0,
+                        "is_final_step": order == len(stages) - 1,
+                        "sort_order": order,
+                        "required": True,
+                        "config": config,
+                    }
+                    for order, (name, step_type, description, config) in enumerate(
+                        stages
+                    )
+                ],
+            },
+        )
+
     def _guide15_pipeline(self) -> dict:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         found = next(
@@ -20066,6 +20303,7 @@ class Seeder:
         # vote outcomes above are the steps that assume one pipeline.
         self.step("meeting-stage applicant", self.seed_meeting_stage_applicant)
         self.step("guide 15 states", self.seed_guide15_states)
+        self.step("guide 15 follow-up forms", self.seed_backlog_15_follow_up)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
