@@ -185,13 +185,32 @@ export const evaluationsService = {
     return response.data;
   },
 
-  async document(id: string): Promise<Blob> {
-    const response = await api.get<Blob>(`/evaluations/${id}/document`, { responseType: 'blob' });
+  /** The frozen PDF: `latest` carries the member's response once submitted;
+   * `signed` is always the PDF as it was signed. */
+  async document(id: string, version: 'latest' | 'signed' = 'latest'): Promise<Blob> {
+    const response = await api.get<Blob>(`/evaluations/${id}/document`, {
+      responseType: 'blob',
+      params: { version },
+    });
     return response.data;
   },
 
-  async completeCalibration(id: string): Promise<EvaluationDetail> {
-    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/calibration/complete`);
+  async saveResponse(id: string, text: string): Promise<EvaluationDetail> {
+    const response = await api.put<EvaluationDetail>(`/evaluations/${id}/response`, { text });
+    return response.data;
+  },
+
+  async submitResponse(id: string): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/response/submit`);
+    return response.data;
+  },
+
+  /** Complete calibration, flagging the evaluator's items to revisit (ticks
+   * only, never a note). */
+  async completeCalibration(id: string, flaggedItems: string[] = []): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/calibration/complete`, {
+      flagged_items: flaggedItems,
+    });
     return response.data;
   },
 
@@ -220,6 +239,12 @@ export const evaluationsService = {
       items,
     });
     return { drafted: response.data.drafted ?? 0, results: asArray(response.data.results ?? []) };
+  },
+
+  /** Reopen a finalized evaluation as a new revision, with the reason. */
+  async amend(id: string, reason: string): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/amend`, { reason });
+    return response.data;
   },
 
   /** Delete an evaluation with a reason. The server asks for step-up

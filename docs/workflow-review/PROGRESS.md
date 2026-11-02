@@ -151,11 +151,6 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Reports and inventory activities** — three `DialogPanel` dialogs have no
-  `role` on the panel or a wrapper: the report viewer, and
-  InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The
-  inventory pair sits inside another modal; check its tests' dialog queries
-  when changing it.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
@@ -166,10 +161,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   ("module is not enabled"). The weather and `/integrations/connected` half of
   this lead was fixed in the W01 third pass (W01-33); the training call was not
   seen there, because that install had Training on.
-- **Any run touching the app shell** — nothing keeps `TopNavigation` and
-  `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
-  whole Forms & Comms admin group present only in the side layout. A test
-  comparing the two link sets would catch the next one (W55).
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -220,6 +211,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Leads — Navigation parity and dialog roles — 2026-11-02
+
+Driven as: `admin` in the top layout at 390×844, on a reseeded review
+database. Fixed: the top layout lacked two destinations the side layout
+offers, both added there on 2026-10-26 (#3755): Medical Screening under
+Admin, and My ID Card among the member's own links. Both are now in the top
+layout, gated as in the side one, and the new `navigationParity.test.tsx`
+renders both layouts with every permission and module on, opens every group,
+and fails when either reaches a destination the other does not (80 against 82
+before the fix). Re-driven: both appear in the top layout's menu, and My ID Card
+opens the admin's own card. The W14-2 dialog-role lead was already fixed on
+main: all 56 `DialogPanel` uses carry `role="dialog"` on the panel or a
+wrapper. Gate: typecheck and lint clean, and the navigation tests pass.
 
 ### Lead — Reflow table cells a phone hid — 2026-11-01
 

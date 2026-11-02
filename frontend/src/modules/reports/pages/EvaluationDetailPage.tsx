@@ -8,7 +8,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Download, PenLine, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, FilePenLine, PenLine, RefreshCw, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -16,9 +16,12 @@ import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { saveBlob } from '../../../utils/saveBlob';
+import { AmendEvaluationDialog } from '../components/evaluations/AmendEvaluationDialog';
+import { CalibrationDialog } from '../components/evaluations/CalibrationDialog';
 import { DeleteEvaluationDialog } from '../components/evaluations/DeleteEvaluationDialog';
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
+import { ResponsePanel } from '../components/evaluations/ResponsePanel';
 import { SignDialog } from '../components/evaluations/SignDialog';
 import { StepList } from '../components/evaluations/StepList';
 import { evaluationsService } from '../services/evaluationsApi';
@@ -65,6 +68,8 @@ const EvaluationDetailPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [signing, setSigning] = useState<SigningOption | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [amending, setAmending] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   const navigate = useNavigate();
   const signerName = useAuthStore((state) => state.user?.full_name ?? '');
   // Edits made while a save is in flight must not be replaced by the older
@@ -170,18 +175,11 @@ const EvaluationDetailPage: React.FC = () => {
     }
   };
 
-  const calibrate = async () => {
-    const ok = await confirm({
-      title: 'Mark calibration complete?',
-      message:
-        'The evaluator can then lock the evaluation. Discuss any changes with the evaluator directly; only the fact that calibration happened is recorded.',
-      confirmLabel: 'Mark complete',
-      cancelLabel: 'Not yet',
-    });
-    if (!ok) return;
+  const calibrate = async (flaggedItems: string[]) => {
     setBusy(true);
     try {
-      adopt(await evaluationsService.completeCalibration(detail.id), editRevision.current);
+      adopt(await evaluationsService.completeCalibration(detail.id, flaggedItems), editRevision.current);
+      setCalibrating(false);
       toast.success('Calibration recorded');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not record calibration.'));
@@ -204,6 +202,19 @@ const EvaluationDetailPage: React.FC = () => {
     }
   };
 
+  const amend = async (reason: string) => {
+    setBusy(true);
+    try {
+      adopt(await evaluationsService.amend(detail.id, reason), null);
+      setAmending(false);
+      toast.success('Evaluation reopened for amendment');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not amend the evaluation.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async (reason: string) => {
     setBusy(true);
     try {
@@ -216,10 +227,43 @@ const EvaluationDetailPage: React.FC = () => {
     }
   };
 
-  const download = async () => {
+  const saveResponse = async (text: string) => {
     setBusy(true);
     try {
-      saveBlob(await evaluationsService.document(detail.id), `evaluation-${detail.period_end}.pdf`);
+      adopt(await evaluationsService.saveResponse(detail.id, text), null);
+      toast.success('Response saved');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not save your response.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitResponse = async () => {
+    const ok = await confirm({
+      title: 'Submit your response?',
+      message:
+        'Your response becomes part of the record and is printed on the evaluation’s PDF. You cannot change it afterwards. Your evaluator and the evaluation managers are told.',
+      confirmLabel: 'Submit response',
+      cancelLabel: 'Keep editing',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      adopt(await evaluationsService.submitResponse(detail.id), null);
+      toast.success('Response submitted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not submit your response.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const download = async (version: 'latest' | 'signed' = 'latest') => {
+    setBusy(true);
+    try {
+      const suffix = version === 'latest' && detail.response_document_available ? '-with-response' : '';
+      saveBlob(await evaluationsService.document(detail.id, version), `evaluation-${detail.period_end}${suffix}.pdf`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not download the PDF.'));
     } finally {
@@ -283,9 +327,36 @@ const EvaluationDetailPage: React.FC = () => {
                 Download PDF
               </button>
             )}
+            {detail.response_document_available && (
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2 text-sm"
+                disabled={busy}
+                onClick={() => void download('signed')}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Signed PDF, without response
+              </button>
+            )}
             {detail.viewer.can_calibrate && (
-              <button type="button" className="btn-primary text-sm" disabled={busy} onClick={() => void calibrate()}>
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                disabled={busy}
+                onClick={() => setCalibrating(true)}
+              >
                 Mark calibration complete
+              </button>
+            )}
+            {detail.viewer.can_amend && (
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2 text-sm"
+                disabled={busy}
+                onClick={() => setAmending(true)}
+              >
+                <FilePenLine className="h-4 w-4" aria-hidden="true" />
+                Amend
               </button>
             )}
             {detail.viewer.can_delete && (
@@ -330,6 +401,7 @@ const EvaluationDetailPage: React.FC = () => {
                   sources={detail.sources}
                   suggested={detail.suggested_scores}
                   overallLevels={detail.overall_levels}
+                  flagged={detail.calibration_flags}
                 />
                 <div className="action-bar-safe flex flex-wrap justify-end gap-2">
                   <button type="button" className="btn-secondary" disabled={busy || !dirty} onClick={() => void save()}>
@@ -364,6 +436,7 @@ const EvaluationDetailPage: React.FC = () => {
                   sources={detail.sources}
                   suggested={detail.suggested_scores}
                   overallLevels={detail.overall_levels}
+                  flagged={detail.calibration_flags}
                 />
               </section>
             ))}
@@ -378,7 +451,36 @@ const EvaluationDetailPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
+            <ResponsePanel
+              detail={detail}
+              busy={busy}
+              onSave={(text) => void saveResponse(text)}
+              onSubmit={() => void submitResponse()}
+            />
             <StepList steps={detail.steps} />
+            {(detail.amendments ?? []).length > 0 && (
+              <section aria-labelledby="amendments-heading" className="card p-4 sm:p-6">
+                <h2 id="amendments-heading" className="text-theme-text-primary text-lg font-semibold">
+                  Amendments
+                </h2>
+                <p className="text-theme-text-secondary mt-1 text-xs">
+                  Reopened after it was final. The earlier text was not kept.
+                </p>
+                <ul className="mt-3 space-y-3">
+                  {(detail.amendments ?? []).map((amendment) => (
+                    <li key={amendment.to_revision} className="text-sm">
+                      <span className="text-theme-text-secondary block">
+                        Revision {amendment.to_revision}: amended by {amendment.amended_by_name},{' '}
+                        {formatDateTime(amendment.amended_at, tz)}
+                      </span>
+                      <span className="text-theme-text-primary block whitespace-pre-wrap">
+                        Reason: {amendment.reason}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             {detail.signatures.length > 0 && (
               <section aria-labelledby="signatures-heading" className="card p-4 sm:p-6">
                 <h2 id="signatures-heading" className="text-theme-text-primary text-lg font-semibold">
@@ -423,6 +525,20 @@ const EvaluationDetailPage: React.FC = () => {
         busy={busy}
         onClose={() => setSigning(null)}
         onSign={(signature) => void sign(signature)}
+      />
+      <CalibrationDialog
+        isOpen={calibrating}
+        definition={detail.definition}
+        busy={busy}
+        onClose={() => setCalibrating(false)}
+        onComplete={(flaggedItems) => void calibrate(flaggedItems)}
+      />
+      <AmendEvaluationDialog
+        isOpen={amending}
+        memberName={detail.member.name}
+        busy={busy}
+        onClose={() => setAmending(false)}
+        onAmend={(reason) => void amend(reason)}
       />
       <DeleteEvaluationDialog
         isOpen={deleting}

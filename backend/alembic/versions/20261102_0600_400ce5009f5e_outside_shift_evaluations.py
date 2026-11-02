@@ -20,7 +20,7 @@ Downgrade deletes the outside-shift evaluations (there is nothing left to
 attach them to) and drops the columns.
 
 Revision ID: 400ce5009f5e
-Revises: 857291750c67
+Revises: 4c8e2f61a9d7
 Create Date: 2026-11-02 06:00:00
 
 """
@@ -32,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "400ce5009f5e"
-down_revision: Union[str, None] = "857291750c67"
+down_revision: Union[str, None] = "4c8e2f61a9d7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

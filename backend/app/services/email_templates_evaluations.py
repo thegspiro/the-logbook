@@ -1,7 +1,7 @@
 """
 Default Email Templates — Member Performance Evaluations
 
-The five notices an evaluation sends, as editable templates (owner decision
+The seven notices an evaluation sends, as editable templates (owner decision
 2026-11-02):
 
 - **Waiting on you** — a step opened and the recipient acts on it: the member's
@@ -12,6 +12,12 @@ The five notices an evaluation sends, as editable templates (owner decision
 - **Overdue** — the step is still open after its due date; sent to whoever acts
   on it and to the department's evaluation managers.
 - **Finalized** — the record is final and its PDF can be downloaded.
+- **Amended** — a finalized evaluation was reopened as a new revision; sent to
+  the member and to everyone who signed the previous one. The reason is on the
+  evaluation and its PDF, not in the email.
+- **Response** — the member attached a written response to their finalized
+  evaluation; sent to the evaluator and the evaluation managers. The response
+  is in the Logbook and on the evaluation's PDF, not in the email.
 - **Deleted** — one of the member's evaluations was deleted. The reason is not
   in the email; it is on the member's own evaluations page, with who deleted
   it and when.
@@ -159,6 +165,70 @@ Open the evaluation: {{evaluation_url}}
 
 {{footer_text}}"""
 
+AMENDED_SUBJECT = "Evaluation amended: {{period_name}}"
+AMENDED_HTML = build_shell(
+    "An Evaluation Was Amended",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{summary}}</p>
+"""
+    + facts(
+        [[fact("Member", "{{member_name}}"), fact("Review period", "{{period_name}}")]],
+        panel=True,
+    )
+    + """        <p>Why it was amended is recorded with the evaluation in the
+        Logbook.</p>
+"""
+    + action("{{evaluation_url}}", "Open the evaluation"),
+    accent=ACCENT_AMBER,
+    chip=_CHIP,
+)
+AMENDED_TEXT = """An Evaluation Was Amended
+
+Hello {{recipient_name}},
+
+{{summary}}
+
+Member: {{member_name}}
+Review period: {{period_name}}
+
+Why it was amended is recorded with the evaluation in the Logbook.
+
+Open the evaluation: {{evaluation_url}}
+
+{{footer_text}}"""
+
+RESPONSE_SUBJECT = "Written response to an evaluation: {{member_name}}"
+RESPONSE_HTML = build_shell(
+    "A Member Responded to Their Evaluation",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{summary}}</p>
+"""
+    + facts(
+        [[fact("Member", "{{member_name}}"), fact("Review period", "{{period_name}}")]],
+        panel=True,
+    )
+    + """        <p>The response is with the evaluation in the Logbook and on its
+        PDF.</p>
+"""
+    + action("{{evaluation_url}}", "Open the evaluation"),
+    accent=ACCENT_BLUE,
+    chip=_CHIP,
+)
+RESPONSE_TEXT = """A Member Responded to Their Evaluation
+
+Hello {{recipient_name}},
+
+{{summary}}
+
+Member: {{member_name}}
+Review period: {{period_name}}
+
+The response is with the evaluation in the Logbook and on its PDF.
+
+Open the evaluation: {{evaluation_url}}
+
+{{footer_text}}"""
+
 DELETED_SUBJECT = "An evaluation of yours was deleted: {{period_name}}"
 DELETED_HTML = build_shell(
     "An Evaluation Was Deleted",
@@ -218,6 +288,8 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     EmailTemplateType.EVALUATION_DEADLINE_REMINDER.value: _STEP_VARS,
     EmailTemplateType.EVALUATION_OVERDUE.value: _STEP_VARS,
     EmailTemplateType.EVALUATION_FINALIZED.value: _COMMON_VARS,
+    EmailTemplateType.EVALUATION_AMENDED.value: _COMMON_VARS,
+    EmailTemplateType.EVALUATION_RESPONSE.value: _COMMON_VARS,
     EmailTemplateType.EVALUATION_DELETED.value: [
         {"name": "recipient_name", "description": "The member's name"},
         {"name": "period_name", "description": "The review period's name"},
@@ -263,6 +335,20 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     EmailTemplateType.EVALUATION_FINALIZED.value: {
         **_SAMPLE_COMMON,
         "summary": "Alex Johnson's evaluation for 2026 Annual Review is final.",
+    },
+    EmailTemplateType.EVALUATION_AMENDED.value: {
+        **_SAMPLE_COMMON,
+        "summary": (
+            "Chief Dana Reyes amended Alex Johnson's evaluation for 2026 Annual "
+            "Review, which you signed. It goes back through its steps."
+        ),
+    },
+    EmailTemplateType.EVALUATION_RESPONSE.value: {
+        **_SAMPLE_COMMON,
+        "summary": (
+            "Alex Johnson attached a written response to their evaluation for "
+            "2026 Annual Review."
+        ),
     },
     EmailTemplateType.EVALUATION_DELETED.value: {
         "recipient_name": "Alex Johnson",
@@ -329,6 +415,29 @@ DEFAULT_TEMPLATE_DEFS: List[Dict[str, Any]] = [
         "description": (
             "Sent to the member and the evaluator when an evaluation is final "
             "and its PDF can be downloaded."
+        ),
+    },
+    {
+        "type": EmailTemplateType.EVALUATION_AMENDED,
+        "name": "Evaluation Amended",
+        "subject": AMENDED_SUBJECT,
+        "html": AMENDED_HTML,
+        "text": AMENDED_TEXT,
+        "description": (
+            "Sent to the member and to everyone who signed when a finalized "
+            "evaluation is amended. The reason stays in the Logbook."
+        ),
+    },
+    {
+        "type": EmailTemplateType.EVALUATION_RESPONSE,
+        "name": "Evaluation Response",
+        "subject": RESPONSE_SUBJECT,
+        "html": RESPONSE_HTML,
+        "text": RESPONSE_TEXT,
+        "description": (
+            "Sent to the evaluator and the evaluation managers when a member "
+            "attaches a written response to their finalized evaluation. The "
+            "response stays in the Logbook."
         ),
     },
     {

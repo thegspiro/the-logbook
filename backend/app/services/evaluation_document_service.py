@@ -9,9 +9,13 @@ nothing, so a layout or logo change afterwards never alters a signed record
 that failed to build at finalization is built on first request instead of
 leaving a finalized evaluation without its document.
 
-The unique key on (evaluation, revision) settles two first requests racing:
-the loser's file is removed and the winner's row is used (CLAUDE.md
-pitfall #36).
+The unique key on (evaluation, revision, includes_response) settles two first
+requests racing: the loser's file is removed and the winner's row is used
+(CLAUDE.md pitfall #36).
+
+A member's written response is printed in a second document for the same
+revision, built the same way once the response is submitted; the first stays
+as it was signed (owner decision 2026-11-02).
 """
 
 from __future__ import annotations
@@ -141,31 +145,51 @@ class EvaluationDocumentService:
         self.db = db
         self.evaluations = EvaluationService(db)
 
-    async def _document(self, evaluation: Evaluation) -> Optional[EvaluationDocument]:
+    async def _document(
+        self, evaluation: Evaluation, with_response: bool = False
+    ) -> Optional[EvaluationDocument]:
         return (
             await self.db.execute(
                 select(EvaluationDocument).where(
                     EvaluationDocument.evaluation_id == evaluation.id,
                     EvaluationDocument.organization_id == evaluation.organization_id,
                     EvaluationDocument.revision == evaluation.revision,
+                    EvaluationDocument.includes_response.is_(with_response),
                 )
             )
         ).scalar_one_or_none()
 
     async def ensure_document(
-        self, organization_id: str, evaluation_id: str, actor: User
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        actor: User,
+        *,
+        with_response: bool = False,
     ) -> Optional[EvaluationDocument]:
         """The revision's frozen PDF, building it on first call. None when
-        the evaluation does not exist or is not finalized."""
+        the evaluation does not exist or is not finalized, or, for the
+        response PDF, when no response has been submitted."""
         evaluation = await self.evaluations._evaluation(organization_id, evaluation_id)
         if evaluation is None or evaluation.status != EvaluationStatus.FINALIZED.value:
             return None
-        existing = await self._document(evaluation)
+        existing = await self._document(evaluation, with_response)
         if existing is not None:
             return existing
 
         parts = await self.evaluations._parts(evaluation)
-        record = await self._record(evaluation, parts)
+        response = parts.get(EvaluationPartKind.MEMBER_RESPONSE.value)
+        submitted_response = (
+            response
+            if response is not None
+            and response.status == EvaluationPartStatus.SUBMITTED.value
+            else None
+        )
+        if with_response and submitted_response is None:
+            return None
+        record = await self._record(
+            evaluation, parts, submitted_response if with_response else None
+        )
         pdf = render_evaluation_pdf(record)
         stored = await FileStorageService(self.db).store_bytes(
             pdf,
@@ -184,6 +208,7 @@ class EvaluationDocumentService:
             file_sha256=hashlib.sha256(pdf).hexdigest(),
             content_hash=record["content_hash"],
             size_bytes=len(pdf),
+            includes_response=with_response,
         )
         try:
             async with self.db.begin_nested():
@@ -192,11 +217,12 @@ class EvaluationDocumentService:
         except IntegrityError:
             # Another request stored it first; keep theirs, drop this copy.
             await file_storage.delete_quietly(stored.path)
-            return await self._document(evaluation)
+            return await self._document(evaluation, with_response)
         logger.info(
-            "Stored evaluation document for evaluation {} revision {}",
+            "Stored evaluation document for evaluation {} revision {} (response: {})",
             evaluation.id,
             evaluation.revision,
+            with_response,
         )
         return document
 
@@ -211,12 +237,18 @@ class EvaluationDocumentService:
             raise FileNotFoundError("The evaluation's PDF is missing from storage.")
         return await file_storage.file_response(
             path,
-            filename=f"evaluation-{evaluation.period_end.isoformat()}.pdf",
+            filename=(
+                f"evaluation-{evaluation.period_end.isoformat()}"
+                f"{'-with-response' if document.includes_response else ''}.pdf"
+            ),
             media_type="application/pdf",
         )
 
     async def _record(
-        self, evaluation: Evaluation, parts: Dict[str, Any]
+        self,
+        evaluation: Evaluation,
+        parts: Dict[str, Any],
+        response: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Everything the PDF prints, already in words."""
         org_id = evaluation.organization_id
@@ -358,7 +390,26 @@ class EvaluationDocumentService:
                 }
                 for sig in signatures
             ],
+            "amendments": [
+                {
+                    "revision": a["to_revision"],
+                    "by": a["amended_by_name"],
+                    "at": _moment(a["amended_at"], tz),
+                    "reason": a["reason"],
+                }
+                for a in await self.evaluations._amendments(evaluation)
+            ],
             "content_hash": content_hash(evaluation, parts),
+            "response": (
+                {
+                    "text": PartContent.model_validate(
+                        response.content
+                    ).overall_comment,
+                    "submitted_at": _moment(response.submitted_at, tz),
+                }
+                if response is not None
+                else None
+            ),
             "generated_at": _moment(datetime.now(timezone.utc), tz),
         }
 

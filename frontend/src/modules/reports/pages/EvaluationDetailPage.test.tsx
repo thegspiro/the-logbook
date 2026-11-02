@@ -21,6 +21,9 @@ const completeCalibration = vi.fn();
 const sign = vi.fn();
 const documentBlob = vi.fn();
 const remove = vi.fn();
+const amend = vi.fn();
+const saveResponse = vi.fn();
+const submitResponse = vi.fn();
 const saveBlob = vi.fn();
 vi.mock('../../../utils/saveBlob', () => ({ saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown }));
 vi.mock('../../../stores/authStore', () => ({
@@ -37,6 +40,9 @@ vi.mock('../services/evaluationsApi', () => ({
     sign: (...a: unknown[]) => sign(...a) as unknown,
     document: (...a: unknown[]) => documentBlob(...a) as unknown,
     remove: (...a: unknown[]) => remove(...a) as unknown,
+    amend: (...a: unknown[]) => amend(...a) as unknown,
+    saveResponse: (...a: unknown[]) => saveResponse(...a) as unknown,
+    submitResponse: (...a: unknown[]) => submitResponse(...a) as unknown,
   },
 }));
 
@@ -152,7 +158,20 @@ function renderPage() {
 
 describe('EvaluationDetailPage', () => {
   beforeEach(() => {
-    for (const m of [get, savePart, submitPart, refreshData, completeCalibration, sign, documentBlob, saveBlob, remove])
+    for (const m of [
+      get,
+      savePart,
+      submitPart,
+      refreshData,
+      completeCalibration,
+      sign,
+      documentBlob,
+      saveBlob,
+      remove,
+      amend,
+      saveResponse,
+      submitResponse,
+    ])
       m.mockReset();
     get.mockResolvedValue(detail());
   });
@@ -273,7 +292,35 @@ describe('EvaluationDetailPage', () => {
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Mark calibration complete' }));
     await user.click(await screen.findByRole('button', { name: 'Mark complete' }));
-    await waitFor(() => expect(completeCalibration).toHaveBeenCalledWith('ev1'));
+    await waitFor(() => expect(completeCalibration).toHaveBeenCalledWith('ev1', []));
+  });
+
+  it('lets a calibrator flag the evaluator’s items to revisit', async () => {
+    get.mockResolvedValue(
+      detail({
+        viewer: {
+          is_member: false,
+          is_evaluator: false,
+          can_edit_self_evaluation: false,
+          can_edit_evaluation: false,
+          can_refresh_data: false,
+          can_calibrate: true,
+        },
+      })
+    );
+    completeCalibration.mockResolvedValue(detail());
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Mark calibration complete' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Training' }));
+    await user.click(screen.getByRole('button', { name: 'Mark complete, 1 flagged' }));
+    await waitFor(() => expect(completeCalibration).toHaveBeenCalledWith('ev1', ['training']));
+  });
+
+  it('marks the items the calibrator flagged on the evaluator’s form', async () => {
+    get.mockResolvedValue(detail({ calibration_flags: ['training'] }));
+    renderPage();
+    expect(await screen.findByText('Flagged at calibration')).toBeInTheDocument();
   });
 
   describe('signing', () => {
@@ -394,5 +441,100 @@ describe('EvaluationDetailPage', () => {
     renderPage();
     await screen.findAllByText('11.5 h');
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('amends only with a reason, and shows the amendment with its reason', async () => {
+    const amended = detail({
+      revision: 2,
+      amendments: [
+        {
+          from_revision: 1,
+          to_revision: 2,
+          reason: 'Corrected a comment.',
+          amended_by_name: 'Chief Reyes',
+          amended_at: '2027-02-01T15:00:00Z',
+        },
+      ],
+    });
+    amend.mockResolvedValue(amended);
+    get.mockResolvedValue(detail({ status: 'finalized', viewer: { ...detail().viewer, can_amend: true } }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Amend' }));
+    const confirmAmend = screen.getByRole('button', { name: 'Amend evaluation' });
+    expect(confirmAmend).toBeDisabled();
+    await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), ' Corrected a comment. ');
+    await user.click(confirmAmend);
+    await waitFor(() => expect(amend).toHaveBeenCalledWith('ev1', 'Corrected a comment.'));
+    expect(await screen.findByRole('heading', { name: 'Amendments' })).toBeInTheDocument();
+    expect(screen.getByText('Reason: Corrected a comment.')).toBeInTheDocument();
+  });
+
+  describe('the member’s written response', () => {
+    const member = {
+      is_member: true,
+      is_evaluator: false,
+      can_edit_self_evaluation: false,
+      can_edit_evaluation: false,
+      can_refresh_data: false,
+      can_calibrate: false,
+    };
+    const responsePart = (status: 'draft' | 'submitted', text: string) => ({
+      kind: 'member_response' as const,
+      status,
+      content: { answers: {}, overall_comment: text },
+      submitted_at: status === 'submitted' ? '2027-02-01T15:00:00Z' : null,
+      updated_at: null,
+    });
+
+    it('saves a draft, then submits it only after confirming', async () => {
+      const open = detail({
+        status: 'finalized',
+        response_due: '2027-03-01',
+        viewer: { ...member, can_respond: true },
+      });
+      get.mockResolvedValue(open);
+      saveResponse.mockResolvedValue({ ...open, parts: [responsePart('draft', 'I led two drills.')] });
+      submitResponse.mockResolvedValue({
+        ...open,
+        parts: [responsePart('submitted', 'I led two drills.')],
+        viewer: { ...member, can_respond: false },
+      });
+      const user = userEvent.setup();
+      renderPage();
+      const box = await screen.findByLabelText('Response');
+      expect(screen.getByRole('button', { name: 'Submit response' })).toBeDisabled();
+      await user.type(box, '  I led two drills.  ');
+      await user.click(screen.getByRole('button', { name: 'Save draft' }));
+      await waitFor(() => expect(saveResponse).toHaveBeenCalledWith('ev1', 'I led two drills.'));
+
+      await user.click(await screen.findByRole('button', { name: 'Submit response' }));
+      const confirmButtons = await screen.findAllByRole('button', { name: 'Submit response' });
+      await user.click(confirmButtons[confirmButtons.length - 1] as HTMLElement);
+      await waitFor(() => expect(submitResponse).toHaveBeenCalledWith('ev1'));
+      expect(await screen.findByText(/Submitted .*after the evaluation was final/)).toBeInTheDocument();
+      expect(screen.queryByLabelText('Response')).not.toBeInTheDocument();
+    });
+
+    it('shows officers the submitted response and offers the signed PDF beside it', async () => {
+      const blob = new Blob(['%PDF'], { type: 'application/pdf' });
+      documentBlob.mockResolvedValue(blob);
+      get.mockResolvedValue(
+        detail({
+          status: 'finalized',
+          document_available: true,
+          response_document_available: true,
+          parts: [responsePart('submitted', 'I disagree with item two.')],
+        })
+      );
+      const user = userEvent.setup();
+      renderPage();
+      expect(await screen.findByRole('heading', { name: "Member's written response" })).toBeInTheDocument();
+      expect(screen.getByText('I disagree with item two.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Signed PDF, without response' }));
+      await waitFor(() => expect(documentBlob).toHaveBeenCalledWith('ev1', 'signed'));
+      await user.click(screen.getByRole('button', { name: 'Download PDF' }));
+      await waitFor(() => expect(saveBlob).toHaveBeenLastCalledWith(blob, 'evaluation-2026-12-31-with-response.pdf'));
+    });
   });
 });
