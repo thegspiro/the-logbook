@@ -3937,9 +3937,26 @@ export const SHOTS = [
     line: 1279,
     anchor:
       "Screenshot of the Inventory Admin hub showing the low-stock banner",
-    alt: "The inventory admin hub with its cards grouped into sections",
+    alt: "Inventory Administration with the Catalog area chosen: its pages in the strip under the area cards (All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors, Print Labels) and the line naming the page open",
     route: "/inventory/admin",
-    fullPage: true,
+    expect: { selector: "[aria-label='Catalog pages']" },
+    allowEmptyState:
+      '"No location" is the items list\'s location summary card under the hub, not an empty page.',
+    // An area card opens the area's first page, so the strip under the cards
+    // lists that area's pages. The top of the page is the subject.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Catalog/ })
+        .or(page.getByRole("button", { name: /^Catalog/ }))
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .locator("[aria-label='Catalog pages']")
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
   },
   {
     id: "05-61-item-barcode-fields",
@@ -12724,9 +12741,24 @@ export const SHOTS = [
     line: 812,
     anchor:
       "Screenshot of the Equipment Kit create/edit modal showing a kit named 'New",
-    alt: "Equipment kit editor with its line items and quantities",
+    alt: "The Edit Kit window for New Recruit PPE Kit, scrolled to its lines: the single-size lines with their category, quantity and Optional box, and Structural Coat with its Size set to Member's size",
     route: "/inventory/admin/kits",
-    prepare: clickByName(/edit new recruit ppe kit/i),
+    expect: { selector: "select[id$='-size']" },
+    // The sized line is the subject (seed_backlog_05_kit_member_size), and it
+    // sits below the fold of the window. Opened and cancelled; nothing saved.
+    prepare: async (page) => {
+      await clickByName(/edit new recruit ppe kit/i)(page);
+      const size = page.locator("select[id^='kit-line-'][id$='-size']").first();
+      await size.waitFor({ timeout: 15_000 });
+      await size.evaluate((el) =>
+        el.closest(".rounded-lg, li, div")?.scrollIntoView({ block: "center" }),
+      );
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
     fullPage: false,
   },
   {
@@ -17728,6 +17760,13 @@ export const SHOTS = [
         { timeout: 20_000 },
       );
       await print.click();
+      // Since 2026-10-27 a browser print first shows the Before you print
+      // checklist (05-147); carry on through it as a quartermaster would.
+      const carryOn = page.getByRole("button", { name: "Open print dialog" });
+      await carryOn
+        .waitFor({ timeout: 5_000 })
+        .then(() => carryOn.click())
+        .catch(() => {});
       await page.getByText("Did the labels print correctly?").waitFor();
       await page.evaluate(() => window.scrollTo(0, 0));
     },
@@ -22542,19 +22581,28 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 2765,
     anchor: "at 390px: the apparatus detail header and pinned tabs",
-    alt: "One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header",
-    expect: "Medic 3",
-    route: "/apparatus",
+    alt: "Medic 3 opened from Fleet Readiness on a phone: the unit name and its readiness (No checks yet) on one row, the recent-check strip at full width, and the Checks, Inventory, Findings and Check log tabs under the header",
+    expect: { selector: "[role='tab']" },
+    allowEmptyState:
+      "M-3 has no completed checks, which its readiness badge and the Checks tab say; the layout is the subject.",
+    route: "/inventory/checklists",
     viewport: "mobile",
+    // The rig as Fleet Readiness opens it (/inventory/checklists/apparatus/:id),
+    // which is the screen the guide describes; /apparatus/:id is the Apparatus
+    // module's vehicle record, a different page this shot pictured until
+    // 2026-11-02.
     prepare: async (page) => {
       await openFirstFromApi(
         "/apparatus",
-        (id) => `/apparatus/${id}`,
+        (id) => `/inventory/checklists/apparatus/${id}`,
         "apparatus",
         (rig) => (rig.unitNumber ?? rig.unit_number) === "M-3",
       )(page);
-      await page.getByText("Vehicle Details").waitFor({ timeout: 20_000 });
+      await page
+        .getByRole("tab", { name: "Checks" })
+        .waitFor({ timeout: 20_000 });
       await hideScanNotice(page);
+      await page.waitForTimeout(600);
     },
     fullPage: false,
   },
@@ -22566,8 +22614,20 @@ export const SHOTS = [
     alt: "The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons",
     route: "/inventory/admin/checklists/supply",
     viewport: "mobile",
-    expect: "Add stock",
-    prepare: hideScanNotice,
+    expect: "Needs restock",
+    allowEmptyState:
+      '"No stock" is a worklist row with nothing on the shelf to restock from, which the worklist exists to show.',
+    // The page now opens under the Inventory Administration header, which
+    // fills a phone's first screen; the worklist starts below it, so the
+    // frame is scrolled to the count chips.
+    prepare: async (page) => {
+      const chip = page.getByText("Needs restock").first();
+      await chip.waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await chip.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -150));
+      await page.waitForTimeout(500);
+    },
     fullPage: false,
   },
   {
@@ -22579,6 +22639,8 @@ export const SHOTS = [
     route: "/inventory/admin/checklists/supply",
     viewport: "mobile",
     expect: "Quantity",
+    allowEmptyState:
+      '"No stock" is a worklist row behind the sheet, not an empty page.',
     // Opened and photographed; nothing is added.
     prepare: async (page) => {
       await page
@@ -23186,16 +23248,24 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 1870,
     anchor: "The NFC Tag Register as a quartermaster",
-    alt: "The NFC Tag Register as a quartermaster: tags on coats, a cylinder and a shelf with what each names, its status (one Lost) and the last time it was tapped, with the kind, status and search filters and CSV",
+    alt: "The NFC Tag Register as a quartermaster: tags on a cylinder and on coats with what each names, its status (one Lost, offering Mark found) and the last time it was tapped, each with Mark lost, Move and Unlink, and two tags ticked with the 2 selected bar (Mark lost, Mark found, Clear selection) above the list",
     route: "/inventory/admin/nfc/tags",
-    expect: "NFC Tag Register",
+    expect: { selector: "[aria-label='Actions for selected tags']" },
+    viewport: { width: 1440, height: 1000 },
     fullPage: false,
+    // Two tags ticked to bring up the selection bar. Ticking is page state
+    // only: nothing is marked lost or found.
     prepare: withInventoryNfc(async (page) => {
-      await page
-        .getByRole("checkbox", { name: /^Select tag ending / })
-        .first()
-        .waitFor({ timeout: 20_000 });
+      const boxes = page.getByRole("checkbox", { name: /^Select tag ending / });
+      await boxes.first().waitFor({ timeout: 20_000 });
+      await boxes.nth(0).check();
+      await boxes.nth(1).check();
       await hideScanNotice(page);
+      await page
+        .locator("h1, h2", { hasText: "NFC Tag Register" })
+        .last()
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(400);
     }),
     cleanup: disableInventoryNfc,
   },
@@ -23230,7 +23300,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3196,
     anchor: "Find a lot on the Medical Supplies Expiring tab",
-    alt: "Find a lot on the Medical Supplies Expiring tab: the lot number GZ-9910 typed, the shelf lot it found, and the Recall lot button for it",
+    alt: "Find a lot on the Medical Supplies Expiring tab: the lot number HG-2607 typed, the Hemostatic Gauze lot it found on the shelf, and the Recall lot button for it",
     route: "/medical-supplies",
     expect: "with a lot number containing",
     fullPage: false,
@@ -23238,9 +23308,9 @@ export const SHOTS = [
       await page
         .getByRole("tab", { name: /^Expiring/ })
         .click({ timeout: 15_000 });
-      await page.getByLabel("Find a lot").fill("GZ-9910");
+      await page.getByLabel("Find a lot").fill("HG-2607");
       await page.getByRole("button", { name: "Find", exact: true }).click();
-      const recall = page.getByRole("button", { name: /^Recall lot GZ-9910/ });
+      const recall = page.getByRole("button", { name: /^Recall lot HG-2607/ });
       await recall.waitFor({ timeout: 15_000 });
       await hideScanNotice(page);
       await page
@@ -23254,20 +23324,22 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3200,
     anchor: "The Recall this lot dialog with a reason typed",
-    alt: "The Recall this lot dialog for Gauze lot GZ-9910, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot",
+    alt: "The Recall this lot dialog for Hemostatic Gauze lot HG-2607, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot",
     route: "/medical-supplies",
     expect: "stops counting as stock",
     fullPage: false,
     // Photographed with the reason typed and never submitted: Cancel in the
     // cleanup, so the gauze lot the other medical shots count stays stock.
+    // It has to be a medical supply's lot: the supply-tracking gauze (GZ-*) is
+    // filed as consumable gear, which the lookup leaves out.
     prepare: async (page) => {
       await page
         .getByRole("tab", { name: /^Expiring/ })
         .click({ timeout: 15_000 });
-      await page.getByLabel("Find a lot").fill("GZ-9910");
+      await page.getByLabel("Find a lot").fill("HG-2607");
       await page.getByRole("button", { name: "Find", exact: true }).click();
       await page
-        .getByRole("button", { name: /^Recall lot GZ-9910/ })
+        .getByRole("button", { name: /^Recall lot HG-2607/ })
         .click({ timeout: 15_000 });
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("Reason").fill("Manufacturer notice 2026-121");
@@ -23286,7 +23358,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 3225,
     anchor: "The Recalled lots panel on the Expiring tab",
-    alt: "The Recalled lots panel on the Medical Supplies Expiring tab: Normal Saline lot NS-4471, the date it was recalled, how many are still to pull and Lift recall",
+    alt: "The Recalled lots panel on the Medical Supplies Expiring tab: Nasal Cannula lot NC-2519, the date it was recalled, how many are still to pull and Lift recall",
     route: "/medical-supplies",
     expect: { selector: "section[aria-label='Recalled lots'] h3" },
     prepare: async (page) => {
@@ -23294,7 +23366,7 @@ export const SHOTS = [
         .getByRole("tab", { name: /^Expiring/ })
         .click({ timeout: 15_000 });
       const panel = page.getByRole("region", { name: "Recalled lots" });
-      await panel.getByText("NS-4471").waitFor({ timeout: 15_000 });
+      await panel.getByText("NC-2519").waitFor({ timeout: 15_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(400);
     },
@@ -23315,6 +23387,245 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page.waitForTimeout(1200);
       await hideScanNotice(page);
+    },
+  },
+  {
+    id: "05-146-print-labels-menu",
+    doc: "05-inventory.md",
+    line: 1951,
+    anchor: "The Print Labels menu opened beside Export on the inventory items list",
+    alt: "The Print Labels menu opened beside Export on the inventory items list: This list with its item count, Items that need a label with its count, and Choose by category or location",
+    route: "/inventory/items",
+    expect: "Choose by category or location",
+    allowEmptyState:
+      '"No location" is the location summary card and filter option, not an empty list.',
+    fullPage: false,
+    // Opened and photographed; choosing nothing leaves the list as it was.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Print Labels", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Choose by category or location")
+        .waitFor({ timeout: 10_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    id: "05-147-before-you-print",
+    doc: "05-inventory.md",
+    line: 2063,
+    anchor: 'The Before you print window for a Rollo / Thermal 2" x 1" roll',
+    alt: 'The Before you print window for a 2" x 1" roll: choose the label printer, paper size 2" x 1" under More settings, margins None and scale 100%, with the Don\'t show again box, Back and Open print dialog',
+    route: "/inventory/print-labels",
+    expect: "Open print dialog",
+    selector: '[data-testid="modal-panel"]',
+    // The checklist sits between Print Labels and the browser's print dialog,
+    // so it is photographed and answered Back: nothing prints and nothing is
+    // marked labelled. The label size lives in this browser's storage, which
+    // the later label shots in the same session read, so the cleanup puts the
+    // default (Dymo 30252) back.
+    prepare: async (page) => {
+      await withIdsFromApi("/inventory/items?limit=3", "items", 3)(page);
+      await page
+        .getByRole("button", { name: "Settings", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Rollo \/ Thermal 2" x 1"/ })
+        .click({ timeout: 10_000 });
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("button")].some(
+            (b) => /Print\s*Labels/.test(b.textContent ?? "") && !b.disabled,
+          ),
+        null,
+        { timeout: 20_000 },
+      );
+      await page
+        .getByRole("button", { name: /Print\s*Labels/ })
+        .first()
+        .click();
+      await page
+        .getByRole("button", { name: "Open print dialog" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const back = page.getByRole("button", { name: "Back", exact: true });
+      if (await back.isVisible().catch(() => false)) await back.click();
+      const dymo = page.getByRole("button", { name: /^Dymo 30252/ });
+      if (!(await dymo.isVisible().catch(() => false))) {
+        await page
+          .getByRole("button", { name: "Settings", exact: true })
+          .click()
+          .catch(() => {});
+      }
+      await dymo.click({ timeout: 5_000 }).catch(() => {});
+    },
+  },
+  {
+    id: "05-148-folded-product-rename",
+    doc: "05-inventory.md",
+    line: 429,
+    anchor: "A folded product row on the inventory items list",
+    alt: "The inventory items list with the folded Structural Coat row: 5 loaded, its sizes L, M, S, XL and XXL on one line, and the pencil Rename button focused at the end of the row",
+    route: "/inventory/items",
+    allowEmptyState:
+      '"No location" is the location summary card and filter option, not an empty list.',
+    expect: { selector: "button[aria-label='Rename Structural Coat']" },
+    fullPage: false,
+    // Focus only, so the button's ring marks it; nothing is renamed.
+    prepare: async (page) => {
+      await unpinEverything(page);
+      const rename = page.getByRole("button", { name: "Rename Structural Coat" });
+      await rename.waitFor({ timeout: 20_000 });
+      await rename.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await rename.focus();
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-149-rename-product-dialog",
+    doc: "05-inventory.md",
+    line: 431,
+    anchor: "The Rename product window opened from a folded product row",
+    alt: "The Rename product window for Structural Coat: renames it on every size and variant while the size, colour and style part of each name stays, with Product name, Cancel and Rename",
+    route: "/inventory/items",
+    expect: "Product name",
+    selector: '[data-testid="modal-panel"]',
+    // Opened and cancelled: the product keeps its name.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Rename Structural Coat" })
+        .click({ timeout: 20_000 });
+      await page.getByLabel("Product name").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    id: "05-150-builder-crew-view",
+    doc: "05-inventory.md",
+    line: 3052,
+    anchor: "The Crew view panel beside the checklist builder",
+    alt: "The Crew view panel beside the checklist builder for Engine Daily Check: What the crew sees, updating as you edit, the checklist inside the phone frame as a crew gets it, and the expand button",
+    route: "/inventory/admin/checklists",
+    expect: "What the crew sees",
+    selector: 'div.card:has(h3:text-is("What the crew sees"))',
+    viewport: { width: 1440, height: 1300 },
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page
+        .getByRole("button", { name: "Crew view", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("heading", { name: "What the crew sees" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "05-151-builder-crew-view-full",
+    doc: "05-inventory.md",
+    line: 3054,
+    anchor: "The crew view opened full size from the builder",
+    alt: "The crew view opened full size from the checklist builder: Engine Daily Check in the large phone frame, as a crew sees it, with the round close button",
+    route: "/inventory/admin/checklists",
+    expect: { selector: "[aria-label='Crew view, full size']" },
+    viewport: { width: 1440, height: 1200 },
+    fullPage: false,
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page
+        .getByRole("button", { name: "Crew view", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Open crew view full size" })
+        .click({ timeout: 20_000 });
+      await page
+        .locator("[aria-label='Crew view, full size']")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      const close = page.getByRole("button", { name: "Close preview" });
+      if (await close.isVisible().catch(() => false)) await close.click();
+    },
+  },
+  {
+    id: "05-152-items-low-stock-notice",
+    doc: "05-inventory.md",
+    line: 1292,
+    anchor: "Inventory Items opened from the low-stock email link",
+    alt: "Inventory Items opened from the low-stock email link: the notice Showing only items at or below their reorder point with Show all items, above Firefighting Gloves, the one gear item at or below its reorder point",
+    // The address the email's "View low-stock gear and uniforms" link opens.
+    route: "/inventory/items?low_stock=true",
+    expect: "Showing only items at or below their reorder point",
+    allowEmptyState:
+      '"No location" is the location summary card and filter option, not an empty list.',
+    viewport: { width: 1440, height: 1100 },
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByText("Firefighting Gloves")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-153-checklist-settings-phone",
+    doc: "05-inventory.md",
+    line: 3004,
+    anchor: "Checklist settings on a phone",
+    alt: "Checklist Settings on a phone: the compact page top, then Start-of-shift and End-of-shift checklists as rows with their switches, and Opens before the start and Closes after the end with their hour boxes",
+    route: "/inventory/admin/checklists/settings",
+    expect: "Start-of-shift checklists",
+    viewport: "mobile",
+    fullPage: true,
+    prepare: async (page) => {
+      await page
+        .getByText("Start-of-shift checklists")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-154-medical-expiring-lookahead",
+    doc: "05-inventory.md",
+    line: 3221,
+    anchor: "The Expiring tab of Medical Supplies looking ahead 90 days",
+    alt: "The Expiring tab of Medical Supplies with Look ahead set to 90 days: the recalled Nasal Cannula lot listed first and marked Recalled, then shelf lots and the stock on trucks, each truck row naming its apparatus and compartment with a Swap or restock link",
+    route: "/medical-supplies",
+    expect: { selector: "#medical-expiry-window" },
+    viewport: { width: 1440, height: 1300 },
+    fullPage: false,
+    // The window is page state, not saved between visits.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /^Expiring/ })
+        .click({ timeout: 15_000 });
+      await page.locator("#medical-expiry-window").selectOption("90");
+      await page
+        .getByRole("cell", { name: "Recalled", exact: true })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page
+        .locator("#medical-expiry-window")
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -16));
+      await page.waitForTimeout(400);
     },
   },
   {

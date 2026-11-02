@@ -19735,8 +19735,12 @@ class Seeder:
         return {"outcomes": outcomes}
 
     # A lot of its own, so recalling it moves nothing the other medical shots
-    # count: the saline's in-date stock stays NS-5520.
-    RECALLED_LOT = ("Normal Saline 1000mL", "NS-4471", 4)
+    # count: the cannula's in-date stock stays NC-2602. It has to be a supply in
+    # a *medical* category: the saline and gauze of the supply-tracking catalog
+    # are filed as consumable gear, which the Medical Supplies page, its lot
+    # lookup and its recall endpoint all leave out, so a recall against them
+    # is refused and the lookup never finds them.
+    RECALLED_LOT = ("Nasal Cannula", "NC-2519", 5)
 
     def seed_lot_recall(self) -> str:
         """One active recall, for the Recalled lots panel and the Recalled row."""
@@ -19758,7 +19762,7 @@ class Seeder:
             None,
         )
         if not item:
-            return "saline not found"
+            return f"{name} not found"
         item_id = pick(item, "id")
         lots = items(self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots")
         if not any(pick(lot, "lot_number", "lotNumber") == lot_number for lot in lots):
@@ -19780,6 +19784,99 @@ class Seeder:
             },
         )
         return "recalled"
+
+    # A gear row for the low-stock email's link. Every reorder point the demo
+    # sets is on a medical supply, and Inventory Items narrowed with
+    # ?low_stock=true leaves medical items out (they link to Medical Supplies
+    # instead), so without one the notice sits over an empty list.
+    LOW_STOCK_GEAR = ("Firefighting Gloves", 10)
+
+    def seed_backlog_05_low_stock_gear(self) -> str:
+        """One gear item below its reorder point, for the low-stock notice."""
+        name, reorder_point = self.LOW_STOCK_GEAR
+        item = next(
+            (
+                i
+                for i in items(
+                    self.api.get("/inventory/items?limit=500"), "items"
+                )
+                if pick(i, "name") == name
+            ),
+            None,
+        )
+        if not item:
+            return f"{name} not found"
+        if pick(item, "reorder_point") == reorder_point:
+            return "already set"
+        self.api.patch(
+            f"/inventory/items/{pick(item, 'id')}", {"reorder_point": reorder_point}
+        )
+        return f"reorder point {reorder_point}"
+
+    # The recruit kit's lines are all single-size items, so neither the kit
+    # editor's "Member's size" choice nor the issue review's resolved size has
+    # anything to show. A sized product added on Member's size gives both: the
+    # coat is a variant group, and every demo member has a jacket size on file.
+    KIT_SIZED_LINE = ("New Recruit PPE Kit", "Structural Coat", "Structural PPE")
+
+    def seed_backlog_05_kit_member_size(self) -> str:
+        """Add Structural Coat on Member's size to the recruit kit."""
+        kit_name, product, category = self.KIT_SIZED_LINE
+        kit = next(
+            (
+                k
+                for k in items(self.api.get("/inventory/kits"), "kits")
+                if pick(k, "name") == kit_name
+            ),
+            None,
+        )
+        if not kit:
+            return f"{kit_name} not found"
+        detail = self.api.get(f"/inventory/kits/{pick(kit, 'id')}")
+        lines = sorted(
+            pick(detail, "line_items") or [],
+            key=lambda line: pick(line, "sort_order") or 0,
+        )
+        if any(pick(line, "item_name") == product for line in lines):
+            return "already sized"
+        variant = next(
+            (
+                i
+                for i in items(self.api.get("/inventory/items?limit=500"), "items")
+                if str(pick(i, "name") or "").startswith(f"{product} — ")
+                and pick(i, "variant_group_id")
+            ),
+            None,
+        )
+        if not variant:
+            return f"no {product} variant"
+        keep = [
+            {
+                key: pick(line, key)
+                for key in (
+                    "item_id",
+                    "category_id",
+                    "item_name",
+                    "quantity",
+                    "size_selectable",
+                    "optional",
+                )
+                if pick(line, key) is not None
+            }
+            for line in lines
+        ]
+        keep.insert(
+            0,
+            {
+                "item_id": pick(variant, "id"),
+                "category_id": pick(variant, "category_id"),
+                "item_name": product,
+                "quantity": 1,
+                "size_selectable": True,
+            },
+        )
+        self.api.patch(f"/inventory/kits/{pick(kit, 'id')}", {"line_items": keep})
+        return f"added {product} on Member's size"
 
     INACTIVE_TEMPLATE = "Reserve Engine — Out of Service"
     PAUSED_PATTERN = "Summer Reserve Rotation"
@@ -20106,6 +20203,8 @@ class Seeder:
         self.step("id cards", self.seed_id_cards)
         self.step("card taps", self.seed_card_taps)
         self.step("lot recall", self.seed_lot_recall)
+        self.step("low-stock gear", self.seed_backlog_05_low_stock_gear)
+        self.step("kit member size", self.seed_backlog_05_kit_member_size)
         self.step("paused scheduling", self.seed_paused_scheduling)
         self.step("ical feed", self.seed_ical_feed)
         self.step("unused approval chain", self.seed_unused_approval_chain)

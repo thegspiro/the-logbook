@@ -222,7 +222,6 @@
 05-11-allowances
 05-12-new-allowance-modal
 05-25-admin-hub
-05-27-equipment-kit-modal
 05-31-equipment-kits
 05-32-variant-groups
 05-46-size-preferences
@@ -236,7 +235,6 @@
 05-55-member-picker
 05-56-item-barcode-value
 05-58-return-items-modal
-05-60-admin-hub-groups
 05-61-item-barcode-fields
 05-62-generate-variants
 05-63-variant-group-modal

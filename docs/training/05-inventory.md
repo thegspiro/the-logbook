@@ -426,6 +426,10 @@ stay. A size filed under a different name is left alone. If any new name would b
 over 255 characters, nothing changes. Generating more sizes afterward reuses the
 group by its new name.
 
+<!-- Screenshot needed: A folded product row on the inventory items list, its sizes listed on one line, with the pencil Rename button at the end of the row -->
+
+<!-- Screenshot needed: The Rename product window opened from a folded product row, saying every size and variant is renamed and the size, colour and style part stays, with Product name and Rename -->
+
 ### Generating sizes and styles
 
 Needs the **Manage gear, uniforms and equipment** permission.
@@ -1284,6 +1288,9 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
   their reorder point** and a **Show all items** button to lift it. Medical rows
   link to the **Low stock** tab of Medical Supplies instead, and an officer who
   sees only one kind gets only that link.
+
+  <!-- Screenshot needed: Inventory Items opened from the low-stock email link: the notice Showing only items at or below their reorder point with Show all items, above the one gear item that is low -->
+
 - Low-stock alerts are **email only**. No text message is sent, because
   reordering is a business-hours decision made from an item table a text
   cannot hold.
@@ -1941,6 +1948,9 @@ Needs the **Manage gear, uniforms and equipment** permission.
    - Use the **Barcode labels** card at the end of the setup steps.
    - Open the print page with nothing selected and choose a category, location
      or storage area.
+
+   <!-- Screenshot needed: The Print Labels menu opened beside Export on the inventory items list, offering This list with its item count, Items that need a label with its count, and Choose by category or location -->
+
 2. Select **Settings** and choose a **Label Size**. The sizes are cards, not a
    list:
    - **Dymo 30252**, **30256**, **30334** and **30336**: the four common Dymo
@@ -2050,6 +2060,8 @@ still shows for any other size, including each custom size. When no network
 printer is registered, the window also points to **Settings → Label
 Printers**, where an administrator can register one and skip the print dialog
 altogether.
+
+<!-- Screenshot needed: The Before you print window for a Rollo / Thermal 2" x 1" roll: the printer, paper size, margins and scale to choose in the print dialog, the Don't show again box, Back and Open print dialog -->
 
 The checklist is not shown for **PDF**, **Print to _printer name_**, or on a
 phone or tablet, where printing always downloads the PDF.
@@ -2987,6 +2999,11 @@ number boxes when you click away or press Enter. There is no Save button.
 Clearing a number box and leaving it empty puts back the saved value. A number
 outside the range is changed to the nearest allowed value.
 
+On a phone each setting is one row with its switch or number box at the right,
+under a compact page top.
+
+<!-- Screenshot needed: Checklist settings on a phone: the two prompt switches and the two check-in window boxes as rows, under the compact page top -->
+
 ### Building a checklist
 
 Build checklists in the **Template builder**, from the checklist console.
@@ -3020,6 +3037,10 @@ Build checklists in the **Template builder**, from the checklist console.
   (gauze, say) is stocked in many places, each counted on its own.
 - After pasting a list into a saved location, the builder offers **Match to
   catalog**.
+- **Crew view** shows the checklist as a crew will see it on a phone, and
+  updates as you edit. On a wide screen it is a panel beside the checklist; on a
+  narrower one it has a bar of its own. Select the expand button to open it
+  **full size**.
 - **Clone checklist** (on the list, or **Tools → Clone checklist** in the
   builder) asks **which apparatus to copy onto**. Only full Apparatus-module
   units are offered. The copy is named "_apparatus_ - _template_" and starts
@@ -3028,6 +3049,10 @@ Build checklists in the **Template builder**, from the checklist console.
 ![Linked Inventory Item in the checklist builder, searched for tourniquet: Tourniquet, CAT with its Medical badge, then Create in Medical Supplies and Create as equipment or gear](./images/05-123-builder-medical-picker.png)
 
 ![Copy checklist to an apparatus, opened from Tools → Clone checklist: the note that the copy starts switched off so it can be reviewed first, and Copy onto set to B-5 — Brush 5](./images/05-124-clone-checklist-dialog.png)
+
+<!-- Screenshot needed: The Crew view panel beside the checklist builder: What the crew sees, the phone frame showing the checklist as a crew gets it, and the expand button -->
+
+<!-- Screenshot needed: The crew view opened full size from the builder: the checklist in the large phone frame with its close button -->
 
 ### Catalog Links
 
@@ -3190,6 +3215,11 @@ total. Gear is unchanged: it is still judged on the shelf alone.
 - The **Expiring** tab's **Look ahead** offers 30, 60 or 90 days. The tiles,
   the list and the Next expiry colouring follow it. It is not saved between
   visits, and the weekly email keeps 30 days.
+- On the **Expiring** tab, a row for stock on a truck names the apparatus and
+  compartment and links to that apparatus's inventory, where the swap and
+  restock are done.
+
+<!-- Screenshot needed: The Expiring tab of Medical Supplies looking ahead 90 days: a recalled lot listed first and marked Recalled, then shelf lots and truck rows, each truck row linking to that apparatus's inventory -->
 
 **Kept on apparatus only.** Some equipment has no spare in a stock room: a LUCAS
 device or a cardiac monitor lives on the ambulance. Tick **Kept on apparatus
@@ -3309,7 +3339,7 @@ at once.
 
 A lot with no lot number cannot be recalled.
 
-<!-- Screenshot needed: The Recalled lots panel on the Expiring tab, with the recalled saline lot, how many are still to pull, and Lift recall -->
+<!-- Screenshot needed: The Recalled lots panel on the Expiring tab, with the recalled cannula lot, how many are still to pull, and Lift recall -->
 
 ---
 
