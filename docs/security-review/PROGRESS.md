@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3939](https://github.com/thegspiro/the-logbook/pull/3939)** (branch
+`claude/security-review-compliance`) — Feature 20 (Compliance), pass 13, a
+watchdog pickup. Near-zero delta since pass 12 (PR #3845): the only backend
+change in scope was a junior-member compliance-profile matching fix already
+independently reviewed under Feature 17 (Training core) pass 13, re-verified
+clean here; the only frontend changes were a cosmetic class-name layout
+sweep. 0 new findings; all standing CMP/CS findings (CS-8 original,
+`grace_period_days`, both OPEN by design) re-verified unchanged. See
+`docs/security-review/CMP-20-compliance.md`'s **Pass 13** section for the
+full review.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 13, PR #3935, merged), preserved for history</summary>
+
 **PR [#3935](https://github.com/thegspiro/the-logbook/pull/3935)** (branch
 `claude/security-review-skills-testing`) — Feature 19 (Skills testing), pass
 13, a watchdog pickup. Backend scope byte-identical to pass 12's baseline;
@@ -24423,7 +24437,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                                                   | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ⬜     |
@@ -45817,3 +45831,66 @@ Full write-up: `docs/security-review/USR-07-users-organizations.md`'s
 Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
 pipeline) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-11-02 (Feature 20, Compliance, pass 13, watchdog pickup)
+
+**Step 0.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. `gh api search/issues`
+for `is:pr is:open head:claude/security-review` returned 0 matches (the
+only two open PRs, #3937/#3938, are unrelated feature work). Reading the
+rotation table fresh against `origin/main` showed row 19 (Skills testing)
+already `✅` (PR #3935 merged) and row 20 (Compliance) the next `⬜`. This
+worktree started on an unrelated, dirty local branch
+(`claude/friendly-babbage-g2e2fg`, carrying another session's in-progress,
+uncommitted-by-this-session work for unrelated PR #3938); a fresh branch
+was cut from `origin/main` instead of building on it.
+
+**Reviewed:** `endpoints/compliance_config.py` (13 routes),
+`endpoints/compliance_officer.py` (8 routes),
+`services/compliance_config_service.py`,
+`services/compliance_officer_service.py`,
+`services/compliance_member_notices.py`, `services/training_compliance.py`,
+`models/compliance_config.py`, `schemas/compliance_config.py`,
+`schemas/compliance_officer.py`, and the five established frontend files
+(`ComplianceRequirementsConfigPage.tsx`, `ComplianceOfficerDashboard.tsx`,
+`ComplianceMatrixTab.tsx`, `complianceMatrixModel.ts`,
+`CompliancePrintPage.tsx`).
+
+**Real delta since pass 12** (baseline `c9d8be24`, PR #3845): one backend
+commit (`83b20820`, 11 insertions/2 deletions in `training_compliance.py` —
+a junior-member compliance-profile matching fix, logic-only, no query of
+its own, already independently reviewed under Feature 17/Training core's
+own pass 13) and one repo-wide cosmetic layout sweep (`ab879fc7`) touching
+two of this feature's frontend files with class-string substitutions only.
+Every other declared file confirmed byte-identical via `git diff --stat`.
+All 21 routes re-enumerated by direct file read — unchanged counts, no new
+route, no broadened permission; every by-id write still org-scoped and
+every client-supplied FK (`required_requirement_ids`,
+`optional_requirement_ids`, `role_ids`, `admin_hours_requirements[].category_id`)
+still validated in-org via `_validate_profile_fks` before persisting.
+
+**Findings: 0 fixed, 0 new flagged.** Standing findings CS-8 (attestation
+dual control/immutability — only two attestation routes exist, no
+update/delete) and `grace_period_days` (unwired, zero readers outside
+`schemas/`/`models/`) re-verified unchanged, both OPEN by design
+(owner-accepted). CMP2-1 (`compliance_member_notices`) re-confirmed still
+registered in `scheduled_tasks.py`'s three registration sites, unchanged
+function body, despite that file gaining 131 unrelated lines from other
+features in the interim.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (isort 9.0.2, already on `PATH`, matching
+CI's pin); `validate_migrations.py --strict` — 698 revisions, single head
+`6b2f0c9d4e71`; `generate_schema_docs.py --check` (via `python3.13`) —
+`DATABASE_SCHEMA.md` up to date; `check_route_permissions.py --strict`
+(repo root) — 289 routes, 0 errors/warnings; `pytest tests/ -q -k
+"compliance"` (via `python3.13`) — 663 passed, 1 pre-existing
+`pywebpush`-optional skip; the feature's 13 named backend test files — 377
+passed; frontend `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings;
+11 compliance-scoped frontend test files — 157 passed.
+
+Full write-up: `docs/security-review/CMP-20-compliance.md`'s **Pass 13**
+section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
