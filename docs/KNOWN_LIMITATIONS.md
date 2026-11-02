@@ -1,6 +1,6 @@
 # Known Limitations & Open Decisions
 
-## Medical Screening — Four Gaps for the Owner (2026-11-02)
+## Medical Screening — Gaps for the Owner (2026-11-02)
 
 From the medical-screening deep dive
 ([W71b](workflow-review/W71b-medical-screening-deep-dive.md)). Each was seen in
@@ -8,6 +8,11 @@ the browser except the last, which was read from code. None is fixed, because
 each changes saved members' standing, writes PHI rows, or adds behaviour.
 
 - **A failed screening does not count against the member (W71b-1, HIGH).**
+  ✅ **Resolved 2026-11-02 (owner decision: the latest result decides).** A
+  failure leaves the requirement unmet until a later pass, completion or
+  waiver; the panel reads "Failed — not cleared", and the older pass leaves
+  the expiring list. `tests/test_medical_screening_failed_result.py`. Original
+  finding:
   `_grade` considers only passed, completed and waived records. A member who
   failed their physical last week, but passed one eleven months ago, reads
   **compliant** on the roster, in the per-member panel and on their own

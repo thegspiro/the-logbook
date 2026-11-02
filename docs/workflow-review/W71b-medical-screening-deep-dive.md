@@ -66,7 +66,7 @@ pinned by pytest), and the MCP tools.
 
 ## Findings
 
-### W71b-1 — HIGH — A failed screening does not count against the member — FLAGGED
+### W71b-1 — HIGH — A failed screening does not count against the member — ✅ FIXED (owner decision 2026-11-02: the latest result decides)
 
 **Did:** recorded Jordan Avery's annual physical as **Failed** on 25 Oct 2026,
 with "Failed cardiac stress portion; not cleared for interior attack." Jordan
@@ -100,6 +100,17 @@ Options:
 - (c) leave it as it is.
 
 Mirrored to KNOWN_LIMITATIONS.
+
+**Resolved:** option (a). `_grade` and `superseded_record_clause` (behind the
+expiring list and the MCP expiring tool) now read the latest record among
+passed, completed, waived **and failed**. A failure is unmet and carries no
+expiration, even if the row has one saved. The panel says "Failed — not cleared".
+Re-driven: Jordan reads "1 of 2 met · Not compliant", the expiring list no
+longer names the old pass, and Jordan's dashboard reads "Not clear to respond ·
+1 screening overdue". The dashboard keeps "overdue" because its summary
+deliberately never says what a screening found (it can be on a station kiosk).
+Tests: `tests/test_medical_screening_failed_result.py` (5 of 13 fail on the old
+grading) and `SubjectCompliancePanel.test.tsx`.
 
 ### W71b-2 — HIGH — Converting a prospect to a member leaves their screenings behind — FLAGGED
 

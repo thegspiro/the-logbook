@@ -12,7 +12,7 @@
 import React, { useEffect, useRef } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
-import { SCREENING_STATUS_LABELS, SCREENING_TYPE_LABELS, type ComplianceItem } from '../types';
+import { SCREENING_STATUS_LABELS, SCREENING_TYPE_LABELS, ScreeningStatus, type ComplianceItem } from '../types';
 import { SelfRecordedBadge } from './SelfRecordedBadge';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 
@@ -32,6 +32,9 @@ interface SubjectCompliancePanelProps {
 
 const itemState = (item: ComplianceItem): { label: string; tone: 'met' | 'soon' | 'unmet' } => {
   if (!item.is_compliant) {
+    // The latest result decides (W71b-1), so an unmet item may be a failure
+    // rather than a lapse — different work for the officer reading it.
+    if (item.status === ScreeningStatus.FAILED) return { label: 'Failed — not cleared', tone: 'unmet' };
     return { label: item.last_screening_date ? 'Expired' : 'No qualifying record', tone: 'unmet' };
   }
   const days = item.days_until_expiration;
