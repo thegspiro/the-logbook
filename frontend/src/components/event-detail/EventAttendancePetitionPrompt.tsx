@@ -147,7 +147,7 @@ export const EventAttendancePetitionPrompt: React.FC<EventAttendancePetitionProm
               type="button"
               onClick={() => void handleWithdraw()}
               disabled={withdrawing}
-              className="btn-secondary shrink-0 text-sm font-medium disabled:opacity-50"
+              className="split-row-aside btn-secondary text-sm font-medium disabled:opacity-50"
             >
               {withdrawing ? 'Withdrawing...' : 'Withdraw request'}
             </button>

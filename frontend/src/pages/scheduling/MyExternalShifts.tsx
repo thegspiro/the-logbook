@@ -146,7 +146,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                   )}
                 </div>
                 {!rejected && (
-                  <div className="flex shrink-0 gap-1">
+                  <div className="split-row-aside flex flex-wrap gap-1">
                     <button
                       type="button"
                       className="btn-icon"

@@ -283,9 +283,9 @@ const ExternalSyncHistoryPanel: React.FC<ExternalSyncHistoryPanelProps> = ({ pro
 
   return (
     <div className="space-y-4" role="tabpanel">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="split-row gap-3 sm:items-end">
         {providers.length > 1 ? (
-          <div>
+          <div className="split-row-main">
             <label htmlFor="sync-history-provider" className="form-label">
               Provider
             </label>
@@ -303,12 +303,12 @@ const ExternalSyncHistoryPanel: React.FC<ExternalSyncHistoryPanelProps> = ({ pro
             </select>
           </div>
         ) : (
-          <h2 className="text-theme-text-primary text-lg font-semibold">{providerName}</h2>
+          <h2 className="split-row-main text-theme-text-primary text-lg font-semibold">{providerName}</h2>
         )}
         <button
           type="button"
           onClick={() => setReloadKey((key) => key + 1)}
-          className="btn-secondary btn-md inline-flex items-center gap-1.5 self-start text-sm sm:self-auto"
+          className="split-row-aside btn-secondary btn-md inline-flex items-center gap-1.5 self-start text-sm sm:self-auto"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Refresh
