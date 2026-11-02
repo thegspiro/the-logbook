@@ -144,6 +144,18 @@ def _scheduling_minutes(
     return min(max(value, 0), ceiling)
 
 
+def _notice_date(value, fallback: str) -> str:
+    """A shift or leave date as a notice prints it: ``Sep 30, 2026``.
+
+    Notification bodies and email subjects are read by members, who were being
+    shown ``2026-09-30``. ``%b %d, %Y`` is the form the scheduled reminders and
+    the email-template preview already use, so a member sees one date format
+    whichever sender wrote to them. A shift date is the org-local calendar day
+    and carries no time, so there is nothing to convert.
+    """
+    return value.strftime("%b %d, %Y") if value else fallback
+
+
 def _position_label(position) -> str:
     """Human-readable position for a notification body.
 
@@ -2991,11 +3003,7 @@ class SchedulingService:
             # unless the member turned it off) go out together: a member who
             # reads only email would otherwise turn up for a shift that is off.
             if recipient_ids:
-                shift_date_str = (
-                    shift.shift_date.isoformat()
-                    if shift.shift_date
-                    else "the scheduled date"
-                )
+                shift_date_str = _notice_date(shift.shift_date, "the scheduled date")
                 message = f"Your shift on {shift_date_str} has been cancelled."
                 if reason:
                     message += f" Reason: {reason}"
@@ -6187,9 +6195,7 @@ class SchedulingService:
             if not recipient_ids:
                 return
 
-            shift_date_str = (
-                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
-            )
+            shift_date_str = _notice_date(shift.shift_date, "unknown date")
             position_label = _position_label(position)
             message = (
                 f"{user_name} {action} the {position_label} position "
@@ -6270,9 +6276,7 @@ class SchedulingService:
             if not shift:
                 return
 
-            shift_date_str = (
-                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
-            )
+            shift_date_str = _notice_date(shift.shift_date, "unknown date")
             # On an outreach signup sheet the seat is a plain `volunteer` and
             # the job the member actually chose lives on outreach_role. Telling
             # them they are "assigned to the Volunteer position" loses the one
@@ -6407,10 +6411,8 @@ class SchedulingService:
                 select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
             )
             offering_shift = shift_result.scalar_one_or_none()
-            shift_date_str = (
-                offering_shift.shift_date.isoformat()
-                if offering_shift and offering_shift.shift_date
-                else "unknown date"
+            shift_date_str = _notice_date(
+                offering_shift.shift_date if offering_shift else None, "unknown date"
             )
 
             recipient_ids: set[str] = set()
@@ -6469,10 +6471,8 @@ class SchedulingService:
                 select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
             )
             offering_shift = shift_result.scalar_one_or_none()
-            shift_date_str = (
-                offering_shift.shift_date.isoformat()
-                if offering_shift and offering_shift.shift_date
-                else "unknown date"
+            shift_date_str = _notice_date(
+                offering_shift.shift_date if offering_shift else None, "unknown date"
             )
 
             message = (
@@ -6534,9 +6534,7 @@ class SchedulingService:
             if user:
                 user_name = user.display_name or "A member"
 
-            shift_date_str = (
-                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
-            )
+            shift_date_str = _notice_date(shift.shift_date, "unknown date")
             position_label = _position_label(assignment.position)
 
             message = (
@@ -6570,10 +6568,8 @@ class SchedulingService:
 
             status_label = "approved" if status == TimeOffStatus.APPROVED else "denied"
 
-            start_str = (
-                time_off.start_date.isoformat() if time_off.start_date else "unknown"
-            )
-            end_str = time_off.end_date.isoformat() if time_off.end_date else "unknown"
+            start_str = _notice_date(time_off.start_date, "unknown")
+            end_str = _notice_date(time_off.end_date, "unknown")
 
             message = (
                 f"Your time-off request for "

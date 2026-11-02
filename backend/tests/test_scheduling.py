@@ -571,7 +571,9 @@ class TestShiftCRUD:
         assert err is None
         (call,) = send.await_args_list
         assert call.kwargs["to_emails"] == ["ff1@test.com"]
-        assert call.kwargs["subject"] == f"Shift cancelled — {day.isoformat()}"
+        assert (
+            call.kwargs["subject"] == f"Shift cancelled — {day.strftime('%b %d, %Y')}"
+        )
         assert "Engine &lt;1&gt; out of service" in call.kwargs["html_body"]
         bell = (
             await db_session.execute(
