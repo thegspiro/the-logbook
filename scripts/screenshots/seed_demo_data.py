@@ -170,6 +170,14 @@ COMPLIANCE_OFFICER_USERNAME = "lnakamura"
 # `_assert_two_factor_account_is_unused` checks that at seed time.
 TWO_FACTOR_USERNAME = "whalloway"
 
+# The member the passkey shots (00-23, 00-33, 08-119) register a passkey for,
+# in the browser through a virtual authenticator, and remove it from again in
+# the same shot. Chosen because no shot signs in as it and the seeder only
+# reaches it through the all-members loops, so the few seconds it holds a
+# second factor cannot strand another step at the code prompt. Must match
+# PASSKEY_MEMBER_CREDENTIALS in manifest.mjs.
+PASSKEY_MEMBER_USERNAME = "eadeyemi"
+
 
 def password_login_members(members: list[dict]) -> list[dict]:
     """Members a step may sign in as with a password.
@@ -411,6 +419,71 @@ def write_admin_totp_secret(secret: str) -> Path:
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(f"{ADMIN_TOTP_ENV}={secret}\n")
     # O_CREAT's mode does not apply to a staging file left by an earlier crash.
+    os.chmod(staging, 0o600)
+    os.replace(staging, path)
+    return path
+
+
+# Members the captures sign in as whose positions require two-step sign-in.
+#
+# A privileged member who has not enrolled gets a grace period, and every page
+# they open carries a banner counting it down; once it lapses they are routed
+# to enrolment and reach nothing else. Left unenrolled, the secretary's dozen
+# shots each pictured that banner, and would all have broken two weeks after
+# seeding. They are enrolled like the administrator, and their secrets kept
+# beside its one — `Api._sign_in` completes the code step for any account
+# listed here, so the steps below that sign in as them need no change.
+#
+# Not every privileged member: the grace banner itself is pictured, as
+# MFA_GRACE_USERNAME, which must therefore stay unenrolled.
+ENROLLED_MEMBER_USERNAMES = ("okittredge",)
+
+# The privileged member the grace-period shots (00-35, 00-36) sign in as. An
+# assistant chief: the position requires two-step sign-in, and no other shot
+# signs in as this account, so its banner reaches no image but those two. Must
+# match DEMO_MFA_GRACE_CREDENTIALS in manifest.mjs, and must not be listed in
+# ENROLLED_MEMBER_USERNAMES.
+MFA_GRACE_USERNAME = "praman"
+
+
+def member_totp_path() -> Path:
+    return admin_totp_path().with_name("member-totp.env")
+
+
+def read_member_totp_secret(username: str) -> str | None:
+    """The stored TOTP secret for *username*, or None (`member_totp_path`)."""
+    try:
+        text = member_totp_path().read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() == username and value.strip():
+            return value.strip()
+    return None
+
+
+def write_member_totp_secret(username: str, secret: str) -> Path:
+    """Store *secret* for *username*, keeping every other member's line.
+
+    The same private, rename-into-place write as `write_admin_totp_secret`.
+    """
+    path = member_totp_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    kept: list[str] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, _ = line.partition("=")
+            if sep and key.strip() != username:
+                kept.append(line)
+    except FileNotFoundError:
+        pass
+    kept.append(f"{username}={secret}")
+    staging = path.with_name(path.name + ".tmp")
+    fd = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(kept) + "\n")
     os.chmod(staging, 0o600)
     os.replace(staging, path)
     return path
@@ -716,6 +789,8 @@ class Api:
         )
         if not (isinstance(result, dict) and result.get("mfa_required")):
             return False
+        if not self.totp_secret and username in ENROLLED_MEMBER_USERNAMES:
+            self.totp_secret = read_member_totp_secret(username)
         if not self.totp_secret:
             if username == DEMO_ADMIN_USERNAME:
                 raise SystemExit(
@@ -1661,6 +1736,78 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"two-factor: enrol {TWO_FACTOR_USERNAME}: {exc}")
+
+    def seed_backlog_00_passkey_member(self) -> None:
+        """Ready the member the passkey shots sign in as.
+
+        The shots sign this member in with a password, add a passkey (and, for
+        00-23, an authenticator app), photograph the result and take both off
+        again. That needs the account to sign in with DEMO_MEMBER_PASSWORD
+        without the forced password change every `POST /users` account
+        carries, and to hold no second factor to begin with.
+
+        A capture interrupted before its cleanup leaves a factor behind, and a
+        password sign-in then stops at the code step. Resetting it here is the
+        recovery: the administrator's Reset MFA removes the authenticator app,
+        every passkey and the recovery codes in one call.
+        """
+        member = next(
+            (
+                m
+                for m in items(self.api.get("/users/with-roles"), "users")
+                if pick(m, "username") == PASSKEY_MEMBER_USERNAME
+            ),
+            None,
+        )
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return
+        if pick(member, "mfa_enabled") or pick(member, "has_passkey"):
+            ADMIN_RESET_THROTTLE.wait()
+            self.api.post(f"/users/{user_id}/reset-mfa", {})
+        try:
+            self.member_session(self.base_url, user_id, PASSKEY_MEMBER_USERNAME)
+        except ApiError as exc:
+            self.blocked.append(f"passkey member: sign in: {exc}")
+
+    def seed_capture_member_two_factor(self) -> None:
+        """Enrol ENROLLED_MEMBER_USERNAMES in TOTP and keep their secrets.
+
+        An account already enrolled whose secret is stored is left alone. One
+        enrolled with no stored secret (the file was deleted, or a run died
+        between enrolment and the write) cannot sign in at all, so its second
+        factor is reset with the administrator's Reset MFA and it is enrolled
+        again — the recovery the README gives for the administrator.
+        """
+        assert MFA_GRACE_USERNAME not in ENROLLED_MEMBER_USERNAMES
+        rows = {
+            str(pick(row, "username")): row
+            for row in items(self.api.get("/users/with-roles"), "users")
+        }
+        for username in ENROLLED_MEMBER_USERNAMES:
+            row = rows.get(username)
+            user_id = pick(row or {}, "id")
+            if not user_id:
+                self.blocked.append(f"two-factor: {username} is not on the roster")
+                continue
+            stored = read_member_totp_secret(username)
+            if pick(row, "mfa_enabled"):
+                if stored:
+                    continue
+                ADMIN_RESET_THROTTLE.wait()
+                self.api.post(f"/users/{user_id}/reset-mfa", {})
+            try:
+                session = self.member_session(self.base_url, user_id, username)
+                secret = session.post("/auth/mfa/setup")["secret"]
+                # Stored before verification, as for the administrator: once
+                # verify-setup succeeds a password alone no longer signs in.
+                write_member_totp_secret(username, secret)
+                session.totp_secret = secret
+                session.post(
+                    "/auth/mfa/verify-setup", {"code": session.fresh_totp_code()}
+                )
+            except ApiError as exc:
+                self.blocked.append(f"two-factor: enrol {username}: {exc}")
 
     def _fill_in_the_administrator(self, members: list[dict]) -> None:
         """Give the demo administrator the contact details everyone else has.
@@ -19511,8 +19658,12 @@ class Seeder:
                 category_id = categories.get(name)
                 if entry is None and category_id:
                     day = max(first_of_month, TODAY - timedelta(days=2 + index))
+                    # Spaced three hours apart, not one: in the first days of a
+                    # month the clamp to the 1st lands every entry on the same
+                    # day, and two-hour entries an hour apart overlap, which the
+                    # server refuses.
                     start = datetime.combine(
-                        day, time(hour=13 + index), tzinfo=ORG_TIMEZONE
+                        day, time(hour=13 + 3 * index), tzinfo=ORG_TIMEZONE
                     )
                     try:
                         entry = session.post(
@@ -20156,7 +20307,9 @@ class Seeder:
         Resume controls. Neither is used by another shot, and the pattern is
         paused before anything generates from it."""
         result: dict[str, str] = {}
-        templates = items(self.api.get("/scheduling/templates"), "templates")
+        templates = items(
+            self.api.get("/scheduling/templates?active_only=false"), "templates"
+        )
         template = next(
             (t for t in templates if pick(t, "name") == self.INACTIVE_TEMPLATE), None
         )
@@ -20180,7 +20333,9 @@ class Seeder:
             )
             result["template"] = "deactivated"
 
-        patterns = items(self.api.get("/scheduling/patterns"), "patterns")
+        patterns = items(
+            self.api.get("/scheduling/patterns?active_only=false"), "patterns"
+        )
         pattern = next(
             (p for p in patterns if pick(p, "name") == self.PAUSED_PATTERN), None
         )
@@ -20205,6 +20360,219 @@ class Seeder:
                 f"/scheduling/patterns/{pick(pattern, 'id')}", {"is_active": False}
             )
             result["pattern"] = "paused"
+        return result
+
+    BACKLOG_BASIC_UNIT = "RE-9"
+    BACKLOG_BASIC_NAME = "Reserve Engine 9"
+
+    def seed_backlog_03_inactive_basic_apparatus(self) -> str:
+        """One inactive basic vehicle, for Show inactive and its Reactivate.
+
+        A basic vehicle in use is deactivated rather than deleted, so it is
+        made the way an officer makes one: the out-of-service template names
+        it, then it is deleted. The department's full Apparatus records
+        outrank the basic list in every picker, and an inactive row is in no
+        picker at all, so nothing else the demo pictures changes.
+        """
+        for row in items(self.api.get("/scheduling/apparatus?is_active=false")):
+            if pick(row, "unit_number") == self.BACKLOG_BASIC_UNIT:
+                return "already inactive"
+        template = next(
+            (
+                t
+                for t in items(
+                    self.api.get("/scheduling/templates?active_only=false"), "templates"
+                )
+                if pick(t, "name") == self.INACTIVE_TEMPLATE
+            ),
+            None,
+        )
+        if template is None:
+            return "blocked: no out-of-service template"
+        vehicle = next(
+            (
+                row
+                for row in items(self.api.get("/scheduling/apparatus"))
+                if pick(row, "unit_number") == self.BACKLOG_BASIC_UNIT
+            ),
+            None,
+        ) or self.api.post(
+            "/scheduling/apparatus",
+            {
+                "unit_number": self.BACKLOG_BASIC_UNIT,
+                "name": self.BACKLOG_BASIC_NAME,
+                "apparatus_type": "engine",
+                "min_staffing": 3,
+                "positions": ["officer", "driver", "firefighter"],
+            },
+        )
+        self.api.patch(
+            f"/scheduling/templates/{pick(template, 'id')}",
+            {"apparatus_id": pick(vehicle, "id")},
+        )
+        self.api.delete(f"/scheduling/apparatus/{pick(vehicle, 'id')}")
+        return "deactivated"
+
+    BACKLOG_HELD_PATTERN = "Reserve Engine Weekend Cover"
+
+    def seed_backlog_03_held_pattern(self) -> str:
+        """A pattern whose template is inactive, for its warning notice.
+
+        Named after the out-of-service template, so the server holds it: the
+        nightly run skips it and Generate is refused. It starts two weeks out
+        and is otherwise active, so the notice is the only thing stopping it.
+        """
+        patterns = items(
+            self.api.get("/scheduling/patterns?active_only=false"), "patterns"
+        )
+        if any(pick(p, "name") == self.BACKLOG_HELD_PATTERN for p in patterns):
+            return "exists"
+        template = next(
+            (
+                t
+                for t in items(
+                    self.api.get("/scheduling/templates?active_only=false"), "templates"
+                )
+                if pick(t, "name") == self.INACTIVE_TEMPLATE
+            ),
+            None,
+        )
+        if template is None:
+            return "blocked: no out-of-service template"
+        self.api.post(
+            "/scheduling/patterns",
+            {
+                "name": self.BACKLOG_HELD_PATTERN,
+                "description": "Saturday cover on the reserve engine.",
+                "pattern_type": "weekly",
+                "days_on": 1,
+                "days_off": 6,
+                "rotation_days": 7,
+                "start_date": str(TODAY + timedelta(days=14)),
+                "end_date": str(TODAY + timedelta(days=120)),
+                "template_id": pick(template, "id"),
+            },
+        )
+        return "created"
+
+    BACKLOG_DRAFT_CHECKLIST = "Reserve Engine 9 Check"
+    BACKLOG_CREW_CHECKLIST = "Utility 1 Walkaround"
+
+    def seed_backlog_03_checklist_lines(self) -> dict[str, str]:
+        """Two checklists for the builder and check-form shots of guide 03.
+
+        The draft carries what the builder flags: a Date line with no date,
+        between a location and a group of items placed directly on the
+        checklist. It stays unpublished, which is what lets it keep the
+        missing date. The walkaround is published, so it can be opened from
+        Unscheduled checklist, with Present lines and an untracked Date line
+        expiring inside its warning window, which is when the form offers to
+        date a replacement. Neither names an apparatus or a type, so neither
+        lands on any shift's checklists or in the reports.
+        """
+        existing = {
+            str(pick(t, "name"))
+            for t in items(self.api.get("/equipment-checks/templates"), "templates")
+        }
+
+        def present(name: str, order: int) -> dict:
+            return {
+                "name": name,
+                "sort_order": order,
+                "check_type": "presence",
+                "is_required": True,
+            }
+
+        result: dict[str, str] = {}
+        if self.BACKLOG_DRAFT_CHECKLIST not in existing:
+            self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": self.BACKLOG_DRAFT_CHECKLIST,
+                    "description": "Rebuilt for the reserve engine's return.",
+                    "check_timing": "start_of_shift",
+                    "template_type": "vehicle",
+                    "is_active": False,
+                    "compartments": [
+                        {
+                            "name": "Cab",
+                            "sort_order": 0,
+                            "items": [
+                                present("Portable radio", 0),
+                                present("Thermal imaging camera", 1),
+                            ],
+                        },
+                        {
+                            "name": "",
+                            "is_inline": True,
+                            "sort_order": 1,
+                            "items": [
+                                present("Map book", 0),
+                                present("Wheel chocks", 1),
+                            ],
+                        },
+                        {
+                            "name": "Compartment 2 — Officer Rear",
+                            "sort_order": 2,
+                            "items": [
+                                {
+                                    "name": "Burn kit",
+                                    "sort_order": 0,
+                                    "check_type": "expiry",
+                                    "is_required": True,
+                                },
+                                {
+                                    "name": "Road flares",
+                                    "sort_order": 1,
+                                    "check_type": "count",
+                                    "is_required": True,
+                                    "required_quantity": 6,
+                                    "expected_quantity": 6,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            )
+            result["draft"] = "created"
+        if self.BACKLOG_CREW_CHECKLIST not in existing:
+            self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": self.BACKLOG_CREW_CHECKLIST,
+                    "description": "Walk around the utility truck before it leaves.",
+                    "check_timing": "start_of_shift",
+                    "template_type": "vehicle",
+                    "is_active": True,
+                    "compartments": [
+                        {
+                            "name": "Cab",
+                            "sort_order": 0,
+                            "items": [
+                                present("Portable radio", 0),
+                                present("Hand light", 1),
+                                present("Traffic vest", 2),
+                            ],
+                        },
+                        {
+                            "name": "Rear Compartment",
+                            "sort_order": 1,
+                            "items": [
+                                {
+                                    "name": "Eyewash bottle",
+                                    "sort_order": 0,
+                                    "check_type": "expiry",
+                                    "is_required": True,
+                                    "expiration_date": str(TODAY + timedelta(days=10)),
+                                    "expiration_warning_days": 30,
+                                },
+                                present("Spill kit", 1),
+                            ],
+                        },
+                    ],
+                },
+            )
+            result["crew"] = "created"
         return result
 
     ICAL_INTEGRATION_TYPE = "ical"
@@ -20253,6 +20621,101 @@ class Seeder:
             if printer["name"] in existing:
                 continue
             self.api.post("/label-printers", printer)
+            created += 1
+        return created
+
+    BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE = "Community CPR Night"
+
+    def seed_backlog_04_upcoming_guest_event(self) -> str:
+        """An event a few days out with guest check-in switched on.
+
+        Guide 04 pictures the event QR page before check-in opens, when the
+        guest code is withheld and the card says when it will appear while
+        still offering Reset. The two guest events the demo already has are
+        slid into their check-in window on every run, so neither can show it.
+
+        No location: the room kiosk is not what is pictured, and a location
+        would refuse another booking in its window. Slid forward whenever it
+        has come within a day, so the window is never open on capture day.
+        """
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=200"), "events")
+                if e.get("title") == self.BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE
+            ),
+            None,
+        )
+        start = (NOW + timedelta(days=3)).replace(
+            hour=23, minute=0, second=0, microsecond=0
+        )
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=2)),
+        }
+        if existing and pick(existing, "id"):
+            starts = str(pick(existing, "start_datetime", "startDatetime") or "")
+            if starts and starts > iso(NOW + timedelta(days=1)):
+                return "present"
+            self.api.patch(f"/events/{pick(existing, 'id')}", window)
+            return "moved forward"
+        self.api.post(
+            "/events",
+            {
+                "title": self.BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE,
+                "description": (
+                    "Hands-only CPR for neighbours, taught by our EMTs. Open to "
+                    "anyone; no account or sign-up needed."
+                ),
+                "event_type": "public_education",
+                "location": "Oakville Community Center",
+                "requires_rsvp": False,
+                "is_mandatory": False,
+                "send_reminders": False,
+                "is_draft": False,
+                "allow_guest_check_in": True,
+                **window,
+            },
+        )
+        return "created"
+
+    # One member with a leave behind them, one in force and one ahead, so the
+    # profile's Leave of Absence card shows its date badges side by side
+    # (Expired, Active, Future). Rafael Duarte, because he holds no shift
+    # seat in the coming month, so the leave in force cancels nothing another
+    # shot pictures. Each leave stays under 15 days in every calendar month it
+    # touches, so none reduces a requirement, and each is exempt from the
+    # linked training waiver, so the training waiver lists do not change.
+    BACKLOG_01_LEAVE_MEMBER = "rduarte"
+    BACKLOG_01_LEAVES = (
+        (-40, -30, "personal", "Family matter out of state."),
+        (-2, 9, "leave_of_absence", "Paternity leave."),
+        (45, 56, "military", "Annual reserve training."),
+    )
+
+    def seed_backlog_01_leave_badges(self) -> int:
+        user_id = self._user_id(self.BACKLOG_01_LEAVE_MEMBER)
+        if not user_id:
+            return 0
+        reasons = {
+            pick(lv, "reason")
+            for lv in items(self.api.get(f"/users/{user_id}/leaves-of-absence"))
+        }
+        created = 0
+        for start, end, kind, reason in self.BACKLOG_01_LEAVES:
+            if reason in reasons:
+                continue
+            self.api.post(
+                "/users/leaves-of-absence",
+                {
+                    "user_id": user_id,
+                    "leave_type": kind,
+                    "reason": reason,
+                    "start_date": str(TODAY + timedelta(days=start)),
+                    "end_date": str(TODAY + timedelta(days=end)),
+                    "exempt_from_training_waiver": True,
+                },
+            )
             created += 1
         return created
 
@@ -20474,6 +20937,12 @@ class Seeder:
         self.step("card taps", self.seed_card_taps)
         self.step("lot recall", self.seed_lot_recall)
         self.step("paused scheduling", self.seed_paused_scheduling)
+        self.step(
+            "backlog 03 inactive basic apparatus",
+            self.seed_backlog_03_inactive_basic_apparatus,
+        )
+        self.step("backlog 03 held pattern", self.seed_backlog_03_held_pattern)
+        self.step("backlog 03 checklist lines", self.seed_backlog_03_checklist_lines)
         self.step("ical feed", self.seed_ical_feed)
         self.step("unused approval chain", self.seed_unused_approval_chain)
         self.step("guide 11 finance states", self.seed_guide11_finance_states)
@@ -20491,6 +20960,8 @@ class Seeder:
         self.step("photo consent", self.seed_photo_consent)
         self.step("waitlisted event", self.seed_waitlisted_event)
         self.step("out-of-stock size", self.seed_out_of_stock_size)
+        self.step("passkey member", self.seed_backlog_00_passkey_member)
+        self.step("capture member two-factor", self.seed_capture_member_two_factor)
         # Last: it parks two coats on a new shelf and issues gloves, which no
         # earlier step expects to find moved or issued.
         self.step("guide 05 states", self.seed_guide05_states)
@@ -20504,6 +20975,11 @@ class Seeder:
         self.step(
             "backlog 13 compliance states", self.seed_backlog_13_compliance_states
         )
+        self.step(
+            "backlog 04 upcoming guest event",
+            self.seed_backlog_04_upcoming_guest_event,
+        )
+        self.step("guide 01 leave badges", self.seed_backlog_01_leave_badges)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

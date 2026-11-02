@@ -46,6 +46,12 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
+import {
+  readAdminTotpSecret,
+  TOTP_PERIOD_SECONDS,
+  totpForStep,
+  totpStep,
+} from "./totp.mjs";
 
 export const DEMO_CREDENTIALS = {
   username: process.env.SCREENSHOT_ADMIN_USERNAME || "chief",
@@ -107,6 +113,22 @@ export const DEMO_SECOND_MEMBER_CREDENTIALS = {
  */
 export const DEMO_SECRETARY_CREDENTIALS = {
   username: "okittredge",
+  password: "DemoMember!2026",
+};
+
+/**
+ * A privileged member deliberately left without two-step sign-in, so the
+ * grace-period banner and the password step-up box have someone to picture.
+ *
+ * Shots marked `auth: "mfagrace"` sign in as this account. The secretary used
+ * to stand in, which put the banner on every secretary shot; the seeder now
+ * enrols the secretary (ENROLLED_MEMBER_USERNAMES) and leaves this account,
+ * which no other shot signs in as, unenrolled. Must match MFA_GRACE_USERNAME in
+ * seed_demo_data.py. The grace period runs from the seed, so these two shots
+ * are taken within two weeks of seeding.
+ */
+export const DEMO_MFA_GRACE_CREDENTIALS = {
+  username: "praman",
   password: "DemoMember!2026",
 };
 
@@ -178,12 +200,13 @@ export const DEMO_TRAINING_OFFICER_CREDENTIALS = {
 };
 
 /**
- * The one account enrolled in TOTP, used to photograph the login page's
- * authentication-code step.
+ * The one account the seeder enrols in TOTP. It photographed the login page's
+ * authentication-code step until 2026-11-02, when 00-23 moved to a member
+ * holding a passkey as well (PASSKEY_MEMBER_CREDENTIALS); it is kept for a
+ * shot that wants the code step alone.
  *
  * Signing in as this account deliberately does *not* complete: it stops at the
- * code step, which is the shot. Never give it to `auth:` — it cannot produce a
- * session.
+ * code step. Never give it to `auth:` — it cannot produce a session.
  *
  * Must match TWO_FACTOR_USERNAME in seed_demo_data.py. It was hard-coded here
  * once and drifted the moment the seeder moved the enrolment to a different
@@ -1848,7 +1871,18 @@ async function guide01RemoveFormerMember(page, kind) {
   const users = await guide08Api(page, "GET", "/users?limit=200");
   const list = Array.isArray(users) ? users : users.users || users.items || [];
   for (const user of list.filter((u) => u.username === username)) {
-    await guide08Api(page, "DELETE", `/users/${user.id}?hard=true`);
+    const path = `/users/${user.id}?hard=true`;
+    // A step-up lasts ten minutes on this session, so ask for a code only
+    // when the server says the last one has lapsed: every code spent here
+    // is one a parallel run's sign-in may have wanted.
+    try {
+      await guide08Api(page, "DELETE", path);
+    } catch (err) {
+      if (!String(err).includes("LB-AUTH-013")) throw err;
+      // A permanent delete has required a step-up since #3761.
+      await adminStepUp(page);
+      await guide08Api(page, "DELETE", path);
+    }
   }
 }
 
@@ -4863,8 +4897,9 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 1151,
     anchor: "Screenshot of the delete series confirmation dialog",
-    alt: "The Delete Event dialog on a recurring event, with the single/series choice",
+    alt: "The Delete Event dialog on a recurring event: Delete only this event, Delete this and future events in this series (selected) and Delete all events in this series, with Keep Event and Delete This and Future",
     route: "/events",
+    expect: "Delete this and future events in this series",
     prepare: async (page) => {
       // The series choice only renders on a recurring event, so the shot has
       // to open one of those rather than whatever the list returns first.
@@ -4902,8 +4937,10 @@ export const SHOTS = [
         .first()
         .click({ timeout: 10_000 });
       await page.waitForTimeout(800);
+      // The middle choice, added 2026-10-21: it is the one that keeps the
+      // series' history, which the guide's note recommends.
       await page
-        .getByText("Delete all events in this series")
+        .getByText("Delete this and future events in this series")
         .click({ timeout: 10_000 });
       await page.waitForTimeout(500);
     },
@@ -6151,6 +6188,18 @@ export const SHOTS = [
     // full-page capture paints it across the middle of the settings card. The
     // area cards and page strip this shot is about are above the fold anyway.
     fullPage: false,
+    // Since the hub's header gained its totals and Needs attention panel,
+    // the area cards start below the first screen; the frame is moved down
+    // to them.
+    prepare: async (page) => {
+      const strip = page.getByText(/Shift defaults, overtime advisory/).first();
+      await strip.waitFor({ state: "attached", timeout: 20_000 });
+      await strip.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -330);
+      });
+      await page.waitForTimeout(500);
+    },
   },
   {
     id: "02-76-report-form-sections",
@@ -6945,32 +6994,55 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 98,
     anchor: "The login page showing the two-factor",
-    alt: "The login page's two-factor step — the 6-digit code field and the Use a recovery code link",
+    alt: "The login page's second step for a member with both a passkey and an authenticator app: Use your passkey above the 6-digit code field, and the Use a recovery code link",
     route: "/login",
     auth: "anonymous",
+    expect: "Use your passkey, or enter the 6-digit code",
+    // The second step is one render branch keyed on `mfaRequired`, reached
+    // the same way whether the first factor was a password or a returning
+    // OAuth sign-in. The guide describes a member with both kinds of second
+    // step, which the page shows as the passkey button above the code box;
+    // whalloway (DEMO_TWO_FACTOR_CREDENTIALS) has only the app, so the
+    // passkey member is given both for the length of the shot. See
+    // PASSKEY_MEMBER_CREDENTIALS.
     prepare: async (page) => {
-      // The code step is one render branch keyed on `mfaRequired`, reached the
-      // same way whether the first factor was a password or a returning OAuth
-      // sign-in — so a password sign-in as the enrolled demo member puts the
-      // page in exactly the state the guide is describing. `signIn` cannot be
-      // reused: it waits to leave /login, which is precisely what a 2FA
-      // account does not do.
+      const device = await attachPasskeyDevice(page);
+      passkeyShot = { page, device, secret: null, lastStep: -1 };
+      const first = await passwordSignIn(page, PASSKEY_MEMBER_CREDENTIALS);
+      if (first !== "in") {
+        throw new Error(
+          "the passkey member already has a second step; run " +
+            "seed_backlog_00_passkey_member to reset it",
+        );
+      }
+      await addPasskeyOnCard(page, "My phone");
+      const setup = await apiFromPage(page, "POST", "/auth/mfa/setup");
+      if (setup.status !== 200 || !setup.body?.secret) {
+        throw new Error(`authenticator setup returned ${setup.status}`);
+      }
+      passkeyShot.secret = setup.body.secret;
+      const verified = await apiFromPage(
+        page,
+        "POST",
+        "/auth/mfa/verify-setup",
+        { code: await nextMemberTotp(page, passkeyShot) },
+      );
+      if (verified.status !== 200) {
+        throw new Error(`authenticator verify returned ${verified.status}`);
+      }
+      await signOutCompletely(page);
+      const second = await passwordSignIn(page, PASSKEY_MEMBER_CREDENTIALS);
+      if (second !== "second-step") {
+        throw new Error("the sign-in did not stop at the second step");
+      }
+      await page.locator("#mfa-code").waitFor({ timeout: 20_000 });
       await page
-        .getByLabel(/username|email/i)
-        .first()
-        .fill(DEMO_TWO_FACTOR_CREDENTIALS.username);
-      await page
-        .getByLabel(/password/i)
-        .first()
-        .fill(DEMO_TWO_FACTOR_CREDENTIALS.password);
-      await page
-        .getByRole("button", { name: /sign in|log ?in/i })
-        .first()
-        .click();
-      const code = page.locator("#mfa-code");
-      await code.waitFor({ timeout: 20_000 });
+        .getByRole("button", { name: "Use your passkey" })
+        .waitFor({ timeout: 20_000 });
+      await page.mouse.move(0, 0);
       await page.waitForTimeout(500);
     },
+    cleanup: tearDownPasskeyShot,
   },
   {
     id: "00-21-login-sso-options",
@@ -7155,8 +7227,9 @@ export const SHOTS = [
     line: 37,
     anchor:
       "Screenshot of the Members page showing the member list table with columns",
-    alt: "Member directory listing members with rank, status, and contact columns",
+    alt: "The Members roster: the member count tiles, the search with status, class and membership-status filters, and each member's name, rank, member number, status and hire date",
     route: "/members",
+    expect: "Membership Management",
   },
   {
     id: "01-02-member-profile",
@@ -7258,11 +7331,15 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 567,
     anchor: "The Members Admin hub — Member Management, Add Member",
-    alt: "The Members Admin hub — Member Management, Add Member and Import Members tabs",
+    alt: "Members Administration: the Active, Probationary, Inactive and Needs attention tiles, the Roster, Add & Import and Settings area cards with Roster open and its Member Management page beneath, and the start of the roster with rank, membership (class and status) and positions in separate columns",
     route: "/members/admin",
+    expect: "Add & Import",
+    // Tall enough to reach the roster's header and first row, which shows
+    // rank, membership (class and status) and positions as three columns.
+    viewport: { width: 1440, height: 1100 },
     // The hub's "Former members still holding property" card reads "No
     // dropped member has property outstanding" -- the normal state, and not
-    // this shot's subject, which is the hub's tabs.
+    // this shot's subject, which is the hub's area cards.
     allowEmptyState: true,
   },
   {
@@ -7290,8 +7367,9 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 345,
     anchor: "Screenshot of the Remove Member dialog's Permanently Delete tab",
-    alt: "The Permanently Delete tab of the Remove Member dialog, with its impact breakdown and typed confirmation",
+    alt: "The Permanently Delete tab of the Remove Member dialog for Nadia Belhaj: the warning, the Permanently deleted list with a count for each kind of record and the total, the Kept list, and the typed confirmation",
     route: "/members",
+    expect: "along with anything filed under",
     prepare: async (page) => {
       // Nadia Belhaj is the member the seeder kits out, so her impact
       // breakdown has a number against every row rather than a column of
@@ -7308,6 +7386,10 @@ export const SHOTS = [
         .click({ timeout: 10_000 });
       await page.waitForTimeout(600);
     },
+    // The itemized list runs to thirty-odd record types, and the panel is
+    // height-capped to the viewport: at 900px it scrolled the typed
+    // confirmation out of the picture.
+    viewport: { width: 1440, height: 2000 },
     selector: "div.fixed.inset-0",
   },
   {
@@ -7670,8 +7752,9 @@ export const SHOTS = [
     line: 500,
     anchor:
       "Screenshot of the Stage Configuration Modal showing the stage type selector",
-    alt: "The stage type picker in the Stage Configuration modal, showing all twelve stage types",
+    alt: "The stage type picker in the Stage Configuration modal, showing all thirteen stage types, the last of them Follow-up Form",
     route: "/prospective-members/settings",
+    expect: "Follow-up Form",
     prepare: async (page) => {
       // The page opens on "Select a pipeline" — the stage builder, and with
       // it Add Stage, only renders once one is chosen from the left list.
@@ -7695,7 +7778,7 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
     // Clipped to the picker's own block. The modal scrolls internally, so a
-    // viewport shot of it shows six of the twelve types and cuts the rest off
+    // viewport shot of it shows six of the thirteen types and cuts the rest off
     // at the fold — which is the one thing this placeholder is counting.
     selector: "div:has(> label:text-is('Stage Type *'))",
   },
@@ -8380,6 +8463,20 @@ export const SHOTS = [
       "Screenshot of the Shift Templates tab showing a list of templates with",
     alt: "Shift Templates tab listing templates with start and end times",
     route: "/scheduling/admin/planning/templates",
+    expect: "Shift Templates & Patterns",
+    // The Scheduling Administration header and its area cards fill the
+    // first screen, so the frame starts at the templates' own heading.
+    prepare: async (page) => {
+      const heading = page.getByText("Shift Templates & Patterns").first();
+      await heading.waitFor({ timeout: 20_000 });
+      await page.getByText("Day Shift").first().waitFor({ timeout: 20_000 });
+      await heading.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -40);
+      });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
   },
   {
     id: "03-13-shift-patterns",
@@ -8408,6 +8505,29 @@ export const SHOTS = [
       "Screenshot of the Equipment Check Reports page showing the Compliance Dashboard tab",
     alt: "Equipment Check Reports page with the compliance dashboard",
     route: "/inventory/admin/checklists/reports",
+    expect: "Equipment Check Reports",
+    // "No checklist applies" is a truck's badge in the list, not an empty
+    // page.
+    allowEmptyState: true,
+    // The page sits under the Inventory Administration hub's header and
+    // area cards, which fill the first screen; the frame starts at the
+    // report's own heading so the per-truck list is in view.
+    prepare: async (page) => {
+      const heading = page
+        .getByRole("heading", { name: "Equipment Check Reports" })
+        .first();
+      await heading.waitFor({ timeout: 20_000 });
+      await page
+        .getByText(/checks ·/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await heading.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -90);
+      });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
   },
 
   {
@@ -8500,8 +8620,9 @@ export const SHOTS = [
     line: 423,
     anchor:
       "Screenshot of the minutes creation/editing page showing the meeting type selector, date,",
-    alt: "The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted",
+    alt: "The Meeting Minutes page under the Governance section header: Outlines, Settings, Attendance and Record Minutes, the summary tiles, the search box, and each meeting card listing its minutes with their state, one Circulated for review and one Draft",
     route: "/minutes",
+    expect: "Total Meetings",
   },
   {
     // "budget" is in the seeded Officer Meeting minutes, so the card has a hit.
@@ -8530,12 +8651,12 @@ export const SHOTS = [
     line: 1468,
     anchor:
       "Minutes Settings as a settings administrator: the section list (Attendance,",
-    alt: "Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row",
+    alt: "Minutes Settings under the Governance section header: the section tabs (Attendance, Signatures, Reminders, Publishing, Elections) above the Attendance section, How attendance is listed, and its Save button",
     route: "/minutes/settings",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: "How attendance is listed",
   },
   {
@@ -8560,10 +8681,10 @@ export const SHOTS = [
       "Minutes Settings, Publishing section: the public-copy switch and the",
     alt: "Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches",
     route: "/minutes/settings?tab=publishing",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: "Executive-session minutes",
   },
   {
@@ -8574,10 +8695,10 @@ export const SHOTS = [
       "Minutes Settings, Signatures section with the two default slots, Recording",
     alt: "Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes",
     route: "/minutes/settings?tab=signatures",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: { selector: "input[value='Recording Secretary']" },
   },
   {
@@ -8588,10 +8709,10 @@ export const SHOTS = [
       "Minutes Settings, Reminders section: the email switch, the first-reminder and",
     alt: "Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch",
     route: "/minutes/settings?tab=reminders",
-    // The settings column only: the page opens under the administrator's
-    // malware-scanning notice on a stack with scanning off, which is not a
-    // state a department running the app would be shown.
-    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    // The whole page with the app shell. Until 2026-11-02 this was cropped to
+    // the settings column to keep out the malware-scanning notice a stack with
+    // scanning off shows administrators; the capture stack now scans.
+    fullPage: true,
     expect: "Email reminders to assignees",
   },
   {
@@ -8647,7 +8768,9 @@ export const SHOTS = [
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    selector: "div:has(> p.alert-info:has-text('accepted these minutes'))",
+    // The page with the app shell rather than the note alone (cropped until
+    // 2026-11-02 to keep out the scanning-off notice); the note sits at the
+    // top of the first screen.
     expect: "accepted these minutes",
     // "No suggestions yet" is the Suggestions panel further down the page, not
     // an empty subject: the shot is the note at the top.
@@ -11167,7 +11290,7 @@ export const SHOTS = [
     line: 43,
     anchor:
       "Screenshot of Settings → Security showing the Privacy Choices section with three",
-    alt: "My Account, Privacy tab: Profile visibility for each contact detail, then the Privacy Choices checkboxes for photo use, public roster listing and text message notifications, and Your Data",
+    alt: "My Account, Privacy tab: Profile visibility for each contact detail, then Privacy Choices with a Yes / No pair for photo use and for public roster listing, both not answered, the Text message notifications checkbox, and Your Data",
     // Privacy Choices lives on the Privacy tab (it moved off Security). Note
     // the canonical path: /settings/account is a <Navigate to="/account"> with no query, so
     // React Router drops ?tab= on the redirect and the param never arrives.
@@ -11585,8 +11708,13 @@ export const SHOTS = [
     line: 73,
     anchor:
       "Screenshot of an event detail page showing the event header (title, date,",
-    alt: "Event detail page with the header, description, and RSVP controls",
+    alt: "An upcoming Training event's page as a member: RSVP Now and Add to Calendar beside the title and no View QR Code, then the Event Details, Training Session Details, Requirements & Programs and Event Information cards",
     route: "/events",
+    // As a member since 2026-11-02: the section describes what a member
+    // sees, and an administrator's page carries View QR Code, Edit and the
+    // attendance tools, which a member is never offered.
+    auth: "member",
+    expect: "Event Details",
     prepare: openFirstFromApi(
       "/events?limit=100",
       (id) => `/events/${id}`,
@@ -12368,8 +12496,9 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 163,
     anchor: "The guest sign-in page as a visitor sees it on a",
-    alt: "The guest sign-in page on a phone, with the event name above the email field",
+    alt: "The guest sign-in page at a recruitment event on a phone: the event's name, time and place, then the Email field and Continue",
     route: "/login",
+    expect: { selector: "input[type='email']" },
     auth: "anonymous",
     viewport: "mobile",
     prepare: withDisplayCode(
@@ -12382,8 +12511,9 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 159,
     anchor: "The confirmation state after a guest signs in,",
-    alt: "The guest sign-in confirmation naming the event and the time signed in",
+    alt: "The guest sign-in confirmation for an applicant who had already signed in: You're already checked in, Rosa D., the event, where it is and the time signed in, and the note that her attendance was added to her application",
     route: "/login",
+    expect: "already checked in",
     auth: "anonymous",
     viewport: "mobile",
     // **This shot signs a guest in.** The confirmation is client state that no
@@ -12404,6 +12534,7 @@ export const SHOTS = [
         .click({ timeout: 15_000 });
       await page
         .getByText(/You're (already checked in|signed in)/i)
+        .first()
         .waitFor({ timeout: 15_000 });
     },
     fullPage: true,
@@ -13213,7 +13344,7 @@ export const SHOTS = [
     line: 67,
     anchor:
       "Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at",
-    alt: "Shift detail panel with the crew roster and shift information",
+    alt: "The Shift Details window over the schedule: readiness, time, crew, apparatus and shift officer, then the crew board with each seat",
     route: "/scheduling",
     // Not the finalized shift: this is the guide's introduction to the panel,
     // and the closed-out state (banner, Reopen link, locked actions) has its
@@ -13825,7 +13956,7 @@ export const SHOTS = [
     line: 1043,
     anchor:
       "Screenshot of the Department Information section on a member's admin edit page showing the auto-generated Membership Number",
-    alt: "The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, all editable",
+    alt: "The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, then Platoon, Hire Date, Member Class and Membership Status, all editable",
     route: "/members",
     prepare: openFirstFromApi(
       "/users?limit=1",
@@ -13983,7 +14114,7 @@ export const SHOTS = [
     line: 195,
     anchor:
       "Screenshot of the Admin Member Edit page showing the form sections: personal",
-    alt: "Admin member edit form with personal, department and access sections",
+    alt: "The Edit Member page: Personal Information, Department Information with Member Class and Membership Status, Contact Information, Address and Emergency Contacts, with Save Changes at the foot",
     route: "/members",
     prepare: openFirstFromApi(
       "/users?limit=1",
@@ -17560,6 +17691,9 @@ export const SHOTS = [
     alt: "The Card taps section of the in-progress drill's event page, listing each ID card tap with its time, member, outcome and the check-in station it was made at",
     route: "/events",
     expect: { selector: "#event-card-taps-heading" },
+    // Wide, so the table's five columns are not squeezed into the event
+    // page's main column at 1440px, where Where wraps a word to a line.
+    viewport: { width: 1920, height: 1100 },
     prepare: async (page, helpers) => {
       await openFirstFromApi(
         "/events?limit=200",
@@ -17584,13 +17718,17 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 592,
     anchor: "The Card Check-ins tab of Events Admin",
-    alt: "The Card Check-ins tab of Events Admin: filters for outcome, reader and dates above every ID card tap across events, from the check-in station and the Volunteer Office kiosk",
+    alt: "Events Administration with the Check-ins area card chosen and its Card Check-ins page open: filters for outcome, reader and dates above the ID card taps, each with its outcome, member, card, the check-in station it was made at and its event",
     route: "/events/admin?tab=card_checkins",
-    expect: "Room kiosk",
-    fullPage: false,
+    expect: "Member ID card taps at stations and room kiosks",
+    // Full page: the hub's headline numbers, Needs attention and area cards
+    // fill the first screen, and the taps this pictures sit below them.
+    fullPage: true,
     prepare: async (page) => {
-      await page.getByText("Room kiosk").first().waitFor({ timeout: 20_000 });
-      await hideScanNotice(page);
+      await page
+        .locator("td", { hasText: "Check-in station" })
+        .first()
+        .waitFor({ timeout: 20_000 });
     },
   },
   {
@@ -17608,6 +17746,137 @@ export const SHOTS = [
         .check({ timeout: 20_000 });
       await page.getByText("Reader on").first().waitFor({ timeout: 10_000 });
       await hideScanNotice(page);
+    },
+  },
+  {
+    // The open house the seeder slides into its check-in window on every
+    // run, which has guest check-in on. Taken from the event page, not the
+    // QR page: at dffccc89 GET /events/{id}/qr-check-in-data never fills
+    // `allow_guest_check_in`, so the QR page tells a manager guest check-in
+    // is off on every event and its Print Guest QR Code cannot be reached.
+    id: "04-93-event-qr-guest-code",
+    doc: "04-events-meetings.md",
+    line: 709,
+    anchor: "The Guest Check-In card on an event page while check-in is open",
+    alt: "The Guest Check-In card on the Volunteer Interest Night's event page while check-in is open: the guest code, the guest check-in link with its copy button, Show full size and Reset code",
+    route: "/events",
+    expect: {
+      selector:
+        "[data-testid='guest-qr-card'] input[aria-label='Guest check-in link']",
+    },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Volunteer Interest Night",
+      )(page);
+      const card = page.locator("[data-testid='guest-qr-card']");
+      await card
+        .locator("input[aria-label='Guest check-in link']")
+        .waitFor({ timeout: 20_000 });
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "[data-testid='guest-qr-card']",
+  },
+  {
+    // seed_backlog_04_upcoming_guest_event keeps this event three days out,
+    // so its window is never open: the card withholds the code and says
+    // when it will appear. Reset is offered regardless. The event page for
+    // the same reason as 04-93.
+    id: "04-94-event-qr-guest-code-hidden",
+    doc: "04-events-meetings.md",
+    line: 711,
+    anchor: "The Guest Check-In card on the page of an event days away",
+    alt: "The Guest Check-In card on the page of an event three days away: the code hidden until check-in opens, the times guests can sign in, the note that the code appears when check-in opens, Show full size and Reset code",
+    route: "/events",
+    expect: "QR code hidden until check-in opens",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Community CPR Night",
+      )(page);
+      const card = page.locator("[data-testid='guest-qr-card']");
+      await card
+        .getByText("QR code hidden until check-in opens")
+        .waitFor({ timeout: 20_000 });
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "[data-testid='guest-qr-card']",
+  },
+  {
+    id: "04-95-event-guests-card",
+    doc: "04-events-meetings.md",
+    line: 722,
+    anchor: "The Guests card on the event page of an open house",
+    alt: "The Guests card on the Fall Recruitment Open House's page: Add guest beside the heading, the note that guests are not counted in attendance, and four guests signed in at the kiosk, each with email, phone and sign-in time",
+    route: "/events",
+    expect: { selector: "#event-guests-heading" },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Fall Recruitment Open House",
+      )(page);
+      const section = page.locator(
+        "section[aria-labelledby='event-guests-heading']",
+      );
+      await section.getByText("Rosa Delgado").waitFor({ timeout: 20_000 });
+      await section.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='event-guests-heading']",
+  },
+  {
+    // The Compliance Officer is the seeded alternate organizer of the next
+    // Monthly Officers Meeting (seed_guide04_event_states) and holds no
+    // events.manage, so this is the organizer pair's view of their own
+    // event: the attendance tools without Edit, End Event or More. A
+    // business meeting, so training.manage adds nothing here.
+    id: "04-96-event-organizer-view",
+    doc: "04-events-meetings.md",
+    line: 1060,
+    anchor: "An upcoming meeting's page as its alternate organizer",
+    alt: "The next Monthly Officers Meeting as its alternate organizer, who does not manage events: Going, View QR Code, Add to Calendar and Check In beside the title, no Edit or More, and the Organized by row naming her as the alternate",
+    route: "/events",
+    auth: "compliance",
+    // The meeting is weeks away, so its attendance list correctly reads
+    // empty; the subject is the row of actions.
+    allowEmptyState: true,
+    expect: "Monthly Officers Meeting",
+    viewport: { width: 1440, height: 1000 },
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/events?limit=200", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : body.events || [];
+        const now = Date.now();
+        const next = rows
+          .filter(
+            (e) =>
+              e.title === "Monthly Officers Meeting" &&
+              !e.is_cancelled &&
+              new Date(e.start_datetime).getTime() > now,
+          )
+          .sort((a, b) => a.start_datetime.localeCompare(b.start_datetime))[0];
+        return next ? next.id : null;
+      });
+      if (!id) throw new Error("no upcoming Monthly Officers Meeting");
+      await page.goto(new URL(`/events/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByRole("button", { name: /^Check In$/ })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
     },
   },
   {
@@ -17680,7 +17949,7 @@ export const SHOTS = [
     doc: "17-privacy-data-rights.md",
     line: 451,
     anchor: "for a Dropped (Voluntary) demo member: the Membership card",
-    alt: "The Membership card on a dropped member's profile, as an administrator: Rank, Member type, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it",
+    alt: "The Membership card on a dropped member's profile, as an administrator: Rank, Member class, Membership status, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it",
     route: "/members",
     expect: "Anonymize member",
     // The demo department has no departed member, and dropping one for real
@@ -22590,6 +22859,36 @@ export const SHOTS = [
     viewport: { width: 1280, height: 900 },
   },
   {
+    id: "06-36-card-readers",
+    doc: "06-apparatus-facilities.md",
+    line: 697,
+    anchor: "Card Readers listing each room with its taps, refusals, last tap",
+    alt: "Card Readers: each room with its taps, refusals and last tap over the last 7 days and its Badge check-in switch, with the Volunteer Office's reader on and its recent taps opened",
+    route: "/locations/card-readers",
+    expect: { selector: "button[aria-expanded='true']" },
+    viewport: { width: 1280, height: 900 },
+    fullPage: false,
+    // Opening a room's recent taps changes nothing; the switch is not touched.
+    prepare: async (page) => {
+      const room = page
+        .locator("li")
+        .filter({
+          // Anchored: rooms inside the office carry its name in their path.
+          has: page.getByRole("heading", { name: /^Volunteer Office/ }),
+        })
+        .first();
+      await room.waitFor({ timeout: 20_000 });
+      await room.getByRole("button", { name: "Recent taps" }).click();
+      await page.waitForTimeout(1200);
+      // The list is alphabetical by path, which puts the office last: the
+      // frame ends on its opened taps with the rooms above it in view.
+      await room.evaluate((el) => el.scrollIntoView({ block: "end" }));
+      await page.evaluate(() => window.scrollBy(0, 40));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     id: "05-127-items-not-seen",
     doc: "05-inventory.md",
     line: 1837,
@@ -22928,6 +23227,7 @@ export const SHOTS = [
     // permanently it would put this row on every later dashboard capture.
     prepare: async (page) => {
       const { userId, roleId } = await adminAndChiefIds(page);
+      await adminStepUp(page);
       const granted = await apiFromPage(
         page,
         "POST",
@@ -22948,6 +23248,134 @@ export const SHOTS = [
     },
     cleanup: releaseChiefPosition,
     selector: "section[aria-labelledby='needs-you-heading']",
+  },
+  {
+    id: "00-33-passkeys-card",
+    doc: "00-getting-started.md",
+    line: 510,
+    anchor: "A member on My Account, Security tab, just after adding a passkey",
+    alt: "My Account, Security tab, just after adding a passkey: the Passkeys card lists My phone (Syncs across your devices, and the date it was added) with its bin icon, then 10 recovery codes left and Generate new recovery codes, above the Authenticator app card",
+    route: "/login",
+    auth: "anonymous",
+    expect: { selector: 'button[aria-label="Remove passkey My phone"]' },
+    // A real passkey, made by a virtual authenticator for the length of the
+    // shot and removed again in cleanup; see PASSKEY_MEMBER_CREDENTIALS.
+    prepare: async (page) => {
+      const device = await attachPasskeyDevice(page);
+      passkeyShot = { page, device, secret: null, lastStep: -1 };
+      const signedIn = await passwordSignIn(page, PASSKEY_MEMBER_CREDENTIALS);
+      if (signedIn !== "in") {
+        throw new Error(
+          "the passkey member already has a second step; run " +
+            "seed_backlog_00_passkey_member to reset it",
+        );
+      }
+      await addPasskeyOnCard(page, "My phone");
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+    cleanup: tearDownPasskeyShot,
+  },
+  {
+    id: "00-34-step-up-code",
+    doc: "00-getting-started.md",
+    line: 473,
+    anchor: "An administrator who uses an authenticator app has just switched",
+    alt: "The Confirm it's you box over Settings → Authentication → MFA Policy, opened by switching Allow passkeys: This action needs a recent confirmation, the Authenticator code field, and Cancel / Confirm",
+    route: "/settings?tab=authentication&page=mfa",
+    expect: "Authenticator code",
+    viewport: { width: 1280, height: 900 },
+    // The switch asks the server first, and the server answers that a fresh
+    // confirmation is needed, which is the box. Cancel leaves the policy as
+    // it was. Should this session already be confirmed the switch would save,
+    // so the policy read before the click is put back in cleanup either way.
+    prepare: async (page) => {
+      const before = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      if (before.status !== 200) {
+        throw new Error(`reading the MFA policy returned ${before.status}`);
+      }
+      mfaPolicyBefore = { policy: before.body, page };
+      await page
+        .locator("[role='switch'][aria-labelledby='mfa-policy-passkeys-label']")
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("dialog")
+        .getByText("Authenticator code")
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const held = mfaPolicyBefore;
+      mfaPolicyBefore = null;
+      const cancel = page.getByRole("dialog").getByRole("button", {
+        name: "Cancel",
+      });
+      if (await cancel.count()) await cancel.click();
+      if (!held) return;
+      const now = await apiFromPage(page, "GET", "/auth/mfa/policy");
+      if (now.body?.passkeys_enabled === held.policy.passkeys_enabled) return;
+      throw new Error(
+        "the MFA policy changed during 00-34 and could not be restored " +
+          "without a step-up; switch Allow passkeys back by hand",
+      );
+    },
+  },
+  {
+    id: "00-35-step-up-password",
+    doc: "00-getting-started.md",
+    line: 477,
+    anchor: "The secretary, who has not set up two-step sign-in yet",
+    alt: "The Confirm it's you box with a Password field over the Reset MFA dialog, shown to an assistant chief who has not set up two-step sign-in yet, after selecting Reset MFA for a member",
+    route: "/members/admin",
+    auth: "mfagrace",
+    expect: { selector: "#stepup-proof[type='password']" },
+    // The roster's Former members card reads "No dropped member has property
+    // outstanding" behind the dialogs, which is not this shot's subject.
+    allowEmptyState: true,
+    // The assistant chief holds members.manage and has no second step, so the
+    // box asks for their password. Nobody types it: Cancel closes the box and the
+    // Reset MFA request it was holding is never sent again, so whalloway
+    // (the one member enrolled in the app) keeps it.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Reset MFA for .*Halloway/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Reset MFA", exact: true })
+        .click({ timeout: 15_000 });
+      await page.locator("#stepup-proof").waitFor({ timeout: 15_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    // Clipped to the Reset MFA dialog's overlay, which stops short of the
+    // scrollbar gutter: a plain viewport shot of the long roster leaves that
+    // gutter unpainted beside the dimmed page (audit_images.py "edges").
+    selector: "[role='dialog']:has-text('Reset MFA turns off')",
+    cleanup: async (page) => {
+      const confirmBox = page
+        .getByRole("dialog")
+        .filter({ hasText: "Confirm it's you" });
+      if (await confirmBox.count()) {
+        await confirmBox.getByRole("button", { name: "Cancel" }).click();
+      }
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    id: "00-36-mfa-grace-banner",
+    doc: "00-getting-started.md",
+    line: 457,
+    anchor:
+      "The secretary, whose position needs two-step sign-in, on the Dashboard",
+    alt: "The Dashboard as an assistant chief, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link",
+    route: "/dashboard",
+    auth: "mfagrace",
+    expect: "Your access requires two-factor authentication",
+    allowEmptyState: true,
   },
   {
     id: "08-114-security-report-fallback",
@@ -22995,6 +23423,7 @@ export const SHOTS = [
           "could not resolve the IT Manager position or a member",
         );
       }
+      await adminStepUp(page);
       itManagerHolder = { userId: holder.id, roleId: itManager.id, page };
       const granted = await apiFromPage(
         page,
@@ -23028,6 +23457,227 @@ export const SHOTS = [
         );
       }
     },
+  },
+  {
+    id: "08-118-mfa-policy-passkeys",
+    doc: "08-admin-reports.md",
+    line: 265,
+    anchor: "Administrator at Settings → Authentication → MFA Policy",
+    alt: "Settings → Authentication → MFA Policy: the Require two-factor authentication switch, off, and the Allow passkeys switch, on by default, each with its explanation",
+    route: "/settings?tab=authentication&page=mfa",
+    expect: "Allow passkeys",
+    viewport: { width: 1280, height: 900 },
+    prepare: async (page) => {
+      await page
+        .getByText("Allow passkeys")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+    },
+  },
+  {
+    id: "08-119-reset-mfa-passkeys",
+    doc: "08-admin-reports.md",
+    line: 269,
+    anchor:
+      "Administrator on Members administration with the Reset MFA dialog open",
+    alt: "The Reset MFA dialog for a member who has a passkey: Passkeys, with Lost one phone? Remove just that passkey, My phone listed with its Remove link, then what Reset MFA removes, and Cancel / Reset MFA",
+    route: "/members/admin",
+    expect: "Lost one phone? Remove just that passkey",
+    // The member's passkey is made in a second browser context, through the
+    // real card and a virtual authenticator, and removed there again in
+    // cleanup — the administrator never presses Remove or Reset MFA. See
+    // PASSKEY_MEMBER_CREDENTIALS.
+    prepare: async (page) => {
+      const context = await page
+        .context()
+        .browser()
+        .newContext({ viewport: { width: 1280, height: 900 } });
+      const memberPage = await context.newPage();
+      await memberPage.goto(new URL("/login", page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      const device = await attachPasskeyDevice(memberPage);
+      passkeyShot = {
+        page: memberPage,
+        device,
+        context,
+        secret: null,
+        lastStep: -1,
+      };
+      const signedIn = await passwordSignIn(
+        memberPage,
+        PASSKEY_MEMBER_CREDENTIALS,
+      );
+      if (signedIn !== "in") {
+        throw new Error(
+          "the passkey member already has a second step; run " +
+            "seed_backlog_00_passkey_member to reset it",
+        );
+      }
+      await addPasskeyOnCard(memberPage, "My phone");
+
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const reset = page.getByRole("button", {
+        name: /^Reset MFA for .*Adeyemi/,
+      });
+      await reset.first().click({ timeout: 20_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.getByText("My phone").waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      try {
+        await page.keyboard.press("Escape");
+      } finally {
+        await tearDownPasskeyShot();
+      }
+    },
+    selector: "[role='dialog']",
+  },
+  {
+    id: "08-120-email-templates-off-filter",
+    doc: "08-admin-reports.md",
+    line: 1725,
+    anchor:
+      "Administrator at Communications → Email Templates with the Off filter",
+    alt: "Email Templates on the Off filter: the list holds one template, Event Reminder, under Events & Scheduling, its subtitle reading Off and its dot grey",
+    route: "/communications/email-templates",
+    expect: { selector: "button[aria-pressed='true']:text-is('Off')" },
+    // One template is switched off for the shot and back on in cleanup; the
+    // demo department sends every email, so the filter is otherwise empty.
+    // Toggling `is_active` writes no template backup.
+    prepare: async (page) => {
+      const listed = await apiFromPage(page, "GET", "/email-templates");
+      const target = (listed.body ?? []).find(
+        (t) => t.name === OFF_FILTER_TEMPLATE_NAME,
+      );
+      if (!target?.id) {
+        throw new Error(
+          `no ${OFF_FILTER_TEMPLATE_NAME} template to switch off`,
+        );
+      }
+      templateSwitchedOff = { id: target.id, page };
+      const off = await apiFromPage(
+        page,
+        "PUT",
+        `/email-templates/${target.id}`,
+        { is_active: false },
+      );
+      if (off.status !== 200) {
+        throw new Error(`switching the template off returned ${off.status}`);
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: "Off", exact: true })
+        .click({ timeout: 20_000 });
+      await page
+        .getByText(OFF_FILTER_TEMPLATE_NAME)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+    cleanup: async () => {
+      const held = templateSwitchedOff;
+      templateSwitchedOff = null;
+      if (!held) return;
+      const on = await apiFromPage(
+        held.page,
+        "PUT",
+        `/email-templates/${held.id}`,
+        { is_active: true },
+      );
+      if (on.status !== 200) {
+        throw new Error(`switching the template back on returned ${on.status}`);
+      }
+    },
+  },
+  {
+    id: "08-121-template-always-sent",
+    doc: "08-admin-reports.md",
+    line: 1744,
+    anchor:
+      "Administrator at Communications → Email Templates with Password Reset",
+    alt: "The Password Reset template open in the editor: its header reads Always sent and the switch beside it is on and dimmed, because this email cannot be switched off",
+    route: "/communications/email-templates",
+    expect: "Always sent",
+    prepare: async (page) => {
+      await page
+        .getByPlaceholder(/filter templates/i)
+        .first()
+        .fill("Password Reset", { timeout: 15_000 });
+      await page
+        .getByRole("button", { name: /^Password Reset/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Always sent", { exact: true })
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    id: "08-122-gmail-app-password",
+    doc: "08-admin-reports.md",
+    line: 1535,
+    anchor:
+      "Administrator at Settings → Email with Gmail chosen and App Password",
+    alt: "Settings → Email with Gmail chosen and App Password selected: the From address and app password fields, and the notes on a dedicated sending account, a password change revoking app passwords, and DKIM on your own domain",
+    route: "/settings?tab=email",
+    expect: "Authentication",
+    // Choosing a platform is local state until Save, as in 08-38; nothing is
+    // written.
+    prepare: async (page) => {
+      await clickByName(/^Gmail/)(page);
+      await page
+        .getByRole("button", { name: /^App Password/ })
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-123-gmail-service-account",
+    doc: "08-admin-reports.md",
+    line: 1556,
+    anchor: "Administrator at Settings → Email with Gmail and Service account",
+    alt: "Settings → Email with Gmail and Service account chosen and a key file picked: Key chosen for client ID 104857392018475629301, the three setup steps naming that client ID and the gmail.send scope, and the warning that the key can send as anyone in the domain. The key is made up for the picture",
+    route: "/settings?tab=email",
+    expect: "Key chosen for client ID 104857392018475629301",
+    // The key is a made-up file read in the browser only: the form shows the
+    // client ID it finds and keeps the key in local state until Save, which
+    // is never pressed. Nothing reaches the server.
+    prepare: async (page) => {
+      await clickByName(/^Gmail/)(page);
+      await page
+        .getByRole("button", { name: /^Service account/ })
+        .click({ timeout: 15_000 });
+      await page.locator("#gmail-service-account-key").setInputFiles({
+        name: "logbook-mail-key.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(
+          JSON.stringify({
+            type: "service_account",
+            project_id: "oakville-fd-mail",
+            client_id: "104857392018475629301",
+            client_email:
+              "logbook-mail@oakville-fd-mail.iam.gserviceaccount.com",
+            private_key:
+              "-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----\n",
+          }),
+        ),
+      });
+      await page
+        .getByText("Key chosen for client ID 104857392018475629301")
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.mouse.move(0, 0);
+    },
+    fullPage: true,
   },
   {
     id: "02-125-compliance-matrix-not-applicable",
@@ -23658,13 +24308,15 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 2442,
     anchor: "The Coverage tab of Member ID Cards",
-    alt: "The Coverage tab of Member ID Cards: how many current members have a working card, the members without one with Issue card on each row, and the cards-held-by-former-members and unused-cards sections",
+    alt: "The Coverage tab of Member ID Cards: 3 of 22 current members have a working card, the nineteen without one each with Issue card, and the Cards held by former members and Active cards not used in 180 days sections, both empty",
     route: "/members/admin/id-cards?tab=coverage",
     expect: "Current members without a working card",
     // "None" under Cards held by former members is a real answer, not an
     // empty page.
     allowEmptyState: true,
-    fullPage: false,
+    // The whole page: the twenty members without a card fill the first
+    // screen, and the other two sections the caption names sit below them.
+    fullPage: true,
     prepare: async (page) => {
       await page
         .getByText("Current members without a working card")
@@ -23677,14 +24329,86 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 2444,
     anchor: "The Tap log tab of Member ID Cards",
-    alt: "The Tap log tab of Member ID Cards: taps at the check-in station for the in-progress drill, one checked in, one already checked in, one card not active and one unknown card, with the outcome and reader filters and Export CSV",
+    alt: "The Tap log tab of Member ID Cards: the outcome, reader and date filters with Export CSV, and the drill's taps at the check-in station (checked in, already checked in, checked out, a card not active and an unknown card) beside a tap refused at a room kiosk",
     route: "/members/admin/id-cards?tab=taps",
-    expect: "Unknown card",
+    // Scoped to the table: the outcome filter's closed <select> also holds
+    // an "Unknown card" option, which is never visible and matched first.
+    expect: { selector: "table td:has-text('Unknown card')" },
     fullPage: false,
     prepare: async (page) => {
-      await page.getByText("Unknown card").first().waitFor({ timeout: 20_000 });
+      await page
+        .locator("table td", { hasText: "Unknown card" })
+        .first()
+        .waitFor({ timeout: 20_000 });
       await hideScanNotice(page);
     },
+  },
+  {
+    id: "01-56-id-cards-settings",
+    doc: "01-membership.md",
+    line: 2590,
+    anchor: "The Settings tab of Member ID Cards",
+    alt: "The Settings tab of Member ID Cards: Keep the tap log for (months) set to 24, the note that it takes 3 to 84 months and that check-ins stay on their records, and Save",
+    route: "/members/admin/id-cards?tab=settings",
+    expect: "Keep the tap log for (months)",
+    fullPage: false,
+    prepare: async (page) => {
+      await page
+        .getByLabel("Keep the tap log for (months)")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+      await hideScanNotice(page);
+    },
+  },
+
+  // ---- Queued by the October 29 and October 31 – November 1 passes ------
+  {
+    // Rafael Duarte's three leaves are seeded by
+    // `seed_backlog_01_leave_badges`: one ended, one running, one ahead.
+    id: "01-57-profile-leave-badges",
+    doc: "01-membership.md",
+    line: 2038,
+    anchor: "The Leave of Absence card on a member's profile with three leaves",
+    alt: "The Leave of Absence card on Rafael Duarte's profile: a military leave in December badged Future, a leave of absence running now badged Active, and a personal leave that ended in October badged Expired, each with its dates and reason",
+    route: "/members",
+    expect: { selector: "div.card:has(> h2:text-is('Leave of Absence'))" },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=100",
+        (id) => `/members/${id}`,
+        "users",
+        (user) => user.username === "rduarte",
+      )(page);
+      await page
+        .locator("div.card:has(> h2:text-is('Leave of Absence'))")
+        .getByText("Future", { exact: true })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(> h2:text-is('Leave of Absence'))",
+  },
+  {
+    id: "01-58-member-class-status",
+    doc: "01-membership.md",
+    line: 1557,
+    anchor:
+      "The Department Information block of an administrative member's edit page",
+    alt: "The Department Information block of Jonah Whitfield's edit page: Member class set to Administrative beside the hire date, Membership status below it, each with the line explaining it",
+    route: "/members",
+    expect: { selector: "select[id$='-member-class']" },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=100",
+        (id) => `/members/admin/edit/${id}`,
+        "users",
+        (user) => user.username === "jwhitfield",
+      )(page);
+      await page
+        .locator("select[id$='-member-class']")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> h2:text-is('Department Information'))",
   },
   {
     id: "05-140-nfc-tag-register",
@@ -23848,10 +24572,15 @@ export const SHOTS = [
     line: 3137,
     anchor: "The Patterns tab with a pattern reading Paused",
     alt: "The Patterns tab with the Summer Reserve Rotation pattern reading Paused, its Generate button disabled and Resume beside it",
-    route: "/scheduling/admin/planning/patterns",
+    route: "/scheduling/admin/planning/templates",
     expect: "Summer Reserve Rotation",
     fullPage: false,
     prepare: async (page) => {
+      // The Shift Patterns page asks for active patterns only, so a paused
+      // one is listed only on the Shift Templates page's own Patterns tab.
+      await page
+        .getByRole("tab", { name: /Patterns/ })
+        .click({ timeout: 20_000 });
       const button = page.getByRole("button", {
         name: "Resume Summer Reserve Rotation",
       });
@@ -23859,6 +24588,231 @@ export const SHOTS = [
       await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await hideScanNotice(page);
       await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-131-pattern-generate-not-seated",
+    doc: "03-scheduling.md",
+    line: 3368,
+    anchor:
+      "Shift Patterns after Generate, with the message listing each member",
+    alt: "Shift Patterns after Generate on the A/B/C Platoon Rotation: Generated 3 shifts, and beneath it the message that two members were not seated, each with the date and the reason",
+    route: "/scheduling/admin/planning/patterns",
+    expect: "not seated",
+    viewport: { width: 1280, height: 900 },
+    // The generate answer is given in the page, so nothing is written: a
+    // real run would add shifts and occurrences that every later capture of
+    // the schedule would picture, and re-running it generates nothing. The
+    // two members are real demo members, and the reasons are the server's
+    // own wording for a member on leave and a member no seat suits.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/scheduling\/patterns\/[^/]+\/generate$/,
+        async (route) => {
+          if (route.request().method() !== "POST") return route.fallback();
+          const response = await page.request.get(
+            new URL("/api/v1/users?limit=50", page.url()).toString(),
+          );
+          const body = await response.json();
+          const people = (
+            Array.isArray(body) ? body : (body.users ?? body.items ?? [])
+          )
+            .filter(
+              (u) => u.username !== "chief" && u.first_name && u.last_name,
+            )
+            .slice(0, 2)
+            .map((u) => `${u.first_name} ${u.last_name}`);
+          const sent = route.request().postDataJSON() ?? {};
+          const start = String(sent.start_date ?? "");
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              shifts_created: 3,
+              driver_warnings: [],
+              seat_warnings: [
+                `${start}: ${people[0] ?? "A member"} not seated (Member is on leave of absence for this date)`,
+                `${start}: ${people[1] ?? "A member"} not seated (no open seat they are eligible for)`,
+              ],
+            }),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      const pattern = "A/B/C Platoon Rotation";
+      const day = (offset) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + offset);
+        return d.toISOString().slice(0, 10);
+      };
+      await page
+        .getByRole("button", { name: `Generate shifts from ${pattern}` })
+        .click({ timeout: 20_000 });
+      await page.locator('input[id^="pattern-generate-start-"]').fill(day(40));
+      await page.locator('input[id^="pattern-generate-end-"]').fill(day(42));
+      await page
+        .locator('div:has(> h4:has-text("Generate Shifts"))')
+        .getByRole("button", { name: /Generate/ })
+        .last()
+        .click();
+      await page.getByText("not seated").first().waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-132-pattern-template-inactive",
+    doc: "03-scheduling.md",
+    line: 3160,
+    anchor: "The Patterns tab with a pattern whose template is inactive",
+    alt: "The Patterns tab with the Reserve Engine Weekend Cover pattern, its Generate shifts button disabled and the warning that its template is inactive and the pattern is not generating shifts",
+    route: "/scheduling/admin/planning/patterns",
+    expect: "Template inactive — this pattern is not generating shifts",
+    viewport: { width: 1280, height: 900 },
+    fullPage: false,
+    prepare: async (page) => {
+      const notice = page
+        .getByText("Template inactive — this pattern is not generating shifts")
+        .first();
+      await notice.waitFor({ timeout: 20_000 });
+      await notice.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-133-pattern-form-template-inactive",
+    doc: "03-scheduling.md",
+    line: 3162,
+    anchor:
+      "The Edit Pattern form for that pattern, with the inactive template",
+    alt: "Edit Pattern for Reserve Engine Weekend Cover: the Reserve Engine — Out of Service template chosen and marked inactive, with the Template inactive warning beneath it",
+    route: "/scheduling/admin/planning/templates",
+    expect: { selector: "[role='dialog'] [role='status']" },
+    viewport: { width: 1280, height: 900 },
+    selector: "[role='dialog']",
+    // "No template" is the picker's first option, not an empty page.
+    allowEmptyState: true,
+    // Only opened, never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /Patterns/ })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Edit Reserve Engine Weekend Cover" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("dialog")
+        .getByText("Template inactive — this pattern is not generating shifts")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-134-basic-apparatus-inactive",
+    doc: "03-scheduling.md",
+    line: 3177,
+    anchor:
+      "The basic apparatus list (Apparatus & Vehicles) with Show inactive",
+    alt: "Apparatus & Vehicles with Show inactive ticked: Reserve Engine 9 marked Inactive, with its Reactivate button",
+    route: "/apparatus-basic",
+    expect: "Reserve Engine 9",
+    viewport: { width: 1280, height: 900 },
+    fullPage: false,
+    prepare: async (page) => {
+      await page.getByLabel("Show inactive").check({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Reactivate Reserve Engine 9" })
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-135-builder-publish-list",
+    doc: "03-scheduling.md",
+    line: 3041,
+    anchor:
+      "An unpublished checklist in the builder: a location, the group of items",
+    alt: "The checklist builder on an unpublished checklist: the Cab location, two items placed directly on the checklist with no heading, Compartment 2 holding a Date line with no date, and the Before publishing list naming Burn kit needs an expiration date",
+    route: "/inventory/admin/checklists",
+    expect: "Burn kit needs an expiration date",
+    viewport: { width: 1440, height: 1000 },
+    fullPage: false,
+    // Seeded unpublished by `seed_backlog_03_checklist_lines`. Selecting the
+    // list entry opens the location and puts the cursor in the date box,
+    // which is what the guide says it does. Nothing is saved.
+    prepare: async (page) => {
+      await openTemplateNamed("Reserve Engine 9 Check")(page);
+      const entry = page.getByText("Burn kit needs an expiration date").first();
+      await entry.waitFor({ timeout: 20_000 });
+      await entry.click();
+      await page.waitForTimeout(800);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-136-check-form-present",
+    doc: "03-scheduling.md",
+    line: 2464,
+    anchor:
+      "The check form on a phone with Present lines, each offering Present",
+    alt: "The Utility 1 Walkaround check form on a phone: the Cab's Portable radio, Hand light and Traffic vest, each with Present and Absent buttons",
+    route: "/inventory/checklists/my",
+    auth: "member",
+    expect: "Traffic vest",
+    viewport: { width: 390, height: 900 },
+    fullPage: false,
+    // Opened from Unscheduled checklist and left unanswered, so no draft
+    // check is saved for the member.
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Utility 1 Walkaround")(page);
+      await page
+        .getByRole("group", { name: "Portable radio" })
+        .getByRole("button", { name: "Absent" })
+        .waitFor({ timeout: 20_000 });
+      // The picker's button sat where Absent now is; a pointer left there
+      // paints Absent's hover border.
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-137-check-form-replacement-date",
+    doc: "03-scheduling.md",
+    line: 2478,
+    anchor: "The check form on a phone with a Date line expiring soon",
+    alt: "The Eyewash bottle Date line on a phone, expiring in ten days and not linked to stock: Put in a replacement opened to its Replacement expires and lot number boxes",
+    route: "/inventory/checklists/my",
+    auth: "member",
+    expect: "Replacement expires",
+    viewport: { width: 390, height: 900 },
+    fullPage: false,
+    // "No replacement" is the button that closes the fields again.
+    allowEmptyState: true,
+    // Opening the fields records nothing; no date is typed.
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Utility 1 Walkaround")(page);
+      const open = page.getByText("Put in a replacement? Record its date");
+      await open.first().waitFor({ timeout: 20_000 });
+      await open.first().scrollIntoViewIfNeeded();
+      await open.first().click();
+      await page.getByText("Replacement expires").first().waitFor({
+        timeout: 10_000,
+      });
+      await page
+        .getByText("Eyewash bottle")
+        .first()
+        .evaluate((el) => {
+          el.scrollIntoView({ block: "start" });
+          window.scrollBy(0, -220);
+        });
+      await page.waitForTimeout(500);
     },
   },
 ];
@@ -23994,6 +24948,285 @@ async function releaseQuartermaster() {
 }
 
 let itManagerHolder = null;
+
+/**
+ * The member the passkey shots (00-23, 00-33, 08-119) give a passkey to.
+ *
+ * A passkey cannot be seeded: the server only stores one the browser created
+ * against a challenge it issued. So each shot signs this member in, has a
+ * Chrome virtual authenticator (DevTools' WebAuthn domain, the same mechanism
+ * browser test suites use) answer the real "Add a passkey" prompt, takes the
+ * picture, and removes the passkey again through the card, with the step-up
+ * box answered by the same authenticator. Nothing is mocked; the passkey
+ * simply lives for the length of one shot.
+ *
+ * Must match PASSKEY_MEMBER_USERNAME in seed_demo_data.py, whose
+ * `seed_backlog_00_passkey_member` clears the forced password change and
+ * resets any factor an interrupted run left behind.
+ */
+const PASSKEY_MEMBER_CREDENTIALS = {
+  username: "eadeyemi",
+  password: "DemoMember!2026",
+};
+
+/**
+ * Confirm the administrator's session the way the step-up box does, with an
+ * authenticator code, so a raw API call to a step-up-gated endpoint (granting
+ * or releasing a position) is not refused with 403 LB-AUTH-013. The
+ * confirmation lasts ten minutes on this session, which covers the shot's
+ * cleanup too.
+ *
+ * Each code is accepted once per account, and capture.mjs has just spent one
+ * signing this context in, so the code used here is always the next
+ * time-step's: waiting for it costs up to 30 seconds and never collides with
+ * the sign-in. A code another run spent first is refused, and the one after
+ * it is tried.
+ */
+async function adminStepUp(page) {
+  const secret = readAdminTotpSecret();
+  if (!secret) throw new Error("no administrator TOTP secret to confirm with");
+  // Two tries only: refused codes count toward the account lockout (five lock
+  // the administrator out of every capture for fifteen minutes), and parallel
+  // runs signing in as the same administrator already spend steps.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const step = totpStep() + 1;
+    await page.waitForTimeout(
+      Math.max(0, step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1000),
+    );
+    const confirmed = await apiFromPage(page, "POST", "/auth/step-up", {
+      code: totpForStep(secret, step),
+    });
+    if (confirmed.status === 200) return;
+  }
+  throw new Error("the administrator's step-up was refused twice");
+}
+
+/** State a passkey shot's cleanup needs: the page, its authenticator, the TOTP secret. */
+let passkeyShot = null;
+
+/** The template 08-120 switches off for its picture, and switches on again. */
+const OFF_FILTER_TEMPLATE_NAME = "Event Reminder";
+let templateSwitchedOff = null;
+
+/** The MFA policy 00-34 read before clicking, to check nothing saved. */
+let mfaPolicyBefore = null;
+
+async function attachPasskeyDevice(page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send(
+    "WebAuthn.addVirtualAuthenticator",
+    {
+      options: {
+        protocol: "ctap2",
+        transport: "internal",
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+        // A phone's passkey is normally synced (iCloud Keychain, Google
+        // Password Manager), which the card reports as "Syncs across your
+        // devices". Left at the default the authenticator claims a
+        // single-device key, which is the rarer case.
+        defaultBackupEligibility: true,
+        defaultBackupState: true,
+      },
+    },
+  );
+  return { cdp, authenticatorId };
+}
+
+async function detachPasskeyDevice(device) {
+  if (!device) return;
+  await device.cdp.send("WebAuthn.removeVirtualAuthenticator", {
+    authenticatorId: device.authenticatorId,
+  });
+  await device.cdp.detach();
+}
+
+/**
+ * Password sign-in on the login page, waiting out the per-address login
+ * allowance (5 a minute, shared with every other capture on this machine)
+ * rather than reading a 429 as a failure. Resolves once the page has left
+ * /login or shows the second-step prompt.
+ */
+async function passwordSignIn(page, credentials) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await page.goto(new URL("/login", page.url()).toString(), {
+      waitUntil: "domcontentloaded",
+    });
+    await page
+      .getByLabel(/username|email/i)
+      .first()
+      .fill(credentials.username, { timeout: 20_000 });
+    await page
+      .getByLabel(/password/i)
+      .first()
+      .fill(credentials.password);
+    await page
+      .getByRole("button", { name: /sign in|log ?in/i })
+      .first()
+      .click();
+    const outcome = await Promise.race([
+      page
+        .waitForURL((url) => !url.pathname.startsWith("/login"), {
+          timeout: 30_000,
+        })
+        .then(() => "in"),
+      page
+        .getByRole("button", { name: "Use your passkey" })
+        .or(page.locator("#mfa-code"))
+        .first()
+        .waitFor({ timeout: 30_000 })
+        .then(() => "second-step"),
+      page
+        .getByText(/too many/i)
+        .first()
+        .waitFor({ timeout: 30_000 })
+        .then(() => "throttled"),
+    ]);
+    if (outcome !== "throttled") return outcome;
+    await page.waitForTimeout(35_000);
+  }
+  throw new Error(`${credentials.username} could not sign in: throttled`);
+}
+
+/** Sign out and forget the session, so the signed-out context stays signed out. */
+async function signOutCompletely(page) {
+  await apiFromPage(page, "POST", "/auth/logout");
+  await page.context().clearCookies();
+  await page.evaluate(() => localStorage.clear());
+}
+
+async function openSecurityTab(page) {
+  await page.goto(new URL("/account?tab=security", page.url()).toString(), {
+    waitUntil: "domcontentloaded",
+  });
+  await page
+    .getByRole("heading", { name: "Two-Factor Authentication" })
+    .waitFor({ timeout: 20_000 });
+  await page
+    .getByRole("button", { name: /^(Add a passkey|Remove passkey )/ })
+    .first()
+    .waitFor({ timeout: 20_000 });
+}
+
+/**
+ * Add a passkey through the real card: Add a passkey, name it, Create passkey,
+ * which the virtual authenticator answers. A first second factor shows the
+ * recovery codes once; Done dismisses them.
+ */
+async function addPasskeyOnCard(page, name) {
+  await openSecurityTab(page);
+  await page.getByRole("button", { name: "Add a passkey" }).click();
+  await page.locator("#passkey-name").fill(name, { timeout: 15_000 });
+  await page.getByRole("button", { name: "Create passkey" }).click();
+  const done = page.getByRole("button", { name: "Done", exact: true });
+  const removeButton = page.getByRole("button", {
+    name: `Remove passkey ${name}`,
+  });
+  await done.or(removeButton).first().waitFor({ timeout: 30_000 });
+  if (await done.isVisible()) await done.click();
+  await openSecurityTab(page);
+  await removeButton.waitFor({ timeout: 20_000 });
+}
+
+/**
+ * Remove every passkey on the signed-in member's card, the way the guide says
+ * to: the bin icon, Remove passkey, then the step-up box, answered with the
+ * passkey itself.
+ */
+async function removePasskeysOnCard(page) {
+  await openSecurityTab(page);
+  for (let guard = 0; guard < 4; guard += 1) {
+    const bin = page.getByRole("button", { name: /^Remove passkey / }).first();
+    if (!(await bin.count())) return;
+    await bin.click();
+    await page
+      .getByRole("button", { name: "Remove passkey", exact: true })
+      .click({ timeout: 15_000 });
+    const stepUp = page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Use your passkey" });
+    const removed = page.getByText("Passkey removed").first();
+    await stepUp.or(removed).first().waitFor({ timeout: 20_000 });
+    if (await stepUp.isVisible()) {
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("[role='dialog'] button")].some(
+            (b) => b.textContent?.includes("Use your passkey") && !b.disabled,
+          ),
+        null,
+        { timeout: 15_000 },
+      );
+      await stepUp.click();
+    }
+    await removed.waitFor({ timeout: 20_000 });
+    await openSecurityTab(page);
+  }
+  throw new Error("passkeys were still listed after four removals");
+}
+
+/** A TOTP code for a time-step later than the last one this secret spent. */
+async function nextMemberTotp(page, state) {
+  let step = totpStep();
+  if (step <= state.lastStep) {
+    step = state.lastStep + 1;
+    await page.waitForTimeout(
+      Math.max(0, step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1500),
+    );
+  }
+  state.lastStep = step;
+  return totpForStep(state.secret, step);
+}
+
+/**
+ * Undo whatever a passkey shot set up, from wherever it stopped: finish a
+ * sign-in left at the second step with the passkey, turn the authenticator
+ * app off with a fresh code, remove the passkeys, and sign out.
+ */
+async function tearDownPasskeyShot() {
+  const state = passkeyShot;
+  passkeyShot = null;
+  if (!state) return;
+  const { page } = state;
+  try {
+    const onLogin = new URL(page.url()).pathname.startsWith("/login");
+    if (onLogin) {
+      const usePasskey = page.getByRole("button", { name: "Use your passkey" });
+      if (await usePasskey.count()) {
+        await usePasskey.click();
+        await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+          timeout: 30_000,
+        });
+      }
+    }
+    if (state.secret) {
+      const status = await apiFromPage(page, "GET", "/auth/mfa/status");
+      if (status.body?.mfa_enabled) {
+        const off = await apiFromPage(page, "POST", "/auth/mfa/disable", {
+          code: await nextMemberTotp(page, state),
+        });
+        if (off.status !== 200) {
+          throw new Error(
+            `turning the authenticator off returned ${off.status}`,
+          );
+        }
+      }
+    }
+    if (state.device) await removePasskeysOnCard(page);
+  } finally {
+    try {
+      await signOutCompletely(page);
+    } finally {
+      try {
+        await detachPasskeyDevice(state.device);
+      } finally {
+        if (state.context) await state.context.close();
+      }
+    }
+  }
+}
 
 const PACKAGE_UNREACHED = ["pat.hale@example.org", "sam.ortiz@example.org"];
 
