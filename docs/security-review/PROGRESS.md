@@ -16,9 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3924](https://github.com/thegspiro/the-logbook/pull/3924)** (branch
+`claude/security-review-apparatus-nfc-p21`) — Feature 13 (Apparatus & NFC),
+pass 21, a watchdog pickup. Also corrects pass 20's stale tracker cell — pass
+20 landed directly on `main` (`b6a86b4d4`) without a branch or PR and never
+flipped row 13 to ✅. See the Log entry above for the full review summary.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 14, PR #3923, merged), preserved for history</summary>
+
 **PR [#3923](https://github.com/thegspiro/the-logbook/pull/3923)** (branch
 `claude/security-review-facilities-p14`) — Feature 12 (Facilities), pass 14,
 a watchdog pickup. See the Log entry above for the full review summary.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 14, PR #3919, merged), preserved for history</summary>
