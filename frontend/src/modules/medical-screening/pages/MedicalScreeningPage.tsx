@@ -48,9 +48,14 @@ export const MedicalScreeningPage: React.FC = () => {
   const [editingRequirement, setEditingRequirement] = useState<ScreeningRequirement | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ScreeningRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'requirement' | 'record'; id: string; name: string } | null>(
-    null
-  );
+  // `subject` is whose record it is: the confirmation must say so, because the
+  // delete cannot be undone and the type alone is the same for every member.
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'requirement' | 'record';
+    id: string;
+    name: string;
+    subject?: string | undefined;
+  } | null>(null);
 
   const {
     requirements,
@@ -355,6 +360,7 @@ export const MedicalScreeningPage: React.FC = () => {
                         type: 'record',
                         id: record.id,
                         name: SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type,
+                        subject: record.user_name || record.prospect_name || undefined,
                       })
                     }
                     className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
@@ -404,7 +410,7 @@ export const MedicalScreeningPage: React.FC = () => {
         message={
           deleteTarget?.type === 'requirement'
             ? `Delete "${deleteTarget.name}"? Screening records filed under it are kept, but will no longer be linked to a requirement. You can't undo this.`
-            : `Delete this ${deleteTarget?.name ?? ''} record? You can't undo this.`
+            : `Delete ${deleteTarget?.subject ? `${deleteTarget.subject}'s` : 'this'} ${deleteTarget?.name ?? ''} record? You can't undo this.`
         }
         confirmLabel={deleteTarget?.type === 'requirement' ? 'Delete Requirement' : 'Delete Record'}
         variant="danger"

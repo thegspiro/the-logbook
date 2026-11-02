@@ -186,3 +186,105 @@ test('a background sync sends a queued training submission from the service work
   );
   expect(left).toBe(0);
 });
+
+test('a background sync sends a queued equipment check and its photo from the service worker', async ({
+  context,
+  page,
+}) => {
+  await page.goto('/login');
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (navigator.serviceWorker.controller) return;
+    await new Promise<void>((resolve) => {
+      navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
+    });
+  });
+  await context.addCookies([{ name: 'csrf_token', value: 'csrf-e2e', url: 'http://127.0.0.1:4173' }]);
+
+  // Queued exactly as offlineQueue.enqueueCheck stores it, photo Blob and all,
+  // in the shared logbook-offline database (offlineDb.ts, version 3).
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open('logbook-offline', 3);
+      open.onupgradeneeded = () => {
+        for (const name of ['pendingChecks', 'pendingShiftReports', 'equipmentCheckDrafts']) {
+          if (!open.result.objectStoreNames.contains(name)) open.result.createObjectStore(name, { keyPath: 'id' });
+        }
+      };
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error ?? new Error('open failed'));
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('pendingChecks', 'readwrite');
+      tx.objectStore('pendingChecks').put({
+        id: 'check-queue-e2e',
+        ownerId: 'member-e2e',
+        shiftId: 'shift-e2e',
+        payload: {
+          template_id: 'template-e2e',
+          check_timing: 'start_of_shift',
+          client_submission_id: 'check-queue-e2e',
+          items: [],
+        },
+        photos: [
+          {
+            itemId: 'template-item-e2e',
+            fileName: 'gauze.jpg',
+            blob: new Blob(['photo-bytes-e2e'], { type: 'image/jpeg' }),
+          },
+        ],
+        queuedAt: Date.now(),
+        retries: 0,
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('put failed'));
+    });
+    db.close();
+  });
+
+  const cdp = await context.newCDPSession(page);
+  const registrationId = await new Promise<string>((resolve) => {
+    cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => {
+      const live = registrations.find((r: { isDeleted: boolean }) => !r.isDeleted);
+      if (live) resolve(live.registrationId);
+    });
+    void cdp.send('ServiceWorker.enable');
+  });
+  await cdp.send('ServiceWorker.dispatchSyncEvent', {
+    origin: 'http://127.0.0.1:4173',
+    registrationId,
+    tag: 'logbook-offline-sync',
+    lastChance: false,
+  });
+
+  type Received = { kind: string; csrf: string | null; body: unknown; contentType?: string | null };
+  await expect
+    .poll(
+      async (): Promise<number> =>
+        ((await (await page.request.get('/__pwa-test/received-equipment')).json()) as Received[]).length,
+      { timeout: 10_000 }
+    )
+    .toBe(2);
+  const [check, photos] = (await (await page.request.get('/__pwa-test/received-equipment')).json()) as Received[];
+  expect(check).toMatchObject({ kind: 'check', csrf: 'csrf-e2e', body: { client_submission_id: 'check-queue-e2e' } });
+  expect(photos?.kind).toBe('photos');
+  expect(photos?.csrf).toBe('csrf-e2e');
+  expect(photos?.contentType).toMatch(/^multipart\/form-data; boundary=/);
+  expect(photos?.body).toContain('name="files"; filename="gauze.jpg"');
+  expect(photos?.body).toContain('Content-Type: image/jpeg');
+  expect(photos?.body).toContain('photo-bytes-e2e');
+
+  const left = await page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open('logbook-offline', 3);
+        open.onsuccess = () => {
+          const req = open.result.transaction('pendingChecks').objectStore('pendingChecks').count();
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error ?? new Error('count failed'));
+        };
+        open.onerror = () => reject(open.error ?? new Error('open failed'));
+      })
+  );
+  expect(left).toBe(0);
+});

@@ -24,30 +24,36 @@
  */
 
 import type { AxiosInstance } from 'axios';
-import { openIndexedDb } from './offlineDb';
 import { isNetworkError, toAppError, getErrorMessage } from './errorHandling';
+import { currentQueueOwner, isOwnedByCurrentMember, requireQueueOwner } from './offlineQueueOwner';
+import type { SkillTemplate, SkillTest, SkillTestUpdate } from '../types/skillsTesting';
+import { flushSkillsEntry, type SkillsTransport } from './skillsTestFlush';
+import { requestBackgroundSync } from './backgroundSyncRegistration';
+import { withOfflineDrainLock } from '../sw/backgroundSyncProtocol';
 import {
-  currentQueueOwner,
-  isOwnedByCurrentMember,
-  requireQueueOwner,
-  type OwnedQueueEntry,
-} from './offlineQueueOwner';
-import type { SkillTemplate, SkillTest, SkillTestCreate, SkillTestUpdate } from '../types/skillsTesting';
+  ALL_STORES,
+  SKILLS_QUEUE_MAX_RETRIES,
+  STORE_CANDIDATES,
+  STORE_PENDING,
+  STORE_TEMPLATES,
+  STORE_TESTS,
+  allRows,
+  deleteRow,
+  getRow,
+  mutatePendingAs,
+  openSkillsDb,
+  putRow,
+  request,
+  type CachedRow,
+  type OfflineSkillTestCreate,
+  type SkillsPendingEntry,
+} from './skillsTestOfflineStore';
 
-const DB_NAME = 'logbook-offline-skills';
-const DB_VERSION = 1;
-const STORE_PENDING = 'pending';
-const STORE_TESTS = 'tests';
-const STORE_TEMPLATES = 'templates';
-const STORE_CANDIDATES = 'candidates';
-const ALL_STORES = [STORE_PENDING, STORE_TESTS, STORE_TEMPLATES, STORE_CANDIDATES] as const;
+export { SKILLS_QUEUE_MAX_RETRIES };
+export type { OfflineSkillTestCreate, SkillsPendingEntry } from './skillsTestOfflineStore';
 
-/** 5xx answers tolerated before an entry is marked failed (kept, not dropped). */
-export const SKILLS_QUEUE_MAX_RETRIES = 5;
 /** Recent candidates kept for an examiner who starts a test with no signal. */
 const MAX_RECENT_CANDIDATES = 50;
-
-const BASE = '/training/skills-testing';
 
 /** Dispatched on window when work is queued, so the sync engine can try it. */
 export const SKILLS_OFFLINE_QUEUED_EVENT = 'skills-offline-queued';
@@ -103,111 +109,25 @@ export function buildOfflineSkillTest(
   };
 }
 
-/** A create sent from a device with no signal: the client minted the id. */
-export interface OfflineSkillTestCreate extends SkillTestCreate {
-  id: string;
-  /** The template version the scorecard was built from; the server refuses a
-   *  create against a sheet that has changed since. */
-  expected_template_version?: number | undefined;
-}
-
-export interface SkillsPendingEntry extends OwnedQueueEntry {
-  /** The test's id — one entry per test. */
-  testId: string;
-  /** "Template — Candidate", for anything that has to name the evaluation. */
-  label: string;
-  queuedAt: number;
-  updatedAt: number;
-  /** Bumped on every write, so a drain can tell whether the save it just sent
-   *  is still the latest one. */
-  rev: number;
-  create?: OfflineSkillTestCreate | undefined;
-  /** The merged, latest save. Never carries expected_version. */
-  update?: SkillTestUpdate | undefined;
-  /** The test version the queued save was made against. */
-  baseVersion?: number | undefined;
-  complete: boolean;
-  retries: number;
-  /** Set when the server refused a step; the payload is kept. */
-  failed?: { status: number | null; message: string; at: number } | undefined;
-}
-
-interface CachedRow<T> extends OwnedQueueEntry {
-  id: string;
-  value: T;
-  cachedAt: number;
-}
-
-function openDB(): Promise<IDBDatabase> {
-  return openIndexedDb(DB_NAME, DB_VERSION, (db) => {
-    for (const store of ALL_STORES) {
-      if (!db.objectStoreNames.contains(store)) {
-        db.createObjectStore(store, { keyPath: store === STORE_PENDING ? 'testId' : 'id' });
-      }
-    }
-  });
-}
-
-function request<T>(req: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
-  });
-}
-
-async function getRow<T>(store: string, key: string): Promise<T | undefined> {
-  const db = await openDB();
-  return (await request(db.transaction(store, 'readonly').objectStore(store).get(key))) as T | undefined;
-}
-
-async function allRows<T>(store: string): Promise<T[]> {
-  const db = await openDB();
-  return (await request(db.transaction(store, 'readonly').objectStore(store).getAll())) as T[];
-}
-
-async function putRow(store: string, row: unknown): Promise<void> {
-  const db = await openDB();
-  await request(db.transaction(store, 'readwrite').objectStore(store).put(row));
-}
-
-async function deleteRow(store: string, key: string): Promise<void> {
-  const db = await openDB();
-  await request(db.transaction(store, 'readwrite').objectStore(store).delete(key));
-}
-
 /**
- * Read-modify-write one pending entry inside a single transaction.
- *
- * `change` receives the stored entry (or undefined) and returns the entry to
- * store, `null` to delete it, or `undefined` to leave it untouched. An entry
- * belonging to someone else is never handed to `change` — it is refused.
+ * Read-modify-write one of the signed-in member's pending entries; see
+ * mutatePendingAs. Refuses when nobody is signed in.
  */
-async function mutatePending(
+function mutatePending(
   testId: string,
   change: (existing: SkillsPendingEntry | undefined) => SkillsPendingEntry | null | undefined
 ): Promise<SkillsPendingEntry | null> {
-  const owner = requireQueueOwner();
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const store = db.transaction(STORE_PENDING, 'readwrite').objectStore(STORE_PENDING);
-    const read = store.get(testId);
-    read.onerror = () => reject(read.error ?? new Error('IndexedDB request failed'));
-    read.onsuccess = () => {
-      const existing = read.result as SkillsPendingEntry | undefined;
-      if (existing && existing.ownerId !== owner) {
-        reject(new Error('This evaluation was saved on this device by someone else'));
-        return;
-      }
-      const next = change(existing);
-      if (next === undefined) {
-        resolve(existing ?? null);
-        return;
-      }
-      const write = next === null ? store.delete(testId) : store.put({ ...next, ownerId: owner });
-      write.onsuccess = () => resolve(next);
-      write.onerror = () => reject(write.error ?? new Error('IndexedDB request failed'));
-    };
-  });
+  return mutatePendingAs(requireQueueOwner(), testId, change);
+}
+
+/** Write a queued step, then ask for a background sync to send it. */
+async function queueStep(
+  testId: string,
+  change: (existing: SkillsPendingEntry | undefined) => SkillsPendingEntry | null | undefined
+): Promise<SkillsPendingEntry | null> {
+  const entry = await mutatePending(testId, change);
+  void requestBackgroundSync();
+  return entry;
 }
 
 function fresh(testId: string, label: string): SkillsPendingEntry {
@@ -232,7 +152,7 @@ export async function enqueueSkillsUpdate(
   test: { id: string; label: string; version?: number | undefined },
   update: SkillTestUpdate
 ): Promise<SkillsPendingEntry | null> {
-  return mutatePending(test.id, (existing) => {
+  return queueStep(test.id, (existing) => {
     const entry = existing ?? fresh(test.id, test.label);
     return {
       ...entry,
@@ -251,7 +171,7 @@ export async function enqueueSkillsUpdate(
 
 /** Queue the creation of a test started with no signal. */
 export async function enqueueSkillsCreate(create: OfflineSkillTestCreate, label: string): Promise<void> {
-  await mutatePending(create.id, (existing) => ({
+  await queueStep(create.id, (existing) => ({
     ...(existing ?? fresh(create.id, label)),
     create,
     baseVersion: 1,
@@ -262,7 +182,7 @@ export async function enqueueSkillsCreate(create: OfflineSkillTestCreate, label:
 
 /** Queue completion — it runs only after the entry's last save has landed. */
 export async function enqueueSkillsComplete(test: { id: string; label: string }): Promise<void> {
-  await mutatePending(test.id, (existing) => ({
+  await queueStep(test.id, (existing) => ({
     ...(existing ?? fresh(test.id, test.label)),
     complete: true,
     rev: (existing?.rev ?? 0) + 1,
@@ -330,13 +250,16 @@ let inFlight: Promise<SkillsDrainResult> | null = null;
  */
 export function drainSkillsQueue(axios: AxiosInstance): Promise<SkillsDrainResult> {
   if (inFlight) return inFlight;
-  inFlight = runDrain(axios).finally(() => {
+  // The lock is shared with the service worker's background sync, so a page
+  // drain and a worker drain never send the same evaluation at once.
+  inFlight = withOfflineDrainLock(() => runDrain(axios)).finally(() => {
     inFlight = null;
   });
   return inFlight;
 }
 
 async function runDrain(axios: AxiosInstance): Promise<SkillsDrainResult> {
+  const transport = axiosTransport(axios);
   const result: SkillsDrainResult = { synced: [], failed: [] };
   if (typeof navigator !== 'undefined' && !navigator.onLine) return result;
   let entries: SkillsPendingEntry[];
@@ -346,7 +269,11 @@ async function runDrain(axios: AxiosInstance): Promise<SkillsDrainResult> {
     return result;
   }
   for (const entry of entries) {
-    const outcome = await flushEntry(entry, axios);
+    const outcome = await flushSkillsEntry(entry, {
+      transport,
+      owner: requireQueueOwner,
+      maySend: (e) => isOwnedByCurrentMember(e),
+    });
     if (outcome.kind === 'synced') {
       result.synced.push({ testId: entry.testId, test: outcome.test, completed: outcome.completed });
     } else if (outcome.kind === 'failed') {
@@ -358,104 +285,17 @@ async function runDrain(axios: AxiosInstance): Promise<SkillsDrainResult> {
   return result;
 }
 
-type FlushOutcome =
-  | { kind: 'synced'; test: SkillTest | null; completed: boolean }
-  | { kind: 'failed'; message: string }
-  | { kind: 'offline' }
-  | { kind: 'retry' };
-
-async function markFailedOrRetry(entry: SkillsPendingEntry, err: unknown): Promise<FlushOutcome> {
-  const appError = toAppError(err);
-  const status = appError.status ?? null;
-  const message = getErrorMessage(err, 'The server refused this evaluation');
-  const permanent = status !== null && status >= 400 && status < 500;
-  let failedNow = permanent;
-  await mutatePending(entry.testId, (existing) => {
-    if (!existing) return undefined;
-    const retries = existing.retries + 1;
-    failedNow = permanent || retries >= SKILLS_QUEUE_MAX_RETRIES;
-    return {
-      ...existing,
-      retries,
-      failed: failedNow ? { status, message, at: Date.now() } : undefined,
-    };
-  });
-  return failedNow ? { kind: 'failed', message } : { kind: 'retry' };
-}
-
-async function flushEntry(start: SkillsPendingEntry, axios: AxiosInstance): Promise<FlushOutcome> {
-  let entry: SkillsPendingEntry | null = start;
-  let latest: SkillTest | null = null;
-
-  // The member can change between listing and sending, and the request goes
-  // out with whoever's cookies are live (FE3-34-5).
-  if (!isOwnedByCurrentMember(entry)) return { kind: 'retry' };
-
-  // 1. Create — a test started with no signal does not exist server-side yet.
-  if (entry.create) {
-    const create = entry.create;
-    try {
-      latest = (await axios.post<SkillTest>(`${BASE}/tests`, create)).data;
-    } catch (err) {
-      if (isNetworkError(err)) return { kind: 'offline' };
-      return markFailedOrRetry(entry, err);
-    }
-    const createdVersion = latest.version;
-    entry = await mutatePending(entry.testId, (existing) =>
-      existing ? { ...existing, create: undefined, baseVersion: createdVersion } : undefined
-    );
-    if (!entry) return { kind: 'synced', test: latest, completed: false };
-  }
-
-  // 2. The merged save, against the version it was made from.
-  if (entry.update) {
-    const sentRev = entry.rev;
-    const body: SkillTestUpdate = { ...entry.update };
-    if (entry.baseVersion !== undefined) body.expected_version = entry.baseVersion;
-    try {
-      latest = (await axios.put<SkillTest>(`${BASE}/tests/${entry.testId}`, body)).data;
-    } catch (err) {
-      if (isNetworkError(err)) return { kind: 'offline' };
-      return markFailedOrRetry(entry, err);
-    }
-    const savedVersion = latest.version;
-    entry = await mutatePending(entry.testId, (existing) => {
-      if (!existing) return undefined;
-      // A save written while this one was in flight stays queued, now made
-      // against the version this one produced.
-      if (existing.rev !== sentRev) return { ...existing, baseVersion: savedVersion };
-      return { ...existing, update: undefined, baseVersion: savedVersion, retries: 0 };
-    });
-    if (!entry) return { kind: 'synced', test: latest, completed: false };
-    if (entry.update) return { kind: 'retry' };
-  }
-
-  // 3. Complete, only once nothing is left to save.
-  if (entry.complete) {
-    try {
-      latest = (await axios.post<SkillTest>(`${BASE}/tests/${entry.testId}/complete`)).data;
-    } catch (err) {
-      if (isNetworkError(err)) return { kind: 'offline' };
-      // A completion whose response was lost on an earlier try has already
-      // landed; asking is cheaper than reporting a failure that is not one.
-      try {
-        const current = (await axios.get<SkillTest>(`${BASE}/tests/${entry.testId}`)).data;
-        if (current.status === 'completed') latest = current;
-      } catch {
-        // Fall through to the refusal below.
-      }
-      if (latest?.status !== 'completed') return markFailedOrRetry(entry, err);
-    }
-    await mutatePending(entry.testId, () => null);
-    await deleteRow(STORE_TESTS, entry.testId).catch(() => undefined);
-    return { kind: 'synced', test: latest, completed: true };
-  }
-
-  // Nothing left: the entry has done its job.
-  await mutatePending(entry.testId, (existing) =>
-    existing && !existing.update && !existing.create ? null : undefined
-  );
-  return { kind: 'synced', test: latest, completed: false };
+/** The page's transport: the app's axios client, its error helpers. */
+function axiosTransport(axios: AxiosInstance): SkillsTransport {
+  return {
+    post: async (path, body) =>
+      (await (body === undefined ? axios.post<SkillTest>(path) : axios.post<SkillTest>(path, body))).data,
+    put: async (path, body) => (await axios.put<SkillTest>(path, body)).data,
+    get: async (path) => (await axios.get<SkillTest>(path)).data,
+    isNetworkError,
+    statusOf: (err) => toAppError(err).status ?? null,
+    messageOf: (err, fallback) => getErrorMessage(err, fallback),
+  };
 }
 
 // ---------------------------------------------------------------- read cache
@@ -546,7 +386,7 @@ export async function listRecentCandidates(): Promise<{ id: string; name: string
  * the queue, whoever they belonged to.
  */
 export async function clearAllSkillsOffline(): Promise<number> {
-  const db = await openDB();
+  const db = await openSkillsDb();
   const count = await request(db.transaction(STORE_PENDING, 'readonly').objectStore(STORE_PENDING).count()).catch(
     () => 0
   );

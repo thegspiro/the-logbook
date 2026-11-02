@@ -63,6 +63,12 @@ class ExternalAgency(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
     )
+    # A shift a member logs on this agency's units is evaluated like one of
+    # the department's own: a member in a program with an evaluation form gets
+    # one per shift. Off by default, so a mutual-aid neighbour asks for nothing.
+    evaluate_shifts: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

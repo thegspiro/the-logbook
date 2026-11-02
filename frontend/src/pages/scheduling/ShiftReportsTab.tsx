@@ -2031,14 +2031,12 @@ export const ShiftReportsTab: React.FC = () => {
                       const memberEvaluations = (evaluationRoster?.requirements ?? []).filter(
                         (r) => r.member_id === member.user_id
                       );
-                      const evaluationLines = memberEvaluations.length > 0 && evaluationRoster && (
+                      // A department shift's roster always names the shift.
+                      const rosterShiftId = evaluationRoster?.shift_id;
+                      const evaluationLines = memberEvaluations.length > 0 && rosterShiftId && (
                         <div className="space-y-2 px-4 pb-3">
                           {memberEvaluations.map((r) => (
-                            <ShiftEvaluationStatusLine
-                              key={r.scope_key}
-                              shiftId={evaluationRoster.shift_id}
-                              requirement={r}
-                            />
+                            <ShiftEvaluationStatusLine key={r.scope_key} shiftId={rosterShiftId} requirement={r} />
                           ))}
                         </div>
                       );

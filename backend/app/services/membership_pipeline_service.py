@@ -4333,6 +4333,44 @@ class MembershipPipelineService:
             ).scalar_one_or_none()
         return resolve_conversion_outcome(config, prospect.desired_membership_type)
 
+    async def _relink_screenings_to_member(
+        self, prospect: ProspectiveMember, user_id: str
+    ) -> int:
+        """File the applicant's screening records under the new member too.
+
+        Departments that screen before the membership election record those
+        screenings against the prospect; left there, the new member reads as
+        owing every one of them again (W71b-2). ``prospect_id`` is kept so the
+        pipeline's history of the applicant is unchanged; a record created
+        afterwards names only one subject, so "both ids" marks exactly the
+        records a transfer re-linked (migration ``beedcad5b36a`` relies on
+        this for its downgrade, and member anonymization scrubs them with the
+        member). Runs after the new user row is flushed: ``user_id`` is a
+        foreign key.
+        """
+        from app.models.medical_screening import ScreeningRecord
+        from app.utils.sql_results import rows_affected
+
+        result = await self.db.execute(
+            update(ScreeningRecord)
+            .where(
+                ScreeningRecord.organization_id == prospect.organization_id,
+                ScreeningRecord.prospect_id == prospect.id,
+                ScreeningRecord.user_id.is_(None),
+            )
+            .values(user_id=user_id)
+            .execution_options(synchronize_session=False)
+        )
+        relinked = rows_affected(result)
+        if relinked:
+            logger.info(
+                "Re-linked {} screening record(s) of prospect {} to member {}",
+                relinked,
+                prospect.id,
+                user_id,
+            )
+        return relinked
+
     async def _do_transfer(
         self,
         prospect: ProspectiveMember,
@@ -4753,6 +4791,8 @@ class MembershipPipelineService:
         )
 
         await self.db.flush()
+
+        await self._relink_screenings_to_member(prospect, user_id)
 
         # Auto-enroll into probationary training pipeline if one exists
         enrollment_result = await self._auto_enroll_probationary(

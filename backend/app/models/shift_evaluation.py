@@ -162,6 +162,11 @@ EVALUATION_STATUSES: tuple[str, ...] = ("draft", "submitted")
 GENERAL_SCOPE = "general"
 COMBINED_SCOPE = "combined"
 
+#: What an evaluation is about: one of the department's own shifts, or a
+#: shift a member logged on an outside agency's unit (``external_shift_hours``).
+SHIFT_OCCASION = "shift"
+EXTERNAL_OCCASION = "external"
+
 
 class ShiftEvaluation(Base):
     """One member's evaluation for one shift, filled out on a template.
@@ -204,6 +209,28 @@ class ShiftEvaluation(Base):
         DateTime(timezone=True), nullable=True
     )
     unit_label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    occasion: Mapped[str] = mapped_column(
+        String(20),
+        default=SHIFT_OCCASION,
+        server_default=SHIFT_OCCASION,
+        nullable=False,
+    )
+    # The logged outside shift, for an ``external`` evaluation. SET NULL like
+    # shift_id: the evaluation outlives the member deleting their entry, but
+    # stops counting, because nothing it describes counts any more.
+    external_shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "external_shift_hours.id",
+            ondelete="SET NULL",
+            name="fk_shift_evaluations_external_shift",
+        ),
+        nullable=True,
+    )
+    # The outside preceptor who did the evaluating, as written on their form.
+    # They have no account here; evaluator_id is whoever entered it.
+    preceptor_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     member_id: Mapped[str] = mapped_column(
         String(36),
@@ -277,6 +304,12 @@ class ShiftEvaluation(Base):
             "member_id",
             "scope_key",
             name="uq_shift_evaluation_shift_member_scope",
+        ),
+        UniqueConstraint(
+            "external_shift_id",
+            "member_id",
+            "scope_key",
+            name="uq_shift_evaluation_external_member_scope",
         ),
         Index(
             "idx_shift_evaluation_org_member_date",
