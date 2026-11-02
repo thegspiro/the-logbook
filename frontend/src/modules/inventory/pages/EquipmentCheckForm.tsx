@@ -54,10 +54,10 @@ import {
   markPhotosUploaded,
   markRetry,
   pendingCount as getPendingCount,
-  CHECK_QUEUE_MAX_RETRIES,
   type SyncStatus,
 } from '../../../utils/offlineQueue';
 import { isOwnedByCurrentMember } from '../../../utils/offlineQueueOwner';
+import { flushEquipmentCheck } from '../../../utils/equipmentCheckFlush';
 import type {
   EquipmentCheckTemplate,
   CheckTemplateCompartment,
@@ -501,68 +501,34 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         // land while an earlier entry's photos are still uploading, and this
         // request would go out with their cookies.
         if (!isOwnedByCurrentMember(entry)) continue;
-        try {
-          let checkId = entry.submittedCheckId;
-          let submittedItemIds = entry.submittedItemIds;
-          if (!checkId) {
-            const record = await equipmentCheckService.submitEquipmentCheck(entry.shiftId, entry.payload);
-            checkId = record.id;
-            submittedItemIds = Object.fromEntries(
-              (record.items ?? [])
-                .filter((item) => item.templateItemId)
-                .map((item) => [item.templateItemId as string, item.id])
-            );
-            // From this point onward this queue entry is a photo-upload retry,
-            // not a check-submission retry. Persist that distinction before an
-            // upload can fail so the accepted check is never created twice.
-            await markCheckSubmitted(entry.id, checkId, submittedItemIds);
-          }
-
-          // Upload queued photos
-          const photosByItem = new Map<string, Array<{ blob: Blob; fileName: string }>>();
-          for (const photo of entry.photos) {
-            const arr = photosByItem.get(photo.itemId) ?? [];
-            arr.push({ blob: photo.blob, fileName: photo.fileName });
-            photosByItem.set(photo.itemId, arr);
-          }
-          for (const [templateItemId, photos] of photosByItem) {
-            const checkItemId = submittedItemIds?.[templateItemId];
-            if (!checkItemId) {
-              throw new Error(`Submitted check item not found for template item ${templateItemId}`);
-            }
-            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
-            await equipmentCheckService.uploadCheckItemPhotos(checkId, checkItemId, files);
-            // Checkpoint before the next group can fail. The endpoint appends
-            // to the item's photo_urls and caps it at three, so a group left
-            // queued after a successful POST is re-uploaded on the next drain
-            // — filing duplicate evidence, or tripping the cap and returning a
-            // permanent 400 that eventually discards the photos still missing.
-            await markPhotosUploaded(entry.id, templateItemId);
-          }
-
-          await dequeueCheck(entry.id);
-          setSubmissionOutcome((outcome) =>
-            outcome?.status === 'evidence_pending' && outcome.queueId === entry.id
-              ? { status: 'complete', photoCount: outcome.totalPhotoCount }
-              : outcome
+        const outcome = await flushEquipmentCheck(entry, {
+          submitCheck: (shiftId, payload) => equipmentCheckService.submitEquipmentCheck(shiftId, payload),
+          uploadPhotos: (checkId, checkItemId, photos) =>
+            equipmentCheckService.uploadCheckItemPhotos(
+              checkId,
+              checkItemId,
+              photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }))
+            ),
+          markCheckSubmitted: (id, checkId, itemIds) => markCheckSubmitted(id, checkId, itemIds),
+          markPhotosUploaded: (id, templateItemId) => markPhotosUploaded(id, templateItemId),
+          markRetry: (id) => markRetry(id),
+          dequeueCheck: (id) => dequeueCheck(id),
+          isRefusal: isNonRetryableHttpError,
+        });
+        if (outcome.kind === 'sent') {
+          setSubmissionOutcome((current) =>
+            current?.status === 'evidence_pending' && current.queueId === entry.id
+              ? { status: 'complete', photoCount: current.totalPhotoCount }
+              : current
           );
-        } catch (error) {
-          // Never delete the device's only copy after a transport failure or a
-          // retryable server response. Only explicit, permanent 4xx rejections
-          // count toward the ceiling that unwedges an invalid submission.
-          if (isNonRetryableHttpError(error)) {
-            const updated = await markRetry(entry.id);
-            if (updated && updated.retries >= CHECK_QUEUE_MAX_RETRIES) {
-              await dequeueCheck(entry.id);
-              setSubmissionOutcome((outcome) =>
-                outcome?.status === 'evidence_pending' && outcome.queueId === entry.id
-                  ? { status: 'evidence_failed', message: 'The retained evidence was rejected and has been discarded.' }
-                  : outcome
-              );
-              discarded++;
-              continue;
-            }
-          }
+        } else if (outcome.kind === 'discarded') {
+          setSubmissionOutcome((current) =>
+            current?.status === 'evidence_pending' && current.queueId === entry.id
+              ? { status: 'evidence_failed', message: 'The retained evidence was rejected and has been discarded.' }
+              : current
+          );
+          discarded++;
+        } else {
           failed++;
         }
       }

@@ -27,6 +27,7 @@ import type { AxiosInstance } from 'axios';
 import { isNetworkError, toAppError, getErrorMessage } from './errorHandling';
 import { currentQueueOwner, isOwnedByCurrentMember, requireQueueOwner } from './offlineQueueOwner';
 import type { SkillTemplate, SkillTest, SkillTestUpdate } from '../types/skillsTesting';
+import { flushSkillsEntry, type SkillsTransport } from './skillsTestFlush';
 import {
   ALL_STORES,
   SKILLS_QUEUE_MAX_RETRIES,
@@ -51,8 +52,6 @@ export type { OfflineSkillTestCreate, SkillsPendingEntry } from './skillsTestOff
 
 /** Recent candidates kept for an examiner who starts a test with no signal. */
 const MAX_RECENT_CANDIDATES = 50;
-
-const BASE = '/training/skills-testing';
 
 /** Dispatched on window when work is queued, so the sync engine can try it. */
 export const SKILLS_OFFLINE_QUEUED_EVENT = 'skills-offline-queued';
@@ -246,6 +245,7 @@ export function drainSkillsQueue(axios: AxiosInstance): Promise<SkillsDrainResul
 }
 
 async function runDrain(axios: AxiosInstance): Promise<SkillsDrainResult> {
+  const transport = axiosTransport(axios);
   const result: SkillsDrainResult = { synced: [], failed: [] };
   if (typeof navigator !== 'undefined' && !navigator.onLine) return result;
   let entries: SkillsPendingEntry[];
@@ -255,7 +255,11 @@ async function runDrain(axios: AxiosInstance): Promise<SkillsDrainResult> {
     return result;
   }
   for (const entry of entries) {
-    const outcome = await flushEntry(entry, axios);
+    const outcome = await flushSkillsEntry(entry, {
+      transport,
+      owner: requireQueueOwner,
+      maySend: (e) => isOwnedByCurrentMember(e),
+    });
     if (outcome.kind === 'synced') {
       result.synced.push({ testId: entry.testId, test: outcome.test, completed: outcome.completed });
     } else if (outcome.kind === 'failed') {
@@ -267,104 +271,17 @@ async function runDrain(axios: AxiosInstance): Promise<SkillsDrainResult> {
   return result;
 }
 
-type FlushOutcome =
-  | { kind: 'synced'; test: SkillTest | null; completed: boolean }
-  | { kind: 'failed'; message: string }
-  | { kind: 'offline' }
-  | { kind: 'retry' };
-
-async function markFailedOrRetry(entry: SkillsPendingEntry, err: unknown): Promise<FlushOutcome> {
-  const appError = toAppError(err);
-  const status = appError.status ?? null;
-  const message = getErrorMessage(err, 'The server refused this evaluation');
-  const permanent = status !== null && status >= 400 && status < 500;
-  let failedNow = permanent;
-  await mutatePending(entry.testId, (existing) => {
-    if (!existing) return undefined;
-    const retries = existing.retries + 1;
-    failedNow = permanent || retries >= SKILLS_QUEUE_MAX_RETRIES;
-    return {
-      ...existing,
-      retries,
-      failed: failedNow ? { status, message, at: Date.now() } : undefined,
-    };
-  });
-  return failedNow ? { kind: 'failed', message } : { kind: 'retry' };
-}
-
-async function flushEntry(start: SkillsPendingEntry, axios: AxiosInstance): Promise<FlushOutcome> {
-  let entry: SkillsPendingEntry | null = start;
-  let latest: SkillTest | null = null;
-
-  // The member can change between listing and sending, and the request goes
-  // out with whoever's cookies are live (FE3-34-5).
-  if (!isOwnedByCurrentMember(entry)) return { kind: 'retry' };
-
-  // 1. Create — a test started with no signal does not exist server-side yet.
-  if (entry.create) {
-    const create = entry.create;
-    try {
-      latest = (await axios.post<SkillTest>(`${BASE}/tests`, create)).data;
-    } catch (err) {
-      if (isNetworkError(err)) return { kind: 'offline' };
-      return markFailedOrRetry(entry, err);
-    }
-    const createdVersion = latest.version;
-    entry = await mutatePending(entry.testId, (existing) =>
-      existing ? { ...existing, create: undefined, baseVersion: createdVersion } : undefined
-    );
-    if (!entry) return { kind: 'synced', test: latest, completed: false };
-  }
-
-  // 2. The merged save, against the version it was made from.
-  if (entry.update) {
-    const sentRev = entry.rev;
-    const body: SkillTestUpdate = { ...entry.update };
-    if (entry.baseVersion !== undefined) body.expected_version = entry.baseVersion;
-    try {
-      latest = (await axios.put<SkillTest>(`${BASE}/tests/${entry.testId}`, body)).data;
-    } catch (err) {
-      if (isNetworkError(err)) return { kind: 'offline' };
-      return markFailedOrRetry(entry, err);
-    }
-    const savedVersion = latest.version;
-    entry = await mutatePending(entry.testId, (existing) => {
-      if (!existing) return undefined;
-      // A save written while this one was in flight stays queued, now made
-      // against the version this one produced.
-      if (existing.rev !== sentRev) return { ...existing, baseVersion: savedVersion };
-      return { ...existing, update: undefined, baseVersion: savedVersion, retries: 0 };
-    });
-    if (!entry) return { kind: 'synced', test: latest, completed: false };
-    if (entry.update) return { kind: 'retry' };
-  }
-
-  // 3. Complete, only once nothing is left to save.
-  if (entry.complete) {
-    try {
-      latest = (await axios.post<SkillTest>(`${BASE}/tests/${entry.testId}/complete`)).data;
-    } catch (err) {
-      if (isNetworkError(err)) return { kind: 'offline' };
-      // A completion whose response was lost on an earlier try has already
-      // landed; asking is cheaper than reporting a failure that is not one.
-      try {
-        const current = (await axios.get<SkillTest>(`${BASE}/tests/${entry.testId}`)).data;
-        if (current.status === 'completed') latest = current;
-      } catch {
-        // Fall through to the refusal below.
-      }
-      if (latest?.status !== 'completed') return markFailedOrRetry(entry, err);
-    }
-    await mutatePending(entry.testId, () => null);
-    await deleteRow(STORE_TESTS, entry.testId).catch(() => undefined);
-    return { kind: 'synced', test: latest, completed: true };
-  }
-
-  // Nothing left: the entry has done its job.
-  await mutatePending(entry.testId, (existing) =>
-    existing && !existing.update && !existing.create ? null : undefined
-  );
-  return { kind: 'synced', test: latest, completed: false };
+/** The page's transport: the app's axios client, its error helpers. */
+function axiosTransport(axios: AxiosInstance): SkillsTransport {
+  return {
+    post: async (path, body) =>
+      (await (body === undefined ? axios.post<SkillTest>(path) : axios.post<SkillTest>(path, body))).data,
+    put: async (path, body) => (await axios.put<SkillTest>(path, body)).data,
+    get: async (path) => (await axios.get<SkillTest>(path)).data,
+    isNetworkError,
+    statusOf: (err) => toAppError(err).status ?? null,
+    messageOf: (err, fallback) => getErrorMessage(err, fallback),
+  };
 }
 
 // ---------------------------------------------------------------- read cache
