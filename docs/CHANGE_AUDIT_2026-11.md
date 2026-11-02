@@ -23,6 +23,31 @@ A targeted pass for one merge: the Zeffy integration (#3892, merged
 link dialog. **Re-check:** the Grants & Fundraising menu. See
 `docs/training/SCREENSHOT_CURRENCY.md`.
 
+## Change audit: member performance evaluations, November 1–2, 2026
+
+A pass scoped to one feature: the member performance evaluations PRs, merged
+between #3888 and #3938. **Other merges after `f57fd5a` are not reviewed here**
+and remain for the next full pass. The October 31 row "storage tables only,
+nothing reads them yet (#3875)" is superseded: the screens have shipped.
+
+| Change                                                                                                                                                             | Guide | Disposition                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | --------------------------------------------------------------------- |
+| Evaluation templates (form builder, workflow steps, publish) and review periods; `evaluations.configure` and `evaluations.manage` given to the Chief (#3888)       | wiki  | `wiki/Module-Evaluations.md` and `docs/EVALUATIONS_MODULE.md` written |
+| Drafting, the figures snapshot and coverage, parts, who sees what, calibration; `evaluations.conduct` and `evaluations.view_all` given to the Chief (#3921, #3925) | wiki  | Same pages                                                            |
+| Signing with typed name and step-up, finalization, the frozen PDF (#3928)                                                                                          | wiki  | Same pages; step-up table in Security-Authentication                  |
+| Seven editable evaluation emails, daily reminders and overdue notices; new email kinds "Your performance evaluations" (required) and "Evaluation duties" (#3929)   | wiki  | Same pages                                                            |
+| Bulk drafting a review period; deletion with a kept record and `evaluations.delete` given to the Chief (#3933)                                                     | wiki  | Same pages                                                            |
+| Amending a finalized evaluation as a new revision (#3936)                                                                                                          | wiki  | Same pages                                                            |
+| The member's written response with a second PDF; calibration flags (#3938)                                                                                         | wiki  | Same pages                                                            |
+| Reports page crash on an unexpected report payload; medical supplies storage list (#3926)                                                                          | none  | Bug fix; no guide text described the failure                          |
+
+**Screenshots to create:** Member Evaluations (templates and periods); template
+builder (sections, items, workflow); Evaluations list and Draft a review
+period dialog; evaluation page as evaluator, as member, and after
+finalization; sign dialog; calibration dialog; amend and delete dialogs; My
+Evaluations with a deleted-evaluation record; the evaluation PDF. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: October 31 – November 1, 2026
 
 Merged to `main` after `f9220b3` (2026-10-31 00:40 UTC) through `f57fd5a`
