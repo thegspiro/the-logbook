@@ -19144,8 +19144,12 @@ class Seeder:
                 category_id = categories.get(name)
                 if entry is None and category_id:
                     day = max(first_of_month, TODAY - timedelta(days=2 + index))
+                    # Spaced three hours apart, not one: in the first days of a
+                    # month the clamp to the 1st lands every entry on the same
+                    # day, and two-hour entries an hour apart overlap, which the
+                    # server refuses.
                     start = datetime.combine(
-                        day, time(hour=13 + index), tzinfo=ORG_TIMEZONE
+                        day, time(hour=13 + 3 * index), tzinfo=ORG_TIMEZONE
                     )
                     try:
                         entry = session.post(
