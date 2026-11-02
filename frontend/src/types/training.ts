@@ -2,7 +2,7 @@
  * Training type definitions
  */
 
-import type { PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
+import type { LeaveMonthRule, PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
@@ -2270,6 +2270,11 @@ export interface RequirementDetail {
   due_date?: string | null;
   days_until_due?: number | null;
   waived_months?: number;
+  /** Of `waived_months`, those a leave of absence and those a training waiver
+   * excused. A month both covered counts in both. */
+  leave_months?: number;
+  waiver_months?: number;
+  /** Fractional when a partial month was excused. */
   active_months?: number;
   cert_expired?: boolean;
   blocks_activity?: boolean;
@@ -2293,11 +2298,46 @@ export interface RequirementDetail {
   /**
    * Hours per calendar month over the window, zeros included, for an hours
    * requirement. These are the records the server counted, so they sum to
-   * `completed_hours`. `waived` marks a month covered by leave, the same
-   * months the requirement's target was prorated by. Null for every other
-   * requirement type.
+   * `completed_hours`, including hours earned while excused. `waived` marks a
+   * month leave or a waiver excused any of, the same months the requirement's
+   * target was prorated by. Null for every other requirement type.
    */
-  monthly_hours?: Array<{ month: string; hours: number; waived?: boolean }> | null;
+  monthly_hours?: RequirementMonth[] | null;
+}
+
+export interface RequirementMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  hours: number;
+  waived?: boolean;
+  /** Share of the month's target excused, 0–1; under 1 for a partial month. */
+  waived_share?: number;
+  /** A leave of absence covered part or all of the month. */
+  on_leave?: boolean;
+  /** A training waiver covered part or all of the month. */
+  on_waiver?: boolean;
+}
+
+/** A member's leave of absence as the officer view shows it: dates and type only. */
+export interface MemberLeavePeriod {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string | null;
+}
+
+/** `/training/module-config/members/{id}/requirements`: one member, officer's view. */
+export interface MemberRequirementsResponse {
+  user_id: string;
+  as_of: string;
+  leave_month_rule: LeaveMonthRule;
+  requirements_summary: {
+    total_requirements: number;
+    met_requirements: number;
+    avg_compliance: number | null;
+  };
+  requirements_detail: RequirementDetail[];
+  leaves_of_absence: MemberLeavePeriod[];
 }
 
 /** One training record on the History tab, from `/my-training/records`. */
@@ -3199,6 +3239,8 @@ export interface ComplianceConfigData {
   atRiskThreshold: number;
   gracePeriodDays: number;
   includeCurrentMonth: boolean;
+  /** Absent from a server that predates the setting; read as `full_month`. */
+  leaveMonthRule?: LeaveMonthRule;
   autoReportFrequency: string;
   // `| null`, not just `| undefined`: the backend schema field is
   // `Optional[List[...]] = None`, so a config an officer explicitly cleared
@@ -3221,6 +3263,7 @@ export interface ComplianceConfigUpdate {
   at_risk_threshold?: number | undefined;
   grace_period_days?: number | undefined;
   include_current_month?: boolean | undefined;
+  leave_month_rule?: LeaveMonthRule | undefined;
   auto_report_frequency?: string | undefined;
   // `| null`: this payload also serves `PUT /config` (a partial update, per
   // `exclude_unset` on the backend), where an omitted key leaves the stored

@@ -24,6 +24,19 @@ vi.mock('../services/api', () => ({
   userService: {
     getUserWithRoles: (...args: unknown[]) => mockGetUser(...args) as unknown,
   },
+  // The officer's requirements section loads on its own; these tests are
+  // about the records below it.
+  trainingModuleConfigService: {
+    getMemberRequirements: () =>
+      Promise.resolve({
+        user_id: 'member-1',
+        as_of: '2026-10-21',
+        leave_month_rule: 'full_month',
+        requirements_summary: { total_requirements: 0, met_requirements: 0, avg_compliance: null },
+        requirements_detail: [],
+        leaves_of_absence: [],
+      }),
+  },
 }));
 
 vi.mock('../services/trainingServices', () => ({

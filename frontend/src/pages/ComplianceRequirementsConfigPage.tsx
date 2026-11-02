@@ -39,6 +39,7 @@ import { complianceConfigService } from '../services/trainingServices';
 import { adminHoursCategoryService } from '../modules/admin-hours/services/api';
 import type { AdminHoursCategory } from '../modules/admin-hours/types';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { LeaveMonthRule } from '../constants/enums';
 import type {
   AdminHoursRequirementItem,
   ComplianceConfigData,
@@ -55,6 +56,28 @@ import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 
 // Shared form input classes
 const inputClass = 'form-input';
+
+/** The department's choices for `leave_month_rule`, as the settings screen offers them. */
+const LEAVE_MONTH_RULE_OPTIONS: ReadonlyArray<{ value: LeaveMonthRule; label: string; description: string }> = [
+  {
+    value: LeaveMonthRule.FULL_MONTH,
+    label: 'Full month (default)',
+    description:
+      'Any day of leave excuses the whole month. A leave ending September 1 excuses all of September; one starting July 15 excuses all of July.',
+  },
+  {
+    value: LeaveMonthRule.PROPORTIONAL,
+    label: '15-day rule: proportional',
+    description:
+      'A partly covered month is reduced by the share of its days on leave. 10 days of a 30-day month on leave leaves two thirds of that month owed.',
+  },
+  {
+    value: LeaveMonthRule.HALF,
+    label: '15-day rule: half',
+    description:
+      '15 or more days on leave halves that month; fewer than 15 leaves it owed in full. A whole month on leave excuses all of it.',
+  },
+];
 const selectClass = 'form-input';
 const labelClass = 'form-label';
 const checkboxClass =
@@ -118,6 +141,7 @@ export default function ComplianceRequirementsConfigPage() {
   const [atRiskThreshold, setAtRiskThreshold] = useState(75);
   const [gracePeriodDays, setGracePeriodDays] = useState(0);
   const [includeCurrentMonth, setIncludeCurrentMonth] = useState(true);
+  const [leaveMonthRule, setLeaveMonthRule] = useState<LeaveMonthRule>(LeaveMonthRule.FULL_MONTH);
   const [autoReportFrequency, setAutoReportFrequency] = useState('none');
   const [reportEmailRecipients, setReportEmailRecipients] = useState('');
   const [reportDayOfMonth, setReportDayOfMonth] = useState(1);
@@ -172,6 +196,7 @@ export default function ComplianceRequirementsConfigPage() {
         setAtRiskThreshold(data.atRiskThreshold);
         setGracePeriodDays(data.gracePeriodDays);
         setIncludeCurrentMonth(data.includeCurrentMonth ?? true);
+        setLeaveMonthRule(data.leaveMonthRule ?? LeaveMonthRule.FULL_MONTH);
         setAutoReportFrequency(data.autoReportFrequency);
         setReportEmailRecipients(data.reportEmailRecipients?.join(', ') ?? '');
         setReportDayOfMonth(data.reportDayOfMonth ?? 1);
@@ -257,6 +282,7 @@ export default function ComplianceRequirementsConfigPage() {
         at_risk_threshold: atRiskThreshold,
         grace_period_days: gracePeriodDays,
         include_current_month: includeCurrentMonth,
+        leave_month_rule: leaveMonthRule,
         auto_report_frequency: autoReportFrequency,
         // null (not undefined) when the officer clears the field: this same
         // payload also drives PUT /config, whose partial-update semantics
@@ -696,6 +722,33 @@ export default function ComplianceRequirementsConfigPage() {
                 This is the department-wide default; individual requirements can override it.
               </p>
             </div>
+
+            <fieldset className="md:col-span-2">
+              <legend className={labelClass}>Months on leave</legend>
+              <p className="text-theme-text-secondary mt-1 text-xs">
+                How a month that a leave of absence or training waiver covers reduces an hours, shift or call target.
+                Training done during leave always counts. Shift and call targets are rounded down to whole shifts and
+                calls.
+              </p>
+              <div className="mt-2 space-y-1">
+                {LEAVE_MONTH_RULE_OPTIONS.map((option) => (
+                  <label key={option.value} className="mobile-touch-target flex items-start justify-start gap-2">
+                    <input
+                      type="radio"
+                      name="leave-month-rule"
+                      value={option.value}
+                      className="mt-1"
+                      checked={leaveMonthRule === option.value}
+                      onChange={() => setLeaveMonthRule(option.value)}
+                    />
+                    <span className="text-sm">
+                      <span className="text-theme-text-primary font-medium">{option.label}</span>
+                      <span className="text-theme-text-secondary block text-xs">{option.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
 
           {/* Threshold preview */}

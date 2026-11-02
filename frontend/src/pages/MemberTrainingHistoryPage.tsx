@@ -17,6 +17,7 @@ import type { TrainingAttachment } from '../services/trainingServices';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState, PromptDialog } from '../components/ux';
 import { EditTrainingRecordModal } from '../components/training/EditTrainingRecordModal';
+import { MemberRequirementsSection } from '../components/training/MemberRequirementsSection';
 import { useAuthStore } from '../stores/authStore';
 import { Ban, GraduationCap, Download, Paperclip, Pencil, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
@@ -436,6 +437,11 @@ export const MemberTrainingHistoryPage: React.FC = () => {
           <StatCard label="Expiring Soon" value={stats.expiringSoon} color="orange" />
           <StatCard label="Expired" value={stats.expired} color="red" />
         </StatGrid>
+
+        {/* The member's requirements, as on their own My Training page. The
+            endpoint is training.manage only; a member reading their own
+            history sees these on My Training instead. */}
+        {canManage && userId && <MemberRequirementsSection userId={userId} timezone={tz} />}
 
         {/* Filters */}
         <div className="card mb-6 p-4">
