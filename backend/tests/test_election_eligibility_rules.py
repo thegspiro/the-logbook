@@ -816,6 +816,107 @@ class TestWaitingPeriods:
         assert (await self._check(db_session, cadet, election, org)).is_eligible
 
 
+FROZEN_ROLL_REASON = (
+    "You are not on the voter roll that was frozen when this election opened. "
+    "Contact the election administrator if you believe this is an error."
+)
+
+
+@pytest.mark.integration
+class TestOffTheFrozenRoll:
+    """W50-R3: a member left off the roll is told why, when the reason holds.
+
+    The frozen-roll message used to answer every member missing from the
+    snapshot, so one still inside a waiting period read "contact the
+    administrator if you believe this is an error" for a rule working as
+    set. Their own reason now wins while they still fail it; the roll is
+    named only for a member who has become eligible since voting opened.
+    """
+
+    async def _check(self, db, member, election, org):
+        return await ElectionService(db).check_voter_eligibility(
+            member.id, election.id, org.id
+        )
+
+    async def test_a_member_still_waiting_is_told_the_waiting_period(self, db_session):
+        org = await _org(db_session)
+        recent = await _typed_member(
+            db_session, org, "recent", "administrative", "regular", _ago(months=2)
+        )
+        election = await _election(
+            db_session,
+            org,
+            recent,
+            _waits(administrative=ADMIN_A_YEAR),
+            eligible_roster_snapshot=[],
+        )
+
+        result = await self._check(db_session, recent, election, org)
+        assert result.is_eligible is False
+        assert result.reason.startswith(
+            "Administrative members may vote 12 months after becoming "
+            "administrative; eligible from "
+        )
+
+    async def test_a_member_still_short_of_attendance_is_told_so(
+        self, db_session, attendance_org
+    ):
+        ns = attendance_org
+        election = await _election(
+            db_session,
+            ns.org,
+            ns.steady,
+            COUNT_2_OF_3,
+            eligible_roster_snapshot=[str(ns.steady.id)],
+        )
+
+        result = await self._check(db_session, ns.lapsed, election, ns.org)
+        assert result.is_eligible is False
+        assert result.reason != FROZEN_ROLL_REASON
+        assert "meeting" in result.reason.lower()
+
+    async def test_a_member_who_now_passes_is_told_the_roll_is_frozen(self, db_session):
+        # Eligible today (a year's wait served), but absent from the roll
+        # drawn when voting opened, as a member waived after opening is.
+        org = await _org(db_session)
+        settled = await _typed_member(
+            db_session, org, "settled", "administrative", "regular", _ago(months=13)
+        )
+        election = await _election(
+            db_session,
+            org,
+            settled,
+            _waits(administrative=ADMIN_A_YEAR),
+            eligible_roster_snapshot=[],
+        )
+
+        result = await self._check(db_session, settled, election, org)
+        assert result.is_eligible is False
+        assert result.reason == FROZEN_ROLL_REASON
+
+    async def test_the_roll_outranks_a_position_rule(self, db_session):
+        # The roll bars every race, so a member off it hears about the roll
+        # rather than one position's voter types.
+        org = await _org(db_session)
+        settled = await _typed_member(
+            db_session, org, "settled", "administrative", "regular", _ago(months=13)
+        )
+        election = await _election(
+            db_session,
+            org,
+            settled,
+            _waits(),
+            eligible_roster_snapshot=[],
+            position_eligibility={"Chief": {"voter_types": ["operational"]}},
+        )
+
+        result = await ElectionService(db_session).check_voter_eligibility(
+            settled.id, election.id, org.id, position="Chief"
+        )
+        assert result.is_eligible is False
+        assert result.reason == FROZEN_ROLL_REASON
+
+
 @pytest.mark.integration
 class TestCreateAndUpdate:
     def _payload(self, **extra):
