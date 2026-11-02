@@ -117,8 +117,13 @@ export const evaluationsService = {
   },
 
   async draftOptions(): Promise<DraftOptions> {
-    const response = await api.get<DraftOptions>('/evaluations/draft-options');
-    return response.data;
+    const response = await api.get<Partial<DraftOptions>>('/evaluations/draft-options');
+    const body = response.data;
+    return {
+      members: asArray(body.members ?? []),
+      evaluators: asArray(body.evaluators ?? []),
+      periods: asArray(body.periods ?? []),
+    };
   },
 
   async create(data: EvaluationCreate): Promise<EvaluationDetail> {

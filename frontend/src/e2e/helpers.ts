@@ -876,6 +876,17 @@ const memberRecordRoutes = (): [string, () => unknown][] => [
   ['**/api/v1/evaluations', () => [EVALUATION_SUMMARY]],
   ['**/api/v1/evaluations/mine', () => [EVALUATION_SUMMARY]],
   [
+    '**/api/v1/evaluations/draft-options',
+    () => ({
+      members: [
+        { id: TEST_USER.id, name: `${TEST_USER.first_name} ${TEST_USER.last_name}` },
+        { id: 'e2e-evaluator', name: 'Jordan Captain' },
+      ],
+      evaluators: [{ id: 'e2e-evaluator', name: 'Jordan Captain' }],
+      periods: [{ id: 'e2e-period', name: '2026 Annual Review', start_date: '2026-01-01', end_date: '2026-12-31' }],
+    }),
+  ],
+  [
     '**/api/v1/evaluations/mine/live-data',
     () => ({
       period_id: 'e2e-period',
