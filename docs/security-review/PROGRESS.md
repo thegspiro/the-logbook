@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (branch
+**PR [#3930](https://github.com/thegspiro/the-logbook/pull/3930)** (branch
 `claude/security-review-scheduling-p13`) — Feature 15 (Scheduling), pass 13,
 a watchdog pickup. Real delta: the new Shift Evaluations feature's close-out
 gate hooked into `finalize_shift` (admin-only override, audit-logged,
