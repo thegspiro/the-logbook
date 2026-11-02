@@ -237,7 +237,7 @@ export const DonorsPage: React.FC = () => {
         <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-6">
           <h2 className="text-theme-text-primary text-lg font-semibold">New Donor</h2>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="field-grid gap-4">
             {/* First Name */}
             <div>
               <label htmlFor="donor-firstName" className={labelClass}>
