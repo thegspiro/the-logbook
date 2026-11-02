@@ -18,6 +18,7 @@ import { formatCalendarDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
 import { externalShiftTimeRange } from './externalShiftTimes';
+import { ExternalShiftEvaluationBadge } from './ExternalShiftEvaluationBadge';
 
 interface ExternalShiftsReviewProps {
   /** YYYY-MM-DD, inclusive. */
@@ -210,6 +211,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                           Counted
                         </span>
                       )}
+                      <ExternalShiftEvaluationBadge status={entry.evaluation_status} className="mt-1 block w-fit" />
                     </td>
                     {canManage && (
                       <td className="px-4 py-3 text-right" data-label="Actions">

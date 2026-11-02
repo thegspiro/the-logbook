@@ -20,6 +20,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
 import { ExternalShiftFormModal } from './ExternalShiftFormModal';
 import { externalShiftTimeRange } from './externalShiftTimes';
+import { ExternalShiftEvaluationBadge } from './ExternalShiftEvaluationBadge';
 
 interface MyExternalShiftsProps {
   /** Called after any change, so the hours totals beside this list refresh. */
@@ -133,6 +134,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                         Not counted
                       </span>
                     )}
+                    <ExternalShiftEvaluationBadge status={entry.evaluation_status} className="ml-2" />
                   </p>
                   <p className="text-theme-text-secondary text-sm">
                     {formatCalendarDate(entry.shift_date)}

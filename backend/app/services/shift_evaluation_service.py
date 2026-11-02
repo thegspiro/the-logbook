@@ -31,7 +31,7 @@ re-running the sync never counts an evaluation twice (Pitfall #36).
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -40,10 +40,18 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.external_shift_hours import (
+    ExternalAgency,
+    ExternalApparatus,
+    ExternalShiftHours,
+    ExternalShiftHoursStatus,
+)
 from app.models.shift_evaluation import (
     COMBINED_SCOPE,
     DEFAULT_GENERAL_EVALUATION_MODE,
+    EXTERNAL_OCCASION,
     GENERAL_SCOPE,
+    SHIFT_OCCASION,
     ShiftEvaluation,
     ShiftEvaluationTemplate,
 )
@@ -76,6 +84,7 @@ from app.schemas.shift_evaluation import (
     TemplateOption,
 )
 from app.services.training_program_service import TrainingProgramService
+from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 from app.utils.positions import canonical_position
 
 # Mirrors SchedulingService.INACTIVE_ASSIGNMENT_STATUSES. Not imported from
@@ -162,6 +171,46 @@ class _Requirement:
     evaluation: Optional[ShiftEvaluation] = None
 
 
+@dataclass
+class _Scope:
+    """One evaluation a program member is due, before it is matched to a shift."""
+
+    scope_key: str
+    enrollments: list[ProgramEnrollment]
+    program_names: list[str]
+    templates: list[ShiftEvaluationTemplate]
+
+    def started_by(self, cutoff: tuple[date, Any]) -> bool:
+        """Whether any of its enrollments began on or before the shift's date."""
+        shift_date, tz = cutoff
+        return any(
+            e.enrolled_at is None or local_date(e.enrolled_at, tz) <= shift_date
+            for e in self.enrollments
+        )
+
+
+@dataclass
+class _Scopes:
+    by_member: dict[str, list[_Scope]]
+    general: Optional[ShiftEvaluationTemplate]
+    general_required: bool
+
+
+@dataclass
+class _Occasion:
+    """The shift being evaluated: a department shift or a logged outside one."""
+
+    kind: str
+    id: str
+    shift_date: date
+    start: Optional[datetime]
+    end: Optional[datetime]
+    unit_label: Optional[str]
+    platoon: Optional[str]
+    shift: Optional[Shift] = None
+    entry: Optional[ExternalShiftHours] = None
+
+
 class ShiftEvaluationService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -203,42 +252,72 @@ class ShiftEvaluationService:
         )
         return labels.get(shift.id)
 
+    # -- What is being evaluated ------------------------------------------
+
+    async def occasion_for_shift(
+        self, shift: Shift, organization_id: UUID | str
+    ) -> "_Occasion":
+        return _Occasion(
+            kind=SHIFT_OCCASION,
+            id=str(shift.id),
+            shift_date=shift.shift_date,
+            start=shift.start_time,
+            end=shift.end_time,
+            unit_label=await self._unit_label(shift, organization_id),
+            platoon=shift.platoon,
+            shift=shift,
+        )
+
+    @staticmethod
+    def occasion_for_entry(entry: ExternalShiftHours) -> "_Occasion":
+        return _Occasion(
+            kind=EXTERNAL_OCCASION,
+            id=str(entry.id),
+            shift_date=entry.shift_date,
+            start=entry.start_at,
+            end=entry.end_at,
+            unit_label=f"{entry.agency_name} {entry.apparatus_name}".strip(),
+            platoon=None,
+            entry=entry,
+        )
+
+    async def get_entry(
+        self, entry_id: UUID | str, organization_id: UUID | str
+    ) -> Optional[ExternalShiftHours]:
+        result = await self.db.execute(
+            select(ExternalShiftHours).where(
+                ExternalShiftHours.id == str(entry_id),
+                ExternalShiftHours.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _evaluated_apparatus_ids(self, organization_id: UUID | str) -> set[str]:
+        """Outside units whose agency asks for its shifts to be evaluated."""
+        rows = await self.db.execute(
+            select(ExternalApparatus.id)
+            .join(ExternalAgency, ExternalAgency.id == ExternalApparatus.agency_id)
+            .where(
+                ExternalApparatus.organization_id == str(organization_id),
+                ExternalAgency.organization_id == str(organization_id),
+                ExternalAgency.evaluate_shifts.is_(True),
+            )
+        )
+        return {str(i) for i in rows.scalars()}
+
     # -- Who is evaluated ------------------------------------------------
 
-    async def requirements(
-        self, shift: Shift, organization_id: UUID | str
-    ) -> list[_Requirement]:
+    async def _program_scopes(
+        self, member_ids: list[str], organization_id: UUID | str
+    ) -> "_Scopes":
+        """Each member's program evaluations, and the department's general form.
+
+        Shared by department and outside shifts so both read "who needs which
+        evaluation" from one rule (Pitfall #29).
+        """
         org = str(organization_id)
-        crew_rows = (
-            await self.db.execute(
-                select(ShiftAssignment, User)
-                .join(User, User.id == ShiftAssignment.user_id)
-                .where(
-                    ShiftAssignment.shift_id == shift.id,
-                    ShiftAssignment.assignment_status.notin_(
-                        _INACTIVE_ASSIGNMENT_STATUSES
-                    ),
-                    User.organization_id == org,
-                )
-                .order_by(User.last_name, User.first_name, User.id)
-            )
-        ).all()
-        members = {str(user.id): (assignment, user) for assignment, user in crew_rows}
-
-        existing = {
-            (str(e.member_id), e.scope_key): e
-            for e in (
-                await self.db.execute(
-                    select(ShiftEvaluation).where(
-                        ShiftEvaluation.shift_id == shift.id,
-                        ShiftEvaluation.organization_id == org,
-                    )
-                )
-            ).scalars()
-        }
-
         enrollments: dict[str, list[tuple[ProgramEnrollment, TrainingProgram]]] = {}
-        if members:
+        if member_ids:
             rows = (
                 await self.db.execute(
                     select(ProgramEnrollment, TrainingProgram)
@@ -247,7 +326,7 @@ class ShiftEvaluationService:
                         TrainingProgram.id == ProgramEnrollment.program_id,
                     )
                     .where(
-                        ProgramEnrollment.user_id.in_(list(members)),
+                        ProgramEnrollment.user_id.in_(member_ids),
                         ProgramEnrollment.organization_id == org,
                         ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
                         TrainingProgram.organization_id == org,
@@ -290,14 +369,11 @@ class ShiftEvaluationService:
             ).scalars():
                 templates[str(template.id)] = template
 
-        result: list[_Requirement] = []
-        for member_id, (assignment, user) in members.items():
-            seat = canonical_position(
-                str(getattr(assignment.position, "value", assignment.position) or "")
-            )
+        scopes: dict[str, list[_Scope]] = {}
+        for member_id, member_pairs in enrollments.items():
             pairs = [
                 (e, p)
-                for e, p in enrollments.get(member_id, [])
+                for e, p in member_pairs
                 if str(p.shift_evaluation_template_id) in templates
             ]
             if pairs and combine and len(pairs) > 1:
@@ -306,44 +382,157 @@ class ShiftEvaluationService:
                     template = templates[str(program.shift_evaluation_template_id)]
                     if template not in options:
                         options.append(template)
+                scopes[member_id] = [
+                    _Scope(
+                        scope_key=COMBINED_SCOPE,
+                        enrollments=[e for e, _ in pairs],
+                        program_names=[p.name for _, p in pairs],
+                        templates=options,
+                    )
+                ]
+            elif pairs:
+                scopes[member_id] = [
+                    _Scope(
+                        scope_key=str(enrollment.id),
+                        enrollments=[enrollment],
+                        program_names=[program.name],
+                        templates=[
+                            templates[str(program.shift_evaluation_template_id)]
+                        ],
+                    )
+                    for enrollment, program in pairs
+                ]
+        general = (
+            templates.get(str(general_id))
+            if general_id and general_mode != "off"
+            else None
+        )
+        return _Scopes(
+            by_member=scopes,
+            general=general,
+            general_required=general_mode == "required",
+        )
+
+    async def requirements(
+        self, shift: Shift, organization_id: UUID | str
+    ) -> list[_Requirement]:
+        return await self._requirements(
+            await self.occasion_for_shift(shift, organization_id), organization_id
+        )
+
+    async def entry_requirements(
+        self, entry: ExternalShiftHours, organization_id: UUID | str
+    ) -> list[_Requirement]:
+        return await self._requirements(self.occasion_for_entry(entry), organization_id)
+
+    async def _requirements(
+        self, occasion: "_Occasion", organization_id: UUID | str
+    ) -> list[_Requirement]:
+        org = str(organization_id)
+        # member_id -> (seat, user)
+        members: dict[str, tuple[Optional[str], User]] = {}
+        if occasion.shift is not None:
+            crew_rows = (
+                await self.db.execute(
+                    select(ShiftAssignment, User)
+                    .join(User, User.id == ShiftAssignment.user_id)
+                    .where(
+                        ShiftAssignment.shift_id == occasion.shift.id,
+                        ShiftAssignment.assignment_status.notin_(
+                            _INACTIVE_ASSIGNMENT_STATUSES
+                        ),
+                        User.organization_id == org,
+                    )
+                    .order_by(User.last_name, User.first_name, User.id)
+                )
+            ).all()
+            for assignment, user in crew_rows:
+                members[str(user.id)] = (
+                    canonical_position(
+                        str(
+                            getattr(assignment.position, "value", assignment.position)
+                            or ""
+                        )
+                    ),
+                    user,
+                )
+            existing_filter = ShiftEvaluation.shift_id == occasion.shift.id
+        else:
+            entry = occasion.entry
+            if entry is None:
+                raise ValueError("An outside-shift occasion needs its entry")
+            # An outside shift is evaluated only while it counts and only on
+            # an agency the department asked to evaluate.
+            if entry.status == ExternalShiftHoursStatus.COUNTED.value and (
+                str(entry.external_apparatus_id or "")
+                in await self._evaluated_apparatus_ids(org)
+            ):
+                logged_by = (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id == entry.user_id, User.organization_id == org
+                        )
+                    )
+                ).scalar_one_or_none()
+                if logged_by is not None:
+                    members[str(logged_by.id)] = (None, logged_by)
+            existing_filter = ShiftEvaluation.external_shift_id == entry.id
+
+        existing = {
+            (str(e.member_id), e.scope_key): e
+            for e in (
+                await self.db.execute(
+                    select(ShiftEvaluation).where(
+                        existing_filter, ShiftEvaluation.organization_id == org
+                    )
+                )
+            ).scalars()
+        }
+
+        program_scopes = await self._program_scopes(list(members), org)
+        scopes = program_scopes.by_member
+        general = program_scopes.general
+        general_required = program_scopes.general_required
+        cutoff = await self._enrollment_cutoff(occasion, org)
+
+        result: list[_Requirement] = []
+        for member_id, (seat, user) in members.items():
+            member_scopes = [
+                scope
+                for scope in scopes.get(member_id, [])
+                if cutoff is None or scope.started_by(cutoff)
+            ]
+            if member_scopes:
+                for scope in member_scopes:
+                    result.append(
+                        _Requirement(
+                            member=user,
+                            seat=seat,
+                            scope_key=scope.scope_key,
+                            required=True,
+                            enrollment_ids=[str(e.id) for e in scope.enrollments],
+                            program_names=list(scope.program_names),
+                            templates=list(scope.templates),
+                        )
+                    )
+            elif (
+                general is not None
+                and occasion.shift is not None
+                and member_id not in scopes
+                and seat
+                and seat in (general.evaluated_seats or [])
+            ):
+                # The general form is chosen by seat, which only a
+                # department shift has.
                 result.append(
                     _Requirement(
                         member=user,
                         seat=seat,
-                        scope_key=COMBINED_SCOPE,
-                        required=True,
-                        enrollment_ids=[str(e.id) for e, _ in pairs],
-                        program_names=[p.name for _, p in pairs],
-                        templates=options,
+                        scope_key=GENERAL_SCOPE,
+                        required=general_required,
+                        templates=[general],
                     )
                 )
-            elif pairs:
-                for enrollment, program in pairs:
-                    result.append(
-                        _Requirement(
-                            member=user,
-                            seat=seat,
-                            scope_key=str(enrollment.id),
-                            required=True,
-                            enrollment_ids=[str(enrollment.id)],
-                            program_names=[program.name],
-                            templates=[
-                                templates[str(program.shift_evaluation_template_id)]
-                            ],
-                        )
-                    )
-            elif general_id and general_mode != "off" and str(general_id) in templates:
-                general = templates[str(general_id)]
-                if seat and seat in (general.evaluated_seats or []):
-                    result.append(
-                        _Requirement(
-                            member=user,
-                            seat=seat,
-                            scope_key=GENERAL_SCOPE,
-                            required=general_mode == "required",
-                            templates=[general],
-                        )
-                    )
 
         for requirement in result:
             requirement.evaluation = existing.pop(
@@ -381,6 +570,23 @@ class ShiftEvaluationService:
                     )
                 )
         return result
+
+    async def _enrollment_cutoff(
+        self, occasion: "_Occasion", organization_id: str
+    ) -> Optional[tuple[date, Any]]:
+        """For an outside shift, its date and the department's timezone.
+
+        A department shift is evaluated as it closes, so whoever is enrolled
+        then is evaluated. An outside shift is logged afterwards, sometimes
+        long afterwards; a shift from before the member joined the program is
+        not one the program asks to have evaluated.
+        """
+        if occasion.kind != EXTERNAL_OCCASION:
+            return None
+        return (
+            occasion.shift_date,
+            await resolve_scheduling_timezone(self.db, organization_id),
+        )
 
     async def missing_required(
         self, shift_id: UUID | str, organization_id: UUID | str
@@ -455,7 +661,19 @@ class ShiftEvaluationService:
     async def roster(
         self, shift: Shift, organization_id: UUID | str
     ) -> ShiftEvaluationRoster:
-        requirements = await self.requirements(shift, organization_id)
+        return await self._roster(
+            await self.occasion_for_shift(shift, organization_id), organization_id
+        )
+
+    async def entry_roster(
+        self, entry: ExternalShiftHours, organization_id: UUID | str
+    ) -> ShiftEvaluationRoster:
+        return await self._roster(self.occasion_for_entry(entry), organization_id)
+
+    async def _roster(
+        self, occasion: _Occasion, organization_id: UUID | str
+    ) -> ShiftEvaluationRoster:
+        requirements = await self._requirements(occasion, organization_id)
         users = await self._users(
             {
                 str(r.evaluation.evaluator_id)
@@ -465,12 +683,16 @@ class ShiftEvaluationService:
             organization_id,
         )
         return ShiftEvaluationRoster(
-            shift_id=shift.id,
-            shift_date=shift.shift_date,
-            shift_start=shift.start_time,
-            shift_end=shift.end_time,
-            unit_label=await self._unit_label(shift, organization_id),
-            platoon=shift.platoon,
+            occasion=occasion.kind,
+            shift_id=occasion.id if occasion.kind == SHIFT_OCCASION else None,
+            external_shift_id=(
+                occasion.id if occasion.kind == EXTERNAL_OCCASION else None
+            ),
+            shift_date=occasion.shift_date,
+            shift_start=occasion.start,
+            shift_end=occasion.end,
+            unit_label=occasion.unit_label,
+            platoon=occasion.platoon,
             requirements=[self._requirement_response(r, users) for r in requirements],
         )
 
@@ -494,7 +716,10 @@ class ShiftEvaluationService:
                 str(evaluation.evaluator_id) if evaluation.evaluator_id else None
             ),
             evaluator_name=_name(users.get(str(evaluation.evaluator_id))),
+            occasion=evaluation.occasion or SHIFT_OCCASION,
             shift_id=evaluation.shift_id,
+            external_shift_id=evaluation.external_shift_id,
+            preceptor_name=evaluation.preceptor_name,
             shift_date=evaluation.shift_date,
             shift_start=evaluation.shift_start,
             shift_end=evaluation.shift_end,
@@ -520,12 +745,12 @@ class ShiftEvaluationService:
 
     async def _find_requirement(
         self,
-        shift: Shift,
+        occasion: _Occasion,
         member_id: str,
         scope_key: str,
         organization_id: UUID | str,
     ) -> _Requirement:
-        for requirement in await self.requirements(shift, organization_id):
+        for requirement in await self._requirements(occasion, organization_id):
             if (
                 str(requirement.member.id) == str(member_id)
                 and requirement.scope_key == scope_key
@@ -544,14 +769,19 @@ class ShiftEvaluationService:
             raise ValueError("That form is not one this evaluation can use")
         return requirement.templates[0] if requirement.templates else None
 
-    async def _prefill_statistics(self, shift: Shift, member_id: str) -> dict[str, int]:
+    async def _prefill_statistics(
+        self, occasion: _Occasion, member_id: str
+    ) -> dict[str, int]:
         # The same per-member call count the shift report pre-fills, from the
         # call log or the close-out tally. Transports and refusals are typed.
+        # An outside shift has no call log here, so everything is typed.
+        if occasion.shift is None:
+            return {}
         from app.services.shift_completion_service import ShiftCompletionService
 
         calls, _types = await ShiftCompletionService(
             self.db
-        )._get_trainee_call_data_from_shift(shift.id, str(member_id))
+        )._get_trainee_call_data_from_shift(occasion.shift.id, str(member_id))
         return {"calls": int(calls or 0)}
 
     async def form(
@@ -562,8 +792,39 @@ class ShiftEvaluationService:
         organization_id: UUID | str,
         template_id: Optional[str] = None,
     ) -> ShiftEvaluationForm:
+        return await self._form(
+            await self.occasion_for_shift(shift, organization_id),
+            member_id,
+            scope_key,
+            organization_id,
+            template_id,
+        )
+
+    async def entry_form(
+        self,
+        entry: ExternalShiftHours,
+        scope_key: str,
+        organization_id: UUID | str,
+        template_id: Optional[str] = None,
+    ) -> ShiftEvaluationForm:
+        return await self._form(
+            self.occasion_for_entry(entry),
+            str(entry.user_id),
+            scope_key,
+            organization_id,
+            template_id,
+        )
+
+    async def _form(
+        self,
+        occasion: _Occasion,
+        member_id: str,
+        scope_key: str,
+        organization_id: UUID | str,
+        template_id: Optional[str] = None,
+    ) -> ShiftEvaluationForm:
         requirement = await self._find_requirement(
-            shift, member_id, scope_key, organization_id
+            occasion, member_id, scope_key, organization_id
         )
         users = await self._users(
             (
@@ -585,18 +846,22 @@ class ShiftEvaluationService:
             chosen_id = template.id
         return ShiftEvaluationForm(
             requirement=self._requirement_response(requirement, users),
-            shift_id=shift.id,
-            shift_date=shift.shift_date,
-            shift_start=shift.start_time,
-            shift_end=shift.end_time,
-            unit_label=await self._unit_label(shift, organization_id),
-            platoon=shift.platoon,
+            occasion=occasion.kind,
+            shift_id=occasion.id if occasion.kind == SHIFT_OCCASION else None,
+            external_shift_id=(
+                occasion.id if occasion.kind == EXTERNAL_OCCASION else None
+            ),
+            shift_date=occasion.shift_date,
+            shift_start=occasion.start,
+            shift_end=occasion.end,
+            unit_label=occasion.unit_label,
+            platoon=occasion.platoon,
             template=snapshot,
             template_id=chosen_id,
             evaluation=(
                 await self.detail(evaluation, organization_id) if evaluation else None
             ),
-            prefill_statistics=await self._prefill_statistics(shift, member_id),
+            prefill_statistics=await self._prefill_statistics(occasion, member_id),
         )
 
     # -- Saving ------------------------------------------------------------
@@ -708,10 +973,53 @@ class ShiftEvaluationService:
         evaluator: User,
     ) -> ShiftEvaluation:
         """Create or update the evaluation; raises ValueError / LookupError."""
+        return await self._save(
+            await self.occasion_for_shift(shift, organization_id),
+            member_id,
+            scope_key,
+            organization_id,
+            body,
+            evaluator,
+        )
+
+    async def save_for_entry(
+        self,
+        entry: ExternalShiftHours,
+        scope_key: str,
+        organization_id: UUID | str,
+        body: ShiftEvaluationSave,
+        evaluator: User,
+    ) -> ShiftEvaluation:
+        """Enter the outside preceptor's evaluation of a logged outside shift.
+
+        The preceptor has no account, so the person entering it is the
+        evaluator of record and the preceptor is named on the form; a
+        submission must name them.
+        """
+        if body.submit and not body.preceptor_name:
+            raise ValueError("Enter the name of the preceptor who evaluated the shift")
+        return await self._save(
+            self.occasion_for_entry(entry),
+            str(entry.user_id),
+            scope_key,
+            organization_id,
+            body,
+            evaluator,
+        )
+
+    async def _save(
+        self,
+        occasion: _Occasion,
+        member_id: str,
+        scope_key: str,
+        organization_id: UUID | str,
+        body: ShiftEvaluationSave,
+        evaluator: User,
+    ) -> ShiftEvaluation:
         if str(member_id) == str(evaluator.id):
             raise ValueError("You cannot evaluate yourself")
         requirement = await self._find_requirement(
-            shift, member_id, scope_key, organization_id
+            occasion, member_id, scope_key, organization_id
         )
         evaluation = requirement.evaluation
 
@@ -734,21 +1042,26 @@ class ShiftEvaluationService:
             version = evaluation.template_version
 
         answers = self._settle_answers(snapshot, body)
-        unit_label = await self._unit_label(shift, organization_id)
 
         if evaluation is None:
             evaluation = ShiftEvaluation(
                 organization_id=str(organization_id),
-                shift_id=shift.id,
+                occasion=occasion.kind,
+                shift_id=occasion.id if occasion.kind == SHIFT_OCCASION else None,
+                external_shift_id=(
+                    occasion.id if occasion.kind == EXTERNAL_OCCASION else None
+                ),
                 member_id=str(member_id),
                 scope_key=scope_key,
             )
             self.db.add(evaluation)
 
-        evaluation.shift_date = shift.shift_date
-        evaluation.shift_start = shift.start_time
-        evaluation.shift_end = shift.end_time
-        evaluation.unit_label = unit_label
+        evaluation.shift_date = occasion.shift_date
+        evaluation.shift_start = occasion.start
+        evaluation.shift_end = occasion.end
+        evaluation.unit_label = occasion.unit_label
+        if occasion.kind == EXTERNAL_OCCASION:
+            evaluation.preceptor_name = body.preceptor_name
         evaluation.evaluator_id = str(evaluator.id)
         evaluation.enrollment_ids = list(requirement.enrollment_ids)
         evaluation.program_names = list(requirement.program_names)
@@ -771,12 +1084,12 @@ class ShiftEvaluationService:
             # unique key kept one row; apply this save to it (Pitfall #36).
             await self.db.rollback()
             requirement = await self._find_requirement(
-                shift, member_id, scope_key, organization_id
+                occasion, member_id, scope_key, organization_id
             )
             if requirement.evaluation is None:
                 raise
-            return await self.save(
-                shift, member_id, scope_key, organization_id, body, evaluator
+            return await self._save(
+                occasion, member_id, scope_key, organization_id, body, evaluator
             )
         await self.db.refresh(evaluation)
         if evaluation.status == "submitted":
@@ -909,6 +1222,194 @@ class ShiftEvaluationService:
             if evaluation is not None:
                 await self.sync_credit(evaluation, organization_id)
 
+    async def sync_credit_for_entry(
+        self, entry_id: UUID | str, organization_id: UUID | str
+    ) -> None:
+        """Re-sync after a logged outside shift was rejected, restored or edited."""
+        evaluation_ids = list(
+            (
+                await self.db.execute(
+                    select(ShiftEvaluation.id).where(
+                        ShiftEvaluation.organization_id == str(organization_id),
+                        ShiftEvaluation.external_shift_id == str(entry_id),
+                        ShiftEvaluation.status == "submitted",
+                    )
+                )
+            ).scalars()
+        )
+        await self._sync_ids(evaluation_ids, organization_id)
+
+    async def submitted_ids_for_entry(
+        self, entry_id: UUID | str, organization_id: UUID | str
+    ) -> list[str]:
+        """Read before an entry is deleted: SET NULL leaves nothing to find."""
+        return [
+            str(i)
+            for i in (
+                await self.db.execute(
+                    select(ShiftEvaluation.id).where(
+                        ShiftEvaluation.organization_id == str(organization_id),
+                        ShiftEvaluation.external_shift_id == str(entry_id),
+                        ShiftEvaluation.status == "submitted",
+                    )
+                )
+            ).scalars()
+        ]
+
+    async def _sync_ids(
+        self, evaluation_ids: list[str], organization_id: UUID | str
+    ) -> None:
+        for evaluation_id in evaluation_ids:
+            evaluation = await self.get(evaluation_id, organization_id)
+            if evaluation is not None:
+                await self.sync_credit(evaluation, organization_id)
+
+    # -- Outside shifts: what is outstanding --------------------------------
+
+    async def entry_statuses(
+        self, entries: list[ExternalShiftHours], organization_id: UUID | str
+    ) -> dict[str, Optional[str]]:
+        states = await self._entry_states(entries, organization_id)
+        return {entry_id: state for entry_id, (state, _) in states.items()}
+
+    async def _entry_states(
+        self, entries: list[ExternalShiftHours], organization_id: UUID | str
+    ) -> dict[str, tuple[Optional[str], Optional[str]]]:
+        """Each logged outside shift's evaluation state, for the shift lists.
+
+        ``needed`` while an evaluation the shift calls for is missing,
+        ``draft`` while one is started but not submitted, ``submitted`` once
+        every one is in, and None when the shift calls for none. Worked out
+        for the whole page at once from the same rule ``_requirements``
+        applies to one shift (``_program_scopes``, ``_Scope.started_by``).
+        """
+        org = str(organization_id)
+        # entry_id -> (status, the first scope still to submit)
+        statuses: dict[str, tuple[Optional[str], Optional[str]]] = {
+            str(e.id): (None, None) for e in entries
+        }
+        if not entries:
+            return statuses
+        entry_ids = [str(e.id) for e in entries]
+        on_file: dict[str, list[ShiftEvaluation]] = {}
+        for evaluation in (
+            await self.db.execute(
+                select(ShiftEvaluation).where(
+                    ShiftEvaluation.organization_id == org,
+                    ShiftEvaluation.external_shift_id.in_(entry_ids),
+                )
+            )
+        ).scalars():
+            on_file.setdefault(str(evaluation.external_shift_id), []).append(evaluation)
+
+        evaluated = await self._evaluated_apparatus_ids(org)
+        candidates = [
+            e
+            for e in entries
+            if e.status == ExternalShiftHoursStatus.COUNTED.value
+            and str(e.external_apparatus_id or "") in evaluated
+        ]
+        scopes = (
+            await self._program_scopes(
+                sorted({str(e.user_id) for e in candidates}), org
+            )
+        ).by_member
+        tz = await resolve_scheduling_timezone(self.db, org)
+        candidate_ids = {str(e.id) for e in candidates}
+
+        for entry in entries:
+            entry_id = str(entry.id)
+            evaluations = {e.scope_key: e for e in on_file.get(entry_id, [])}
+            required = (
+                [
+                    scope.scope_key
+                    for scope in scopes.get(str(entry.user_id), [])
+                    if scope.started_by((entry.shift_date, tz))
+                ]
+                if entry_id in candidate_ids
+                else []
+            )
+            if required:
+                done = [
+                    key
+                    for key in required
+                    if key in evaluations and evaluations[key].status == "submitted"
+                ]
+                open_scope = next((k for k in required if k not in done), None)
+                if open_scope is None:
+                    statuses[entry_id] = ("submitted", None)
+                elif any(key in evaluations for key in required):
+                    statuses[entry_id] = ("draft", open_scope)
+                else:
+                    statuses[entry_id] = ("needed", open_scope)
+            elif evaluations:
+                statuses[entry_id] = (
+                    (
+                        "submitted"
+                        if all(e.status == "submitted" for e in evaluations.values())
+                        else "draft"
+                    ),
+                    None,
+                )
+        return statuses
+
+    async def outstanding_entries(
+        self, organization_id: UUID | str, limit: int = 200
+    ) -> list[tuple[ExternalShiftHours, str, str]]:
+        """Counted outside shifts still waiting on an evaluation, newest first.
+
+        Each with its status and the scope to open first.
+        """
+        org = str(organization_id)
+        evaluated = await self._evaluated_apparatus_ids(org)
+        if not evaluated:
+            return []
+        member_ids = list(
+            (
+                await self.db.execute(
+                    select(ProgramEnrollment.user_id)
+                    .join(
+                        TrainingProgram,
+                        TrainingProgram.id == ProgramEnrollment.program_id,
+                    )
+                    .where(
+                        ProgramEnrollment.organization_id == org,
+                        ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                        TrainingProgram.organization_id == org,
+                        TrainingProgram.shift_evaluation_template_id.is_not(None),
+                    )
+                    .distinct()
+                )
+            ).scalars()
+        )
+        if not member_ids:
+            return []
+        entries = list(
+            (
+                await self.db.execute(
+                    select(ExternalShiftHours)
+                    .where(
+                        ExternalShiftHours.organization_id == org,
+                        ExternalShiftHours.status
+                        == ExternalShiftHoursStatus.COUNTED.value,
+                        ExternalShiftHours.external_apparatus_id.in_(evaluated),
+                        ExternalShiftHours.user_id.in_(member_ids),
+                    )
+                    .order_by(
+                        ExternalShiftHours.shift_date.desc(),
+                        ExternalShiftHours.created_at.desc(),
+                    )
+                )
+            ).scalars()
+        )
+        states = await self._entry_states(entries, org)
+        outstanding = []
+        for entry in entries:
+            state, scope_key = states[str(entry.id)]
+            if state in ("needed", "draft") and scope_key:
+                outstanding.append((entry, state, scope_key))
+        return outstanding[:limit]
+
     async def sync_credit_for_organization(self, organization_id: UUID | str) -> None:
         """Re-sync every submitted evaluation, after report review is toggled."""
         evaluation_ids = list(
@@ -945,6 +1446,20 @@ class ShiftEvaluationService:
         """Whether the evaluated member may see it, on the shift report's terms."""
         if evaluation.status != "submitted":
             return False
+        if (evaluation.occasion or SHIFT_OCCASION) == EXTERNAL_OCCASION:
+            # No report to wait for: the member sees it while the logged
+            # shift it describes still counts.
+            if not evaluation.external_shift_id:
+                return False
+            entry_status = (
+                await self.db.execute(
+                    select(ExternalShiftHours.status).where(
+                        ExternalShiftHours.id == evaluation.external_shift_id,
+                        ExternalShiftHours.organization_id == str(organization_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            return entry_status == ExternalShiftHoursStatus.COUNTED.value
         config = await self._config(organization_id)
         if not (config and config.report_review_required):
             return True

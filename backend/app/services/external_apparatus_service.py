@@ -148,6 +148,7 @@ class ExternalApparatusService:
             organization_id=str(organization_id),
             name=payload["name"],
             is_active=payload.get("is_active", True),
+            evaluate_shifts=bool(payload.get("evaluate_shifts", False)),
         )
         self.db.add(agency)
         await self.db.commit()
@@ -282,6 +283,7 @@ class ExternalApparatusService:
             "id": agency.id,
             "name": agency.name,
             "is_active": bool(agency.is_active),
+            "evaluate_shifts": bool(agency.evaluate_shifts),
         }
 
     @staticmethod

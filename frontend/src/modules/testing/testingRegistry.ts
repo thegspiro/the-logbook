@@ -473,6 +473,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         label: 'Shift evaluation',
         module: 'scheduling',
       },
+      {
+        path: '/scheduling/outside-shifts/:entryId/evaluations/:scopeKey',
+        label: 'Outside shift evaluation',
+        module: 'scheduling',
+      },
       { path: '/scheduling/shift-evaluations/print', label: 'Print shift evaluation', module: 'scheduling' },
       {
         path: '/scheduling/admin',

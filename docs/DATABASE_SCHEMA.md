@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**340 tables · 5604 columns · 1152 foreign keys**
+**340 tables · 5608 columns · 1153 foreign keys**
 
 ---
 
@@ -240,7 +240,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`external_agencies`](#external_agencies) | `ExternalAgency` | 6 | A department members may staff apparatus for. |
+| [`external_agencies`](#external_agencies) | `ExternalAgency` | 7 | A department members may staff apparatus for. |
 | [`external_apparatus`](#external_apparatus) | `ExternalApparatus` | 8 | One unit belonging to an :class:`ExternalAgency`. |
 | [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 18 |  |
 
@@ -624,7 +624,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`shift_evaluation_templates`](#shift_evaluation_templates) | `ShiftEvaluationTemplate` | 21 | One evaluation form a department has defined. |
-| [`shift_evaluations`](#shift_evaluations) | `ShiftEvaluation` | 26 | One member's evaluation for one shift, filled out on a template. |
+| [`shift_evaluations`](#shift_evaluations) | `ShiftEvaluation` | 29 | One member's evaluation for one shift, filled out on a template. |
 
 ### Shift_History_Import
 
@@ -3404,6 +3404,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `is_active` | BOOL | no |  | `1` |  |
+| `evaluate_shifts` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -8651,6 +8652,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `shift_start` | DATETIME | yes |  |  |  |
 | `shift_end` | DATETIME | yes |  |  |  |
 | `unit_label` | VARCHAR(200) | yes |  |  |  |
+| `occasion` | VARCHAR(20) | no |  | `shift` |  |
+| `external_shift_id` | VARCHAR(36) | yes | FK |  | → `external_shift_hours.id` ON DELETE SET NULL |
+| `preceptor_name` | VARCHAR(200) | yes |  |  |  |
 | `member_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
 | `evaluator_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `scope_key` | VARCHAR(40) | no |  |  |  |
@@ -8678,6 +8682,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Constraints**
 
+- UNIQUE `uq_shift_evaluation_external_member_scope` (`external_shift_id`, `member_id`, `scope_key`)
 - UNIQUE `uq_shift_evaluation_shift_member_scope` (`shift_id`, `member_id`, `scope_key`)
 
 ## Shift_History_Import
@@ -13446,6 +13451,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `external_shift_hours` | `external_apparatus_id` | SET NULL | yes |
+
+### → `external_shift_hours` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_evaluations` | `external_shift_id` | SET NULL | yes |
 
 ### → `external_training_sync_logs` (1 references)
 
