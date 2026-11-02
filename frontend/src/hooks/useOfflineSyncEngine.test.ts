@@ -7,6 +7,8 @@ const mockEquipmentPending = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 const mockToast = vi.fn();
+const mockHandleSynced = vi.fn();
+const mockRequestBackgroundSync = vi.fn();
 
 vi.mock('react-hot-toast', () => ({
   default: Object.assign((...a: unknown[]) => mockToast(...a) as unknown, {
@@ -40,7 +42,10 @@ vi.mock('../stores/pendingSyncStore', () => ({
   ),
 }));
 vi.mock('../stores/skillsTestingStore', () => ({
-  useSkillsTestingStore: { getState: () => ({ handleSynced: vi.fn() }) },
+  useSkillsTestingStore: { getState: () => ({ handleSynced: (...a: unknown[]) => mockHandleSynced(...a) as unknown }) },
+}));
+vi.mock('../utils/backgroundSyncRegistration', () => ({
+  requestBackgroundSync: () => mockRequestBackgroundSync() as unknown,
 }));
 
 import { triggerAllOfflineDrains, triggerOfflineDrain, useOfflineSyncEngine } from './useOfflineSyncEngine';
@@ -59,6 +64,10 @@ describe('useOfflineSyncEngine', () => {
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
     mockToast.mockReset();
+    mockHandleSynced.mockReset();
+    mockHandleSynced.mockResolvedValue(undefined);
+    mockRequestBackgroundSync.mockReset();
+    mockRequestBackgroundSync.mockResolvedValue(false);
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
   });
 
@@ -110,6 +119,16 @@ describe('useOfflineSyncEngine', () => {
     expect(mockToast).toHaveBeenCalledWith(
       '2 equipment checks are saved on this device. Open the equipment check to send them.'
     );
+  });
+
+  it('has the service worker send waiting equipment checks where the browser can', async () => {
+    mockEquipmentPending.mockResolvedValue(2);
+    mockRequestBackgroundSync.mockResolvedValue(true);
+
+    await triggerAllOfflineDrains();
+
+    expect(mockRequestBackgroundSync).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith('Sending 2 equipment checks saved on this device.');
   });
 
   it('says nothing about equipment checks when none are waiting', async () => {
@@ -168,6 +187,42 @@ describe('useOfflineSyncEngine', () => {
         expect(synced).toHaveBeenCalledTimes(1);
       } finally {
         window.removeEventListener('logbook:shift-reports-synced', synced);
+        Reflect.deleteProperty(navigator, 'serviceWorker');
+      }
+    });
+
+    it('counts equipment checks and skills evaluations, and hands evaluations to the skills screen', async () => {
+      const container = installWorkerMessages();
+      const test = { id: 't1', status: 'completed', version: 3 };
+      try {
+        renderHook(() => useOfflineSyncEngine());
+        await flush();
+        mockToastSuccess.mockClear();
+
+        post(container, {
+          type: BACKGROUND_SYNC_MESSAGE,
+          genericSynced: 0,
+          genericDiscarded: 0,
+          shiftReportsSynced: 0,
+          shiftReportsRefused: [],
+          equipmentChecksSynced: ['c1'],
+          equipmentChecksDiscarded: ['c2'],
+          skillsSynced: [{ testId: 't1', test, completed: true }],
+          skillsFailed: [{ testId: 't2', label: 'Ladder raise — Sam Rivera', message: 'This test was voided' }],
+        });
+        await flush();
+
+        expect(mockToastSuccess).toHaveBeenCalledWith('Sent 2 items saved on this device while you were offline');
+        expect(mockToastError).toHaveBeenCalledWith(
+          '1 queued equipment check was rejected repeatedly and has been discarded'
+        );
+        expect(mockToastError).toHaveBeenCalledWith(
+          'Not accepted: Ladder raise — Sam Rivera. This test was voided It is still saved on this device.',
+          { duration: 10_000 }
+        );
+        expect(mockHandleSynced).toHaveBeenCalledWith('t1', test, true);
+        expect(mockHandleSynced).toHaveBeenCalledWith('t2', null, false);
+      } finally {
         Reflect.deleteProperty(navigator, 'serviceWorker');
       }
     });
