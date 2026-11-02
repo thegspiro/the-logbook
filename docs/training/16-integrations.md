@@ -717,6 +717,19 @@ reset is recorded in the audit log.
 
 ![The connected iCalendar (ICS) card: the note that anyone with the link can see the department's published events, the feed link with its copy button, and Reset link](./images/16-16-ical-department-feed.png)
 
+**Choosing what the feed publishes** _(2026-11-01)_. On the connected
+iCalendar card, select **Settings**.
+
+- Tick the event types to publish, or leave them all unticked to publish every
+  type. Drafts and cancelled events are never published.
+- Tick **Include duty shifts** to add each scheduled shift's date, times and
+  platoon. Who is assigned and shift notes are never published.
+
+Saved settings apply the next time a subscribed calendar refreshes; the feed
+link does not change. The feed covers 30 days back to a year ahead, on the
+department's calendar. Members' own shifts are still in their personal feed
+whether or not this integration is connected.
+
 **A member's shift feed** is private to each member, and it is not set up on
 the Integrations page. Each member opens **Subscribe to my shifts** at the top
 of **Scheduling > My Shifts**:

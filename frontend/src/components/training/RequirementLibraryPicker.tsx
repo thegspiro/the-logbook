@@ -33,8 +33,11 @@ interface RequirementLibraryPickerProps {
 const describe = (req: TrainingRequirementEnhanced): string => {
   const parts: string[] = [REQUIREMENT_TYPE_LABELS[req.requirement_type] ?? req.requirement_type];
   if (req.required_hours) parts.push(`${req.required_hours} hrs`);
-  if (req.required_shifts) parts.push(`${req.required_shifts} shifts`);
+  if (req.required_shifts)
+    parts.push(`${req.required_shifts} ${req.requirement_type === 'evaluated_shifts' ? 'evaluated shifts' : 'shifts'}`);
   if (req.required_calls) parts.push(`${req.required_calls} calls`);
+  if (req.required_transports) parts.push(`${req.required_transports} transports`);
+  if (req.required_refusals) parts.push(`${req.required_refusals} refusals`);
   if (req.checklist_items?.length) parts.push(`${req.checklist_items.length} items`);
   if (req.frequency) parts.push(req.frequency.replace(/_/g, ' '));
   if (req.recency_days != null) parts.push(`within last ${req.recency_days}d`);

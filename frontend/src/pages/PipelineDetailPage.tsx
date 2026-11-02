@@ -295,7 +295,14 @@ const RequirementList: React.FC<{
                 )}
                 <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                   {pr.requirement?.required_hours && <span>{pr.requirement.required_hours}h required</span>}
-                  {pr.requirement?.required_shifts && <span>{pr.requirement.required_shifts} shifts</span>}
+                  {pr.requirement?.required_shifts && (
+                    <span>
+                      {pr.requirement.required_shifts}{' '}
+                      {pr.requirement.requirement_type === 'evaluated_shifts' ? 'evaluated shifts' : 'shifts'}
+                    </span>
+                  )}
+                  {pr.requirement?.required_transports && <span>{pr.requirement.required_transports} transports</span>}
+                  {pr.requirement?.required_refusals && <span>{pr.requirement.required_refusals} refusals</span>}
                   {pr.requirement?.checklist_items && <span>{pr.requirement.checklist_items.length} items</span>}
                   {pr.requirement?.recency_days != null && <span>within last {pr.requirement.recency_days}d</span>}
                   {pr.requirement?.required_courses?.length ? (
@@ -655,7 +662,7 @@ const EnrollModal: React.FC<{
 // Requirement types whose progress is a numeric accrual (log a value); all
 // other types (courses, certification, checklist, knowledge test, skills) are
 // completed by setting status.
-const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses']);
+const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses', 'evaluated_shifts', 'transports', 'refusals']);
 
 // Requirement types an officer scores by entering a percentage; pass/fail is
 // derived from the requirement's passing_score. Groundwork for a fuller
@@ -667,6 +674,12 @@ function requirementTarget(req?: TrainingRequirementEnhanced): { value: number; 
   if (req.requirement_type === 'hours' && req.required_hours) return { value: req.required_hours, label: 'hours' };
   if (req.requirement_type === 'shifts' && req.required_shifts) return { value: req.required_shifts, label: 'shifts' };
   if (req.requirement_type === 'calls' && req.required_calls) return { value: req.required_calls, label: 'calls' };
+  if (req.requirement_type === 'evaluated_shifts' && req.required_shifts)
+    return { value: req.required_shifts, label: 'evaluated shifts' };
+  if (req.requirement_type === 'transports' && req.required_transports)
+    return { value: req.required_transports, label: 'transports' };
+  if (req.requirement_type === 'refusals' && req.required_refusals)
+    return { value: req.required_refusals, label: 'refusals' };
   if (req.requirement_type === 'courses' && req.required_courses?.length)
     return { value: req.required_courses.length, label: 'courses' };
   return null;

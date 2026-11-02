@@ -23,7 +23,12 @@ import { describeNfcSync } from '../modules/inventory/utils/nfcOfflineSync';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { SKILLS_OFFLINE_QUEUED_EVENT, drainSkillsQueue } from '../utils/skillsTestOffline';
-import { drainShiftReports } from '../utils/shiftReportSync';
+import { SHIFT_REPORTS_SYNCED_EVENT, drainShiftReports } from '../utils/shiftReportSync';
+import {
+  BACKGROUND_SYNC_MESSAGE,
+  withOfflineDrainLock,
+  type BackgroundSyncSummary,
+} from '../sw/backgroundSyncProtocol';
 import { pendingCount as equipmentPendingCount } from '../utils/offlineQueue';
 
 let inFlight: Promise<void> | null = null;
@@ -36,7 +41,8 @@ let inFlight: Promise<void> | null = null;
 function drainGenericQueue(): Promise<void> {
   if (inFlight) return inFlight;
   if (typeof navigator !== 'undefined' && !navigator.onLine) return Promise.resolve();
-  inFlight = runDrain().finally(() => {
+  // Shared with the service worker's background sync; see shiftReportSync.ts.
+  inFlight = withOfflineDrainLock(runDrain).finally(() => {
     inFlight = null;
   });
   return inFlight;
@@ -137,6 +143,41 @@ async function drainShiftReportQueue(): Promise<void> {
   }
 }
 
+function isBackgroundSyncSummary(data: unknown): data is BackgroundSyncSummary {
+  return typeof data === 'object' && data !== null && (data as { type?: unknown }).type === BACKGROUND_SYNC_MESSAGE;
+}
+
+/**
+ * The service worker sent queued work in the background (sw/backgroundSync.ts)
+ * while this window was open: say so in the same words the page drains use,
+ * refresh the pill, and let Shift Reports reload its list.
+ */
+function reportBackgroundSync(summary: BackgroundSyncSummary): void {
+  const sent = summary.genericSynced + summary.shiftReportsSynced;
+  if (sent > 0) {
+    toast.success(
+      sent === 1
+        ? 'Sent 1 item saved on this device while you were offline'
+        : `Sent ${sent} items saved on this device while you were offline`
+    );
+  }
+  if (summary.genericDiscarded > 0) {
+    toast.error(
+      summary.genericDiscarded === 1
+        ? '1 pending item failed permanently and was discarded'
+        : `${summary.genericDiscarded} pending items failed permanently and were discarded`
+    );
+  }
+  for (const refused of summary.shiftReportsRefused) {
+    toast.error(
+      `Shift report for ${refused.shiftDate} was not accepted: ${refused.message} It is still saved on this device.`,
+      { duration: 10_000 }
+    );
+  }
+  if (summary.shiftReportsSynced > 0) window.dispatchEvent(new Event(SHIFT_REPORTS_SYNCED_EVENT));
+  void usePendingSyncStore.getState().refresh();
+}
+
 export function useOfflineSyncEngine(): void {
   const refresh = usePendingSyncStore((s) => s.refresh);
 
@@ -157,11 +198,17 @@ export function useOfflineSyncEngine(): void {
       void drainShiftReportQueue();
       void drainSkillsTests();
     }
+    const handleWorkerMessage = (event: MessageEvent) => {
+      if (isBackgroundSyncSummary(event.data)) reportBackgroundSync(event.data);
+    };
+    const workerMessages = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
     window.addEventListener('online', handleOnline);
     window.addEventListener(SKILLS_OFFLINE_QUEUED_EVENT, handleSkillsQueued);
+    workerMessages?.addEventListener('message', handleWorkerMessage);
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener(SKILLS_OFFLINE_QUEUED_EVENT, handleSkillsQueued);
+      workerMessages?.removeEventListener('message', handleWorkerMessage);
     };
   }, [refresh]);
 }

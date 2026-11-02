@@ -761,6 +761,10 @@ export interface TrainingRequirement {
   required_courses?: string[];
   required_shifts?: number;
   required_calls?: number;
+  required_transports?: number | null;
+  required_refusals?: number | null;
+  /** Evaluated shifts: count only evaluations with no item at the form's lowest rating. */
+  evaluation_excludes_lowest_rating?: boolean;
   required_call_types?: string[];
   required_skills?: string[];
   checklist_items?: ChecklistItem[];
@@ -823,6 +827,9 @@ export interface TrainingRequirementCreate {
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;
   required_calls?: number | null | undefined;
+  required_transports?: number | null | undefined;
+  required_refusals?: number | null | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
   checklist_items?: ChecklistItem[] | null | undefined;
@@ -874,6 +881,9 @@ export interface TrainingRequirementUpdate {
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;
   required_calls?: number | null | undefined;
+  required_transports?: number | null | undefined;
+  required_refusals?: number | null | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
   checklist_items?: ChecklistItem[] | null | undefined;
@@ -949,7 +959,18 @@ export interface RequirementProgress {
 // ==================== Training Program Types ====================
 
 export type RequirementType =
-  'hours' | 'courses' | 'certification' | 'shifts' | 'calls' | 'skills_evaluation' | 'checklist' | 'knowledge_test';
+  | 'hours'
+  | 'courses'
+  | 'certification'
+  | 'shifts'
+  | 'calls'
+  | 'skills_evaluation'
+  | 'checklist'
+  | 'knowledge_test'
+  // Credited by submitted shift evaluations.
+  | 'evaluated_shifts'
+  | 'transports'
+  | 'refusals';
 
 export type RequirementSource = 'department' | 'state' | 'national';
 
@@ -1451,6 +1472,9 @@ export interface ProgramBuildRequirementInput {
   required_hours?: number | undefined;
   required_shifts?: number | undefined;
   required_calls?: number | undefined;
+  required_transports?: number | undefined;
+  required_refusals?: number | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   checklist_items?: ChecklistItem[] | undefined;
@@ -2102,12 +2126,25 @@ export interface MonthlyShiftData {
   calls?: number;
 }
 
+/**
+ * A member's average on one shift evaluation form, on that form's own scale.
+ * Never pooled with the 1-5 shift report rating or with another form.
+ */
+export interface ShiftEvaluationAverage {
+  template_id: string | null;
+  form_name: string;
+  scale_max: number;
+  average: number;
+  evaluations: number;
+}
+
 export interface TraineeShiftStats {
   total_reports: number;
   total_hours: number | null;
   total_calls: number | null;
   avg_rating: number | null;
   monthly: MonthlyShiftData[];
+  evaluation_averages?: ShiftEvaluationAverage[];
 }
 
 export interface OfficerAnalyticsTrainee {
@@ -2393,6 +2430,7 @@ export interface MyTrainingSummary {
     hours_reported: number;
     total_calls: number;
     avg_rating: number | null;
+    evaluation_averages?: ShiftEvaluationAverage[];
   };
   submissions?: Array<{
     id: string;

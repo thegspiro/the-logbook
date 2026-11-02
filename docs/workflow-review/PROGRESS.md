@@ -151,29 +151,16 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Reports and inventory activities** — three `DialogPanel` dialogs have no
-  `role` on the panel or a wrapper: the report viewer, and
-  InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The
-  inventory pair sits inside another modal; check its tests' dialog queries
-  when changing it.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
+
 - **Dashboard, or any activity touching a module left off at setup** — on a
   fresh install with every module skipped, the administrator's first dashboard
   asked `GET /training/module-config/config` and was refused `403 LB-ORG-002`
   ("module is not enabled"). The weather and `/integrations/connected` half of
   this lead was fixed in the W01 third pass (W01-33); the training call was not
   seen there, because that install had Training on.
-- **Any run touching the app shell** — nothing keeps `TopNavigation` and
-  `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
-  whole Forms & Comms admin group present only in the side layout. A test
-  comparing the two link sets would catch the next one (W55).
-- **Any run touching Finance Reports or the QuickBooks export settings** —
-  `FinanceReportsPage.tsx` and `QuickBooksExportSettingsPage.tsx` have table
-  cells with no `data-label`. Inside an `rwd-table` body, such a cell is
-  hidden under 768px; that is how W66-2 lost the dues actions on a phone.
-  Check those tables at 390×844.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -225,6 +212,49 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### Leads — Navigation parity and dialog roles — 2026-11-02
+
+Driven as: `admin` in the top layout at 390×844, on a reseeded review
+database. Fixed: the top layout lacked two destinations the side layout
+offers, both added there on 2026-10-26 (#3755): Medical Screening under
+Admin, and My ID Card among the member's own links. Both are now in the top
+layout, gated as in the side one, and the new `navigationParity.test.tsx`
+renders both layouts with every permission and module on, opens every group,
+and fails when either reaches a destination the other does not (80 against 82
+before the fix). Re-driven: both appear in the top layout's menu, and My ID Card
+opens the admin's own card. The W14-2 dialog-role lead was already fixed on
+main: all 56 `DialogPanel` uses carry `role="dialog"` on the panel or a
+wrapper. Gate: typecheck and lint clean, and the navigation tests pass.
+
+### Lead — Reflow table cells a phone hid — 2026-11-01
+
+Driven as: `admin` at 390×844. Fixed: every body cell of a `rwd-table` with no
+`data-label` is hidden below 768px, which took the row actions off the
+QuickBooks mapping tables and the pledges list, and every cell of the documents
+list view (a document row rendered as an empty card). Those cells now carry
+labels, and `rwdTableLabelIntegrity.test.ts` fails on the next unlabeled body
+cell, allowing only the inventory desktop actions cell (a phone gets its own)
+and the decorative bar in My Hours. Finance Reports, named in the lead, was
+clean: its unlabeled cells are in tables that do not reflow or in totals rows,
+which the rule leaves alone. Re-driven: the QuickBooks "Add a mapping", the
+pledge's Edit and a document's name, size, type and date all show on a phone;
+without the fix the document row showed nothing. Gate: typecheck and lint
+clean, and the tests for the changed pages pass.
+
+### Lead — The dashboard asked two modules that were off — 2026-10-31
+
+Driven as: `admin` at 1280×900, with Integrations and Training switched off
+over `PATCH /organization/modules` and back on afterwards. Fixed: the
+dashboard's severe-weather banner asks only while Integrations is on, and the
+side and top navigation and the command palette ask for the practical-skills
+setting only while Training is on (`usePracticalSkillsMethod` takes the module
+check from its caller; Training's own pages are behind its route gate already).
+Without the fix the dashboard sent three requests and all three were refused
+`403 LB-ORG-002`; with it, the dashboard, Events and the phone layout sent none.
+With the modules back on, both requests were sent again and answered. Gate:
+typecheck and lint clean; the 281 test files related to the changed files pass,
+and every new test fails without the fix.
+
 ### W01 third pass — Onboarding options and wording, as an IT manager — 2026-10-31
 
 Driven as: a fresh install, twice (find, then re-drive), anonymous → system
@@ -245,7 +275,9 @@ saved without a word). Resolved the dashboard lead's integrations half
 (W01-33). Gate: typecheck and lint clean, every new test seen failing first,
 the full frontend suite passes, flake8 and black clean on the two backend files.
 Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
-from onboarding and Settings (the stored field is kept, retired).
+from onboarding and Settings (the stored field is kept, retired). Owner decided
+W01-27: a failed email test now warns on the page and Continue asks before
+saving, but saving is allowed.
 
 ### Membership re-check (W08, W10–W15) — 2026-10-31
 
@@ -260,7 +292,7 @@ expired leaves "Active"; it now shares the Waivers screen's rule) and MR-2 (LOW 
 the directory fired a refused tier-config request for every member). Flagged:
 MR-3 (LOW — members see built-in tier names; mirrored to KNOWN_LIMITATIONS),
 MR-4 (LOW — profile views crowd the audit history) and MR-7 (NIT — an unused
-membership store). Open: MR-5 and MR-6 (NIT). Gate: typecheck and lint clean;
+membership store). MR-5 and MR-6 (NIT) were fixed in a 2026-11-01 follow-up. Gate: typecheck and lint clean;
 lint needed a larger Node heap with the harness running. The touched suites
 pass. See W10-W15-membership-recheck.md.
 

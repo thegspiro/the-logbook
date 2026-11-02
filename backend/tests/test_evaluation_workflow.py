@@ -1,0 +1,2577 @@
+"""Evaluations driven over HTTP: drafting, the snapshot, who sees what, and the
+forward-only workflow.
+
+Covers who may draft (a manager assigns any evaluator holding
+``evaluations.conduct``; a conductor drafts only for themselves; nobody
+evaluates themselves), that every id resolves inside the caller's
+department, that the evaluator never reads a self-evaluation before the
+member submits it and the member never reads the evaluation before it is
+released to them, and the figures the snapshot records.
+"""
+
+import json
+import uuid
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Optional
+
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_current_user
+from app.api.v1.endpoints import evaluations as endpoints
+from app.core.database import get_db
+from app.models.audit import AuditLog
+from app.models.email_template import EmailTemplateType
+from app.models.evaluation import (
+    Evaluation,
+    EvaluationPeriod,
+    EvaluationStep,
+    EvaluationTemplate,
+    EvaluationTemplateVersion,
+)
+from app.models.event import Event, EventRSVP, EventType
+from app.models.meeting import Meeting, MeetingAttendee
+from app.models.training import TrainingRecord, TrainingStatus, TrainingType
+from app.models.user import MemberLeaveOfAbsence, User, user_positions
+from app.services import evaluation_notice_service
+from app.services.email_service import EmailService
+from app.services.evaluation_notice_service import (
+    EvaluationNoticeService,
+    reminder_due,
+)
+
+pytestmark = [pytest.mark.integration]
+
+ClientFactory = Callable[..., Awaitable[AsyncClient]]
+
+PERIOD = (date(2025, 1, 1), date(2025, 12, 31))
+LEVELS = [{"value": v, "label": f"L{v}", "anchor": f"A{v}"} for v in range(1, 6)]
+DEFINITION: dict[str, Any] = {
+    "overall_mode": "weighted",
+    "officer_ranks": ["captain"],
+    "sections": [
+        {
+            "key": "core",
+            "title": "Core",
+            "items": [
+                {
+                    "key": "training",
+                    "label": "Training",
+                    "tool": "labeled_scale",
+                    "levels": LEVELS,
+                    "weight": 100,
+                    "data_block": {
+                        "source": "training.hours",
+                        "scoring_rule": {
+                            "bands": [
+                                {"min": 0, "max": 10, "score": 2},
+                                {"min": 10, "score": 4},
+                            ]
+                        },
+                    },
+                },
+                {
+                    "key": "meetings",
+                    "label": "Meetings",
+                    "tool": "narrative",
+                    "include_in_self_evaluation": False,
+                    "data_block": {"source": "events.meeting_attendance_pct"},
+                },
+            ],
+        },
+        {
+            "key": "leadership",
+            "title": "Leadership",
+            "officer_only": True,
+            "items": [
+                {
+                    "key": "lead",
+                    "label": "Leads the crew",
+                    "tool": "narrative",
+                    "include_in_self_evaluation": False,
+                    "data_block": {"source": "positions.held"},
+                }
+            ],
+        },
+    ],
+}
+
+
+def _step(key: str, kind: str, actor: str, due: int) -> dict:
+    return {
+        "key": key,
+        "type": kind,
+        "label": key.title(),
+        "actor": {"kind": actor},
+        "due_days": due,
+    }
+
+
+ANNUAL = {
+    "steps": [
+        _step("self_evaluation", "self_evaluation", "member", 14),
+        _step("evaluator", "evaluator", "evaluator", 30),
+        _step("member_acknowledgement", "member_acknowledgement", "member", 58),
+    ]
+}
+WITH_CALIBRATION = {
+    "steps": [
+        _step("self_evaluation", "self_evaluation", "member", 14),
+        _step("evaluator", "evaluator", "evaluator", 30),
+        _step("calibration", "calibration", "view_all", 40),
+        _step("member_acknowledgement", "member_acknowledgement", "member", 58),
+    ]
+}
+INTERIM = {
+    "steps": [
+        _step("self_evaluation", "self_evaluation", "member", 14),
+        _step("evaluator", "evaluator", "evaluator", 30),
+    ]
+}
+# A rating of 2 is what the figures suggest for a member with no training
+# hours, so the stock answer needs no justification.
+EVALUATOR_ANSWERS = {
+    "answers": {
+        "training": {"rating": 2},
+        "meetings": {"text": "Steady attendance."},
+    }
+}
+SELF_ANSWERS = {"answers": {"training": {"rating": 5}}}
+
+
+def _uid() -> str:
+    return str(uuid.uuid4())
+
+
+async def _org(db: AsyncSession) -> str:
+    org_id = _uid()
+    await db.execute(
+        text(
+            "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+            "VALUES (:id, 'Eval Dept', 'fire_department', :slug, 'UTC')"
+        ),
+        {"id": org_id, "slug": f"eval-{org_id[:8]}"},
+    )
+    return org_id
+
+
+async def _user(
+    db: AsyncSession,
+    org_id: str,
+    permissions: list[str],
+    *,
+    rank: Optional[str] = None,
+    hire_date: date = date(2015, 3, 1),
+    position_kind: str = "office",
+    position_name: Optional[str] = None,
+) -> User:
+    user_id, position_id = _uid(), _uid()
+    await db.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name, "
+            "last_name, email, password_hash, status, `rank`, hire_date, member_class) "
+            "VALUES (:id, :org, :un, 'Eval', :ln, :em, 'hashed', 'active', :rank, "
+            ":hire, 'operational')"
+        ),
+        {
+            "id": user_id,
+            "org": org_id,
+            "un": f"eval-{user_id[:8]}",
+            "ln": user_id[:6],
+            "em": f"eval-{user_id[:8]}@test.example",
+            "rank": rank,
+            "hire": hire_date,
+        },
+    )
+    await db.execute(
+        text(
+            "INSERT INTO positions (id, organization_id, name, slug, permissions, kind) "
+            "VALUES (:id, :org, :name, :slug, :perms, :kind)"
+        ),
+        {
+            "id": position_id,
+            "org": org_id,
+            "name": position_name or f"Pos {position_id[:6]}",
+            "slug": f"pos-{position_id[:8]}",
+            "perms": json.dumps(permissions),
+            "kind": position_kind,
+        },
+    )
+    await db.execute(
+        text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
+        {"u": user_id, "p": position_id},
+    )
+    user = await db.get(User, user_id)
+    assert user is not None
+    await db.refresh(user, ["positions"])
+    return user
+
+
+async def _template(
+    db: AsyncSession,
+    org_id: str,
+    *,
+    name: str = "Operational Annual",
+    kind: str = "annual",
+    workflow: Optional[dict] = None,
+    definition: Optional[dict] = None,
+    member_class: Optional[str] = None,
+    member_status: Optional[str] = None,
+) -> EvaluationTemplate:
+    template = EvaluationTemplate(
+        organization_id=org_id,
+        name=name,
+        kind=kind,
+        member_class=member_class,
+        member_status=member_status,
+        is_active=True,
+    )
+    db.add(template)
+    await db.flush()
+    db.add(
+        EvaluationTemplateVersion(
+            organization_id=org_id,
+            template_id=template.id,
+            version_number=1,
+            definition=definition or DEFINITION,
+            workflow=workflow or ANNUAL,
+            published_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    await db.flush()
+    return template
+
+
+async def _period(
+    db: AsyncSession, org_id: str, *, closed: bool = False
+) -> EvaluationPeriod:
+    period = EvaluationPeriod(
+        organization_id=org_id,
+        name=f"2025 Annual {_uid()[:4]}",
+        start_date=PERIOD[0],
+        end_date=PERIOD[1],
+        is_closed=closed,
+    )
+    db.add(period)
+    await db.flush()
+    return period
+
+
+@pytest.fixture
+async def make_client(db_session: AsyncSession) -> AsyncGenerator[ClientFactory]:
+    opened: list[AsyncClient] = []
+
+    async def factory(user: User) -> AsyncClient:
+        app = FastAPI()
+        app.include_router(endpoints.router, prefix="/evaluations")
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db_session
+        client = AsyncClient(
+            transport=ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        )
+        opened.append(client)
+        return client
+
+    yield factory
+    for client in opened:
+        await client.aclose()
+
+
+class _Dept:
+    """A department with a Chief (manage, conduct and view_all, as seeded), a
+    conductor, a member and a reader who holds view_all alone."""
+
+    def __init__(self, db, org, manager, evaluator, member, reader, period, template):
+        self.db = db
+        self.org = org
+        self.manager = manager
+        self.evaluator = evaluator
+        self.member = member
+        self.reader = reader
+        self.period = period
+        self.template = template
+
+
+@pytest.fixture
+async def dept(db_session: AsyncSession) -> _Dept:
+    org = await _org(db_session)
+    manager = await _user(
+        db_session,
+        org,
+        ["evaluations.manage", "evaluations.conduct", "evaluations.view_all"],
+    )
+    evaluator = await _user(db_session, org, ["evaluations.conduct"])
+    member = await _user(db_session, org, [])
+    reader = await _user(db_session, org, ["evaluations.view_all"])
+    period = await _period(db_session, org)
+    template = await _template(db_session, org)
+    return _Dept(db_session, org, manager, evaluator, member, reader, period, template)
+
+
+async def _draft(
+    client: AsyncClient, dept: _Dept, *, member: Optional[User] = None, **extra
+) -> dict:
+    response = await client.post(
+        "/evaluations",
+        json={
+            "member_id": (member or dept.member).id,
+            "period_id": dept.period.id,
+            "evaluator_id": dept.evaluator.id,
+            **extra,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def _set_today(monkeypatch, day: date) -> None:
+    from app.services import evaluation_service
+
+    monkeypatch.setattr(evaluation_service, "today_in", lambda tz: day)
+
+
+class TestDrafting:
+    async def test_draft_opens_the_parallel_steps_and_records_the_figures(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        dept.db.add_all(
+            [
+                TrainingRecord(
+                    organization_id=dept.org,
+                    user_id=dept.member.id,
+                    course_name=name,
+                    training_type=TrainingType.CONTINUING_EDUCATION,
+                    hours_completed=hours,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=done,
+                )
+                for name, hours, done in (
+                    ("Pump ops", 6, date(2025, 3, 4)),
+                    ("Ladders", 5.5, date(2025, 9, 9)),
+                    # Outside the period: not counted.
+                    ("Last year", 40, date(2024, 12, 30)),
+                )
+            ]
+        )
+        await dept.db.flush()
+        detail = await _draft(await make_client(dept.manager), dept)
+
+        assert [(s["key"], s["status"]) for s in detail["steps"]] == [
+            ("self_evaluation", "open"),
+            ("evaluator", "open"),
+            ("member_acknowledgement", "pending"),
+        ]
+        assert [s["due_date"] for s in detail["steps"]] == [
+            "2026-01-14",
+            "2026-01-30",
+            "2026-02-27",
+        ]
+        assert detail["data"]["training.hours"] == {"available": True, "value": 11.5}
+        assert [s["key"] for s in detail["sources"]] == [
+            "training.hours",
+            "events.meeting_attendance_pct",
+        ]
+        assert detail["sources"][0]["unit"] == "hours"
+        assert detail["suggested_scores"] == {"training": 4}
+        assert [s["key"] for s in detail["definition"]["sections"]] == ["core"]
+        assert (detail["coverage_start"], detail["coverage_end"]) == (
+            "2025-01-01",
+            "2025-12-31",
+        )
+
+    async def test_an_officer_gets_the_officer_sections(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        captain = await _user(
+            dept.db, dept.org, [], rank="captain", position_name="Safety Officer"
+        )
+        # Assigned during the period; a seat taken after it ended is not listed.
+        await dept.db.execute(
+            text("UPDATE user_positions SET assigned_at = :at WHERE user_id = :u"),
+            {"at": datetime(2025, 6, 1, tzinfo=timezone.utc), "u": captain.id},
+        )
+        detail = await _draft(await make_client(dept.manager), dept, member=captain)
+
+        assert detail["includes_officer_sections"] is True
+        assert [s["key"] for s in detail["definition"]["sections"]] == [
+            "core",
+            "leadership",
+        ]
+        assert detail["data"]["positions.held"]["value"] == [
+            {"label": "Safety Officer"}
+        ]
+
+    async def test_a_member_who_joined_mid_year_is_measured_from_the_next_full_month(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        late = await _user(dept.db, dept.org, [], hire_date=date(2025, 11, 14))
+        detail = await _draft(await make_client(dept.manager), dept, member=late)
+        assert (detail["coverage_start"], detail["coverage_end"]) == (
+            "2025-12-01",
+            "2025-12-31",
+        )
+
+    async def test_a_conductor_drafts_only_for_themselves(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        client = await make_client(dept.evaluator)
+        other = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        response = await client.post(
+            "/evaluations",
+            json={
+                "member_id": dept.member.id,
+                "period_id": dept.period.id,
+                "evaluator_id": other.id,
+            },
+        )
+        assert response.status_code == 403
+        response = await client.post(
+            "/evaluations",
+            json={"member_id": dept.member.id, "period_id": dept.period.id},
+        )
+        assert response.status_code == 201
+        assert response.json()["evaluator"]["id"] == dept.evaluator.id
+
+    @pytest.mark.parametrize(
+        "case",
+        ["self", "no_conduct", "duplicate", "closed", "foreign_member", "late_joiner"],
+    )
+    async def test_refusals(self, case: str, dept: _Dept, make_client: ClientFactory):
+        client = await make_client(dept.manager)
+        body: dict[str, Any] = {
+            "member_id": dept.member.id,
+            "period_id": dept.period.id,
+            "evaluator_id": dept.evaluator.id,
+        }
+        if case == "self":
+            body["evaluator_id"] = dept.member.id
+            expected = "cannot evaluate themselves"
+        elif case == "no_conduct":
+            body["evaluator_id"] = dept.reader.id
+            expected = "not able to conduct evaluations"
+        elif case == "duplicate":
+            await _draft(client, dept)
+            expected = "already has an evaluation"
+        elif case == "closed":
+            body["period_id"] = (await _period(dept.db, dept.org, closed=True)).id
+            expected = "is closed"
+        elif case == "foreign_member":
+            body["member_id"] = (await _user(dept.db, await _org(dept.db), [])).id
+            expected = "Member not found"
+        else:
+            body["member_id"] = (
+                await _user(dept.db, dept.org, [], hire_date=date(2025, 12, 2))
+            ).id
+            expected = "served no full month"
+        response = await client.post("/evaluations", json=body)
+        assert response.status_code == 400, response.text
+        assert expected in response.json()["detail"]
+
+    async def test_the_most_specific_template_wins_and_a_tie_is_refused(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        specific = await _template(
+            dept.db, dept.org, name="Operational Regular", member_class="operational"
+        )
+        client = await make_client(dept.manager)
+        detail = await _draft(client, dept)
+        assert detail["template_name"] == specific.name
+
+        await _template(dept.db, dept.org, name="By status", member_status="regular")
+        dept.member.member_status = "regular"
+        other = await _user(dept.db, dept.org, [])
+        other.member_status = "regular"
+        await dept.db.flush()
+        response = await client.post(
+            "/evaluations",
+            json={
+                "member_id": other.id,
+                "period_id": dept.period.id,
+                "evaluator_id": dept.evaluator.id,
+            },
+        )
+        assert response.status_code == 400
+        assert "More than one template fits" in response.json()["detail"]
+
+    async def test_drafting_is_audited(self, dept: _Dept, make_client: ClientFactory):
+        detail = await _draft(await make_client(dept.manager), dept)
+        logged = (
+            (
+                await dept.db.execute(
+                    select(AuditLog).where(AuditLog.event_type == "evaluation_created")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert any(
+            row.event_data.get("evaluation_id") == detail["id"] for row in logged
+        )
+
+
+class TestWhoSeesWhat:
+    async def test_a_stranger_or_another_department_is_told_it_does_not_exist(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        stranger = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        outsider = await _user(dept.db, await _org(dept.db), ["*"])
+        for user in (stranger, outsider):
+            response = await (await make_client(user)).get(
+                f"/evaluations/{detail['id']}"
+            )
+            assert response.status_code == 404
+
+    async def test_drafts_stay_with_their_authors_until_submitted(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        url = f"/evaluations/{detail['id']}"
+
+        assert (
+            await member.put(
+                f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS}
+            )
+        ).status_code == 200
+        assert (
+            await evaluator.put(
+                f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+            )
+        ).status_code == 200
+
+        as_member = (await member.get(url)).json()
+        as_evaluator = (await evaluator.get(url)).json()
+        assert [p["kind"] for p in as_member["parts"]] == ["self_evaluation"]
+        assert as_member["data"] is None
+        assert [p["kind"] for p in as_evaluator["parts"]] == ["evaluator"]
+
+        assert (
+            await member.post(f"{url}/parts/self_evaluation/submit")
+        ).status_code == 200
+        as_evaluator = (await evaluator.get(url)).json()
+        assert sorted(p["kind"] for p in as_evaluator["parts"]) == [
+            "evaluator",
+            "self_evaluation",
+        ]
+
+    async def test_a_manager_runs_the_process_without_reading_the_content(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.evaluator), dept)
+        await (await make_client(dept.evaluator)).put(
+            f"/evaluations/{detail['id']}/parts/evaluator",
+            json={"content": EVALUATOR_ANSWERS},
+        )
+        manager_only = await _user(dept.db, dept.org, ["evaluations.manage"])
+        seen = (
+            await (await make_client(manager_only)).get(f"/evaluations/{detail['id']}")
+        ).json()
+        assert seen["parts"] == []
+        assert seen["data"] is None
+        reader = (
+            await (await make_client(dept.reader)).get(f"/evaluations/{detail['id']}")
+        ).json()
+        assert [p["kind"] for p in reader["parts"]] == ["evaluator"]
+
+    async def test_only_the_author_writes_a_part(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}/parts"
+        evaluator = await make_client(dept.evaluator)
+        member = await make_client(dept.member)
+        assert (
+            await evaluator.put(
+                f"{url}/self_evaluation", json={"content": SELF_ANSWERS}
+            )
+        ).status_code == 403
+        assert (
+            await member.put(f"{url}/evaluator", json={"content": EVALUATOR_ANSWERS})
+        ).status_code == 403
+
+    async def test_lists_are_scoped(self, dept: _Dept, make_client: ClientFactory):
+        mine = await _draft(await make_client(dept.manager), dept)
+        other_member = await _user(dept.db, dept.org, [])
+        other_evaluator = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        await _draft(
+            await make_client(dept.manager),
+            dept,
+            member=other_member,
+            evaluator_id=other_evaluator.id,
+        )
+        conducting = (
+            await (await make_client(dept.evaluator)).get("/evaluations")
+        ).json()
+        assert [e["id"] for e in conducting] == [mine["id"]]
+        everything = (await (await make_client(dept.reader)).get("/evaluations")).json()
+        assert len(everything) == 2
+        own = (await (await make_client(dept.member)).get("/evaluations/mine")).json()
+        assert [e["id"] for e in own] == [mine["id"]]
+        assert (
+            await (await make_client(dept.member)).get("/evaluations")
+        ).status_code == 403
+
+
+class TestWorkflow:
+    async def _ready(
+        self, dept: _Dept, make_client: ClientFactory, **extra
+    ) -> tuple[str, AsyncClient, AsyncClient]:
+        detail = await _draft(await make_client(dept.manager), dept, **extra)
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        url = f"/evaluations/{detail['id']}"
+        await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        return url, member, evaluator
+
+    async def test_the_evaluator_waits_for_the_self_evaluation_until_its_deadline(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        url, _member, evaluator = await self._ready(dept, make_client)
+        await _set_today(monkeypatch, date(2026, 1, 14))
+        response = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert response.status_code == 400
+        assert "until 2026-01-14" in response.json()["detail"]
+
+        await _set_today(monkeypatch, date(2026, 1, 15))
+        response = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert response.status_code == 200
+        steps = {s["key"]: s["status"] for s in response.json()["evaluation"]["steps"]}
+        assert steps == {
+            "self_evaluation": "skipped",
+            "evaluator": "completed",
+            "member_acknowledgement": "open",
+        }
+
+    async def test_locking_releases_the_evaluation_to_the_member(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, evaluator = await self._ready(dept, make_client)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        assert (
+            await member.post(f"{url}/parts/self_evaluation/submit")
+        ).status_code == 200
+        response = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert response.json()["outcome"] == "submitted"
+        assert response.json()["evaluation"]["status"] == "in_progress"
+
+        as_member = (await member.get(url)).json()
+        assert sorted(p["kind"] for p in as_member["parts"]) == [
+            "evaluator",
+            "self_evaluation",
+        ]
+        assert as_member["data"]["training.hours"]["available"] is True
+        # 2 on a 1..5 scale is a quarter of the way up; one item carries all
+        # the weight.
+        assert as_member["weighted_overall"] == 25.0
+        assert as_member["current_step"] == "Member_Acknowledgement"
+
+        locked = await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        assert locked.status_code == 400
+        assert (await evaluator.post(f"{url}/refresh-data")).status_code == 400
+
+    async def test_departing_from_the_suggested_score_needs_a_reason(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        dept.db.add(
+            TrainingRecord(
+                organization_id=dept.org,
+                user_id=dept.member.id,
+                course_name="Hours",
+                training_type=TrainingType.CONTINUING_EDUCATION,
+                hours_completed=2,
+                status=TrainingStatus.COMPLETED,
+                completion_date=date(2025, 5, 1),
+            )
+        )
+        await dept.db.flush()
+        url, member, evaluator = await self._ready(dept, make_client)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        departing = {
+            "answers": {**EVALUATOR_ANSWERS["answers"], "training": {"rating": 4}}
+        }
+        await evaluator.put(f"{url}/parts/evaluator", json={"content": departing})
+
+        response = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert response.status_code == 400
+        assert "differs from the 2 the figures suggest" in response.json()["detail"]
+
+        departing["answers"]["training"]["justification"] = "Led every drill."
+        await evaluator.put(f"{url}/parts/evaluator", json={"content": departing})
+        assert (
+            await evaluator.post(f"{url}/parts/evaluator/submit")
+        ).status_code == 200
+
+    async def test_a_check_in_finalizes_when_the_evaluator_locks(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        interim = await _template(
+            dept.db, dept.org, name="Monthly check-in", kind="interim", workflow=INTERIM
+        )
+        url, member, evaluator = await self._ready(
+            dept, make_client, kind="interim", template_id=interim.id
+        )
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        response = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert response.json()["outcome"] == "finalized"
+        assert response.json()["evaluation"]["status"] == "finalized"
+
+    async def test_calibration_comes_before_the_lock_and_is_hidden_from_the_member(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        calibrated = await _template(
+            dept.db,
+            dept.org,
+            name="Calibrated",
+            workflow=WITH_CALIBRATION,
+            member_class="operational",
+        )
+        url, member, evaluator = await self._ready(
+            dept, make_client, template_id=calibrated.id
+        )
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+
+        first = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert first.json()["outcome"] == "sent_for_calibration"
+        again = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert again.status_code == 400
+        assert "with calibration" in again.json()["detail"]
+        assert "calibration" not in [
+            s["key"] for s in (await member.get(url)).json()["steps"]
+        ]
+
+        # A conductor cannot calibrate; a reader can.
+        assert (await evaluator.post(f"{url}/calibration/complete")).status_code == 403
+        reader = await make_client(dept.reader)
+        assert (await reader.post(f"{url}/calibration/complete")).status_code == 200
+
+        locked = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert locked.json()["outcome"] == "submitted"
+        steps = {s["key"]: s["status"] for s in locked.json()["evaluation"]["steps"]}
+        assert steps["calibration"] == "completed"
+        assert steps["member_acknowledgement"] == "open"
+
+    async def test_a_saved_answer_must_fit_the_form(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, evaluator = await self._ready(dept, make_client)
+        off_scale = await evaluator.put(
+            f"{url}/parts/evaluator",
+            json={"content": {"answers": {"training": {"rating": 9}}}},
+        )
+        assert off_scale.status_code == 400
+        not_on_self = await member.put(
+            f"{url}/parts/self_evaluation",
+            json={"content": {"answers": {"meetings": {"text": "x"}}}},
+        )
+        assert not_on_self.status_code == 400
+        assert "'meetings' is not on this form" in not_on_self.json()["detail"]
+
+
+class TestFigures:
+    async def test_meetings_on_leave_are_dropped(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        meetings = [
+            Meeting(
+                organization_id=dept.org,
+                title=f"M{i}",
+                meeting_date=day,
+                meeting_type="business",
+            )
+            for i, day in enumerate(
+                [
+                    date(2025, 2, 10),
+                    date(2025, 5, 12),
+                    date(2025, 8, 11),
+                    date(2025, 10, 13),
+                ]
+            )
+        ]
+        dept.db.add_all(meetings)
+        await dept.db.flush()
+        dept.db.add_all(
+            [
+                MeetingAttendee(
+                    organization_id=dept.org,
+                    meeting_id=meetings[0].id,
+                    user_id=dept.member.id,
+                    present=True,
+                ),
+                MeetingAttendee(
+                    organization_id=dept.org,
+                    meeting_id=meetings[1].id,
+                    user_id=dept.member.id,
+                    present=False,
+                ),
+                MemberLeaveOfAbsence(
+                    organization_id=dept.org,
+                    user_id=dept.member.id,
+                    start_date=date(2025, 8, 1),
+                    end_date=date(2025, 10, 31),
+                    active=True,
+                ),
+            ]
+        )
+        await dept.db.flush()
+        detail = await _draft(await make_client(dept.manager), dept)
+        assert detail["data"]["events.meeting_attendance_pct"] == {
+            "available": True,
+            "value": 50.0,
+            "attended": 1,
+            "held": 2,
+        }
+        assert [r["reason"] for r in detail["excluded_ranges"]] == ["leave"]
+
+    async def test_no_meetings_held_is_not_a_perfect_record(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        assert detail["data"]["events.meeting_attendance_pct"] == {
+            "available": False,
+            "value": None,
+            "note": "No business meetings were held in the period.",
+        }
+
+    async def test_training_sessions_count_an_officers_override(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        definition = json.loads(json.dumps(DEFINITION))
+        definition["sections"][0]["items"][1]["data_block"] = {
+            "source": "training.session_attendance_pct"
+        }
+        sessions = await _template(
+            dept.db,
+            dept.org,
+            name="Sessions",
+            definition=definition,
+            member_class="operational",
+        )
+        events = [
+            Event(
+                organization_id=dept.org,
+                title=f"Drill {i}",
+                event_type=EventType.TRAINING,
+                start_datetime=datetime(2025, month, 3, 19, tzinfo=timezone.utc),
+                end_datetime=datetime(2025, month, 3, 21, tzinfo=timezone.utc),
+                is_cancelled=cancelled,
+            )
+            for i, (month, cancelled) in enumerate(
+                [(3, False), (6, False), (9, False), (11, True)]
+            )
+        ]
+        dept.db.add_all(events)
+        await dept.db.flush()
+        dept.db.add_all(
+            [
+                EventRSVP(
+                    organization_id=dept.org,
+                    event_id=events[0].id,
+                    user_id=dept.member.id,
+                    checked_in=True,
+                ),
+                EventRSVP(
+                    organization_id=dept.org,
+                    event_id=events[1].id,
+                    user_id=dept.member.id,
+                    checked_in=False,
+                    override_check_in_at=datetime(2025, 6, 3, 19, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+        await dept.db.flush()
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=sessions.id
+        )
+        assert detail["data"]["training.session_attendance_pct"] == {
+            "available": True,
+            "value": 66.7,
+            "attended": 2,
+            "held": 3,
+        }
+
+    async def test_live_data_measures_the_member_now(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        await _draft(await make_client(dept.manager), dept)
+        response = await (await make_client(dept.member)).get(
+            "/evaluations/mine/live-data"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["period_id"] == dept.period.id
+        assert [s["key"] for s in body["sources"]] == [
+            "training.hours",
+            "events.meeting_attendance_pct",
+        ]
+        assert body["data"]["training.hours"]["available"] is True
+
+    async def test_refreshing_takes_the_figures_again_before_the_lock(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        dept.db.add(
+            TrainingRecord(
+                organization_id=dept.org,
+                user_id=dept.member.id,
+                course_name="Late entry",
+                training_type=TrainingType.CONTINUING_EDUCATION,
+                hours_completed=3,
+                status=TrainingStatus.COMPLETED,
+                completion_date=date(2025, 12, 20),
+            )
+        )
+        await dept.db.flush()
+        refreshed = await (await make_client(dept.evaluator)).post(
+            f"/evaluations/{detail['id']}/refresh-data"
+        )
+        assert refreshed.status_code == 200
+        assert refreshed.json()["data"]["training.hours"]["value"] == 3.0
+        row = await dept.db.get(Evaluation, detail["id"])
+        assert row is not None
+        assert row.data_snapshot["values"]["training.hours"]["value"] == 3.0
+
+
+class TestEverySource:
+    async def test_every_catalog_source_is_measured_without_error(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        """Each source reaches into another module's code; a wrong argument
+        there would surface only as a server error on drafting."""
+        from app.services.evaluation_data_sources import DATA_SOURCES
+
+        definition = {
+            "overall_mode": "none",
+            "sections": [
+                {
+                    "key": "all",
+                    "title": "All",
+                    "items": [
+                        {
+                            "key": source.key.replace(".", "_"),
+                            "label": source.label,
+                            "tool": "narrative",
+                            "data_block": {"source": source.key},
+                        }
+                        for source in DATA_SOURCES
+                    ],
+                }
+            ],
+        }
+        everything = await _template(
+            dept.db,
+            dept.org,
+            name="Everything",
+            definition=definition,
+            member_class="operational",
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=everything.id
+        )
+        assert sorted(detail["data"]) == sorted(s.key for s in DATA_SOURCES)
+        for key, entry in detail["data"].items():
+            assert entry["available"] or entry["note"], key
+        # With nothing recorded, the counts are honest zeros and the rates are
+        # unavailable rather than 0% or 100%.
+        assert detail["data"]["shifts.hours"] == {
+            "available": True,
+            "value": 0.0,
+            "external_hours": 0.0,
+        }
+        assert detail["data"]["skills.tests_passed"]["value"] == 0
+        assert detail["data"]["training.session_attendance_pct"]["available"] is False
+        assert detail["data"]["calls.response_pct"]["available"] is False
+
+
+class TestDraftingDefaults:
+    async def _supervise(self, dept: _Dept, supervisor: User) -> None:
+        from app.models.member_supervisor import MemberSupervisorAssignment
+
+        dept.db.add(
+            MemberSupervisorAssignment(
+                organization_id=dept.org,
+                member_id=dept.member.id,
+                supervisor_id=supervisor.id,
+                starts_on=date(2024, 1, 1),
+            )
+        )
+        await dept.db.flush()
+
+    async def _draft_unassigned(self, dept: _Dept, client: AsyncClient) -> dict:
+        response = await client.post(
+            "/evaluations",
+            json={"member_id": dept.member.id, "period_id": dept.period.id},
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    async def test_a_managers_draft_goes_to_the_members_supervisor(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        await self._supervise(dept, dept.evaluator)
+        detail = await self._draft_unassigned(dept, await make_client(dept.manager))
+        assert detail["evaluator"]["id"] == dept.evaluator.id
+
+    async def test_a_supervisor_who_cannot_evaluate_leaves_it_with_the_manager(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        await self._supervise(dept, dept.reader)
+        detail = await self._draft_unassigned(dept, await make_client(dept.manager))
+        assert detail["evaluator"]["id"] == dept.manager.id
+
+    async def test_a_conductors_draft_stays_their_own(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        conductor = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        await self._supervise(dept, dept.evaluator)
+        detail = await self._draft_unassigned(dept, await make_client(conductor))
+        assert detail["evaluator"]["id"] == conductor.id
+
+    async def test_draft_options_list_members_open_periods_and_evaluators(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        await _period(dept.db, dept.org, closed=True)
+        response = await (await make_client(dept.evaluator)).get(
+            "/evaluations/draft-options"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        member_ids = {m["id"] for m in body["members"]}
+        assert {dept.member.id, dept.evaluator.id, dept.manager.id} <= member_ids
+        assert {e["id"] for e in body["evaluators"]} == {
+            dept.manager.id,
+            dept.evaluator.id,
+        }
+        assert [p["id"] for p in body["periods"]] == [dept.period.id]
+
+        member = await make_client(dept.member)
+        assert (await member.get("/evaluations/draft-options")).status_code == 403
+
+
+WITH_APPROVAL_STEPS = [
+    _step("self_evaluation", "self_evaluation", "member", 14),
+    _step("evaluator", "evaluator", "evaluator", 30),
+    {
+        "key": "chief_approval",
+        "type": "approval",
+        "label": "Chief approval",
+        "actor": {"kind": "position", "position_id": "__POSITION__"},
+        "due_days": 40,
+    },
+    _step("member_acknowledgement", "member_acknowledgement", "member", 58),
+]
+
+
+class TestSigning:
+    async def _released(
+        self, dept: _Dept, make_client: ClientFactory, **extra
+    ) -> tuple[str, AsyncClient, AsyncClient]:
+        """An annual evaluation whose evaluator has locked, waiting on the
+        next signature."""
+        detail = await _draft(await make_client(dept.manager), dept, **extra)
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        url = f"/evaluations/{detail['id']}"
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        response = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert response.status_code == 200, response.text
+        return url, member, evaluator
+
+    @staticmethod
+    def _signature(name: str, disposition: str = "acknowledged", **extra) -> dict:
+        return {
+            "signed_name": name,
+            "disposition": disposition,
+            "intent_confirmed": True,
+            **extra,
+        }
+
+    async def test_the_members_acknowledgement_finalizes_and_freezes_the_pdf(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        offered = (await member.get(url)).json()["viewer"]["can_sign"]
+        assert offered == {
+            "step_key": "member_acknowledgement",
+            "label": "Member_Acknowledgement",
+            "dispositions": ["acknowledged", "refused"],
+        }
+
+        response = await member.post(
+            f"{url}/sign",
+            json=self._signature(f"  eval   {dept.member.last_name.upper()} "),
+            headers={"user-agent": "pytest-signing"},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["outcome"] == "finalized"
+        assert body["evaluation"]["status"] == "finalized"
+        assert body["evaluation"]["document_available"] is True
+        assert [
+            (s["step_key"], s["disposition"]) for s in body["evaluation"]["signatures"]
+        ] == [("member_acknowledgement", "acknowledged")]
+
+        from app.models.evaluation import EvaluationDocument, EvaluationSignature
+
+        signature = (
+            await dept.db.execute(
+                select(EvaluationSignature).where(
+                    EvaluationSignature.evaluation_id == body["evaluation"]["id"]
+                )
+            )
+        ).scalar_one()
+        assert signature.user_agent == "pytest-signing"
+        assert signature.intent_confirmed is True
+        assert len(signature.content_hash) == 64
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == body["evaluation"]["id"]
+                )
+            )
+        ).scalar_one()
+        assert document.content_hash == signature.content_hash
+
+        download = await member.get(f"{url}/document")
+        assert download.status_code == 200
+        assert download.headers["content-type"] == "application/pdf"
+        assert download.content.startswith(b"%PDF")
+        import hashlib
+
+        assert hashlib.sha256(download.content).hexdigest() == document.file_sha256
+        # Served as the same file on every request, not rebuilt.
+        again = await (await make_client(dept.evaluator)).get(f"{url}/document")
+        assert again.content == download.content
+
+    async def test_the_typed_name_must_be_the_signers_own(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        response = await member.post(
+            f"{url}/sign", json=self._signature("Someone Else")
+        )
+        assert response.status_code == 400
+        assert (
+            "Type your name as it appears on your account" in response.json()["detail"]
+        )
+
+    async def test_a_refusal_needs_a_reason_and_still_finalizes(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        name = dept.member.full_name
+        missing = await member.post(
+            f"{url}/sign", json=self._signature(name, "refused")
+        )
+        assert missing.status_code == 422
+        refused = await member.post(
+            f"{url}/sign",
+            json=self._signature(
+                name, "refused", comment="I dispute the training rating."
+            ),
+        )
+        assert refused.status_code == 200
+        assert refused.json()["outcome"] == "finalized"
+        assert refused.json()["evaluation"]["signatures"][0]["comment"] == (
+            "I dispute the training rating."
+        )
+
+    async def test_only_the_person_the_step_waits_on_may_sign_it(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, evaluator = await self._released(dept, make_client)
+        assert (await evaluator.get(url)).json()["viewer"]["can_sign"] is None
+        response = await evaluator.post(
+            f"{url}/sign", json=self._signature(dept.evaluator.full_name)
+        )
+        assert response.status_code == 403
+        approving = await member.post(
+            f"{url}/sign", json=self._signature(dept.member.full_name, "signed")
+        )
+        assert approving.status_code == 400
+        stranger = await _user(dept.db, dept.org, [])
+        outside = await (await make_client(stranger)).post(
+            f"{url}/sign", json=self._signature(stranger.full_name)
+        )
+        assert outside.status_code == 404
+
+    async def test_a_step_is_signed_once(self, dept: _Dept, make_client: ClientFactory):
+        url, member, _ = await self._released(dept, make_client)
+        signature = self._signature(dept.member.full_name)
+        assert (await member.post(f"{url}/sign", json=signature)).status_code == 200
+        second = await member.post(f"{url}/sign", json=signature)
+        assert second.status_code == 403
+
+    async def test_an_approver_signs_before_the_member_is_asked(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        chief = await _user(dept.db, dept.org, [], position_name="Chief of Department")
+        position_id = chief.positions[0].id
+        steps = json.loads(
+            json.dumps(WITH_APPROVAL_STEPS).replace("__POSITION__", position_id)
+        )
+        approved = await _template(
+            dept.db,
+            dept.org,
+            name="With approval",
+            workflow={"steps": steps},
+            member_class="operational",
+        )
+        url, member, _ = await self._released(
+            dept, make_client, template_id=approved.id
+        )
+        assert (await member.get(url)).json()["viewer"]["can_sign"] is None
+
+        chief_client = await make_client(chief)
+        offered = (await chief_client.get(url)).json()["viewer"]["can_sign"]
+        assert offered["step_key"] == "chief_approval"
+        assert offered["dispositions"] == ["signed"]
+        signed = await chief_client.post(
+            f"{url}/sign", json=self._signature(chief.full_name, "signed")
+        )
+        assert signed.json()["outcome"] == "signed"
+        assert (await member.get(url)).json()["viewer"]["can_sign"]["step_key"] == (
+            "member_acknowledgement"
+        )
+
+    # conftest treats step-up as satisfied unless a test asks for the real
+    # check, which is what this one is about.
+    @pytest.mark.real_stepup
+    async def test_signing_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, _, _ = await self._released(dept, make_client)
+        unverified = await make_client(dept.member)
+        response = await unverified.post(
+            f"{url}/sign", json=self._signature(dept.member.full_name)
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"
+
+    async def test_a_check_in_gets_its_pdf_when_the_evaluator_locks(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        interim = await _template(
+            dept.db, dept.org, name="Check-in", kind="interim", workflow=INTERIM
+        )
+        detail = await _draft(
+            await make_client(dept.manager),
+            dept,
+            kind="interim",
+            template_id=interim.id,
+        )
+        url = f"/evaluations/{detail['id']}"
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        await evaluator.post(f"{url}/parts/evaluator/submit")
+        download = await member.get(f"{url}/document")
+        assert download.status_code == 200
+        assert download.content.startswith(b"%PDF")
+
+    async def test_no_pdf_before_finalization(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url, member, _ = await self._released(dept, make_client)
+        assert (await member.get(f"{url}/document")).status_code == 404
+
+
+class TestContentHash:
+    def test_it_changes_with_the_record_and_ignores_drafts(self):
+        from types import SimpleNamespace
+
+        from app.services.evaluation_service import content_hash
+
+        evaluation = SimpleNamespace(
+            id="e1",
+            revision=1,
+            template_version_id="v1",
+            member_id="m1",
+            evaluator_id="x1",
+            period_start=date(2025, 1, 1),
+            period_end=date(2025, 12, 31),
+            coverage_start=date(2025, 1, 1),
+            coverage_end=date(2025, 12, 31),
+            excluded_ranges=[],
+            data_snapshot={
+                "values": {"training.hours": {"available": True, "value": 3}}
+            },
+        )
+        submitted = SimpleNamespace(
+            status="submitted",
+            content={"answers": {"t": {"rating": 2}}},
+            submitted_at=None,
+        )
+        base = content_hash(evaluation, {"evaluator": submitted})
+        draft = SimpleNamespace(
+            status="draft", content={"answers": {}}, submitted_at=None
+        )
+        assert (
+            content_hash(evaluation, {"evaluator": submitted, "self_evaluation": draft})
+            == base
+        )
+        changed = SimpleNamespace(
+            status="submitted",
+            content={"answers": {"t": {"rating": 3}}},
+            submitted_at=None,
+        )
+        assert content_hash(evaluation, {"evaluator": changed}) != base
+        evaluation.data_snapshot = {
+            "values": {"training.hours": {"available": True, "value": 4}}
+        }
+        assert content_hash(evaluation, {"evaluator": submitted}) != base
+
+
+# ---------------------------------------------------------------- notices
+#
+# Who is emailed when a step opens, when the record is final, and the
+# deadline reminders and overdue notices the daily scan sends. Sending is
+# replaced by a recorder at ``EmailService.send_evaluation_notice``, so each
+# test asserts exactly who would have been emailed which template, and with
+# which sentence.
+
+WAITING = EmailTemplateType.EVALUATION_STEP_WAITING
+REMINDER = EmailTemplateType.EVALUATION_DEADLINE_REMINDER
+OVERDUE = EmailTemplateType.EVALUATION_OVERDUE
+FINALIZED = EmailTemplateType.EVALUATION_FINALIZED
+DELETED = EmailTemplateType.EVALUATION_DELETED
+
+# The workflow suite's period ends 2025-12-31, so its steps fall due in
+# January and February 2026.
+SELF_DUE = date(2026, 1, 14)
+EVALUATOR_DUE = date(2026, 1, 30)
+
+
+class _Outbox:
+    def __init__(self) -> None:
+        self.sent: list[tuple[EmailTemplateType, str, dict[str, Any]]] = []
+
+    def to(self, user: User, template: Optional[EmailTemplateType] = None) -> list:
+        return [
+            context
+            for kind, email, context in self.sent
+            if email == user.email and (template is None or kind == template)
+        ]
+
+    def templates_to(self, user: User) -> list[EmailTemplateType]:
+        return [kind for kind, email, _ in self.sent if email == user.email]
+
+    def clear(self) -> None:
+        self.sent.clear()
+
+
+@pytest.fixture
+def outbox(monkeypatch) -> _Outbox:
+    box = _Outbox()
+
+    async def record(self, template_type, to_email, context, **_):
+        box.sent.append((template_type, to_email, dict(context)))
+        return True
+
+    monkeypatch.setattr(EmailService, "send_evaluation_notice", record)
+    return box
+
+
+def _set_notice_today(monkeypatch, day: date) -> None:
+    monkeypatch.setattr(evaluation_notice_service, "today_in", lambda tz: day)
+
+
+async def _lock_evaluator(
+    dept: _Dept,
+    make_client: ClientFactory,
+    url: str,
+    member_user: Optional[User] = None,
+) -> dict:
+    member = await make_client(member_user or dept.member)
+    evaluator = await make_client(dept.evaluator)
+    await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+    await member.post(f"{url}/parts/self_evaluation/submit")
+    await evaluator.put(f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS})
+    response = await evaluator.post(f"{url}/parts/evaluator/submit")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def _step(dept: _Dept, evaluation_id: str, key: str) -> EvaluationStep:
+    return (
+        await dept.db.execute(
+            select(EvaluationStep).where(
+                EvaluationStep.evaluation_id == evaluation_id,
+                EvaluationStep.step_key == key,
+            )
+        )
+    ).scalar_one()
+
+
+def _at(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, 12, tzinfo=timezone.utc)
+
+
+class TestReminderWindow:
+    @pytest.mark.parametrize(
+        ("today", "expected"),
+        [
+            (date(2026, 1, 10), False),
+            (date(2026, 1, 11), True),
+            (date(2026, 1, 14), True),
+            (date(2026, 1, 15), False),
+        ],
+    )
+    def test_the_window_runs_from_the_reminder_day_through_the_due_date(
+        self, today: date, expected: bool
+    ):
+        assert reminder_due(SELF_DUE, 3, today) is expected
+
+    def test_no_due_date_is_never_due(self):
+        assert reminder_due(None, 3, date(2026, 1, 14)) is False
+
+
+class TestWhenAStepOpens:
+    async def test_drafting_tells_the_member_and_the_evaluator(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+
+        (to_member,) = outbox.to(dept.member, WAITING)
+        assert to_member["summary"] == (
+            f"Your self-evaluation for {dept.period.name} is open."
+        )
+        assert to_member["step_label"] == "Self_Evaluation"
+        assert to_member["due_date"] == "January 14, 2026"
+        assert to_member["evaluation_url"].endswith(
+            f"/reports/evaluations/{detail['id']}"
+        )
+        (to_evaluator,) = outbox.to(dept.evaluator, WAITING)
+        assert to_evaluator["summary"] == (
+            f"You are evaluating {dept.member.full_name} for {dept.period.name}."
+        )
+        # The drafting manager acts on no step, so is not told.
+        assert outbox.to(dept.manager) == []
+
+    async def test_no_notice_carries_a_rating_or_a_comment(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        await _lock_evaluator(dept, make_client, f"/evaluations/{detail['id']}")
+        written = "Steady attendance."
+        for _, _, context in outbox.sent:
+            assert all(written not in str(v) for v in context.values())
+            assert set(context) <= {
+                "recipient_name",
+                "member_name",
+                "period_name",
+                "summary",
+                "evaluation_url",
+                "step_label",
+                "due_date",
+            }
+
+    async def test_the_evaluator_locking_asks_the_member_to_acknowledge(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        outbox.clear()
+        await _lock_evaluator(dept, make_client, f"/evaluations/{detail['id']}")
+
+        (notice,) = outbox.to(dept.member, WAITING)
+        assert notice["summary"] == (
+            f"Your evaluation for {dept.period.name} is ready for you to read "
+            "and acknowledge."
+        )
+        assert outbox.to(dept.evaluator) == []
+
+    async def test_calibration_tells_its_holders_and_then_the_evaluator(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        template = await _template(
+            dept.db, dept.org, name="Calibrated", workflow=WITH_CALIBRATION
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        outbox.clear()
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+
+        sentence = (
+            f"{dept.member.full_name}'s evaluation for {dept.period.name} is "
+            "ready for calibration."
+        )
+        assert [n["summary"] for n in outbox.to(dept.reader, WAITING)] == [sentence]
+        assert [n["summary"] for n in outbox.to(dept.manager, WAITING)] == [sentence]
+        assert outbox.to(dept.member) == []
+
+        outbox.clear()
+        response = await (await make_client(dept.reader)).post(
+            f"{url}/calibration/complete"
+        )
+        assert response.status_code == 200, response.text
+        (notice,) = outbox.to(dept.evaluator, WAITING)
+        assert notice["summary"].startswith("Calibration of ")
+        assert notice["step_label"] == "Evaluator"
+
+    async def test_an_approval_tells_the_positions_holders_but_not_the_member(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, db_session
+    ):
+        approver = await _user(db_session, dept.org, [], position_name="Board")
+        approver_position = approver.positions[0].id
+        # The member also holds the position; they never approve their own.
+        await db_session.execute(
+            user_positions.insert().values(
+                user_id=dept.member.id, position_id=approver_position
+            )
+        )
+        workflow = {
+            "steps": [
+                *ANNUAL["steps"][:2],
+                {
+                    "key": "board",
+                    "type": "approval",
+                    "label": "Board approval",
+                    "actor": {"kind": "position", "position_id": approver_position},
+                    "due_days": 45,
+                },
+                ANNUAL["steps"][2],
+            ]
+        }
+        template = await _template(
+            dept.db, dept.org, name="With approval", workflow=workflow
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        outbox.clear()
+        await _lock_evaluator(dept, make_client, f"/evaluations/{detail['id']}")
+
+        (notice,) = outbox.to(approver, WAITING)
+        assert notice["summary"] == (
+            f"{dept.member.full_name}'s evaluation for {dept.period.name} is "
+            "waiting for your approval."
+        )
+        assert notice["step_label"] == "Board approval"
+        assert outbox.to(dept.member) == []
+
+    async def test_a_failed_notice_does_not_undo_the_draft(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        async def broken(self, *args, **kwargs):
+            raise RuntimeError("mail server on fire")
+
+        monkeypatch.setattr(EmailService, "send_evaluation_notice", broken)
+        detail = await _draft(await make_client(dept.manager), dept)
+        response = await (await make_client(dept.manager)).get(
+            f"/evaluations/{detail['id']}"
+        )
+        assert response.status_code == 200
+
+    async def test_a_step_opening_inside_its_window_is_not_reminded_again(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, SELF_DUE - timedelta(days=1))
+        detail = await _draft(await make_client(dept.manager), dept)
+        step = await _step(dept, detail["id"], "self_evaluation")
+        assert step.reminder_sent_at is not None
+        # The evaluator's step is due later, outside the window: not stamped.
+        assert (await _step(dept, detail["id"], "evaluator")).reminder_sent_at is None
+
+        outbox.clear()
+        counts = await EvaluationNoticeService(dept.db).send_due_notices(
+            now=_at(SELF_DUE)
+        )
+        assert outbox.to(dept.member, REMINDER) == []
+        assert counts["reminders"] == 0
+
+
+class TestFinalized:
+    async def test_the_member_and_the_evaluator_are_told(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        outbox.clear()
+        member = await make_client(dept.member)
+        response = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        (to_member,) = outbox.to(dept.member, FINALIZED)
+        assert (
+            to_member["summary"] == f"Your evaluation for {dept.period.name} is final."
+        )
+        (to_evaluator,) = outbox.to(dept.evaluator, FINALIZED)
+        assert "which you conducted" in to_evaluator["summary"]
+        assert outbox.to(dept.manager) == []
+
+
+class TestPreferences:
+    async def test_an_officer_may_switch_duties_off_but_a_member_cannot_opt_out(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        dept.evaluator.notification_preferences = {
+            "email_kinds": {"evaluation_duties": False}
+        }
+        dept.member.notification_preferences = {"email_notifications": False}
+        await dept.db.flush()
+
+        await _draft(await make_client(dept.manager), dept)
+
+        assert outbox.to(dept.evaluator) == []
+        assert len(outbox.to(dept.member, WAITING)) == 1
+
+
+class TestTheDailyScan:
+    async def _drafted(self, dept: _Dept, make_client: ClientFactory) -> str:
+        detail = await _draft(await make_client(dept.manager), dept)
+        return detail["id"]
+
+    async def test_a_reminder_goes_out_once_inside_the_window(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        # Drafted long before anything is due, so no stamp at opening.
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        outbox.clear()
+        service = EvaluationNoticeService(dept.db)
+
+        early = await service.send_due_notices(now=_at(SELF_DUE - timedelta(days=4)))
+        assert outbox.sent == []
+        assert early["reminders"] == 0
+
+        await service.send_due_notices(now=_at(SELF_DUE - timedelta(days=3)))
+        (notice,) = outbox.to(dept.member, REMINDER)
+        assert notice["summary"] == (
+            f"Your self-evaluation for {dept.period.name} is due soon."
+        )
+        assert outbox.to(dept.evaluator) == []
+        assert (await _step(dept, evaluation_id, "self_evaluation")).reminder_sent_at
+
+        outbox.clear()
+        await service.send_due_notices(now=_at(SELF_DUE - timedelta(days=2)))
+        assert outbox.to(dept.member) == []
+
+    async def test_an_overdue_step_tells_the_actor_and_the_managers_once(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        outbox.clear()
+        service = EvaluationNoticeService(dept.db)
+
+        counts = await service.send_due_notices(
+            now=_at(EVALUATOR_DUE + timedelta(days=1))
+        )
+        assert counts["overdue"] == 2
+        assert [n["summary"] for n in outbox.to(dept.evaluator, OVERDUE)] == [
+            f"Your evaluation of {dept.member.full_name} for {dept.period.name} "
+            "is past its due date."
+        ]
+        to_manager = sorted(n["summary"] for n in outbox.to(dept.manager, OVERDUE))
+        assert to_manager == sorted(
+            f"The {label} step of {dept.member.full_name}'s evaluation for "
+            f"{dept.period.name} is past its due date."
+            for label in ("Self_Evaluation", "Evaluator")
+        )
+        # A reader holds view_all, not manage: not an evaluation manager.
+        assert outbox.to(dept.reader) == []
+        # Late is late: no "due soon" for a step already overdue.
+        assert outbox.to(dept.member, REMINDER) == []
+        step = await _step(dept, evaluation_id, "evaluator")
+        assert step.overdue_notice_sent_at is not None
+        assert step.reminder_sent_at is not None
+
+        outbox.clear()
+        again = await service.send_due_notices(
+            now=_at(EVALUATOR_DUE + timedelta(days=2))
+        )
+        assert outbox.sent == []
+        assert again["overdue"] == 0
+
+    async def test_a_mail_outage_leaves_the_step_to_be_tried_again(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        recorder = EmailService.send_evaluation_notice
+
+        async def down(self, *args, **kwargs):
+            raise ConnectionError("SMTP unreachable")
+
+        monkeypatch.setattr(EmailService, "send_evaluation_notice", down)
+        service = EvaluationNoticeService(dept.db)
+        day = _at(SELF_DUE - timedelta(days=1))
+        assert (await service.send_due_notices(now=day))["reminders"] == 0
+        step = await _step(dept, evaluation_id, "self_evaluation")
+        assert step.reminder_sent_at is None
+
+        monkeypatch.setattr(EmailService, "send_evaluation_notice", recorder)
+        outbox.clear()
+        assert (await service.send_due_notices(now=day))["reminders"] == 1
+        assert len(outbox.to(dept.member, REMINDER)) == 1
+
+    async def test_a_closed_step_is_not_chased(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        _set_notice_today(monkeypatch, date(2025, 12, 1))
+        evaluation_id = await self._drafted(dept, make_client)
+        member = await make_client(dept.member)
+        url = f"/evaluations/{evaluation_id}"
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        outbox.clear()
+
+        await EvaluationNoticeService(dept.db).send_due_notices(
+            now=_at(SELF_DUE + timedelta(days=1))
+        )
+        assert outbox.to(dept.member) == []
+
+    async def test_a_departments_template_switch_is_honoured_by_the_sender(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        """Through the real sender: a switched-off template sends nothing."""
+        calls: list[str] = []
+
+        async def fake_send_email(self, **kwargs):
+            calls.append(kwargs["template_type"])
+            return 1, 0
+
+        async def switched_off(self, organization_id, template_type):
+            return template_type == WAITING
+
+        from app.services.email_template_service import EmailTemplateService
+
+        monkeypatch.setattr(EmailService, "send_email", fake_send_email)
+        monkeypatch.setattr(EmailTemplateService, "is_switched_off", switched_off)
+        await _draft(await make_client(dept.manager), dept)
+        assert WAITING.value not in calls
+
+
+def test_the_scan_is_scheduled_daily():
+    from app.services import scheduled_tasks
+
+    assert (
+        scheduled_tasks.TASK_RUNNERS["evaluation_due_notices"]
+        is scheduled_tasks.run_evaluation_due_notices
+    )
+    assert scheduled_tasks.SCHEDULE["evaluation_due_notices"]["frequency"] == "daily"
+
+
+# --------------------------------------------------------- bulk drafting
+
+
+class TestBulkDrafting:
+    async def _preview(self, client: AsyncClient, dept: _Dept) -> dict:
+        response = await client.get(
+            "/evaluations/bulk-preview", params={"period_id": dept.period.id}
+        )
+        assert response.status_code == 200, response.text
+        return {row["member"]["id"]: row for row in response.json()["rows"]}
+
+    async def test_the_preview_says_what_each_member_would_get(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        manager = await make_client(dept.manager)
+        drafted = await _user(dept.db, dept.org, [])
+        await _draft(manager, dept, member=drafted)
+
+        rows = await self._preview(manager, dept)
+
+        member = rows[dept.member.id]
+        assert member["template"]["name"] == dept.template.name
+        # No supervisor who conducts: the drafting manager evaluates.
+        assert member["evaluator"]["id"] == dept.manager.id
+        assert member["skip_reason"] is None
+        assert rows[drafted.id]["skip_reason"] == (
+            "Already has an evaluation for this period."
+        )
+        # The manager is a member too, and cannot be their own evaluator.
+        assert rows[dept.manager.id]["evaluator"] is None
+        assert rows[dept.manager.id]["skip_reason"] is None
+
+    async def test_drafting_the_kept_members_reports_each_one(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        manager = await make_client(dept.manager)
+        already = await _user(dept.db, dept.org, [])
+        await _draft(manager, dept, member=already)
+
+        response = await manager.post(
+            "/evaluations/bulk",
+            json={
+                "period_id": dept.period.id,
+                "items": [
+                    {"member_id": dept.member.id, "evaluator_id": dept.evaluator.id},
+                    {"member_id": dept.reader.id},
+                    {"member_id": already.id},
+                ],
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["drafted"] == 2
+        results = {r["member_id"]: r for r in body["results"]}
+        assert results[already.id]["error"].endswith(
+            "already has an evaluation for " f"'{dept.period.name}'."
+        )
+
+        evaluations = {
+            e.member_id: e
+            for e in (
+                await dept.db.execute(
+                    select(Evaluation).where(Evaluation.period_id == dept.period.id)
+                )
+            )
+            .scalars()
+            .all()
+        }
+        assert evaluations[dept.member.id].evaluator_id == dept.evaluator.id
+        assert evaluations[dept.reader.id].evaluator_id == dept.manager.id
+        assert (
+            results[dept.member.id]["evaluation_id"] == evaluations[dept.member.id].id
+        )
+
+    async def test_only_a_manager_drafts_in_bulk(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        conductor = await make_client(dept.evaluator)
+        preview = await conductor.get(
+            "/evaluations/bulk-preview", params={"period_id": dept.period.id}
+        )
+        assert preview.status_code == 403
+        drafted = await conductor.post(
+            "/evaluations/bulk",
+            json={
+                "period_id": dept.period.id,
+                "items": [{"member_id": dept.member.id}],
+            },
+        )
+        assert drafted.status_code == 403
+
+    async def test_a_member_listed_twice_is_refused(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        response = await (await make_client(dept.manager)).post(
+            "/evaluations/bulk",
+            json={
+                "period_id": dept.period.id,
+                "items": [{"member_id": dept.member.id}, {"member_id": dept.member.id}],
+            },
+        )
+        assert response.status_code == 422
+
+    async def test_another_departments_period_is_not_found(
+        self, dept: _Dept, make_client: ClientFactory, db_session
+    ):
+        other_org = await _org(db_session)
+        other_period = await _period(db_session, other_org)
+        manager = await make_client(dept.manager)
+
+        preview = await manager.get(
+            "/evaluations/bulk-preview", params={"period_id": other_period.id}
+        )
+        assert preview.status_code == 400
+        assert "not found" in preview.json()["detail"]
+        drafted = await manager.post(
+            "/evaluations/bulk",
+            json={
+                "period_id": other_period.id,
+                "items": [{"member_id": dept.member.id}],
+            },
+        )
+        assert drafted.status_code == 400
+
+
+# ---------------------------------------------------------------- deletion
+
+
+class TestDeletion:
+    async def _deleter(self, dept: _Dept) -> User:
+        return await _user(
+            dept.db, dept.org, ["evaluations.delete", "evaluations.view_all"]
+        )
+
+    async def test_deleting_leaves_a_record_the_member_reads_and_emails_them(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        deleter_user = await self._deleter(dept)
+        deleter = await make_client(deleter_user)
+        assert (await deleter.get(url)).json()["viewer"]["can_delete"] is True
+        outbox.clear()
+
+        response = await deleter.post(
+            f"{url}/delete", json={"reason": "  Drafted for the wrong member.  "}
+        )
+        assert response.status_code == 200, response.text
+        record = response.json()
+        assert record["reason"] == "Drafted for the wrong member."
+        assert record["deleted_by_name"] == deleter_user.full_name
+        assert record["evaluator_name"] == dept.evaluator.full_name
+        assert record["was_finalized"] is False
+
+        assert (await deleter.get(url)).status_code == 404
+        steps = (
+            await dept.db.execute(
+                select(EvaluationStep).where(
+                    EvaluationStep.evaluation_id == detail["id"]
+                )
+            )
+        ).all()
+        assert steps == []
+
+        member = await make_client(dept.member)
+        mine = (await member.get("/evaluations/mine/removed")).json()
+        assert [(r["id"], r["reason"]) for r in mine] == [
+            (record["id"], "Drafted for the wrong member.")
+        ]
+        (notice,) = outbox.to(dept.member, DELETED)
+        assert notice["deleted_by_name"] == deleter_user.full_name
+        assert notice["evaluations_url"].endswith("/reports/evaluations/mine")
+        assert all("wrong member" not in str(v) for v in notice.values())
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(AuditLog.event_type == "evaluation_deleted")
+            )
+        ).scalar_one()
+        assert audit.event_data["evaluation_id"] == detail["id"]
+
+    async def test_a_finalized_evaluations_pdf_goes_with_it(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        from app.models.evaluation import EvaluationDocument
+        from app.services import file_storage_service as file_storage
+
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        member = await make_client(dept.member)
+        signed = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.status_code == 200, signed.text
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == detail["id"]
+                )
+            )
+        ).scalar_one()
+        stored = file_storage.resolve(
+            document.file_path, dept.org, file_storage.StorageArea.EVALUATIONS
+        )
+        assert stored is not None
+        assert await file_storage.exists(stored)
+
+        response = await (await make_client(await self._deleter(dept))).post(
+            f"{url}/delete", json={"reason": "Duplicate of the paper record."}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["was_finalized"] is True
+        assert not await file_storage.exists(stored)
+        remaining = (
+            await dept.db.execute(
+                select(EvaluationDocument.id).where(
+                    EvaluationDocument.evaluation_id == detail["id"]
+                )
+            )
+        ).all()
+        assert remaining == []
+
+    async def test_without_the_grant_nobody_deletes(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        manager = await make_client(dept.manager)
+        assert (await manager.get(url)).json()["viewer"]["can_delete"] is False
+        response = await manager.post(f"{url}/delete", json={"reason": "Mistake."})
+        assert response.status_code == 403
+
+    async def test_nobody_deletes_their_own_evaluation(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        own = await self._deleter(dept)
+        detail = await _draft(await make_client(dept.manager), dept, member=own)
+        client = await make_client(own)
+        url = f"/evaluations/{detail['id']}"
+        assert (await client.get(url)).json()["viewer"]["can_delete"] is False
+        response = await client.post(f"{url}/delete", json={"reason": "Not mine."})
+        assert response.status_code == 403
+        assert (await client.get(url)).status_code == 200
+
+    async def test_another_departments_evaluation_is_not_found(
+        self, dept: _Dept, make_client: ClientFactory, db_session
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        other_org = await _org(db_session)
+        outsider = await _user(db_session, other_org, ["evaluations.delete"])
+        response = await (await make_client(outsider)).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "Reach across."}
+        )
+        assert response.status_code == 404
+        assert (
+            await dept.db.execute(
+                select(Evaluation.id).where(Evaluation.id == detail["id"])
+            )
+        ).scalar_one_or_none() == detail["id"]
+
+    async def test_a_reason_is_required(self, dept: _Dept, make_client: ClientFactory):
+        detail = await _draft(await make_client(dept.manager), dept)
+        response = await (await make_client(await self._deleter(dept))).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "   "}
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.real_stepup
+    async def test_deleting_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        response = await (await make_client(await self._deleter(dept))).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "Mistake."}
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"
+
+    async def test_managers_read_the_departments_deletion_records(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        await (await make_client(await self._deleter(dept))).post(
+            f"/evaluations/{detail['id']}/delete", json={"reason": "Mistake."}
+        )
+        manager = await make_client(dept.manager)
+        everyone = (await manager.get("/evaluations/removed")).json()
+        assert [r["member"]["id"] for r in everyone] == [dept.member.id]
+        others = (
+            await manager.get(
+                "/evaluations/removed", params={"member_id": dept.reader.id}
+            )
+        ).json()
+        assert others == []
+        assert (
+            await (await make_client(dept.evaluator)).get("/evaluations/removed")
+        ).status_code == 403
+
+
+# ---------------------------------------------------------------- amending
+
+AMENDED = EmailTemplateType.EVALUATION_AMENDED
+
+
+async def _finalized(
+    dept: _Dept, make_client: ClientFactory, member: Optional[User] = None
+) -> str:
+    """An annual evaluation the member has acknowledged; returns its URL."""
+    member = member or dept.member
+    detail = await _draft(await make_client(dept.manager), dept, member=member)
+    url = f"/evaluations/{detail['id']}"
+    await _lock_evaluator(dept, make_client, url, member)
+    signed = await (await make_client(member)).post(
+        f"{url}/sign",
+        json={
+            "signed_name": member.full_name,
+            "disposition": "acknowledged",
+            "intent_confirmed": True,
+        },
+    )
+    assert signed.status_code == 200, signed.text
+    assert signed.json()["outcome"] == "finalized"
+    return url
+
+
+class TestAmending:
+    async def test_amending_reopens_from_the_evaluator_and_tells_the_member(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
+    ):
+        from app.models.evaluation import EvaluationDocument
+        from app.services import file_storage_service as file_storage
+
+        url = await _finalized(dept, make_client)
+        evaluation_id = url.rsplit("/", 1)[-1]
+        document = (
+            await dept.db.execute(
+                select(EvaluationDocument).where(
+                    EvaluationDocument.evaluation_id == evaluation_id
+                )
+            )
+        ).scalar_one()
+        stored = file_storage.resolve(
+            document.file_path, dept.org, file_storage.StorageArea.EVALUATIONS
+        )
+        assert stored is not None
+        manager = await make_client(dept.manager)
+        assert (await manager.get(url)).json()["viewer"]["can_amend"] is True
+        await _set_today(monkeypatch, date(2026, 3, 1))
+        outbox.clear()
+
+        response = await manager.post(
+            f"{url}/amend",
+            json={"reason": "  The meetings comment named the wrong year. "},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert (body["revision"], body["status"]) == (2, "in_progress")
+        steps = {s["key"]: s for s in body["steps"]}
+        assert steps["self_evaluation"]["status"] == "completed"
+        assert steps["evaluator"]["status"] == "open"
+        # The template's 16 days between the self-evaluation and the
+        # evaluator, counted from the amendment.
+        assert steps["evaluator"]["due_date"] == "2026-03-17"
+        assert steps["member_acknowledgement"]["status"] == "pending"
+        assert steps["member_acknowledgement"]["due_date"] == "2026-04-14"
+        assert body["signatures"] == []
+        (amendment,) = body["amendments"]
+        assert amendment["reason"] == "The meetings comment named the wrong year."
+        assert amendment["amended_by_name"] == dept.manager.full_name
+        assert (amendment["from_revision"], amendment["to_revision"]) == (1, 2)
+
+        evaluator = await make_client(dept.evaluator)
+        as_evaluator = (await evaluator.get(url)).json()
+        assert as_evaluator["viewer"]["can_edit_evaluation"] is True
+        evaluator_part = next(
+            p for p in as_evaluator["parts"] if p["kind"] == "evaluator"
+        )
+        assert evaluator_part["status"] == "draft"
+        assert evaluator_part["content"]["answers"]["meetings"]["text"] == (
+            "Steady attendance."
+        )
+
+        as_member = (await (await make_client(dept.member)).get(url)).json()
+        assert [a["reason"] for a in as_member["amendments"]] == [
+            "The meetings comment named the wrong year."
+        ]
+        # The earlier revision's PDF is gone with its text.
+        assert not await file_storage.exists(stored)
+        assert (
+            await dept.db.execute(
+                select(EvaluationDocument.id).where(
+                    EvaluationDocument.evaluation_id == evaluation_id
+                )
+            )
+        ).all() == []
+
+        (notice,) = outbox.to(dept.member, AMENDED)
+        assert notice["summary"].startswith(f"{dept.manager.full_name} amended your")
+        assert "wrong year" not in str(notice)
+        assert len(outbox.to(dept.evaluator, WAITING)) == 1
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(AuditLog.event_type == "evaluation_amended")
+            )
+        ).scalar_one()
+        assert audit.event_data["documents_removed"] == 1
+
+    async def test_the_new_revision_finalizes_with_the_reason_on_its_pdf(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        import io
+
+        from pypdf import PdfReader
+
+        url = await _finalized(dept, make_client)
+        manager = await make_client(dept.manager)
+        await manager.post(f"{url}/amend", json={"reason": "Corrected a comment."})
+        evaluator = await make_client(dept.evaluator)
+        resubmitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert resubmitted.status_code == 200, resubmitted.text
+        member = await make_client(dept.member)
+        assert (await member.get(url)).json()["viewer"]["can_sign"] is not None
+        signed = await member.post(
+            f"{url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized"
+
+        pdf = await member.get(f"{url}/document")
+        assert pdf.status_code == 200
+        text = " ".join(
+            page.extract_text() for page in PdfReader(io.BytesIO(pdf.content)).pages
+        )
+        assert "Amendments" in text
+        assert "Corrected a comment." in text
+
+    async def test_everyone_who_signed_is_told(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, db_session
+    ):
+        approver = await _user(db_session, dept.org, [], position_name="Board")
+        workflow = {
+            "steps": [
+                *ANNUAL["steps"][:2],
+                {
+                    "key": "board",
+                    "type": "approval",
+                    "label": "Board approval",
+                    "actor": {
+                        "kind": "position",
+                        "position_id": approver.positions[0].id,
+                    },
+                    "due_days": 45,
+                },
+                ANNUAL["steps"][2],
+            ]
+        }
+        template = await _template(
+            dept.db, dept.org, name="With approval", workflow=workflow
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        for signer, disposition in (
+            (approver, "signed"),
+            (dept.member, "acknowledged"),
+        ):
+            signed = await (await make_client(signer)).post(
+                f"{url}/sign",
+                json={
+                    "signed_name": signer.full_name,
+                    "disposition": disposition,
+                    "intent_confirmed": True,
+                },
+            )
+            assert signed.status_code == 200, signed.text
+        outbox.clear()
+
+        response = await (await make_client(dept.manager)).post(
+            f"{url}/amend", json={"reason": "Board asked for a correction."}
+        )
+        assert response.status_code == 200, response.text
+        (notice,) = outbox.to(approver, AMENDED)
+        assert "which you signed" in notice["summary"]
+        assert len(outbox.to(dept.member, AMENDED)) == 1
+
+    async def test_only_a_finalized_evaluation_is_amended(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        manager = await make_client(dept.manager)
+        url = f"/evaluations/{detail['id']}"
+        assert (await manager.get(url)).json()["viewer"]["can_amend"] is False
+        response = await manager.post(f"{url}/amend", json={"reason": "Too soon."})
+        assert response.status_code == 400
+        assert "finalized" in response.json()["detail"]
+
+    async def test_without_manage_nobody_amends(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        for user in (dept.evaluator, dept.reader, dept.member):
+            client = await make_client(user)
+            response = await client.post(f"{url}/amend", json={"reason": "Mine."})
+            assert response.status_code == 403, user.id
+            assert (await client.get(url)).json()["viewer"]["can_amend"] is False
+
+    async def test_nobody_amends_their_own_evaluation(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        own = await _user(dept.db, dept.org, ["evaluations.manage"])
+        url = await _finalized(dept, make_client, member=own)
+        response = await (await make_client(own)).post(
+            f"{url}/amend", json={"reason": "Improve my rating."}
+        )
+        assert response.status_code == 403
+
+    async def test_another_departments_evaluation_is_not_found(
+        self, dept: _Dept, make_client: ClientFactory, db_session
+    ):
+        url = await _finalized(dept, make_client)
+        outsider = await _user(
+            db_session, await _org(db_session), ["evaluations.manage"]
+        )
+        response = await (await make_client(outsider)).post(
+            f"{url}/amend", json={"reason": "Reach across."}
+        )
+        assert response.status_code == 404
+
+    async def test_a_reason_is_required(self, dept: _Dept, make_client: ClientFactory):
+        url = await _finalized(dept, make_client)
+        response = await (await make_client(dept.manager)).post(
+            f"{url}/amend", json={"reason": "  "}
+        )
+        assert response.status_code == 422
+
+
+# --------------------------------------------------------------- response
+
+RESPONSE = EmailTemplateType.EVALUATION_RESPONSE
+
+
+def _pdf_text(content: bytes) -> str:
+    import io
+
+    from pypdf import PdfReader
+
+    return " ".join(
+        page.extract_text() for page in PdfReader(io.BytesIO(content)).pages
+    )
+
+
+class TestMemberResponse:
+    async def test_a_submitted_response_joins_the_record_and_a_second_pdf(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        from app.models.evaluation import EvaluationDocument
+
+        url = await _finalized(dept, make_client)
+        evaluation_id = url.rsplit("/", 1)[-1]
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        signed_pdf = await member.get(f"{url}/document")
+        assert signed_pdf.status_code == 200
+        assert (await member.get(url)).json()["viewer"]["can_respond"] is True
+        outbox.clear()
+
+        saved = await member.put(
+            f"{url}/response", json={"text": "  I led two drills the form missed.  "}
+        )
+        assert saved.status_code == 200, saved.text
+        # A draft is the member's alone.
+        assert not any(
+            p["kind"] == "member_response"
+            for p in (await evaluator.get(url)).json()["parts"]
+        )
+
+        submitted = await member.post(f"{url}/response/submit")
+        assert submitted.status_code == 200, submitted.text
+        body = submitted.json()
+        assert body["viewer"]["can_respond"] is False
+        assert body["response_document_available"] is True
+
+        as_evaluator = (await evaluator.get(url)).json()
+        (response,) = [
+            p for p in as_evaluator["parts"] if p["kind"] == "member_response"
+        ]
+        assert response["status"] == "submitted"
+        assert response["content"]["overall_comment"] == (
+            "I led two drills the form missed."
+        )
+
+        (to_evaluator,) = outbox.to(dept.evaluator, RESPONSE)
+        assert to_evaluator["summary"] == (
+            f"{dept.member.full_name} attached a written response to their "
+            f"evaluation for {dept.period.name}."
+        )
+        assert "drills" not in str(to_evaluator)
+        assert len(outbox.to(dept.manager, RESPONSE)) == 1
+        assert outbox.to(dept.member, RESPONSE) == []
+
+        latest = await evaluator.get(f"{url}/document")
+        assert "I led two drills the form missed." in _pdf_text(latest.content)
+        assert "with-response" in latest.headers["content-disposition"]
+        original = await evaluator.get(f"{url}/document", params={"version": "signed"})
+        assert original.content == signed_pdf.content
+        assert "I led two drills" not in _pdf_text(original.content)
+        documents = (
+            (
+                await dept.db.execute(
+                    select(EvaluationDocument).where(
+                        EvaluationDocument.evaluation_id == evaluation_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(d.includes_response for d in documents) == [False, True]
+        # The response is outside what the signatures attested to.
+        assert len({d.content_hash for d in documents}) == 1
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "evaluation_response_submitted"
+                )
+            )
+        ).scalar_one()
+        assert audit.event_data["evaluation_id"] == evaluation_id
+
+    async def test_a_response_is_final_once_submitted(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        await member.put(f"{url}/response", json={"text": "First."})
+        await member.post(f"{url}/response/submit")
+        again = await member.put(f"{url}/response", json={"text": "Second."})
+        assert again.status_code == 400
+        assert "already been submitted" in again.json()["detail"]
+        assert (await member.post(f"{url}/response/submit")).status_code == 400
+
+    async def test_the_window_closes(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        due = date.fromisoformat((await member.get(url)).json()["response_due"])
+        assert due == datetime.now(timezone.utc).date() + timedelta(days=30)
+
+        await _set_today(monkeypatch, due + timedelta(days=1))
+        assert (await member.get(url)).json()["viewer"]["can_respond"] is False
+        late = await member.put(f"{url}/response", json={"text": "Late."})
+        assert late.status_code == 400
+        assert "closed" in late.json()["detail"]
+
+    async def test_only_the_member_responds_and_only_once_it_is_final(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        detail = await _draft(await make_client(dept.manager), dept)
+        member = await make_client(dept.member)
+        early = await member.put(
+            f"/evaluations/{detail['id']}/response", json={"text": "Too soon."}
+        )
+        assert early.status_code == 400
+
+        url = await _finalized(
+            dept, make_client, member=await _user(dept.db, dept.org, [])
+        )
+        for officer in (dept.evaluator, dept.manager):
+            response = await (await make_client(officer)).put(
+                f"{url}/response", json={"text": "Not mine to write."}
+            )
+            assert response.status_code == 403, officer.id
+        stranger = await _user(dept.db, dept.org, [])
+        assert (
+            await (await make_client(stranger)).put(
+                f"{url}/response", json={"text": "Who?"}
+            )
+        ).status_code == 404
+
+    async def test_nothing_to_submit_and_blank_text_are_refused(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        assert (await member.post(f"{url}/response/submit")).status_code == 400
+        assert (
+            await member.put(f"{url}/response", json={"text": "   "})
+        ).status_code == 422
+
+    async def test_an_amendment_takes_the_response_with_the_earlier_text(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await _finalized(dept, make_client)
+        member = await make_client(dept.member)
+        await member.put(f"{url}/response", json={"text": "About the old text."})
+        await member.post(f"{url}/response/submit")
+        await (await make_client(dept.manager)).post(
+            f"{url}/amend", json={"reason": "Rewritten after the response."}
+        )
+        reopened = (await member.get(url)).json()
+        assert not any(p["kind"] == "member_response" for p in reopened["parts"])
+        assert reopened["response_due"] is None
+        assert reopened["response_document_available"] is False
+
+
+# ------------------------------------------------------- calibration flags
+
+
+class TestCalibrationFlags:
+    async def _at_calibration(self, dept: _Dept, make_client: ClientFactory) -> str:
+        template = await _template(
+            dept.db, dept.org, name="Calibrated", workflow=WITH_CALIBRATION
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        return url
+
+    async def test_flags_reach_the_evaluator_and_later_the_member(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        url = await self._at_calibration(dept, make_client)
+        outbox.clear()
+
+        calibrated = await (await make_client(dept.reader)).post(
+            f"{url}/calibration/complete",
+            json={"flagged_items": ["training", "training"]},
+        )
+        assert calibrated.status_code == 200, calibrated.text
+        assert calibrated.json()["calibration_flags"] == ["training"]
+
+        evaluator = await make_client(dept.evaluator)
+        assert (await evaluator.get(url)).json()["calibration_flags"] == ["training"]
+        (notice,) = outbox.to(dept.evaluator, WAITING)
+        assert "flagged for you to revisit" in notice["summary"]
+        assert "Training" not in notice["summary"]
+
+        member = await make_client(dept.member)
+        # Not released yet: the evaluator has not resubmitted.
+        assert (await member.get(url)).json()["calibration_flags"] == []
+        resubmitted = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert resubmitted.status_code == 200, resubmitted.text
+        assert (await member.get(url)).json()["calibration_flags"] == ["training"]
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "evaluation_calibration_completed"
+                )
+            )
+        ).scalar_one()
+        assert audit.event_data["flagged_items"] == 1
+
+    async def test_only_the_evaluators_items_can_be_flagged(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        url = await self._at_calibration(dept, make_client)
+        reader = await make_client(dept.reader)
+        response = await reader.post(
+            f"{url}/calibration/complete", json={"flagged_items": ["no_such_item"]}
+        )
+        assert response.status_code == 400
+        assert (await reader.get(url)).json()["viewer"]["can_calibrate"] is True
+
+    async def test_without_flags_the_evaluator_is_told_to_go_on(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        url = await self._at_calibration(dept, make_client)
+        outbox.clear()
+        calibrated = await (await make_client(dept.reader)).post(
+            f"{url}/calibration/complete", json={"flagged_items": []}
+        )
+        assert calibrated.json()["calibration_flags"] == []
+        (notice,) = outbox.to(dept.evaluator, WAITING)
+        assert "flagged" not in notice["summary"]

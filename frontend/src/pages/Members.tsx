@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate, Link, useSearchParams } from 'react-router';
 import {
   Users,
   UserPlus,
@@ -91,7 +91,33 @@ const Members: React.FC = () => {
   // archived, so an older department's "All" is mostly people who left decades
   // ago. They stay one filter choice away, under Archived or All Statuses.
   const defaultFilterStatus = canManageMembers ? CURRENT_MEMBERS_FILTER : UserStatus.ACTIVE;
-  const [filterStatus, setFilterStatus] = useState<string>(defaultFilterStatus);
+  // `?status=` seeds the status filter: the dashboard's Active members tile
+  // links here with `?status=active`, and the Active choice below selects
+  // the same accounts it counts (isActiveAccount, so probationary members
+  // too). Only a value the select offers this viewer is taken.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    const requested = searchParams.get('status');
+    const offered: readonly string[] = [
+      ...(canManageMembers ? [CURRENT_MEMBERS_FILTER, UserStatus.ARCHIVED] : []),
+      'all',
+      UserStatus.ACTIVE,
+      UserStatus.INACTIVE,
+      UserStatus.LEAVE,
+      UserStatus.RETIRED,
+    ];
+    return requested && offered.includes(requested) ? requested : defaultFilterStatus;
+  });
+  const changeFilterStatus = (value: string) => {
+    setFilterStatus(value);
+    // Changed on the page, the filter no longer answers to the link that
+    // seeded it, and a reload must not bring the old one back.
+    if (searchParams.has('status')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('status');
+      setSearchParams(next, { replace: true });
+    }
+  };
   // Class and membership status are two more axes a coordinator slices the
   // roster by: "every administrative member", "every life member". 'all' on
   // each is the default; 'unset' on class finds the members whose class was
@@ -463,7 +489,7 @@ const Members: React.FC = () => {
               <select
                 aria-label="Filter by status"
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) => changeFilterStatus(e.target.value)}
                 className="form-input"
               >
                 {canManageMembers && <option value={CURRENT_MEMBERS_FILTER}>All Current</option>}

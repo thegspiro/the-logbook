@@ -59,6 +59,7 @@ const checkContactInfoEnabled = vi.fn();
 const reactivateMember = vi.fn();
 const anonymizeMember = vi.fn();
 const getServiceHistory = vi.fn();
+const getSupervisor = vi.fn();
 const changeStatus = vi.fn();
 // No recorded change by default, so the reason control stays out of the way of
 // tests that are not about it.
@@ -116,6 +117,7 @@ vi.mock('../services/api', () => ({
     reactivateMember: (...args: unknown[]) => reactivateMember(...args) as unknown,
     anonymizeMember: (...args: unknown[]) => anonymizeMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => getServiceHistory(...args) as unknown,
+    getSupervisor: (...args: unknown[]) => getSupervisor(...args) as unknown,
     changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
     getStatusChange: (...args: Parameters<typeof getStatusChange>) => getStatusChange(...args),
     updateStatusChangeReason: () => Promise.reject(new Error('not used here')),
@@ -419,6 +421,19 @@ describe('MemberProfilePage membership and privacy', () => {
     setMyProfileVisibility.mockImplementation((v: unknown) => Promise.resolve(v));
     getServiceHistory.mockReset();
     getServiceHistory.mockResolvedValue(RETURNED_HISTORY);
+    getSupervisor.mockReset();
+    getSupervisor.mockResolvedValue({
+      member_id: TARGET_ID,
+      current: {
+        id: 'a1',
+        supervisor_id: 'chief',
+        supervisor_name: 'Pat Chief',
+        starts_on: '2026-01-01',
+        ends_on: null,
+        created_at: null,
+      },
+      history: [],
+    });
     changeStatus.mockReset();
     changeStatus.mockResolvedValue({ user_id: TARGET_ID, previous_status: 'retired', new_status: 'active' });
     getStatusChange.mockReset();
@@ -713,6 +728,24 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.getByText('Not counted')).toBeInTheDocument();
     expect(getServiceHistory).toHaveBeenCalledWith(TARGET_ID);
     expect(screen.getByRole('button', { name: 'Edit service history' })).toBeInTheDocument();
+  });
+
+  it('shows a members-manager who the member reports to', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('heading', { name: 'Reports To' })).toBeInTheDocument();
+    expect(await screen.findByText('Pat Chief')).toBeInTheDocument();
+    expect(getSupervisor).toHaveBeenCalledWith(TARGET_ID);
+    expect(screen.getByRole('button', { name: 'Change supervisor' })).toBeInTheDocument();
+  });
+
+  it('keeps the supervisor card from a colleague without members.manage', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByText('Captain · Life member');
+    expect(screen.queryByRole('heading', { name: 'Reports To' })).not.toBeInTheDocument();
+    expect(getSupervisor).not.toHaveBeenCalled();
   });
 
   it('keeps the service history from a colleague, since it records how a member left', async () => {

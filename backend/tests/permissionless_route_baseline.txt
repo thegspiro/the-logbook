@@ -87,6 +87,35 @@ app/api/v1/endpoints/elections.py::get_member_ballot
 app/api/v1/endpoints/elections.py::list_my_proxy_authorizations
 app/api/v1/endpoints/elections.py::submit_member_ballot
 
+# Member performance evaluations (2026-11-01). A member reaches their own
+# evaluations on sign-in alone: they acknowledge, refuse or respond to the
+# record, so a grant a department could withdraw would withhold it from them.
+# /mine and /mine/live-data filter on current_user.id within its organization.
+# The by-id routes resolve the evaluation org-scoped, then EvaluationService
+# admits only its member, its evaluator, an approver at an open approval step
+# or a holder of evaluations.view_all / manage, and answers anyone else 404;
+# each write further requires the author of that part (403 otherwise).
+# The PDF download (2026-11-02) admits exactly whom the evaluation page shows
+# the finalized record to; signing requires the signer the open step waits
+# on (an approval's position holder, or the member), a re-verified session,
+# and the signer's own name typed.
+app/api/v1/endpoints/evaluations.py::download_evaluation_document
+app/api/v1/endpoints/evaluations.py::get_evaluation
+app/api/v1/endpoints/evaluations.py::get_my_live_data
+# /mine/removed lists the deletion records of the caller's own evaluations,
+# filtered on current_user.id within its organization (2026-11-02).
+app/api/v1/endpoints/evaluations.py::list_my_deletion_records
+app/api/v1/endpoints/evaluations.py::list_my_evaluations
+# The member's written response (2026-11-02): the service admits only the
+# evaluated member, on their finalized evaluation in its organization, inside
+# the template's response window; anyone else gets 404 or 403.
+app/api/v1/endpoints/evaluations.py::save_evaluation_response
+app/api/v1/endpoints/evaluations.py::submit_evaluation_response
+app/api/v1/endpoints/evaluations.py::refresh_evaluation_data
+app/api/v1/endpoints/evaluations.py::save_evaluation_part
+app/api/v1/endpoints/evaluations.py::sign_evaluation
+app/api/v1/endpoints/evaluations.py::submit_evaluation_part
+
 app/api/v1/endpoints/equipment_check.py::download_csv_sample
 app/api/v1/endpoints/equipment_check.py::get_check_log
 app/api/v1/endpoints/equipment_check.py::get_my_checklist_history
@@ -227,6 +256,10 @@ app/api/v1/endpoints/member_leaves.py::get_member_leaves
 app/api/v1/endpoints/member_leaves.py::get_my_leaves
 
 app/api/v1/endpoints/member_service_history.py::get_service_history
+
+# The caller's own supervisor history; anyone else's is refused in the body
+# without members.manage.
+app/api/v1/endpoints/member_supervisors.py::get_member_supervisor
 
 app/api/v1/endpoints/membership_pipeline.py::approve_step
 app/api/v1/endpoints/membership_pipeline.py::list_my_sign_offs

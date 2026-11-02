@@ -18,9 +18,10 @@ import { shiftCompletionService } from '../services/api';
 import { getErrorMessage, isNetworkError, isNonRetryableHttpError } from './errorHandling';
 import { isOwnedByCurrentMember } from './offlineQueueOwner';
 import { dequeueShiftReport, listOwnPendingReports, markReportRetry } from './shiftReportOfflineQueue';
+import { SHIFT_REPORT_REFUSALS_BEFORE_NOTICE } from './shiftReportOfflineStore';
+import { withOfflineDrainLock } from '../sw/backgroundSyncProtocol';
 
-/** Refusals before a report is named to the officer. */
-export const SHIFT_REPORT_REFUSALS_BEFORE_NOTICE = 3;
+export { SHIFT_REPORT_REFUSALS_BEFORE_NOTICE };
 
 /** Dispatched after a drain sends at least one report, for screens listing them. */
 export const SHIFT_REPORTS_SYNCED_EVENT = 'logbook:shift-reports-synced';
@@ -45,7 +46,9 @@ let inFlight: Promise<ShiftReportDrainResult> | null = null;
  */
 export function drainShiftReports(): Promise<ShiftReportDrainResult> {
   if (inFlight) return inFlight;
-  inFlight = runDrain().finally(() => {
+  // The lock is shared with the service worker's background sync, so a page
+  // drain and a worker drain never post the same report at once.
+  inFlight = withOfflineDrainLock(runDrain).finally(() => {
     inFlight = null;
   });
   return inFlight;

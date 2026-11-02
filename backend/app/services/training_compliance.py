@@ -33,6 +33,7 @@ from app.services.training_waiver_service import (
     get_rolling_period_months,
 )
 from app.utils.hours import meets_required_hours
+from app.utils.membership import MemberStatus, canonical_member_status
 from app.utils.org_timezone import resolve_org_today
 
 
@@ -1248,7 +1249,15 @@ def _find_matching_profile(
     membership_types and no role_ids matches all members. Returns None
     if no profile matches.
     """
-    member_type = getattr(member, "membership_type", None)
+    member_types = {getattr(member, "membership_type", None)}
+    # The legacy membership_type has no word for a junior member (it derives
+    # to "probationary"), so the profile form's "junior" chip is matched on
+    # the status itself. Every other chip keeps matching the legacy value.
+    if (
+        canonical_member_status(getattr(member, "member_status", None))
+        == MemberStatus.JUNIOR
+    ):
+        member_types.add(MemberStatus.JUNIOR)
     # A profile's "role_ids" hold *position* ids: User.roles is a synonym for
     # User.positions, and PUT /users/{id}/roles writes position ids under that
     # name. Position has no `role_id` column, so reading one collected nothing
@@ -1269,7 +1278,7 @@ def _find_matching_profile(
         role_match = True
 
         if profile.membership_types:
-            type_match = member_type in profile.membership_types
+            type_match = bool(member_types & set(profile.membership_types))
 
         if profile.role_ids:
             role_match = bool(set(member_role_ids) & set(profile.role_ids))

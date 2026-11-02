@@ -8,6 +8,7 @@
  */
 
 import type {
+  ShiftEvaluationAverage,
   ShiftEvaluationFormSnapshot,
   ShiftEvaluationItemAnswer,
   ShiftEvaluationStatistic,
@@ -95,3 +96,23 @@ export function shiftEvaluationProblems(form: ShiftEvaluationFormSnapshot, draft
   });
   return problems;
 }
+
+/** Requirement types credited by submitted shift evaluations, and the field each one's target lives in. */
+export const EVALUATION_REQUIREMENT_TARGETS = {
+  evaluated_shifts: 'required_shifts',
+  transports: 'required_transports',
+  refusals: 'required_refusals',
+} as const;
+export type EvaluationRequirementType = keyof typeof EVALUATION_REQUIREMENT_TARGETS;
+
+export function isEvaluationRequirementType(type: string | undefined | null): type is EvaluationRequirementType {
+  return type != null && Object.prototype.hasOwnProperty.call(EVALUATION_REQUIREMENT_TARGETS, type);
+}
+
+/** "3.3 / 4": an evaluation average against its own form's top rating. */
+export const formatEvaluationAverage = (average: ShiftEvaluationAverage): string =>
+  `${average.average} / ${average.scale_max}`;
+
+/** "EMT Shift Evaluation · 5 evaluations" */
+export const evaluationAverageLabel = (average: ShiftEvaluationAverage): string =>
+  `${average.form_name} · ${average.evaluations} ${average.evaluations === 1 ? 'evaluation' : 'evaluations'}`;

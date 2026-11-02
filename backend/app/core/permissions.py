@@ -676,9 +676,13 @@ REPORTS_MANAGE = Permission(
 
 # Member performance evaluations
 #
-# Only the grants something reads are registered (CLAUDE.md pitfall #19). The
-# member-facing and evaluator grants (view_own, conduct, view_all, delete) are
-# added with the endpoints that check them.
+# Only the grants something reads are registered (CLAUDE.md pitfall #19).
+#
+# There is no ``view_own``. A member reaches their own evaluations on
+# authentication alone, as with their own notifications: the member signs or
+# refuses the acknowledgement and may file a written response, so a grant a
+# department could withdraw would let it withhold a record the member is
+# entitled to see.
 EVALUATIONS_CONFIGURE = Permission(
     "evaluations.configure",
     "Build evaluation templates and their workflows",
@@ -687,6 +691,24 @@ EVALUATIONS_CONFIGURE = Permission(
 EVALUATIONS_MANAGE = Permission(
     "evaluations.manage",
     "Open and close evaluation review periods",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_CONDUCT = Permission(
+    "evaluations.conduct",
+    "Evaluate members as their assigned evaluator",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_VIEW_ALL = Permission(
+    "evaluations.view_all",
+    "View every member's evaluations and record that calibration is complete",
+    PermissionCategory.EVALUATIONS,
+)
+# Removing a personnel record. Kept apart from ``manage`` so running the
+# review process does not carry the power to erase its results; a deletion
+# always leaves a record with its reason on the member's history.
+EVALUATIONS_DELETE = Permission(
+    "evaluations.delete",
+    "Delete an evaluation, with a reason kept on the member's history",
     PermissionCategory.EVALUATIONS,
 )
 
@@ -914,6 +936,9 @@ ALL_PERMISSIONS: list[Permission] = [
     # Member performance evaluations
     EVALUATIONS_CONFIGURE,
     EVALUATIONS_MANAGE,
+    EVALUATIONS_CONDUCT,
+    EVALUATIONS_VIEW_ALL,
+    EVALUATIONS_DELETE,
     # Members (additional)
     MEMBERS_CREATE,
     # Training (additional)
@@ -1565,6 +1590,9 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             # periods starts with the Chief, who delegates by position.
             EVALUATIONS_CONFIGURE.name,
             EVALUATIONS_MANAGE.name,
+            EVALUATIONS_CONDUCT.name,
+            EVALUATIONS_VIEW_ALL.name,
+            EVALUATIONS_DELETE.name,
             ADMIN_ACCESS.name,
             APPARATUS_MANAGE_NFC_TAGS.name,
             LOCATIONS_MANAGE_NFC_TAGS.name,

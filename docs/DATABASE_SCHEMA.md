@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**338 tables · 5575 columns · 1146 foreign keys**
+**340 tables · 5604 columns · 1152 foreign keys**
 
 ---
 
@@ -202,10 +202,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`evaluation_amendments`](#evaluation_amendments) | `EvaluationAmendment` | 8 | A finalized evaluation reopened as a new revision, and why. |
 | [`evaluation_deletion_records`](#evaluation_deletion_records) | `EvaluationDeletionRecord` | 14 | The permanent trace of a deleted evaluation. |
+| [`evaluation_documents`](#evaluation_documents) | `EvaluationDocument` | 10 | The finalized PDF of one revision, frozen. |
 | [`evaluation_parts`](#evaluation_parts) | `EvaluationPart` | 11 | A block of authored content: the evaluator's ratings and narrative, the |
 | [`evaluation_periods`](#evaluation_periods) | `EvaluationPeriod` | 9 | A review period a manager opens, e.g. "2026 Annual Review". |
 | [`evaluation_signatures`](#evaluation_signatures) | `EvaluationSignature` | 14 | A signature given on one step of one revision. |
-| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 13 | The state of one workflow step on one revision of an evaluation. |
+| [`evaluation_steps`](#evaluation_steps) | `EvaluationStep` | 16 | The state of one workflow step on one revision of an evaluation. |
 | [`evaluation_template_versions`](#evaluation_template_versions) | `EvaluationTemplateVersion` | 11 | One version of a template's content and workflow. |
 | [`evaluation_templates`](#evaluation_templates) | `EvaluationTemplate` | 11 | A department's evaluation form for one kind of member. |
 | [`evaluations`](#evaluations) | `Evaluation` | 20 | One member's evaluation for one period. |
@@ -279,7 +280,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`advance_returns`](#advance_returns) | `AdvanceReturn` | 12 | Unspent cash a member handed back against a cash advance. |
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
-| [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 13 | Tracks actual approval step progression for a specific entity |
+| [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 16 | Tracks actual approval step progression for a specific entity |
 | [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 14 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 13 | Budget category (hierarchical) |
 | [`budget_category_charge_positions`](#budget_category_charge_positions) | `BudgetCategoryChargePosition` | 5 | A position named as able to charge a restricted category's lines. |
@@ -458,7 +459,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 48 | Meeting Minutes model |
+| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 49 | Meeting Minutes model |
 | [`meeting_motions`](#meeting_motions) | `Motion` | 21 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
@@ -479,6 +480,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 14 | Meeting Action Item model |
 | [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 10 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
+
+### Member Supervisors
+
+<sub>`app/models/member_supervisor.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`member_supervisor_assignments`](#member_supervisor_assignments) | `MemberSupervisorAssignment` | 9 | One stretch of time during which ``supervisor_id`` supervised ``member_id``. |
 
 ### Membership Pipeline
 
@@ -735,7 +744,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 49 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 47 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 50 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 29 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
@@ -2628,7 +2637,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2691,7 +2700,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -2779,7 +2788,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `period_end` | DATE | no |  |  |  |
 | `template_name` | VARCHAR(150) | no |  |  |  |
 | `evaluator_name` | VARCHAR(200) | yes |  |  |  |
-| `was_finalized` | BOOL | no |  |  |  |
+| `was_finalized` | BOOL | no |  | `0` |  |
 | `reason` | TEXT | no |  |  |  |
 | `deleted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `deleted_by_name` | VARCHAR(200) | no |  |  |  |
@@ -2792,6 +2801,33 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_evaluation_deletion_records_evaluation` (`evaluation_id`)
+
+### `evaluation_documents`
+
+**EvaluationDocument** · `app/models/evaluation.py`
+
+> The finalized PDF of one revision, frozen. Generated once, when the last signature finalizes the revision, and served as that exact file from then on: a layout or logo change afterwards must not alter a signed record. ``file_sha256`` fingerprints the file bytes so a copy can be checked against the original; ``content_hash`` is the hash of the record every signature on the revision attested to, printed on the document. One per revision, so an amendment's new revision gets its own. A member's written response, attached after finalization, is printed in a second document for the same revision (``includes_response``), and the first is kept as it was signed (owner decision 2026-11-02).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `evaluation_id` | VARCHAR(36) | no | FK |  | → `evaluations.id` ON DELETE CASCADE |
+| `revision` | INTEGER | no |  |  |  |
+| `file_path` | VARCHAR(500) | no |  |  |  |
+| `file_sha256` | VARCHAR(64) | no |  |  |  |
+| `content_hash` | VARCHAR(64) | no |  |  |  |
+| `size_bytes` | INTEGER | no |  |  |  |
+| `includes_response` | BOOL | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_evaluation_documents_org_eval` (`organization_id`, `evaluation_id`)
+
+**Constraints**
+
+- UNIQUE `uq_evaluation_documents_variant` (`evaluation_id`, `revision`, `includes_response`)
 
 ### `evaluation_parts`
 
@@ -2865,7 +2901,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `signed_name` | VARCHAR(200) | no |  |  |  |
 | `disposition` | VARCHAR(20) | no |  |  |  |
 | `comment` | TEXT | yes |  |  |  |
-| `intent_confirmed` | BOOL | no |  |  |  |
+| `intent_confirmed` | BOOL | no |  | `0` |  |
 | `content_hash` | VARCHAR(64) | no |  |  |  |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
 | `user_agent` | VARCHAR(512) | yes |  |  |  |
@@ -2898,6 +2934,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `due_date` | DATE | yes |  |  |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `reminder_sent_at` | DATETIME | yes |  |  |  |
+| `overdue_notice_sent_at` | DATETIME | yes |  |  |  |
+| `flagged_items` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -4190,6 +4229,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notes` | TEXT | yes |  |  |  |
 | `approval_token` | VARCHAR(255) | yes | UQ |  |  |
 | `token_expires_at` | DATETIME | yes |  |  |  |
+| `email_status` | VARCHAR(16) | yes |  |  |  |
+| `email_status_at` | DATETIME | yes |  |  |  |
+| `email_link_version` | INTEGER | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -7081,6 +7123,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `created_at` | DATETIME | no |  | `now()` |  |
+| `edit_version` | INTEGER | no |  | `0` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -7483,6 +7526,36 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_meetings_event_id` (`event_id`)
 - `ix_meetings_location_id` (`location_id`)
 - `ix_meetings_meeting_date` (`meeting_date`)
+
+## Member Supervisors
+
+### `member_supervisor_assignments`
+
+**MemberSupervisorAssignment** · `app/models/member_supervisor.py`
+
+> One stretch of time during which ``supervisor_id`` supervised ``member_id``. **At most one open row per member, enforced by the database.** MySQL has no partial unique index, so ``open_marker`` is a stored generated column that is 1 while ``ends_on`` is NULL and NULL once the row is closed; the unique key on ``(member_id, open_marker)`` then admits one open row and any number of closed ones, because MySQL treats NULLs as distinct. The expression reads ``ends_on`` only: MySQL refuses a stored generated column whose base column carries a foreign key with a referential action, and ``member_id`` is CASCADE. The service also takes the member's row lock before reading, so two concurrent changes queue rather than one failing on the key. **``supervisor_id`` is SET NULL, not CASCADE.** The rows are the *member's* history; hard-deleting the officer who once supervised them must not erase the record that the member had a supervisor over those dates. The row keeps its dates and reads "a former member". An open row left pointing at nobody is reported as no current supervisor, and setting a new one closes it as usual. ``member_id`` is CASCADE: the history belongs to the member and goes with them. "Never supervises themselves" is a service rule, not a CHECK, for the reason the ``Evaluation`` model gives: MySQL refuses a CHECK naming a column whose foreign key has a referential action.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `supervisor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `starts_on` | DATE | no |  |  |  |
+| `ends_on` | DATE | yes |  |  |  |
+| `open_marker` | INTEGER | yes |  | server default |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_member_supervisor_assignments_org_member` (`organization_id`, `member_id`, `starts_on`)
+- `ix_member_supervisor_assignments_org_supervisor` (`organization_id`, `supervisor_id`)
+
+**Constraints**
+
+- CHECK `ck_member_supervisor_assignments_date_order`: `ends_on IS NULL OR ends_on >= starts_on`
+- UNIQUE `uq_member_supervisor_assignments_open` (`member_id`, `open_marker`)
 
 ## Membership Pipeline
 
@@ -10235,7 +10308,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `progress_id` | VARCHAR(36) | no | FK |  | → `requirement_progress.id` ON DELETE CASCADE |
-| `source_type` | ENUM(`training_session`, `shift_report`, `external_import`, `officer_apply`) | no |  |  |  |
+| `source_type` | ENUM(`training_session`, `shift_report`, `external_import`, `officer_apply`, `shift_evaluation`) | no |  |  |  |
 | `source_id` | VARCHAR(64) | no |  |  |  |
 | `units` | FLOAT | no |  | `0.0` |  |
 | `previous_status` | VARCHAR(50) | yes |  |  |  |
@@ -11155,7 +11228,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`) | no | IDX |  |  |
+| `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`, `evaluated_shifts`, `transports`, `refusals`) | no | IDX |  |  |
 | `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | yes |  |  |  |
 | `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
@@ -11168,6 +11241,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `required_courses` | JSON | yes |  |  |  |
 | `required_shifts` | INTEGER | yes |  |  |  |
 | `required_calls` | INTEGER | yes |  |  |  |
+| `required_transports` | INTEGER | yes |  |  |  |
+| `required_refusals` | INTEGER | yes |  |  |  |
+| `evaluation_excludes_lowest_rating` | BOOL | no |  | `0` |  |
 | `required_call_types` | JSON | yes |  |  |  |
 | `required_skills` | JSON | yes |  |  |  |
 | `checklist_items` | JSON | yes |  |  |  |
@@ -11787,7 +11863,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (420 references)
+### → `users` (423 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12046,6 +12122,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_service_periods` | `created_by` | SET NULL | yes |
 | `member_service_periods` | `user_id` | CASCADE | no |
 | `member_size_preferences` | `user_id` | CASCADE | no |
+| `member_supervisor_assignments` | `created_by` | SET NULL | yes |
+| `member_supervisor_assignments` | `member_id` | CASCADE | no |
+| `member_supervisor_assignments` | `supervisor_id` | SET NULL | yes |
 | `membership_pipelines` | `created_by` | RESTRICT | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
 | `minutes_action_items` | `assignee_id` | RESTRICT | yes |
@@ -12212,7 +12291,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (280 references)
+### → `organizations` (282 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12280,6 +12359,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_requests` | `organization_id` | CASCADE | no |
 | `evaluation_amendments` | `organization_id` | CASCADE | no |
 | `evaluation_deletion_records` | `organization_id` | CASCADE | no |
+| `evaluation_documents` | `organization_id` | CASCADE | no |
 | `evaluation_parts` | `organization_id` | CASCADE | no |
 | `evaluation_periods` | `organization_id` | CASCADE | no |
 | `evaluation_signatures` | `organization_id` | CASCADE | no |
@@ -12383,6 +12463,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_qualifications` | `organization_id` | CASCADE | no |
 | `member_service_periods` | `organization_id` | CASCADE | no |
 | `member_size_preferences` | `organization_id` | CASCADE | no |
+| `member_supervisor_assignments` | `organization_id` | CASCADE | no |
 | `membership_pipelines` | `organization_id` | CASCADE | no |
 | `message_history` | `organization_id` | CASCADE | yes |
 | `minutes_attachments` | `organization_id` | CASCADE | no |
@@ -12893,6 +12974,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
 | `scheduled_emails` | `template_id` | SET NULL | yes |
 
+### → `evaluations` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `evaluation_amendments` | `evaluation_id` | CASCADE | no |
+| `evaluation_documents` | `evaluation_id` | CASCADE | no |
+| `evaluation_parts` | `evaluation_id` | CASCADE | no |
+| `evaluation_signatures` | `evaluation_id` | CASCADE | no |
+| `evaluation_steps` | `evaluation_id` | CASCADE | no |
+
 ### → `suggestions` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -12939,15 +13030,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_equipment_checks` | `template_id` | SET NULL | yes |
 | `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
 | `template_change_logs` | `template_id` | CASCADE | no |
-
-### → `evaluations` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `evaluation_amendments` | `evaluation_id` | CASCADE | no |
-| `evaluation_parts` | `evaluation_id` | CASCADE | no |
-| `evaluation_signatures` | `evaluation_id` | CASCADE | no |
-| `evaluation_steps` | `evaluation_id` | CASCADE | no |
 
 ### → `forms` (4 references)
 

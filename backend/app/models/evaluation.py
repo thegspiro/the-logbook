@@ -444,6 +444,23 @@ class EvaluationStep(Base):
     completed_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # When the deadline reminder and the overdue notice went out. Each is
+    # sent once per step; the stamp is what makes a second scheduler run a
+    # no-op (CLAUDE.md pitfall #36). A step that opens already inside its
+    # reminder window is stamped then, because its opening notice gives the
+    # due date and a reminder the same day would repeat it.
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    overdue_notice_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # On a calibration step: the keys of the evaluator's items the calibrator
+    # flagged for the evaluator to revisit (owner decision 2026-11-02). Ticks
+    # only, never a note: everything kept about a member is something the
+    # member may read, and the member sees these once the evaluation is
+    # released to them. NULL on every other step and when nothing is flagged.
+    flagged_items: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -545,7 +562,11 @@ class EvaluationSignature(Base):
     signed_name: Mapped[str] = mapped_column(String(200), nullable=False)
     disposition: Mapped[str] = mapped_column(String(20), nullable=False)
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    intent_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # The sign path always writes True; the "0" default only means a row
+    # written any other way never claims an intent nobody confirmed.
+    intent_confirmed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
@@ -629,7 +650,9 @@ class EvaluationDeletionRecord(Base):
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     template_name: Mapped[str] = mapped_column(String(150), nullable=False)
     evaluator_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    was_finalized: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    was_finalized: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     deleted_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -646,4 +669,51 @@ class EvaluationDeletionRecord(Base):
         Index(
             "ix_evaluation_deletion_records_org_member", "organization_id", "member_id"
         ),
+    )
+
+
+class EvaluationDocument(Base):
+    """The finalized PDF of one revision, frozen.
+
+    Generated once, when the last signature finalizes the revision, and served
+    as that exact file from then on: a layout or logo change afterwards must
+    not alter a signed record. ``file_sha256`` fingerprints the file bytes so
+    a copy can be checked against the original; ``content_hash`` is the hash
+    of the record every signature on the revision attested to, printed on the
+    document. One per revision, so an amendment's new revision gets its own.
+
+    A member's written response, attached after finalization, is printed in a
+    second document for the same revision (``includes_response``), and the
+    first is kept as it was signed (owner decision 2026-11-02).
+    """
+
+    __tablename__ = "evaluation_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    evaluation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("evaluations.id", ondelete="CASCADE"), nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    includes_response: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "evaluation_id",
+            "revision",
+            "includes_response",
+            name="uq_evaluation_documents_variant",
+        ),
+        Index("ix_evaluation_documents_org_eval", "organization_id", "evaluation_id"),
     )

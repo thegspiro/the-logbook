@@ -3667,13 +3667,17 @@ async def delete_event_attachment(
     # references it. Recurring-occurrence generation and event duplication
     # copy attachment metadata (same file_path) across events, so an
     # unconditional remove would break downloads for the parent and every
-    # sibling occurrence.
+    # sibling occurrence. Scoped to this org: duplication/generation never
+    # crosses organizations, and without this filter an unrelated event in a
+    # different org that merely names this exact stored path (EV-30) could
+    # keep the file on disk forever for this org too.
     file_path = attachment["file_path"]
     others = await db.execute(
         select(func.count())
         .select_from(Event)
         .where(
             Event.id != str(event_id),
+            Event.organization_id == str(current_user.organization_id),
             cast(Event.attachments, String).contains(file_path, autoescape=True),
         )
     )

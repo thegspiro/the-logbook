@@ -6,9 +6,9 @@
  * manager needs to see which form each member will get, and a template
  * builder needs the periods its deadlines count from.
  *
- * Drafting and completing evaluations arrives in a later change. Until then
- * nothing configured here reaches a member, and the page says so rather than
- * presenting setup as though it were in effect (CLAUDE.md pitfall #19).
+ * Drafting, completing and signing evaluations happens on the Evaluations list.
+ * Email notices are not yet built, and the page says so rather than presenting
+ * the workflow as complete (CLAUDE.md pitfall #19).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -203,9 +203,17 @@ const EvaluationsPage: React.FC = () => {
         <div className="alert-info mb-6 flex gap-3">
           <Info className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p className="text-theme-alert-info-text text-sm">
-            <span className="text-theme-alert-info-title font-medium">Setup only for now.</span> Templates and review
-            periods can be prepared here. Drafting, completing and signing evaluations arrives in a later update, so
-            nothing set up here is sent to members yet.
+            <span className="text-theme-alert-info-title font-medium">Where evaluations happen.</span> Evaluations are
+            drafted, completed and signed from the{' '}
+            <Link to="/reports/evaluations/conduct" className="underline">
+              Evaluations
+            </Link>{' '}
+            list, and each finalized evaluation keeps its signed PDF. People are emailed when a step is waiting on them,
+            before it is due and once it is overdue. The wording of those emails is edited in{' '}
+            <Link to="/communications/email-templates" className="underline">
+              Email Templates
+            </Link>
+            .
           </p>
         </div>
 
@@ -364,7 +372,7 @@ const EvaluationsPage: React.FC = () => {
                         {period.evaluations_count}
                       </td>
                       {canManage && (
-                        <td className="px-4 py-3">
+                        <td data-label="Actions" className="px-4 py-3">
                           <div className="flex flex-wrap justify-end gap-2">
                             <button
                               type="button"

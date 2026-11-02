@@ -163,4 +163,26 @@ describe('FinanceApprovalPage', () => {
     expect(await screen.findByText(/If you already responded, your response was recorded/)).toBeInTheDocument();
     expect(screen.queryByText(/Approval not found/)).not.toBeInTheDocument();
   });
+
+  it('shows the request’s title, amount and requester so the approver can decide', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        step_name: 'CPA review',
+        entity_type: 'purchase_request',
+        status: 'pending',
+        actionable: true,
+        expired: false,
+        title: 'Thermal camera',
+        amount: '4200.00',
+        requester_name: 'Jamie Rivera',
+      },
+    });
+
+    renderAt('tok-detail');
+
+    expect(await screen.findByText('Thermal camera')).toBeInTheDocument();
+    expect(screen.getByText('$4,200.00')).toBeInTheDocument();
+    expect(screen.getByText('Jamie Rivera')).toBeInTheDocument();
+    expect(screen.getByText('Requested by')).toBeInTheDocument();
+  });
 });

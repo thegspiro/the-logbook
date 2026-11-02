@@ -22,6 +22,12 @@ opt-in. A department with no form attached sees no change.
 The member sees a submitted evaluation on the same terms as their shift
 report: at once, unless the department requires report review, in which case
 once the report for that shift is approved.
+
+Program credit (evaluated shifts, transports, refusals) lands when the member
+can see the evaluation and follows it from then on: an edit restates the
+credit, and anything that hides the evaluation again takes it back. Each
+credit is keyed on the evaluation in the requirement credit ledger, so
+re-running the sync never counts an evaluation twice (Pitfall #36).
 """
 
 from dataclasses import dataclass, field
@@ -29,6 +35,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,11 +51,18 @@ from app.models.training import (
     AssignmentStatus,
     EnrollmentStatus,
     ProgramEnrollment,
+    ProgramRequirement,
+    ProgressCreditSource,
+    RequirementProgress,
+    RequirementProgressCredit,
+    RequirementProgressStatus,
+    RequirementType,
     Shift,
     ShiftAssignment,
     ShiftCompletionReport,
     TrainingModuleConfig,
     TrainingProgram,
+    TrainingRequirement,
 )
 from app.models.user import User
 from app.schemas.shift_evaluation import (
@@ -61,6 +75,7 @@ from app.schemas.shift_evaluation import (
     ShiftEvaluationSummary,
     TemplateOption,
 )
+from app.services.training_program_service import TrainingProgramService
 from app.utils.positions import canonical_position
 
 # Mirrors SchedulingService.INACTIVE_ASSIGNMENT_STATUSES. Not imported from
@@ -81,6 +96,44 @@ _SNAPSHOT_FIELDS = (
     "closing_comments_label",
     "closing_comments_hint",
 )
+
+
+# The requirement types an evaluation credits.
+_CREDITED_TYPES = (
+    RequirementType.EVALUATED_SHIFTS,
+    RequirementType.TRANSPORTS,
+    RequirementType.REFUSALS,
+)
+# A progress row in one of these states takes no new credit: the member is
+# already done, or the requirement was set aside for them.
+_CLOSED_PROGRESS = (
+    RequirementProgressStatus.COMPLETED,
+    RequirementProgressStatus.VERIFIED,
+    RequirementProgressStatus.WAIVED,
+)
+
+
+def credit_units(evaluation: ShiftEvaluation, requirement: Any) -> float:
+    """What one submitted evaluation is worth toward one requirement."""
+    rtype = requirement.requirement_type
+    statistics = evaluation.statistics or {}
+    if rtype == RequirementType.TRANSPORTS:
+        return float(statistics.get("transports") or 0)
+    if rtype == RequirementType.REFUSALS:
+        return float(statistics.get("refusals") or 0)
+    if rtype != RequirementType.EVALUATED_SHIFTS:
+        return 0.0
+    if requirement.evaluation_excludes_lowest_rating:
+        # The form's own lowest rating, from the copy it was filled out on,
+        # so a later edit to the template's scale cannot regrade it.
+        scale = (evaluation.template_snapshot or {}).get("scale") or []
+        values = [int(level["value"]) for level in scale if "value" in level]
+        if values:
+            lowest = min(values)
+            for answer in (evaluation.responses or {}).values():
+                if (answer or {}).get("rating") == lowest:
+                    return 0.0
+    return 1.0
 
 
 def _name(user: Optional[User]) -> Optional[str]:
@@ -726,7 +779,152 @@ class ShiftEvaluationService:
                 shift, member_id, scope_key, organization_id, body, evaluator
             )
         await self.db.refresh(evaluation)
+        if evaluation.status == "submitted":
+            await self.sync_credit(evaluation, organization_id)
+            await self.db.refresh(evaluation)
         return evaluation
+
+    # -- Program credit ------------------------------------------------------
+
+    async def sync_credit(
+        self, evaluation: ShiftEvaluation, organization_id: UUID | str
+    ) -> None:
+        """Bring the evaluation's program credit in line with what it says now.
+
+        Called after the evaluation or the state that decides its visibility
+        has been committed: the credit ledger's own conflict handling rolls the
+        session back, which must not take an uncommitted change with it.
+        """
+        enrollment_ids = [str(e) for e in (evaluation.enrollment_ids or [])]
+        if not enrollment_ids:
+            return
+        visible = await self.visible_to_member(evaluation, organization_id)
+        rows = (
+            await self.db.execute(
+                select(RequirementProgress, TrainingRequirement, ProgramEnrollment)
+                .join(
+                    ProgramEnrollment,
+                    ProgramEnrollment.id == RequirementProgress.enrollment_id,
+                )
+                .join(
+                    TrainingRequirement,
+                    TrainingRequirement.id == RequirementProgress.requirement_id,
+                )
+                .join(
+                    ProgramRequirement,
+                    (ProgramRequirement.requirement_id == TrainingRequirement.id)
+                    & (ProgramRequirement.program_id == ProgramEnrollment.program_id),
+                )
+                .where(
+                    RequirementProgress.enrollment_id.in_(enrollment_ids),
+                    ProgramEnrollment.organization_id == str(organization_id),
+                    ProgramEnrollment.user_id == evaluation.member_id,
+                    TrainingRequirement.requirement_type.in_(_CREDITED_TYPES),
+                )
+            )
+        ).all()
+        if not rows:
+            return
+        credited = set(
+            (
+                await self.db.execute(
+                    select(RequirementProgressCredit.progress_id).where(
+                        RequirementProgressCredit.progress_id.in_(
+                            [str(progress.id) for progress, _, _ in rows]
+                        ),
+                        RequirementProgressCredit.source_type
+                        == ProgressCreditSource.SHIFT_EVALUATION,
+                        RequirementProgressCredit.source_id == str(evaluation.id),
+                    )
+                )
+            ).scalars()
+        )
+        # Plain values first: a ledger conflict rolls the session back and
+        # expires every loaded row.
+        plan = [
+            (
+                str(progress.id),
+                credit_units(evaluation, requirement) if visible else 0.0,
+                str(progress.id) in credited,
+                enrollment.status == EnrollmentStatus.ACTIVE
+                and progress.status not in _CLOSED_PROGRESS,
+            )
+            for progress, requirement, enrollment in rows
+        ]
+        evaluation_id = str(evaluation.id)
+        evaluator_id = evaluation.evaluator_id
+        program_service = TrainingProgramService(self.db)
+        for progress_id, units, has_credit, open_for_credit in plan:
+            if units > 0 and (has_credit or open_for_credit):
+                _, error = await program_service.apply_requirement_credit(
+                    progress_id=progress_id,
+                    organization_id=organization_id,
+                    source_type=ProgressCreditSource.SHIFT_EVALUATION,
+                    source_id=evaluation_id,
+                    units=units,
+                    verified_by=evaluator_id,
+                    applied_by=evaluator_id,
+                    mark_in_progress=not has_credit,
+                    restate=True,
+                )
+            elif units <= 0 and has_credit:
+                _, error = await program_service.revoke_requirement_credit(
+                    progress_id=progress_id,
+                    organization_id=organization_id,
+                    source_type=ProgressCreditSource.SHIFT_EVALUATION,
+                    source_id=evaluation_id,
+                    verified_by=evaluator_id,
+                )
+            else:
+                continue
+            if error:
+                logger.error(
+                    "Shift evaluation {} credit to progress {} failed: {}",
+                    evaluation_id,
+                    progress_id,
+                    error,
+                )
+
+    async def sync_credit_for_shift_member(
+        self,
+        shift_id: Optional[str],
+        member_id: str,
+        organization_id: UUID | str,
+    ) -> None:
+        """Re-sync after the member's shift report changed review state."""
+        if not shift_id:
+            return
+        evaluations = (
+            await self.db.execute(
+                select(ShiftEvaluation).where(
+                    ShiftEvaluation.organization_id == str(organization_id),
+                    ShiftEvaluation.shift_id == str(shift_id),
+                    ShiftEvaluation.member_id == str(member_id),
+                    ShiftEvaluation.status == "submitted",
+                )
+            )
+        ).scalars()
+        for evaluation_id in [e.id for e in evaluations]:
+            evaluation = await self.get(evaluation_id, organization_id)
+            if evaluation is not None:
+                await self.sync_credit(evaluation, organization_id)
+
+    async def sync_credit_for_organization(self, organization_id: UUID | str) -> None:
+        """Re-sync every submitted evaluation, after report review is toggled."""
+        evaluation_ids = list(
+            (
+                await self.db.execute(
+                    select(ShiftEvaluation.id).where(
+                        ShiftEvaluation.organization_id == str(organization_id),
+                        ShiftEvaluation.status == "submitted",
+                    )
+                )
+            ).scalars()
+        )
+        for evaluation_id in evaluation_ids:
+            evaluation = await self.get(evaluation_id, organization_id)
+            if evaluation is not None:
+                await self.sync_credit(evaluation, organization_id)
 
     # -- Reading -----------------------------------------------------------
 
@@ -790,3 +988,65 @@ class ShiftEvaluationService:
                 if await self.visible_to_member(e, organization_id)
             ]
         return evaluations
+
+    async def averages_by_form(
+        self,
+        member_id: UUID | str,
+        organization_id: UUID | str,
+        *,
+        start_date=None,
+        end_date=None,
+        member_view: bool = False,
+    ) -> list[dict[str, Any]]:
+        """The member's average rating on each evaluation form.
+
+        One figure per form and scale, never pooled: a 1-4 shift evaluation
+        and a 1-5 report rating, or two forms on different scales, do not
+        average into anything meaningful. Each evaluation weighs the same,
+        however many items it rated; one with every item N/A has no rating
+        and is left out.
+        """
+        evaluations = await self.list_for_member(
+            member_id,
+            organization_id,
+            start_date=start_date,
+            end_date=end_date,
+            member_view=member_view,
+        )
+        groups: dict[tuple[str, int], dict[str, Any]] = {}
+        # Newest first, so each group takes the form's latest name.
+        for evaluation in evaluations:
+            if evaluation.average_rating is None:
+                continue
+            snapshot = evaluation.template_snapshot or {}
+            values = [
+                int(level["value"])
+                for level in snapshot.get("scale") or []
+                if "value" in level
+            ]
+            if not values:
+                continue
+            scale_max = max(values)
+            name = snapshot.get("name") or "Shift evaluation"
+            key = (str(evaluation.template_id or name), scale_max)
+            group = groups.setdefault(
+                key,
+                {
+                    "template_id": evaluation.template_id,
+                    "form_name": name,
+                    "scale_max": scale_max,
+                    "ratings": [],
+                },
+            )
+            group["ratings"].append(float(evaluation.average_rating))
+        averages = [
+            {
+                "template_id": group["template_id"],
+                "form_name": group["form_name"],
+                "scale_max": group["scale_max"],
+                "average": round(sum(group["ratings"]) / len(group["ratings"]), 1),
+                "evaluations": len(group["ratings"]),
+            }
+            for group in groups.values()
+        ]
+        return sorted(averages, key=lambda a: (a["form_name"].lower(), a["scale_max"]))

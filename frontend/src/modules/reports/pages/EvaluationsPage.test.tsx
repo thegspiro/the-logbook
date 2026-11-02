@@ -1,7 +1,7 @@
 /**
  * Member evaluation setup: templates for `evaluations.configure`, review
  * periods for `evaluations.manage`, each able to read the other's list, and a
- * page that says plainly that drafting evaluations has not arrived yet.
+ * page that says plainly that email notices have not arrived yet.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -83,9 +83,14 @@ describe('EvaluationsPage', () => {
     listPeriods.mockResolvedValue([period()]);
   });
 
-  it('says that drafting evaluations has not arrived yet', async () => {
+  it('points to where evaluations are drafted and where their emails are worded', async () => {
     renderWithRouter(<EvaluationsPage />);
-    expect(await screen.findByText(/nothing set up here is sent to members yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Where evaluations happen/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Evaluations' })).toHaveAttribute('href', '/reports/evaluations/conduct');
+    expect(screen.getByRole('link', { name: 'Email Templates' })).toHaveAttribute(
+      'href',
+      '/communications/email-templates'
+    );
   });
 
   it('shows each template with who it applies to and its version', async () => {

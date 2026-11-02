@@ -24,6 +24,7 @@ import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker'
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
+import { EvaluationRequirementFields } from '../components/training/EvaluationRequirementFields';
 import { ProgramEnrollmentRulesFields } from '../components/training/ProgramEnrollmentRulesFields';
 import { ProgramRequirementSettingsFields } from '../components/training/ProgramRequirementSettingsFields';
 import { ShiftEvaluationTemplateSelect } from '../components/training/ShiftEvaluationTemplateSelect';
@@ -73,6 +74,10 @@ interface RequirementFormData {
   required_hours: string;
   required_shifts: string;
   required_calls: string;
+  required_transports: string;
+  required_refusals: string;
+  // Evaluated shifts: count only evaluations with no item at the form's lowest rating.
+  evaluation_excludes_lowest_rating: boolean;
   // Department call-type slugs a calls requirement counts; empty counts all.
   required_call_types: string[];
   passing_score: string;
@@ -166,6 +171,9 @@ const emptyRequirement = (sortOrder: number, source: 'library' | 'new' = 'new'):
   required_hours: '',
   required_shifts: '',
   required_calls: '',
+  required_transports: '',
+  required_refusals: '',
+  evaluation_excludes_lowest_rating: false,
   required_call_types: [],
   passing_score: '',
   max_attempts: '',
@@ -206,6 +214,10 @@ const toRequirementPayload = (reqData: RequirementFormData) =>
         required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
         required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
         required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
+        required_transports: reqData.required_transports ? parseInt(reqData.required_transports) : undefined,
+        required_refusals: reqData.required_refusals ? parseInt(reqData.required_refusals) : undefined,
+        evaluation_excludes_lowest_rating:
+          reqData.requirement_type === 'evaluated_shifts' && reqData.evaluation_excludes_lowest_rating,
         ...(reqData.requirement_type === 'calls' && reqData.required_call_types.length > 0
           ? { required_call_types: reqData.required_call_types }
           : {}),
@@ -258,6 +270,10 @@ const REQUIREMENT_TYPE_HELP: Record<string, string> = {
     'A certification. Link the library course that grants it, or leave it unlinked and an officer marks it earned.',
   shifts: 'A number of shifts. Accrue automatically from approved shift reports.',
   calls: 'A number of call responses. Accrue automatically from approved shift reports.',
+  evaluated_shifts:
+    'A number of shifts with a submitted shift evaluation. Accrue automatically once the member can see each evaluation.',
+  transports: 'A number of patient transports, totalled from submitted shift evaluations.',
+  refusals: 'A number of patient refusals, totalled from submitted shift evaluations.',
 };
 
 // ==================== Step Components ====================
@@ -783,6 +799,9 @@ const StepRequirements: React.FC<{
                             <option value="certification">Certification</option>
                             <option value="shifts">Shifts Completed</option>
                             <option value="calls">Call Responses</option>
+                            <option value="evaluated_shifts">Evaluated Shifts</option>
+                            <option value="transports">Transports</option>
+                            <option value="refusals">Refusals</option>
                           </select>
                           {REQUIREMENT_TYPE_HELP[req.requirement_type] && (
                             <HelpText>{REQUIREMENT_TYPE_HELP[req.requirement_type]}</HelpText>
@@ -928,6 +947,21 @@ const StepRequirements: React.FC<{
                         />
                       </div>
                     )}
+
+                    <EvaluationRequirementFields
+                      idPrefix={`pipeline-${req.id}`}
+                      type={req.requirement_type}
+                      shifts={req.required_shifts}
+                      transports={req.required_transports}
+                      refusals={req.required_refusals}
+                      excludesLowest={req.evaluation_excludes_lowest_rating}
+                      onShiftsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_shifts', v)}
+                      onTransportsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_transports', v)}
+                      onRefusalsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_refusals', v)}
+                      onExcludesLowestChange={(v) =>
+                        onUpdateRequirement(phase.key, req.id, 'evaluation_excludes_lowest_rating', v)
+                      }
+                    />
 
                     {req.requirement_type === 'calls' && (
                       <div>
@@ -1563,7 +1597,10 @@ const CreatePipelinePage: React.FC = () => {
         const missingTarget =
           (req.requirement_type === 'hours' && !req.required_hours.trim()) ||
           (req.requirement_type === 'shifts' && !req.required_shifts.trim()) ||
-          (req.requirement_type === 'calls' && !req.required_calls.trim());
+          (req.requirement_type === 'calls' && !req.required_calls.trim()) ||
+          (req.requirement_type === 'evaluated_shifts' && !req.required_shifts.trim()) ||
+          (req.requirement_type === 'transports' && !req.required_transports.trim()) ||
+          (req.requirement_type === 'refusals' && !req.required_refusals.trim());
         if (req.source === 'new' && missingTarget) {
           return `"${req.name.trim()}" in ${group.title} needs a number to count toward, or nobody can ever complete it.`;
         }

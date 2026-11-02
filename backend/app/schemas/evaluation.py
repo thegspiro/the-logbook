@@ -612,3 +612,413 @@ class EvaluationPeriodResponse(BaseModel):
     evaluations_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# -------------------------------------------------------------- evaluations ---
+
+#: The scale an evaluator picks an overall rating from when a template's
+#: ``overall_mode`` is ``evaluator``. Fixed rather than per-template: the
+#: overall rating is compared across members and years, which a scale each
+#: template could redefine would defeat.
+OVERALL_LEVELS: List[ScaleLevel] = [
+    ScaleLevel(value=1, label="Unsatisfactory"),
+    ScaleLevel(value=2, label="Needs improvement"),
+    ScaleLevel(value=3, label="Meets expectations"),
+    ScaleLevel(value=4, label="Exceeds expectations"),
+    ScaleLevel(value=5, label="Outstanding"),
+]
+
+MAX_ANSWER_TEXT = 5000
+
+
+def _blank_to_none(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    v = v.strip()
+    return v or None
+
+
+class ItemAnswer(BaseModel):
+    """One item's answer in an evaluator's part or a self-evaluation.
+
+    The canonical stored shape of an entry in ``evaluation_parts.content``
+    (CLAUDE.md pitfall #20): ``rating`` is the scale level given (``1`` /
+    ``0`` for meets / does not meet), ``text`` the answer to a narrative or
+    goals item, ``comment`` the remark beside a rated one, ``example`` the
+    specific instance a level requires, and ``justification`` the evaluator's
+    reason for departing from the score the data suggested.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rating: Optional[int] = Field(default=None, ge=0, le=10)
+    na: bool = False
+    checked: List[str] = Field(default_factory=list, max_length=30)
+    text: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    example: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    justification: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("text", "comment", "example", "justification")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+    @model_validator(mode="after")
+    def _na_is_unanswered(self) -> "ItemAnswer":
+        if self.na and self.rating is not None:
+            raise ValueError("An item marked N/A cannot also be rated")
+        return self
+
+
+class PartContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answers: dict[str, ItemAnswer] = Field(
+        default_factory=dict, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
+    )
+    overall_rating: Optional[int] = Field(default=None, ge=1, le=5)
+    overall_comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("overall_comment")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+
+class EvaluationCreate(BaseModel):
+    member_id: str = Field(min_length=1, max_length=36)
+    period_id: str = Field(min_length=1, max_length=36)
+    # Omitted means the caller evaluates the member themselves.
+    evaluator_id: Optional[str] = Field(default=None, max_length=36)
+    kind: EvaluationTemplateKind = EvaluationTemplateKind.ANNUAL
+    # Omitted means the most specific active template that fits the member.
+    template_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class PartWrite(BaseModel):
+    content: PartContent
+
+
+class PersonRef(BaseModel):
+    id: str
+    name: str
+
+
+class EvaluationStepResponse(BaseModel):
+    key: str
+    type: EvaluationStepType
+    label: str
+    order: int
+    status: str
+    due_date: Optional[date] = None
+    completed_at: Optional[datetime] = None
+
+
+class EvaluationPartResponse(BaseModel):
+    kind: str
+    status: str
+    content: PartContent
+    submitted_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ExcludedRangeResponse(BaseModel):
+    start: date
+    end: date
+    reason: Literal["leave", "separation"]
+
+
+class EvaluationSummary(BaseModel):
+    id: str
+    member: PersonRef
+    evaluator: Optional[PersonRef] = None
+    period_id: Optional[str] = None
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    template_name: str
+    kind: EvaluationTemplateKind
+    status: str
+    # The step waiting on someone, and when it is due.
+    current_step: Optional[str] = None
+    current_step_due: Optional[date] = None
+    created_at: Optional[datetime] = None
+
+
+class SigningOption(BaseModel):
+    """A signature the caller may give now: the step, and the dispositions
+    open to them (an approver signs; the member acknowledges or refuses)."""
+
+    step_key: str
+    label: str
+    dispositions: List[Literal["signed", "acknowledged", "refused"]]
+
+
+class EvaluationViewer(BaseModel):
+    """What the caller may do with this evaluation, decided by the server so
+    the screens do not re-derive it (CLAUDE.md pitfall #29)."""
+
+    is_member: bool
+    is_evaluator: bool
+    can_edit_self_evaluation: bool
+    can_edit_evaluation: bool
+    can_refresh_data: bool
+    can_calibrate: bool
+    can_sign: Optional[SigningOption] = None
+    # A holder of evaluations.delete, never on their own evaluation.
+    can_delete: bool = False
+    # A holder of evaluations.manage, on a finalized evaluation not their own.
+    can_amend: bool = False
+    # The member, on their finalized evaluation, inside the response window,
+    # before their response is submitted.
+    can_respond: bool = False
+
+
+class AmendmentResponse(BaseModel):
+    """A finalized evaluation reopened as a new revision, and why. Shown to
+    everyone who may see the evaluation, the member included."""
+
+    from_revision: int
+    to_revision: int
+    reason: str
+    amended_by_name: str
+    amended_at: datetime
+
+
+class SignatureResponse(BaseModel):
+    step_key: str
+    label: str
+    signed_name: str
+    disposition: Literal["signed", "acknowledged", "refused"]
+    comment: Optional[str] = None
+    signed_at: datetime
+
+
+class SignatureWrite(BaseModel):
+    """A signature. The typed name must match the signer's own name; the
+    session must have re-verified recently (step-up)."""
+
+    signed_name: str = Field(min_length=1, max_length=200)
+    disposition: Literal["signed", "acknowledged", "refused"]
+    # Required when refusing: the member's reason, kept with the record.
+    comment: Optional[str] = Field(default=None, max_length=2000)
+    intent_confirmed: Literal[True]
+
+    @field_validator("comment")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+    @model_validator(mode="after")
+    def _reason_for_refusal(self) -> "SignatureWrite":
+        if self.disposition == "refused" and not self.comment:
+            raise ValueError("Give a reason for refusing to sign")
+        return self
+
+
+class EvaluationDetail(EvaluationSummary):
+    coverage_start: Optional[date] = None
+    coverage_end: Optional[date] = None
+    excluded_ranges: List[ExcludedRangeResponse] = Field(default_factory=list)
+    includes_officer_sections: bool
+    # The form, with officer-only sections removed when they do not apply.
+    definition: TemplateDefinition
+    overall_levels: List[ScaleLevel]
+    steps: List[EvaluationStepResponse]
+    # Each source's entry as stored ({"available", "value", ...}); None when
+    # the caller may not see the figures yet.
+    data: Optional[dict] = None
+    # The catalog entries for the sources in ``data``, so the screens label
+    # and format figures from the server's catalog rather than a copy of it.
+    sources: List[DataSourceResponse] = Field(default_factory=list)
+    suggested_scores: dict[str, int] = Field(default_factory=dict)
+    data_taken_at: Optional[datetime] = None
+    parts: List[EvaluationPartResponse]
+    # The evaluator's weighted overall, as a percentage of each item's scale,
+    # when the template calculates one and the caller may read the part.
+    weighted_overall: Optional[float] = None
+    signatures: List[SignatureResponse] = Field(default_factory=list)
+    # The finalized PDF can be downloaded.
+    document_available: bool = False
+    revision: int = 1
+    amendments: List[AmendmentResponse] = Field(default_factory=list)
+    # The last day the member may attach a written response; None until the
+    # evaluation is finalized.
+    response_due: Optional[date] = None
+    # A second PDF carrying the member's submitted response; the signed one
+    # (``document_available``) is kept as it was.
+    response_document_available: bool = False
+    # Keys of the evaluator's items the calibrator flagged to revisit.
+    calibration_flags: List[str] = Field(default_factory=list)
+    viewer: EvaluationViewer
+
+
+class SignResult(BaseModel):
+    outcome: Literal["signed", "finalized"]
+    evaluation: "EvaluationDetail"
+
+
+class SubmitResult(BaseModel):
+    outcome: Literal["submitted", "sent_for_calibration", "finalized"]
+    evaluation: EvaluationDetail
+
+
+class LiveDataResponse(BaseModel):
+    """A member's figures for the current review period, computed now."""
+
+    period_id: Optional[str] = None
+    period_name: Optional[str] = None
+    coverage_start: Optional[date] = None
+    coverage_end: Optional[date] = None
+    excluded_ranges: List[ExcludedRangeResponse] = Field(default_factory=list)
+    sources: List[DataSourceResponse]
+    data: dict
+    note: Optional[str] = None
+
+
+class DraftPeriodOption(BaseModel):
+    id: str
+    name: str
+    start_date: date
+    end_date: date
+
+
+class DraftOptions(BaseModel):
+    members: List[PersonRef]
+    evaluators: List[PersonRef]
+    periods: List[DraftPeriodOption]
+
+
+# ------------------------------------------------------------- bulk drafting
+
+# One request drafts at most this many; a department larger than that drafts
+# in batches. Bounds the time one request holds the database.
+MAX_BULK_DRAFTS = 500
+
+
+class BulkDraftRow(BaseModel):
+    """One current member as bulk drafting would treat them: the template and
+    evaluator it would use, or why they are left out."""
+
+    member: PersonRef
+    template: Optional[PersonRef] = None
+    # None with no skip_reason: nobody qualifies by default, so the manager
+    # chooses one before this member can be drafted.
+    evaluator: Optional[PersonRef] = None
+    skip_reason: Optional[str] = None
+
+
+class BulkDraftPreview(BaseModel):
+    period: DraftPeriodOption
+    kind: EvaluationTemplateKind
+    rows: List[BulkDraftRow]
+    evaluators: List[PersonRef]
+
+
+class BulkDraftItem(BaseModel):
+    member_id: str = Field(min_length=1, max_length=36)
+    evaluator_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class BulkDraftRequest(BaseModel):
+    period_id: str = Field(min_length=1, max_length=36)
+    kind: EvaluationTemplateKind = EvaluationTemplateKind.ANNUAL
+    items: List[BulkDraftItem] = Field(min_length=1, max_length=MAX_BULK_DRAFTS)
+
+    @model_validator(mode="after")
+    def _once_each(self) -> "BulkDraftRequest":
+        ids = [item.member_id for item in self.items]
+        if len(set(ids)) != len(ids):
+            raise ValueError("A member is listed more than once")
+        return self
+
+
+class BulkDraftResult(BaseModel):
+    member_id: str
+    evaluation_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BulkDraftResponse(BaseModel):
+    drafted: int
+    results: List[BulkDraftResult]
+
+
+# ------------------------------------------------------------------ deletion
+
+
+class EvaluationDelete(BaseModel):
+    """Why the evaluation is removed. Kept on the member's history, where the
+    member reads it."""
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Give the reason for deleting this evaluation")
+        return v
+
+
+class EvaluationDeletionRecordResponse(BaseModel):
+    id: str
+    member: PersonRef
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    template_name: str
+    evaluator_name: Optional[str] = None
+    was_finalized: bool
+    reason: str
+    deleted_by_name: str
+    deleted_at: datetime
+
+
+# ----------------------------------------------------------------- amending
+
+
+class EvaluationAmend(BaseModel):
+    """Why a finalized evaluation is reopened. Kept with the evaluation and
+    printed on its PDF; the member reads it."""
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Give the reason for amending this evaluation")
+        return v
+
+
+# ----------------------------------------------------------------- response
+
+
+class ResponseWrite(BaseModel):
+    """The member's written response to their finalized evaluation."""
+
+    text: str = Field(min_length=1, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("text")
+    @classmethod
+    def _text(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Write your response before saving it")
+        return v
+
+
+# -------------------------------------------------------------- calibration
+
+
+class CalibrationComplete(BaseModel):
+    """Completing calibration, with the evaluator's items flagged for them to
+    revisit. Item keys only, never a note (owner decision 2026-11-02)."""
+
+    flagged_items: List[str] = Field(
+        default_factory=list, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
+    )

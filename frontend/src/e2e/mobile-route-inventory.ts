@@ -1286,6 +1286,24 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/reports/evaluations/conduct',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — evaluations a member conducts',
+  },
+  {
+    path: '/reports/evaluations/mine',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: "fast route-level mobile presentation ratchet — a member's own evaluations and live figures",
+  },
+  {
+    path: '/reports/evaluations/:evaluationId',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/scheduling',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'ratchet',

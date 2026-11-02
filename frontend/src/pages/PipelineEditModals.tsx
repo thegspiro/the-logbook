@@ -5,6 +5,7 @@
  */
 
 import { CallTypeRequirementPicker } from '../components/training/CallTypeRequirementPicker';
+import { EvaluationRequirementFields } from '../components/training/EvaluationRequirementFields';
 import React, { useEffect, useState } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
@@ -634,6 +635,9 @@ export const RequirementFormModal: React.FC<{
   const [hours, setHours] = useState(req?.required_hours?.toString() ?? '');
   const [shifts, setShifts] = useState(req?.required_shifts?.toString() ?? '');
   const [calls, setCalls] = useState(req?.required_calls?.toString() ?? '');
+  const [transports, setTransports] = useState(req?.required_transports?.toString() ?? '');
+  const [refusals, setRefusals] = useState(req?.required_refusals?.toString() ?? '');
+  const [excludesLowest, setExcludesLowest] = useState(req?.evaluation_excludes_lowest_rating === true);
   const [callTypes, setCallTypes] = useState<string[]>(req?.required_call_types ?? []);
   const [passing, setPassing] = useState(req?.passing_score?.toString() ?? '');
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
@@ -724,8 +728,12 @@ export const RequirementFormModal: React.FC<{
         description: blankToNull(description),
         requirement_type: type as never,
         required_hours: type === 'hours' && hours ? Number(hours) : null,
-        required_shifts: type === 'shifts' && shifts ? Number(shifts) : null,
+        required_shifts: (type === 'shifts' || type === 'evaluated_shifts') && shifts ? Number(shifts) : null,
         required_calls: type === 'calls' && calls ? Number(calls) : null,
+        required_transports: type === 'transports' && transports ? Number(transports) : null,
+        required_refusals: type === 'refusals' && refusals ? Number(refusals) : null,
+        // A boolean on every save: the column refuses null.
+        evaluation_excludes_lowest_rating: type === 'evaluated_shifts' && excludesLowest,
         // Empty means every call counts, so switching away clears it.
         required_call_types: type === 'calls' ? callTypes : [],
         passing_score: type === 'knowledge_test' && passing ? Number(passing) : null,
@@ -911,6 +919,18 @@ export const RequirementFormModal: React.FC<{
               </div>
             </div>
           )}
+          <EvaluationRequirementFields
+            idPrefix="rq"
+            type={type}
+            shifts={shifts}
+            transports={transports}
+            refusals={refusals}
+            excludesLowest={excludesLowest}
+            onShiftsChange={setShifts}
+            onTransportsChange={setTransports}
+            onRefusalsChange={setRefusals}
+            onExcludesLowestChange={setExcludesLowest}
+          />
           {type === 'knowledge_test' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>

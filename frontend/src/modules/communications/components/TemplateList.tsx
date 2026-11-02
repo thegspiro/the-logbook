@@ -135,6 +135,22 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     label: 'Applicant Needs Your Attention',
     color: 'text-blue-700 dark:text-blue-400',
   },
+  evaluation_step_waiting: {
+    icon: ClipboardPen,
+    label: 'Evaluation Waiting on You',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  evaluation_deadline_reminder: {
+    icon: Hourglass,
+    label: 'Evaluation Step Due Soon',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
+  evaluation_overdue: { icon: AlertTriangle, label: 'Evaluation Step Overdue', color: 'text-red-600' },
+  evaluation_finalized: {
+    icon: BadgeCheck,
+    label: 'Evaluation Finalized',
+    color: 'text-green-700 dark:text-green-600',
+  },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
   equipment_request_update: {
     icon: PackageCheck,
@@ -254,6 +270,11 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
     id: 'inventory',
     label: 'Inventory & Property',
     types: ['inventory_change', 'property_return_reminder', 'equipment_request_update'],
+  },
+  {
+    id: 'evaluations',
+    label: 'Performance Evaluations',
+    types: ['evaluation_step_waiting', 'evaluation_deadline_reminder', 'evaluation_overdue', 'evaluation_finalized'],
   },
   {
     id: 'suggestions',

@@ -156,6 +156,9 @@ const TrainingRequirementsPage: React.FC = () => {
         required_courses: requirement.required_courses,
         required_shifts: requirement.required_shifts,
         required_calls: requirement.required_calls,
+        required_transports: requirement.required_transports,
+        required_refusals: requirement.required_refusals,
+        evaluation_excludes_lowest_rating: requirement.evaluation_excludes_lowest_rating,
         required_call_types: requirement.required_call_types,
         required_skills: requirement.required_skills,
         checklist_items: requirement.checklist_items,
@@ -465,6 +468,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
         return 'Checklist';
       case 'knowledge_test':
         return 'Knowledge Test';
+      case 'evaluated_shifts':
+        return 'Evaluated Shifts';
+      case 'transports':
+        return 'Transports';
+      case 'refusals':
+        return 'Refusals';
       default:
         return type;
     }
@@ -720,6 +729,22 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 )}
                 {requirement.required_calls != null && (
                   <DetailRow label="Required Calls" value={String(requirement.required_calls)} />
+                )}
+                {requirement.required_transports != null && (
+                  <DetailRow label="Required Transports" value={String(requirement.required_transports)} />
+                )}
+                {requirement.required_refusals != null && (
+                  <DetailRow label="Required Refusals" value={String(requirement.required_refusals)} />
+                )}
+                {requirement.requirement_type === 'evaluated_shifts' && (
+                  <DetailRow
+                    label="Lowest Rating"
+                    value={
+                      requirement.evaluation_excludes_lowest_rating
+                        ? 'An evaluation with any item at the lowest rating does not count'
+                        : 'Every submitted evaluation counts'
+                    }
+                  />
                 )}
                 {requirement.required_courses && requirement.required_courses.length > 0 && (
                   <DetailRow

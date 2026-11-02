@@ -47,6 +47,7 @@ from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
 )
+from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.skills_testing_service import member_skill_expirations
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
@@ -715,6 +716,10 @@ async def get_my_training_summary(
             "hours_reported": float(srow[1]),
             "total_calls": int(srow[2]),
             "avg_rating": round(float(srow[3]), 1) if srow[3] else None,
+            # Per form, never pooled with avg_rating's 1-5 report scale.
+            "evaluation_averages": await ShiftEvaluationService(db).averages_by_form(
+                user_id, org_id, member_view=not is_officer
+            ),
         }
 
     # --- Submission History ---

@@ -3182,6 +3182,9 @@ _TARGET_BY_TYPE = {
     RequirementType.HOURS.value: ("required_hours", "hours"),
     RequirementType.SHIFTS.value: ("required_shifts", "shifts"),
     RequirementType.CALLS.value: ("required_calls", "calls"),
+    RequirementType.EVALUATED_SHIFTS.value: ("required_shifts", "evaluated shifts"),
+    RequirementType.TRANSPORTS.value: ("required_transports", "transports"),
+    RequirementType.REFUSALS.value: ("required_refusals", "refusals"),
 }
 
 

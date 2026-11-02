@@ -706,8 +706,15 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
                               )}
                               <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                                 {req.required_hours && <span>{req.required_hours} hours</span>}
-                                {req.required_shifts && <span>{req.required_shifts} shifts</span>}
+                                {req.required_shifts && (
+                                  <span>
+                                    {req.required_shifts}{' '}
+                                    {req.requirement_type === 'evaluated_shifts' ? 'evaluated shifts' : 'shifts'}
+                                  </span>
+                                )}
                                 {req.required_calls && <span>{req.required_calls} calls</span>}
+                                {req.required_transports && <span>{req.required_transports} transports</span>}
+                                {req.required_refusals && <span>{req.required_refusals} refusals</span>}
                                 <span>{req.frequency}</span>
                               </div>
                             </div>

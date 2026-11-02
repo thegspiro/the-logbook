@@ -250,6 +250,72 @@ describe('MemberAdminEditPage — clearing a date', () => {
   });
 });
 
+// Update payloads are dumped with exclude_unset, so '' was written through
+// as an empty string rather than a clear: the street "cleared" in the
+// workflow re-check came back as "" while the dates beside it came back null
+// (MR-5). Each optional text field now sends null, as the dates do.
+describe('MemberAdminEditPage — clearing a text field', () => {
+  const filled = {
+    middle_name: 'Lee',
+    personal_email: 'dana@home.test',
+    membership_number: 'FF-001',
+    station: 'Station 1',
+    platoon: 'B',
+    phone: '703-555-0101',
+    mobile: '703-555-0102',
+    address_street: '12 Elm St',
+    address_city: 'Falls Church',
+    address_state: 'VA',
+    address_zip: '22046',
+    address_country: 'USA',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([{ id: 's1', name: 'Station 1' }]);
+    mockUpdateUserProfile.mockReset();
+    mockUpdateUserProfile.mockResolvedValue({});
+    mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
+    mockGetUserWithRoles.mockReset();
+    mockGetUserWithRoles.mockResolvedValue(member(filled));
+  });
+
+  it('sends null for every optional text field that is emptied', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    for (const [field, value] of Object.entries(filled)) {
+      if (field === 'station') continue;
+      await user.clear(screen.getByDisplayValue(value));
+    }
+    await user.selectOptions(screen.getByRole('combobox', { name: /^station$/i }), '');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    for (const field of Object.keys(filled)) {
+      expect(payload).toHaveProperty(field, null);
+    }
+  });
+
+  it('still sends a value that was changed, trimmed', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    const platoon = screen.getByDisplayValue('B');
+    await user.clear(platoon);
+    await user.type(platoon, ' C ');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.platoon).toBe('C');
+  });
+});
+
 describe('MemberAdminEditPage — emergency contacts', () => {
   beforeEach(() => {
     mockGetUserWithRoles.mockReset();

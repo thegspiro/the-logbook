@@ -1232,6 +1232,7 @@ def _build_response(minutes) -> MinutesResponse:
         created_by=minutes.created_by,
         created_at=minutes.created_at,
         updated_at=minutes.updated_at,
+        edit_version=minutes.edit_version or 0,
         motions=[
             _build_motion_response(m, members_present(minutes.attendees))
             for m in (minutes.motions or [])

@@ -8,6 +8,9 @@ import {
   Contrast,
   ChevronDown,
   Bell,
+  ClipboardCheck,
+  ClipboardList,
+  CreditCard,
   UserCog,
   WifiOff,
   RefreshCw,
@@ -88,7 +91,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
-  const practicalSkillsMethod = usePracticalSkillsMethod();
+  const practicalSkillsMethod = usePracticalSkillsMethod(!modulesLoading && isModuleOn('training'));
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
@@ -289,6 +292,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   ]
                 : []),
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
+              ...(isModuleOn('medical_screening')
+                ? [{ label: 'Medical Screening', path: '/medical-screening', permission: 'medical_screening.view' }]
+                : []),
               DIV,
               { label: 'Manage Events', path: '/events', permission: 'events.manage' },
               ...(isModuleOn('training')
@@ -419,6 +425,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   // off it is an entry to a refusal that can never show a number.
   const showNotifications = isModuleOn('notifications');
   const accountActive = isActive('/account');
+  const myIdCardPath = currentUser?.id ? `/members/${currentUser.id}/id-card` : null;
+  const myIdCardActive = myIdCardPath !== null && isActive(myIdCardPath);
+  const myEvaluationsActive = isActive('/reports/evaluations/mine');
+  const conductActive = isActive('/reports/evaluations/conduct');
+  // Gated like its route: the evaluations a member conducts, or all of them.
+  const canListEvaluations =
+    checkPermission('evaluations.conduct') ||
+    checkPermission('evaluations.view_all') ||
+    checkPermission('evaluations.manage');
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
     .filter((item) => item.path !== '#' && isActive(item.path))
@@ -961,6 +976,32 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       )}
                     </a>
                   )}
+                  {isModuleOn('reports') && (
+                    <a
+                      href="/reports/evaluations/mine"
+                      onClick={(e) => handleNavigation('/reports/evaluations/mine', e)}
+                      aria-current={myEvaluationsActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        myEvaluationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                      <span>My Evaluations</span>
+                    </a>
+                  )}
+                  {isModuleOn('reports') && canListEvaluations && (
+                    <a
+                      href="/reports/evaluations/conduct"
+                      onClick={(e) => handleNavigation('/reports/evaluations/conduct', e)}
+                      aria-current={conductActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        conductActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                      <span>Evaluations</span>
+                    </a>
+                  )}
                   <a
                     href="/account"
                     onClick={(e) => handleNavigation('/account', e)}
@@ -972,6 +1013,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     <UserCog className="h-4 w-4" aria-hidden="true" />
                     <span>My Account</span>
                   </a>
+                  {myIdCardPath && (
+                    <a
+                      href={myIdCardPath}
+                      onClick={(e) => handleNavigation(myIdCardPath, e)}
+                      aria-current={myIdCardActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        myIdCardActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <CreditCard className="h-4 w-4" aria-hidden="true" />
+                      <span>My ID Card</span>
+                    </a>
+                  )}
                   <button
                     onClick={cycleTheme}
                     className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"

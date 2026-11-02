@@ -740,6 +740,14 @@ class MeetingMinutes(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # Bumped by every content save; a save that names an older value is
+    # refused (409), so two secretaries editing one draft cannot silently
+    # overwrite each other's sections (MM5-4). A counter rather than
+    # updated_at, which is stored to the second and would miss two saves in
+    # the same second.
+    edit_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -630,6 +630,39 @@ def _item_response(item: InventoryItem) -> InventoryItemResponse:
     return payload
 
 
+async def _low_stock_item_ids(
+    service: InventoryService,
+    organization_id: Any,
+    low_stock: bool,
+    low_stock_categories: bool,
+) -> list[str] | None:
+    """The item ids the two low-stock filters narrow a listing to, or None.
+
+    Each filter reuses the scan behind the link that opens it, so the list holds
+    exactly what was counted: ``low_stock`` is the alert email's per-item
+    reorder-point scan, ``low_stock_categories`` the dashboard tile's
+    per-category threshold scan. A second definition of "low" here would let
+    the list and its source disagree. Both together intersect. An empty list
+    must reach the query as an empty list: None means "no narrowing".
+    """
+    narrowed: list[str] | None = None
+    if low_stock:
+        low_rows = await service.get_low_stock_items_for_alerts(
+            organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
+        narrowed = [str(item.id) for item, _on_hand, _from_lots in low_rows]
+    if low_stock_categories:
+        in_low_categories = await service.item_ids_in_low_stock_categories(
+            organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
+        if narrowed is None:
+            narrowed = in_low_categories
+        else:
+            keep = set(in_low_categories)
+            narrowed = [item_id for item_id in narrowed if item_id in keep]
+    return narrowed
+
+
 @router.get("/items", response_model=ItemsListResponse)
 async def list_items(
     category_id: UUID | None = None,
@@ -654,6 +687,7 @@ async def list_items(
     limit: int = Query(100, ge=1, le=500),
     fuzzy: bool = False,
     low_stock: bool = False,
+    low_stock_categories: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -662,6 +696,9 @@ async def list_items(
 
     ``low_stock=true`` narrows to the gear and uniform items at or below their
     reorder point — the set the daily low-stock alert email lists.
+    ``low_stock_categories=true`` narrows to the items filed under a category
+    at or below its low-stock threshold — the categories the dashboard's Low
+    stock tile counts.
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -713,14 +750,9 @@ async def list_items(
     # whether `groups` comes back populated.
     grouping = group_by if group_by in InventoryService.GROUPABLE else None
 
-    # The alert email's own scan, so the list its link opens holds exactly the
-    # items it named; a second definition of "low" here would let them disagree.
-    low_stock_ids = None
-    if low_stock:
-        low_rows = await service.get_low_stock_items_for_alerts(
-            current_user.organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
-        )
-        low_stock_ids = [str(item.id) for item, _on_hand, _from_lots in low_rows]
+    low_stock_ids = await _low_stock_item_ids(
+        service, current_user.organization_id, low_stock, low_stock_categories
+    )
 
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
@@ -1073,6 +1105,7 @@ async def export_items_csv(
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     low_stock: bool = False,
+    low_stock_categories: bool = False,
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Export inventory items as CSV.
@@ -1145,12 +1178,9 @@ async def export_items_csv(
         # accepted risk.
         async with async_session_factory() as db:
             service = InventoryService(db)
-            low_stock_ids = None
-            if low_stock:
-                low_rows = await service.get_low_stock_items_for_alerts(
-                    organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
-                )
-                low_stock_ids = [str(item.id) for item, _oh, _fl in low_rows]
+            low_stock_ids = await _low_stock_item_ids(
+                service, organization_id, low_stock, low_stock_categories
+            )
             skip = 0
             while True:
                 # get_items_page, not get_items: the latter COUNTs the whole

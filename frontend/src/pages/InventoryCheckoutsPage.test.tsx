@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
@@ -63,5 +63,61 @@ describe('InventoryCheckoutsPage', () => {
 
     await waitFor(() => expect(mockExtend).toHaveBeenCalledTimes(1));
     expect(mockExtend).toHaveBeenCalledWith('co-1', '2026-10-06T04:59:00.000Z');
+  });
+});
+
+describe("InventoryCheckoutsPage — the dashboard tile's ?status=overdue", () => {
+  const overdueLoan = {
+    ...loan,
+    checkout_id: 'co-2',
+    item_name: 'SCBA Mask',
+    user_name: 'Jo Rivera',
+    expected_return_at: '2026-09-01T22:00:00Z',
+    is_overdue: true,
+  };
+
+  beforeEach(() => {
+    mockGetActive.mockReset();
+    mockGetActive.mockResolvedValue({ checkouts: [loan, overdueLoan], total: 2 });
+    mockGetOverdue.mockReset();
+    mockGetOverdue.mockResolvedValue({ checkouts: [overdueLoan], total: 1 });
+  });
+
+  // renderWithRouter mounts a BrowserRouter, which reads window.location, so
+  // the URL is the fixture and has to be put back for the tests after this.
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  const renderAt = (url: string) => {
+    window.history.pushState({}, '', url);
+    return renderWithRouter(<InventoryCheckoutsPage />);
+  };
+
+  it('opens on the Overdue tab, listing only the overdue loans', async () => {
+    renderAt('/inventory/checkouts?status=overdue');
+
+    expect(await screen.findByRole('tab', { name: /Overdue/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Active Temporary Loans/ })).toHaveAttribute('aria-selected', 'false');
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('SCBA Mask')).toBeInTheDocument();
+    expect(within(table).queryByText('Structural Coat')).not.toBeInTheDocument();
+  });
+
+  it('opens on the Active tab without the parameter, as before', async () => {
+    renderAt('/inventory/checkouts');
+
+    expect(await screen.findByRole('tab', { name: /Active Temporary Loans/ })).toHaveAttribute('aria-selected', 'true');
+    expect(within(screen.getByRole('table')).getByText('Structural Coat')).toBeInTheDocument();
+  });
+
+  it('clears the filter from the URL when the Active tab is chosen', async () => {
+    const user = userEvent.setup();
+    renderAt('/inventory/checkouts?status=overdue');
+
+    await user.click(await screen.findByRole('tab', { name: /Active Temporary Loans/ }));
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+    expect(within(screen.getByRole('table')).getByText('Structural Coat')).toBeInTheDocument();
   });
 });

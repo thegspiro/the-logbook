@@ -185,4 +185,25 @@ describe('useInspectionForm paging (FAC2-5)', () => {
       })
     );
   });
+
+  // The dashboard's "Upcoming inspections" tile counts a window the server
+  // computes on the department's calendar, so the window goes to the server
+  // rather than being re-derived from the rows on the page.
+  it('asks the server for the due window and lists what it returns', async () => {
+    const due = { ...existing, id: 'insp-due', nextInspectionDate: '2026-11-15', passed: null };
+    getInspectionsPage.mockResolvedValue({ items: [due], total: 1, skip: 0, limit: 50 });
+
+    const { result } = renderHook(() => useInspectionForm({ dueWithinDays: 30 }));
+
+    await waitFor(() => expect(result.current.inspections).toEqual([due]));
+    expect(getInspectionsPage).toHaveBeenLastCalledWith({ due_within_days: 30, skip: 0, limit: 50 });
+    expect(result.current.total).toBe(1);
+  });
+
+  it('sends no due window when none is asked for', async () => {
+    renderHook(() => useInspectionForm());
+
+    await waitFor(() => expect(getInspectionsPage).toHaveBeenCalled());
+    expect(getInspectionsPage).toHaveBeenLastCalledWith({ skip: 0, limit: 50 });
+  });
 });

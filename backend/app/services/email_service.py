@@ -2939,6 +2939,46 @@ class EmailService:
         )
         return success_count > 0
 
+    async def send_evaluation_notice(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """One of the four performance-evaluation notices to one recipient.
+
+        ``context`` is built by EvaluationNoticeService, which decides who is
+        told and in what words; this only renders the department's template
+        (or the built-in default) and sends it.
+        """
+        from app.services.email_templates_evaluations import DEFAULT_TEMPLATE_DEFS
+
+        default = next(d for d in DEFAULT_TEMPLATE_DEFS if d["type"] == template_type)
+        rendered = await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default["subject"],
+            default_html=default["html"],
+            default_text=default["text"],
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+        )
+        return success_count > 0
+
     async def send_applicant_needs_attention_email(
         self,
         to_email: str,

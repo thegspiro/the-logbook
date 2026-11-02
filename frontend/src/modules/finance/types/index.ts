@@ -888,6 +888,35 @@ export interface PendingApproval {
   lateLineCount?: number;
   /** How far it would take its restricted funds past what they have left; null when it fits. */
   fundShortfall?: MonetaryAmount | null;
+  /** An "email" approver step's link, as the backend reads it; null for every other step. */
+  emailDelivery?: ApprovalEmailDelivery | null;
+  /** When the last send was attempted; null when none was recorded. */
+  emailStatusAt?: string | null;
+  /** Named back by a re-send, so a repeated one sends nothing. */
+  emailLinkVersion?: number;
+  /** The viewer may re-send the link (an approvals admin, on an email step). */
+  canResendEmail?: boolean;
+}
+
+/** The state of an emailed approval link (`PendingApproval.emailDelivery`). */
+export const ApprovalEmailDelivery = {
+  SENT: 'sent',
+  FAILED: 'failed',
+  EXPIRED: 'expired',
+  NOT_SENT: 'not_sent',
+  /** A live link emailed before send status was recorded. */
+  UNKNOWN: 'unknown',
+} as const;
+export type ApprovalEmailDelivery = (typeof ApprovalEmailDelivery)[keyof typeof ApprovalEmailDelivery];
+
+/** `POST /finance/approvals/{id}/resend-email`: the link's state afterwards, never the link. */
+export interface ApprovalEmailResendResult {
+  stepRecordId: string;
+  /** False when another re-send had already replaced the link. */
+  resent: boolean;
+  emailDelivery: ApprovalEmailDelivery | null;
+  emailStatusAt: string | null;
+  emailLinkVersion: number;
 }
 
 /** Why nobody can act on an approval step, from the approver-coverage report. */

@@ -6,6 +6,7 @@
  */
 
 import { useEffect } from 'react';
+import { useSearchParams } from 'react-router';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 
 import {
@@ -32,9 +33,25 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
+/** The endpoint's own bound on `due_within_days`; anything else is ignored. */
+const MAX_DUE_WITHIN_DAYS = 366;
+
+/**
+ * The dashboard's "Upcoming inspections" tile links here as `?dueWithin=30`.
+ * A value that is not a whole number of days in range degrades to the full
+ * list rather than an error.
+ */
+function parseDueWithin(raw: string | null): number | undefined {
+  if (!raw || !/^\d+$/.test(raw)) return undefined;
+  const days = Number(raw);
+  return days <= MAX_DUE_WITHIN_DAYS ? days : undefined;
+}
+
 export default function InspectionsListPage() {
   const { canEdit, canDelete } = useFacilitiesAccess();
   const tz = useTimezone();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dueWithinDays = parseDueWithin(searchParams.get('dueWithin'));
   const { facilities, loadFacilities } = useFacilitiesStore();
 
   useEffect(() => {
@@ -64,7 +81,14 @@ export default function InspectionsListPage() {
     openEdit,
     handleSave,
     handleDelete,
-  } = useInspectionForm();
+  } = useInspectionForm({ dueWithinDays });
+
+  const clearDueWithin = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('dueWithin');
+    setSearchParams(next, { replace: true });
+    setPage(1);
+  };
 
   const getFacilityName = (facilityId: string) =>
     facilities.find((f) => f.id === facilityId)?.name || 'Unknown facility';
@@ -110,6 +134,18 @@ export default function InspectionsListPage() {
         </div>
       </div>
 
+      {dueWithinDays !== undefined && (
+        <div className="alert-warning flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+          <span>
+            Showing only inspections next due {dueWithinDays === 0 ? 'today' : `in the next ${dueWithinDays} days`}, at
+            facilities that are not archived.
+          </span>
+          <button type="button" onClick={clearDueWithin} className="touch-target-phone font-medium underline">
+            Show all inspections
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
@@ -131,7 +167,7 @@ export default function InspectionsListPage() {
         <div className="py-20 text-center">
           <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted">
-            {searchQuery || resultFilter !== 'all'
+            {searchQuery || resultFilter !== 'all' || dueWithinDays !== undefined
               ? 'No inspections match your filters.'
               : 'No inspections recorded yet.'}
           </p>

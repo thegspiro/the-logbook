@@ -695,6 +695,7 @@ class ShiftCompletionService:
         if commit:
             await self.db.commit()
             await self.db.refresh(report)
+            await self._sync_evaluation_credit(report, organization_id)
 
         if review_status == "approved":
             await self._send_notification(
@@ -891,6 +892,7 @@ class ShiftCompletionService:
             require_shift_officer(shift, officer_id)
 
         created_ids: List[str] = []
+        created_members: List[str] = []
         skipped = 0
 
         for member_id in crew_member_ids:
@@ -941,6 +943,7 @@ class ShiftCompletionService:
                     commit=False,
                 )
                 created_ids.append(str(report.id))
+                created_members.append(member_id)
             except ValueError as e:
                 logger.warning(
                     "Skipped report for member {}: {}",
@@ -951,6 +954,16 @@ class ShiftCompletionService:
 
         if created_ids:
             await self.db.commit()
+            if shift_id:
+                from app.services.shift_evaluation_service import (
+                    ShiftEvaluationService,
+                )
+
+                evaluations = ShiftEvaluationService(self.db)
+                for member_id in created_members:
+                    await evaluations.sync_credit_for_shift_member(
+                        shift_id, member_id, organization_id
+                    )
 
         return {
             "created": len(created_ids),
@@ -1704,7 +1717,28 @@ class ShiftCompletionService:
 
         await self.db.commit()
         await self.db.refresh(report)
+        await self._sync_evaluation_credit(report, organization_id)
         return report
+
+    async def _sync_evaluation_credit(
+        self, report: ShiftCompletionReport, organization_id: UUID | str
+    ) -> None:
+        """Follow a review-state change through to the shift's evaluations.
+
+        Under required review an evaluation is visible, and so credited, only
+        while this report is approved. Run after the report is committed, and
+        the report is refreshed afterwards because a ledger conflict inside
+        the sync rolls back and expires the session's rows.
+        """
+        if not report.shift_id:
+            return
+        # Imported here: shift_evaluation_service imports this module.
+        from app.services.shift_evaluation_service import ShiftEvaluationService
+
+        await ShiftEvaluationService(self.db).sync_credit_for_shift_member(
+            report.shift_id, report.trainee_id, organization_id
+        )
+        await self.db.refresh(report)
 
     async def _return_edited_report_to_review(
         self, report: ShiftCompletionReport, organization_id: UUID | str
@@ -2086,6 +2120,7 @@ class ShiftCompletionService:
 
         await self.db.commit()
         await self.db.refresh(report)
+        await self._sync_evaluation_credit(report, organization_id)
 
         if review_status == "approved":
             await self._send_notification(

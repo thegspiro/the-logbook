@@ -113,6 +113,8 @@ class StorageArea(str, Enum):
     EMAIL_ATTACHMENTS = "email-attachments"
     SUGGESTIONS = "suggestions"
     MINUTES_ATTACHMENTS = "minutes-attachments"
+    # Finalized evaluation PDFs, written by the application, never uploaded.
+    EVALUATIONS = "evaluations"
 
 
 # Where each area wrote files before the org-first layout, relative to
@@ -127,6 +129,7 @@ _LEGACY_ROOTS: Mapping[StorageArea, tuple[str, ...]] = {
     StorageArea.SUGGESTIONS: ("suggestions",),
     # Born under the org-first layout, so there is no older root to honour.
     StorageArea.MINUTES_ATTACHMENTS: (),
+    StorageArea.EVALUATIONS: (),
 }
 
 

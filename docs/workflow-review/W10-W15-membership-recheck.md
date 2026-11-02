@@ -126,22 +126,40 @@ of the filters (Profile Updates, Status Changes, …) hide views.
 default filter should exclude views, or a "Views" filter should be added, is a
 product choice.
 
-### MR-5 — NIT — Cleared text fields on the admin edit page are saved as `''`, not `null` — OPEN
+### MR-5 — NIT — Cleared text fields on the admin edit page are saved as `''`, not `null` — ✅ FIXED (2026-11-01)
 
 **Saw:** clearing the street saved `address_street: ""`. The date fields saved
-`null`, because they use `blankToNull`. Text fields (`phone`, `personal_email`,
-address, station, platoon) send `form.x` as is
-(`MemberAdminEditPage.tsx:248–297`). Phone came back `null` only because the
-backend normalizes it.
-**Impact:** none visible. An empty string renders as absent. It is still the
-inconsistency pitfall 1 describes. Converting them to `blankToNull` is safe
-only once each backend field is confirmed to accept `null`.
+`null`, because they use `blankToNull`. The text fields (`phone`,
+`personal_email`, address, station, platoon) sent `form.x` as is. Phone came
+back `null` only because the backend normalizes it.
+**Impact:** none visible, since an empty string renders as absent. It was still
+the inconsistency pitfall 1 describes, and an `IS NULL` check for "no station"
+would miss an emptied one.
+**Checked first:** each of the twelve columns is `Mapped[Optional[...]]` on
+`User`. None is in `UserUpdate.null_refused`. The profile handler writes them
+through its allowlist with `setattr`. The phone validator treats null as a
+clear, and the membership-number uniqueness check skips a blank. Rank is left
+as it was, because `_canonical_rank_or_400` already turns `''` into `null` on
+the server.
+**Fix:** `MemberAdminEditPage` sends the twelve optional text fields (middle
+name, personal email, membership number, station, platoon, phone, mobile, and
+the five address fields) through `blankToNull`. That also trims a value that is
+kept. `UserProfileUpdate` allows `null` on the six of those it did not already
+allow. Tests: `MemberAdminEditPage.test.tsx` "clearing a text field" (two
+tests, seen to fail before the fix). Re-driven: street, city, platoon and
+personal email emptied on the edit page came back `null`.
 
-### MR-6 — NIT — The digital ID card shows the raw account status — OPEN
+### MR-6 — NIT — The digital ID card shows the raw account status — ✅ FIXED (2026-11-01)
 
-**Saw:** `/members/:id/id-card` shows the badge text `active` in lower case
-(`MemberIdCardPage.tsx:261`), and would show `leave` rather than "On Leave".
-No shared account-status label map exists to reuse.
+**Saw:** `/members/:id/id-card` showed the badge text `active` in lower case, and
+would have shown `leave` rather than "On Leave". No shared account-status label
+map existed.
+**Fix:** `USER_STATUS_LABELS` and `userStatusLabel()` sit beside `UserStatus` in
+`constants/enums.ts`, using the roster's wording ("On Leave", "Dropped
+(voluntary)"). The ID card uses them. The existing ID-card test asserted the
+lowercase `active`, so its expectation was the defect and was rewritten in the
+same commit, which says so. A second test covers `leave` → "On Leave". Both
+were seen to fail before the fix. Re-driven: the card reads **Active**.
 
 ### MR-7 — NIT — `useMembershipStore` has no consumer — FLAGGED
 
@@ -157,7 +175,7 @@ for the owner.
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | 1. Job gets done       | ✅ add, edit, clear, waiver, deactivate. Results checked from the other role and through the API, not from toasts      |
 | 2. Right people        | ✅ routes and API refuse `member`; contact data redacted                                                               |
-| 3. Wrong input         | ✅ required fields, waiver dates, double submit; MR-5 (NIT)                                                            |
+| 3. Wrong input         | ✅ required fields, waiver dates, double submit; MR-5 fixed                                                            |
 | 4. Browser reported    | ✅ after MR-2; the step-up 403 is the designed re-auth prompt                                                          |
 | 5. Coming back         | ✅ reload and deep links to profile, edit and history; the legacy redirects land correctly                             |
 | 6. Phone               | ✅ no overflow; dialog reachable; 44px buttons                                                                         |

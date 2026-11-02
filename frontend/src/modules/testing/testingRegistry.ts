@@ -379,12 +379,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/training/admin', label: 'Training administration', permission: 'training.manage', module: 'training' },
       { path: '/training/cohorts', label: 'Cohorts', permission: 'training.manage', module: 'training' },
-      {
-        path: '/training/cohorts/:cohortId',
-        label: 'Cohort detail',
-        permission: 'training.manage',
-        module: 'training',
-      },
+      { path: '/training/cohorts/:cohortId', label: 'Cohort detail', module: 'training' },
       { path: '/training/log-shift', label: 'Manual shift report', permission: 'training.manage', module: 'training' },
       {
         path: '/training/compliance-config',
@@ -1242,6 +1237,14 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'evaluations.configure',
         module: 'reports',
       },
+      {
+        path: '/reports/evaluations/conduct',
+        label: 'Evaluations',
+        anyPermission: ['evaluations.conduct', 'evaluations.view_all', 'evaluations.manage'],
+        module: 'reports',
+      },
+      { path: '/reports/evaluations/mine', label: 'My evaluations', module: 'reports' },
+      { path: '/reports/evaluations/:evaluationId', label: 'Evaluation', module: 'reports' },
       { path: '/admin/analytics', label: 'Analytics dashboard', permission: 'analytics.view' },
       { path: '/admin/platform-analytics', label: 'Platform analytics', permission: 'settings.manage' },
     ],

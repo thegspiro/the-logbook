@@ -111,3 +111,78 @@ test('a page chunk that stays unreachable reloads once, then shows the error', a
 
   await context.close();
 });
+
+test('a background sync sends a queued training submission from the service worker', async ({ context, page }) => {
+  await page.goto('/login');
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (navigator.serviceWorker.controller) return;
+    await new Promise<void>((resolve) => {
+      navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
+    });
+  });
+  await context.addCookies([{ name: 'csrf_token', value: 'csrf-e2e', url: 'http://127.0.0.1:4173' }]);
+
+  // Queued exactly as genericOfflineQueue stores it, owned by the member the
+  // stand-in /auth/me reports, so the worker's owner check lets it through.
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open('logbook-offline-generic', 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('pendingMutations', { keyPath: 'id' });
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error ?? new Error('open failed'));
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('pendingMutations', 'readwrite');
+      tx.objectStore('pendingMutations').put({
+        id: 'g-e2e',
+        ownerId: 'member-e2e',
+        kind: 'training-submission',
+        url: '/training/submissions',
+        body: { course_name: 'Ladder drill', client_request_id: 'e2e-request-0001' },
+        label: 'Training: Ladder drill',
+        queuedAt: Date.now(),
+        retries: 0,
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('put failed'));
+    });
+    db.close();
+  });
+
+  // The browser decides when to fire a real sync; DevTools fires one now.
+  const cdp = await context.newCDPSession(page);
+  const registrationId = await new Promise<string>((resolve) => {
+    cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => {
+      const live = registrations.find((r: { isDeleted: boolean }) => !r.isDeleted);
+      if (live) resolve(live.registrationId);
+    });
+    void cdp.send('ServiceWorker.enable');
+  });
+  await cdp.send('ServiceWorker.dispatchSyncEvent', {
+    origin: 'http://127.0.0.1:4173',
+    registrationId,
+    tag: 'logbook-offline-sync',
+    lastChance: false,
+  });
+
+  await expect
+    .poll(async (): Promise<unknown> => (await (await page.request.get('/__pwa-test/received')).json()) as unknown, {
+      timeout: 10_000,
+    })
+    .toEqual([{ body: { course_name: 'Ladder drill', client_request_id: 'e2e-request-0001' }, csrf: 'csrf-e2e' }]);
+
+  const left = await page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open('logbook-offline-generic', 1);
+        open.onsuccess = () => {
+          const req = open.result.transaction('pendingMutations').objectStore('pendingMutations').count();
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error ?? new Error('count failed'));
+        };
+        open.onerror = () => reject(open.error ?? new Error('open failed'));
+      })
+  );
+  expect(left).toBe(0);
+});
