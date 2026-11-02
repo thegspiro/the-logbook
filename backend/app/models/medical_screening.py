@@ -141,8 +141,11 @@ class ScreeningRecord(Base):
     """
     Individual screening instance for a user or prospective member.
 
-    Links to either a user_id (active member) or a prospect_id (prospective
-    member in the pipeline), but not both.
+    Created for either a user_id (active member) or a prospect_id (prospective
+    member in the pipeline), never both. The one exception is set by the
+    transfer to membership: it adds the new member's user_id to the
+    prospect's records and keeps prospect_id, so both ids mark a record
+    carried across (W71b-2, migration beedcad5b36a).
     """
 
     __tablename__ = "screening_records"

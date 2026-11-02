@@ -34,6 +34,13 @@ export const shiftEvaluationPagePath = (shiftId: string, memberId: string, scope
     memberId
   )}/${encodeURIComponent(scopeKey)}`;
 
+/** The evaluation page for a shift a member logged on an outside agency's unit. */
+export const outsideShiftEvaluationPagePath = (entryId: string, scopeKey: string): string =>
+  `/scheduling/outside-shifts/${encodeURIComponent(entryId)}/evaluations/${encodeURIComponent(scopeKey)}`;
+
+/** Where the training officer's list of outside shifts awaiting an evaluation lives. */
+export const OUTSIDE_SHIFT_EVALUATIONS_LIST_PATH = '/training/admin?page=settings&tab=shift-evaluations';
+
 export const shiftEvaluationPrintPath = (evaluationId: string): string =>
   `/scheduling/shift-evaluations/print?id=${encodeURIComponent(evaluationId)}`;
 

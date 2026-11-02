@@ -5,6 +5,19 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: Zeffy integration, November 2, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
+
+- **Zeffy.** A department that raises money through Zeffy can connect it under
+  **Integrations**. Under **Grants & Fundraising → Zeffy**, link each Zeffy
+  campaign to a fundraising campaign, a fundraising event or a dues schedule,
+  and its donations, ticket sales and memberships are recorded there as they
+  arrive, refunds included. Linking applies payments from now on unless you
+  choose an earlier date, so gifts already typed in are not counted twice.
+  Guides 11, 12 and 16 cover it.
+
 ## Recent changes: member performance evaluations, November 1–2, 2026
 
 The engineering audit is

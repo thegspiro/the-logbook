@@ -11,7 +11,11 @@ const mockGetExample = vi.fn();
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 const mockRemove = vi.fn();
+const mockListOutstanding = vi.fn();
 vi.mock('../../services/api', () => ({
+  shiftEvaluationService: {
+    listOutsideOutstanding: (...a: unknown[]) => mockListOutstanding(...a) as unknown,
+  },
   shiftEvaluationTemplateService: {
     list: (...a: unknown[]) => mockList(...a) as unknown,
     getSettings: (...a: unknown[]) => mockGetSettings(...a) as unknown,
@@ -90,13 +94,56 @@ describe('ShiftEvaluationSettingsPanel — templates', () => {
     mockUpdate.mockResolvedValue(saved());
     mockRemove.mockReset();
     mockRemove.mockResolvedValue(undefined);
+    mockListOutstanding.mockReset();
+    mockListOutstanding.mockResolvedValue([]);
   });
 
-  it('says the forms are not in use on shifts yet', async () => {
+  it('no longer says the forms are not in use on shifts', async () => {
     renderWithRouter(<ShiftEvaluationSettingsPanel />);
 
-    expect(await screen.findByText('Not in use on shifts yet.')).toBeInTheDocument();
-    expect(screen.getByText(/No evaluation templates yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/No evaluation templates yet/)).toBeInTheDocument();
+    expect(screen.queryByText('Not in use on shifts yet.')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Nothing waiting/)).toBeInTheDocument();
+  });
+
+  it('lists outside shifts awaiting an evaluation, with a link to enter each', async () => {
+    mockListOutstanding.mockResolvedValue([
+      {
+        entry_id: 'entry-1',
+        member_id: 'member-1',
+        member_name: 'Terry Member',
+        shift_date: '2026-10-30',
+        start_at: null,
+        end_at: null,
+        agency_name: 'ACFD',
+        apparatus_name: 'Medic 101',
+        evaluation_status: 'needed',
+        scope_key: 'enrollment-1',
+      },
+      {
+        entry_id: 'entry-2',
+        member_id: 'member-1',
+        member_name: 'Terry Member',
+        shift_date: '2026-10-28',
+        start_at: null,
+        end_at: null,
+        agency_name: 'ACFD',
+        apparatus_name: 'Medic 101',
+        evaluation_status: 'draft',
+        scope_key: 'enrollment-1',
+      },
+    ]);
+    renderWithRouter(<ShiftEvaluationSettingsPanel />);
+
+    expect(await screen.findByRole('link', { name: 'Enter evaluation' })).toHaveAttribute(
+      'href',
+      '/scheduling/outside-shifts/entry-1/evaluations/enrollment-1'
+    );
+    expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute(
+      'href',
+      '/scheduling/outside-shifts/entry-2/evaluations/enrollment-1'
+    );
+    expect(screen.getAllByText(/ACFD Medic 101/)).toHaveLength(2);
   });
 
   it('starts from the example and creates it', async () => {

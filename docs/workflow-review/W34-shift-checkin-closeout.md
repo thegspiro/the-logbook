@@ -90,13 +90,22 @@ Covered by the same test file.
 Covered by new cases in `ShiftDetailPanel.test.tsx` and
 `CloseoutQueueSection.test.tsx`, both failing against the old code.
 
-### W34-4 — NIT — Opening the check-in page logs two 404s — OPEN
+### W34-4 — NIT — Opening the check-in page logs two 404s — ✅ FIXED (2026-11-02)
 
 `GET /shifts/{id}/my-attendance` answers 404 for a member who has not checked
 in. The page reads that as "not yet", but it is requested twice (load, then the
 visibility refresh), and the browser logs both as failures. This is the same
 contract question as W31-4, and was left for the same reason: changing it to a
 200 with no body is a response change.
+
+**Fixed:** the endpoint now answers 200 with a `null` body for a member who has
+not checked in. Its only caller, `schedulingService.getMyAttendance`, already
+read a 404 as `null`, and still does for a backend that predates the change. A
+shift the caller cannot see answers `null` too, the same answer it gave as a
+404, so nothing about another department is revealed. Covered by
+`backend/tests/test_scheduling_my_attendance.py`, which failed against the old
+endpoint, and `frontend/src/modules/scheduling/services/myAttendance.test.ts`.
+W31-4 (My Sizes) is the same pattern on a different endpoint and stays open.
 
 ### W34-5 — NIT — A member not on the shift can check in to it — OPEN (setting)
 

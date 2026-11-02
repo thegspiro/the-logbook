@@ -1,7 +1,76 @@
 # Application Review — Auth & Session Lifecycle
 
 **Prefix:** `AUTH` · **Iteration:** A2 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-09-09 (pass 5)
+2026-08-08 (pass 2), 2026-09-09 (pass 5), 2026-11-02 (pass 6)
+
+## Pass 6 (2026-11-02) — the single-use secrets, and a lock that deadlocked
+
+Lens: the delta since pass 5 is large (passkeys, MFA required of privileged members with step-up,
+week-long kiosk sessions, hardened session lifetimes), but security-review pass 13 (2026-10-28) read
+the passkey feature in full and found it good, so this pass did not repeat it. It took the concurrency
+class that produced AUTH-9, AUTH-13, AUTH-20 and AUTH-21 and asked of every **single-use secret** in the
+module: if two requests present it at once, does exactly one win? **1 fixed (LOW/MED).**
+
+| Secret                  | One winner? | How                                                                               |
+| ----------------------- | ----------- | --------------------------------------------------------------------------------- |
+| TOTP code               | yes         | `_verify_and_consume_totp` re-reads the user by primary key under a lock (AUTH-9) |
+| Recovery / backup code  | yes         | `_verify_and_consume_recovery_code`, same shape (AUTH-13)                         |
+| Passkey challenge       | yes         | `_consume_challenge` deletes the row; only one request can remove it              |
+| Training approval link  | yes         | `approve_by_token` locks the event, session, then approval                        |
+| Finance approval link   | yes         | `approve_by_token` selects the step `FOR UPDATE`                                  |
+| **Password-reset link** | **no**      | **AUTH-24, below**                                                                |
+
+> **Finding ids:** AUTH-24 is the next free number across both tracks (the highest in use is AUTH-23).
+> The shared-prefix problem recorded in Pass 5 stands.
+
+### AUTH-24 — LOW/MED — A password-reset link submitted twice at once is not single-use — ✅ FIXED
+
+`reset_password_with_token` looked the user up by the hash of the emailed token with a plain read,
+validated the new password, wrote it, cleared the token and committed. Two submissions of one link — a
+double-click, a retried POST, or a leaked link racing the member it was sent to — both read the live
+token before either cleared it. The email promises the link works once; nothing enforced it.
+
+**Reproduced before fixing** against two real, independently-committing sessions on MariaDB: the two
+requests did not cleanly both succeed, they **deadlocked** (error 1213) and the loser surfaced a raw
+database error instead of "this link has already been used". On an engine that does not deadlock the same
+shape lets both set a password, with the later commit owning the account while the other party was told
+theirs took.
+
+**The obvious fix does not work, and the reason is worth keeping.** Adding `.with_for_update()` to the
+token lookup still deadlocked. `password_reset_token` is a non-unique secondary index, so a locking read
+through it takes gap locks; the winner's `UPDATE`, which sets the token to `NULL`, must insert into that
+same index gap behind the loser's waiting lock request, and each waits for the other. The working pattern
+is the one AUTH-9 and AUTH-13 already use: look the user up by token, then **re-read by primary key with a
+lock and `populate_existing`**, and re-check that the token still matches. A locking read keyed on a unique
+column takes only a record lock. The code carries a comment saying so, because the unlocked-lookup
+version looks equally correct to the next reader.
+
+**Test:** `tests/test_password_reset_token_race.py` — two simultaneous submissions of one link with
+different new passwords; exactly one reports success and the token ends cleared. Red before (deadlock),
+green after, and stable over five consecutive runs. Two source guards pin the primary-key re-lock and
+forbid a lock taken through the token index.
+
+### Related, not changed
+
+- **A locking read through a non-unique index is a pattern to look for elsewhere.** This is the same
+  mechanism that bites any `SELECT … FOR UPDATE` filtered by an indexed value followed by an `UPDATE` of
+  that value. Worth a sentence in the pitfall #27 rule text (`docs/rules/tenancy.md`); not added here, as
+  changing the repository's rules is the owner's call.
+- The B26 guest sign-in lookup (`_find_existing_attendee(..., for_update=True)`) is a locking read through
+  non-unique indexes too. It is reached only after the event row is locked, which serializes guests of one
+  event, so two guests cannot collide on it. A writer that touches `event_external_attendees` without that
+  event lock (a staff-entered guest) could in principle meet it. Reasoned, not tested.
+
+### Verified good, unchanged
+
+The passkey, step-up, kiosk-session and session-lifetime features were not re-reviewed (security-review
+pass 13). The lockout counter (AUTH-20) and refresh rotation (AUTH-21) fixes are still in place.
+
+**Completion gate (pass 6):** `flake8`, `black --check`, `isort --check-only` and `mypy` on the touched
+files; the auth, password, reset, MFA, passkey, login and session test selection — see the PROGRESS
+entry.
+
+---
 
 ## Pass 5 (2026-09-09) — the lockout counter, one layer up from AUTH-9/AUTH-13
 

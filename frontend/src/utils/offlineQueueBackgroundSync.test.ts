@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 
-const mockRequestBackgroundSync = vi.fn(() => Promise.resolve());
+const mockRequestBackgroundSync = vi.fn(() => Promise.resolve(true));
 vi.mock('./backgroundSyncRegistration', () => ({
   requestBackgroundSync: () => mockRequestBackgroundSync(),
 }));
@@ -14,6 +14,8 @@ vi.mock('../stores/authStore', () => ({
 
 import { enqueueGeneric, putGenericItem } from './genericOfflineQueue';
 import { enqueueShiftReport } from './shiftReportOfflineQueue';
+import { enqueueCheck } from './offlineQueue';
+import { enqueueSkillsComplete, enqueueSkillsCreate, enqueueSkillsUpdate } from './skillsTestOffline';
 
 // Queuing is what asks the browser for a background sync, so an item queued
 // with no signal can be sent once signal returns even after the app is closed.
@@ -21,7 +23,7 @@ describe('queuing an item asks for a background sync', () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
     mockRequestBackgroundSync.mockReset();
-    mockRequestBackgroundSync.mockResolvedValue(undefined);
+    mockRequestBackgroundSync.mockResolvedValue(true);
   });
 
   it('for a training submission or RSVP', async () => {
@@ -49,5 +51,19 @@ describe('queuing an item asks for a background sync', () => {
     await enqueueShiftReport({ shift_date: '2026-10-30', hours_on_shift: 12, calls_responded: 0, crew_member_ids: [] });
 
     expect(mockRequestBackgroundSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('for an equipment check', async () => {
+    await enqueueCheck('shift-1', { template_id: 'tpl', check_timing: 'start_of_shift', items: [] }, []);
+
+    expect(mockRequestBackgroundSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('for each step of a skills evaluation: start, save and complete', async () => {
+    await enqueueSkillsCreate({ id: 't1', template_id: 'tpl', candidate_id: 'cand' }, 'Ladder — Sam');
+    await enqueueSkillsUpdate({ id: 't1', label: 'Ladder — Sam' }, { notes: 'Steady' });
+    await enqueueSkillsComplete({ id: 't1', label: 'Ladder — Sam' });
+
+    expect(mockRequestBackgroundSync).toHaveBeenCalledTimes(3);
   });
 });

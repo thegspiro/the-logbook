@@ -1827,14 +1827,21 @@ async def get_my_attendance_history(
 
 @router.get(
     "/shifts/{shift_id}/my-attendance",
-    response_model=ShiftAttendanceResponse,
+    response_model=ShiftAttendanceResponse | None,
 )
 async def get_my_attendance(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the current member's attendance for a shift."""
+    """Get the current member's attendance for a shift.
+
+    ``null`` when they have none. Not having checked in is the normal state
+    before a shift, and the check-in page asks on every opening: a 404 here
+    logged a failed request on each ordinary visit. A shift the caller cannot
+    see answers ``null`` too, the same answer it gave as a 404 before, so
+    nothing is revealed about another department's shifts.
+    """
     service = SchedulingService(db)
     result = await service.get_my_attendance(
         shift_id=str(shift_id),
@@ -1842,10 +1849,7 @@ async def get_my_attendance(
         organization_id=current_user.organization_id,
     )
     if not result:
-        raise HTTPException(
-            status_code=404,
-            detail="No attendance record found",
-        )
+        return None
     enriched = await service.enrich_attendance_records([result])
     return enriched[0]
 
