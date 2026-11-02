@@ -1,19 +1,27 @@
 /**
  * Evaluations a member conducts — or every evaluation, for a holder of
- * `evaluations.view_all` or `evaluations.manage` — and the dialog that drafts
- * one. The server decides which rows the caller may list.
+ * `evaluations.view_all` or `evaluations.manage` — the dialog that drafts one,
+ * the manager's dialog that drafts a whole review period, and the records of
+ * deleted evaluations. The server decides which rows the caller may list.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { BulkDraftDialog } from '../components/evaluations/BulkDraftDialog';
+import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { evaluationsService } from '../services/evaluationsApi';
-import { EvaluationTemplateKind, type DraftOptions, type EvaluationSummary } from '../types/evaluations';
+import {
+  EvaluationTemplateKind,
+  type DraftOptions,
+  type EvaluationDeletionRecord,
+  type EvaluationSummary,
+} from '../types/evaluations';
 
 interface DraftForm {
   member_id: string;
@@ -37,6 +45,15 @@ const EvaluationListPage: React.FC = () => {
   const [draft, setDraft] = useState<DraftForm | null>(null);
   const [options, setOptions] = useState<DraftOptions | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const canSeeRemoved = useAuthStore(
+    (state) =>
+      state.checkPermission('evaluations.view_all') ||
+      state.checkPermission('evaluations.manage') ||
+      state.checkPermission('evaluations.delete')
+  );
+  const [removed, setRemoved] = useState<EvaluationDeletionRecord[]>([]);
+  const [removedError, setRemovedError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +70,15 @@ const EvaluationListPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Loaded apart from the list, so a failure here never hides the evaluations.
+  useEffect(() => {
+    if (!canSeeRemoved) return;
+    evaluationsService
+      .removed()
+      .then(setRemoved)
+      .catch((err: unknown) => setRemovedError(getErrorMessage(err, 'Could not load deleted evaluations.')));
+  }, [canSeeRemoved]);
 
   const openDraft = async () => {
     setDraft(EMPTY_DRAFT);
@@ -101,16 +127,28 @@ const EvaluationListPage: React.FC = () => {
             <h1 className="text-theme-text-primary text-3xl font-bold">Evaluations</h1>
             <p className="text-theme-text-secondary mt-1">Evaluations you conduct, and where each one stands.</p>
           </div>
-          {canDraft && (
-            <button
-              type="button"
-              className="btn-primary inline-flex items-center gap-2 text-sm"
-              onClick={() => void openDraft()}
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              New evaluation
-            </button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {canManage && (
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-2 text-sm"
+                onClick={() => setBulkOpen(true)}
+              >
+                <Users className="h-4 w-4" aria-hidden="true" />
+                Draft a review period
+              </button>
+            )}
+            {canDraft && (
+              <button
+                type="button"
+                className="btn-primary inline-flex items-center gap-2 text-sm"
+                onClick={() => void openDraft()}
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                New evaluation
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mb-4 flex items-center gap-2">
@@ -195,7 +233,25 @@ const EvaluationListPage: React.FC = () => {
             </table>
           </div>
         )}
+
+        {canSeeRemoved && (removed.length > 0 || removedError) && (
+          <section aria-labelledby="removed-heading" className="mt-8">
+            <h2 id="removed-heading" className="text-theme-text-primary mb-1 text-xl font-semibold">
+              Deleted evaluations
+            </h2>
+            <p className="text-theme-text-secondary mb-3 text-sm">
+              Each deletion stays on the member&apos;s history with its reason, and the member can read it.
+            </p>
+            {removedError ? (
+              <p className="text-theme-alert-danger-text text-sm">{removedError}</p>
+            ) : (
+              <DeletionRecordList records={removed} showMember />
+            )}
+          </section>
+        )}
       </div>
+
+      <BulkDraftDialog isOpen={bulkOpen} onClose={() => setBulkOpen(false)} onDrafted={() => void load()} />
 
       <Modal
         isOpen={draft !== null}

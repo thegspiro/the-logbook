@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +40,7 @@ from app.api.dependencies import user_has_permission
 from app.core.utils import list_within_detail_limit
 from app.models.evaluation import (
     Evaluation,
+    EvaluationDeletionRecord,
     EvaluationDocument,
     EvaluationPart,
     EvaluationPartKind,
@@ -57,6 +59,7 @@ from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.schemas.evaluation import (
     OVERALL_LEVELS,
     SCORED_TOOLS,
+    BulkDraftItem,
     EvaluationCreate,
     EvaluationTool,
     PartContent,
@@ -502,6 +505,8 @@ class EvaluationService:
             # finalization, or on first download if that failed.
             document_available=bool(document_id)
             or evaluation.status == EvaluationStatus.FINALIZED.value,
+            can_delete=not roles.is_member
+            and user_has_permission(viewer, "evaluations.delete"),
         )
 
     def _released_to_member(
@@ -575,6 +580,7 @@ class EvaluationService:
         viewer_positions: Optional[set] = None,
         signatures: Sequence[EvaluationSignature] = (),
         document_available: bool = False,
+        can_delete: bool = False,
     ) -> Dict[str, Any]:
         signable = self._signable(evaluation, steps, viewer_positions or set(), roles)
         definition = self._definition(evaluation)
@@ -698,6 +704,7 @@ class EvaluationService:
                     and calibration_step is not None
                     and calibration_step.status == EvaluationStepStatus.OPEN.value,
                     "can_sign": signable,
+                    "can_delete": can_delete,
                 },
             }
         )
@@ -1573,3 +1580,264 @@ class EvaluationService:
             organization_id, evaluation.id
         )
         return True
+
+    # ------------------------------------------------------- bulk drafting
+
+    async def _open_period(
+        self, organization_id: str, period_id: str
+    ) -> EvaluationPeriod:
+        period = (
+            await self.db.execute(
+                select(EvaluationPeriod).where(
+                    EvaluationPeriod.id == period_id,
+                    EvaluationPeriod.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if period is None:
+            raise ValueError("Review period not found.")
+        if period.is_closed:
+            raise ValueError(f"'{period.name}' is closed.")
+        return period
+
+    async def bulk_preview(
+        self,
+        organization_id: str,
+        actor: User,
+        period_id: str,
+        kind: EvaluationTemplateKind,
+    ) -> Dict[str, Any]:
+        """Every current member as drafting them all for ``period_id`` would
+        treat them (owner decision 2026-11-02: preview, then exclude).
+
+        Each row is decided by the rules ``create`` applies, so a member the
+        preview offers is one ``create`` accepts: the template that fits, a
+        full month served, the supervisor who may conduct evaluations or else
+        the drafter, and no second evaluation for the period. A member left
+        out says why.
+        """
+        period = await self._open_period(organization_id, period_id)
+        members = list(
+            (
+                await self.db.execute(
+                    select(User)
+                    .options(selectinload(User.positions))
+                    .where(
+                        User.organization_id == organization_id,
+                        User.deleted_at.is_(None),
+                        User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        members.sort(key=lambda u: (u.last_name or "", u.first_name or ""))
+        drafted = set(
+            (
+                await self.db.execute(
+                    select(Evaluation.member_id).where(
+                        Evaluation.organization_id == organization_id,
+                        Evaluation.period_id == period.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        conductors = {
+            u.id: u for u in members if user_has_permission(u, "evaluations.conduct")
+        }
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        data_service = EvaluationDataService(self.db)
+        supervisors = MemberSupervisorService(self.db)
+        fallback = actor.id if actor.id in conductors else None
+
+        rows: List[Dict[str, Any]] = []
+        for member in members:
+            row: Dict[str, Any] = {"member": _name(member)}
+            rows.append(row)
+            if member.id in drafted:
+                row["skip_reason"] = "Already has an evaluation for this period."
+                continue
+            try:
+                template = await self.resolve_template(organization_id, member, kind)
+            except ValueError as exc:
+                row["skip_reason"] = str(exc)
+                continue
+            row["template"] = {"id": template.id, "name": template.name}
+            coverage = await data_service.coverage_for(
+                organization_id, member, period.start_date, period.end_date, tz
+            )
+            if coverage is None:
+                row["skip_reason"] = "Served no full month of the period."
+                continue
+            evaluator_id = (
+                await supervisors.default_evaluator_id(
+                    organization_id, member.id, "evaluations.conduct"
+                )
+                or fallback
+            )
+            if evaluator_id == member.id:
+                evaluator_id = None
+            evaluator = conductors.get(evaluator_id or "")
+            row["evaluator"] = _name(evaluator)
+        return {
+            "period": {
+                "id": period.id,
+                "name": period.name,
+                "start_date": period.start_date,
+                "end_date": period.end_date,
+            },
+            "kind": kind,
+            "rows": rows,
+            "evaluators": [_name(u) for u in conductors.values()],
+        }
+
+    async def bulk_create(
+        self,
+        organization_id: str,
+        actor: User,
+        period_id: str,
+        kind: EvaluationTemplateKind,
+        items: Sequence[BulkDraftItem],
+    ) -> List[Dict[str, Any]]:
+        """Draft each listed member, one at a time through ``create``.
+
+        Each draft commits on its own, so one member who cannot be drafted
+        (their template was retired since the preview, someone drafted them
+        meanwhile) is reported and the rest still go ahead. ``create``'s
+        unique constraint settles a member drafted twice at once.
+        """
+        await self._open_period(organization_id, period_id)
+        results: List[Dict[str, Any]] = []
+        for item in items:
+            try:
+                evaluation_id = await self.create(
+                    organization_id,
+                    actor,
+                    EvaluationCreate(
+                        member_id=item.member_id,
+                        period_id=period_id,
+                        evaluator_id=item.evaluator_id,
+                        kind=kind,
+                    ),
+                )
+                results.append(
+                    {"member_id": item.member_id, "evaluation_id": evaluation_id}
+                )
+            except (ValueError, PermissionError) as exc:
+                results.append({"member_id": item.member_id, "error": str(exc)})
+        return results
+
+    # ------------------------------------------------------------ deletion
+
+    async def delete(
+        self, organization_id: str, evaluation_id: str, actor: User, reason: str
+    ) -> Optional[Tuple[Dict[str, Any], List[str]]]:
+        """Remove an evaluation and leave its deletion record.
+
+        Returns the record and the stored PDF paths the caller removes after
+        this commits, or None when there is no such evaluation in the
+        department. Nobody deletes their own evaluation, whatever they hold.
+
+        The rows go with one DELETE, cascading in the database to the steps,
+        parts, signatures, amendments and documents: loading each collection
+        to cascade through the ORM would be one round trip per collection
+        for nothing.
+        """
+        evaluation = await self._evaluation(
+            organization_id, evaluation_id, for_update=True
+        )
+        if evaluation is None:
+            return None
+        if evaluation.member_id == actor.id:
+            raise PermissionError("Nobody deletes their own evaluation.")
+        people = await self._people(
+            organization_id, [evaluation.member_id, evaluation.evaluator_id]
+        )
+        evaluator = people.get(evaluation.evaluator_id or "")
+        paths = list(
+            (
+                await self.db.execute(
+                    select(EvaluationDocument.file_path).where(
+                        EvaluationDocument.evaluation_id == evaluation.id,
+                        EvaluationDocument.organization_id == organization_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        record = EvaluationDeletionRecord(
+            organization_id=organization_id,
+            member_id=evaluation.member_id,
+            evaluation_id=evaluation.id,
+            period_name=evaluation.period.name if evaluation.period else None,
+            period_start=evaluation.period_start,
+            period_end=evaluation.period_end,
+            template_name=evaluation.template_version.template.name,
+            evaluator_name=evaluator.full_name if evaluator else None,
+            was_finalized=evaluation.status == EvaluationStatus.FINALIZED.value,
+            reason=reason,
+            deleted_by=actor.id,
+            deleted_by_name=actor.full_name,
+            deleted_at=datetime.now(timezone.utc),
+        )
+        self.db.add(record)
+        self.db.expunge(evaluation)
+        await self.db.execute(
+            sql_delete(Evaluation).where(
+                Evaluation.id == evaluation_id,
+                Evaluation.organization_id == organization_id,
+            )
+        )
+        await self.db.commit()
+        member = people.get(record.member_id)
+        await EvaluationNoticeService(self.db).deleted(
+            organization_id, record.member_id, record.period_name or "", actor.full_name
+        )
+        return self._deletion_view(record, member), paths
+
+    @staticmethod
+    def _deletion_view(
+        record: EvaluationDeletionRecord, member: Optional[User]
+    ) -> Dict[str, Any]:
+        return {
+            "id": record.id,
+            "member": {
+                "id": record.member_id,
+                "name": member.full_name if member else "Former member",
+            },
+            "period_name": record.period_name,
+            "period_start": record.period_start,
+            "period_end": record.period_end,
+            "template_name": record.template_name,
+            "evaluator_name": record.evaluator_name,
+            "was_finalized": record.was_finalized,
+            "reason": record.reason,
+            "deleted_by_name": record.deleted_by_name,
+            "deleted_at": record.deleted_at,
+        }
+
+    async def deletion_records(
+        self, organization_id: str, member_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Deletion records, newest first; one member's when ``member_id`` is
+        given."""
+        query = select(EvaluationDeletionRecord).where(
+            EvaluationDeletionRecord.organization_id == organization_id
+        )
+        if member_id:
+            query = query.where(EvaluationDeletionRecord.member_id == member_id)
+        records = (
+            (
+                await self.db.execute(
+                    query.order_by(EvaluationDeletionRecord.deleted_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        people = await self._people(organization_id, [r.member_id for r in records])
+        return [self._deletion_view(r, people.get(r.member_id)) for r in records]

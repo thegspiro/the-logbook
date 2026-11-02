@@ -766,6 +766,8 @@ class EvaluationViewer(BaseModel):
     can_refresh_data: bool
     can_calibrate: bool
     can_sign: Optional[SigningOption] = None
+    # A holder of evaluations.delete, never on their own evaluation.
+    can_delete: bool = False
 
 
 class SignatureResponse(BaseModel):
@@ -860,3 +862,90 @@ class DraftOptions(BaseModel):
     members: List[PersonRef]
     evaluators: List[PersonRef]
     periods: List[DraftPeriodOption]
+
+
+# ------------------------------------------------------------- bulk drafting
+
+# One request drafts at most this many; a department larger than that drafts
+# in batches. Bounds the time one request holds the database.
+MAX_BULK_DRAFTS = 500
+
+
+class BulkDraftRow(BaseModel):
+    """One current member as bulk drafting would treat them: the template and
+    evaluator it would use, or why they are left out."""
+
+    member: PersonRef
+    template: Optional[PersonRef] = None
+    # None with no skip_reason: nobody qualifies by default, so the manager
+    # chooses one before this member can be drafted.
+    evaluator: Optional[PersonRef] = None
+    skip_reason: Optional[str] = None
+
+
+class BulkDraftPreview(BaseModel):
+    period: DraftPeriodOption
+    kind: EvaluationTemplateKind
+    rows: List[BulkDraftRow]
+    evaluators: List[PersonRef]
+
+
+class BulkDraftItem(BaseModel):
+    member_id: str = Field(min_length=1, max_length=36)
+    evaluator_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class BulkDraftRequest(BaseModel):
+    period_id: str = Field(min_length=1, max_length=36)
+    kind: EvaluationTemplateKind = EvaluationTemplateKind.ANNUAL
+    items: List[BulkDraftItem] = Field(min_length=1, max_length=MAX_BULK_DRAFTS)
+
+    @model_validator(mode="after")
+    def _once_each(self) -> "BulkDraftRequest":
+        ids = [item.member_id for item in self.items]
+        if len(set(ids)) != len(ids):
+            raise ValueError("A member is listed more than once")
+        return self
+
+
+class BulkDraftResult(BaseModel):
+    member_id: str
+    evaluation_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BulkDraftResponse(BaseModel):
+    drafted: int
+    results: List[BulkDraftResult]
+
+
+# ------------------------------------------------------------------ deletion
+
+
+class EvaluationDelete(BaseModel):
+    """Why the evaluation is removed. Kept on the member's history, where the
+    member reads it."""
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Give the reason for deleting this evaluation")
+        return v
+
+
+class EvaluationDeletionRecordResponse(BaseModel):
+    id: str
+    member: PersonRef
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    template_name: str
+    evaluator_name: Optional[str] = None
+    was_finalized: bool
+    reason: str
+    deleted_by_name: str
+    deleted_at: datetime

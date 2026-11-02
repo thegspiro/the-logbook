@@ -102,6 +102,9 @@ app/api/v1/endpoints/elections.py::submit_member_ballot
 app/api/v1/endpoints/evaluations.py::download_evaluation_document
 app/api/v1/endpoints/evaluations.py::get_evaluation
 app/api/v1/endpoints/evaluations.py::get_my_live_data
+# /mine/removed lists the deletion records of the caller's own evaluations,
+# filtered on current_user.id within its organization (2026-11-02).
+app/api/v1/endpoints/evaluations.py::list_my_deletion_records
 app/api/v1/endpoints/evaluations.py::list_my_evaluations
 app/api/v1/endpoints/evaluations.py::refresh_evaluation_data
 app/api/v1/endpoints/evaluations.py::save_evaluation_part

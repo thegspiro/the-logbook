@@ -67,6 +67,7 @@ from app.services.email_policy import (
 from app.utils.org_timezone import scheduling_timezone, today_in
 
 EVALUATION_PATH = "/reports/evaluations/{id}"
+MY_EVALUATIONS_PATH = "/reports/evaluations/mine"
 
 # The day a step is due, as every evaluation notice prints it.
 DUE_DATE_FORMAT = "%B %d, %Y"
@@ -510,6 +511,57 @@ class EvaluationNoticeService:
                 e,
             )
             return 0
+
+    async def deleted(
+        self,
+        organization_id: str,
+        member_id: str,
+        period_name: str,
+        deleted_by_name: str,
+    ) -> bool:
+        """Tell the member one of their evaluations was deleted. The reason
+        is not emailed; it is on their evaluations page with the record."""
+        from app.services.email_service import EmailService
+
+        try:
+            organization = await self.db.get(Organization, organization_id)
+            if organization is None:
+                return False
+            members = await self._own(organization_id, member_id)
+            if not members:
+                return False
+            member = members[0]
+            if not member_receives_email(
+                member.notification_preferences,
+                EmailKind.PERFORMANCE_EVALUATIONS,
+                department_required_kinds(organization),
+            ):
+                return False
+            base = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+            try:
+                return await EmailService(organization).send_evaluation_notice(
+                    EmailTemplateType.EVALUATION_DELETED,
+                    to_email=member.email,
+                    context={
+                        "recipient_name": member.full_name,
+                        "period_name": period_name,
+                        "deleted_by_name": deleted_by_name,
+                        "evaluations_url": f"{base}{MY_EVALUATIONS_PATH}",
+                    },
+                    db=self.db,
+                    organization_id=organization.id,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to send the deletion notice to user {}: {}", member_id, e
+                )
+                return False
+        except Exception as e:
+            await self._settle(e)
+            logger.error(
+                "Failed to send the deletion notice to user {}: {}", member_id, e
+            )
+            return False
 
     async def finalized(self, organization_id: str, evaluation_id: str) -> int:
         """Tell the member and the evaluator the record is final."""

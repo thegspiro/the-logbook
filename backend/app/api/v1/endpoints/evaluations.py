@@ -12,12 +12,19 @@ Member performance evaluation endpoints — setup.
 * ``""`` — evaluations a holder of ``evaluations.conduct`` evaluates, or every
   one for ``evaluations.view_all`` / ``evaluations.manage``; ``POST`` drafts
   one.
-* ``/mine`` and ``/mine/live-data`` — a member's own evaluations and their
-  figures for the current period, on authentication alone: the member is
-  entitled to their own record whatever positions the department grants.
+* ``/bulk-preview`` and ``/bulk`` — ``evaluations.manage`` drafts a whole
+  review period at once: a preview of every current member and why any is
+  left out, then the drafts for the members the manager kept.
+* ``/removed`` — deletion records, for holders of ``evaluations.view_all``,
+  ``evaluations.manage`` or ``evaluations.delete``.
+* ``/mine``, ``/mine/live-data`` and ``/mine/removed`` — a member's own
+  evaluations, their figures for the current period and the records of any
+  deleted, on authentication alone: the member is entitled to their own
+  record whatever positions the department grants.
 * ``/{evaluation_id}`` and its actions — open to anyone with a part in the
   evaluation. The service decides who that is and what each may read and do;
-  anyone else is told it does not exist.
+  anyone else is told it does not exist. ``/{evaluation_id}/delete`` needs
+  ``evaluations.delete`` and a re-verified session.
 """
 
 from typing import List, Literal, Optional
@@ -31,12 +38,18 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip
 from app.core.utils import ensure_found, handle_service_errors
+from app.models.evaluation import EvaluationTemplateKind
 from app.models.user import User
 from app.schemas.evaluation import (
     BuilderOptions,
+    BulkDraftPreview,
+    BulkDraftRequest,
+    BulkDraftResponse,
     DataSourceResponse,
     DraftOptions,
     EvaluationCreate,
+    EvaluationDelete,
+    EvaluationDeletionRecordResponse,
     EvaluationDetail,
     EvaluationPeriodCreate,
     EvaluationPeriodResponse,
@@ -54,6 +67,7 @@ from app.schemas.evaluation import (
     SubmitResult,
     TemplateDraftWrite,
 )
+from app.services import file_storage_service as file_storage
 from app.services.evaluation_document_service import EvaluationDocumentService
 from app.services.evaluation_service import EvaluationService
 from app.services.evaluation_template_service import EvaluationTemplateService
@@ -62,13 +76,17 @@ router = APIRouter()
 
 
 async def _audit(
-    db: AsyncSession, current_user: User, event_type: str, event_data: dict
+    db: AsyncSession,
+    current_user: User,
+    event_type: str,
+    event_data: dict,
+    severity: str = "info",
 ) -> None:
     await log_audit_event(
         db=db,
         event_type=event_type,
         event_category="evaluations",
-        severity="info",
+        severity=severity,
         event_data=event_data,
         user_id=str(current_user.id),
         username=current_user.username,
@@ -417,6 +435,66 @@ async def get_draft_options(
     return await EvaluationService(db).draft_options(current_user.organization_id)
 
 
+@router.get("/bulk-preview", response_model=BulkDraftPreview)
+async def preview_bulk_drafts(
+    period_id: str = Query(min_length=1, max_length=36),
+    kind: EvaluationTemplateKind = EvaluationTemplateKind.ANNUAL,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """Every current member as drafting the whole period would treat them."""
+    async with handle_service_errors("Failed to prepare the drafts"):
+        return await EvaluationService(db).bulk_preview(
+            current_user.organization_id, current_user, period_id, kind
+        )
+
+
+@router.post("/bulk", response_model=BulkDraftResponse)
+async def bulk_draft_evaluations(
+    data: BulkDraftRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.manage")),
+):
+    """Draft the listed members for one period. Each draft stands alone: a
+    member who cannot be drafted is reported and the rest go ahead."""
+    async with handle_service_errors("Failed to draft the evaluations"):
+        results = await EvaluationService(db).bulk_create(
+            current_user.organization_id,
+            current_user,
+            data.period_id,
+            data.kind,
+            data.items,
+        )
+    drafted = [r["evaluation_id"] for r in results if r.get("evaluation_id")]
+    await _audit(
+        db,
+        current_user,
+        "evaluations_bulk_drafted",
+        {
+            "period_id": data.period_id,
+            "evaluation_ids": drafted,
+            "failed": len(results) - len(drafted),
+        },
+    )
+    return {"drafted": len(drafted), "results": results}
+
+
+@router.get("/removed", response_model=List[EvaluationDeletionRecordResponse])
+async def list_deletion_records(
+    member_id: Optional[str] = Query(default=None, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "evaluations.view_all", "evaluations.manage", "evaluations.delete"
+        )
+    ),
+):
+    """The department's deletion records, newest first."""
+    return await EvaluationService(db).deletion_records(
+        current_user.organization_id, member_id
+    )
+
+
 @router.post("", response_model=EvaluationDetail, status_code=201)
 async def create_evaluation(
     data: EvaluationCreate,
@@ -450,6 +528,18 @@ async def list_my_evaluations(
 ):
     return await EvaluationService(db).list_mine(
         current_user.organization_id, current_user
+    )
+
+
+@router.get("/mine/removed", response_model=List[EvaluationDeletionRecordResponse])
+async def list_my_deletion_records(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Records of the caller's own evaluations that were deleted, with the
+    reason given: the member is told an evaluation was removed, and why."""
+    return await EvaluationService(db).deletion_records(
+        current_user.organization_id, current_user.id
     )
 
 
@@ -668,3 +758,44 @@ async def download_evaluation_document(
         )
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="The evaluation's PDF is missing.")
+
+
+@router.post("/{evaluation_id}/delete", response_model=EvaluationDeletionRecordResponse)
+async def delete_evaluation(
+    evaluation_id: str,
+    data: EvaluationDelete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.delete")),
+    _stepup: User = Depends(require_stepup),
+):
+    """Delete an evaluation, keeping a record with the reason on the member's
+    history and emailing the member.
+
+    A personnel record is removed for good, so the session must have
+    re-verified recently, as for deleting a member account. The stored PDFs
+    go too: a deleted evaluation's signed copy must not outlive it.
+    """
+    service = EvaluationService(db)
+    async with handle_service_errors("Failed to delete the evaluation"):
+        removed = ensure_found(
+            await service.delete(
+                current_user.organization_id, evaluation_id, current_user, data.reason
+            ),
+            "Evaluation",
+        )
+    record, paths = removed
+    for path in paths:
+        await file_storage.delete_quietly(path)
+    await _audit(
+        db,
+        current_user,
+        "evaluation_deleted",
+        {
+            "evaluation_id": evaluation_id,
+            "member_id": record["member"]["id"],
+            "was_finalized": record["was_finalized"],
+            "documents_removed": len(paths),
+        },
+        severity="warning",
+    )
+    return record
