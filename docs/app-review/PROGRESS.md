@@ -19,7 +19,7 @@ been through a review pass.
 | #   | Feature                        | Code                                                                                                                                                                                                                                                                      | Prefix | Status |
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
 | A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
-| A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ⬜     |
+| A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ⬜     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
@@ -3512,3 +3512,13 @@ secrets redacted for non-admins. See
   `IntegrityError` handler it asked for landed 2026-10-06 and is guarded by
   `test_a_concurrent_duplicate_returns_the_row_that_won` (fails with the handler disabled). Pass 6 reset
   both tiers. See storefront.md → Pass 6. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅ (pass 6, 2026-11-02) — 1 fixed.** The passkey, step-up and kiosk
+  features were not re-reviewed (security-review pass 13 read them in full). Took the single-use-secret
+  lens instead: TOTP, recovery codes, passkey challenges, training and finance approval links all have one
+  winner under concurrency. **AUTH-24 FIXED:** the password-reset link was not single-use when submitted
+  twice at once. Reproduced on MariaDB as a deadlock (error 1213), not a double success. The obvious
+  `.with_for_update()` on the token lookup still deadlocks, because `password_reset_token` is a non-unique
+  index and a locking read through it takes gap locks that the winner's `UPDATE` then blocks on; the fix
+  re-reads the user by primary key under a lock, as AUTH-9 and AUTH-13 do. Race test red→green, stable over
+  five runs. Auth/password/reset/MFA/passkey/login/session tests: 1,460 passed, 1 skipped. Worth a sentence
+  in pitfall #27's rule text (owner's call). See auth-session.md → Pass 6. Next: A3 scheduled tasks & cron.

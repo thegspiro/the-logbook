@@ -1198,6 +1198,10 @@ class AuthService:
 
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
+        invalid_link = (
+            False,
+            "This password reset link is invalid or has already been used. Please request a new reset link from the login page.",
+        )
         result = await self.db.execute(
             select(User).where(
                 User.password_reset_token == token_hash,
@@ -1207,10 +1211,26 @@ class AuthService:
         user = result.scalar_one_or_none()
 
         if not user:
-            return (
-                False,
-                "This password reset link is invalid or has already been used. Please request a new reset link from the login page.",
-            )
+            return invalid_link
+
+        # The link is single-use, and two submissions of it at once (a
+        # double-click, a retry, or a leaked link racing its owner) must not both
+        # find the token live. The row is locked and re-read by primary key, as
+        # _verify_and_consume_totp does, and not by the token: locking through the
+        # non-unique password_reset_token index takes gap locks, and the winner's
+        # UPDATE then needs to insert into that gap behind the loser's waiting
+        # lock, so the pair deadlock (error 1213) instead of one getting the
+        # "already used" answer. populate_existing makes the re-read see what the
+        # winner committed rather than the row loaded above.
+        locked = await self.db.execute(
+            select(User)
+            .where(User.id == user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        user = locked.scalar_one()
+        if user.password_reset_token != token_hash or user.deleted_at is not None:
+            return invalid_link
 
         reset_exp = user.password_reset_expires_at
         if reset_exp and reset_exp.tzinfo is None:
