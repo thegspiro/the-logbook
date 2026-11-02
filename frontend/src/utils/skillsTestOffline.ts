@@ -24,26 +24,31 @@
  */
 
 import type { AxiosInstance } from 'axios';
-import { openIndexedDb } from './offlineDb';
 import { isNetworkError, toAppError, getErrorMessage } from './errorHandling';
+import { currentQueueOwner, isOwnedByCurrentMember, requireQueueOwner } from './offlineQueueOwner';
+import type { SkillTemplate, SkillTest, SkillTestUpdate } from '../types/skillsTesting';
 import {
-  currentQueueOwner,
-  isOwnedByCurrentMember,
-  requireQueueOwner,
-  type OwnedQueueEntry,
-} from './offlineQueueOwner';
-import type { SkillTemplate, SkillTest, SkillTestCreate, SkillTestUpdate } from '../types/skillsTesting';
+  ALL_STORES,
+  SKILLS_QUEUE_MAX_RETRIES,
+  STORE_CANDIDATES,
+  STORE_PENDING,
+  STORE_TEMPLATES,
+  STORE_TESTS,
+  allRows,
+  deleteRow,
+  getRow,
+  mutatePendingAs,
+  openSkillsDb,
+  putRow,
+  request,
+  type CachedRow,
+  type OfflineSkillTestCreate,
+  type SkillsPendingEntry,
+} from './skillsTestOfflineStore';
 
-const DB_NAME = 'logbook-offline-skills';
-const DB_VERSION = 1;
-const STORE_PENDING = 'pending';
-const STORE_TESTS = 'tests';
-const STORE_TEMPLATES = 'templates';
-const STORE_CANDIDATES = 'candidates';
-const ALL_STORES = [STORE_PENDING, STORE_TESTS, STORE_TEMPLATES, STORE_CANDIDATES] as const;
+export { SKILLS_QUEUE_MAX_RETRIES };
+export type { OfflineSkillTestCreate, SkillsPendingEntry } from './skillsTestOfflineStore';
 
-/** 5xx answers tolerated before an entry is marked failed (kept, not dropped). */
-export const SKILLS_QUEUE_MAX_RETRIES = 5;
 /** Recent candidates kept for an examiner who starts a test with no signal. */
 const MAX_RECENT_CANDIDATES = 50;
 
@@ -103,111 +108,15 @@ export function buildOfflineSkillTest(
   };
 }
 
-/** A create sent from a device with no signal: the client minted the id. */
-export interface OfflineSkillTestCreate extends SkillTestCreate {
-  id: string;
-  /** The template version the scorecard was built from; the server refuses a
-   *  create against a sheet that has changed since. */
-  expected_template_version?: number | undefined;
-}
-
-export interface SkillsPendingEntry extends OwnedQueueEntry {
-  /** The test's id — one entry per test. */
-  testId: string;
-  /** "Template — Candidate", for anything that has to name the evaluation. */
-  label: string;
-  queuedAt: number;
-  updatedAt: number;
-  /** Bumped on every write, so a drain can tell whether the save it just sent
-   *  is still the latest one. */
-  rev: number;
-  create?: OfflineSkillTestCreate | undefined;
-  /** The merged, latest save. Never carries expected_version. */
-  update?: SkillTestUpdate | undefined;
-  /** The test version the queued save was made against. */
-  baseVersion?: number | undefined;
-  complete: boolean;
-  retries: number;
-  /** Set when the server refused a step; the payload is kept. */
-  failed?: { status: number | null; message: string; at: number } | undefined;
-}
-
-interface CachedRow<T> extends OwnedQueueEntry {
-  id: string;
-  value: T;
-  cachedAt: number;
-}
-
-function openDB(): Promise<IDBDatabase> {
-  return openIndexedDb(DB_NAME, DB_VERSION, (db) => {
-    for (const store of ALL_STORES) {
-      if (!db.objectStoreNames.contains(store)) {
-        db.createObjectStore(store, { keyPath: store === STORE_PENDING ? 'testId' : 'id' });
-      }
-    }
-  });
-}
-
-function request<T>(req: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
-  });
-}
-
-async function getRow<T>(store: string, key: string): Promise<T | undefined> {
-  const db = await openDB();
-  return (await request(db.transaction(store, 'readonly').objectStore(store).get(key))) as T | undefined;
-}
-
-async function allRows<T>(store: string): Promise<T[]> {
-  const db = await openDB();
-  return (await request(db.transaction(store, 'readonly').objectStore(store).getAll())) as T[];
-}
-
-async function putRow(store: string, row: unknown): Promise<void> {
-  const db = await openDB();
-  await request(db.transaction(store, 'readwrite').objectStore(store).put(row));
-}
-
-async function deleteRow(store: string, key: string): Promise<void> {
-  const db = await openDB();
-  await request(db.transaction(store, 'readwrite').objectStore(store).delete(key));
-}
-
 /**
- * Read-modify-write one pending entry inside a single transaction.
- *
- * `change` receives the stored entry (or undefined) and returns the entry to
- * store, `null` to delete it, or `undefined` to leave it untouched. An entry
- * belonging to someone else is never handed to `change` — it is refused.
+ * Read-modify-write one of the signed-in member's pending entries; see
+ * mutatePendingAs. Refuses when nobody is signed in.
  */
-async function mutatePending(
+function mutatePending(
   testId: string,
   change: (existing: SkillsPendingEntry | undefined) => SkillsPendingEntry | null | undefined
 ): Promise<SkillsPendingEntry | null> {
-  const owner = requireQueueOwner();
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const store = db.transaction(STORE_PENDING, 'readwrite').objectStore(STORE_PENDING);
-    const read = store.get(testId);
-    read.onerror = () => reject(read.error ?? new Error('IndexedDB request failed'));
-    read.onsuccess = () => {
-      const existing = read.result as SkillsPendingEntry | undefined;
-      if (existing && existing.ownerId !== owner) {
-        reject(new Error('This evaluation was saved on this device by someone else'));
-        return;
-      }
-      const next = change(existing);
-      if (next === undefined) {
-        resolve(existing ?? null);
-        return;
-      }
-      const write = next === null ? store.delete(testId) : store.put({ ...next, ownerId: owner });
-      write.onsuccess = () => resolve(next);
-      write.onerror = () => reject(write.error ?? new Error('IndexedDB request failed'));
-    };
-  });
+  return mutatePendingAs(requireQueueOwner(), testId, change);
 }
 
 function fresh(testId: string, label: string): SkillsPendingEntry {
@@ -546,7 +455,7 @@ export async function listRecentCandidates(): Promise<{ id: string; name: string
  * the queue, whoever they belonged to.
  */
 export async function clearAllSkillsOffline(): Promise<number> {
-  const db = await openDB();
+  const db = await openSkillsDb();
   const count = await request(db.transaction(STORE_PENDING, 'readonly').objectStore(STORE_PENDING).count()).catch(
     () => 0
   );
