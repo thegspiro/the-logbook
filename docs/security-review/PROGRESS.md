@@ -16,10 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3935](https://github.com/thegspiro/the-logbook/pull/3935)** (branch
+`claude/security-review-skills-testing`) — Feature 19 (Skills testing), pass
+13, a watchdog pickup. Backend scope byte-identical to pass 12's baseline;
+the one substantive frontend change (`usePracticalSkillsMethod(enabled)`) is
+a correctness fix with no security implication. 0 new findings; all standing
+SKT findings re-verified unchanged. See
+`docs/security-review/SKT-19-skills-testing.md`'s **Pass 13** section for the
+full review.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 13, PR #3935, merged), preserved for history</summary>
+
 **None.** PR #3934 (Feature 18, Training extended, pass 13) merged
 (`ff56376ee`). Row 18 was already ✅ from that PR's own commit. Feature 19
 (Skills testing) is next — confirmed via a fresh GitHub check, 0 open PRs
 with a `claude/security-review-` head branch.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 13, PR #3934, merged), preserved for history</summary>
