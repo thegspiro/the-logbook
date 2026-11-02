@@ -19793,7 +19793,9 @@ class Seeder:
         Resume controls. Neither is used by another shot, and the pattern is
         paused before anything generates from it."""
         result: dict[str, str] = {}
-        templates = items(self.api.get("/scheduling/templates"), "templates")
+        templates = items(
+            self.api.get("/scheduling/templates?active_only=false"), "templates"
+        )
         template = next(
             (t for t in templates if pick(t, "name") == self.INACTIVE_TEMPLATE), None
         )
@@ -19817,7 +19819,9 @@ class Seeder:
             )
             result["template"] = "deactivated"
 
-        patterns = items(self.api.get("/scheduling/patterns"), "patterns")
+        patterns = items(
+            self.api.get("/scheduling/patterns?active_only=false"), "patterns"
+        )
         pattern = next(
             (p for p in patterns if pick(p, "name") == self.PAUSED_PATTERN), None
         )
@@ -19842,6 +19846,219 @@ class Seeder:
                 f"/scheduling/patterns/{pick(pattern, 'id')}", {"is_active": False}
             )
             result["pattern"] = "paused"
+        return result
+
+    BACKLOG_BASIC_UNIT = "RE-9"
+    BACKLOG_BASIC_NAME = "Reserve Engine 9"
+
+    def seed_backlog_03_inactive_basic_apparatus(self) -> str:
+        """One inactive basic vehicle, for Show inactive and its Reactivate.
+
+        A basic vehicle in use is deactivated rather than deleted, so it is
+        made the way an officer makes one: the out-of-service template names
+        it, then it is deleted. The department's full Apparatus records
+        outrank the basic list in every picker, and an inactive row is in no
+        picker at all, so nothing else the demo pictures changes.
+        """
+        for row in items(self.api.get("/scheduling/apparatus?is_active=false")):
+            if pick(row, "unit_number") == self.BACKLOG_BASIC_UNIT:
+                return "already inactive"
+        template = next(
+            (
+                t
+                for t in items(
+                    self.api.get("/scheduling/templates?active_only=false"), "templates"
+                )
+                if pick(t, "name") == self.INACTIVE_TEMPLATE
+            ),
+            None,
+        )
+        if template is None:
+            return "blocked: no out-of-service template"
+        vehicle = next(
+            (
+                row
+                for row in items(self.api.get("/scheduling/apparatus"))
+                if pick(row, "unit_number") == self.BACKLOG_BASIC_UNIT
+            ),
+            None,
+        ) or self.api.post(
+            "/scheduling/apparatus",
+            {
+                "unit_number": self.BACKLOG_BASIC_UNIT,
+                "name": self.BACKLOG_BASIC_NAME,
+                "apparatus_type": "engine",
+                "min_staffing": 3,
+                "positions": ["officer", "driver", "firefighter"],
+            },
+        )
+        self.api.patch(
+            f"/scheduling/templates/{pick(template, 'id')}",
+            {"apparatus_id": pick(vehicle, "id")},
+        )
+        self.api.delete(f"/scheduling/apparatus/{pick(vehicle, 'id')}")
+        return "deactivated"
+
+    BACKLOG_HELD_PATTERN = "Reserve Engine Weekend Cover"
+
+    def seed_backlog_03_held_pattern(self) -> str:
+        """A pattern whose template is inactive, for its warning notice.
+
+        Named after the out-of-service template, so the server holds it: the
+        nightly run skips it and Generate is refused. It starts two weeks out
+        and is otherwise active, so the notice is the only thing stopping it.
+        """
+        patterns = items(
+            self.api.get("/scheduling/patterns?active_only=false"), "patterns"
+        )
+        if any(pick(p, "name") == self.BACKLOG_HELD_PATTERN for p in patterns):
+            return "exists"
+        template = next(
+            (
+                t
+                for t in items(
+                    self.api.get("/scheduling/templates?active_only=false"), "templates"
+                )
+                if pick(t, "name") == self.INACTIVE_TEMPLATE
+            ),
+            None,
+        )
+        if template is None:
+            return "blocked: no out-of-service template"
+        self.api.post(
+            "/scheduling/patterns",
+            {
+                "name": self.BACKLOG_HELD_PATTERN,
+                "description": "Saturday cover on the reserve engine.",
+                "pattern_type": "weekly",
+                "days_on": 1,
+                "days_off": 6,
+                "rotation_days": 7,
+                "start_date": str(TODAY + timedelta(days=14)),
+                "end_date": str(TODAY + timedelta(days=120)),
+                "template_id": pick(template, "id"),
+            },
+        )
+        return "created"
+
+    BACKLOG_DRAFT_CHECKLIST = "Reserve Engine 9 Check"
+    BACKLOG_CREW_CHECKLIST = "Utility 1 Walkaround"
+
+    def seed_backlog_03_checklist_lines(self) -> dict[str, str]:
+        """Two checklists for the builder and check-form shots of guide 03.
+
+        The draft carries what the builder flags: a Date line with no date,
+        between a location and a group of items placed directly on the
+        checklist. It stays unpublished, which is what lets it keep the
+        missing date. The walkaround is published, so it can be opened from
+        Unscheduled checklist, with Present lines and an untracked Date line
+        expiring inside its warning window, which is when the form offers to
+        date a replacement. Neither names an apparatus or a type, so neither
+        lands on any shift's checklists or in the reports.
+        """
+        existing = {
+            str(pick(t, "name"))
+            for t in items(self.api.get("/equipment-checks/templates"), "templates")
+        }
+
+        def present(name: str, order: int) -> dict:
+            return {
+                "name": name,
+                "sort_order": order,
+                "check_type": "presence",
+                "is_required": True,
+            }
+
+        result: dict[str, str] = {}
+        if self.BACKLOG_DRAFT_CHECKLIST not in existing:
+            self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": self.BACKLOG_DRAFT_CHECKLIST,
+                    "description": "Rebuilt for the reserve engine's return.",
+                    "check_timing": "start_of_shift",
+                    "template_type": "vehicle",
+                    "is_active": False,
+                    "compartments": [
+                        {
+                            "name": "Cab",
+                            "sort_order": 0,
+                            "items": [
+                                present("Portable radio", 0),
+                                present("Thermal imaging camera", 1),
+                            ],
+                        },
+                        {
+                            "name": "",
+                            "is_inline": True,
+                            "sort_order": 1,
+                            "items": [
+                                present("Map book", 0),
+                                present("Wheel chocks", 1),
+                            ],
+                        },
+                        {
+                            "name": "Compartment 2 — Officer Rear",
+                            "sort_order": 2,
+                            "items": [
+                                {
+                                    "name": "Burn kit",
+                                    "sort_order": 0,
+                                    "check_type": "expiry",
+                                    "is_required": True,
+                                },
+                                {
+                                    "name": "Road flares",
+                                    "sort_order": 1,
+                                    "check_type": "count",
+                                    "is_required": True,
+                                    "required_quantity": 6,
+                                    "expected_quantity": 6,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            )
+            result["draft"] = "created"
+        if self.BACKLOG_CREW_CHECKLIST not in existing:
+            self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": self.BACKLOG_CREW_CHECKLIST,
+                    "description": "Walk around the utility truck before it leaves.",
+                    "check_timing": "start_of_shift",
+                    "template_type": "vehicle",
+                    "is_active": True,
+                    "compartments": [
+                        {
+                            "name": "Cab",
+                            "sort_order": 0,
+                            "items": [
+                                present("Portable radio", 0),
+                                present("Hand light", 1),
+                                present("Traffic vest", 2),
+                            ],
+                        },
+                        {
+                            "name": "Rear Compartment",
+                            "sort_order": 1,
+                            "items": [
+                                {
+                                    "name": "Eyewash bottle",
+                                    "sort_order": 0,
+                                    "check_type": "expiry",
+                                    "is_required": True,
+                                    "expiration_date": str(TODAY + timedelta(days=10)),
+                                    "expiration_warning_days": 30,
+                                },
+                                present("Spill kit", 1),
+                            ],
+                        },
+                    ],
+                },
+            )
+            result["crew"] = "created"
         return result
 
     ICAL_INTEGRATION_TYPE = "ical"
@@ -20111,6 +20328,12 @@ class Seeder:
         self.step("card taps", self.seed_card_taps)
         self.step("lot recall", self.seed_lot_recall)
         self.step("paused scheduling", self.seed_paused_scheduling)
+        self.step(
+            "backlog 03 inactive basic apparatus",
+            self.seed_backlog_03_inactive_basic_apparatus,
+        )
+        self.step("backlog 03 held pattern", self.seed_backlog_03_held_pattern)
+        self.step("backlog 03 checklist lines", self.seed_backlog_03_checklist_lines)
         self.step("ical feed", self.seed_ical_feed)
         self.step("unused approval chain", self.seed_unused_approval_chain)
         self.step("guide 11 finance states", self.seed_guide11_finance_states)

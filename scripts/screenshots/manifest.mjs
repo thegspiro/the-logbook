@@ -6081,6 +6081,18 @@ export const SHOTS = [
     // full-page capture paints it across the middle of the settings card. The
     // area cards and page strip this shot is about are above the fold anyway.
     fullPage: false,
+    // Since the hub's header gained its totals and Needs attention panel,
+    // the area cards start below the first screen; the frame is moved down
+    // to them.
+    prepare: async (page) => {
+      const strip = page.getByText(/Shift defaults, overtime advisory/).first();
+      await strip.waitFor({ state: "attached", timeout: 20_000 });
+      await strip.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -330);
+      });
+      await page.waitForTimeout(500);
+    },
   },
   {
     id: "02-76-report-form-sections",
@@ -8310,6 +8322,20 @@ export const SHOTS = [
       "Screenshot of the Shift Templates tab showing a list of templates with",
     alt: "Shift Templates tab listing templates with start and end times",
     route: "/scheduling/admin/planning/templates",
+    expect: "Shift Templates & Patterns",
+    // The Scheduling Administration header and its area cards fill the
+    // first screen, so the frame starts at the templates' own heading.
+    prepare: async (page) => {
+      const heading = page.getByText("Shift Templates & Patterns").first();
+      await heading.waitFor({ timeout: 20_000 });
+      await page.getByText("Day Shift").first().waitFor({ timeout: 20_000 });
+      await heading.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -40);
+      });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
   },
   {
     id: "03-13-shift-patterns",
@@ -8338,6 +8364,29 @@ export const SHOTS = [
       "Screenshot of the Equipment Check Reports page showing the Compliance Dashboard tab",
     alt: "Equipment Check Reports page with the compliance dashboard",
     route: "/inventory/admin/checklists/reports",
+    expect: "Equipment Check Reports",
+    // "No checklist applies" is a truck's badge in the list, not an empty
+    // page.
+    allowEmptyState: true,
+    // The page sits under the Inventory Administration hub's header and
+    // area cards, which fill the first screen; the frame starts at the
+    // report's own heading so the per-truck list is in view.
+    prepare: async (page) => {
+      const heading = page
+        .getByRole("heading", { name: "Equipment Check Reports" })
+        .first();
+      await heading.waitFor({ timeout: 20_000 });
+      await page
+        .getByText(/checks ·/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await heading.evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -90);
+      });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
   },
 
   {
@@ -13123,7 +13172,7 @@ export const SHOTS = [
     line: 67,
     anchor:
       "Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at",
-    alt: "Shift detail panel with the crew roster and shift information",
+    alt: "The Shift Details window over the schedule: readiness, time, crew, apparatus and shift officer, then the crew board with each seat",
     route: "/scheduling",
     // Not the finalized shift: this is the guide's introduction to the panel,
     // and the closed-out state (banner, Reopen link, locked actions) has its
@@ -22466,6 +22515,36 @@ export const SHOTS = [
     viewport: { width: 1280, height: 900 },
   },
   {
+    id: "06-36-card-readers",
+    doc: "06-apparatus-facilities.md",
+    line: 697,
+    anchor: "Card Readers listing each room with its taps, refusals, last tap",
+    alt: "Card Readers: each room with its taps, refusals and last tap over the last 7 days and its Badge check-in switch, with the Volunteer Office's reader on and its recent taps opened",
+    route: "/locations/card-readers",
+    expect: { selector: "button[aria-expanded='true']" },
+    viewport: { width: 1280, height: 900 },
+    fullPage: false,
+    // Opening a room's recent taps changes nothing; the switch is not touched.
+    prepare: async (page) => {
+      const room = page
+        .locator("li")
+        .filter({
+          // Anchored: rooms inside the office carry its name in their path.
+          has: page.getByRole("heading", { name: /^Volunteer Office/ }),
+        })
+        .first();
+      await room.waitFor({ timeout: 20_000 });
+      await room.getByRole("button", { name: "Recent taps" }).click();
+      await page.waitForTimeout(1200);
+      // The list is alphabetical by path, which puts the office last: the
+      // frame ends on its opened taps with the rooms above it in view.
+      await room.evaluate((el) => el.scrollIntoView({ block: "end" }));
+      await page.evaluate(() => window.scrollBy(0, 40));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     id: "05-127-items-not-seen",
     doc: "05-inventory.md",
     line: 1837,
@@ -23343,10 +23422,15 @@ export const SHOTS = [
     line: 3137,
     anchor: "The Patterns tab with a pattern reading Paused",
     alt: "The Patterns tab with the Summer Reserve Rotation pattern reading Paused, its Generate button disabled and Resume beside it",
-    route: "/scheduling/admin/planning/patterns",
+    route: "/scheduling/admin/planning/templates",
     expect: "Summer Reserve Rotation",
     fullPage: false,
     prepare: async (page) => {
+      // The Shift Patterns page asks for active patterns only, so a paused
+      // one is listed only on the Shift Templates page's own Patterns tab.
+      await page
+        .getByRole("tab", { name: /Patterns/ })
+        .click({ timeout: 20_000 });
       const button = page.getByRole("button", {
         name: "Resume Summer Reserve Rotation",
       });
@@ -23354,6 +23438,231 @@ export const SHOTS = [
       await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await hideScanNotice(page);
       await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-131-pattern-generate-not-seated",
+    doc: "03-scheduling.md",
+    line: 3368,
+    anchor:
+      "Shift Patterns after Generate, with the message listing each member",
+    alt: "Shift Patterns after Generate on the A/B/C Platoon Rotation: Generated 3 shifts, and beneath it the message that two members were not seated, each with the date and the reason",
+    route: "/scheduling/admin/planning/patterns",
+    expect: "not seated",
+    viewport: { width: 1280, height: 900 },
+    // The generate answer is given in the page, so nothing is written: a
+    // real run would add shifts and occurrences that every later capture of
+    // the schedule would picture, and re-running it generates nothing. The
+    // two members are real demo members, and the reasons are the server's
+    // own wording for a member on leave and a member no seat suits.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/scheduling\/patterns\/[^/]+\/generate$/,
+        async (route) => {
+          if (route.request().method() !== "POST") return route.fallback();
+          const response = await page.request.get(
+            new URL("/api/v1/users?limit=50", page.url()).toString(),
+          );
+          const body = await response.json();
+          const people = (
+            Array.isArray(body) ? body : (body.users ?? body.items ?? [])
+          )
+            .filter(
+              (u) => u.username !== "chief" && u.first_name && u.last_name,
+            )
+            .slice(0, 2)
+            .map((u) => `${u.first_name} ${u.last_name}`);
+          const sent = route.request().postDataJSON() ?? {};
+          const start = String(sent.start_date ?? "");
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              shifts_created: 3,
+              driver_warnings: [],
+              seat_warnings: [
+                `${start}: ${people[0] ?? "A member"} not seated (Member is on leave of absence for this date)`,
+                `${start}: ${people[1] ?? "A member"} not seated (no open seat they are eligible for)`,
+              ],
+            }),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      const pattern = "A/B/C Platoon Rotation";
+      const day = (offset) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + offset);
+        return d.toISOString().slice(0, 10);
+      };
+      await page
+        .getByRole("button", { name: `Generate shifts from ${pattern}` })
+        .click({ timeout: 20_000 });
+      await page.locator('input[id^="pattern-generate-start-"]').fill(day(40));
+      await page.locator('input[id^="pattern-generate-end-"]').fill(day(42));
+      await page
+        .locator('div:has(> h4:has-text("Generate Shifts"))')
+        .getByRole("button", { name: /Generate/ })
+        .last()
+        .click();
+      await page.getByText("not seated").first().waitFor({ timeout: 20_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-132-pattern-template-inactive",
+    doc: "03-scheduling.md",
+    line: 3160,
+    anchor: "The Patterns tab with a pattern whose template is inactive",
+    alt: "The Patterns tab with the Reserve Engine Weekend Cover pattern, its Generate shifts button disabled and the warning that its template is inactive and the pattern is not generating shifts",
+    route: "/scheduling/admin/planning/patterns",
+    expect: "Template inactive — this pattern is not generating shifts",
+    viewport: { width: 1280, height: 900 },
+    fullPage: false,
+    prepare: async (page) => {
+      const notice = page
+        .getByText("Template inactive — this pattern is not generating shifts")
+        .first();
+      await notice.waitFor({ timeout: 20_000 });
+      await notice.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-133-pattern-form-template-inactive",
+    doc: "03-scheduling.md",
+    line: 3162,
+    anchor:
+      "The Edit Pattern form for that pattern, with the inactive template",
+    alt: "Edit Pattern for Reserve Engine Weekend Cover: the Reserve Engine — Out of Service template chosen and marked inactive, with the Template inactive warning beneath it",
+    route: "/scheduling/admin/planning/templates",
+    expect: { selector: "[role='dialog'] [role='status']" },
+    viewport: { width: 1280, height: 900 },
+    selector: "[role='dialog']",
+    // "No template" is the picker's first option, not an empty page.
+    allowEmptyState: true,
+    // Only opened, never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /Patterns/ })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Edit Reserve Engine Weekend Cover" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("dialog")
+        .getByText("Template inactive — this pattern is not generating shifts")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-134-basic-apparatus-inactive",
+    doc: "03-scheduling.md",
+    line: 3177,
+    anchor:
+      "The basic apparatus list (Apparatus & Vehicles) with Show inactive",
+    alt: "Apparatus & Vehicles with Show inactive ticked: Reserve Engine 9 marked Inactive, with its Reactivate button",
+    route: "/apparatus-basic",
+    expect: "Reserve Engine 9",
+    viewport: { width: 1280, height: 900 },
+    fullPage: false,
+    prepare: async (page) => {
+      await page.getByLabel("Show inactive").check({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Reactivate Reserve Engine 9" })
+        .waitFor({ timeout: 15_000 });
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-135-builder-publish-list",
+    doc: "03-scheduling.md",
+    line: 3041,
+    anchor:
+      "An unpublished checklist in the builder: a location, the group of items",
+    alt: "The checklist builder on an unpublished checklist: the Cab location, two items placed directly on the checklist with no heading, Compartment 2 holding a Date line with no date, and the Before publishing list naming Burn kit needs an expiration date",
+    route: "/inventory/admin/checklists",
+    expect: "Burn kit needs an expiration date",
+    viewport: { width: 1440, height: 1000 },
+    fullPage: false,
+    // Seeded unpublished by `seed_backlog_03_checklist_lines`. Selecting the
+    // list entry opens the location and puts the cursor in the date box,
+    // which is what the guide says it does. Nothing is saved.
+    prepare: async (page) => {
+      await openTemplateNamed("Reserve Engine 9 Check")(page);
+      const entry = page.getByText("Burn kit needs an expiration date").first();
+      await entry.waitFor({ timeout: 20_000 });
+      await entry.click();
+      await page.waitForTimeout(800);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await hideScanNotice(page);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "03-136-check-form-present",
+    doc: "03-scheduling.md",
+    line: 2464,
+    anchor:
+      "The check form on a phone with Present lines, each offering Present",
+    alt: "The Utility 1 Walkaround check form on a phone: the Cab's Portable radio, Hand light and Traffic vest, each with Present and Absent buttons",
+    route: "/inventory/checklists/my",
+    auth: "member",
+    expect: "Traffic vest",
+    viewport: { width: 390, height: 900 },
+    fullPage: false,
+    // Opened from Unscheduled checklist and left unanswered, so no draft
+    // check is saved for the member.
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Utility 1 Walkaround")(page);
+      await page
+        .getByRole("group", { name: "Portable radio" })
+        .getByRole("button", { name: "Absent" })
+        .waitFor({ timeout: 20_000 });
+      // The picker's button sat where Absent now is; a pointer left there
+      // paints Absent's hover border.
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-137-check-form-replacement-date",
+    doc: "03-scheduling.md",
+    line: 2478,
+    anchor: "The check form on a phone with a Date line expiring soon",
+    alt: "The Eyewash bottle Date line on a phone, expiring in ten days and not linked to stock: Put in a replacement opened to its Replacement expires and lot number boxes",
+    route: "/inventory/checklists/my",
+    auth: "member",
+    expect: "Replacement expires",
+    viewport: { width: 390, height: 900 },
+    fullPage: false,
+    // "No replacement" is the button that closes the fields again.
+    allowEmptyState: true,
+    // Opening the fields records nothing; no date is typed.
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Utility 1 Walkaround")(page);
+      const open = page.getByText("Put in a replacement? Record its date");
+      await open.first().waitFor({ timeout: 20_000 });
+      await open.first().scrollIntoViewIfNeeded();
+      await open.first().click();
+      await page.getByText("Replacement expires").first().waitFor({
+        timeout: 10_000,
+      });
+      await page
+        .getByText("Eyewash bottle")
+        .first()
+        .evaluate((el) => {
+          el.scrollIntoView({ block: "start" });
+          window.scrollBy(0, -220);
+        });
+      await page.waitForTimeout(500);
     },
   },
 ];
