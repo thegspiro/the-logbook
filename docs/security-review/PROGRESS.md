@@ -16,7 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [see this branch's push below]** — Feature 17 (Training core), pass
+**None.** PR #3932 (Feature 17, Training core, pass 13) merged
+(`9cecb6fd2`). Row 17 was already ✅ from that PR's own commit. Feature 18
+(Training extended) is next — confirmed via a fresh GitHub check, 0 open
+PRs with a `claude/security-review-` head branch.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 13, PR #3932, merged), preserved for history</summary>
+
+**PR [#3932](https://github.com/thegspiro/the-logbook/pull/3932)** (branch
+`claude/security-review-training-core-p13b`) — Feature 17 (Training core), pass
 13, a watchdog pickup. Scope correction: the Shift Evaluations surface
 (`shift_evaluation_templates.py`, `shift_evaluations.py`,
 `shift_evaluation_service.py`, `shift_evaluation_template_service.py`,
@@ -31,6 +40,8 @@ requirement types crediting from shift evaluations, and a junior-member
 compliance-matching fix (`83b208201`). TR7-1 re-confirmed unchanged
 (still OPEN/FLAGGED). See `docs/security-review/TR-17-training-core.md`'s
 **Pass 13** section for the full review.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 13, PR #3931, merged), preserved for history</summary>
@@ -24376,7 +24387,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | 🔄     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ⬜     |
