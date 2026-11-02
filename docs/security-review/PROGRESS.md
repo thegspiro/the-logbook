@@ -16,6 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3955](https://github.com/thegspiro/the-logbook/pull/3955)** (branch
+`claude/security-review-admin-hours-p13`) — Feature 21 (Admin hours), pass
+13, a watchdog pickup. Zero backend delta since pass 12 (PR #3846): the
+only changes in scope were DASH-37's dashboard-tile deep link
+(`?status=pending`, still gated by `admin_hours.manage`) and a repo-wide
+layout-class swap. 0 new findings; feature remains at zero open items. See
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 13** section for the
+full review.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 13, PR #3940, merged), preserved for history</summary>
+
+**PR [#3940](https://github.com/thegspiro/the-logbook/pull/3940)** (branch
+`claude/security-review-compliance`) — Feature 20 (Compliance), pass 13, a
+watchdog pickup. Near-zero delta since pass 12 (PR #3845): the only backend
+change in scope was a junior-member compliance-profile matching fix already
+independently reviewed under Feature 17 (Training core) pass 13, re-verified
+clean here; the only frontend changes were a cosmetic class-name layout
+sweep. 0 new findings; all standing CMP/CS findings (CS-8 original,
+`grace_period_days`, both OPEN by design) re-verified unchanged. See
+`docs/security-review/CMP-20-compliance.md`'s **Pass 13** section for the
+full review.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 13, PR #3935, merged), preserved for history</summary>
+
 **PR [#3935](https://github.com/thegspiro/the-logbook/pull/3935)** (branch
 `claude/security-review-skills-testing`) — Feature 19 (Skills testing), pass
 13, a watchdog pickup. Backend scope byte-identical to pass 12's baseline;
@@ -24313,6 +24339,8 @@ findings are all resolved with no open items. Rotation row 33 -> done.
 
 </details>
 
+</details>
+
 ---
 
 ## Relationship to the existing review passes
@@ -24423,8 +24451,8 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ⬜     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                                                   | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ⬜     |
@@ -45817,3 +45845,123 @@ Full write-up: `docs/security-review/USR-07-users-organizations.md`'s
 Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
 pipeline) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-11-02 (Feature 20, Compliance, pass 13, watchdog pickup)
+
+**Step 0.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. `gh api search/issues`
+for `is:pr is:open head:claude/security-review` returned 0 matches (the
+only two open PRs, #3937/#3938, are unrelated feature work). Reading the
+rotation table fresh against `origin/main` showed row 19 (Skills testing)
+already `✅` (PR #3935 merged) and row 20 (Compliance) the next `⬜`. This
+worktree started on an unrelated, dirty local branch
+(`claude/friendly-babbage-g2e2fg`, carrying another session's in-progress,
+uncommitted-by-this-session work for unrelated PR #3938); a fresh branch
+was cut from `origin/main` instead of building on it.
+
+**Reviewed:** `endpoints/compliance_config.py` (13 routes),
+`endpoints/compliance_officer.py` (8 routes),
+`services/compliance_config_service.py`,
+`services/compliance_officer_service.py`,
+`services/compliance_member_notices.py`, `services/training_compliance.py`,
+`models/compliance_config.py`, `schemas/compliance_config.py`,
+`schemas/compliance_officer.py`, and the five established frontend files
+(`ComplianceRequirementsConfigPage.tsx`, `ComplianceOfficerDashboard.tsx`,
+`ComplianceMatrixTab.tsx`, `complianceMatrixModel.ts`,
+`CompliancePrintPage.tsx`).
+
+**Real delta since pass 12** (baseline `c9d8be24`, PR #3845): one backend
+commit (`83b20820`, 11 insertions/2 deletions in `training_compliance.py` —
+a junior-member compliance-profile matching fix, logic-only, no query of
+its own, already independently reviewed under Feature 17/Training core's
+own pass 13) and one repo-wide cosmetic layout sweep (`ab879fc7`) touching
+two of this feature's frontend files with class-string substitutions only.
+Every other declared file confirmed byte-identical via `git diff --stat`.
+All 21 routes re-enumerated by direct file read — unchanged counts, no new
+route, no broadened permission; every by-id write still org-scoped and
+every client-supplied FK (`required_requirement_ids`,
+`optional_requirement_ids`, `role_ids`, `admin_hours_requirements[].category_id`)
+still validated in-org via `_validate_profile_fks` before persisting.
+
+**Findings: 0 fixed, 0 new flagged.** Standing findings CS-8 (attestation
+dual control/immutability — only two attestation routes exist, no
+update/delete) and `grace_period_days` (unwired, zero readers outside
+`schemas/`/`models/`) re-verified unchanged, both OPEN by design
+(owner-accepted). CMP2-1 (`compliance_member_notices`) re-confirmed still
+registered in `scheduled_tasks.py`'s three registration sites, unchanged
+function body, despite that file gaining 131 unrelated lines from other
+features in the interim.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (isort 9.0.2, already on `PATH`, matching
+CI's pin); `validate_migrations.py --strict` — 698 revisions, single head
+`6b2f0c9d4e71`; `generate_schema_docs.py --check` (via `python3.13`) —
+`DATABASE_SCHEMA.md` up to date; `check_route_permissions.py --strict`
+(repo root) — 289 routes, 0 errors/warnings; `pytest tests/ -q -k
+"compliance"` (via `python3.13`) — 663 passed, 1 pre-existing
+`pywebpush`-optional skip; the feature's 13 named backend test files — 377
+passed; frontend `npm run typecheck`/`npm run lint` — 0 errors, 0 warnings;
+11 compliance-scoped frontend test files — 157 passed.
+
+Full write-up: `docs/security-review/CMP-20-compliance.md`'s **Pass 13**
+section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-02 (Feature 21, Admin hours, pass 13, watchdog pickup)
+
+**Step 0.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`
+("No reachable agents"). `gh api search/issues` for `is:pr is:open
+head:claude/security-review` returned 0 matches — PR #3940 (Feature 20,
+Compliance, pass 13) had just merged (`275f6b02` → `dffccc891`). Reading
+the rotation table fresh against `origin/main` showed row 20 (Compliance)
+already `✅` and row 21 (Admin hours) the next `⬜`.
+
+**Reviewed:** `endpoints/admin_hours.py` (30 routes), `admin_hours_service.py`,
+`models/admin_hours.py`, `schemas/admin_hours.py`,
+`utils/admin_hours_settings.py`, `core/seed_admin_hours.py`, and the
+`admin-hours` frontend module.
+
+**Real delta since pass 12** (baseline `06da5fc4a`, PR #3846's merge): two
+commits, both outside this feature's own backend files —
+`cf8fdae30` (a repo-wide page-header layout fix) and `7f0ef2c1d` (DASH-37,
+the operations dashboard's "Admin hours" tile now deep-linking to
+`/admin-hours/manage?status=pending`). `git diff --stat` confirms **zero**
+diff across all six declared backend files. The frontend delta — a new
+`?status=pending` reader in `AdminHoursManagePage.tsx` that opens the
+Pending Review tab, plus the same layout-class swap in `AdminHoursPage.tsx`
+— changes only which already-fetched tab renders first; the manage page is
+still gated end to end by `<ProtectedRoute requiredPermission=
+"admin_hours.manage">`, confirmed unchanged. Also reviewed, as a new reader
+of this feature's model: `dashboard.py`'s two admin-hours queries (the
+pending-approvals tile and the admin summary), both filtering
+`AdminHoursEntry.organization_id == org_id` from the authenticated caller —
+not this feature's fix to make (Feature 29, Reports & analytics, still
+`⬜`), no finding. Routes re-enumerated by AST: 30 routes, byte-identical to
+pass 12 (17 `admin_hours.manage`, 13 `get_current_user`-only, none with no
+auth dependency).
+
+**Findings: 0 fixed, 0 new flagged.** No open or flagged finding carries
+forward from passes 1–12 — all were already closed (by fix or owner
+decision) as of pass 12, and nothing in this pass's delta touches any of
+them. `KNOWN_LIMITATIONS.md`'s admin-hours rows re-read and still match the
+current code exactly.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 700
+revisions, single head `4c8e2f61a9d7`; `check_route_permissions.py
+--strict` — 289 routes, 0 errors/warnings; `pytest tests/ -q -k
+"admin_hours"` (via `python3.13`) — 174 passed, 1 pre-existing
+`pywebpush`-optional skip (unchanged count from pass 12 — no backend file
+touched); frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
+warnings; `npx vitest run src/modules/admin-hours` — 125 passed (14 files,
+up from 13 with the new `AdminHoursManagePage.test.tsx`).
+
+Full write-up: `docs/security-review/AH-21-admin-hours.md`'s **Pass 13**
+section.
+
+Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests` fresh rather than trusting
+this note.

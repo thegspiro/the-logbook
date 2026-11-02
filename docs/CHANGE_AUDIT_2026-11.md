@@ -7,25 +7,66 @@ new file. The plain-language handoff for each pass is in
 
 ## Change audit: November 1 – 2, 2026
 
-Merged to `main` after `f57fd5a` (2026-11-01 12:47 UTC) through `8700f3cf`
-(2026-11-02 15:07 UTC). Security-review passes (scheduling, events-requests,
-training-core, training-extended, skills-testing, apparatus-nfc, facilities,
-equipment-check-shifts) are in `docs/security-review/PROGRESS.md`.
+A top-up pass for the merges after `f57fd5a` (2026-11-01 12:47 UTC) through
+`8700f3cf` (2026-11-02 15:07 UTC) that the two passes below did not cover.
+Member performance evaluations and the Reports and Medical Supplies crash fix
+are in the evaluations pass, and Zeffy in its own. Security-review passes
+(scheduling, events-requests, training-core, training-extended,
+skills-testing, apparatus-nfc, facilities, equipment-check-shifts) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                       | Guide  | Disposition                                  |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------- |
+| Evaluated shifts, Transports, Refusals requirement types credited from shift evaluations; offered in the requirement editors | 02     | Already described under Shift Evaluations    |
+| Member supervisors (Reports To) with dates; finance approval emails record their send and can be re-sent                     | 01, 11 | Covered by an earlier docs commit (41e4cd45) |
+| Top navigation gains Medical Screening and My ID Card, matching the side layout                                              | none   | Behaviour fix; parity test added             |
+| Dialogs carry `role="dialog"` (#3937)                                                                                        | none   | Accessibility, no guide text                 |
+
+**Screenshots to create:** see `docs/training/SCREENSHOT_CURRENCY.md`, which
+also queues the evaluation screens the evaluations pass named.
+
+## Change audit: Zeffy integration, November 2, 2026
+
+A targeted pass for one merge: the Zeffy integration (#3892, merged
+2026-11-01 18:23 UTC), which landed after the previous pass's range closed at
+`f57fd5a`. The rest of what merged since is left to the next full pass.
 `CHANGELOG.md` stays closed.
 
-| Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Guide  | Disposition                                              |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------- |
-| Member performance evaluations ship end to end: screens (3b), supervisor as default evaluator and draft options, signatures, finalization and frozen PDF (4a), email notices and daily reminders (4b), bulk drafting and deletion with a kept record, new `evaluations.delete` (5a), amendment as a new revision (5b), member response and second PDF (5c), calibration flags (5d). Migrations `0ebd6603289b`, `38e0f552242d`, `857291750c67`, `6b2f0c9d4e71`, `9d3a71c5e2b8`, `4c8e2f61a9d7` | 02     | New section written; `APPLICATION_PAGES.md` note updated |
-| Evaluated shifts, Transports, Refusals requirement types credited from shift evaluations; offered in the requirement editors                                                                                                                                                                                                                                                                                                                                                                  | 02     | Already described under Shift Evaluations                |
-| Member supervisors (Reports To) with dates; finance approval emails record their send and can be re-sent                                                                                                                                                                                                                                                                                                                                                                                      | 01, 11 | Covered by an earlier docs commit (41e4cd45)             |
-| Top navigation gains Medical Screening and My ID Card, matching the side layout                                                                                                                                                                                                                                                                                                                                                                                                               | none   | Behaviour fix; parity test added                         |
-| Reports and medical-supplies pages no longer crash on a malformed body                                                                                                                                                                                                                                                                                                                                                                                                                        | none   | Bug fix                                                  |
-| Dialogs carry `role="dialog"` (#3937)                                                                                                                                                                                                                                                                                                                                                                                                                                                         | none   | Accessibility, no guide text                             |
+| Change                                                                                                                                                                                                           | Guide | Disposition                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------- |
+| Zeffy integration card: API key, optional webhook signing secret, signed webhook, hourly sync of linked campaigns (#3892)                                                                                        | 16    | Section written; catalog row and troubleshooting rows added            |
+| **Grants & Fundraising → Zeffy**: linking a Zeffy campaign to a fundraising campaign, fundraising event or dues schedule, the start date, the payments list and its eight statuses, refunds and disputes (#3892) | 12    | Section written; menu list, events note and troubleshooting rows added |
+| Zeffy membership payments credited to member dues (method `zeffy`, reference `zeffy:`); dues link needs both finance permissions (#3892)                                                                         | 11    | Note added under Recording Payments                                    |
+| Setup and operator detail: `docs/ZEFFY_INTEGRATION.md`; owner decisions in `docs/KNOWN_LIMITATIONS.md` (#3892)                                                                                                   | none  | Already written with the change                                        |
 
-**Screenshots to create:** see `docs/training/SCREENSHOT_CURRENCY.md`.
-**Operator note:** the migration `857291750c67` adds `evaluations.delete` to the
-seeded `fire_chief` position; no new environment variables or boot-blocking
-changes.
+**Screenshots to create:** Zeffy card and connect dialog; the Zeffy page; the
+link dialog. **Re-check:** the Grants & Fundraising menu. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Change audit: member performance evaluations, November 1–2, 2026
+
+A pass scoped to one feature: the member performance evaluations PRs, merged
+between #3888 and #3938. **Other merges after `f57fd5a` are not reviewed here**
+and remain for the next full pass. The October 31 row "storage tables only,
+nothing reads them yet (#3875)" is superseded: the screens have shipped.
+
+| Change                                                                                                                                                             | Guide | Disposition                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | --------------------------------------------------------------------- |
+| Evaluation templates (form builder, workflow steps, publish) and review periods; `evaluations.configure` and `evaluations.manage` given to the Chief (#3888)       | wiki  | `wiki/Module-Evaluations.md` and `docs/EVALUATIONS_MODULE.md` written |
+| Drafting, the figures snapshot and coverage, parts, who sees what, calibration; `evaluations.conduct` and `evaluations.view_all` given to the Chief (#3921, #3925) | wiki  | Same pages                                                            |
+| Signing with typed name and step-up, finalization, the frozen PDF (#3928)                                                                                          | wiki  | Same pages; step-up table in Security-Authentication                  |
+| Seven editable evaluation emails, daily reminders and overdue notices; new email kinds "Your performance evaluations" (required) and "Evaluation duties" (#3929)   | wiki  | Same pages                                                            |
+| Bulk drafting a review period; deletion with a kept record and `evaluations.delete` given to the Chief (#3933)                                                     | wiki  | Same pages                                                            |
+| Amending a finalized evaluation as a new revision (#3936)                                                                                                          | wiki  | Same pages                                                            |
+| The member's written response with a second PDF; calibration flags (#3938)                                                                                         | wiki  | Same pages                                                            |
+| Reports page crash on an unexpected report payload; medical supplies storage list (#3926)                                                                          | none  | Bug fix; no guide text described the failure                          |
+
+**Screenshots to create:** Member Evaluations (templates and periods); template
+builder (sections, items, workflow); Evaluations list and Draft a review
+period dialog; evaluation page as evaluator, as member, and after
+finalization; sign dialog; calibration dialog; amend and delete dialogs; My
+Evaluations with a deleted-evaluation record; the evaluation PDF. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
 
 ## Change audit: October 31 – November 1, 2026
 

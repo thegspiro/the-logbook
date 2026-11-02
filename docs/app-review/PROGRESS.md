@@ -20,13 +20,13 @@ been through a review pass.
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
 | A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
 | A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
-| A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
-| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
-| A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
-| A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
-| A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
-| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
-| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ✅     |
+| A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ⬜     |
+| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
+| A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
+| A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
+| A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ⬜     |
+| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ⬜     |
+| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ⬜     |
 
 ## Tier B — second pass over the audited 27
 
@@ -39,35 +39,40 @@ from its open list.
 
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
-| B1  | medical-screening          | MS2    | ✅     |
-| B2  | apparatus                  | AP2    | ✅     |
-| B3  | inventory                  | INV2   | ✅     |
-| B4  | facilities                 | FAC2   | ✅     |
-| B5  | elections                  | ELEC2  | ✅     |
-| B6  | meetings & minutes         | MM2    | ✅     |
-| B7  | equipment-check            | EC2    | ✅     |
-| B8  | documents                  | DOC2   | ✅     |
-| B9  | membership pipeline        | MP2    | ✅     |
-| B10 | messaging & communications | MSG2   | ✅     |
-| B11 | notifications              | NOTIF2 | ✅     |
-| B12 | integrations               | INT2   | ✅     |
-| B13 | forms                      | FORM2  | ✅     |
-| B14 | grants & fundraising       | GF2    | ✅     |
-| B15 | admin-hours                | AH2    | ✅     |
-| B16 | reports & analytics        | RPT2   | ✅     |
-| B17 | events                     | EV2    | ✅     |
-| B18 | training                   | TR2    | ✅     |
-| B19 | scheduling                 | SCH2   | ✅     |
-| B20 | finance                    | FIN2   | ✅     |
-| B21 | orgs, roles & users        | ORU2   | ✅     |
-| B22 | compliance & skills        | CS2    | ✅     |
-| B23 | security, audit & IP       | SEC2   | ✅     |
-| B24 | core infra                 | CI2    | ✅     |
-| B25 | onboarding                 | ONB2   | ✅     |
-| B26 | public-portal              | PP2    | ✅     |
-| B27 | frontend shared            | FE2    | ✅     |
+| B1  | medical-screening          | MS2    | ⬜     |
+| B2  | apparatus                  | AP2    | ⬜     |
+| B3  | inventory                  | INV2   | ⬜     |
+| B4  | facilities                 | FAC2   | ⬜     |
+| B5  | elections                  | ELEC2  | ⬜     |
+| B6  | meetings & minutes         | MM2    | ⬜     |
+| B7  | equipment-check            | EC2    | ⬜     |
+| B8  | documents                  | DOC2   | ⬜     |
+| B9  | membership pipeline        | MP2    | ⬜     |
+| B10 | messaging & communications | MSG2   | ⬜     |
+| B11 | notifications              | NOTIF2 | ⬜     |
+| B12 | integrations               | INT2   | ⬜     |
+| B13 | forms                      | FORM2  | ⬜     |
+| B14 | grants & fundraising       | GF2    | ⬜     |
+| B15 | admin-hours                | AH2    | ⬜     |
+| B16 | reports & analytics        | RPT2   | ⬜     |
+| B17 | events                     | EV2    | ⬜     |
+| B18 | training                   | TR2    | ⬜     |
+| B19 | scheduling                 | SCH2   | ⬜     |
+| B20 | finance                    | FIN2   | ⬜     |
+| B21 | orgs, roles & users        | ORU2   | ⬜     |
+| B22 | compliance & skills        | CS2    | ⬜     |
+| B23 | security, audit & IP       | SEC2   | ⬜     |
+| B24 | core infra                 | CI2    | ⬜     |
+| B25 | onboarding                 | ONB2   | ⬜     |
+| B26 | public-portal              | PP2    | ⬜     |
+| B27 | frontend shared            | FE2    | ⬜     |
 
 **36 features total.** After B27 the rotation wraps to A1.
+
+**Pass 6 (fresh, opened 2026-11-02).** Both tiers reset to ⬜ at the owner's direction, Tier A first (its
+surfaces carry the most money and security risk), one feature per branch and per pull request. A pass-6
+iteration starts from the delta since that feature's last pass and from any entry still marked OPEN,
+not from a fresh sweep, and looks for the same defect class in neighbouring code.
 
 **Pass 2 (fresh, opened 2026-08-06).** Tier B reset to ⬜ at the owner's
 direction after the first full rotation completed. Tier A (A1–A9) stays ✅ —
@@ -3498,3 +3503,22 @@ secrets redacted for non-admins. See
   owner decision recorded in KNOWN_LIMITATIONS.md. Suggested follow-up: a backend
   guard test for the list. See frontend-shared.md. Rotation complete: all 27 Tier B
   rows ✅.
+- **A1 storefront & payments ✅ (pass 6, 2026-11-02) — no code change.** Took the delta since pass 5
+  instead of re-sweeping. **Verified:** the email/phone encryption left no storefront query matching an
+  encrypted column (the order search uses `customer_email_hash`); order-number allocation is settled by
+  `uq_store_orders_org_number` plus a savepoint retry; a payment stranded between the event commit and
+  the apply reaches the reconciliation queue and admin hub because `MATCHED` is counted unresolved
+  (that dependency is now written down). **Corrected:** SF-3 was still marked OPEN, but the
+  `IntegrityError` handler it asked for landed 2026-10-06 and is guarded by
+  `test_a_concurrent_duplicate_returns_the_row_that_won` (fails with the handler disabled). Pass 6 reset
+  both tiers. See storefront.md → Pass 6. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅ (pass 6, 2026-11-02) — 1 fixed.** The passkey, step-up and kiosk
+  features were not re-reviewed (security-review pass 13 read them in full). Took the single-use-secret
+  lens instead: TOTP, recovery codes, passkey challenges, training and finance approval links all have one
+  winner under concurrency. **AUTH-24 FIXED:** the password-reset link was not single-use when submitted
+  twice at once. Reproduced on MariaDB as a deadlock (error 1213), not a double success. The obvious
+  `.with_for_update()` on the token lookup still deadlocks, because `password_reset_token` is a non-unique
+  index and a locking read through it takes gap locks that the winner's `UPDATE` then blocks on; the fix
+  re-reads the user by primary key under a lock, as AUTH-9 and AUTH-13 do. Race test red→green, stable over
+  five runs. Auth/password/reset/MFA/passkey/login/session tests: 1,460 passed, 1 skipped. Worth a sentence
+  in pitfall #27's rule text (owner's call). See auth-session.md → Pass 6. Next: A3 scheduled tasks & cron.

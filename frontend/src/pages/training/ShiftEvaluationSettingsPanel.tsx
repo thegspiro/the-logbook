@@ -17,8 +17,9 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ClipboardList, FilePlus2, Info, Loader2, Pencil, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ClipboardList, FilePlus2, Loader2, Pencil, Save, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { OutsideShiftEvaluationsList } from '../../components/training/OutsideShiftEvaluationsList';
 import { ShiftEvaluationTemplateEditor } from '../../components/training/ShiftEvaluationTemplateEditor';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { shiftEvaluationTemplateService } from '../../services/api';
@@ -263,14 +264,7 @@ const ShiftEvaluationSettingsPanel: React.FC = () => {
         </p>
       </div>
 
-      <div className="alert-info text-theme-alert-info-text flex gap-3 text-sm">
-        <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-        <p>
-          <span className="font-semibold">Not in use on shifts yet.</span> You can build forms and attach them to
-          programs now. Shift reports start asking for them in an upcoming update; until then nobody is asked to fill
-          one out.
-        </p>
-      </div>
+      <OutsideShiftEvaluationsList />
 
       {/* Department settings */}
       {draftSettings && (

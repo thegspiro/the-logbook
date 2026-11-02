@@ -126,12 +126,19 @@ _SATISFYING_STATUSES = (
     ScreeningStatus.WAIVED.value,
 )
 
+# The statuses that decide a requirement: a result. The latest of these wins,
+# so a failure revokes an earlier pass until a later pass, completion or waiver
+# supersedes it (W71b-1, owner decision 2026-11-02). Scheduled, pending review
+# and expired records carry no result and decide nothing either way.
+_DECIDING_STATUSES = _SATISFYING_STATUSES + (ScreeningStatus.FAILED.value,)
+
 
 def superseded_record_clause():
-    """SQL: a newer satisfying record of the same type, for the same subject, exists.
+    """SQL: a newer deciding record of the same type, for the same subject, exists.
 
     The compliance summary grades each requirement on the subject's most
-    recent satisfying record of that screening type: latest completed date,
+    recent deciding record of that screening type (a result: passed,
+    completed, waived or failed — ``_DECIDING_STATUSES``): latest completed date,
     an undated record ranking lowest, the newer-created winning a same-day
     tie. A record something later supersedes is therefore not an impending
     lapse however soon it expires, and a list of expiring screenings must
@@ -161,7 +168,7 @@ def superseded_record_clause():
                 ),
             ),
             later.screening_type == ScreeningRecord.screening_type,
-            later.status.in_(_SATISFYING_STATUSES),
+            later.status.in_(_DECIDING_STATUSES),
             later.id != ScreeningRecord.id,
             or_(
                 later_completed > completed,
@@ -211,6 +218,18 @@ def _effective_expiration(
     return record.completed_date + relativedelta(months=months), True
 
 
+def _recency(record: ScreeningRecord) -> Tuple[date, datetime, str]:
+    """Sort key for "most recent": completed date, then entry time, then id.
+
+    An undated record ranks lowest; a same-day tie goes to the one entered
+    later. Mirrors ``superseded_record_clause``, field for field.
+    """
+    created = record.created_at or datetime(1, 1, 1, tzinfo=timezone.utc)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return (record.completed_date or date.min, created, str(record.id))
+
+
 def _grade(
     requirements: List[ScreeningRequirement],
     records: List[ScreeningRecord],
@@ -235,23 +254,35 @@ def _grade(
     self_recorded_count = 0
 
     for req in requirements:
-        # Find the most recent passing/completed record for this requirement type
+        # The most recent result of this type decides — the same ordering as
+        # `superseded_record_clause`, so the expiring list and this grade
+        # agree. A failure therefore leaves the requirement unmet until a
+        # later satisfying record supersedes it.
         matching_records = [
             r
             for r in records
-            if r.screening_type == req.screening_type
-            and r.status in _SATISFYING_STATUSES
+            if r.screening_type == req.screening_type and r.status in _DECIDING_STATUSES
         ]
-        matching_records.sort(key=lambda r: r.completed_date or date.min, reverse=True)
+        matching_records.sort(key=_recency, reverse=True)
 
         latest = matching_records[0] if matching_records else None
+        satisfying = (
+            latest
+            if latest is not None and latest.status in _SATISFYING_STATUSES
+            else None
+        )
+        satisfied = satisfying is not None
         is_compliant = False
         days_until_exp = None
+        # A failed result has no expiration to report, even when a row saved
+        # before W71b-7 carries one: a date beside it reads as a clearance.
         expires, from_frequency = (
-            _effective_expiration(latest, req, frequencies) if latest else (None, False)
+            _effective_expiration(satisfying, req, frequencies)
+            if satisfying is not None
+            else (None, False)
         )
 
-        if latest:
+        if satisfied:
             if expires:
                 is_compliant = expires >= today
                 days_until_exp = (expires - today).days

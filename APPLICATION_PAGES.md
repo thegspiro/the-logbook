@@ -774,6 +774,7 @@ section had no scheduling entry at all. That row is gone.
 | `/scheduling/admin/settings/outside-apparatus`                       | Settings — Outside Apparatus   | `scheduling.manage` |
 | `/scheduling/checkin`                                                | Shift Check-In                 | Authenticated       |
 | `/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey` | Shift Evaluation               | Authenticated       |
+| `/scheduling/outside-shifts/:entryId/evaluations/:scopeKey`          | Outside Shift Evaluation       | Authenticated       |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,

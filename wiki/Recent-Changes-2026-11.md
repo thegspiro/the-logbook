@@ -10,19 +10,48 @@ new page. The engineering audit behind each pass is in
 The engineering audit is
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
 
-- **Member performance evaluations are live.** Draft one per member (or a whole
-  review period at once, previewing first), fill in the self-evaluation and
-  evaluator parts, calibrate, sign, and download a frozen PDF. Members read theirs
-  under **My Evaluations** and may add a written response within 30 days.
-- **Amend and delete.** A manager can reopen a finalized evaluation as a new
-  revision with a written reason; only the Chief can delete one, and a record of
-  why is kept.
-- **Emails.** Seven editable templates under Communications, plus daily due-soon
-  and overdue notices. They never include ratings or comments.
-- **Calibration** can tick items for the evaluator to revisit.
+- **Member performance evaluations** are described in their own entry below.
 - **Top navigation** now has Medical Screening and My ID Card like the side menu.
 - **Fixes:** Reports and Medical Supplies no longer show the error screen on a
   malformed response.
+
+## Recent changes: Zeffy integration, November 2, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
+
+- **Zeffy.** A department that raises money through Zeffy can connect it under
+  **Integrations**. Under **Grants & Fundraising → Zeffy**, link each Zeffy
+  campaign to a fundraising campaign, a fundraising event or a dues schedule,
+  and its donations, ticket sales and memberships are recorded there as they
+  arrive, refunds included. Linking applies payments from now on unless you
+  choose an earlier date, so gifts already typed in are not counted twice.
+  Guides 11, 12 and 16 cover it.
+
+## Recent changes: member performance evaluations, November 1–2, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-member-performance-evaluations-november-12-2026).
+The full guide is [Performance Evaluations](Module-Evaluations).
+
+- **Member evaluations are here.** Build a form for each kind of member,
+  open a review period, and draft evaluations one at a time or for the whole
+  period at once.
+- **Figures fill themselves in.** Training, meetings, shifts, calls,
+  certifications and more are measured over the member's own time in the
+  period, with leave and gaps left out.
+- **Steps and signatures.** Self-evaluation, evaluator, optional calibration
+  and approvals, then the member acknowledges or refuses with a reason. Signing
+  needs your typed name and a quick identity check.
+- **A PDF with your logo,** made once when the evaluation is final and kept as
+  signed.
+- **Emails** when a step is waiting on someone, before it is due, once it is
+  overdue, and when it is final; all editable under Email Templates.
+- **After it is final:** the member can attach a written response; a manager
+  can amend it with a reason; the Chief can delete one with a reason the
+  member can read.
+- **Permissions:** the Chief gets all five evaluation permissions; give them
+  to other positions in Role Management.
 
 ## Recent changes: October 31 – November 1, 2026
 

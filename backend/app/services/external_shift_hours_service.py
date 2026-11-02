@@ -13,7 +13,7 @@ count.
 """
 
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,9 @@ from app.services.external_apparatus_service import ExternalApparatusService
 from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import resolve_scheduling_timezone
+
+if TYPE_CHECKING:
+    from app.services.shift_evaluation_service import ShiftEvaluationService
 
 _COUNTED = ExternalShiftHoursStatus.COUNTED.value
 _REJECTED = ExternalShiftHoursStatus.REJECTED.value
@@ -140,6 +143,13 @@ class ExternalShiftHoursService:
         await self.db.refresh(entry)
         return entry
 
+    def _evaluations(self) -> "ShiftEvaluationService":
+        # Imported here: the evaluation service reaches the training program
+        # service, which this scheduling module does not otherwise load.
+        from app.services.shift_evaluation_service import ShiftEvaluationService
+
+        return ShiftEvaluationService(self.db)
+
     async def get(
         self, organization_id: str, entry_id: str, *, user_id: Optional[str] = None
     ) -> Optional[ExternalShiftHours]:
@@ -232,8 +242,16 @@ class ExternalShiftHoursService:
             # The rejection is the officer's record; a member removing it
             # would erase the review along with the claim.
             raise ValueError("A rejected entry cannot be deleted")
+        evaluations = self._evaluations()
+        # Read first: the foreign key nulls the link on delete, after which
+        # the evaluations no longer say which entry they described.
+        evaluation_ids = await evaluations.submitted_ids_for_entry(
+            entry.id, organization_id
+        )
         await self.db.delete(entry)
         await self.db.commit()
+        # An evaluation of a shift that no longer counts stops crediting it.
+        await evaluations._sync_ids(evaluation_ids, organization_id)
         return entry
 
     # ------------------------------------------------------------------
@@ -299,9 +317,15 @@ class ExternalShiftHoursService:
             )
         ).all()
 
-        return [
-            self.serialize(entry, member=m, reviewer=r) for entry, m, r in rows
-        ], int(total)
+        statuses = await self._evaluations().entry_statuses(
+            [entry for entry, _, _ in rows], organization_id
+        )
+        items = []
+        for entry, m, r in rows:
+            item = self.serialize(entry, member=m, reviewer=r)
+            item["evaluation_status"] = statuses.get(str(entry.id))
+            items.append(item)
+        return items, int(total)
 
     @staticmethod
     def serialize(
@@ -347,6 +371,9 @@ class ExternalShiftHoursService:
         entry.reviewed_at = datetime.now(timezone.utc)
         entry.rejection_reason = reason
         await self.db.commit()
+        # A rejected shift no longer counts, so its evaluation stops crediting
+        # the member's program; restoring it gives the credit back.
+        await self._evaluations().sync_credit_for_entry(entry.id, organization_id)
         await self.db.refresh(entry)
         return entry
 
@@ -361,6 +388,7 @@ class ExternalShiftHoursService:
         entry.reviewed_at = datetime.now(timezone.utc)
         entry.rejection_reason = None
         await self.db.commit()
+        await self._evaluations().sync_credit_for_entry(entry.id, organization_id)
         await self.db.refresh(entry)
         return entry
 
