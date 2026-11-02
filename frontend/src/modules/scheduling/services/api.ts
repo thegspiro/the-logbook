@@ -596,6 +596,12 @@ export interface ExternalShiftEntry {
   role: string | null;
   notes: string | null;
   status: ExternalShiftStatus;
+  /**
+   * Whether the shift calls for a shift evaluation: ``needed`` until one is
+   * started, ``draft`` while it is, ``submitted`` once it is in; null when it
+   * calls for none.
+   */
+  evaluation_status?: 'needed' | 'draft' | 'submitted' | null;
   reviewed_by: string | null;
   reviewer_name: string | null;
   reviewed_at: string | null;
@@ -650,6 +656,8 @@ export interface ExternalAgency {
   id: string;
   name: string;
   is_active: boolean;
+  /** Shifts members log on its units call for a shift evaluation. */
+  evaluate_shifts: boolean;
   apparatus: ExternalApparatus[];
 }
 
@@ -664,6 +672,7 @@ export interface ExternalAgencyCreate {
 export interface ExternalAgencyUpdate {
   name?: string;
   is_active?: boolean;
+  evaluate_shifts?: boolean;
 }
 
 export interface ExternalApparatusCreate {

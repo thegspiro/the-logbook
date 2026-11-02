@@ -53,6 +53,7 @@ const agencies: ExternalAgency[] = [
     id: 'a-township',
     name: 'Township Fire Company',
     is_active: true,
+    evaluate_shifts: false,
     apparatus: [
       { id: 'u-42', agency_id: 'a-township', name: 'Engine 42', apparatus_type: 'engine', is_active: true },
       { id: 'u-7', agency_id: 'a-township', name: 'Tower 7', apparatus_type: null, is_active: true },
@@ -62,6 +63,7 @@ const agencies: ExternalAgency[] = [
     id: 'a-county',
     name: 'County Rescue',
     is_active: true,
+    evaluate_shifts: false,
     apparatus: [{ id: 'u-9', agency_id: 'a-county', name: 'Rescue 9', apparatus_type: null, is_active: true }],
   },
 ];
@@ -303,5 +305,21 @@ describe('MyExternalShifts', () => {
     expect(screen.getByText('Not on the mutual aid roster')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Edit shift/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Delete shift/ })).not.toBeInTheDocument();
+  });
+
+  it('says when a shift is waiting on its evaluation, and when it is evaluated', async () => {
+    mockGetMine.mockResolvedValue({
+      items: [
+        entry({ id: 'e-needed', evaluation_status: 'needed' }),
+        entry({ id: 'e-done', evaluation_status: 'submitted' }),
+        entry({ id: 'e-none', evaluation_status: null }),
+      ],
+      total: 3,
+    });
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    expect(await screen.findByText('Evaluation needed')).toBeInTheDocument();
+    expect(screen.getByText('Evaluated')).toBeInTheDocument();
+    expect(screen.getAllByText(/Evaluation needed|Evaluated|Evaluation started/)).toHaveLength(2);
   });
 });

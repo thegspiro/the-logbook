@@ -1630,6 +1630,46 @@ export const shiftEvaluationService = {
     return response.data;
   },
 
+  /** The evaluations a logged outside shift calls for (training.manage). */
+  async getOutsideRoster(entryId: string): Promise<import('../types/training').ShiftEvaluationRoster> {
+    const response = await api.get<import('../types/training').ShiftEvaluationRoster>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}`
+    );
+    return response.data;
+  },
+
+  async getOutsideForm(
+    entryId: string,
+    scopeKey: string,
+    templateId?: string
+  ): Promise<import('../types/training').ShiftEvaluationFormResponse> {
+    const response = await api.get<import('../types/training').ShiftEvaluationFormResponse>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}/${encodeURIComponent(scopeKey)}`,
+      templateId ? { params: { template_id: templateId } } : undefined
+    );
+    return response.data;
+  },
+
+  async saveOutside(
+    entryId: string,
+    scopeKey: string,
+    body: import('../types/training').ShiftEvaluationSaveBody
+  ): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.put<import('../types/training').ShiftEvaluationDetail>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}/${encodeURIComponent(scopeKey)}`,
+      body
+    );
+    return response.data;
+  },
+
+  /** Logged outside shifts whose evaluation is missing or unfinished. */
+  async listOutsideOutstanding(): Promise<import('../types/training').OutsideShiftAwaitingEvaluation[]> {
+    const response = await api.get<import('../types/training').OutsideShiftAwaitingEvaluation[]>(
+      '/training/shift-evaluations/external/outstanding'
+    );
+    return asArray(response.data);
+  },
+
   /** The caller's own submitted evaluations they may see yet. */
   async listMine(): Promise<import('../types/training').ShiftEvaluationDetail[]> {
     const response = await api.get<import('../types/training').ShiftEvaluationDetail[]>(
