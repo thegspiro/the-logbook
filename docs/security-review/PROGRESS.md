@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3940 (Feature 20, Compliance, pass 13) merged. Row 20 → ✅;
+next is Feature 21 (Admin hours) — confirmed via `gh api search/issues`
+(`is:pr is:open head:claude/security-review`, 0 results) before starting
+this pass.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 13, PR #3940, merged), preserved for history</summary>
+
 **PR [#3940](https://github.com/thegspiro/the-logbook/pull/3940)** (branch
 `claude/security-review-compliance`) — Feature 20 (Compliance), pass 13, a
 watchdog pickup. Near-zero delta since pass 12 (PR #3845): the only backend
@@ -24327,6 +24335,8 @@ findings are all resolved with no open items. Rotation row 33 -> done.
 
 </details>
 
+</details>
+
 ---
 
 ## Relationship to the existing review passes
@@ -24438,7 +24448,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                                                   | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ⬜     |
@@ -45894,3 +45904,60 @@ section.
 
 Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-02 (Feature 21, Admin hours, pass 13, watchdog pickup)
+
+**Step 0.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`
+("No reachable agents"). `gh api search/issues` for `is:pr is:open
+head:claude/security-review` returned 0 matches — PR #3940 (Feature 20,
+Compliance, pass 13) had just merged (`275f6b02` → `dffccc891`). Reading
+the rotation table fresh against `origin/main` showed row 20 (Compliance)
+already `✅` and row 21 (Admin hours) the next `⬜`.
+
+**Reviewed:** `endpoints/admin_hours.py` (30 routes), `admin_hours_service.py`,
+`models/admin_hours.py`, `schemas/admin_hours.py`,
+`utils/admin_hours_settings.py`, `core/seed_admin_hours.py`, and the
+`admin-hours` frontend module.
+
+**Real delta since pass 12** (baseline `06da5fc4a`, PR #3846's merge): two
+commits, both outside this feature's own backend files —
+`cf8fdae30` (a repo-wide page-header layout fix) and `7f0ef2c1d` (DASH-37,
+the operations dashboard's "Admin hours" tile now deep-linking to
+`/admin-hours/manage?status=pending`). `git diff --stat` confirms **zero**
+diff across all six declared backend files. The frontend delta — a new
+`?status=pending` reader in `AdminHoursManagePage.tsx` that opens the
+Pending Review tab, plus the same layout-class swap in `AdminHoursPage.tsx`
+— changes only which already-fetched tab renders first; the manage page is
+still gated end to end by `<ProtectedRoute requiredPermission=
+"admin_hours.manage">`, confirmed unchanged. Also reviewed, as a new reader
+of this feature's model: `dashboard.py`'s two admin-hours queries (the
+pending-approvals tile and the admin summary), both filtering
+`AdminHoursEntry.organization_id == org_id` from the authenticated caller —
+not this feature's fix to make (Feature 29, Reports & analytics, still
+`⬜`), no finding. Routes re-enumerated by AST: 30 routes, byte-identical to
+pass 12 (17 `admin_hours.manage`, 13 `get_current_user`-only, none with no
+auth dependency).
+
+**Findings: 0 fixed, 0 new flagged.** No open or flagged finding carries
+forward from passes 1–12 — all were already closed (by fix or owner
+decision) as of pass 12, and nothing in this pass's delta touches any of
+them. `KNOWN_LIMITATIONS.md`'s admin-hours rows re-read and still match the
+current code exactly.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 700
+revisions, single head `4c8e2f61a9d7`; `check_route_permissions.py
+--strict` — 289 routes, 0 errors/warnings; `pytest tests/ -q -k
+"admin_hours"` (via `python3.13`) — 174 passed, 1 pre-existing
+`pywebpush`-optional skip (unchanged count from pass 12 — no backend file
+touched); frontend `npm run typecheck`/`npm run lint` — 0 errors, 0
+warnings; `npx vitest run src/modules/admin-hours` — 125 passed (14 files,
+up from 13 with the new `AdminHoursManagePage.test.tsx`).
+
+Full write-up: `docs/security-review/AH-21-admin-hours.md`'s **Pass 13**
+section.
+
+Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests` fresh rather than trusting
+this note.
