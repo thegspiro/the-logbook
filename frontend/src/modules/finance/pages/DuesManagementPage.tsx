@@ -100,7 +100,7 @@ const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
         <DollarSign className="h-4 w-4 text-red-600" />
         Outstanding
       </div>
-      <p className="mt-1 text-xl font-bold text-red-600">{formatCurrency(summary.totalOutstanding)}</p>
+      <p className="text-theme-accent-red mt-1 text-xl font-bold">{formatCurrency(summary.totalOutstanding)}</p>
     </div>
     <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
@@ -438,7 +438,7 @@ const DuesManagementPage: React.FC = () => {
                       </td>
                       <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DUES_STATUS_COLORS[md.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DUES_STATUS_COLORS[md.status] ?? 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300'}`}
                         >
                           {STATUS_LABEL_MAP[md.status] ?? md.status}
                         </span>
