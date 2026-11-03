@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.dialects import mysql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event, EventRSVP
@@ -328,6 +329,81 @@ class TestSchedulingAMakeup:
             s["cohort"].id, s["late"], second.id, s["org"], s["officer"]
         )
         assert decision.resolution.value == "credited"
+
+
+class TestADecisionIsSerialized:
+    """Two officers deciding the same missed class must not both succeed.
+
+    The decision is a read-then-write: it reads whether a decision exists, then
+    writes a record or a make-up class. The unique key on (member, class) stops
+    two first decisions, but only by failing the second with a bare 500; once a
+    cancelled make-up leaves a row behind, the second decision is an UPDATE of
+    that row, nothing conflicts, and both credits stand. CLAUDE.md pitfall #27:
+    lock the parent row, then make the read itself a locking read, because
+    REPEATABLE READ answers a plain SELECT from a snapshot older than the lock.
+    """
+
+    @staticmethod
+    def _record_locking_reads(db_session, monkeypatch):
+        locked: list = []
+        real_execute = db_session.execute
+
+        async def spy(statement, *args, **kwargs):
+            if hasattr(statement, "compile"):
+                sql = str(statement.compile(dialect=mysql.dialect()))
+                if "FOR UPDATE" in sql:
+                    locked.append(sql)
+            return await real_execute(statement, *args, **kwargs)
+
+        monkeypatch.setattr(db_session, "execute", spy)
+        return locked
+
+    @staticmethod
+    def _tables_locked(locked):
+        return [
+            (
+                "course_cohort_missed_classes"
+                if "FROM course_cohort_missed_classes" in sql
+                else (
+                    "course_cohort_members"
+                    if "FROM course_cohort_members" in sql
+                    else sql
+                )
+            )
+            for sql in locked
+        ]
+
+    async def test_a_credit_locks_the_roster_row_then_re_reads_the_decision(
+        self, db_session, cohort_setup, monkeypatch
+    ):
+        s = cohort_setup
+        locked = self._record_locking_reads(db_session, monkeypatch)
+        await CourseCohortService(db_session).credit_missed_class(
+            s["cohort"].id, s["late"], s["classes"][0].id, s["org"], s["officer"]
+        )
+        assert self._tables_locked(locked) == [
+            "course_cohort_members",
+            "course_cohort_missed_classes",
+        ]
+
+    async def test_a_makeup_locks_the_roster_row_then_re_reads_the_decision(
+        self, db_session, cohort_setup, monkeypatch
+    ):
+        s = cohort_setup
+        start = NOW + timedelta(days=3)
+        locked = self._record_locking_reads(db_session, monkeypatch)
+        await CourseCohortService(db_session).schedule_makeup_class(
+            s["cohort"].id,
+            s["late"],
+            s["classes"][1].id,
+            CohortMakeupCreate(
+                scheduled_start=start, scheduled_end=start + timedelta(hours=3)
+            ),
+            s["org"],
+            s["officer"],
+        )
+        tables = self._tables_locked(locked)
+        assert tables[:2] == ["course_cohort_members", "course_cohort_missed_classes"]
 
 
 class TestRosterReportsWhatIsPending:

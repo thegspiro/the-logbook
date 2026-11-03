@@ -161,6 +161,14 @@ Before committing any changes, mentally verify these items (the most frequent so
 
 The Logbook is an open-source modular intranet platform for fire departments and emergency services. It is a monorepo with an npm workspaces structure containing a React frontend and a Python backend.
 
+**One department per installation** _(owner policy, 2026-11-01)_. Each
+installation serves one department. The multi-organization code already in the
+tree (`organization_id` on every table, Pitfall #14's scoping) stays and is
+still enforced, but new work does not add multi-department handling: a question
+that arises only when several departments share one install is answered for the
+single-department case. See "Owner Decisions of 2026-11-01" in
+`docs/KNOWN_LIMITATIONS.md`.
+
 ## Tech Stack
 
 ### Frontend (`/frontend`)

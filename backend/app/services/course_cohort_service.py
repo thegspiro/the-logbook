@@ -1597,16 +1597,22 @@ class CourseCohortService:
     # ── late joiners (W27-3) ─────────────────────────────────────────
 
     async def _active_roster_member(
-        self, cohort_id: UUID, user_id: UUID, organization_id: UUID | str
+        self,
+        cohort_id: UUID,
+        user_id: UUID,
+        organization_id: UUID | str,
+        *,
+        for_update: bool = False,
     ) -> CourseCohortMember:
-        result = await self.db.execute(
-            select(CourseCohortMember).where(
-                CourseCohortMember.cohort_id == str(cohort_id),
-                CourseCohortMember.user_id == str(user_id),
-                CourseCohortMember.organization_id == str(organization_id),
-                CourseCohortMember.status == CohortMemberStatus.ACTIVE,
-            )
+        query = select(CourseCohortMember).where(
+            CourseCohortMember.cohort_id == str(cohort_id),
+            CourseCohortMember.user_id == str(user_id),
+            CourseCohortMember.organization_id == str(organization_id),
+            CourseCohortMember.status == CohortMemberStatus.ACTIVE,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         member: Optional[CourseCohortMember] = result.scalar_one_or_none()
         if member is None:
             raise ValueError("That member is not on this cohort's roster")
@@ -1650,13 +1656,14 @@ class CourseCohortService:
         return [r for r in rows if not r.event_id or r.event_id not in invited]
 
     async def _missed_class_resolutions(
-        self, member: CourseCohortMember
+        self, member: CourseCohortMember, *, for_update: bool = False
     ) -> Dict[str, CohortMissedClass]:
-        result = await self.db.execute(
-            select(CohortMissedClass).where(
-                CohortMissedClass.cohort_member_id == member.id
-            )
+        query = select(CohortMissedClass).where(
+            CohortMissedClass.cohort_member_id == member.id
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return {r.cohort_class_id: r for r in result.scalars().all()}
 
     async def list_missed_classes(
@@ -1715,12 +1722,25 @@ class CourseCohortService:
         cohort_class_id: UUID,
         organization_id: UUID | str,
     ) -> Tuple[CourseCohortMember, CourseCohortClass, Optional[CohortMissedClass]]:
-        member = await self._active_roster_member(cohort_id, user_id, organization_id)
+        # A decision is a read-then-write (is there one? then record one), so two
+        # officers acting at once both read "pending". The unique key catches two
+        # first decisions only as a bare 500; once a cancelled make-up has left a
+        # row behind, the second decision is an UPDATE of it, nothing conflicts,
+        # and both a credit and a second make-up stand. Lock the roster row to
+        # serialize the pair (CLAUDE.md pitfall #27), then re-read the decision
+        # with a locking read, because REPEATABLE READ answers a plain SELECT
+        # from a snapshot taken before the lock was won. The roster row is
+        # locked first so the decision read cannot gap-lock against a rival.
+        member = await self._active_roster_member(
+            cohort_id, user_id, organization_id, for_update=True
+        )
         rows = await self._missed_class_rows(member, organization_id)
         cohort_class = next((r for r in rows if r.id == str(cohort_class_id)), None)
         if cohort_class is None:
             raise ValueError("That class is not one this member joined too late for")
-        resolution = (await self._missed_class_resolutions(member)).get(cohort_class.id)
+        resolution = (
+            await self._missed_class_resolutions(member, for_update=True)
+        ).get(cohort_class.id)
         makeup = None
         if resolution and resolution.makeup_class_id:
             makeup = await self._get_cohort_class(
