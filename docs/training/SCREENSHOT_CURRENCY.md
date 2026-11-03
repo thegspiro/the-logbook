@@ -1,5 +1,23 @@
 # Screenshot currency
 
+## Queued by the November 1 – 2 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | Evaluations list (Conduct) with status filter and removed records | Create |
+| 02 | **Draft a review period** dialog (preview with exclusions) | Create |
+| 02 | Evaluation page: form with figures and suggested ratings, steps beside | Create |
+| 02 | Calibration dialog with flag checkboxes; "Flagged at calibration" mark | Create |
+| 02 | Sign / Acknowledge dialog | Create |
+| 02 | Response card and the two PDF download buttons | Create |
+| 02 | Amend dialog and Amendments panel; Delete dialog | Create |
+| 02 | My Evaluations | Create |
+| 02 | Email Templates, group Performance Evaluations | Create |
+| 00 | Top navigation menu (Medical Screening, My ID Card) | Re-check |
+
 ## Queued by the November 2 Zeffy documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
