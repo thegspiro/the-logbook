@@ -16,14 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None yet** — Feature 26 (Forms), pass 12, a watchdog pickup. PR #3980
-(Feature 25, Messaging & notifications, pass 12) merged
-(`12f1430d2`). This iteration found a true zero-delta: every one of this
-feature's declared backend and frontend scope files is byte-identical to
-pass 11's head; the only path matching `forms` in the 490-commit window was
-a cosmetic layout-utility swap in `FormsPage.tsx`. 0 fixed, 0 new findings.
-See `docs/security-review/FORM-26-forms.md`'s **Pass 12** section. (PR
-number recorded here once opened.)
+**PR [#3981](https://github.com/thegspiro/the-logbook/pull/3981)** (branch
+`claude/security-review-forms-p12`) — Feature 26 (Forms), pass 12, a
+watchdog pickup. True zero-delta: every one of this feature's declared
+backend and frontend scope files is byte-identical to pass 11's head; the
+only path matching `forms` in the 490-commit window was a cosmetic
+layout-utility swap in `FormsPage.tsx`. 0 fixed, 0 new findings. See
+`docs/security-review/FORM-26-forms.md`'s **Pass 12** section.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 12, PR #3980, merged), preserved for history</summary>
