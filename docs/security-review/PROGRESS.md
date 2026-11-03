@@ -16,14 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3978](https://github.com/thegspiro/the-logbook/pull/3978)** (branch
+`claude/security-review-meetings-minutes-p12`) — Feature 24 (Meetings &
+minutes), pass 12, a watchdog pickup. MM5-4 — open since pass 2
+(2026-08-31) — found resolved by other work's new
+`meeting_minutes.edit_version` optimistic-concurrency check, independently
+verified against the real diff; 0 fixed by this pass, 0 new findings. See
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 12** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 19, PR #3976, merged), preserved for history</summary>
+
 **None.** PR #3962 (Feature 22, Grants & fundraising, pass 13) merged
 2026-11-03 — the base-branch migration fork (PR #3967) had already resolved
 by the time this iteration checked, and merging `main` into the PR brought
 CI back to fully green with no conflicts, so it was merged directly rather
 than tended further. This iteration (Feature 23, Medical supplies, pass 19,
 a watchdog pickup) found a true near-zero-delta pass — 0 fixed, 0 new
-findings — and is still open as this row is written; see
-`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 19** section.
+findings. See `docs/security-review/MSUP-23-medical-supplies.md`'s
+**Pass 19** section.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 13, PR #3962, merged), preserved for history</summary>
@@ -24505,7 +24516,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                            | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ⬜     |
@@ -24523,6 +24534,37 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-03 — Feature 23 (Medical supplies, pass 19) merged; Feature 24 (Meetings & minutes, pass 12) — watchdog pickup, MM5-4 resolved by other work, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` ("No reachable agents"). PR #3976 (Feature 23, Medical supplies,
+pass 19) had already merged; `gh api search/issues` for
+`is:pr is:open head:claude/security-review` returned zero results, confirming
+row 24 (Meetings & minutes) as the next `⬜` row read directly off a freshly
+fetched `main`. `git log 52bb15d5e..origin/main` (pass 11's merge to current
+`main`) restricted to this feature's full declared scope surfaced exactly
+three non-merge commits: `feaf1d3f4`/`98531ef1c` (new `meeting_minutes.edit_version`
+optimistic-concurrency check on `PUT /minutes-records/{id}`) and `83b208201`
+(a `MembershipTierService.tier_for_member` correctness fix touching
+`attendance_dashboard_service.py`). The first pair **resolves MM5-4** — open
+and re-confirmed open every pass since pass 2 (2026-08-31) — verified against
+the actual diff: the locking read runs after the existing org-scoped
+`get_minutes` fetch (no tenant-isolation gap introduced), the new column's
+migration is a correct nullable-false-with-server-default addition guarded
+against a not-yet-created table, `expected_version` is bounds-checked against
+the `Integer` column it compares against, and the frontend preserves
+in-editor text behind a 409-triggered Reload banner rather than silently
+discarding it. The second commit is an in-memory tier lookup with no new
+query, auth, or tenancy surface — not a security finding. Route count
+re-enumerated by AST: 81 (unchanged). `docs/app-review/meetings-minutes.md`'s
+own MM5-4 entry (not touched by the fixing commit) was still marked
+🚩 FLAGGED; corrected to match the resolved state, alongside
+`docs/KNOWN_LIMITATIONS.md`'s MM5-4 entry which the fixing commit had already
+updated. 0 fixed by this pass (both deltas landed by other work), 0 new
+findings. Full write-up: `docs/security-review/MM-24-meetings-minutes.md`'s
+**Pass 12** section. Next in rotation: Feature 25 (Messaging & notifications).
 
 ### 2026-11-03 — Feature 22 (Grants & fundraising, pass 13) merged; Feature 23 (Medical supplies, pass 19) — watchdog pickup, near-zero delta, 0 new findings
 
