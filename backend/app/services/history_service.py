@@ -417,13 +417,24 @@ class HistoryService:
         if source.organization_id != target.organization_id:
             raise ValueError("Title not found")
         # A period carrying both keeps the one row it already has for target.
-        already = select(HistoricalMemberPeriodTitle.period_id).where(
-            HistoricalMemberPeriodTitle.title_id == target.id
+        # Fetched as a list rather than a correlated subquery: MySQL rejects
+        # a DELETE whose WHERE references the same table it deletes from
+        # (error 1093, "specify target table ... for update in FROM clause").
+        already_period_ids = (
+            (
+                await self.db.execute(
+                    select(HistoricalMemberPeriodTitle.period_id).where(
+                        HistoricalMemberPeriodTitle.title_id == target.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
         )
         await self.db.execute(
             delete(HistoricalMemberPeriodTitle).where(
                 HistoricalMemberPeriodTitle.title_id == source.id,
-                HistoricalMemberPeriodTitle.period_id.in_(already.scalar_subquery()),
+                HistoricalMemberPeriodTitle.period_id.in_(already_period_ids),
             )
         )
         await self.db.execute(
