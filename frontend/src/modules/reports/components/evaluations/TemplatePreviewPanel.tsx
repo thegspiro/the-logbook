@@ -160,8 +160,8 @@ export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ defi
                 setContent(emptyContent());
               }}
             >
-              <option value={EvaluationPartKind.EVALUATOR}>The evaluator fills it in</option>
-              <option value={EvaluationPartKind.SELF_EVALUATION}>The member&apos;s self-evaluation</option>
+              <option value={EvaluationPartKind.EVALUATOR}>Evaluator</option>
+              <option value={EvaluationPartKind.SELF_EVALUATION}>Self-evaluation</option>
             </select>
           </div>
         </div>

@@ -155,7 +155,7 @@ export const EvaluationSetupChecklist: React.FC<EvaluationSetupChecklistProps> =
       title: 'Choose who conducts evaluations',
       done: conductDone,
       detail: conductDone
-        ? `${evaluators?.length ?? 0} members can conduct evaluations.`
+        ? `${evaluators?.length ?? 0} ${evaluators?.length === 1 ? 'member' : 'members'} can conduct evaluations.`
         : 'Give the Conduct evaluations permission to the positions that evaluate, such as Captain or Lieutenant. Until then, every evaluation falls to you.',
       action:
         !conductDone && canManageRoles ? (
