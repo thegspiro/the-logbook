@@ -40,6 +40,7 @@ from app.api.v1.endpoints import (
     google_calendar_oauth,
     google_workspace,
     grants,
+    history,
     integrations,
     inventory,
     inventory_kiosk,
@@ -371,6 +372,12 @@ api_router.include_router(
     prefix="/medical-screening",
     tags=["medical-screening"],
     dependencies=module_gate("medical_screening", "Medical Screening"),
+)
+api_router.include_router(
+    history.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
 )
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(

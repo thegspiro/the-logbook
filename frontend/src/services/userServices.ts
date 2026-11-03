@@ -459,6 +459,7 @@ export interface ModuleSettingsData {
   finance: boolean;
   medical_screening: boolean;
   testing: boolean;
+  history: boolean;
 }
 
 export interface OrganizationProfile {

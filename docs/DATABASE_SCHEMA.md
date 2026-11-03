@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**340 tables · 5609 columns · 1153 foreign keys**
+**349 tables · 5714 columns · 1175 foreign keys**
 
 ---
 
@@ -326,6 +326,22 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`grant_notes`](#grant_notes) | `GrantNote` | 7 | Activity log / note for a grant application. |
 | [`grant_opportunities`](#grant_opportunities) | `GrantOpportunity` | 26 | Library of available grant programs. |
 | [`pledges`](#pledges) | `Pledge` | 16 | Pledge model mapping to the existing pledges table. |
+
+### History
+
+<sub>`app/models/history.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`historical_member_period_titles`](#historical_member_period_titles) | `HistoricalMemberPeriodTitle` | 2 | A title held during one service period. |
+| [`historical_member_relations`](#historical_member_relations) | `HistoricalMemberRelation` | 8 | A family link between two people, stored once and read from both ends. |
+| [`historical_member_service_periods`](#historical_member_service_periods) | `HistoricalMemberServicePeriod` | 11 | One stretch of service. A person who left and rejoined has several. |
+| [`historical_members`](#historical_members) | `HistoricalMember` | 37 | A person who served the department, as the archive records them. |
+| [`history_clearance_decisions`](#history_clearance_decisions) | `HistoryClearanceDecision` | 9 | One step's decision on one request. |
+| [`history_clearance_requests`](#history_clearance_requests) | `HistoryClearanceRequest` | 12 | One submission of one revision through the clearance list. |
+| [`history_clearance_steps`](#history_clearance_steps) | `HistoryClearanceStep` | 7 | One step in a department's clearance list, in order. |
+| [`history_revisions`](#history_revisions) | `HistoryRevision` | 10 | One entry in an archive record's change history. |
+| [`history_titles`](#history_titles) | `HistoryTitle` | 9 | One entry in a department's managed list of historical titles. |
 
 ### IP Security
 
@@ -5302,6 +5318,233 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_pledges_donor` (`donor_id`)
 - `idx_pledges_due_date` (`due_date`)
 - `idx_pledges_status` (`organization_id`, `status`)
+
+## History
+
+### `historical_member_period_titles`
+
+**HistoricalMemberPeriodTitle** · `app/models/history.py`
+
+> A title held during one service period.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `period_id` | VARCHAR(36) | no | PK, FK |  | → `historical_member_service_periods.id` ON DELETE CASCADE |
+| `title_id` | VARCHAR(36) | no | PK, FK |  | → `history_titles.id` ON DELETE RESTRICT |
+
+### `historical_member_relations`
+
+**HistoricalMemberRelation** · `app/models/history.py`
+
+> A family link between two people, stored once and read from both ends.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | FK |  | → `historical_members.id` ON DELETE CASCADE |
+| `related_member_id` | VARCHAR(36) | no | FK, IDX |  | → `historical_members.id` ON DELETE CASCADE |
+| `relation_type` | ENUM(`parent_of`, `grandparent_of`, `sibling`, `spouse`, `other`) | no |  |  |  |
+| `label` | VARCHAR(100) | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_hist_relations_related` (`related_member_id`)
+
+**Constraints**
+
+- UNIQUE `uq_historical_member_relation` (`member_id`, `related_member_id`, `relation_type`)
+
+### `historical_member_service_periods`
+
+**HistoricalMemberServicePeriod** · `app/models/history.py`
+
+> One stretch of service. A person who left and rejoined has several. No ``organization_id``: reached only through its member, which is.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `member_id` | VARCHAR(36) | no | FK, IDX |  | → `historical_members.id` ON DELETE CASCADE |
+| `start_date` | DATE | yes |  |  |  |
+| `start_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `start_circa` | BOOL | no |  | `0` |  |
+| `end_date` | DATE | yes |  |  |  |
+| `end_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `end_circa` | BOOL | no |  | `0` |  |
+| `is_ongoing` | BOOL | no |  | `0` |  |
+| `notes` | TEXT | yes |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+
+**Indexes**
+
+- `ix_hist_service_periods_member` (`member_id`)
+
+### `historical_members`
+
+**HistoricalMember** · `app/models/history.py`
+
+> A person who served the department, as the archive records them. The record keeps its own copy of the person's identity even when it is linked to an account: anonymizing that account later leaves the history record as it is (owner decision, recorded in docs/KNOWN_LIMITATIONS.md). Restricted fields — birth date, addresses, verification sources, research notes — are never sent to members or the public. Encrypted at rest because they are personal data about people who may still be living.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `first_name` | VARCHAR(100) | yes |  |  |  |
+| `middle_name` | VARCHAR(100) | yes |  |  |  |
+| `last_name` | VARCHAR(100) | no |  |  |  |
+| `suffix` | VARCHAR(20) | yes |  |  |  |
+| `nickname` | VARCHAR(100) | yes |  |  |  |
+| `badge_number` | VARCHAR(50) | yes |  |  |  |
+| `birth_date` | TEXT | yes |  |  |  |
+| `birth_date_precision` | ENUM(`day`, `month`, `year`) | no |  | `'day'` |  |
+| `birth_date_circa` | BOOL | no |  | `0` |  |
+| `biography` | TEXT | yes |  |  |  |
+| `addresses` | TEXT | yes |  |  |  |
+| `verification_sources` | TEXT | yes |  |  |  |
+| `research_notes` | TEXT | yes |  |  |  |
+| `is_memorial` | BOOL | no |  | `0` |  |
+| `is_line_of_duty_death` | BOOL | no |  | `0` |  |
+| `death_date` | DATE | yes |  |  |  |
+| `death_date_precision` | ENUM(`day`, `month`, `year`) | no |  | `'day'` |  |
+| `death_date_circa` | BOOL | no |  | `0` |  |
+| `death_date_visibility` | ENUM(`historian`, `members`, `public`) | no |  | `'historian'` |  |
+| `death_circumstances` | TEXT | yes |  |  |  |
+| `death_circumstances_visibility` | ENUM(`historian`, `members`, `public`) | no |  | `'historian'` |  |
+| `burial_location` | TEXT | yes |  |  |  |
+| `burial_location_visibility` | ENUM(`historian`, `members`, `public`) | no |  | `'historian'` |  |
+| `publication_level` | ENUM(`draft`, `members`, `public`) | no |  | `'draft'` |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `public_snapshot` | JSON | yes |  |  |  |
+| `public_revision_number` | INTEGER | yes |  |  |  |
+| `substantial_revision_number` | INTEGER | no |  | `1` |  |
+| `revision_number` | INTEGER | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_historical_members_org_last` (`organization_id`, `last_name`)
+- `ix_historical_members_org_level` (`organization_id`, `publication_level`)
+- `ix_historical_members_org_lodd` (`organization_id`, `is_line_of_duty_death`)
+
+### `history_clearance_decisions`
+
+**HistoryClearanceDecision** · `app/models/history.py`
+
+> One step's decision on one request. No ``organization_id``: reached only through its request, which is.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `request_id` | VARCHAR(36) | no | FK, IDX |  | → `history_clearance_requests.id` ON DELETE CASCADE |
+| `step_index` | INTEGER | no |  |  |  |
+| `step_name` | VARCHAR(150) | no |  |  |  |
+| `decision` | ENUM(`cleared`, `returned`) | no |  |  |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `decided_by_author` | BOOL | no |  | `0` |  |
+| `note` | TEXT | yes |  |  |  |
+| `decided_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_clearance_decisions_req` (`request_id`)
+
+### `history_clearance_requests`
+
+**HistoryClearanceRequest** · `app/models/history.py`
+
+> One submission of one revision through the clearance list. ``steps`` is the list as it stood at submission. A request finishes the review it started even if the department edits its list meanwhile.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `record_type` | VARCHAR(30) | no |  |  |  |
+| `record_id` | VARCHAR(36) | no |  |  |  |
+| `revision_number` | INTEGER | no |  |  |  |
+| `purpose` | ENUM(`public`, `review`) | no |  |  |  |
+| `status` | ENUM(`pending`, `cleared`, `returned`, `withdrawn`) | no |  | `'pending'` |  |
+| `steps` | JSON | no |  |  |  |
+| `current_step_index` | INTEGER | no |  | `0` |  |
+| `submitted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `submitted_at` | DATETIME | no |  | `now()` |  |
+| `closed_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_history_clearance_requests_record` (`organization_id`, `record_type`, `record_id`)
+- `ix_history_clearance_requests_status` (`organization_id`, `status`)
+
+### `history_clearance_steps`
+
+**HistoryClearanceStep** · `app/models/history.py`
+
+> One step in a department's clearance list, in order. Any one member holding the step's position clears it. If the position is deleted the step keeps its place with no position, which blocks it with a message rather than letting records skip a review the department set up.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `step_order` | INTEGER | no |  |  |  |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `position_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_clearance_steps_org` (`organization_id`, `step_order`)
+
+### `history_revisions`
+
+**HistoryRevision** · `app/models/history.py`
+
+> One entry in an archive record's change history. Edits carry a snapshot of the whole record as it stood afterwards, restricted fields included, so the snapshot is encrypted like those fields are. Publication and clearance events carry no snapshot.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `record_type` | VARCHAR(30) | no |  |  |  |
+| `record_id` | VARCHAR(36) | no |  |  |  |
+| `revision_number` | INTEGER | no |  |  |  |
+| `kind` | ENUM(`created`, `minor`, `substantial`, `published`, `unpublished`, `submitted`, `cleared`, `returned`, `withdrawn`) | no |  |  |  |
+| `snapshot` | TEXT | yes |  |  |  |
+| `note` | TEXT | yes |  |  |  |
+| `actor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_revisions_record` (`organization_id`, `record_type`, `record_id`, `created_at`)
+
+### `history_titles`
+
+**HistoryTitle** · `app/models/history.py`
+
+> One entry in a department's managed list of historical titles. Records point at the entry rather than copying its text, so correcting a spelling here corrects it on every record, and a title that is in use can only be merged away, never deleted out from under the records using it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `name_key` | VARCHAR(150) | no |  |  |  |
+| `source` | ENUM(`rank`, `position`, `custom`) | no |  | `'custom'` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_title_key` (`organization_id`, `name_key`)
 
 ## IP Security
 
@@ -11869,7 +12112,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (423 references)
+### → `users` (432 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12053,6 +12296,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `grant_expenditures` | `created_by` | RESTRICT | yes |
 | `grant_notes` | `created_by` | RESTRICT | yes |
 | `grant_opportunities` | `created_by` | RESTRICT | yes |
+| `historical_member_relations` | `created_by` | SET NULL | yes |
+| `historical_members` | `created_by` | SET NULL | yes |
+| `historical_members` | `published_by` | SET NULL | yes |
+| `historical_members` | `updated_by` | SET NULL | yes |
+| `historical_members` | `user_id` | SET NULL | yes |
+| `history_clearance_decisions` | `decided_by` | SET NULL | yes |
+| `history_clearance_requests` | `submitted_by` | SET NULL | yes |
+| `history_revisions` | `actor_id` | SET NULL | yes |
+| `history_titles` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `user_id` | CASCADE | no |
 | `instructor_qualifications` | `verified_by` | SET NULL | yes |
@@ -12297,7 +12549,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (282 references)
+### → `organizations` (288 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12423,6 +12675,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `fundraising_events` | `organization_id` | CASCADE | no |
 | `grant_applications` | `organization_id` | CASCADE | no |
 | `grant_opportunities` | `organization_id` | CASCADE | no |
+| `historical_member_relations` | `organization_id` | CASCADE | no |
+| `historical_members` | `organization_id` | CASCADE | no |
+| `history_clearance_requests` | `organization_id` | CASCADE | no |
+| `history_clearance_steps` | `organization_id` | CASCADE | no |
+| `history_revisions` | `organization_id` | CASCADE | no |
+| `history_titles` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
 | `integration_sync_logs` | `organization_id` | CASCADE | no |
 | `inventory_categories` | `organization_id` | CASCADE | no |
@@ -12714,6 +12972,23 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 | `training_submissions` | `shift_id` | SET NULL | yes |
 
+### → `positions` (12 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `budget_categories` | `owner_position_id` | SET NULL | yes |
+| `budget_category_charge_positions` | `position_id` | CASCADE | no |
+| `budget_requests` | `owner_position_id` | SET NULL | yes |
+| `budgets` | `owner_position_id` | SET NULL | yes |
+| `history_clearance_steps` | `position_id` | SET NULL | yes |
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `prospective_members` | `target_role_id` | SET NULL | yes |
+| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
+| `suggestion_box_watchers` | `position_id` | CASCADE | yes |
+| `suggestion_forwards` | `position_id` | CASCADE | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `meeting_minutes` (11 references)
 
 | From table | Column | On delete | Nullable |
@@ -12729,22 +13004,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_revisions` | `minutes_id` | CASCADE | no |
 | `minutes_signatures` | `minutes_id` | CASCADE | no |
 | `minutes_suggestions` | `minutes_id` | CASCADE | no |
-
-### → `positions` (11 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `budget_categories` | `owner_position_id` | SET NULL | yes |
-| `budget_category_charge_positions` | `position_id` | CASCADE | no |
-| `budget_requests` | `owner_position_id` | SET NULL | yes |
-| `budgets` | `owner_position_id` | SET NULL | yes |
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `org_chart_nodes` | `position_id` | SET NULL | yes |
-| `prospective_members` | `target_role_id` | SET NULL | yes |
-| `suggestion_box_reviewers` | `position_id` | CASCADE | yes |
-| `suggestion_box_watchers` | `position_id` | CASCADE | yes |
-| `suggestion_forwards` | `position_id` | CASCADE | yes |
-| `user_positions` | `position_id` | CASCADE | no |
 
 ### → `prospective_members` (10 references)
 
@@ -13114,6 +13373,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospect_form_requests` | `submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
+
+### → `historical_members` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_relations` | `member_id` | CASCADE | no |
+| `historical_member_relations` | `related_member_id` | CASCADE | no |
+| `historical_member_service_periods` | `member_id` | CASCADE | no |
 
 ### → `inventory_vendors` (3 references)
 
@@ -13513,6 +13780,24 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
 
+### → `historical_member_service_periods` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_period_titles` | `period_id` | CASCADE | no |
+
+### → `history_clearance_requests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_clearance_decisions` | `request_id` | CASCADE | no |
+
+### → `history_titles` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_period_titles` | `title_id` | RESTRICT | no |
+
 ### → `inventory_nfc_audits` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -13718,6 +14003,9 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `grant_compliance_tasks` | `grant_applications`, `users` |
 | `grant_expenditures` | `grant_applications`, `grant_budget_items`, `users` |
 | `grant_notes` | `grant_applications`, `users` |
+| `historical_member_period_titles` | `historical_member_service_periods`, `history_titles` |
+| `historical_member_service_periods` | `historical_members` |
+| `history_clearance_decisions` | `history_clearance_requests`, `users` |
 | `ip_exception_audit_log` | `ip_exceptions`, `users` |
 | `meeting_motions` | `elections`, `meeting_minutes` |
 | `membership_pipeline_steps` | `email_templates`, `membership_pipelines` |

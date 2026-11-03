@@ -1,5 +1,36 @@
 # Known Limitations & Open Decisions
 
+## History — Decisions the Module Ships With (2026-11-03)
+
+The History module's first phase (past members, the Honor Roll, titles, family
+links and the clearance list; design in [HISTORY_MODULE.md](HISTORY_MODULE.md)).
+Each is an owner decision or a deliberate deferral, recorded so whoever handles
+an erasure request, a public-website question or a large upload knows it.
+
+- **Anonymizing a member does not touch their history record (owner decision,
+  Q-B option A).** A past-member record keeps its own copy of the person's
+  name and details from the moment it is created, even when it is linked to an
+  account. `member_anonymization_service` scrubs the account and leaves the
+  `historical_members` row, so the department's history outlives a right-to-
+  erasure request against the account. A request that should reach the
+  history record too has to be handled by the Historian by hand — editing or
+  deleting the record (a published one is unpublished first).
+- **"Public" is stored but not yet shown anywhere outside the app (owner
+  decision: the public feed ships in phase 7).** Publishing to the public
+  writes a cleared snapshot and the clearance list is enforced, but no public
+  portal endpoint reads it yet. The person page says so beside the button.
+- **Video and large audio are not accepted yet.** Phase 1 stores no files.
+  When photos and media arrive (phase 3) uploads stay under the 60 MB proxy
+  limit every nginx configuration sets (`client_max_body_size 60M`) — 55 MB
+  per file was agreed; long recordings wait for chunked uploads.
+- **Person merge and bulk import are phase 2.** Until then a duplicate is
+  warned about at entry but two records for one person are combined by hand.
+- **Reading published history needs no permission.** Any signed-in member of a
+  department with the module on reads what is published to members. This was
+  chosen over a `history.view` grant on every position, which would have
+  needed a positions migration for every department; `history.view` instead
+  reads drafts and research.
+
 ## Medical Screening — Gaps for the Owner (2026-11-02)
 
 From the medical-screening deep dive

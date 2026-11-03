@@ -102,6 +102,7 @@ class EmailKind(str, enum.Enum):
     DOCUMENT_DUTIES = "document_duties"
     FUNDRAISING_DUTIES = "fundraising_duties"
     EVALUATION_DUTIES = "evaluation_duties"
+    HISTORY_DUTIES = "history_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -413,6 +414,20 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Seats automatic shift generation could not fill",
         ),
         rationale="The task also waits in the bell and on the schedule.",
+    ),
+    EmailKind.HISTORY_DUTIES: EmailPolicy(
+        label="History clearance",
+        required=False,
+        audience=_O,
+        includes=(
+            "A history record is waiting for your clearance",
+            "A record you submitted was cleared or returned",
+            "The History clearance list changed (administrators)",
+        ),
+        rationale=(
+            "History > Awaiting my clearance lists every record waiting on you, "
+            "and the bell shows each notice either way."
+        ),
     ),
     EmailKind.EVALUATION_DUTIES: EmailPolicy(
         label="Evaluation duties",
