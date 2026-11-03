@@ -22,6 +22,7 @@ from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.document import Document
 from app.models.election import Election
 from app.models.event import Event
+from app.models.meeting import Meeting, MeetingStatus
 from app.models.minute import (
     DEFAULT_ANNUAL_SECTIONS,
     DEFAULT_BUSINESS_SECTIONS,
@@ -1509,12 +1510,52 @@ class MinuteService:
         )
 
         await records.record_approval(minutes, approved_by, approved_at)
+        await self._approve_linked_meeting(
+            minutes, organization_id, approved_by, approved_at
+        )
         await self.db.commit()
 
         approved = await self.get_minutes(minutes_id, organization_id, refresh=True)
         if approved is not None:
             await self._notify_assignees(approved, approved.action_items or [])
         return approved
+
+    async def _approve_linked_meeting(
+        self,
+        minutes: MeetingMinutes,
+        organization_id: UUID | str,
+        approved_by: UUID | str,
+        approved_at: datetime,
+    ) -> None:
+        """Mark the meeting these minutes record as approved (W51-9).
+
+        Nothing else moves a meeting record's status, so every meeting read
+        "Draft" beside approved, published minutes, and stayed deletable after
+        its attendance became the settled record that membership tiers count.
+        Approving the minutes is the approval of that meeting: the same person,
+        the same moment, and the separation-of-duties check above has already
+        run. A meeting already approved keeps its original stamp.
+
+        Reopening the minutes for correction leaves the meeting approved on
+        purpose: the correction is to the record of the meeting, and lifting
+        the delete guard while it is under way would let the attendance the
+        approval settled be deleted with it.
+        """
+        if not minutes.meeting_id:
+            return
+        meeting = (
+            await self.db.execute(
+                select(Meeting)
+                .where(Meeting.id == str(minutes.meeting_id))
+                .where(Meeting.organization_id == str(organization_id))
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if meeting is None or meeting.status == MeetingStatus.APPROVED:
+            return
+        meeting.status = MeetingStatus.APPROVED
+        meeting.approved_by = str(approved_by)
+        meeting.approved_at = approved_at
 
     async def _notify_assignees(self, minutes: MeetingMinutes, items) -> None:
         """Email assignees about items in approved minutes; never raises.

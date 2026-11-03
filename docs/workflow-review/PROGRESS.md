@@ -170,8 +170,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
-- **Minutes, a later pass** — the meetings list badges every meeting "Draft"
-  forever (W51-9).
 
 - **Fundraising, a later pass** — the Donations list has a Receipt column
   but nothing sends a receipt or marks one sent, and donors, donations and
@@ -206,6 +204,25 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — A meeting's status now follows its minutes — 2026-11-03
+
+Owner decision: drive the meeting's status from its minutes (W51-9). Fixed:
+nothing moved a meeting record's status, so every meeting read "Draft" beside
+approved, published minutes, and every meeting stayed deletable after its
+attendance became the settled record that membership tiers count. Approving a
+set of minutes now approves the meeting it was taken from, in the same
+transaction, with the minutes' approver and time. A meeting already approved
+keeps its own stamp, a meeting in another organization is never touched, and
+reopening minutes for correction leaves the meeting approved so its attendance
+cannot be deleted mid-correction. Migration `6b81e95d4157` settles the meetings
+whose minutes were approved before this change. Read from code and tested, not
+re-driven: `test_minutes_approve_meeting.py` (the approval failed to move the
+meeting before the fix) and `test_meeting_approval_backfill.py` (the backfill,
+upgrade and downgrade, against rows). Gate: flake8, black and isort clean; the
+migration guards and every minutes and meetings suite pass (1,000 tests);
+`alembic upgrade head`, `downgrade -1` and `upgrade head` clean on an empty
+database.
 
 ### Lead — Documents named their type by MIME string — 2026-11-02
 
