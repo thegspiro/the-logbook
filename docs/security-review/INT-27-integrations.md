@@ -1,6 +1,179 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-30 (pass 11, this PR), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 11); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-11-03 (pass 12, this PR), 2026-10-30 (pass 11, PR merged as `9ae9e594`), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 12); pass 11 (merged, `9ae9e594`); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 12 (2026-11-03) — watchdog pickup; department feed can publish shifts, Zeffy added to the catalog; 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents` — no reachable agents). A GitHub search
+(`is:pr is:open head:claude/security-review-`) returned zero results — no
+rotation PR was in flight. Row 27 (Integrations) confirmed the first `⬜`
+row in `PROGRESS.md`'s rotation table on a freshly fetched `main`.
+
+**Baseline `9ae9e594`** (pass 11's merge). Diffing every file this feature
+has accumulated into scope across passes 1–11 — all ten route files, every
+file under `services/integration_services/`, the directory-account and
+Google Workspace services, `models/integration.py`,
+`schemas/integration.py`, `utils/ssrf_transport.py`, `mcp/keys.py`, and
+`frontend/src/pages/IntegrationsPage.tsx` — against `9ae9e594` finds six
+changed files, all read in full:
+
+- `backend/app/api/public/calendar.py`
+- `backend/app/api/v1/endpoints/integrations.py`
+- `backend/app/schemas/integration.py`
+- `backend/app/services/integration_services/__init__.py`
+- `backend/app/services/integration_services/zeffy_service.py` (new, 401
+  lines)
+- `frontend/src/pages/IntegrationsPage.tsx`
+
+Confirmed byte-identical, not sampled: `salesforce_sync.py`,
+`calcom_sync.py`, `mcp_keys.py`, `google_workspace.py`,
+`google_calendar_oauth.py`, `outlook_calendar_oauth.py`,
+`api/public/integrations_webhook.py`, `api/public/salesforce_webhook.py`,
+`mcp/keys.py`, `utils/ssrf_transport.py`, `models/integration.py`,
+`models/directory_account_departure.py`, `services/integration_health.py`,
+`services/paypal_backfill_service.py`.
+
+**Route inventory re-enumerated by AST**, not trusted from the diff: 39
+routes across all ten scope files (12 `integrations.py`, 9
+`salesforce_sync.py`, 1 `calcom_sync.py`, 4 `mcp_keys.py`, 4
+`google_workspace.py`, 2 `google_calendar_oauth.py`, 2
+`outlook_calendar_oauth.py`, 2 `api/public/calendar.py`, 2
+`api/public/integrations_webhook.py`, 1 `api/public/salesforce_webhook.py`).
+Neither changed file's diff added a new `@router.*` decorator — confirmed by
+grepping the diff for one — so this is the same count as pass 11, and the
+check_route_permissions gate below (298 routes app-wide, 0 errors) agrees.
+
+### What changed in-scope since pass 11 (reviewed, no fix needed)
+
+- **The department events ICS feed (`/public/v1/calendar/org/{token}.ics`)
+  can now also publish scheduled shifts.** A new `ICalConfig.include_shifts`
+  flag (`schemas/integration.py`), off by default, so every feed connected
+  before this change keeps serving events only. When on, `get_department_events_feed`
+  queries `Shift` with `Shift.organization_id == organization_id` — the
+  `organization_id` the route already resolved from the matched,
+  constant-time-compared feed token, never a client-supplied value — filters
+  to `status != ShiftStatus.CANCELLED` and the same `[today - 30d, today +
+365d]` window the personal shift feed uses, and caps the query at the
+  existing `ORG_FEED_MAX_EVENTS` (2000). The new `_org_feed_shift()`
+  projection exposes only `id` (prefixed `shift-` so it can never collide
+  with an event's UID), `title` (via the existing, reused `_shift_title()`
+  helper — not duplicated), `start_time`, `end_time` and a fixed
+  `"Shift"` category: no notes, pass-down notes, positions or who is
+  assigned, matching the module docstring's updated claim and the personal
+  feed's own minimization (which does include `notes`, because that feed is
+  scoped to the member's own shifts, not the shared department link). The
+  same `included_event_types` field gained a `field_validator` rejecting any
+  value not in the `EventType` enum (422, not a silent no-op) — new this
+  window, not a regression, since the field previously accepted unvalidated
+  free text.
+  - **Checklist 3 (tenant isolation):** the shift query's `organization_id`
+    traces to the token match, not the request; verified by reading
+    `_integration_for_org_feed_token` and the route body together, not
+    assumed from the variable name.
+  - **Checklist 5 (data exposure):** cross-checked the projection dict
+    literal against the `Shift` model's columns by name — `notes`,
+    `pass_down_notes`, `position`, `assigned_user_id` are all absent.
+  - **Checklist 6 (abuse resistance):** the existing `_rate_limit_feed`
+    dependency (60/minute/IP) and `ORG_FEED_MAX_EVENTS` cap both apply
+    unchanged to the combined response; the shift query has its own
+    `.limit()`, so a department with more shifts than the cap cannot inflate
+    the response past roughly 2× the existing bound on events alone.
+  - **Guard test already in place:** `test_department_ical_feed.py`'s
+    `TestShiftsArePublishedOnlyWhenIncluded` includes a cross-org case
+    (`row_a`/`row_b`, two organizations, each with `include_shifts: True`)
+    and an authorization case (a non-admin "intruder" saving the setting is
+    refused, and `"include_shifts" not in row.config` afterward) — read in
+    full, not just by name; both assert the isolation this review would
+    otherwise have had to verify by hand.
+- **Zeffy (read-only donations/tickets/memberships platform) added to the
+  integration catalog.** This feature's own surface here is narrow — the
+  `INTEGRATION_CATALOG` entry, `_CREDENTIALS_REQUIRED_TO_CONNECT["zeffy"] =
+("api_key",)` (closing the same INT2-3 class pass 11 fixed for PayPal/
+  Documenso/Cal.com/Salesforce, applied to a new type as it's added — read
+  the diff, not inferred: `zeffy` requires a non-blank `api_key` to connect,
+  same `_missing_required_fields` mechanism), the new `ZeffyConfig` schema
+  (`extra="forbid"`, both fields default to `""`), and wiring
+  `ZeffyError` into `test_connection`'s existing `sanitize_connector_error(...,
+trusted_types=(...))` allowlist (INT-6's pattern, pass 2/pass 3) so a
+  hand-authored Zeffy error message still passes through while an unhandled
+  one still gets the generic fallback.
+  - `_SECRET_KEY_PATTERN` (`token|secret|key|password|api_key|auth|
+webhook_url|refresh_token|client_secret`, case-insensitive) matches both
+    `api_key` and `webhook_secret` — confirmed by re-reading the regex and
+    the `ZeffyConfig` field names together — so `_sanitize_config` redacts
+    both on every read, same as every other secret-bearing integration type.
+  - The frontend form (`IntegrationsPage.tsx`) follows the existing
+    PayPal/Documenso pattern exactly: both fields render as `type="password"`
+    with `autoComplete="off"`, are reset to `''` on every settings-dialog
+    open (never pre-filled from a stored value), and are sent as
+    `.trim() || undefined` (CLAUDE.md Pitfall #1 — blank means "leave
+    unchanged", never an empty string reaching the schema).
+  - **The actual Zeffy integration logic (`zeffy_service.py`,
+    `zeffy_sync_service.py`, `api/v1/endpoints/zeffy.py`,
+    `api/public/zeffy_webhook.py`, `models/zeffy.py`, `schemas/zeffy.py`) is
+    Feature 22's (Grants & fundraising) own scope and was reviewed there in
+    full at pass 13 (PR #3962, merge `6b816dfb`)** — webhook HMAC
+    verification with timestamp tolerance, re-fetch-from-API rather than
+    trust-the-webhook-body, `organization_id`-scoped queries throughout,
+    `with_for_update()` row locking on financial mutations, a unique
+    `(organization_id, zeffy_payment_id)` idempotency key, encrypted secrets
+    never echoed back. **Confirmed byte-identical since that merge** (`git
+diff 6b816dfb..origin/main` on all five of those files: empty) — so this
+    pass does not re-derive that review, only the narrow slice that is this
+    feature's own (the catalog entry, the credential gate, and the frontend
+    form). `services/integration_services/zeffy_service.py` is new _in this
+    directory_ only because Feature 22 happens to have put its service there,
+    which is why it shows up in this feature's accumulated-scope diff; it
+    carries no logic this pass is responsible for and none was re-reviewed
+    beyond the byte-identical check.
+
+## Verified good ✅ (re-confirmed, not re-derived)
+
+Every item under this heading in pass 11 — INT-1 through INT-5, the
+Salesforce OAuth flow, SOQL injection defense, instance-URL domain pinning,
+tenant isolation across both endpoint files, no secret exposure — re-checked
+against the current tree and unchanged by this window's delta.
+
+## Confirmed still open — nothing needing a product decision
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` chat-webhook allowlist) —
+  unchanged, still an explicit owner behavior decision.
+
+## Findings
+
+**0 fixed, 0 new findings.** The shift-inclusion feature is org-scoped at
+its only query, rate-limited and capped by the feed's pre-existing guards,
+and minimizes exposed shift fields the same way the feed already minimizes
+event fields — with a guard test already covering the cross-org and
+authorization cases. The Zeffy catalog entry reuses every existing
+credential-gating and secret-redaction mechanism correctly, and its actual
+service logic is owned and already reviewed by Feature 22.
+
+## Schema & migration notes
+
+None — no migration, model or column change in this feature's own scope
+this iteration. (Zeffy's table and migration were Feature 22's and were
+reviewed there.)
+
+## Completion gate
+
+| Check                                                                                                                                                               | Result                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                       | ✅ 0 violations                                                                                                                     |
+| `black --check app/ tests/ alembic/`                                                                                                                                | ✅ 2869 files unchanged                                                                                                             |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                           | ✅ clean                                                                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                   | ✅ 710 revisions, single head `6b81e95d4157`                                                                                        |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                               | ✅ 298 routes, 0 errors, 0 warnings                                                                                                 |
+| `pytest tests/ -q -k "integration or salesforce or calcom or zeffy or ical_feed or mcp_key or google_workspace or google_calendar_oauth or outlook_calendar_oauth"` | ⏳ started this pass, long-running (1500+ tests across this feature's scope); result to follow in a same-branch commit before merge |
+| `npm run typecheck`                                                                                                                                                 | ✅ 0 errors                                                                                                                         |
+| `npx eslint src/pages/IntegrationsPage.tsx`                                                                                                                         | ✅ 0 errors/warnings                                                                                                                |
+| `npx vitest run src/pages/IntegrationsPage.test.tsx`                                                                                                                | ✅ 90 passed                                                                                                                        |
+
+Next in rotation: Feature 28 (Security, audit & IP).
 
 ---
 

@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None yet** — Feature 27 (Integrations), pass 12, a watchdog pickup. PR
+#3981 (Feature 26, Forms, pass 12) merged (`b6ab744a`). This iteration
+found a real but narrow delta: the department ICS feed can now optionally
+publish scheduled shifts, and Zeffy was added to the integration catalog
+(the actual Zeffy service logic is Feature 22's own scope, reviewed there
+at pass 13 and confirmed byte-identical since). 0 fixed, 0 new findings.
+See `docs/security-review/INT-27-integrations.md`'s **Pass 12** section.
+(PR number recorded here once opened.)
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 12, PR #3981, merged), preserved for history</summary>
+
 **PR [#3981](https://github.com/thegspiro/the-logbook/pull/3981)** (branch
 `claude/security-review-forms-p12`) — Feature 26 (Forms), pass 12, a
 watchdog pickup. True zero-delta: every one of this feature's declared
@@ -24541,7 +24553,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                          | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ⬜     |
@@ -46245,3 +46257,58 @@ Full write-up: `docs/security-review/GF-22-grants-fundraising.md`'s **Pass
 Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
 supplies) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-11-03 — Feature 26 (Forms, pass 12) merged; Feature 27 (Integrations, pass 12) — watchdog pickup, shift-inclusion and Zeffy catalog entry reviewed, 0 fixed, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` ("No reachable agents"). PR #3981 (Feature 26, Forms, pass 12)
+had already merged (`b6ab744a`); a GitHub search for `is:pr is:open
+head:claude/security-review` returned zero results, confirming row 27
+(Integrations) as the next `⬜` row on a freshly fetched `main`.
+
+Baseline `9ae9e594` (pass 11's merge) to head `ec6a96a9`: diffing every file
+this feature has accumulated into scope across passes 1–11 found six
+changed files — `api/public/calendar.py`, `api/v1/endpoints/integrations.py`,
+`schemas/integration.py`, `services/integration_services/__init__.py`, the
+new `services/integration_services/zeffy_service.py`, and
+`frontend/src/pages/IntegrationsPage.tsx` — all read in full; every other
+scope file confirmed byte-identical. Route count re-enumerated by AST
+across all ten scope files: 39, unchanged (no new `@router.*` decorator in
+either changed backend file).
+
+Two real pieces of delta, both reviewed against all seven checklist
+dimensions:
+
+- The department events ICS feed can now optionally publish scheduled
+  shifts (`ICalConfig.include_shifts`, off by default). The new shift query
+  takes its `organization_id` from the already-matched, constant-time
+  compared feed token — never a client-supplied value — filters out
+  cancelled shifts, reuses the feed's existing rate limit and event cap, and
+  its projection (`_org_feed_shift`) exposes only id/title/times/a fixed
+  category — no notes, positions or assignee. A guard test already covers
+  the cross-org and non-admin-save cases.
+- Zeffy was added to the integration catalog. This feature's own surface —
+  the catalog entry, the `api_key`-required-to-connect gate, and the
+  `ZeffyError` entry in `test_connection`'s sanitizer allowlist — correctly
+  reuses every existing mechanism (secret-key regex redaction, blank-means-
+  unchanged frontend fields). Zeffy's actual service/webhook/sync logic
+  belongs to Feature 22 (Grants & fundraising), was reviewed there in full
+  at pass 13 (PR #3962), and is confirmed byte-identical since that merge.
+
+**0 fixed, 0 new findings.** INT-1 through INT-6 and INT-5 (the open,
+owner-accepted item) all re-confirmed unchanged. Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 12** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 710
+revisions, single head; `check_route_permissions.py --strict` — 298
+routes, 0 errors/warnings; `npm run typecheck` and `npx eslint` on the
+changed frontend file clean; `npx vitest run src/pages/IntegrationsPage.test.tsx`
+— 90 passed; targeted backend suite (`-k "integration or salesforce or
+calcom or zeffy or ical_feed or mcp_key or google_workspace or
+google_calendar_oauth or outlook_calendar_oauth"`) run in the background —
+see this PR for the final count.
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
+& IP) — re-check `list_pull_requests` fresh rather than trusting this note.
