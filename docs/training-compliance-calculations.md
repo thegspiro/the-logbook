@@ -611,8 +611,22 @@ Both are merged into a unified `WaiverPeriod` for calculation purposes.
 
 ### 4b. Counting Waived Months
 
-A calendar month is considered **waived** when a waiver covers **15 or more
-days** of that month.
+How much of a month a waiver excuses is a department setting,
+**Months on leave** on the compliance settings page
+(`compliance_configs.leave_month_rule`, added 2026-11-02). It applies to
+leaves of absence and training waivers alike, and to every hours, shift and
+call requirement on every screen.
+
+| Rule                         | A month partly covered by leave…                                   |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `full_month` (default)       | is excused in full if leave covers **any** day of it               |
+| `proportional` (15-day rule) | is excused by the share of its days on leave (10 of 30 days = 1/3) |
+| `half` (15-day rule)         | is half excused at **15 or more** days, not at all below 15        |
+
+Under every rule a month leave covers entirely is excused in full. Before
+2026-11-02 a month was excused in full at 15 or more covered days and not at
+all below that; that rule is no longer offered, and every department moved to
+`full_month` with the migration.
 
 ```
 For each waiver period:
@@ -621,17 +635,25 @@ For each waiver period:
   2. Calculate overlap with the evaluation period:
        overlap_start = MAX(waiver.start_date, period_start)
        overlap_end   = MIN(waiver.end_date, period_end)
-  3. Walk month-by-month through the overlap:
-       For each (year, month):
-         covered_days = days the waiver covers in that month
-         IF covered_days >= 15:
-           Add (year, month) to the waived set
+  3. Record, per (year, month), the days the overlap covers
 
-waived_months = count of unique (year, month) entries in the set
+For each (year, month) touched:
+  covered_days  = days covered, overlaps merged so no day counts twice
+  days_in_month = days of that month inside the evaluation window
+  share         = by the rule above (0, a fraction, or 1)
+
+waived_months = count of months with share > 0
+waived_share  = sum of the shares
 ```
 
-Overlapping waivers are automatically deduplicated — multiple waivers
-covering the same month only count it once.
+Overlapping waivers are automatically deduplicated — two waivers covering
+the same days count those days once. Each month also records whether a leave
+of absence or a training waiver covered it, so the screens can say "on leave"
+only where a leave is the reason.
+
+Training completed during an excused month still counts toward the total.
+The monthly breakdown lists it under a **Leave** (or **Waived**) label, so
+the leave and the hours earned during it are both on the record.
 
 ### 4c. Adjusting the Required Target
 
@@ -639,10 +661,15 @@ covering the same month only count it once.
 total_months  = months in evaluation period
                 = (end.year - start.year) × 12 + (end.month - start.month) + 1
 
-active_months = MAX(total_months - waived_months, 1)
+active_months = MAX(total_months - waived_share, 1)
 
 adjusted_required = base_required × (active_months / total_months)
 ```
+
+Shift and call targets are counted in whole units, so their adjusted target
+is **rounded down** (owner decision 2026-11-02): 3 shifts a year with half a
+month excused is 2.875, so 2 are owed. A target that rounds down to 0 is met.
+Hours targets keep two decimals.
 
 > **Bug Fix (2026-02-24):** A rolling period of N months can span N+1 calendar months (e.g., Feb 15 – Feb 14 next year = 12 rolling months spanning 13 calendar months). Previously, `total_months` was set from the rolling period config (12) while the calendar month walk counted 13 months, causing `waived_months > total_months` and negative `active_months`. The fix ensures `total_months` is computed from the actual evaluation period dates rather than the rolling period config value.
 
@@ -727,20 +754,20 @@ Sam needs 24 CE hours and 8 shifts instead of 36 hours and 12 shifts. His
 EMT certification and quarterly EMS requirements remain at their original
 targets.
 
-### Edge Case: Near the 15-Day Threshold
+### Edge Case: A Partly Covered Month
 
-What if Sam's deployment ended on **May 14** instead of May 31?
+What if Sam's deployment ended on **May 14** instead of May 31? May has 14
+of its 31 days covered, and the department's rule decides what that means:
 
-- May: May 1–14 = 14 days → **not waived** (14 < 15)
+| Rule           | May excused | Waived share | CE hours owed        | Shifts owed (12/yr)     |
+| -------------- | ----------- | ------------ | -------------------- | ----------------------- |
+| `full_month`   | all         | 4            | 36 × 8/12 = 24.0     | 12 × 8/12 = 8           |
+| `proportional` | 14/31       | 3.45         | 36 × 8.55/12 = 25.65 | 12 × 8.55/12 = 8.55 → 8 |
+| `half`         | none (< 15) | 3            | 36 × 9/12 = 27.0     | 12 × 9/12 = 9           |
 
-Waived months would drop from 4 to 3, and the adjustment would be:
-
-```
-adjusted_required = 36 × (MAX(12 - 3, 1) / 12) = 36 × (9/12) = 27.0 hours
-```
-
-A single day makes the difference: ending May 14 means 27 required hours;
-ending May 15 means 24 required hours. The 15-day threshold is strict.
+Ending May 15 instead changes only the `proportional` row (15/31 of May)
+and the `half` row (now half of May: 36 × 8.5/12 = 25.5 hours, 8.5 → 8
+shifts).
 
 ### Edge Case: Overlapping Waivers
 
@@ -751,9 +778,9 @@ months only once:
 
 ```
 Maternity leave covers June fully → June waived
-Medical waiver also covers June 20-30 → June already in the set, skip
+Medical waiver also covers June 20-30 → those days already counted
 Maternity leave covers July 1-25 → July waived
-Medical waiver covers July 1-10 → July already in the set, skip
+Medical waiver covers July 1-10 → those days already counted
 
 Waived months = still 5  (Mar, Apr, May, Jun, Jul)
 ```
@@ -1072,31 +1099,31 @@ CPR requirement shows:
 Hours completed are irrelevant for biannual certification requirements.
 Tom must recertify.
 
-### Waived Month Threshold
+### A Partly Covered Month
 
-A month counts as waived only when the waiver covers **15 or more days**
-of that calendar month. A waiver covering Jan 1–14 (14 days) does **not**
-waive January.
+How a month that leave covers only partly is counted is the department's
+**Months on leave** setting (section 4b). Under the default, `full_month`,
+any day of leave excuses the month: a leave ending September 1 excuses all of
+September, and one starting July 15 excuses all of July.
 
 #### Example: The One-Day Difference
 
 Sam Kowalski's military deployment officially ended May 14 in one scenario
 and May 15 in another. The department's annual CE requirement is 36 hours.
 
-| Scenario    | May Coverage       | May Waived?    | Waived Months | Adjusted Req         |
-| ----------- | ------------------ | -------------- | ------------- | -------------------- |
-| Ends May 14 | May 1–14 = 14 days | No (14 < 15)   | 3 (Feb–Apr)   | 36 × 9/12 = 27.0 hrs |
-| Ends May 15 | May 1–15 = 15 days | Yes (15 >= 15) | 4 (Feb–May)   | 36 × 8/12 = 24.0 hrs |
+| Scenario    | `full_month` | `proportional`       | `half`             |
+| ----------- | ------------ | -------------------- | ------------------ |
+| Ends May 14 | 24.0 hrs     | 36 × 8.55/12 = 25.65 | 36 × 9/12 = 27.0   |
+| Ends May 15 | 24.0 hrs     | 36 × 8.52/12 = 25.55 | 36 × 8.5/12 = 25.5 |
 
-That single day changes Sam's required hours by 3 — from 27 to 24. If Sam
-has completed exactly 25 hours, he passes in one scenario and fails in the
-other.
+Under `full_month` the day makes no difference; under `half` it moves Sam's
+target by 1.5 hours.
 
 ### Overlapping Waivers
 
-Multiple waivers covering the same calendar month are deduplicated. The
-system tracks waived months as a set of `(year, month)` tuples, so
-overlapping waivers never double-count a month.
+Multiple waivers covering the same days are deduplicated. The system merges
+the covered day ranges within each month, so overlapping waivers never
+double-count a day or a month.
 
 #### Example: Two Waivers, Same Month
 
@@ -1287,11 +1314,12 @@ On July 10, Danielle notifies the department she is returning early on
 end date to July 15. The linked waiver automatically updates to
 Mar 10 – Jul 15.
 
-This changes July's coverage from 25 days (waived) to 15 days (still
-waived, since 15 >= 15). If the return date had been July 14 instead,
-July would have only 14 covered days and would **not** be waived, changing
-Danielle's waived months from 5 to 4 and increasing her requirement from
-21.0 to 24.0 hours.
+This changes July's coverage from 25 days to 15. Under the default
+`full_month` rule July is still excused in full and Danielle's requirement
+stays at 21.0 hours. Under `half` July stays half excused at 15 days, but a
+return on July 14 would leave July owed in full (waived months 5 → 4,
+requirement 21.0 → 24.0 hours); under `proportional` each day moves the
+target by a thirty-first of a month.
 
 ---
 

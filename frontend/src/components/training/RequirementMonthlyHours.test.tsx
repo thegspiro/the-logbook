@@ -74,20 +74,88 @@ describe('RequirementMonthlyHours', () => {
       requirement({
         monthly_hours: [
           { month: '2026-01', hours: 3 },
-          { month: '2026-02', hours: 0, waived: true },
-          { month: '2026-03', hours: 0, waived: true },
+          { month: '2026-02', hours: 0, waived: true, waived_share: 1, on_leave: true },
+          { month: '2026-03', hours: 0, waived: true, waived_share: 1, on_leave: true },
           { month: '2026-04', hours: 1 },
         ],
       })
     );
     expect(screen.getByLabelText('Feb 2026: leave, 0 hours')).toBeInTheDocument();
     expect(screen.getAllByText('Leave')).toHaveLength(2);
-    expect(screen.getByText(/average 2 hrs\/month \(2 months of leave not counted\)/)).toBeInTheDocument();
+    expect(screen.getByText(/average 2 hrs\/month in the 2 months not excused/)).toBeInTheDocument();
   });
 
-  it('still shows hours earned in a month of leave', async () => {
-    await open(requirement({ monthly_hours: [{ month: '2026-01', hours: 2, waived: true }] }));
-    expect(screen.queryByText('Leave')).not.toBeInTheDocument();
+  it('shows the leave and the hours earned during it', async () => {
+    await open(
+      requirement({ monthly_hours: [{ month: '2026-01', hours: 2, waived: true, waived_share: 1, on_leave: true }] })
+    );
+    expect(screen.getByText('Leave')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByLabelText('Jan 2026: leave, 2 hours')).toBeInTheDocument();
+  });
+
+  it("states the owner's example without inflating the average", async () => {
+    // 26 hours, 23 of them on leave; 3 earned in the one month not excused.
+    const leave = (month: string, hours: number) => ({
+      month,
+      hours,
+      waived: true,
+      waived_share: 1,
+      on_leave: true,
+    });
+    await open(
+      requirement({
+        required_hours: 6,
+        original_required_hours: 72,
+        completed_hours: 26,
+        monthly_hours: [
+          leave('2025-11', 5),
+          leave('2025-12', 4),
+          leave('2026-01', 2),
+          leave('2026-02', 1),
+          leave('2026-03', 0),
+          leave('2026-04', 3),
+          leave('2026-05', 4),
+          leave('2026-06', 1),
+          leave('2026-07', 3),
+          leave('2026-08', 0),
+          leave('2026-09', 0),
+          { month: '2026-10', hours: 3 },
+        ],
+      })
+    );
+    expect(
+      screen.getByText(
+        /26 hrs over 12 months \(23 earned on leave\) · average 3 hrs\/month in the 1 month not excused · 6 hrs\/month needed/
+      )
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Leave')).toHaveLength(11);
+  });
+
+  it('names a training waiver rather than calling it leave', async () => {
+    await open(
+      requirement({ monthly_hours: [{ month: '2026-01', hours: 1, waived: true, waived_share: 1, on_waiver: true }] })
+    );
+    expect(screen.getByText('Waived')).toBeInTheDocument();
+    expect(screen.queryByText('Leave')).not.toBeInTheDocument();
+    expect(screen.getByText(/1 earned while waived/)).toBeInTheDocument();
+  });
+
+  it('labels a partly excused month', async () => {
+    await open(
+      requirement({
+        monthly_hours: [
+          { month: '2026-09', hours: 0, waived: true, waived_share: 0.5, on_leave: true },
+          { month: '2026-10', hours: 0, waived: true, waived_share: 0.5, on_waiver: true },
+        ],
+      })
+    );
+    expect(screen.getByLabelText('Sep 2026: partial leave, 0 hours')).toBeInTheDocument();
+    expect(screen.getByLabelText('Oct 2026: partly waived, 0 hours')).toBeInTheDocument();
+  });
+
+  it('reads an excused month from an older server, with no reason flags, as leave', async () => {
+    await open(requirement({ monthly_hours: [{ month: '2026-01', hours: 0, waived: true }] }));
+    expect(screen.getByLabelText('Jan 2026: leave, 0 hours')).toBeInTheDocument();
   });
 });

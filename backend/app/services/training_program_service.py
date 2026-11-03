@@ -3912,12 +3912,20 @@ class TrainingProgramService:
                         user_waivers,
                         str(requirement.id),
                         period_months=get_rolling_period_months(requirement),
+                        whole_units=True,
                     )
                     if user_waivers
                     else (requirement.required_shifts, 0, 0)
                 )
                 progress.progress_percentage = min(
-                    100.0, (updates.progress_value / adj_required) * 100
+                    100.0,
+                    (
+                        (updates.progress_value / adj_required) * 100
+                        # A prorated shift or call target can round down to
+                        # zero, which the member has already met.
+                        if adj_required > 0
+                        else 100.0
+                    ),
                 )
             elif (
                 requirement.requirement_type == RequirementType.CALLS
@@ -3931,12 +3939,20 @@ class TrainingProgramService:
                         user_waivers,
                         str(requirement.id),
                         period_months=get_rolling_period_months(requirement),
+                        whole_units=True,
                     )
                     if user_waivers
                     else (requirement.required_calls, 0, 0)
                 )
                 progress.progress_percentage = min(
-                    100.0, (updates.progress_value / adj_required) * 100
+                    100.0,
+                    (
+                        (updates.progress_value / adj_required) * 100
+                        # A prorated shift or call target can round down to
+                        # zero, which the member has already met.
+                        if adj_required > 0
+                        else 100.0
+                    ),
                 )
             elif evaluation_target := _evaluation_requirement_target(requirement):
                 adj_required, _, _ = (

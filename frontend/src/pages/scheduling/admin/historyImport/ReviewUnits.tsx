@@ -76,8 +76,8 @@ const UnitRow: React.FC<{
 
   return (
     <li className="space-y-3 p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-theme-text-primary font-medium break-words">{label}</span>
             <span className={`badge border ${HISTORY_IMPORT_RESOLUTION_COLORS[unit.status] ?? ''}`}>
@@ -90,7 +90,7 @@ const UnitRow: React.FC<{
             {target ? ` · recorded on ${target}` : ''}
           </p>
         </div>
-        <div className="lg:w-80">
+        <div className="split-row-aside sm:w-80">
           <label htmlFor={selectId} className="sr-only">
             Which unit is {label}?
           </label>

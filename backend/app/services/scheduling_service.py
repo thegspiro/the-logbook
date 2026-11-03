@@ -86,7 +86,11 @@ from app.services.training_compliance import (
     requirement_applies_to_member,
     requirement_as_of,
 )
-from app.services.training_waiver_service import fetch_org_waivers
+from app.services.training_waiver_service import (
+    SOURCE_LEAVE,
+    adjust_required,
+    fetch_org_waivers,
+)
 from app.utils.apparatus_ref import (
     apparatus_in_use,
     apparatus_ref_exists,
@@ -142,6 +146,18 @@ def _scheduling_minutes(
     except (TypeError, ValueError):
         return default
     return min(max(value, 0), ceiling)
+
+
+def _notice_date(value, fallback: str) -> str:
+    """A shift or leave date as a notice prints it: ``Sep 30, 2026``.
+
+    Notification bodies and email subjects are read by members, who were being
+    shown ``2026-09-30``. ``%b %d, %Y`` is the form the scheduled reminders and
+    the email-template preview already use, so a member sees one date format
+    whichever sender wrote to them. A shift date is the org-local calendar day
+    and carries no time, so there is nothing to convert.
+    """
+    return value.strftime("%b %d, %Y") if value else fallback
 
 
 def _position_label(position) -> str:
@@ -2991,11 +3007,7 @@ class SchedulingService:
             # unless the member turned it off) go out together: a member who
             # reads only email would otherwise turn up for a shift that is off.
             if recipient_ids:
-                shift_date_str = (
-                    shift.shift_date.isoformat()
-                    if shift.shift_date
-                    else "the scheduled date"
-                )
+                shift_date_str = _notice_date(shift.shift_date, "the scheduled date")
                 message = f"Your shift on {shift_date_str} has been cancelled."
                 if reason:
                     message += f" Reason: {reason}"
@@ -6187,9 +6199,7 @@ class SchedulingService:
             if not recipient_ids:
                 return
 
-            shift_date_str = (
-                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
-            )
+            shift_date_str = _notice_date(shift.shift_date, "unknown date")
             position_label = _position_label(position)
             message = (
                 f"{user_name} {action} the {position_label} position "
@@ -6270,9 +6280,7 @@ class SchedulingService:
             if not shift:
                 return
 
-            shift_date_str = (
-                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
-            )
+            shift_date_str = _notice_date(shift.shift_date, "unknown date")
             # On an outreach signup sheet the seat is a plain `volunteer` and
             # the job the member actually chose lives on outreach_role. Telling
             # them they are "assigned to the Volunteer position" loses the one
@@ -6407,10 +6415,8 @@ class SchedulingService:
                 select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
             )
             offering_shift = shift_result.scalar_one_or_none()
-            shift_date_str = (
-                offering_shift.shift_date.isoformat()
-                if offering_shift and offering_shift.shift_date
-                else "unknown date"
+            shift_date_str = _notice_date(
+                offering_shift.shift_date if offering_shift else None, "unknown date"
             )
 
             recipient_ids: set[str] = set()
@@ -6469,10 +6475,8 @@ class SchedulingService:
                 select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
             )
             offering_shift = shift_result.scalar_one_or_none()
-            shift_date_str = (
-                offering_shift.shift_date.isoformat()
-                if offering_shift and offering_shift.shift_date
-                else "unknown date"
+            shift_date_str = _notice_date(
+                offering_shift.shift_date if offering_shift else None, "unknown date"
             )
 
             message = (
@@ -6534,9 +6538,7 @@ class SchedulingService:
             if user:
                 user_name = user.display_name or "A member"
 
-            shift_date_str = (
-                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
-            )
+            shift_date_str = _notice_date(shift.shift_date, "unknown date")
             position_label = _position_label(assignment.position)
 
             message = (
@@ -6570,10 +6572,8 @@ class SchedulingService:
 
             status_label = "approved" if status == TimeOffStatus.APPROVED else "denied"
 
-            start_str = (
-                time_off.start_date.isoformat() if time_off.start_date else "unknown"
-            )
-            end_str = time_off.end_date.isoformat() if time_off.end_date else "unknown"
+            start_str = _notice_date(time_off.start_date, "unknown")
+            end_str = _notice_date(time_off.end_date, "unknown")
 
             message = (
                 f"Your time-off request for "
@@ -10076,6 +10076,7 @@ class SchedulingService:
 
         # 3. For each requirement, compute compliance
         compliance_data: List[Dict[str, Any]] = []
+        leaves_by_user: Optional[Dict[str, list]] = None
 
         for req in requirements:
             graded_by_shared_grader = counts_shift_attendance(req)
@@ -10200,21 +10201,16 @@ class SchedulingService:
                 and req.due_date_type == DueDateType.ROLLING
                 and req.rolling_period_months
             )
-            user_leave_months: Dict[str, int] = {}
-            if is_rolling:
-                leave_svc = MemberLeaveService(self.db)
-                leaves_by_user = await leave_svc.get_active_leaves_for_users(
-                    str(organization_id),
-                    user_ids,
-                    period_start,
-                    period_end,
-                )
-                for uid in user_ids:
-                    user_leave_months[uid] = MemberLeaveService.count_leave_months(
-                        leaves_by_user.get(uid, []),
-                        period_start,
-                        period_end,
-                    )
+            # Leaves of absence only, as this report has always counted, but
+            # measured by the department's leave month rule so a month here
+            # is excused exactly as it is on the member's training screen.
+            if is_rolling and leaves_by_user is None:
+                leaves_by_user = {
+                    uid: [w for w in periods if w.source == SOURCE_LEAVE]
+                    for uid, periods in (
+                        await fetch_org_waivers(self.db, str(organization_id))
+                    ).items()
+                }
 
             # Build member compliance list
             members = []
@@ -10233,7 +10229,21 @@ class SchedulingService:
                     + prep_map.get(str(user.id), 0)
                 )
                 total_hours = hours_from_minutes(total_minutes)
-                leave_months = user_leave_months.get(user.id, 0)
+                leave_months = 0
+                member_required = required_value
+                member_leaves = (leaves_by_user or {}).get(str(user.id), [])
+                if is_rolling and member_leaves:
+                    member_required, leave_months, _ = adjust_required(
+                        required_value,
+                        period_start,
+                        period_end,
+                        member_leaves,
+                        str(req.id),
+                        period_months=req.rolling_period_months,
+                        whole_units=(
+                            req.requirement_type == RequirementType.SHIFTS.value
+                        ),
+                    )
 
                 if graded_by_shared_grader:
                     ev = evaluate_member_requirement_detail(
@@ -10274,16 +10284,6 @@ class SchedulingService:
                     compliance_value = float(total_minutes) / 60.0
 
                 if not graded_by_shared_grader:
-                    # Adjust required value for rolling-period requirements
-                    # by excluding months the member was on leave.
-                    member_required = required_value
-                    if is_rolling and leave_months > 0 and req.rolling_period_months:
-                        active_months = max(req.rolling_period_months - leave_months, 1)
-                        member_required = round(
-                            required_value * active_months / req.rolling_period_months,
-                            1,
-                        )
-
                     percentage = round(
                         (
                             (completed_value / member_required * 100)

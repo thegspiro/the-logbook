@@ -1300,3 +1300,18 @@ export const ADMIN_HOURS_ENTRY_METHOD_LABELS: Record<string, string> = {
   manual: 'Manual',
   event_attendance: 'Event Attendance',
 };
+
+// ============================================
+// Training compliance
+// ============================================
+
+/**
+ * How a month that leave or a waiver only partly covers reduces a target.
+ * Mirrors `LeaveMonthRule` in backend/app/models/compliance_config.py.
+ */
+export const LeaveMonthRule = {
+  FULL_MONTH: 'full_month',
+  PROPORTIONAL: 'proportional',
+  HALF: 'half',
+} as const;
+export type LeaveMonthRule = (typeof LeaveMonthRule)[keyof typeof LeaveMonthRule];

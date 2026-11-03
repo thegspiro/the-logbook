@@ -16,3 +16,20 @@ export const countingWindowLabel = (months: MonthlyHours): string => {
     ? monthLabel(first.month, true)
     : `${monthLabel(first.month, true)} – ${monthLabel(last.month, true)}`;
 };
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * "11 months on leave", "2 waived months", or both. Falls back to the plain
+ * waived count for a server that does not split it by reason.
+ */
+export const excusedMonthsPhrase = (req: RequirementDetail): string => {
+  const waived = req.waived_months ?? 0;
+  const leave = req.leave_months ?? 0;
+  const waiver = req.waiver_months ?? 0;
+  if (leave === 0 && waiver === 0) return `${plural(waived, 'waived month')} of leave`;
+  const parts: string[] = [];
+  if (leave > 0) parts.push(`${plural(leave, 'month')} on leave`);
+  if (waiver > 0) parts.push(plural(waiver, 'waived month'));
+  return parts.join(' and ');
+};

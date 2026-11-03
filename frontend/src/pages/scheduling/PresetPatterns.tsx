@@ -110,7 +110,7 @@ const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId })
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="card-grid gap-3 [--card-grid-min:18rem]">
         {PRESET_PATTERNS.map((preset) => {
           const isSelected = selectedId === preset.id;
           return (

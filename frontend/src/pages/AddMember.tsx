@@ -404,7 +404,7 @@ const AddMember: React.FC = () => {
               <h2 className="text-theme-text-primary text-xl font-bold">Personal Information</h2>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+            <div className="field-grid gap-4">
               <div>
                 <label htmlFor="add-firstName" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   First Name <span className="text-red-700 dark:text-red-400">*</span>
@@ -536,7 +536,7 @@ const AddMember: React.FC = () => {
                 {errors.street && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.street}</p>}
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+              <div className="field-grid gap-4">
                 <div>
                   <label htmlFor="add-city" className="text-theme-text-primary mb-2 block text-sm font-medium">
                     City <span className="text-red-700 dark:text-red-400">*</span>

@@ -85,7 +85,7 @@ const StepShell: React.FC<StepShellProps> = ({ title, intro, manageTo, manageLab
       {manageTo && (
         <Link
           to={manageTo}
-          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 flex shrink-0 items-center gap-1 text-sm"
+          className="split-row-aside text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-sm"
         >
           {manageLabel ?? 'Open full page'}
           <ExternalLink className="h-3.5 w-3.5" />

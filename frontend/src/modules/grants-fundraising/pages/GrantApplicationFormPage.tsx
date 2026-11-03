@@ -755,7 +755,7 @@ export const GrantApplicationFormPage: React.FC = () => {
               <p className="text-theme-text-muted mb-2 text-xs">
                 How much of the request goes to each budget category. Leave a category blank if it does not apply.
               </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="field-grid gap-3">
                 {BUDGET_CATEGORY_ORDER.map((category) => (
                   <div key={category}>
                     <label htmlFor={`budget-${category}`} className="text-theme-text-secondary mb-1 block text-xs">

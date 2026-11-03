@@ -5,6 +5,26 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 1 – 2, 2026
+
+A top-up pass for the merges after `f57fd5a` (2026-11-01 12:47 UTC) through
+`8700f3cf` (2026-11-02 15:07 UTC) that the two passes below did not cover.
+Member performance evaluations and the Reports and Medical Supplies crash fix
+are in the evaluations pass, and Zeffy in its own. Security-review passes
+(scheduling, events-requests, training-core, training-extended,
+skills-testing, apparatus-nfc, facilities, equipment-check-shifts) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                       | Guide  | Disposition                                  |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------- |
+| Evaluated shifts, Transports, Refusals requirement types credited from shift evaluations; offered in the requirement editors | 02     | Already described under Shift Evaluations    |
+| Member supervisors (Reports To) with dates; finance approval emails record their send and can be re-sent                     | 01, 11 | Covered by an earlier docs commit (41e4cd45) |
+| Top navigation gains Medical Screening and My ID Card, matching the side layout                                              | none   | Behaviour fix; parity test added             |
+| Dialogs carry `role="dialog"` (#3937)                                                                                        | none   | Accessibility, no guide text                 |
+
+**Screenshots to create:** see `docs/training/SCREENSHOT_CURRENCY.md`, which
+also queues the evaluation screens the evaluations pass named.
+
 ## Change audit: Zeffy integration, November 2, 2026
 
 A targeted pass for one merge: the Zeffy integration (#3892, merged

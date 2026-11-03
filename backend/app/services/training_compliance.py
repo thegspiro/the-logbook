@@ -28,7 +28,11 @@ from app.services.training_period import (
     resolve_as_of_date,
 )
 from app.services.training_waiver_service import (
+    SOURCE_LEAVE,
+    SOURCE_WAIVER,
+    MonthWaiver,
     adjust_required,
+    excused_month_reasons,
     fetch_org_waivers,
     get_rolling_period_months,
 )
@@ -147,7 +151,7 @@ def monthly_hours(
     records: Iterable,
     start: date,
     end: date,
-    waived: Optional[set] = None,
+    excused: Optional[Dict[Tuple[int, int], MonthWaiver]] = None,
 ) -> List[Dict]:
     """Hours per calendar month from ``start`` through ``end``, zeros included.
 
@@ -155,10 +159,12 @@ def monthly_hours(
     months add up to the figure the requirement reports. A month with nothing
     in it is listed, not skipped: the gap is what a member is checking for.
 
-    ``waived`` is the set of ``(year, month)`` covered by leave
-    (``waived_month_keys``). Those months are flagged, so a month a member was
-    excused from is not read as a month they fell short, and the requirement's
-    prorated target is the same one these rows are measured against.
+    ``excused`` is what leave and waivers excused, by ``(year, month)``
+    (``month_waivers``). Those months are flagged, with the share excused and
+    whether a leave of absence or a training waiver was the reason, so a month
+    a member was excused from is not read as a month they fell short, and the
+    requirement's prorated target is the same one these rows are measured
+    against. Hours earned in such a month still count and are still listed.
     """
     totals: Dict[Tuple[int, int], float] = {}
     for record in records:
@@ -170,11 +176,15 @@ def monthly_hours(
     months: List[Dict] = []
     year, month = start.year, start.month
     while (year, month) <= (end.year, end.month):
+        mw = (excused or {}).get((year, month))
         months.append(
             {
                 "month": f"{year:04d}-{month:02d}",
                 "hours": totals.get((year, month), 0.0),
-                "waived": (year, month) in (waived or set()),
+                "waived": mw is not None,
+                "waived_share": round(mw.share, 4) if mw else 0.0,
+                "on_leave": bool(mw and SOURCE_LEAVE in mw.sources),
+                "on_waiver": bool(mw and SOURCE_WAIVER in mw.sources),
             }
         )
         month += 1
@@ -519,6 +529,11 @@ class RequirementEvaluation:
     progress_unit: Optional[str] = None
     base_required: Optional[float] = None
     waived_months: int = 0
+    # Of waived_months, how many a leave of absence and how many a training
+    # waiver excused; a month both touched counts in both, so these can sum
+    # to more than waived_months.
+    leave_months: int = 0
+    waiver_months: int = 0
     window_start: Optional[str] = None
     window_end: Optional[str] = None
     as_of: Optional[str] = None
@@ -626,6 +641,10 @@ def _grade_member_requirement(
         base=None,
         waived=0,
     ) -> RequirementEvaluation:
+        # The months adjust_required prorated by, split by reason.
+        reasons = excused_month_reasons(
+            _waivers if waived else [], start_date, end_date, str(req.id)
+        )
         return RequirementEvaluation(
             status=status,
             completion_date=comp,
@@ -635,6 +654,8 @@ def _grade_member_requirement(
             progress_unit=unit,
             base_required=base,
             waived_months=waived,
+            leave_months=reasons["leave_months"],
+            waiver_months=reasons["waiver_months"],
             window_start=start_date.isoformat() if start_date else None,
             window_end=end_date.isoformat() if end_date else None,
             as_of=today.isoformat(),
@@ -818,6 +839,7 @@ def _grade_member_requirement(
                 _waivers,
                 str(req.id),
                 period_months=get_rolling_period_months(req),
+                whole_units=True,
             )
 
         progress = {
@@ -842,7 +864,9 @@ def _grade_member_requirement(
             latest_comp = latest_shift.isoformat()
         latest_exp = None
 
-        if required > 0 and count >= required:
+        # A base target that leave prorated down to zero is met: the member
+        # owes nothing for the window.
+        if (required > 0 or base_required > 0) and count >= required:
             return _ev("completed", latest_comp, latest_exp, **progress)
         elif count > 0:
             return _ev("in_progress", latest_comp, latest_exp, **progress)
@@ -866,6 +890,7 @@ def _grade_member_requirement(
                 _waivers,
                 str(req.id),
                 period_months=get_rolling_period_months(req),
+                whole_units=True,
             )
 
         progress = {
@@ -888,7 +913,9 @@ def _grade_member_requirement(
         )
         latest_exp = None
 
-        if required > 0 and count >= required:
+        # A base target that leave prorated down to zero is met: the member
+        # owes nothing for the window.
+        if (required > 0 or base_required > 0) and count >= required:
             return _ev("completed", latest_comp, latest_exp, **progress)
         elif count > 0:
             return _ev("in_progress", latest_comp, latest_exp, **progress)
