@@ -225,3 +225,35 @@ describe('useRanks retry and the shared response cache', () => {
     expect(mockInvalidateByPrefix).toHaveBeenCalledWith('/operational-ranks');
   });
 });
+
+describe('useRanks when disabled', () => {
+  beforeEach(() => {
+    mockGetRankLadder.mockReset();
+    invalidateRanksCache();
+    setOrganization('org-disabled');
+  });
+
+  it('makes no request while disabled, and reports an empty, settled ladder', async () => {
+    // A form field renders on public pages too, where the request would 401
+    // and the shared client would send a signed-out visitor to /login.
+    mockGetRankLadder.mockResolvedValue([rank('captain')]);
+    const { result } = renderHook(() => useRanks(true, { enabled: false }));
+
+    await act(async () => {});
+    expect(mockGetRankLadder).not.toHaveBeenCalled();
+    expect(result.current.ranks).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.failed).toBe(false);
+  });
+
+  it('fetches once enabled', async () => {
+    mockGetRankLadder.mockResolvedValue([rank('captain')]);
+    const hook = renderHook(({ enabled }) => useRanks(true, { enabled }), { initialProps: { enabled: false } });
+    expect(mockGetRankLadder).not.toHaveBeenCalled();
+
+    hook.rerender({ enabled: true });
+
+    await waitFor(() => expect(hook.result.current.ranks).toHaveLength(1));
+    expect(mockGetRankLadder).toHaveBeenCalledTimes(1);
+  });
+});
