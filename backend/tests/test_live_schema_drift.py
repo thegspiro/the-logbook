@@ -16,9 +16,10 @@ passes trivially; point ``DB_NAME`` at a migrated database to check one by hand.
 Only drift in a direction that has a fix is asserted. Nullability is now one
 of them: 6dce1364ff7e made 99 model columns NOT NULL to match the chain, so the
 two shapes must agree on every column. The differences still recorded in
-``docs/KNOWN_LIMITATIONS.md`` (leftover tables, server defaults on columns that
-are NOT NULL on both, the unused ``shift_equipment_checks.apparatus_id`` index)
-are deliberately not checked here.
+``docs/KNOWN_LIMITATIONS.md`` (server defaults on columns that are NOT NULL on
+both, the unused ``shift_equipment_checks.apparatus_id`` index) are
+deliberately not checked here. The leftover tables it used to list were
+dropped by d75ecbc15bae.
 """
 
 import uuid
