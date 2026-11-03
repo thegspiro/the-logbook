@@ -54,6 +54,7 @@ import {
   type TrainingDetailsValue,
 } from './training/trainingDetailsValue';
 import { asArray } from '../utils/asArray';
+import { fileTypeLabel } from '../utils/fileTypeLabel';
 
 export interface ConflictEvent {
   id: string;
@@ -1930,7 +1931,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                       <div className="min-w-0">
                         <p className="text-theme-text-primary truncate text-sm font-medium">{attachment.file_name}</p>
                         <p className="text-theme-text-muted text-xs">
-                          {formatAttachmentSize(attachment.file_size)} &middot; {attachment.file_type}
+                          {formatAttachmentSize(attachment.file_size)} &middot; {fileTypeLabel(attachment.file_type)}
                         </p>
                       </div>
                     </div>
