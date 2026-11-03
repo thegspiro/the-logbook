@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3980](https://github.com/thegspiro/the-logbook/pull/3980)** (branch
+`claude/security-review-messaging-notifications-p12`) — Feature 25
+(Messaging & notifications), pass 12, a watchdog pickup. Real delta: web
+push dispatch queue + click-URL validation, History module's new notice
+sender, five new email senders. 0 fixed, 0 new findings. See
+`docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 12**
+section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 12, PR #3978, merged), preserved for history</summary>
+
 **PR [#3978](https://github.com/thegspiro/the-logbook/pull/3978)** (branch
 `claude/security-review-meetings-minutes-p12`) — Feature 24 (Meetings &
 minutes), pass 12, a watchdog pickup. MM5-4 — open since pass 2
@@ -24517,7 +24528,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                            | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ⬜     |
@@ -24534,6 +24545,46 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-03 — Feature 24 (Meetings & minutes, pass 12) merged; Feature 25 (Messaging & notifications, pass 12) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` ("No reachable agents"). PR #3978 (Feature 24, Meetings &
+minutes, pass 12) had already merged (`7127d632f`); a GitHub search for
+`is:pr is:open head:claude/security-review` returned zero results,
+confirming row 25 (Messaging & notifications) as the next `⬜` row.
+
+Baseline `9483ab8a6` (pass 11's merge, PR #3850) to head `7127d632f`: 13
+non-merge commits with a real diff against this feature's own files,
+reviewed in full against all seven checklist dimensions. The substantial
+one is `5dac39fe6` ("Fix four faults in the web push flow") — a new
+`push_dispatch.py` queue (4 workers, capped at 5,000 per Pitfall #9,
+confirmed as a plain length check before enqueue) replacing in-line
+per-recipient push sends that held announcement requests open past
+nginx's timeout; a shared-device fix so `claimDeviceForMember` now
+releases the browser's push subscription on a sign-in that changes the
+device's owner; and a new `_click_path()` validator on
+`PushService.send_to_user` that rejects any non-same-site `action_url`
+before it reaches a push payload (defense-in-depth — every one of the
+~60 existing `action_url` call sites already builds a server-side
+relative path). Also reviewed as new senders into this feature's shared
+infrastructure: the new History module's `history_notifications.py`
+(201 lines — org-rescoped, HTML-escaped, and deliberately carries no
+record content), and five new `EmailService` senders for Evaluations and
+the membership pipeline (zero new `_RAW_HTML_VARIABLES` entries — all go
+through the engine's default escaping). Route count re-enumerated by AST:
+51 (unchanged) — the one endpoint change is a new `failed` query param on
+the already org-scoped `GET /notifications/logs`, not a new route.
+
+**0 fixed, 0 new findings.** Standing findings MSG-3, MAIL-4,
+`email_service.py`'s F4 and the `NotificationRuleCreate`/`Update.config`
+note all re-confirmed unchanged. Full write-up:
+`docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 12**
+section (which also notes that pass 11's own completion-gate section was
+found empty — a documentation gap, not a security finding).
+
+Next in rotation: Feature 26 (Forms).
 
 ### 2026-11-03 — Feature 23 (Medical supplies, pass 19) merged; Feature 24 (Meetings & minutes, pass 12) — watchdog pickup, MM5-4 resolved by other work, 0 new findings
 
