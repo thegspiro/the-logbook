@@ -50,6 +50,16 @@ from app.utils.positions import normalize_stored_positions
 
 ONBOARDING_CORE_MODULES = ["members", "events", "documents", "forms"]
 
+# The core modules the server keeps on whatever is stored: the list
+# ModuleSettings.get_enabled_modules adds, and the cards the Modules step shows
+# as "Always on" (ALWAYS_ON_MODULE_IDS in the frontend registry). Custom Forms
+# is core (shown with the others) but not always on: the step offers Skip, it
+# is a stored ModuleSettings field, and Settings → Modules can turn it off.
+# configure_modules used to force the whole core list on, so it stored Forms on
+# where the completion step honoured the skip.
+# tests/test_onboarding_module_defaults.py holds it to both of those.
+ONBOARDING_ALWAYS_ON_MODULES = ["members", "events", "documents"]
+
 ONBOARDING_OFFERED_MODULES = [
     # Operations
     "training",
@@ -1538,8 +1548,9 @@ class OnboardingService:
         Returns:
             Dictionary of module name to enabled status
         """
-        # Core modules are always enabled — they power cross-module features
-        core_modules = list(ONBOARDING_CORE_MODULES)
+        # Only the modules the server keeps on regardless are forced; a
+        # skipped Custom Forms stays skipped, as it does on completion.
+        always_on_modules = list(ONBOARDING_ALWAYS_ON_MODULES)
         available_modules = sorted(ONBOARDING_ACCEPTED_MODULE_IDS)
 
         # Validate modules
@@ -1549,8 +1560,7 @@ class OnboardingService:
                 list_within_detail_limit("Invalid modules: ", invalid_modules)
             )
 
-        # Ensure core modules are always included
-        final_modules = list(set(enabled_modules) | set(core_modules))
+        final_modules = list(set(enabled_modules) | set(always_on_modules))
 
         # Update onboarding status
         status = await self.get_onboarding_status()

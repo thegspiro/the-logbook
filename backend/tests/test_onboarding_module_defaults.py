@@ -12,7 +12,9 @@ setup does not offer. The completion path, which copies the session into
 Organization.settings, did not. Both now take the rule from one helper.
 """
 
+import re
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1 import onboarding as onboarding_api
 from app.schemas.organization import ModuleSettings
 from app.services.onboarding import (
+    ONBOARDING_ALWAYS_ON_MODULES,
     ONBOARDING_CORE_MODULES,
     ONBOARDING_OFFERED_MODULES,
     ONBOARDING_SETTINGS_ONLY_MODULES,
@@ -104,11 +107,10 @@ class TestCompletionStoresTheRule:
         self, db_session: AsyncSession
     ):
         org = await _create_org(db_session)
-        # Forms included: configure_modules always adds the core list, Forms
-        # among them, while the completion honours a skipped Forms. That
-        # difference predates the Public Information rule and is not what this
-        # test is about.
-        enabled = ["members", "events", "documents", "forms", "scheduling"]
+        # Custom Forms skipped on purpose: configure_modules used to force it
+        # on with the rest of the core list while the completion honoured the
+        # skip, so the two paths stored different answers for one decision.
+        enabled = ["members", "events", "documents", "scheduling"]
         session = SimpleNamespace(data={"modules": {"enabled": enabled}})
 
         await onboarding_api._persist_session_data_to_org(session, db_session)
@@ -119,3 +121,45 @@ class TestCompletionStoresTheRule:
         await db_session.refresh(org)
 
         assert org.settings["modules"] == from_completion
+        assert from_completion["forms"] is False
+
+    async def test_skipping_custom_forms_is_kept_by_the_service_save(
+        self, db_session: AsyncSession
+    ):
+        org = await _create_org(db_session)
+
+        result = await OnboardingService(db_session).configure_modules(
+            ["members", "events", "documents"]
+        )
+
+        await db_session.refresh(org)
+        assert org.settings["modules"]["forms"] is False
+        assert result["forms"] is False
+        # The three the server keeps on whatever is stored are still on.
+        for module_id in ONBOARDING_ALWAYS_ON_MODULES:
+            assert result[module_id] is True, module_id
+
+
+@pytest.mark.unit
+class TestTheAlwaysOnList:
+    def test_matches_what_the_server_always_enables(self):
+        # ModuleSettings.get_enabled_modules adds these whatever is stored;
+        # setup must force exactly those, and Custom Forms is not among them.
+        always = set(ModuleSettings().get_enabled_modules()) - set(
+            ModuleSettings.model_fields
+        )
+        assert set(ONBOARDING_ALWAYS_ON_MODULES) == always & set(
+            ONBOARDING_CORE_MODULES
+        )
+        assert "forms" not in ONBOARDING_ALWAYS_ON_MODULES
+
+    def test_matches_the_setup_screen(self):
+        # The Modules step shows these as "Always on", with no Skip.
+        registry = (
+            Path(__file__).resolve().parents[2]
+            / "frontend/src/modules/onboarding/config/moduleRegistry.ts"
+        ).read_text()
+        match = re.search(r"ALWAYS_ON_MODULE_IDS[^=]*=\s*\[([^\]]*)\]", registry)
+        assert match, "ALWAYS_ON_MODULE_IDS not found in moduleRegistry.ts"
+        frontend = set(re.findall(r"'([\w-]+)'", match.group(1)))
+        assert frontend == set(ONBOARDING_ALWAYS_ON_MODULES)
