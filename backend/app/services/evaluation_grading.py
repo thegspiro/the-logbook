@@ -22,7 +22,7 @@ reason. That grade stands, and both are reported, so the record shows what the
 ratings came to and what the evaluator decided.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.schemas.evaluation import (
     OVERALL_LEVELS,
@@ -59,7 +59,11 @@ def grade_for(score: Optional[float], bands: List[GradeBand]) -> Optional[int]:
     return max(earned) if earned else bands[0].level
 
 
-def _weighted(pairs: List[tuple]) -> Optional[float]:
+#: (weight, value on the 1-5 grade scale) for one rated item or one section.
+Weighted = List[Tuple[int, float]]
+
+
+def _weighted(pairs: Weighted) -> Optional[float]:
     total = sum(weight for weight, _ in pairs)
     if not total:
         return None
@@ -75,15 +79,19 @@ def _result(
     calculated = grade_for(score, bands)
     # An override naming the calculated grade changes nothing, so it is not
     # reported as one.
-    overridden = override_level is not None and override_level != calculated
-    level = override_level if overridden else calculated
+    changed = (
+        override_level
+        if override_level is not None and override_level != calculated
+        else None
+    )
+    level = changed if changed is not None else calculated
     return {
         "score": score,
         "calculated_level": calculated,
         "calculated_label": _LABELS.get(calculated) if calculated else None,
-        "override_level": override_level if overridden else None,
-        "override_label": _LABELS.get(override_level) if overridden else None,
-        "reason": reason if overridden else None,
+        "override_level": changed,
+        "override_label": _LABELS.get(changed) if changed is not None else None,
+        "reason": reason if changed is not None else None,
         "level": level,
         "label": _LABELS.get(level) if level else None,
     }
@@ -102,9 +110,9 @@ def grade_content(
         return None
     bands = definition.grade_bands
     sections: List[Dict[str, Any]] = []
-    overall_pairs: List[tuple] = []
+    overall_pairs: Weighted = []
     for section in definition.sections:
-        pairs = []
+        pairs: Weighted = []
         for item in section.items:
             if item.tool not in SCORED_TOOLS or not item.weight:
                 continue
