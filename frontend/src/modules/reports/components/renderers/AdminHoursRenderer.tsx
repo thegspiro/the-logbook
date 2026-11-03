@@ -9,6 +9,7 @@ import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 import { formatHours, sumHoursToQuarter } from '@/utils/hoursFormatting';
 import { ADMIN_HOURS_ENTRY_METHOD_LABELS } from '@/constants/enums';
+import { renderCalendarDate } from '../../utils/reportDates';
 
 interface Props {
   data: AdminHoursReport;
@@ -31,7 +32,7 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
   const columns = [
     { key: 'member_name', header: 'Member' },
     { key: 'category_name', header: 'Category' },
-    { key: 'date', header: 'Date' },
+    { key: 'date', header: 'Date', render: renderCalendarDate },
     {
       key: 'hours',
       header: 'Hours',

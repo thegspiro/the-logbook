@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { HelpLink } from '../../../components/HelpLink';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { toLocalISODate } from '../../../utils/dateFormatting';
+import { formatCalendarDate, toLocalISODate } from '../../../utils/dateFormatting';
 import { useRanks } from '../../../hooks/useRanks';
 import { useAuthStore } from '../../../stores/authStore';
 import { useReportsStore } from '../store/reportsStore';
@@ -706,7 +706,7 @@ export const ReportsPage: React.FC = () => {
                           startDate &&
                           endDate && (
                             <p className="text-theme-text-muted mt-0.5 text-xs">
-                              {startDate} — {endDate}
+                              {formatCalendarDate(startDate)} — {formatCalendarDate(endDate)}
                             </p>
                           )
                         )}
@@ -750,7 +750,8 @@ export const ReportsPage: React.FC = () => {
                       <div className="split-row mb-3 gap-3 sm:items-center">
                         <h3 className="split-row-main text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                           <GitCompareArrows className="h-4 w-4" />
-                          Previous Period: {comparisonPeriod.start} — {comparisonPeriod.end}
+                          Previous Period: {formatCalendarDate(comparisonPeriod.start)} —{' '}
+                          {formatCalendarDate(comparisonPeriod.end)}
                         </h3>
                         <button
                           type="button"
