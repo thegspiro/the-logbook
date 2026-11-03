@@ -33,7 +33,9 @@ import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
 import { BARCODE_SVG_PRINT_CSS } from './barcodePrintCss';
-import { drawCode128ForPrinter, horizontalPaddingInches, printerDpiFor } from './barcodeGeometry';
+import { drawCode128ForPrinter, horizontalPaddingInches } from './barcodeGeometry';
+import { PrinterDpiSelect } from './PrinterDpiSelect';
+import { usePrinterDpi } from './printerDpi';
 import { LABEL_FONT_FAMILY, labelNameStyle } from './labelText';
 import { PrintSetupChecklist } from './PrintSetupChecklist';
 import { isPrintChecklistSkipped } from './printChecklist';
@@ -78,10 +80,11 @@ const SAME_PRINTER = '\u0000same';
 const presetKey = (preset: string, w: string, h: string, symbology: string, printerId: string) =>
   `${preset === CUSTOM_PRESET_ID ? `custom:${w}x${h}` : preset}:${symbology}:${printerId}`;
 
-const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbology: Symbology }> = ({
+const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbology: Symbology; dpi: number }> = ({
   item,
   preset,
   symbology,
+  dpi,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const value = sanitizeForCode128((item.barcodeValue || '').trim());
@@ -98,7 +101,7 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbolo
           fontSizeCssPx: preset.barcodeFontSize,
         },
         parseFloat(preset.width) - horizontalPaddingInches(preset.padding),
-        printerDpiFor(preset.id)
+        dpi
       );
     } catch {
       /* invalid value — leave empty */
@@ -109,9 +112,9 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbolo
     preset.barcodeWidth,
     preset.barcodeHeight,
     preset.barcodeFontSize,
-    preset.id,
     preset.width,
     preset.padding,
+    dpi,
   ]);
 
   return (
@@ -196,6 +199,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     : (LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset);
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
   const isThermal = preset.columns === 1;
+  const printerDpi = usePrinterDpi(preset.id);
   // A custom size is its own stock, so "don't show again" is per dimension.
   const printSizeKey = isCustom ? `custom:${customW}x${customH}` : preset.id;
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
@@ -811,6 +815,15 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                 </div>
               )}
 
+              {symbology === Symbology.CODE128 && (
+                <PrinterDpiSelect
+                  id="printer-dpi"
+                  value={printerDpi.override}
+                  autoDpi={printerDpi.autoDpi}
+                  onChange={printerDpi.setOverride}
+                />
+              )}
+
               <div>
                 <label
                   htmlFor="copies"
@@ -889,7 +902,13 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                 />
               ))}
               {labelItems.map((item, i) => (
-                <BarcodeLabel key={`${item.id}-${i}`} item={item} preset={preset} symbology={symbology} />
+                <BarcodeLabel
+                  key={`${item.id}-${i}`}
+                  item={item}
+                  preset={preset}
+                  symbology={symbology}
+                  dpi={printerDpi.dpi}
+                />
               ))}
             </div>
           </div>

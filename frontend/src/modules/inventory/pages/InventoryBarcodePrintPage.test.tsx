@@ -1088,4 +1088,58 @@ describe('InventoryBarcodePrintPage', () => {
       expect(within(dialog).queryByRole('link', { name: /Label Printers/ })).not.toBeInTheDocument();
     });
   });
+
+  describe('printer resolution', () => {
+    beforeEach(() => {
+      // Draws a 165-unit-wide symbol so the page can size it for the printer.
+      vi.mocked(JsBarcode).mockReset();
+      vi.mocked(JsBarcode).mockImplementation((el: SVGSVGElement) => {
+        el.setAttribute('width', '165px');
+        el.setAttribute('height', '42px');
+        el.innerHTML = '<rect width="165" height="42" fill="#ffffff"></rect><g><rect width="2" height="32"></rect></g>';
+      });
+      localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
+    });
+
+    // The bar height the page asks JsBarcode for on its second, printer-sized
+    // pass: the preset's 32 px divided by the CSS px each drawing unit fills
+    // once a 1 px module is rounded to whole dots.
+    const barHeightFor = (dots: number, dpi: number) => 32 / ((dots / dpi) * 96);
+    const lastHeight = () => {
+      const calls = vi.mocked(JsBarcode).mock.calls;
+      const options = calls[calls.length - 1]?.[2] as { height?: number } | undefined;
+      return options?.height ?? NaN;
+    };
+
+    it('sizes a 2" x 1" roll for 203 dpi until told otherwise', async () => {
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+
+      await waitFor(() => expect(lastHeight()).toBeCloseTo(barHeightFor(2, 203), 6));
+    });
+
+    it('redraws for the resolution chosen, and remembers it for this label size', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+
+      await user.selectOptions(screen.getByLabelText('Printer resolution'), '300');
+
+      await waitFor(() => expect(lastHeight()).toBeCloseTo(barHeightFor(3, 300), 6));
+      expect(JSON.parse(localStorage.getItem('labels:printerDpi') ?? '{}')).toEqual({ rollo_2x1: 300 });
+    });
+
+    it('offers the setting only for Code 128, which is what it sizes', async () => {
+      const user = userEvent.setup();
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      expect(screen.getByLabelText('Printer resolution')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /QR code/ }));
+
+      expect(screen.queryByLabelText('Printer resolution')).not.toBeInTheDocument();
+    });
+  });
 });
