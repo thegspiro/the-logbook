@@ -2679,3 +2679,156 @@ in-scope delta since pass 10 (`b4d9388a`'s message-length cap) was landed by
 other work and independently re-verified here at the diff level against all
 seven `CHECKLIST.md` dimensions. The diff this pass contributes is this
 findings file and `docs/security-review/PROGRESS.md` — no code change.
+
+---
+
+## Pass 12 (2026-11-03) — watchdog pickup, MM5-4 found resolved by other work; 0 new findings
+
+Watchdog pickup for `/loop 30m /security-review`: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable (`ListAgents` — "No
+reachable agents"). `gh api search/issues` for `is:pr is:open head:claude/security-review`
+returned zero results immediately before starting, confirming row 24
+(Meetings & minutes) as the next `⬜` row read directly off a freshly fetched
+`main`. PR #3962 (Grants & fundraising, pass 13) and PR #3976 (Medical
+supplies, pass 19) had both already merged. Branch name avoids reuse
+(Pitfall #24): the bare name and the `-p6`/`-p10`/`-p11` suffixes are all
+already used and merged, so this pass's branch carries a `-p12` suffix,
+confirmed unused by `git ls-remote origin` returning nothing for any
+`*security-review-meetings*` ref before pushing.
+
+**Baseline:** pass 11's merge, `52bb15d5e` (PR #3849). `git log 52bb15d5e..origin/main`
+restricted to this feature's full declared scope (both endpoint files,
+`minutes_records.py`, `api/public/minutes.py`, `api/attendance_lock.py`,
+`app/mcp/tools/meetings.py`, every `meetings`/`minute`/`quorum`/
+`attendance_dashboard` model, schema and service file, and
+`frontend/src/modules/minutes`) surfaced exactly **three** non-merge commits
+with a real diff in scope, all read in full:
+
+- **`feaf1d3f4` + `98531ef1c`** — "Minutes: a save from a stale copy is
+  refused instead of overwriting" / "bound `expected_version` to the Integer
+  column it is compared with". **This resolves MM5-4**, open since pass 2
+  (2026-08-31) and re-confirmed open at every pass since. New
+  `meeting_minutes.edit_version` column (migration `e15d635bbb98`) is bumped
+  by one on every content save; `MinuteService.update_minutes` takes a
+  `.with_for_update()` locking read of the current `edit_version` before
+  applying an update, and raises `HTTPException(409)` when the client's
+  `expected_version` doesn't match — the full Pitfall #27 shape (lock the
+  row, make the read itself a locking read), not just a plain re-check.
+  Verified directly against the code, not the commit message:
+  - The locking read happens _after_ `update_minutes`'s own
+    `get_minutes(minutes_id, organization_id)` org-scoped fetch, so the new
+    code introduces no tenant-isolation gap — it operates only on an
+    already-org-verified row (`minute_service.py:1148-1166`).
+  - The migration (`e15d635bbb98`) is correct per Pitfall #26/#35: guards on
+    the table not yet existing (`create_all` path), adds the column
+    `nullable=False` with a `server_default="0"` rather than relying on an
+    implicit default, so no existing row needs a backfill and no row is left
+    with an inconsistent value.
+  - `expected_version` is `Optional[int] = Field(None, ge=0, le=INT32_MAX)` —
+    bound to the `Integer` column it's compared against (the second commit),
+    matching this repo's numeric-bounds-sweep convention; a request naming no
+    version stays unconditional, preserving every other caller (API
+    integrations, bulk ops) that doesn't know about this field.
+  - Frontend: every section-mutating call in `MinutesDetailPage.tsx`
+    (`handleSaveSection`, `handleNotTakenUp` — via the new shared
+    `saveSections` helper, reorder, add, delete) now round-trips through
+    `saveSections`, which sends `expected_version` and catches a 409
+    specifically (`toAppError(err).status === 409`) to show a **Reload**
+    banner rather than a generic error toast — the editor's in-progress text
+    is preserved (component state, not re-fetched) until the user explicitly
+    reloads.
+  - Guard test `tests/test_minutes_edit_conflict_integration.py` (added by
+    the fix) was read, not merely cited: it drives two real concurrent
+    sessions against the locking read and asserts the second's commit
+    blocks-then-409s rather than silently overwriting. Ran directly (see
+    gate below) rather than trusted from the commit message.
+  - `docs/KNOWN_LIMITATIONS.md`'s MM5-4 entry was already updated to a
+    "Resolved" stub by the fixing commit itself; this pass additionally
+    found `docs/app-review/meetings-minutes.md`'s own MM5-4 entry still
+    marked "🚩 FLAGGED" (a module doc the fixing commit didn't touch) and
+    corrected it to match, per this rotation's rule to fix a module doc that
+    contradicts current code.
+- **`83b208201`** — "Find a member's tier by membership status; let the
+  junior chip match". Touches this feature's `attendance_dashboard_service.py`
+  (used by `GET /meetings/attendance/dashboard`): replaces a direct
+  `member.membership_type` lookup with `MembershipTierService.tier_for_member`,
+  which derives the tier from the member's current status rather than the
+  legacy `membership_type` string, fixing a case where an administrative or
+  social Life member's voting-eligibility benefit was read from the wrong
+  tier. Read in full: the change operates on an already-fetched, in-memory
+  `member` row from this method's own org-scoped member query — no new
+  database query, no new client input, no auth or tenancy surface. Not a
+  security finding; a correctness fix to voting-eligibility derivation that
+  happens to live in a file this feature owns.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 11's count)
+
+Walked each endpoint file's decorators with `ast.walk` from scratch: **81
+routes total** (17 `meetings.py` + 32 `minutes.py` + 30 `minutes_records.py` +
+2 `api/public/minutes.py`), identical in count to pass 11. None of the four
+endpoint files changed in this window except `minutes.py`'s one-line addition
+noted above (`_build_response`'s new `edit_version` field, not a route
+change); every route still carries `require_permission(...)` or, for the two
+documented self-scoped exceptions (`PUT /minutes/{id}/action-items/{item_id}`
+as-assignee, and `GET /minutes/action-items/mine`), `get_current_active_user`
+plus the narrower in-handler check. `check_route_permissions.py --strict`:
+298 routes repo-wide, 0 errors/warnings. Migration chain re-validated clean at
+a single head (`82944d255c0c`, 709 revisions) — the two-head fork noted on
+PR #3962 (unrelated History-module commits) was already resolved by other
+work (PR #3967) before this pass started.
+
+### New findings
+
+**None.** Both in-scope commits either close a long-standing flagged finding
+in a way that matches this codebase's established locking/versioning pattern
+(verified at the diff level) or are a correctness fix with no auth, tenancy,
+injection or exposure surface.
+
+### Confirmed still open / still flagged, unchanged
+
+- **MM5-4 — RESOLVED** (see above). No longer carried forward as open.
+- **`minutes.view_executive` tier** (module-audit MM-3's deferred half; a
+  role that attends but doesn't edit closed-session minutes currently has no
+  way to read them without also holding `minutes.manage`) — a product/role
+  decision, not touched this pass. **FLAGGED**, unchanged.
+- **MM2-3** (app-review; `status`/`priority` free-str fields on other
+  schemas) — still flagged in `docs/app-review/meetings-minutes.md` as
+  needing per-field verification; out of this rotation's scope, already
+  explicitly deferred as a focused follow-up by the app-review track itself.
+  Not re-derived.
+- Carried-forward "looked at, not a finding" items from passes 5–11
+  (`get_stats`'s UTC-clock "this month" count, `list_waivers`'s per-waiver
+  N+1, `grant_waiver`'s unlocked find-or-create) — none of the involved files
+  changed this delta; not re-investigated beyond confirming no commit touched
+  them.
+
+`docs/KNOWN_LIMITATIONS.md`'s MM-9, MM-17, MM-19 and MM-20 entries re-read
+against current code: all four still accurate (resolved stubs). MM5-4's entry
+is also now a resolved stub (added by the fixing commit, re-verified above).
+
+### Guard tests added
+
+None by this pass. `tests/test_minutes_edit_conflict_integration.py` (added
+by `feaf1d3f4`, outside this rotation) already covers MM5-4's reintroduction
+risk and was run directly below rather than only cited.
+
+### Completion gate (pass 12)
+
+| Check                                                                                                      | Result                                              |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                              | clean (0 violations)                                |
+| `black --check app/ tests/ alembic/`                                                                       | clean (2,865 files unchanged)                       |
+| `isort --check-only app/ tests/ alembic/`                                                                  | clean                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                          | PASSED — 709 revisions, single head `82944d255c0c`  |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                          | 298 routes, 0 errors, 0 warnings                    |
+| backend tests, scope (`-k "meeting or minute or quorum or attendance_dashboard or motion or tier_lookup"`) | 1,293 passed, 1 skipped (pre-existing, `pywebpush`) |
+| `cd frontend && npm run typecheck`                                                                         | 0 errors                                            |
+| `cd frontend && npm run lint`                                                                              | 0 errors, 0 warnings (`--max-warnings 10`)          |
+| `npx vitest run src/modules/minutes`                                                                       | 456 passed (59 files)                               |
+
+No source file under this feature's scope was changed by this pass. Both
+in-scope deltas since pass 11 (the MM5-4 fix, the tier-lookup fix) were landed
+by other work and independently re-verified here at the diff level against
+all seven `CHECKLIST.md` dimensions. The diff this pass contributes is this
+findings file, `docs/app-review/meetings-minutes.md`'s MM5-4 correction, and
+`docs/security-review/PROGRESS.md` — no code change.
