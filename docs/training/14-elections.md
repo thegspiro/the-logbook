@@ -782,6 +782,16 @@ who may vote or the turnout figures. **Overrides still let members in** after
 opening — that is their purpose. The **Eligibility** tab reads the frozen
 list, so a member added after opening is not shown as getting a ballot.
 
+_(2026-11-02)_ **A member left off the roll is told the rule they still fail.**
+When they open the election in the app, the message names that rule first,
+such as a waiting period, attendance or their tier, because it would keep them
+out even without the freeze. Only a member who now passes every rule, such as
+one waived after opening, reads _"You are not on the voter roll that was
+frozen when this election opened. Contact the election administrator if you
+believe this is an error."_ The emailed-ballot link and the **Eligibility** tab
+still give the roll as the reason. Either way they cannot vote without an
+override.
+
 ### Printable Ballot PDF
 
 Running a paper vote in the room? Select **Print Blank Ballots**. It makes the

@@ -592,18 +592,27 @@ problems.
   the menu shows **Offline · 2 pending** (or however many). The count covers
   all seven kinds of item. Once you are back online with items still waiting,
   it shows **2 pending sync — retry**.
-- **Items send by themselves** when the device is back online. Training
-  submissions, RSVPs, NFC put-aways and shelf audits then report **"Synced 2
-  pending items"** (or **"Synced 1 pending item"**). Skills-test evaluations
-  report **"Synced 1 skills evaluation"**.
-- **Equipment checks and shift reports send from their own page.** They go
-  when you open an equipment check, or the **Shift Reports** tab in
-  Scheduling, with a connection. Equipment checks report **"Synced 2 queued
-  check(s)"**; shift reports **"Synced 2 offline reports"**.
+- **Items send by themselves** when the device is back online with The Logbook
+  open. Training submissions, RSVPs, NFC put-aways and shelf audits then report
+  **"Synced 2 pending items"** (or **"Synced 1 pending item"**). Shift reports
+  report **"Synced 2 offline shift reports"**, and skills-test evaluations
+  **"Synced 1 skills evaluation"**.
+- **Equipment checks send from the equipment check page** when you open it
+  with a connection, and report **"Synced 2 queued check(s)"**.
+- **In Chrome or Edge (including on Android), everything can also send in the
+  background.** The browser sends the waiting items, equipment checks with
+  their photos and skills evaluations included, once signal returns, even if
+  The Logbook is closed. If the app is open when that happens, it says
+  **"Sent 2 items saved on this device while you were offline"**. Safari on an
+  iPhone or iPad, and Firefox, do not offer this: open The Logbook with a
+  connection to send.
 - **What pending sync — retry does.** Selecting it sends training
-  submissions, RSVPs, NFC put-aways and shelf audits straight away. It does
-  not send equipment checks or shift reports: open their page instead.
-  Skills-test evaluations send by themselves.
+  submissions, RSVPs, NFC put-aways, shelf audits, shift reports and
+  skills-test evaluations straight away. For equipment checks it asks the
+  browser to send them in the background where it can, and says **"Sending 2
+  equipment checks saved on this device."** Where it cannot, it says **"2
+  equipment checks are saved on this device. Open the equipment check to send
+  them."**
 - **Only real connection failures are saved for later.** If The Logbook
   **rejects** an equipment check — a missing answer, a permission you no longer
   have, a shift already checked — you see the real error straight away.
@@ -613,8 +622,8 @@ problems.
 | Kind of item                                                     | What happens                                                                                                                                                                                                                                                                                        |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Training submission, RSVP, NFC put-away, shelf audit             | After five rejections it is deleted, and the app says so: **"1 pending item failed permanently and was discarded"**. Re-enter it by hand.                                                                                                                                                         |
-| Equipment check                                                  | After five rejections it is deleted: **"1 queued check(s) were rejected repeatedly and have been discarded"**. Re-enter it by hand.                                                                                                                                                                 |
-| Shift report                                                     | It is never deleted. It stays waiting and is tried again each time you open the **Shift Reports** tab with a connection.                                                                                                                                                                          |
+| Equipment check                                                  | After five rejections it is deleted: **"1 queued check(s) were rejected repeatedly and have been discarded"**, or, when the browser sent it in the background, **"1 queued equipment check was rejected repeatedly and has been discarded"**. Re-enter it by hand.                                  |
+| Shift report                                                     | It is never deleted. It stays waiting and is tried again on each later send. From the third refusal you see _"Shift report for [date] was not accepted: [reason] It is still saved on this device."_                                                                                                              |
 | Skills-test evaluation                                           | It is never deleted. You see **"Not accepted:"** with the test and candidate, and the reason. A red banner on the test repeats it. The scoring stays on the device until **you** choose **Discard from this device**. See [Scoring with no signal](./09-skills-testing.md#scoring-with-no-signal). |
 
 Attempts that never reached The Logbook (a dropped signal) do not count
@@ -697,8 +706,9 @@ There are two buttons, each with a confirmation:
 
 - **Send as me** (_"Send these as yours?"_) sends them under your name. Do this
   only if you saved them yourself. The device cannot tell; if another member
-  saved them, their work is recorded as yours. Equipment checks and shift
-  reports go the next time you open their page with a connection.
+  saved them, their work is recorded as yours. They are then sent like any
+  other waiting item; equipment checks go in the background where the browser
+  can, or the next time you open an equipment check with a connection.
 - **Discard** (_"Discard held items?"_) deletes them from the device for good.
   Whoever saved them is not told.
 - **Keep on hold**, in either confirmation, leaves things as they are.
@@ -1011,7 +1021,7 @@ had open.
 | Push stopped after reinstalling the app                          | Push belongs to that installation on that device. Switch it on again.                                                                                                                                                             |
 | Push is on but nothing ever arrives                              | Ask your IT manager to check the department's push keys. Keys made the wrong way are accepted by the phone but rejected by the push service, so nothing arrives and nothing looks wrong.                                         |
 | "Network error" on a page                                        | Everything that shows or changes information needs a connection. Check your Wi-Fi or mobile signal and try again.                                                                                                                |
-| Offline work did not send | Get back online, open **More**, and select **pending sync — retry**. That sends training submissions, RSVPs, NFC put-aways and shelf audits. For equipment checks, open an equipment check; for shift reports, open **Scheduling → Shift Reports**. A skills evaluation that was not accepted shows a red banner on the test with the reason. Then check the result where it belongs. Only seven kinds of item are saved offline; anything else must be re-entered. |
+| Offline work did not send | Get back online, open **More**, and select **pending sync — retry**. That sends everything except equipment checks, which it asks the browser to send in the background where it can; if it cannot, open an equipment check. A skills evaluation that was not accepted shows a red banner on the test with the reason. Then check the result where it belongs. Only seven kinds of item are saved offline; anything else must be re-entered. |
 | App icon disappeared from the home screen                        | Some phones remove app icons after a system update or storage clean-up. Install it again.                                                                                                                                        |
 | Dark mode not as expected                                        | Choose **Light**, **Dark**, **System** or **High Contrast** in **My Account → Appearance**. **System** follows your phone's setting. The choice is stored on each device separately.                                            |
 | No "new version" bar appears                                     | Open **My Account → App → Check for updates**. It answers the question directly, and reloads onto the new version if there is one.                                                                                              |

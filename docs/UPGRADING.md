@@ -625,6 +625,38 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Adopting minutes now approves their meeting, and existing meetings catch up (2026-11-03)
+
+**Adopt Minutes** now also approves the meeting the minutes record. Migration
+`6b81e95d4157` brings existing data in line: every meeting whose minutes were
+already adopted becomes **approved**, stamped with the earliest adoption's
+approver and date. Those meetings stop reading _Draft_ and can no longer be
+deleted from the meeting list. A meeting already approved keeps its own stamp,
+and minutes adopted before adoptions were stamped give their meeting no
+approver or date. See
+[Events & Meetings](training/04-events-meetings.md#submitting-and-approving-minutes).
+
+### A month partly on leave now excuses the whole month by default (2026-11-02)
+
+Training compliance has a new department rule, **Months on leave** (Training
+Admin → Compliance Reporting → Configure → **Thresholds**), for a month that a
+leave of absence or training waiver only partly covers. Migration
+`5438939506b9` sets every department to **Full month (default)**: any day of
+leave excuses the whole month. Before, a month was excused only when leave
+covered 15 or more of its days. **Members' standing can change the moment you
+upgrade:**
+
+- A member with a short leave now owes less, and may turn compliant.
+- Shift and call targets reduced for leave are now rounded down (1.6 shifts
+  owed is 1, not 2), and a target that rounds to 0 is met.
+- The two other options are **15-day rule: proportional** and **15-day rule:
+  half**. Neither is the old rule exactly, so a department that wants close to
+  the old behaviour picks the half rule. See
+  [Training](training/02-training.md#months-on-leave--the-department-rule-2026-11-02).
+
+The downgrade drops the column and returns every department to the old 15-day
+rule.
+
 ### A member's tier is found by their membership status, whatever their class (2026-11-01)
 
 Two readers still found a member's membership tier from the legacy
