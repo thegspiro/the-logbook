@@ -6,7 +6,124 @@
 #2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, PR #2981),
 2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, PR #3455),
 2026-10-24 (pass 16, PR #3635), 2026-10-27 (pass 17, PR #3766),
-2026-10-30 (pass 18, this PR)
+2026-10-30 (pass 18, PR #3848), 2026-11-03 (pass 19, this PR)
+
+## Pass 19 (2026-11-03) — 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (confirmed via
+`ListAgents` — no reachable agents). `list_pull_requests` (state=open)
+showed exactly one open PR with a `claude/security-review-` head branch:
+PR #3962 (Feature 22, Grants & fundraising, pass 13). It carried the base
+migration-fork CI red that landed on `main` between PRs #3965/#3966 (two
+independent merge revisions each rejoining the same fork, stranding two
+heads once `main`'s History-tables migration landed on top of one of
+them) — not caused by that PR's own diff (two docs files). The fix,
+PR #3967, had already merged by the time this iteration started (single
+head `82944d255c0c`, confirmed by `validate_migrations.py --strict`
+below); merging `main` into PR #3962 brought it back to a fully green,
+`mergeable_state: clean` run across all 24 checks, so this iteration
+merged it rather than opening a second tend cycle for a conflict that no
+longer existed. Its own commit had already recorded row 22 ✅ and cleared
+the Open PR note, so nothing further rides along here beyond that
+already-committed state. Row 23 (Medical supplies) confirmed as the first
+`⬜` row in `PROGRESS.md`'s rotation table on a freshly fetched `main`
+(head `6b816dfb`, carrying PR #3962's merge).
+
+**Scope check — re-enumerated by AST, not diffed.** **29 routes** in
+`medical_supplies.py`, unchanged from pass 18's 29 (re-derived by walking
+the module's route decorators directly; all 29 carry
+`Depends(require_permission(...))`, individually confirmed by the same
+walk rather than a regex count).
+
+`git log 3ec282223..origin/main` (pass 18's own merge commit) restricted
+to this feature's files (`medical_supplies.py`, `inventory_service.py`,
+`equipment_check_service.py`, `models/inventory.py`, `schemas/inventory.py`,
+`schemas/equipment_check.py`, `app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`, `scheduled_tasks.py`) found
+**six** non-merge commits, all outside this feature's own domain code —
+`medical_supplies.py`, `models/inventory.py`, `schemas/inventory.py`,
+`schemas/equipment_check.py`, `app/mcp/tools/medical_supplies.py` and the
+frontend module itself carry **zero** changes in this window:
+
+- `66d878e14` — moves `InventoryService.overdue_checkout_clause` from a
+  `@staticmethod` to a module-level function in `inventory_service.py` (so
+  a test that mocks the service class still exercises real SQL). The WHERE
+  clause itself — `organization_id` filter plus the overdue predicate — is
+  byte-identical before and after; purely a call-site refactor, re-read to
+  confirm no clause changed.
+- `7f0ef2c1d` — same file, adds `InventoryService.item_ids_in_low_stock_categories`
+  for a dashboard-tile deep link (DASH-37). Filters `organization_id` and
+  `active` directly (`inventory_service.py:5398-5428`) — correctly scoped —
+  but wired only into `api/v1/endpoints/inventory.py`'s `low_stock_categories`
+  query param (`grep -rn low_stock_categories backend/app/api/v1/endpoints/`:
+  3 hits, all in `inventory.py`, 0 in `medical_supplies.py`). That endpoint
+  belongs to Feature 11 (Inventory, already ✅), not this feature; noted here
+  only because it shares `InventoryService`, and because `medical_supplies.py`
+  does not call it, this feature's own surface is unaffected.
+- `540fabea7` (CRON-41, app-review) — `run_inventory_overdue_alerts` in
+  `scheduled_tasks.py` now dedupes its "Overdue Equipment" email via a
+  `NotificationLog` sent-log keyed on the department's calendar day, instead
+  of resending on every scheduler restart. This task emails members holding
+  _any_ overdue `CheckOutRecord`, which includes medical-item checkouts
+  (`assign_item_to_user`/`checkout_item`, MSUP-23 pass 9) alongside gear —
+  read in full: the dedup query (`_members_emailed_since`) filters
+  `NotificationLog.organization_id`, and the record-after-send ordering
+  matches Pitfall #36 (at-least-once; a duplicate reminder is a nuisance,
+  not a correctness defect). The commit's own message records the
+  "low-stock, supply-expiry … digests have the same gap" as a separate,
+  already-tracked open item (CRON-42) under the scheduled-tasks feature's
+  own prefix, not this one — confirmed no medical-expiry-digest code is
+  touched by this diff (`git show 540fabea7 -- backend/app/services/scheduled_tasks.py`
+  has zero lines matching `medical|expir|supply`).
+- `c45f5d8b5` (evaluations email notices) and `4cb2afc77` (Zeffy donations
+  integration, Feature 22's own pass-13 delta, already reviewed) — both
+  touch `scheduled_tasks.py` for unrelated domains (shift evaluations,
+  fundraising payments); neither diff mentions a medical-supplies symbol.
+
+No other commit in range touches any of this feature's files. This is a
+true near-zero-delta pass on the medical-supplies domain itself — the one
+item worth recording (`item_ids_in_low_stock_categories`) belongs to a
+different, already-reviewed feature and isn't reachable from this one.
+
+**Re-verified directly against current code, not re-cited from pass 18's
+prose:**
+
+- **Tenant isolation (§3):** `InventoryService.find_lots_by_number` (backs
+  `GET /lots/search`) still filters `InventoryLot.organization_id` and still
+  builds its pattern with `like_pattern(...)`/`escape=LIKE_ESCAPE_CHAR` — file
+  unchanged since pass 3.
+- **CSV safety (§4):** all three CSV endpoints still construct
+  `SafeCsvWriter(...)` — file unchanged since pass 17.
+- **Recall routes:** `GET /recalls`, `POST /recalls`,
+  `POST /recalls/{recall_id}/lift` unchanged since pass 17 — same
+  permissions, same `with_for_update()` locking, same migration.
+- **MCP tools:** all four tools in `app/mcp/tools/medical_supplies.py`
+  unchanged, still read-only, still gated and org-scoped.
+- **Frontend (HIPAA/PII, §5):** `frontend/src/utils/apiCache.ts`'s
+  `UNCACHEABLE_PREFIXES` still excludes `/medical-screening/` and not
+  `/medical-supplies/` — unchanged, and still the correct split (department
+  stock data here vs. member PHI there). `grep -rn "window\.\(confirm\|alert\|prompt\)("`
+  over `frontend/src/modules/medical-supplies/`: 0 hits.
+
+**0 new findings.** MSUP-1 through MSUP-27 all re-verified intact (no code
+changed in the domain's own files). MSUP-4 and MSUP-11 remain the only open
+items, both owner-accepted (2026-10-05, `docs/KNOWN_LIMITATIONS.md`) and
+unchanged at their current signatures.
+
+### Completion gate (pass 19)
+
+| Check                                                                                  | Result                                                                 |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                          | ✅ clean                                                               |
+| `black --check app/ tests/ alembic/`                                                   | ✅ clean — 2865 files unchanged                                        |
+| `isort --check-only app/ tests/ alembic/`                                              | ✅ clean                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 709 revisions, single head `82944d255c0c`                           |
+| `python3.13 -m pytest tests/ -q -k "medical_supplies or medical_supply or lot_recall"` | ✅ 216 passed, 1 pre-existing skip (`pywebpush`/`py_vapid`, unrelated) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                      | ✅ 298 routes, 0 errors, 0 warnings                                    |
+| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors                                                            |
+| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                |
+| `npx vitest run src/modules/medical-supplies`                                          | ✅ 190 passed (10 files)                                               |
 
 ## Pass 18 (2026-10-30) — 0 fixed, 0 new findings (watchdog pickup)
 

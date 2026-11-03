@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3962 (Feature 22, Grants & fundraising, pass 13) merged
+2026-11-03 — the base-branch migration fork (PR #3967) had already resolved
+by the time this iteration checked, and merging `main` into the PR brought
+CI back to fully green with no conflicts, so it was merged directly rather
+than tended further. This iteration (Feature 23, Medical supplies, pass 19,
+a watchdog pickup) found a true near-zero-delta pass — 0 fixed, 0 new
+findings — and is still open as this row is written; see
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 19** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 13, PR #3962, merged), preserved for history</summary>
+
 **PR [#3962](https://github.com/thegspiro/the-logbook/pull/3962)** (branch
 `claude/security-review-grants-fundraising-p13`) — Feature 22 (Grants &
 fundraising), pass 13, a watchdog pickup. Substantial real delta this
@@ -24492,7 +24504,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                            | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ⬜     |
@@ -24511,6 +24523,33 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-03 — Feature 22 (Grants & fundraising, pass 13) merged; Feature 23 (Medical supplies, pass 19) — watchdog pickup, near-zero delta, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` ("No reachable agents"). PR #3962 (Feature 22, Grants &
+fundraising, pass 13) was found open with a stale CI-red note from a
+base-branch migration fork; that fork's fix (PR #3967) had already merged,
+so merging `main` into #3962 and re-checking came back fully green
+(`mergeable_state: clean`, all 24 checks passing) — merged directly rather
+than opening a further tend cycle. Row 22 was already `✅` from that PR's
+own commit.
+
+Row 23 (Medical supplies) was confirmed the next `⬜` row on a freshly
+fetched `main` (head `6b816dfb`, carrying #3962's merge). Re-enumerated by
+AST: 29 routes, unchanged from pass 18's 29, all gated. Diffed pass 18's
+merge (`3ec282223`) to current `main` restricted to this feature's files:
+six non-merge commits found, all touching only the shared
+`inventory_service.py`/`scheduled_tasks.py` files for other features'
+domains (a dashboard-tile deep link for the general Inventory feature, an
+overdue-checkout email dedupe fix (CRON-41) that incidentally covers
+medical-item checkouts alongside gear, an evaluations-reminder change, and
+Feature 22's own Zeffy delta) — zero commits touch `medical_supplies.py`,
+`models/inventory.py`, `schemas/inventory.py`, `app/mcp/tools/medical_supplies.py`,
+or the frontend module itself. 0 fixed, 0 new findings; MSUP-4 and MSUP-11
+remain the only open items, unchanged and owner-accepted. Full write-up:
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 19** section.
 
 ### 2026-11-02 — Feature 19 (Skills testing, pass 13) — watchdog pickup, zero backend delta, 0 new findings
 
