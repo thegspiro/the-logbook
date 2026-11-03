@@ -81,6 +81,7 @@ ONBOARDING_SETTINGS_ONLY_MODULES = [
     "communications",
     "finance",
     "grants",
+    "history",
     "hr_payroll",
     "incidents",
     "medical_screening",

@@ -48,6 +48,8 @@ _ADDED_SINCE: dict[str, set[str]] = {
     # prospective_members.view or .manage gains view_all.
     "membership_coordinator": {"prospective_members.view_all"},
     "secretary": {"prospective_members.view_all"},
+    # 02c94bb742d6, with its own backfill.
+    "historian": {"history.view", "history.manage", "history.publish"},
 }
 
 

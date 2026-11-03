@@ -44,6 +44,7 @@ import {
   Stethoscope,
   Store,
   HandCoins,
+  Landmark,
   Wallet,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
@@ -297,6 +298,22 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             icon: HandCoins,
             permission: 'fundraising.view',
             subItems: GRANTS_NAV_ITEMS.map((item) => ({ ...item, icon: HandCoins, permission: 'fundraising.view' })),
+          } as NavItem,
+        ]
+      : []),
+    // Published history is read by every signed-in member, so the entry has no
+    // permission of its own; the module switch is the gate.
+    ...(isModuleOn('history')
+      ? [
+          {
+            label: 'History',
+            path: '/history',
+            icon: Landmark,
+            subItems: [
+              { label: 'Overview', path: '/history', icon: Landmark },
+              { label: 'Past Members', path: '/history/people', icon: Landmark },
+              { label: 'Honor Roll', path: '/history/honor-roll', icon: Landmark },
+            ],
           } as NavItem,
         ]
       : []),

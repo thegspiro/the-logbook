@@ -1168,6 +1168,41 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     ],
   },
   {
+    id: 'history',
+    label: 'History',
+    description: 'The department archive: past members, the Honor Roll, titles and the clearance list.',
+    pages: [
+      { path: '/history', label: 'History home', module: 'history' },
+      { path: '/history/people', label: 'Past members', module: 'history' },
+      { path: '/history/people/new', label: 'Add a past member', permission: 'history.manage', module: 'history' },
+      {
+        path: '/history/people/:personId',
+        label: 'Past member',
+        module: 'history',
+        note: 'Members see the published view; the Historian also sees research fields, publication and clearance.',
+      },
+      {
+        path: '/history/people/:personId/edit',
+        label: 'Edit a past member',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      { path: '/history/honor-roll', label: 'Honor Roll', module: 'history' },
+      {
+        path: '/history/clearance/:requestId',
+        label: 'Clearance review',
+        module: 'history',
+        note: 'Opens for the archive keepers, the submitter and holders of a step position on the request.',
+      },
+      {
+        path: '/history/settings',
+        label: 'Titles and clearance list',
+        anyPermission: ['history.manage', 'settings.manage'],
+        module: 'history',
+      },
+    ],
+  },
+  {
     id: 'grants',
     label: 'Grants & fundraising',
     description: 'Grant applications, campaigns, donors and donations.',
