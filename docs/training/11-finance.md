@@ -296,7 +296,7 @@ Budget categories organize your department's spending into logical groups. Categ
 
 To change a category later, select the pencil beside it.
 
-![Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it](./images/11-03-budget-categories.png)
+![Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it; Public Education is marked Inactive and its sub-category Smoke alarm giveaway Inactive through Public Education](./images/11-03-budget-categories.png)
 
 ### Category Hierarchy
 
@@ -361,6 +361,10 @@ sub-categories are listed as **Inactive through** the parent, their lines take
 no new charges, no new budget line or proposal can name them, and **Start from
 last year** leaves their lines behind. Reactivating the parent reopens them. A
 category nothing uses is deleted outright.
+
+![The Delete category confirmation for Fuel: if budget lines, budget requests or approval chains use it, it is deactivated instead of deleted, they keep it and new budget lines cannot choose it; otherwise it is deleted, which cannot be undone](./images/11-27-category-delete-confirm.png)
+
+![Editing the draft purchase request Smoke alarms for the spring giveaway: its Budget picker still shows the line it was saved on, Smoke alarm giveaway, marked (inactive category) because its parent Public Education was deactivated](./images/11-28-budget-picker-inactive.png)
 
 ### Edge Cases
 
@@ -707,6 +711,8 @@ The chain with the highest score wins. If no chain matches at all (or the matchi
 7. Tick **Default chain (preferred when no more specific chain matches)** if this should be the fallback for its request type.
 8. Select **Create Chain**.
 
+![The New Chain form filled in with Min Amount 5000 and Max Amount 500, the note that both ends are included, and the message The minimum amount cannot be above the maximum amount; nothing is created](./images/11-29-approval-chain-range-refused.png)
+
 A new chain has no steps. Until you add some, the chain card says _"No steps
 yet. Requests routed to this chain get no approval steps."_ — and a request
 routed to it is decided by hand from its detail page (see
@@ -1027,7 +1033,9 @@ Purchase request numbers are made automatically in the form **PR-YYYY-0001**. YY
 
 4. The request is saved as a **Draft** on its own as you type, as soon as it has a title, a fiscal year and an amount above zero; the line under the form shows _"Draft saved at …"_. **Save Draft** saves the latest entries and opens the request, where you submit it for approval. **Close** leaves the form with the draft kept, and asks first only when what you have entered cannot be saved yet. **Discard draft** withdraws a saved draft. A draft you reopen from the list keeps saving as you edit; once a request is submitted, changes are saved with **Save Changes**.
 
-![Create Purchase Request form with budget, vendor, and priority fields](./images/11-08-create-purchase-request.png)
+![Leave without saving? over a new purchase request with only a description typed: a draft is saved once the request has a title and an amount, so what has been entered so far will be lost, with Keep editing and Leave](./images/11-30-purchase-request-leave-prompt.png)
+
+![New Purchase Request with a title, vendor and estimated amount filled in, priority and fiscal year chosen, the Budget picker, Who will approve this naming the chain's two steps, and under the form the line Draft saved at with Discard draft, Close and Save Draft](./images/11-08-create-purchase-request.png)
 
 ### Submitting a Purchase Request
 
@@ -1521,6 +1529,8 @@ records what is owed against the dues and the rest as a **donation** from the
 member, under no campaign, in **Fundraising**. A donor record is created for the
 member if they do not have one. If their dues are already paid, the whole amount
 is the donation. Choose **Change the amount** to go back instead.
+
+![Record the extra as a donation? after entering $150.00 for a member who still owes less: the amount over what they owe is recorded as a donation from them and the rest against their dues, with Change the amount and Record with donation](./images/11-31-dues-overpayment-donation.png)
 
 Every payment is recorded as its own entry in the member's payment history. The
 amount paid shown on the dues record is the **sum of that history**, so if the

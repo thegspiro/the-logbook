@@ -541,6 +541,8 @@ Open the member's profile. Roles that can manage elections see a **Voting
 eligibility** card. It shows the **Member type**, when they **Became this
 type**, and whether the wait holds them back, for each kind of meeting.
 
+![The Voting eligibility card on a member's profile: Member type, Became this type and the outcome for each kind of meeting, then Override for this member with Count the wait from, Waive the waiting period, Reason and Save override](./images/14-32-voting-eligibility-card.png)
+
 1. Set **Count the wait from** to the date they really became that type. Or
    tick **Waive the waiting period**.
 2. Enter a **Reason**. It is required.
@@ -726,6 +728,10 @@ job is reported as interrupted after 30 minutes and you can send again. Ballot
 links are now saved before any mail goes out, so a restart can no longer leave
 members holding a link that answers "Invalid voting token". Sending again does
 not cancel the links already in inboxes.
+
+![The Send Ballot Emails window while the send runs: the note that a large roster can take a few minutes and that the send carries on if you leave the page, and the button reading Sending](./images/14-33-ballot-send-progress.png)
+
+![The Send Ballot Emails window refusing a second send: Ballot emails for this election are already being sent. Wait for that send to finish before sending again.](./images/14-34-ballot-send-refused.png)
 
 **Things to know:**
 
@@ -1383,6 +1389,8 @@ top.
   what differs. Turning it off asks first: **Discard annual rules** or **Keep
   them**. Elections already created keep their rules.
 
+![Election Settings on Voter Eligibility with Annual meeting chosen: the Use different rules at the annual meeting switch, off, and the line saying the annual meeting uses the regular business meeting rules, above the membership tier rules](./images/14-31-voter-eligibility-annual.png)
+
 Each set has these settings:
 
 | Setting                                        | Default                          | What it does                                                                                                                                                   |
@@ -1450,7 +1458,7 @@ Choose a draft election and select **Send Test Ballot** to preview voting. See
 Shows the integrity safeguards in force, such as vote seals and the one-vote
 rule.
 
-![Election Settings open on Proxy Voting, with the Features, Test Ballot and Security sections beside it](./images/14-16-election-settings.png)
+![Election Settings open on Proxy Voting, with all six sections across the top: Proxy Voting, Voter Eligibility, Features, Defaults, Test Ballot and Security](./images/14-16-election-settings.png)
 
 ---
 

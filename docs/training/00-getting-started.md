@@ -120,7 +120,7 @@ from your phone, or select **Use your passkey**, after Google or Microsoft lets
 you in. You can use one of your recovery codes instead. You have 5 minutes to
 enter it; after that, start again.
 
-![The login page's two-factor step — the 6-digit code field and the Use a recovery code link](./images/00-23-login-two-factor.png)
+![The login page's second step for a member with both a passkey and an authenticator app: Use your passkey above the 6-digit code field, and the Use a recovery code link](./images/00-23-login-two-factor.png)
 
 **If it doesn't work,** you come back to the sign-in page with a message such
 as _"No account matches that email. Contact your administrator for access."_
@@ -454,6 +454,8 @@ get one email and a banner across the app counting the days down, and you can
 keep working. When the days run out you can reach only the setup screens until
 you enroll. The 14 days start again if you are later promoted into such a role.
 
+![The Dashboard as an assistant chief, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link](./images/00-36-mfa-grace-banner.png)
+
 **Some actions ask you to prove it is you.** Exporting the audit or error log,
 changing roles, positions, security or integration settings, resetting another
 administrator's password or two-factor, and deleting or anonymizing a member
@@ -465,6 +467,10 @@ stays proven for 10 minutes on that browser, so a second sensitive action right
 after does not ask again. If you sign in only through a provider such as Google
 and have no password, authenticator or passkey, the box tells you to set up
 two-step sign-in first.
+
+![The Confirm it's you box over Settings → Authentication → MFA Policy, opened by switching Allow passkeys: This action needs a recent confirmation, the Authenticator code field, and Cancel / Confirm](./images/00-34-step-up-code.png)
+
+![The Confirm it's you box with a Password field over the Reset MFA dialog, shown to an assistant chief who has not set up two-step sign-in yet, after selecting Reset MFA for a member](./images/00-35-step-up-password.png)
 
 ![My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture](./images/00-31-mfa-recovery-codes.png)
 
@@ -494,6 +500,8 @@ You can have up to three passkeys. Each one shows whether it **Syncs across
 your devices** or is for **This device only**, when it was added, and when it
 was last used. Adding a passkey when you already have a second step asks you
 to prove it is you first.
+
+![My Account, Security tab, just after adding a passkey: the Passkeys card lists My phone (Syncs across your devices, and the date it was added) with its bin icon, then 10 recovery codes left and Generate new recovery codes, above the Authenticator app card](./images/00-33-passkeys-card.png)
 
 **Signing in with it.** After your password, the sign-in page shows **Use
 your passkey**. Select it and confirm on your device. If you also use an
