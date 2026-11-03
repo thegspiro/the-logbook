@@ -252,7 +252,8 @@ A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens 
 | --------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
 | `/prospective-members`                        | Prospective Members Pipeline | `prospective_members.manage`                         |
 | `/prospective-members/settings`               | Pipeline Settings            | `prospective_members.manage`                         |
-| `/prospective-members/:applicantId/interview` | Applicant Interview          | `prospective_members.manage`                         |
+| `/prospective-members/:applicantId/interview` | Applicant Interview          | Authenticated                                        |
+| `/prospective-members/my-applicants`          | My Applicants                | Authenticated                                        |
 | `/prospective-members/sign-offs`              | Sign-offs                    | Authenticated                                        |
 | `/application-status/:token`                  | Public Application Status    | None (token-based; see the public-routes note above) |
 | `/application-form/:token`                    | Applicant Follow-up Form     | None (token-based; see the public-routes note above) |
@@ -405,7 +406,7 @@ A missing or unknown `?tab=` opens Create Event.
 | `/training/programs`                  | Training Programs                         | Authenticated     |
 | `/training/programs/:programId`       | Program Detail                            | Authenticated     |
 | `/training/cohorts`                   | Course Cohorts                            | `training.manage` |
-| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | `training.manage` |
+| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | Authenticated     |
 | `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)          | Authenticated     |
 | `/training/my-progress/:enrollmentId` | My Program Progress                       | Authenticated     |
 | `/training/approve/:token`            | Training Approval (officer credit review) | `training.manage` |
@@ -420,6 +421,14 @@ A missing or unknown `?tab=` opens Create Event.
 > approval's organization. The link had no route before this, so the email
 > bounced officers to the dashboard. An expired link is replaced by reopening the
 > event's attendance and finalizing it again.
+
+> **`/training/cohorts/:cohortId` is open to a cohort's own roster**
+> _(2026-11-01)_. A member reaches it from **My classes** on My Training and sees
+> the class timeline only — no roster, classmates, progress or officer actions.
+> The API is the authority: it returns 404 to a member who is not on the roster
+> and `members: []` with no attendance counts to one who is, so the route gates
+> on sign-in and the Training module only. A `training.manage` holder gets the
+> full management page at the same URL.
 
 > **`/training/my-progress/:enrollmentId` is where every training notification
 > now lands** _(2026-08-09)_. All eight `action_url`s previously pointed at
@@ -743,27 +752,29 @@ only from a row of cards on the member-facing `/scheduling` page — so an
 administrator opened the schedule to find the settings, and the Administration
 section had no scheduling entry at all. That row is gone.
 
-| URL                                            | Page                           | Permission          |
-| ---------------------------------------------- | ------------------------------ | ------------------- |
-| `/scheduling/admin`                            | Scheduling Administration hub  | `scheduling.manage` |
-| `/scheduling/admin/planning`                   | Shift Planning — staffing gaps | `scheduling.manage` |
-| `/scheduling/admin/planning/templates`         | Shift Templates Management     | `scheduling.manage` |
-| `/scheduling/admin/planning/patterns`          | Shift Pattern Management       | `scheduling.manage` |
-| `/scheduling/admin/closeout`                   | Shift Close-Out — the queue    | `scheduling.manage` |
-| `/scheduling/admin/history-import`             | Shift History Import           | `scheduling.manage` |
-| `/scheduling/admin/history-import/:importId`   | Shift History Import — review  | `scheduling.manage` |
-| `/scheduling/admin/reports`                    | Scheduling Reports             | `scheduling.manage` |
-| `/scheduling/admin/platoons`                   | Platoon Management             | `scheduling.manage` |
-| `/scheduling/admin/positions`                  | Position Qualification Roster  | `scheduling.manage` |
-| `/scheduling/admin/settings`                   | `?tab=` → the section's route  | `scheduling.manage` |
-| `/scheduling/admin/settings/general`           | Scheduling Settings — General  | `scheduling.manage` |
-| `/scheduling/admin/settings/apparatus`         | Settings — Apparatus           | `scheduling.manage` |
-| `/scheduling/admin/settings/platoons`          | Settings — Platoons            | `scheduling.manage` |
-| `/scheduling/admin/settings/eligibility`       | Settings — Eligibility         | `scheduling.manage` |
-| `/scheduling/admin/settings/notifications`     | Settings — Notifications       | `scheduling.manage` |
-| `/scheduling/admin/settings/shift-reports`     | Settings — Shift Reports       | `scheduling.manage` |
-| `/scheduling/admin/settings/outside-apparatus` | Settings — Outside Apparatus   | `scheduling.manage` |
-| `/scheduling/checkin`                          | Shift Check-In                 | Authenticated       |
+| URL                                                                  | Page                           | Permission          |
+| -------------------------------------------------------------------- | ------------------------------ | ------------------- |
+| `/scheduling/admin`                                                  | Scheduling Administration hub  | `scheduling.manage` |
+| `/scheduling/admin/planning`                                         | Shift Planning — staffing gaps | `scheduling.manage` |
+| `/scheduling/admin/planning/templates`                               | Shift Templates Management     | `scheduling.manage` |
+| `/scheduling/admin/planning/patterns`                                | Shift Pattern Management       | `scheduling.manage` |
+| `/scheduling/admin/closeout`                                         | Shift Close-Out — the queue    | `scheduling.manage` |
+| `/scheduling/admin/history-import`                                   | Shift History Import           | `scheduling.manage` |
+| `/scheduling/admin/history-import/:importId`                         | Shift History Import — review  | `scheduling.manage` |
+| `/scheduling/admin/reports`                                          | Scheduling Reports             | `scheduling.manage` |
+| `/scheduling/admin/platoons`                                         | Platoon Management             | `scheduling.manage` |
+| `/scheduling/admin/positions`                                        | Position Qualification Roster  | `scheduling.manage` |
+| `/scheduling/admin/settings`                                         | `?tab=` → the section's route  | `scheduling.manage` |
+| `/scheduling/admin/settings/general`                                 | Scheduling Settings — General  | `scheduling.manage` |
+| `/scheduling/admin/settings/apparatus`                               | Settings — Apparatus           | `scheduling.manage` |
+| `/scheduling/admin/settings/platoons`                                | Settings — Platoons            | `scheduling.manage` |
+| `/scheduling/admin/settings/eligibility`                             | Settings — Eligibility         | `scheduling.manage` |
+| `/scheduling/admin/settings/notifications`                           | Settings — Notifications       | `scheduling.manage` |
+| `/scheduling/admin/settings/shift-reports`                           | Settings — Shift Reports       | `scheduling.manage` |
+| `/scheduling/admin/settings/outside-apparatus`                       | Settings — Outside Apparatus   | `scheduling.manage` |
+| `/scheduling/checkin`                                                | Shift Check-In                 | Authenticated       |
+| `/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey` | Shift Evaluation               | Authenticated       |
+| `/scheduling/outside-shifts/:entryId/evaluations/:scopeKey`          | Outside Shift Evaluation       | Authenticated       |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
@@ -1191,6 +1202,23 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ---
 
+## History _(2026-11-03)_
+
+| URL                              | Page                      | Permission                            |
+| -------------------------------- | ------------------------- | ------------------------------------- |
+| `/history`                       | History home              | Authenticated                         |
+| `/history/people`                | Past members              | Authenticated                         |
+| `/history/people/new`            | Add a past member         | `history.manage`                      |
+| `/history/people/:personId`      | Past member               | Authenticated                         |
+| `/history/people/:personId/edit` | Edit a past member        | `history.manage`                      |
+| `/history/honor-roll`            | Honor Roll                | Authenticated                         |
+| `/history/clearance/:requestId`  | Clearance review          | Authenticated                         |
+| `/history/settings`              | Titles and clearance list | `history.manage` or `settings.manage` |
+
+> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships.
+
+---
+
 ## Compliance Requirements Configuration (2026-03-13)
 
 | URL                           | Page                           | Permission                                   |
@@ -1266,10 +1294,17 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Reports
 
-| URL              | Page          | Permission     |
-| ---------------- | ------------- | -------------- |
-| `/reports`       | Reports       | `reports.view` |
-| `/reports/saved` | Saved Reports | `reports.view` |
+| URL                                          | Page                        | Permission                                                            |
+| -------------------------------------------- | --------------------------- | --------------------------------------------------------------------- |
+| `/reports`                                   | Reports                     | `reports.view`                                                        |
+| `/reports/saved`                             | Saved Reports               | `reports.view`                                                        |
+| `/reports/evaluations`                       | Member Evaluations (setup)  | `evaluations.configure` or `evaluations.manage`                       |
+| `/reports/evaluations/templates/:templateId` | Evaluation Template Builder | `evaluations.configure`                                               |
+| `/reports/evaluations/conduct`               | Evaluations                 | `evaluations.conduct`, `evaluations.view_all` or `evaluations.manage` |
+| `/reports/evaluations/mine`                  | My Evaluations              | Authenticated                                                         |
+| `/reports/evaluations/:evaluationId`         | Evaluation                  | Authenticated                                                         |
+
+> **Member Evaluations** _(added 2026-10-31)_. Templates for each member class and status (sections, evaluation tools with behavior descriptions, data blocks with scoring rules, rank-triggered officer sections, and a forward-only workflow with deadlines) and the review periods they are completed for. Drafting, the data snapshot, the self-evaluation and evaluator parts and calibration _(added 2026-11-01)_ run from **Evaluations**; a member reads their own on **My Evaluations**, with their figures for the current period measured live. An evaluation's own page is open to any signed-in member because the server decides access: it admits only the evaluation's member, its evaluator, approvers at an open step and holders of the view-all or manage grants, and answers anyone else as not found. Signing, the final PDF, emails, bulk drafting, amendment, the member's response and calibration flags shipped 2026-11-02.
 
 ---
 
@@ -1391,6 +1426,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/grants/donations/new`          | Record Donation     | `fundraising.manage` |
 | `/grants/pledges`                | Pledges             | `fundraising.view`   |
 | `/grants/events`                 | Fundraising Events  | `fundraising.view`   |
+| `/grants/zeffy`                  | Zeffy               | `fundraising.view`   |
 | `/grants/reports`                | Fundraising Reports | `fundraising.view`   |
 
 ---
@@ -1545,22 +1581,23 @@ A missing or unknown `?tab=` opens Overview.
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                     | Prints                  | Permission                                                     |
-| --------------------------------------- | ----------------------- | -------------------------------------------------------------- |
-| `/members/print-labels`                 | Member labels           | `members.manage` **OR** `members.manage_id_cards`              |
-| `/members/print-id-cards`               | Member ID cards         | `members.manage` **OR** `members.manage_id_cards`              |
-| `/members/:userId/id-card`              | Member ID card          | Authenticated                                                  |
-| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`                           |
-| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view` **OR** `prospective_members.manage` |
-| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                                             |
-| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                                             |
-| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`                     |
-| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage`                   |
-| `/training/print/member`                | Member training history | Authenticated                                                  |
-| `/training/print/program`               | Training program        | Authenticated                                                  |
-| `/training/print/compliance`            | Compliance matrix       | `training.manage`                                              |
-| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                                  |
-| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                                  |
+| URL                                     | Prints                  | Permission                                        |
+| --------------------------------------- | ----------------------- | ------------------------------------------------- |
+| `/members/print-labels`                 | Member labels           | `members.manage` **OR** `members.manage_id_cards` |
+| `/members/print-id-cards`               | Member ID cards         | `members.manage` **OR** `members.manage_id_cards` |
+| `/members/:userId/id-card`              | Member ID card          | Authenticated                                     |
+| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`              |
+| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view_all`                    |
+| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                                |
+| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                                |
+| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`        |
+| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage`      |
+| `/training/print/member`                | Member training history | Authenticated                                     |
+| `/training/print/program`               | Training program        | Authenticated                                     |
+| `/training/print/compliance`            | Compliance matrix       | `training.manage`                                 |
+| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                     |
+| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                     |
+| `/scheduling/shift-evaluations/print`   | Shift evaluation        | Authenticated                                     |
 
 ---
 
@@ -1723,6 +1760,8 @@ the click.
 | ------------------------------- | ---------------------------- | ---------------------------- |
 | `/prospective-members`          | Prospective Members Pipeline | `prospective_members.manage` |
 | `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage` |
+
+> **My Applicants (`/prospective-members/my-applicants`) and the Interview page** _(added 2026-10-31)_. A member assigned to an applicant as case manager or interviewer (`prospect_assignments`) reaches them here, and the Interview page is open to them for that applicant. Authenticated with the module on, and no permission beyond it: an assigned board member or trustee holds no `prospective_members` access, and the server admits the caller per applicant — `prospective_members.view_all`, or an assignment to that applicant — answering 404 otherwise. The menu offers My Applicants only to a member who has an assignment.
 
 > **Sign-offs (`/prospective-members/sign-offs`)** _(added 2026-09-28)_. Where the officers a Multi-Signer Approval stage names (the Chief, the President) approve an applicant. Authenticated with the module on, and no permission beyond it: those officers rarely hold `prospective_members` access, and `GET /prospective-members/my-sign-offs` lists only stages asking for a role the caller holds — by applicant name and stage, not their record. Conversion refuses until every required stage is complete.
 

@@ -35,7 +35,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
-import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
+import { shiftCompletionService, shiftEvaluationService, trainingModuleConfigService } from '../../services/api';
+import { ShiftEvaluationStatusLine } from '../../components/training/ShiftEvaluationStatusLine';
 import { organizationService } from '../../services/api';
 import { offersShiftSignoffs } from '../../stores/practicalSkillsStore';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -50,6 +51,7 @@ import type {
   ShiftCompletionReportCreate,
   ShiftCompletionReportUpdate,
   ShiftCrewMember,
+  ShiftEvaluationRoster,
   TrainingModuleConfig,
   TraineeShiftStats,
   OfficerShiftAnalytics,
@@ -76,17 +78,13 @@ import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/
 import { getErrorMessage } from '../../utils/errorHandling';
 import { blankToNull } from '../../utils/formValues';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
-import {
-  enqueueShiftReport,
-  listOwnPendingReports,
-  dequeueShiftReport,
-  pendingReportCount,
-} from '../../utils/shiftReportOfflineQueue';
-import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
+import { enqueueShiftReport, pendingReportCount } from '../../utils/shiftReportOfflineQueue';
+import { SHIFT_REPORTS_SYNCED_EVENT } from '../../utils/shiftReportSync';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
 import { attributionName } from '../../utils/memberName';
+import { evaluationAverageLabel, formatEvaluationAverage } from '../../utils/shiftEvaluations';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -165,6 +163,9 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Batch create state
   const [crewMembers, setCrewMembers] = useState<ShiftCrewMember[]>([]);
+  // Who on the selected shift needs a shift evaluation; null until loaded or
+  // when the department has none to ask for.
+  const [evaluationRoster, setEvaluationRoster] = useState<ShiftEvaluationRoster | null>(null);
   // Department rule: only each shift's assigned officer files its reports.
   // The server enforces it; this only keeps the form from offering shifts the
   // viewer would be refused on.
@@ -242,8 +243,33 @@ export const ShiftReportsTab: React.FC = () => {
     };
   }, [canManage, linkedShiftId, userId]);
 
+  // Whether the department's reviewer role makes this member a reviewer
+  // without training.manage (2026-10-31). The server decides: it depends on
+  // the chosen role and the member's positions and rank.
+  const [reviewsByRole, setReviewsByRole] = useState(false);
+  // The deep link is honoured once, on arrival, not on every later change.
+  const [arrivalView] = useState(() => searchParams.get('view'));
+  useEffect(() => {
+    if (canManage) return;
+    let cancelled = false;
+    shiftCompletionService
+      .getReviewAccess()
+      .then((access) => {
+        if (cancelled || !access.by_role) return;
+        setReviewsByRole(true);
+        if (arrivalView === 'pending-review' || arrivalView === 'flagged') setViewMode(arrivalView);
+      })
+      .catch(() => {
+        /* no review views; the server refuses them anyway */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, arrivalView]);
+
+  const showDraftsSwitch = filesAsShiftOfficer || draftBadgeCount > 0 || viewMode === 'drafts';
   // Shown the officer's switch only when there is something behind it.
-  const showOfficerSwitch = !canManage && (filesAsShiftOfficer || draftBadgeCount > 0 || viewMode === 'drafts');
+  const showOfficerSwitch = !canManage && (showDraftsSwitch || reviewsByRole);
 
   // Load config for visibility and rating settings
   useEffect(() => {
@@ -347,6 +373,13 @@ export const ShiftReportsTab: React.FC = () => {
         toast.error('Failed to load crew members');
       } finally {
         setLoadingCrew(false);
+      }
+      // Loaded on its own so a failure here leaves the crew list working; the
+      // close-out check still names any evaluation that is missing.
+      try {
+        setEvaluationRoster(await shiftEvaluationService.getRoster(shiftId));
+      } catch {
+        setEvaluationRoster(null);
       }
     },
     [userId]
@@ -511,33 +544,17 @@ export const ShiftReportsTab: React.FC = () => {
     }
   }, [form.shift_id, crewMembers.length, userId]);
 
-  // Sync offline queue when connectivity returns
+  // Queued reports are sent by the app-wide sync engine (shiftReportSync.ts),
+  // so they go on reconnect whatever page is open. This screen only refreshes
+  // its list and count when that happens.
   useEffect(() => {
-    if (!isOnline) return;
-    const syncQueue = async () => {
-      // Only this member's own reports go out under their session (FE3-34-5).
-      const pending = await listOwnPendingReports();
-      if (pending.length === 0) return;
-      let synced = 0;
-      for (const entry of pending) {
-        // Asked again per entry: the member can change while earlier ones send.
-        if (!isOwnedByCurrentMember(entry)) continue;
-        try {
-          await shiftCompletionService.batchCreateReports(entry.payload);
-          await dequeueShiftReport(entry.id);
-          synced++;
-        } catch {
-          // Will retry next time connectivity is restored
-        }
-      }
-      if (synced > 0) {
-        toast.success(`Synced ${synced} offline report${synced !== 1 ? 's' : ''}`);
-        void loadReports();
-      }
-      setPendingOfflineCount(await pendingReportCount());
+    const handleSynced = () => {
+      void loadReports();
+      void pendingReportCount().then(setPendingOfflineCount);
     };
-    void syncQueue();
-  }, [isOnline, loadReports]);
+    window.addEventListener(SHIFT_REPORTS_SYNCED_EVENT, handleSynced);
+    return () => window.removeEventListener(SHIFT_REPORTS_SYNCED_EVENT, handleSynced);
+  }, [loadReports]);
 
   // Track pending offline count
   useEffect(() => {
@@ -930,7 +947,8 @@ export const ShiftReportsTab: React.FC = () => {
   const monthLabel = (month: string) => formatCalendarDate(`${month}-15`, { month: 'short' });
 
   const renderTraineeDashboard = () => {
-    if (!traineeStats || traineeStats.total_reports === 0) return null;
+    const evaluationAverages = traineeStats?.evaluation_averages ?? [];
+    if (!traineeStats || (traineeStats.total_reports === 0 && evaluationAverages.length === 0)) return null;
     const maxHours = Math.max(...traineeStats.monthly.map((m) => m.hours), 1);
     return (
       <div className="card space-y-4 p-4 sm:p-5">
@@ -962,6 +980,19 @@ export const ShiftReportsTab: React.FC = () => {
               <p className="text-theme-text-muted mt-0.5 text-xs">Avg Rating</p>
             </div>
           )}
+          {/* One per evaluation form, on its own scale — never pooled with the
+              report rating above or with another form. */}
+          {evaluationAverages.map((average) => (
+            <div
+              key={`${average.template_id ?? average.form_name}-${average.scale_max}`}
+              className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center"
+            >
+              <p className="text-2xl font-bold text-violet-700 dark:text-violet-400">
+                {formatEvaluationAverage(average)}
+              </p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">{evaluationAverageLabel(average)}</p>
+            </div>
+          ))}
         </div>
         {traineeStats.monthly.length > 1 && (
           <div>
@@ -1643,27 +1674,31 @@ export const ShiftReportsTab: React.FC = () => {
         <div className="segmented-group inline-flex items-center gap-1">
           {(
             [
-              ['my-reports', 'About me'],
-              ['drafts', 'Drafts'],
+              ['my-reports', 'About me', true],
+              ['drafts', 'Drafts', showDraftsSwitch],
+              ['pending-review', 'Review Queue', reviewsByRole],
+              ['flagged', 'Flagged', reviewsByRole],
             ] as const
-          ).map(([mode, label]) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
-                viewMode === mode
-                  ? 'bg-violet-700 text-white'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-            >
-              {label}
-              {mode === 'drafts' && draftBadgeCount > 0 && viewMode !== 'drafts' && (
-                <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
-                  {draftBadgeCount}
-                </span>
-              )}
-            </button>
-          ))}
+          )
+            .filter(([, , shown]) => shown)
+            .map(([mode, label]) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                  viewMode === mode
+                    ? 'bg-violet-700 text-white'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                {label}
+                {mode === 'drafts' && draftBadgeCount > 0 && viewMode !== 'drafts' && (
+                  <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+                    {draftBadgeCount}
+                  </span>
+                )}
+              </button>
+            ))}
         </div>
       )}
 
@@ -1991,18 +2026,34 @@ export const ShiftReportsTab: React.FC = () => {
                       const isSelected = selectedCrewIds.has(member.user_id);
                       const isExpanded = expandedTraineeId === member.user_id;
                       const eval_ = traineeEvals[member.user_id];
+                      // A member evaluated on a department form is evaluated on
+                      // its own page; the generic rating panel is not offered too.
+                      const memberEvaluations = (evaluationRoster?.requirements ?? []).filter(
+                        (r) => r.member_id === member.user_id
+                      );
+                      // A department shift's roster always names the shift.
+                      const rosterShiftId = evaluationRoster?.shift_id;
+                      const evaluationLines = memberEvaluations.length > 0 && rosterShiftId && (
+                        <div className="space-y-2 px-4 pb-3">
+                          {memberEvaluations.map((r) => (
+                            <ShiftEvaluationStatusLine key={r.scope_key} shiftId={rosterShiftId} requirement={r} />
+                          ))}
+                        </div>
+                      );
 
                       if (isReported) {
+                        // The report is on file, but a required evaluation is
+                        // not covered by it, so its line stays reachable.
                         return (
-                          <div
-                            key={member.user_id}
-                            className="bg-theme-surface-hover flex items-center gap-3 rounded-lg px-4 py-3 opacity-60"
-                          >
-                            <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-600" />
-                            <div className="min-w-0 flex-1">
-                              <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
-                              <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>
+                          <div key={member.user_id} className="bg-theme-surface-hover rounded-lg">
+                            <div className="flex items-center gap-3 px-4 py-3 opacity-60">
+                              <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-600" />
+                              <div className="min-w-0 flex-1">
+                                <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
+                                <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>
+                              </div>
                             </div>
+                            {evaluationLines}
                           </div>
                         );
                       }
@@ -2073,7 +2124,7 @@ export const ShiftReportsTab: React.FC = () => {
                               />
                             )}
                             {/* Expand/collapse for trainees */}
-                            {isTrainee && isSelected && (
+                            {isTrainee && isSelected && memberEvaluations.length === 0 && (
                               <button
                                 type="button"
                                 onClick={() => setExpandedTraineeId(isExpanded ? null : member.user_id)}
@@ -2085,8 +2136,10 @@ export const ShiftReportsTab: React.FC = () => {
                             )}
                           </div>
 
+                          {evaluationLines}
+
                           {/* Trainee evaluation panel */}
-                          {isTrainee && isSelected && isExpanded && (
+                          {isTrainee && isSelected && isExpanded && memberEvaluations.length === 0 && (
                             <div className="border-theme-surface-border space-y-4 border-t px-4 pt-3 pb-4">
                               {/* Per-trainee remarks */}
                               <div>

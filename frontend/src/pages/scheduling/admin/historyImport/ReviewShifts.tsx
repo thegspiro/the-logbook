@@ -58,8 +58,8 @@ const AttendanceLine: React.FC<{
   const seed = att.row_ids[0] ?? '';
   return (
     <li className="py-2">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 text-sm">
+      <div className="split-row gap-2 sm:items-start">
+        <div className="split-row-main text-sm">
           <span className="text-theme-text-primary font-medium">{memberLabel(analysis, att.member_ref)}</span>
           <span className="text-theme-text-secondary">
             {showUnit ? ` · ${attendanceUnitLabel(analysis, att)}` : ''}
@@ -88,29 +88,40 @@ const AttendanceLine: React.FC<{
             )}
           </div>
         </div>
-        {att.joined && (
-          <button
-            type="button"
-            className="btn-secondary shrink-0"
-            disabled={busy}
-            onClick={() => onSplit(att.row_ids.slice(1))}
-          >
-            Split apart
-          </button>
-        )}
-        {att.needs_confirmation && (
-          <div className="flex shrink-0 gap-2">
-            <button type="button" className="btn-primary" disabled={busy} onClick={() => onRowDecision(seed, 'accept')}>
-              Same shift
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={busy}
-              onClick={() => onRowDecision(seed, 'separate')}
-            >
-              Keep separate
-            </button>
+        {/* One aside for both, so the pair right-aligns together when the
+            row wraps rather than splitting the free space between them. */}
+        {(att.joined || att.needs_confirmation) && (
+          <div className="split-row-aside flex flex-wrap gap-2">
+            {att.joined && (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => onSplit(att.row_ids.slice(1))}
+              >
+                Split apart
+              </button>
+            )}
+            {att.needs_confirmation && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={busy}
+                  onClick={() => onRowDecision(seed, 'accept')}
+                >
+                  Same shift
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={busy}
+                  onClick={() => onRowDecision(seed, 'separate')}
+                >
+                  Keep separate
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -143,8 +154,8 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
 
   return (
     <section aria-labelledby="review-shifts-heading" className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 id="review-shifts-heading" className="text-theme-text-primary text-lg font-semibold">
             Shifts
           </h2>
@@ -154,7 +165,7 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
           </p>
         </div>
         {pending > 0 && (
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+          <label className="split-row-aside text-theme-text-secondary flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               className="form-checkbox"
@@ -177,8 +188,8 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
         <ul className="space-y-3">
           {shown.map((shift) => (
             <li key={shift.key} className="card p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+              <div className="split-row gap-2 sm:items-start">
+                <div className="split-row-main">
                   <h3 className="text-theme-text-primary font-semibold">
                     {unitLabel(analysis, 'own', shift.apparatus_id)} · {formatShortDateTime(shift.start, timezone)} –{' '}
                     {endsOnStartDay(shift, timezone)
@@ -194,7 +205,7 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
                   </p>
                 </div>
                 {shift.existing_status === ExistingShiftStatus.PENDING && (
-                  <div className="flex flex-col gap-2 sm:items-end">
+                  <div className="split-row-aside flex flex-col gap-2 sm:items-end">
                     <span className="text-theme-text-secondary text-sm">
                       {shift.existing_confidence}% match for a shift already on the schedule
                     </span>

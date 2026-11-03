@@ -313,8 +313,14 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/prospective-members/:applicantId/interview',
         label: 'Interview',
-        permission: 'prospective_members.manage',
         module: 'prospective_members',
+        note: 'A manager, or anyone assigned to the applicant; the server admits per applicant',
+      },
+      {
+        path: '/prospective-members/my-applicants',
+        label: 'My applicants',
+        module: 'prospective_members',
+        note: 'Applicants the member is assigned to as case manager or interviewer',
       },
       {
         path: '/prospective-members/sign-offs',
@@ -325,7 +331,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/prospective-members/print-labels',
         label: 'Print prospect labels',
-        anyPermission: ['prospective_members.view', 'prospective_members.manage'],
+        permission: 'prospective_members.view_all',
         module: 'prospective_members',
       },
     ],
@@ -373,12 +379,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/training/admin', label: 'Training administration', permission: 'training.manage', module: 'training' },
       { path: '/training/cohorts', label: 'Cohorts', permission: 'training.manage', module: 'training' },
-      {
-        path: '/training/cohorts/:cohortId',
-        label: 'Cohort detail',
-        permission: 'training.manage',
-        module: 'training',
-      },
+      { path: '/training/cohorts/:cohortId', label: 'Cohort detail', module: 'training' },
       { path: '/training/log-shift', label: 'Manual shift report', permission: 'training.manage', module: 'training' },
       {
         path: '/training/compliance-config',
@@ -467,6 +468,17 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/scheduling/checkin', label: 'Shift check-in', module: 'scheduling' },
       { path: '/scheduling/checkin/print', label: 'Print shift check-in', module: 'scheduling' },
       { path: '/scheduling/shift-reports/print', label: 'Print shift report', module: 'scheduling' },
+      {
+        path: '/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey',
+        label: 'Shift evaluation',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/outside-shifts/:entryId/evaluations/:scopeKey',
+        label: 'Outside shift evaluation',
+        module: 'scheduling',
+      },
+      { path: '/scheduling/shift-evaluations/print', label: 'Print shift evaluation', module: 'scheduling' },
       {
         path: '/scheduling/admin',
         label: 'Scheduling administration',
@@ -1156,6 +1168,41 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     ],
   },
   {
+    id: 'history',
+    label: 'History',
+    description: 'The department archive: past members, the Honor Roll, titles and the clearance list.',
+    pages: [
+      { path: '/history', label: 'History home', module: 'history' },
+      { path: '/history/people', label: 'Past members', module: 'history' },
+      { path: '/history/people/new', label: 'Add a past member', permission: 'history.manage', module: 'history' },
+      {
+        path: '/history/people/:personId',
+        label: 'Past member',
+        module: 'history',
+        note: 'Members see the published view; the Historian also sees research fields, publication and clearance.',
+      },
+      {
+        path: '/history/people/:personId/edit',
+        label: 'Edit a past member',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      { path: '/history/honor-roll', label: 'Honor Roll', module: 'history' },
+      {
+        path: '/history/clearance/:requestId',
+        label: 'Clearance review',
+        module: 'history',
+        note: 'Opens for the archive keepers, the submitter and holders of a step position on the request.',
+      },
+      {
+        path: '/history/settings',
+        label: 'Titles and clearance list',
+        anyPermission: ['history.manage', 'settings.manage'],
+        module: 'history',
+      },
+    ],
+  },
+  {
     id: 'grants',
     label: 'Grants & fundraising',
     description: 'Grant applications, campaigns, donors and donations.',
@@ -1194,6 +1241,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/grants/donations/new', label: 'Record donation', permission: 'fundraising.manage', module: 'grants' },
       { path: '/grants/pledges', label: 'Pledges', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/events', label: 'Fundraising events', permission: 'fundraising.view', module: 'grants' },
+      { path: '/grants/zeffy', label: 'Zeffy', permission: 'fundraising.view', module: 'grants' },
       { path: '/grants/reports', label: 'Fundraising reports', permission: 'fundraising.view', module: 'grants' },
     ],
   },
@@ -1217,6 +1265,26 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     pages: [
       { path: '/reports', label: 'Reports', permission: 'reports.view', module: 'reports' },
       { path: '/reports/saved', label: 'Saved reports', permission: 'reports.view', module: 'reports' },
+      {
+        path: '/reports/evaluations',
+        label: 'Member evaluations (setup)',
+        anyPermission: ['evaluations.configure', 'evaluations.manage'],
+        module: 'reports',
+      },
+      {
+        path: '/reports/evaluations/templates/:templateId',
+        label: 'Evaluation template builder',
+        permission: 'evaluations.configure',
+        module: 'reports',
+      },
+      {
+        path: '/reports/evaluations/conduct',
+        label: 'Evaluations',
+        anyPermission: ['evaluations.conduct', 'evaluations.view_all', 'evaluations.manage'],
+        module: 'reports',
+      },
+      { path: '/reports/evaluations/mine', label: 'My evaluations', module: 'reports' },
+      { path: '/reports/evaluations/:evaluationId', label: 'Evaluation', module: 'reports' },
       { path: '/admin/analytics', label: 'Analytics dashboard', permission: 'analytics.view' },
       { path: '/admin/platform-analytics', label: 'Platform analytics', permission: 'settings.manage' },
     ],

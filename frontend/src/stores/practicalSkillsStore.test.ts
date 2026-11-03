@@ -6,8 +6,16 @@ vi.mock('../services/api', () => ({
 }));
 
 // Import the store AFTER the mock is in place.
+import { renderHook } from '@testing-library/react';
 import { PracticalSkillsMethod } from '../constants/enums';
-import { offersShiftSignoffs, offersSkillsTesting, usePracticalSkillsStore } from './practicalSkillsStore';
+import {
+  offersShiftSignoffs,
+  offersSkillsTesting,
+  usePracticalSkillsMethod,
+  usePracticalSkillsStore,
+} from './practicalSkillsStore';
+import { useAuthStore } from './authStore';
+import type { CurrentUser } from '../types/auth';
 
 describe('practicalSkillsStore', () => {
   beforeEach(() => {
@@ -72,5 +80,36 @@ describe('practicalSkillsStore', () => {
     expect(offersShiftSignoffs(PracticalSkillsMethod.SKILLS_TESTING)).toBe(false);
     expect(offersSkillsTesting(PracticalSkillsMethod.SHIFT_SIGNOFFS)).toBe(false);
     expect(offersShiftSignoffs(PracticalSkillsMethod.SHIFT_SIGNOFFS)).toBe(true);
+  });
+});
+
+// The command palette reads the method on every page, and the server refuses
+// the setting while Training is off, so a department without Training drew a
+// 403 on each one. The palette passes the module check in as `enabled`.
+describe('usePracticalSkillsMethod', () => {
+  beforeEach(() => {
+    mockGetConfig.mockReset();
+    mockGetConfig.mockResolvedValue({ practical_skills_method: 'skills_testing' });
+    usePracticalSkillsStore.setState({ method: null, organizationId: null });
+    useAuthStore.setState({ user: { organization_id: 'org-1' } as CurrentUser });
+  });
+
+  it('does not ask when its caller says the Training module is off', async () => {
+    const { result } = renderHook(() => usePracticalSkillsMethod(false));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockGetConfig).not.toHaveBeenCalled();
+    expect(result.current).toBeNull();
+  });
+
+  it('asks by default, and once its caller says Training is on', async () => {
+    const { rerender } = renderHook(({ on }: { on: boolean }) => usePracticalSkillsMethod(on), {
+      initialProps: { on: false },
+    });
+    expect(mockGetConfig).not.toHaveBeenCalled();
+
+    rerender({ on: true });
+
+    await vi.waitFor(() => expect(mockGetConfig).toHaveBeenCalledTimes(1));
   });
 });

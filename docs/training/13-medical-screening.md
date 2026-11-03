@@ -170,7 +170,7 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 4. Select **Add Requirement**. When you edit an existing one, the button reads
    **Save Changes**.
 
-![Add screening requirement form with type, frequency, and grace period](./images/13-05-add-requirement.png)
+![The Add Screening Requirement form filled in for an annual physical: name, type, description, a 12-month frequency with its note, Applies to Positions with its explanation, and the grace period](./images/13-05-add-requirement.png)
 
 ### Editing and Deleting Requirements
 
@@ -438,11 +438,14 @@ or, when one runs out within 60 days:
 For each active requirement, The Logbook grades every current member and open
 prospect:
 
-1. **Find the latest qualifying record.** It looks at the person's records of
-   the same **screening type** with a status of **Passed**, **Completed** or
-   **Waived**. It takes the one with the latest **Completed Date**. Failed,
+1. **Find the latest result.** It looks at the person's records of the same
+   **screening type** with a status of **Passed**, **Completed**, **Waived**
+   or **Failed**. It takes the one with the latest **Completed Date**.
    Scheduled, Pending Review and Expired records are ignored.
-2. **Check the expiration date** against today's date in your department's
+2. **A Failed result is not met.** The requirement stays not met until a
+   newer Passed, Completed or Waived record is added. The member's panel shows
+   _"Failed — not cleared"_.
+3. **Otherwise, check the expiration date** against today's date in your department's
    time zone (set under **Organization Settings → Profile**):
    - Expiration date is today or later: **met**.
    - No expiration date: the record falls due by **frequency**, that many
@@ -451,7 +454,7 @@ prospect:
      graded against. With no frequency (a one-time requirement) or no Completed
      Date, it is **met** for good.
    - Expiration date has passed: **not met**.
-3. **No qualifying record:** **not met**.
+4. **No result at all:** **not met**.
 
 Which requirements apply to a member is set by
 [Role-Based Requirements](#role-based-requirements); the grace period plays no
@@ -461,9 +464,11 @@ part. See [Grace Period](#grace-period).
 
 | What happened                                 | What it means                                                          |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| A person has several records of the same type | Only the qualifying one with the latest Completed Date counts          |
-| A Passed record, then a newer Failed one      | The Failed one is ignored. The Passed one counts until it expires      |
-| A qualifying record has no Completed Date     | It is treated as the oldest, so any dated record of the same type wins |
+| A person has several records of the same type | Only the result with the latest Completed Date counts                  |
+| A Passed record, then a newer Failed one      | Not met. The older Passed record no longer counts                      |
+| A Failed record, then a newer Passed one      | Met: the newer pass clears the failure                                 |
+| Two results on the same day                   | The one entered later counts                                           |
+| A record has no Completed Date                | It is treated as the oldest, so any dated record of the same type wins |
 | A requirement is not Active                   | It is left out of compliance completely                                |
 | A record with no expiration date              | Due by the requirement's frequency; met for good if it has none        |
 | A Waived record with no expiration date       | The same: due by frequency, or met for good                            |
@@ -487,6 +492,8 @@ person. It shows:
 
 With no active requirements, the panel says so rather than reporting the person
 compliant. Each opening is recorded in the audit log.
+
+![The Compliance tab with one member's panel open: the annual physical with no expiration date of its own reading due on a date (by frequency), the fitness assessment marked Waived and expiring soon, and the two requirements with no qualifying record](./images/13-09-compliance-by-frequency-waiver.png)
 
 ---
 
@@ -521,6 +528,7 @@ When nothing is due, it reads _"No screenings expire in the next 60 days."_
 | Already expired                          | It shows as not met in the compliance list instead |
 | No expiration date and no frequency      | One-time screenings never expire                   |
 | Status Scheduled, Pending Review, Failed | They do not count toward compliance either         |
+| Passed, then a newer Failed record       | The failure is the result that counts              |
 
 ---
 
@@ -557,19 +565,25 @@ every active requirement, the same as members.
 
 ### Prospect-to-Member Transition
 
-> **Important — screenings stay with the prospect record.** When a prospect
-> becomes a member, their screening records are not moved to the new member
-> account. They do not count toward the member's compliance. Record the
-> screenings the member still needs against the member.
+Departments differ in when they screen. Some screen applicants before the
+membership vote; others bring them in as members first and screen afterwards.
+Both work:
+
+- **Screened as a prospect.** When the prospect becomes a member, their
+  screening records go with them. They count toward the new member's
+  compliance from the moment of the transfer, and the prospect's history still
+  shows them.
+- **Screened after joining.** Record the screenings against the member, as for
+  anyone else.
 
 **What if …?**
 
-| What happened                                     | What it means                                                                                |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| A prospect has no screening records               | Their detail shows 0 met out of every active requirement                                     |
-| A prospect is deleted or purged from the pipeline | Their screening records are deleted with them                                                |
-| A prospect becomes a member                       | Their records stay on the prospect and do not count for the member. Re-record what is needed |
-| You need pre-employment screenings                | Create one-time requirements for them and check each prospect's detail before they join      |
+| What happened                                     | What it means                                                                           |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| A prospect has no screening records               | Their detail shows 0 met out of every active requirement                                |
+| A prospect is deleted or purged from the pipeline | Their screening records are deleted with them                                           |
+| A prospect becomes a member                       | Their records go with them and count for the new member. Nothing needs re-recording     |
+| You need pre-employment screenings                | Create one-time requirements for them and check each prospect's detail before they join |
 
 > **Important.** Prospect screening records have the same health-information
 > protections as member records, under the same two permissions. Make sure
@@ -701,8 +715,8 @@ Three days later the results arrive. She edits the record:
 On the Compliance tab, Alex's detail shows "1 of 2 requirements met". The
 committee can see the pre-employment screening is done.
 
-When Alex becomes a member, Captain Alvarez re-records the drug screening
-against his member account, because prospect records do not carry over.
+When Alex becomes a member, the drug screening goes with the new member
+account. Captain Alvarez does not record it again.
 
 ---
 

@@ -4,12 +4,13 @@ import { DEFAULT_SETTINGS } from '../types/shiftSettings';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 
 describe('DepartmentDefaultsCard', () => {
-  it('offers the three department defaults', () => {
+  it('offers the two department defaults', () => {
     render(<DepartmentDefaultsCard settings={{ ...DEFAULT_SETTINGS }} onSettingsChange={vi.fn()} />);
 
     expect(screen.getByLabelText('Default Shift Duration (hours)')).toBeInTheDocument();
     expect(screen.getByLabelText('Default Min Staffing')).toBeInTheDocument();
-    expect(screen.getByLabelText('Overtime Threshold (hours/week)')).toBeInTheDocument();
+    // The Overtime advisory card owns the overtime rule (2026-10-31).
+    expect(screen.queryByLabelText('Overtime Threshold (hours/week)')).not.toBeInTheDocument();
   });
 
   // require_assignment_confirmation is stored but nothing acts on it, so a
@@ -21,11 +22,10 @@ describe('DepartmentDefaultsCard', () => {
     expect(screen.queryByText(/assignment confirmation/i)).not.toBeInTheDocument();
   });
 
-  // Pitfall #19: the three values are stored but no shift, template or overtime
-  // warning reads them yet, so the card says so instead of implying an effect.
-  it('labels the defaults as not in effect yet', () => {
+  it('says what the defaults change and where overtime is set', () => {
     render(<DepartmentDefaultsCard settings={{ ...DEFAULT_SETTINGS }} onSettingsChange={vi.fn()} />);
 
-    expect(screen.getByText(/Not in effect yet — these are saved, but new shifts and templates/)).toBeInTheDocument();
+    expect(screen.queryByText(/Not in effect yet/)).not.toBeInTheDocument();
+    expect(screen.getByText(/A new shift template starts with this length and minimum staffing/)).toBeInTheDocument();
   });
 });

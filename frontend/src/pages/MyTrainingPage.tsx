@@ -27,30 +27,38 @@ import {
   History,
   ClipboardCheck,
   CalendarClock,
+  CalendarRange,
 } from 'lucide-react';
-import { skillsTestingService, trainingModuleConfigService } from '../services/api';
+import {
+  courseCohortService,
+  shiftEvaluationService,
+  skillsTestingService,
+  trainingModuleConfigService,
+} from '../services/api';
+import { MyShiftEvaluationsList } from '../components/training/MyShiftEvaluationsList';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
-import { RequirementMonthlyHours } from '../components/training/RequirementMonthlyHours';
-import { countingWindowLabel } from '../utils/requirementMonths';
+import { RequirementDetailCard } from '../components/training/RequirementDetailCard';
 import { UpcomingDueList } from '../components/training/UpcomingDueList';
-import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
-import { TRAINING_TYPE_LABELS } from '../constants/enums';
+import { COHORT_STATUS_COLORS, COHORT_STATUS_LABELS, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
-import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
+import type {
+  CourseCohort,
+  MyTrainingSummary,
+  ShiftEvaluationDetail,
+  TrainingModuleConfig as TMConfig,
+  RequirementDetail,
+} from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import { MySkillTestsList } from '../components/training/MySkillTestsList';
 import { useAuthStore } from '../stores/authStore';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
 import { buildUpcomingItems, UPCOMING_WINDOW_DAYS } from '../utils/trainingUpcoming';
-import {
-  getProgressBarColor,
-  getPercentageBarColor,
-  getTrainingStatusColor,
-  getTrainingStatusLabel,
-} from '../utils/trainingColors';
+import { formatEvaluationAverage } from '../utils/shiftEvaluations';
+import { getPercentageBarColor, getTrainingStatusColor, getTrainingStatusLabel } from '../utils/trainingColors';
 
 // ==================== Helpers ====================
 
@@ -443,9 +451,9 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave, canManageTr
                         </option>
                       ))}
                     </select>
-                    {/* Pitfall #19: nothing reads report_review_role; approving a report is gated on training.manage. */}
-                    <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
-                      Not in effect yet — anyone who can manage training can review reports, whatever is chosen here.
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Members holding this position or rank can review reports about other members, as can anyone who
+                      manages training.
                     </p>
                   </div>
                 )}
@@ -561,7 +569,11 @@ const MyTrainingPage: React.FC = () => {
   // read-only one, drawn only for a member who has results on file: switching
   // deleted nothing, and this page is where a member reads their own results.
   const [hasPastSkillTests, setHasPastSkillTests] = useState(false);
+  // The cohorts this member is on the roster for — their recruit school or
+  // other multi-class course. Empty hides the section.
+  const [myCohorts, setMyCohorts] = useState<CourseCohort[]>([]);
   const [data, setData] = useState<MyTrainingSummary | null>(null);
+  const [shiftEvaluations, setShiftEvaluations] = useState<ShiftEvaluationDetail[]>([]);
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -581,6 +593,14 @@ const MyTrainingPage: React.FC = () => {
       setError(null);
       const trainingData = await trainingModuleConfigService.getMyTraining();
       setData(trainingData);
+
+      // Caught on its own, like the settings below: an evaluation list that
+      // fails to load must not replace the overview with a full-page error.
+      try {
+        setShiftEvaluations(await shiftEvaluationService.listMine());
+      } catch {
+        setShiftEvaluations([]);
+      }
 
       if (canConfigure) {
         // Deliberately caught separately. This request only feeds the
@@ -627,6 +647,23 @@ const MyTrainingPage: React.FC = () => {
       cancelled = true;
     };
   }, [showsSkillsTesting, userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    courseCohortService
+      .getMyCohorts()
+      .then((cohorts) => {
+        if (!cancelled) setMyCohorts(cohorts);
+      })
+      .catch(() => {
+        // Supplementary, like the skills-test lookup above: a failed lookup
+        // leaves the section out rather than replacing the overview.
+        if (!cancelled) setMyCohorts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleConfigSave = async (updates: Partial<TMConfig>) => {
     const updated = await trainingModuleConfigService.updateConfig(updates);
@@ -776,6 +813,38 @@ const MyTrainingPage: React.FC = () => {
             />
           </div>
 
+          {/* My classes: the cohorts this member is on. Each opens the
+              member's half of the cohort page — the class timeline, without
+              the roster. Not behind a show_* flag: it is the member's own
+              schedule, already on their calendar as events. */}
+          {myCohorts.length > 0 && (
+            <Section title="My classes" icon={CalendarRange}>
+              <ul className="space-y-2">
+                {myCohorts.map((cohort) => (
+                  <li key={cohort.id}>
+                    <Link
+                      to={`/training/cohorts/${cohort.id}`}
+                      className="card hover:bg-theme-surface-hover block p-4 transition-colors"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-theme-text-primary font-medium">{cohort.name}</span>
+                        <span className={`badge ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
+                          {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}
+                        </span>
+                      </div>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        {cohort.course_name ? `${cohort.course_name} · ` : ''}
+                        {formatDate(cohort.start_date, tz)}
+                        {cohort.end_date ? ` – ${formatDate(cohort.end_date, tz)}` : ''}
+                        {` · ${cohort.class_count} class${cohort.class_count === 1 ? '' : 'es'}`}
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {/* Upcoming expirations and due dates: what to act on in the next
               six months, drawn from the same requirement and certification
               data the sections below show, so they cannot disagree. */}
@@ -803,122 +872,9 @@ const MyTrainingPage: React.FC = () => {
                       return a.days_until_due - b.days_until_due;
                     return 0;
                   })
-                  .map((req: RequirementDetail) => {
-                    const isOverdue = req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
-                    const isDueSoon =
-                      req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
-
-                    return (
-                      <div
-                        key={req.id}
-                        className={`card p-4 ${isOverdue ? 'border-red-500/40' : isDueSoon ? 'border-yellow-500/30' : req.is_met ? 'border-green-500/20' : 'border-theme-surface-border'}`}
-                      >
-                        <div className="mb-2 flex items-start justify-between">
-                          <div className="flex items-center space-x-2">
-                            {req.is_met ? (
-                              <CheckCircle2 className="h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
-                            ) : isOverdue ? (
-                              <AlertTriangle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
-                            ) : (
-                              <Clock className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
-                            )}
-                            <div>
-                              <p className="text-theme-text-primary text-sm font-medium">{req.name}</p>
-                              {req.description && (
-                                <p className="text-theme-text-muted mt-0.5 text-xs">{req.description}</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="ml-4 shrink-0 text-right">
-                            <span
-                              className={`text-sm font-bold ${
-                                req.is_met
-                                  ? 'text-green-700 dark:text-green-400'
-                                  : isOverdue
-                                    ? 'text-red-700 dark:text-red-400'
-                                    : 'text-theme-text-primary'
-                              }`}
-                            >
-                              {req.completed_hours}/{req.required_hours} hrs
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Progress bar */}
-                        <div className="bg-theme-surface-hover mb-2 h-2 w-full rounded-full">
-                          <div
-                            className={`h-2 rounded-full transition-all ${getProgressBarColor(req.progress_percentage, req.is_met, isOverdue)}`}
-                            style={{ width: `${Math.min(req.progress_percentage, 100)}%` }}
-                          />
-                        </div>
-
-                        <RequirementMonthlyHours requirement={req} />
-
-                        {/* Expired certification / blocks activity warning */}
-                        {req.blocks_activity && (
-                          <div className="mb-2 rounded-sm border border-red-500/30 bg-red-500/10 px-2 py-1.5">
-                            <p className="text-xs font-medium text-red-700 dark:text-red-400">
-                              Certification expired — renew ASAP. This may prevent you from signing up for shifts.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Existing member inside the requirement's catch-up period */}
-                        {req.catch_up_deadline && !req.is_met && (
-                          <div className="mb-2 rounded-sm border border-blue-500/20 bg-blue-500/10 px-2 py-1">
-                            <p className="text-xs text-blue-700 dark:text-blue-300">
-                              You joined before this requirement took effect. You have until{' '}
-                              {formatCalendarDate(req.catch_up_deadline)} to complete it, and it won&rsquo;t count
-                              against your compliance before then.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Waiver adjustment notice */}
-                        {req.waived_months != null && req.waived_months > 0 && (
-                          <div className="mb-2 rounded-sm border border-blue-500/20 bg-blue-500/10 px-2 py-1">
-                            <p className="text-xs text-blue-700 dark:text-blue-300">
-                              Adjusted for {req.waived_months} waived month{req.waived_months > 1 ? 's' : ''} of leave
-                              {req.original_required_hours != null &&
-                                req.original_required_hours !== req.required_hours && (
-                                  <>
-                                    {' '}
-                                    (originally {req.original_required_hours} hrs, adjusted to {req.required_hours} hrs
-                                    for {req.active_months} active month{req.active_months !== 1 ? 's' : ''})
-                                  </>
-                                )}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="text-theme-text-muted flex items-center justify-between text-xs">
-                          <span className="capitalize">
-                            {req.frequency.replace('_', ' ')}
-                            {req.training_type ? ` (${req.training_type.replace('_', ' ')})` : ''}
-                          </span>
-                          <div className="flex items-center space-x-2">
-                            {req.is_met ? (
-                              <span className="text-green-700 dark:text-green-400">Complete</span>
-                            ) : req.catch_up_deadline ? (
-                              <span>Due by {formatCalendarDate(req.catch_up_deadline)}</span>
-                            ) : req.cert_expired ? (
-                              <span className="font-medium text-red-700 dark:text-red-400">Expired — Renew ASAP</span>
-                            ) : isOverdue ? (
-                              <span className="font-medium text-red-700 dark:text-red-400">
-                                Overdue by {Math.abs(req.days_until_due ?? 0)} days
-                              </span>
-                            ) : req.days_until_due != null ? (
-                              <span className={isDueSoon ? 'text-yellow-700 dark:text-yellow-400' : ''}>
-                                Due: {formatDate(req.due_date, tz)} ({req.days_until_due} days)
-                              </span>
-                            ) : req.monthly_hours && req.monthly_hours.length > 0 ? (
-                              <span>Counting {countingWindowLabel(req.monthly_hours)}</span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  .map((req: RequirementDetail) => (
+                    <RequirementDetailCard key={req.id} requirement={req} timezone={tz} />
+                  ))}
               </div>
             </Section>
           )}
@@ -1123,33 +1079,47 @@ const MyTrainingPage: React.FC = () => {
               endpoint gated and returned these figures, the page never drew
               them, and the setting's own description promised members could
               see them. */}
-          {v?.show_shift_stats && data.shift_stats && data.shift_stats.shifts_completed > 0 && (
-            <Section title="Shift Statistics" icon={BarChart3}>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <StatCard
-                  icon={ClipboardList}
-                  label="Shifts Completed"
-                  value={data.shift_stats.shifts_completed}
-                  color="text-blue-700 dark:text-blue-400"
-                />
-                <StatCard
-                  icon={Clock}
-                  label="Hours Reported"
-                  value={formatHours(data.shift_stats.hours_reported)}
-                  color="text-green-700 dark:text-green-400"
-                />
-                <StatCard icon={AlertTriangle} label="Calls Responded" value={data.shift_stats.total_calls} />
-                {v?.show_performance_rating && data.shift_stats.avg_rating != null && (
+          {v?.show_shift_stats &&
+            data.shift_stats &&
+            (data.shift_stats.shifts_completed > 0 || (data.shift_stats.evaluation_averages?.length ?? 0) > 0) && (
+              <Section title="Shift Statistics" icon={BarChart3}>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                   <StatCard
-                    icon={Star}
-                    label="Average Rating"
-                    value={`${data.shift_stats.avg_rating}/5`}
-                    color="text-yellow-700 dark:text-yellow-400"
+                    icon={ClipboardList}
+                    label="Shifts Completed"
+                    value={data.shift_stats.shifts_completed}
+                    color="text-blue-700 dark:text-blue-400"
                   />
-                )}
-              </div>
-            </Section>
-          )}
+                  <StatCard
+                    icon={Clock}
+                    label="Hours Reported"
+                    value={formatHours(data.shift_stats.hours_reported)}
+                    color="text-green-700 dark:text-green-400"
+                  />
+                  <StatCard icon={AlertTriangle} label="Calls Responded" value={data.shift_stats.total_calls} />
+                  {v?.show_performance_rating && data.shift_stats.avg_rating != null && (
+                    <StatCard
+                      icon={Star}
+                      label="Average Rating"
+                      value={`${data.shift_stats.avg_rating}/5`}
+                      color="text-yellow-700 dark:text-yellow-400"
+                    />
+                  )}
+                  {/* One per evaluation form, on its own scale: the forms and the
+                    report rating above do not average into one number. */}
+                  {(data.shift_stats.evaluation_averages ?? []).map((average) => (
+                    <StatCard
+                      key={`${average.template_id ?? average.form_name}-${average.scale_max}`}
+                      icon={Star}
+                      label={average.form_name}
+                      value={formatEvaluationAverage(average)}
+                      hint={`${average.evaluations} ${average.evaluations === 1 ? 'evaluation' : 'evaluations'}`}
+                      color="text-violet-700 dark:text-violet-400"
+                    />
+                  ))}
+                </div>
+              </Section>
+            )}
 
           {/* Shift Reports */}
           {v?.show_shift_reports && data.shift_reports && data.shift_reports.length > 0 && (
@@ -1207,6 +1177,14 @@ const MyTrainingPage: React.FC = () => {
             </Section>
           )}
 
+          {/* Shift Evaluations: behind the same switch as the shift reports,
+              which they are filled out beside. */}
+          {v?.show_shift_reports && shiftEvaluations.length > 0 && (
+            <Section title="Shift Evaluations" icon={ClipboardCheck} defaultOpen={false}>
+              <MyShiftEvaluationsList evaluations={shiftEvaluations} />
+            </Section>
+          )}
+
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
@@ -1257,6 +1235,7 @@ const MyTrainingPage: React.FC = () => {
           {!data.training_records?.length &&
             !data.enrollments?.length &&
             !data.shift_reports?.length &&
+            !shiftEvaluations.length &&
             !data.submissions?.length &&
             !data.certifications?.length && (
               <section className="card-secondary p-6" aria-labelledby="training-getting-started">

@@ -2,7 +2,8 @@
 
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
-(pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12) ·
+(pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12),
+2026-11-02 (pass 13) ·
 **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
@@ -18,28 +19,270 @@ fixed),
 fixed, 0 flagged — new public guest-link surface reviewed clean),
 [#3841](https://github.com/thegspiro/the-logbook/pull/3841) (pass 12,
 watchdog pickup, 0 fixed, 0 flagged — two authorization-widening commits
-reviewed clean against all seven checklist dimensions)
+reviewed clean against all seven checklist dimensions),
+[#3931](https://github.com/thegspiro/the-logbook/pull/3931) (pass 13,
+watchdog pickup, 1 fixed — EV-30, cross-org file-retention gap on
+attachment delete)
 
-**Backend:** `api/v1/endpoints/events.py` (61 routes, unchanged — a large
-in-route diff this pass widens who may reach nine existing attendance routes
-and five existing admin routes, no new route),
+**Backend:** `api/v1/endpoints/events.py` (61 routes, unchanged),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
 public outreach event-request intake pipeline),
 `api/v1/endpoints/event_attendance_petitions.py` (7 routes, unchanged),
-`api/public/event_guest.py` (4 routes, unchanged, zero diff this pass),
+`api/public/event_guest.py` (4 routes, unchanged),
 `services/event_service.py`,
 `services/event_request_service.py`,
 `services/event_attendance_petition_service.py`,
 `services/event_organizer_service.py`,
 `services/guest_check_in_service.py`,
-`services/qr_check_in_analytics.py` (zero diff this pass),
+`services/qr_check_in_analytics.py`,
 `models/event.py`, `models/event_request.py`
 **Frontend:** `modules/events`, `pages/AttendanceRequestsPage.tsx`,
-`pages/GuestCheckInPage.tsx` + `.test.tsx`, `components/GuestEmailSignIn.tsx`
+`pages/GuestCheckInPage.tsx` + `.test.tsx`, `components/GuestEmailSignIn.tsx`,
+`pages/EventsPage.tsx`, `pages/EventDetailPage.tsx`,
+`pages/EventCheckInMonitoringPage.tsx`, `pages/events-settings/`,
+`components/event-detail/EventAttachmentsList.tsx` (added to the declared
+list this pass — the attachment-upload/-delete UI it gained is a new entry
+point into the already-reviewed, already-hardened `events.py` attachment
+endpoints, not new backend surface),
+`components/event-detail/EventAttendancePetitionPrompt.tsx`,
+`components/event-detail/EventAttendancePetitionsCard.tsx`
 **Migrations:** `b8236e29ec44` (repo-wide email-address encryption at rest,
 touching `event_requests.contact_email` and
 `event_external_attendees.email`/`.email_hash`) reviewed this pass — see
 Pass 12 below
+
+---
+
+## Pass 13 (2026-11-02) — near-zero delta (5 real files of 351 commits in scope), 1 fixed (EV-30, cross-org file-retention gap), 0 flagged
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. Step 0: `main`'s
+tip (`4d87a43bb`) is PR #3930's merge (Feature 15, Scheduling, pass 13);
+`list_pull_requests(state=open)` returned 0 PRs whose head branch starts
+with `claude/security-review-`. Row 16 (Events & requests) confirmed the
+next `⬜` on a freshly re-read rotation table.
+
+### Scope
+
+Baseline `63ecd45c5` (PR #3841's merge, pass 12). **351 non-merge commits**
+landed repo-wide; diffing every declared file individually:
+
+- **Real diff:** `api/public/event_guest.py` (+1/-1, a rename only),
+  `services/guest_check_in_service.py` (+26/-1), frontend
+  `pages/AttendanceRequestsPage.tsx`, `pages/EventCheckInMonitoringPage.tsx`
+  (both pure shared-component layout swaps, `split-row`/`StatGrid`, no
+  behavior change), `pages/EventDetailPage.tsx` (+49, wires an existing,
+  already-reviewed attachment feature's upload/delete into the UI — see
+  below).
+- **Zero diff:** `events.py`, `event_requests.py`,
+  `event_attendance_petitions.py`, `event_service.py`,
+  `event_request_service.py`, `event_attendance_petition_service.py`,
+  `event_organizer_service.py`, `qr_check_in_analytics.py`, `models/event.py`,
+  `models/event_request.py`, `GuestEmailSignIn.tsx`.
+
+**Scope gap found and closed.** `git diff --name-status` against the full
+351-commit window, filtered for "event"/"guest"/"rsvp"/"attendance", turned
+up five frontend files this feature's declared scope had never named:
+`EventAttachmentsList.tsx` (+test, new upload/delete controls),
+`EventAttendancePetitionPrompt.tsx`, `EventAttendancePetitionsCard.tsx`
+(both pure `split-row` layout swaps), `pages/EventsPage.tsx` (a new
+`?range=next-30-days` deep-link preset) and
+`pages/events-settings/EmailSection.tsx` (layout swap) — all five existed in
+scope before (named in earlier passes' "scope correction" sections) but had
+dropped out of this file's own declared-scope header. All five are read in
+full below and the header above is corrected to name them.
+
+Also found in the window, correctly **out of scope**: a new migration and
+service change for `shift_attendance` (scheduling/equipment-check's own
+`uq_shift_attendance_shift_user` constraint — Feature 14's territory, not
+this feature's) and a change to `attendance_dashboard_service.py` (Feature
+24/29's file, backs `meetings.py` routes, not `events.py`) — both matched
+the "attendance" keyword search but are owned, and already reviewed,
+elsewhere. Also two files in other modules that merely _call_ this
+feature's read-only list endpoint (`FundraisingEventsPage.tsx`,
+`LinkedEventsSection.tsx`) — layout and an unrelated permission narrowing
+in their own module, not this feature's surface.
+
+**No new route.** `grep -c '^@router\.'` against all four backend route
+files: `events.py` 61, `event_requests.py` 23,
+`event_attendance_petitions.py` 7, `event_guest.py` 4 — all unchanged from
+pass 12. Full-repo route count (`check_route_permissions.py --strict`,
+below): 289, up from 280 at pass 12 (unrelated routes from other features'
+concurrent work in the same 351-commit window).
+
+### Real changes reviewed
+
+- **Guest check-in race fix (`guest_check_in_service.py`,
+  `tests/test_guest_check_in_race.py`, new).** A double-tap of the guest
+  QR code, or a retry of a POST that timed out after it was processed,
+  previously could both read "no existing attendee" and both insert,
+  double-counting a guest. Fixed per Pitfall #27's shape: `_lock_event`
+  takes the **event** row's lock first (`SELECT ... WHERE id = ... AND
+organization_id = ... FOR UPDATE`, org-scoped), then
+  `_find_existing_attendee` is itself a locking read
+  (`for_update=True`) so it answers from the state committed by whichever
+  request got the lock first, not the pre-lock snapshot. Read in full;
+  matches the capacity-locking pattern `test_capacity_locking.py` already
+  enforces elsewhere. The companion rename
+  (`check_in_window_state` → `guest_sign_in_state`) is pass 12's own
+  centralization finishing its last call site — no behavior change,
+  confirmed by reading both the old and new definitions were
+  byte-identical bodies under the new name.
+- **Event attachments wired into the UI (`EventDetailPage.tsx`,
+  `EventAttachmentsList.tsx`).** The backend upload/list/download/delete
+  endpoints (`events.py:3467-3701`) are not new — they predate this
+  feature's declared-scope header (an oversight this pass corrects) and
+  already carry a fixed HIGH finding, **EV-17** (cross-tenant read via a
+  client-authored `file_path`), re-verified unchanged below. What is new
+  this window is only the manager-facing **upload** and **delete**
+  controls on the event detail page, which did not exist before (the
+  backend has accepted uploads since EV-17 was fixed; nothing on screen
+  could send one). Reviewed as new UI surface against an already-hardened
+  backend:
+  - **Auth (§1/§2):** both new handlers (`handleAttachmentUpload`,
+    `handleAttachmentDelete`) are rendered only behind `canManage`
+    (`events.manage`), and the server independently re-checks
+    `require_permission("events.manage")` on both routes — the client gate
+    is convenience, not the boundary.
+  - **Injection/output (§4):** the new list/upload control
+    (`EventAttachmentsList.tsx`) renders every filename through plain JSX
+    interpolation; no `dangerouslySetInnerHTML` (grep, 0 hits). The delete
+    confirmation goes through `useConfirm()`, not `window.confirm`
+    (Pitfall #16).
+  - **Found and fixed — EV-30 (MED): the delete endpoint's "is this file
+    still referenced by another event?" check was not org-scoped.** See
+    below.
+- **`EventsPage.tsx`'s `next-30-days` deep link.** A pure client-side
+  filter preset (`?range=next-30-days` → a `start_after`/`start_before`
+  window computed from `getTodayLocalDate()`/`localToUTC()`, both
+  ESLint-sanctioned date utilities — no banned locale method, no raw
+  `Date` arithmetic crossing a timezone boundary). Feeds the existing,
+  already-reviewed `GET /events` list endpoint with existing, already
+  client-exposed query parameters (`start_after`, `start_before`,
+  `include_drafts`, `limit`) — no new backend parameter, no new
+  permission surface. `include_drafts` is still only a request; the
+  server decides independently who may actually see a draft.
+
+### EV-30 — MED — `delete_event_attachment`'s cross-event reference count was not org-scoped — ✅ FIXED
+
+**Where:** `backend/app/api/v1/endpoints/events.py`, `delete_event_attachment`
+(the `others` query, originally ~3672-3679).
+
+**What:** Before removing an attachment's file from disk, the endpoint counts
+how many _other_ events reference the same `file_path` (recurring-occurrence
+generation and event duplication copy attachment metadata, including
+`file_path`, across sibling events within an org) and skips the disk delete
+if any other row matches. That count had no `organization_id` filter:
+
+```python
+others = await db.execute(
+    select(func.count())
+    .select_from(Event)
+    .where(
+        Event.id != str(event_id),
+        cast(Event.attachments, String).contains(file_path, autoescape=True),
+    )
+)
+```
+
+**Failure scenario:** the already-fixed EV-17 established that an
+`events.manage` holder can write an arbitrary `file_path` string into their
+**own** event's `attachments` JSON via the generic create/update payload.
+Using that same primitive, an attacker in organization B who merely learns
+(or guesses) organization A's exact stored attachment path can plant an
+event in their own org naming that path. From then on, organization A's own
+`DELETE /{event_id}/attachments/{attachment_id}` on that file always finds
+`others.scalar() > 0` and never removes the file from disk — a nuisance/
+availability issue (the victim's storage is never reclaimed), not a
+confidentiality leak: the count is never returned to the client, and the
+event A fetch this function opens with is already org-scoped, so nothing
+cross-tenant is read back. Severity kept at MED rather than HIGH because
+exploiting it requires already knowing another org's server-generated,
+UUID-bearing file path, which is not disclosed anywhere cross-org.
+
+**Fix:** added `Event.organization_id == str(current_user.organization_id)`
+to the `others` query, matching the already-org-scoped fetch of the event
+being edited. Recurring-occurrence generation and event duplication never
+cross organizations, so this cannot regress the sibling-occurrence
+file-sharing case the check exists for — confirmed by the existing
+`test_event_attachment_shared_files.py` suite (same-org sibling cases)
+staying green.
+
+**Guard test:** `backend/tests/test_event_attachment_cross_org_reference.py`
+— two organizations, two events, the identical `file_path` string recorded
+on both (the attacker's event never has a real file). Confirmed to fail
+against the pre-fix code first (the victim's delete left the file on disk,
+per CLAUDE.md Pitfall #37), then verified to pass after the fix.
+
+### Re-verified standing items
+
+- **EV-17 — still fixed, unregressed.** `download_event_attachment` and
+  `delete_event_attachment` both still confine the resolved path via
+  `file_storage.resolve(..., current_user.organization_id, ...)` before
+  touching disk; zero diff on either guard this window.
+- **EV-23 — still resolved**, zero diff on `rsvp_to_series`/
+  `_evaluate_session_phase_warning`.
+- **EV-26 — still fixed, unregressed.** Zero diff on
+  `location_service.py::check_overlapping_events` or its three call sites.
+- **`check_request_status`'s 256-bit token, still unrate-limited by
+  design** — unchanged.
+- **`ondelete="SET NULL"` nullability** — no new model column this window;
+  the existing `SET NULL` FKs are unchanged.
+- **No new `.like()`/`.ilike()`, no new CSV export** (grep, 0 hits beyond
+  the already-reviewed `import_events_csv`/`SafeCsvWriter` pair).
+
+### Route inventory
+
+**Unchanged from pass 12** — `events.py` 61, `event_requests.py` 23,
+`event_attendance_petitions.py` 7, `api/public/event_guest.py` 4. Confirmed
+by `grep -c '^@router\.'` against each file, not taken from the diff stat.
+Full-repo count 289, 0 errors/warnings (`check_route_permissions.py
+--strict`, below) — all three frontend route registries agree, and no new
+page was added this window.
+
+### Verified good ✅ (pass 13)
+
+- The guest check-in race fix follows this repo's own established
+  lock-the-parent-then-lock-the-read-too pattern (Pitfall #27) exactly, and
+  ships a dedicated test proving one attendee row from two concurrent
+  requests.
+- The new attachment upload/delete UI adds no backend surface — it is a
+  new entry point into endpoints that already carry a fixed HIGH finding
+  (EV-17) and a MIME/extension allowlist, size cap, and trusted-type
+  download guard, all unchanged this window.
+- `EventsPage.tsx`'s new deep-link preset introduces no new query parameter
+  and no new permission surface.
+- No new route, no new unbounded query, no new CSV export, no new seeded
+  grant change, no JSON-column shallow-copy mutation, no new client-supplied
+  FK accepted without an in-org check.
+
+### Completion gate (pass 13)
+
+| Check                                                                   | Result                                                              |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                   | ✅ 0 violations                                                     |
+| `black --check app/ tests/ alembic/` (26.10.1)                          | ✅ clean                                                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                       | ✅ clean                                                            |
+| `python3 scripts/validate_migrations.py --strict`                       | ✅ single head `38e0f552242d`, 696 revisions                        |
+| `python3 scripts/check_route_permissions.py --strict`                   | ✅ 289 routes, 0 errors, 0 warnings                                 |
+| `python3.13 scripts/generate_schema_docs.py --check`                    | ✅ up to date                                                       |
+| `python3.13 -m pytest tests/ -k "event or guest or rsvp or attendance"` | ✅ 2157 passed, 1 pre-existing skip (`pywebpush`), 25252 deselected |
+| `npm run typecheck`                                                     | ✅ 0 errors                                                         |
+| `npm run lint` (`eslint --max-warnings 10`)                             | ✅ 0 errors, 0 warnings                                             |
+
+**Environment note:** this sandbox's `python3` (3.11) had neither `flake8`
+nor `black` importable as a module (`ModuleNotFoundError`), though both
+exist as standalone CLIs on `PATH` via `uv tool` and were used for the
+flake8/black rows above. Installed `pip install flake8 black isort` into
+that interpreter as well, since this repo's own Stop hook
+(`.claude/hooks/completion-gate.sh`) invokes them as `python3 -m flake8`/
+`python3 -m black --check` specifically — flagged explicitly per the
+skill's rule rather than silently relying on only one of the two working
+paths.
+
+Rotation row 16 → ✅ (pending this PR's merge). Next: Feature 17 (Training
+core) — re-check `list_pull_requests`/`search_pull_requests` fresh rather
+than trusting this note.
 
 ---
 

@@ -69,6 +69,11 @@ _PLAIN_COLUMNS = [
         ],
     ),
     (
+        "shift_evaluations",
+        "id",
+        ["responses", "closing_comments"],
+    ),
+    (
         "users",
         "id",
         [
@@ -145,6 +150,12 @@ _PLAIN_COLUMNS = [
         "id",
         ["provider_name", "result_summary", "notes", "result_data"],
     ),
+    (
+        "historical_members",
+        "id",
+        ["birth_date", "addresses", "verification_sources", "research_notes"],
+    ),
+    ("history_revisions", "id", ["snapshot"]),
     ("integrations", "id", ["encrypted_config"]),
     ("external_training_providers", "id", ["api_key", "api_secret", "client_secret"]),
     ("apparatus_report_configs", "id", ["email_recipients"]),
@@ -163,6 +174,7 @@ _PLAIN_COLUMNS = [
     ("scheduled_emails", "id", ["bcc_emails", "cc_emails", "to_emails"]),
     ("store_payment_events", "id", ["payer_email"]),
     ("xapi_statements", "id", ["actor_email"]),
+    ("zeffy_payments", "id", ["payer_email"]),
 ]
 
 

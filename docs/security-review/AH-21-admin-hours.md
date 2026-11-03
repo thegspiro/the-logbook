@@ -1,6 +1,108 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), pass 12 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12), 2026-11-02 (pass 13) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), [#3846](https://github.com/thegspiro/the-logbook/pull/3846) (pass 12, merged), pass 13 (this PR)
+
+## Pass 13 (2026-11-02) — 0 fixed, 0 new findings; feature remains at zero open findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents` returned no
+reachable agents). `gh api search/issues -f q='repo:thegspiro/the-logbook
+is:pr is:open head:claude/security-review'` returned 0 results — PR #3940
+(Feature 20, Compliance, pass 13) had just merged (`275f6b02` → `dffccc891`).
+Row 21 (Admin hours) was the first `⬜` in `PROGRESS.md`'s table.
+
+**Baseline `06da5fc4a`** (pass 12's merge, PR #3846). Per-file `git log
+06da5fc4a..origin/main` across every file this feature declares in scope
+(`endpoints/admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`,
+`core/seed_admin_hours.py`, the `admin-hours` frontend module) finds exactly
+two commits (`cf8fdae30`, a repo-wide page-header layout fix; `7f0ef2c1d`,
+DASH-37's dashboard-tile deep links), touching three frontend files.
+`git diff --stat` confirms **zero** diff in all six backend files —
+byte-identical to pass 12's merge.
+
+### The frontend delta, read in full
+
+`AdminHoursManagePage.tsx` now reads `?status=pending` from the URL
+(`useSearchParams`) to open directly on the Pending Review tab — the
+destination for the operations dashboard's "Admin hours" tile
+(`dashboard.py:960`, `href="/admin-hours/manage?status=pending"`, part of
+DASH-37's unrelated fix making 13 dashboard tiles land on a filtered view
+instead of an unfiltered page). `selectTab` writes the param back
+(`replace: true`) when Pending Review is chosen and clears it on any other
+tab, so a refresh keeps the tab and leaving Pending Review doesn't leave a
+stale filter contradicting the UI.
+
+No finding: the param only chooses which **already-fetched-the-same-way** tab
+renders first — it does not change what `PendingReviewTab` requests, and
+`/admin-hours/manage` is still gated end to end by
+`<ProtectedRoute requiredPermission="admin_hours.manage">`
+(`modules/admin-hours/routes.tsx:54`), confirmed unchanged by the zero-diff
+above, so the new query param cannot be used to reach the manage page's data
+without that permission — a browser visiting the URL unauthenticated or
+without the grant is redirected before `AdminHoursManagePage` ever reads
+`searchParams`. `AdminHoursPage.tsx`'s change is the same repo-wide
+`page-header`/`page-header-title` CSS-class swap as `cf8fdae30` — layout only,
+no new element, no new handler. Swept both files for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, `innerHTML`, a
+new `fetch(`/`axios` import, `localStorage`/`sessionStorage`, and the banned
+`.toLocale*`/`date-fns` imports: zero hits. The paired new test file
+(`AdminHoursManagePage.test.tsx`, 3 cases) asserts the tab opens on Pending
+Review only for `status=pending`, defaults to Categories otherwise, and drops
+the param when another tab is chosen — read and consistent with the diff.
+
+### The new dashboard reader of this feature's table, read because it touches this feature's model
+
+`dashboard.py`'s two admin-hours queries DASH-37 and an earlier pass added
+(the "Pending approvals" tile's count/oldest-age and the admin summary's
+`pending_admin_approvals`/`recent_admin_hours`) both filter
+`AdminHoursEntry.organization_id == org_id` — verified by direct read at
+`dashboard.py:944` and `:1359-1371`, `org_id` resolved from the authenticated
+caller, never client-supplied. Not this feature's fix to make (Feature 29,
+Reports & analytics, still ⬜), reviewed only because it is a reader of this
+feature's model; no finding.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 12's count)
+
+A Python `ast` walk over every `@router.*` decorator in `admin_hours.py`
+finds **30 routes**, byte-identical to pass 12 (confirmed by the zero-diff
+above, not independently meaningful, but re-run rather than assumed). Depends
+extracted the same way: **17** carry
+`Depends(require_permission("admin_hours.manage"))`; **13** carry
+`Depends(get_current_user)` alone; 17 + 13 = 30, no route with zero auth
+dependency.
+
+### Standing findings
+
+No open or flagged finding carries forward from passes 1–12 — all were
+already closed (by fix or owner decision) as of pass 12, and nothing in this
+pass's delta (a dashboard deep-link param and a repo-wide layout-class swap)
+touches any of them. `KNOWN_LIMITATIONS.md`'s admin-hours rows (including the
+one at line 7313 documenting this exact `?status=pending` deep link) were
+re-read and still match the current code exactly — no edit needed.
+
+### Completion gate (pass 13)
+
+| Check                                                                | Result                                                            |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                        | ✅ 0 violations                                                   |
+| `black --check app/ tests/ alembic/`                                 | ✅ unchanged (no backend file touched)                            |
+| `isort --check-only app/ tests/ alembic/`                            | ✅ clean                                                          |
+| `python3 scripts/validate_migrations.py --strict`                    | ✅ single head, no backend change                                 |
+| `python3.13 -m pytest tests/ -q -k "admin_hours"`                    | ✅ passed, no regression (no backend file touched)                |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root) | ✅ 0 errors, 0 warnings                                           |
+| `cd frontend && npm run typecheck`                                   | ✅ 0 errors                                                       |
+| `cd frontend && npm run lint`                                        | ✅ 0 errors, 0 warnings                                           |
+| `npx vitest run src/modules/admin-hours`                             | ✅ all passing, including the new `AdminHoursManagePage.test.tsx` |
+
+No source file changed this pass — the delta reviewed above (DASH-37's
+dashboard link, the repo-wide layout fix, and the new dashboard reader) all
+pre-date this pass and were reviewed, not written, here. This pass's only
+change is this findings file and the tracker.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ## Pass 12 (2026-10-30) — 0 fixed by the rotation's own scope, 1 fixed-and-tested doc-staleness item (AH2-2), 0 new findings
 

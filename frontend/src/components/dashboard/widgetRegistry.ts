@@ -33,7 +33,8 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
   {
     id: 'prospect-pipeline',
     title: 'Prospective-member pipeline',
-    permission: 'prospective_members.view',
+    // Counts every applicant, so it takes what sees every applicant.
+    permission: 'prospective_members.view_all',
     aggregatePath: '/prospective-members/widget-summary',
     queuePath: '/prospective-members?status=active',
     defaultEnabled: true,

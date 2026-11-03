@@ -2892,6 +2892,138 @@ class EmailService:
         )
         return success_count > 0
 
+    async def send_applicant_assigned_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        role_label: str,
+        assigned_by_name: str,
+        applicant_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a member they were assigned to an applicant."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_ASSIGNED_HTML,
+            DEFAULT_APPLICATION_ASSIGNED_SUBJECT,
+            DEFAULT_APPLICATION_ASSIGNED_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_ASSIGNED,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "role_label": role_label,
+                "assigned_by_name": assigned_by_name,
+                "applicant_url": applicant_url,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_ASSIGNED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_ASSIGNED_HTML,
+            default_text=DEFAULT_APPLICATION_ASSIGNED_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_ASSIGNED.value,
+        )
+        return success_count > 0
+
+    async def send_evaluation_notice(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """One of the four performance-evaluation notices to one recipient.
+
+        ``context`` is built by EvaluationNoticeService, which decides who is
+        told and in what words; this only renders the department's template
+        (or the built-in default) and sends it.
+        """
+        from app.services.email_templates_evaluations import DEFAULT_TEMPLATE_DEFS
+
+        default = next(d for d in DEFAULT_TEMPLATE_DEFS if d["type"] == template_type)
+        rendered = await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default["subject"],
+            default_html=default["html"],
+            default_text=default["text"],
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+        )
+        return success_count > 0
+
+    async def send_applicant_needs_attention_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        event_summary: str,
+        applicant_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a case manager their applicant needs them."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML,
+            DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT,
+            DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_NEEDS_ATTENTION,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "event_summary": event_summary,
+                "applicant_url": applicant_url,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT,
+            default_html=DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML,
+            default_text=DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_NEEDS_ATTENTION.value,
+        )
+        return success_count > 0
+
     async def send_inactivity_warning_email(
         self,
         to_email: str,

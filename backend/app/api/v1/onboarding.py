@@ -2151,6 +2151,28 @@ async def save_it_team(
     )
 
 
+async def _lock_session_for_step(
+    db: AsyncSession, session: OnboardingSessionModel
+) -> None:
+    """Serialize a step that reads its own earlier output out of the session.
+
+    Stations and apparatus replace "the rows this step created last time", and
+    know which those are only because the session recorded their ids. Two
+    submissions of the step at once -- a double-tap, or a retry of a POST that
+    timed out after being processed -- both read the same ids, both insert, and
+    the session keeps only the last writer's, leaving the first writer's rows
+    unreachable by any later pass.
+
+    The lock order is the onboarding status row, then the session row: the
+    order every other step takes (it locks the status row in the service, and
+    reaches the session row when it records its result). The refresh is a
+    locking read so the waiter sees the ids the winner committed; the snapshot
+    ``validate_session`` took before its commit would still show the old ones.
+    """
+    await db.execute(select(OnboardingStatus).limit(1).with_for_update())
+    await db.refresh(session, with_for_update=True)
+
+
 @router.post("/session/stations", response_model=SessionDataResponse)
 async def save_session_stations(
     request: Request, data: StationsRequest, db: AsyncSession = Depends(get_db)
@@ -2174,6 +2196,11 @@ async def save_session_stations(
         )
 
     service = OnboardingService(db)
+
+    # Locked before the completion check as well as the id read: completing
+    # onboarding takes the same status-row lock, so this write cannot land
+    # after completion has committed.
+    await _lock_session_for_step(db, session)
 
     # Reject once onboarding is complete — completion does not delete the
     # session, so a still-valid (or stolen) session must not be replayable to
@@ -2320,6 +2347,9 @@ async def save_session_apparatus(
         )
 
     service = OnboardingService(db)
+
+    # See save_session_stations for why the lock precedes the completion check.
+    await _lock_session_for_step(db, session)
 
     # Reject once onboarding is complete — a still-valid (or stolen) session
     # must not be replayable to write real BasicApparatus rows into the

@@ -128,8 +128,8 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
   };
   return (
     <section aria-labelledby="scheduling-widgets-heading">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <div className="split-row mb-4 gap-3 sm:items-end">
+        <div className="split-row-main">
           <h3 id="scheduling-widgets-heading" className="text-theme-text-primary text-lg font-semibold">
             Scheduling Operations
           </h3>
@@ -137,7 +137,7 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
             Department-wide staffing for today and the rolling window below.
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="split-row-aside flex flex-wrap items-end gap-2">
           <label className="text-theme-text-secondary text-xs">
             Widget
             <select

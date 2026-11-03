@@ -460,6 +460,40 @@ const routes = ({
   ['**/api/v1/onboarding/status', () => ({ is_complete: true })],
 
   ['**/api/v1/organization/modules', () => ({})],
+  // History home: nothing awaiting clearance, two published records.
+  ['**/api/v1/history/clearance/queue', () => []],
+  [
+    '**/api/v1/history/people**',
+    () => ({
+      items: [
+        {
+          id: 'e2e-history-1',
+          display_name: 'John "Jack" Smith Jr.',
+          last_name: 'Smith',
+          first_name: 'John',
+          nickname: 'Jack',
+          service_years: '1951–1972',
+          titles: ['Chief', 'Foreman'],
+          is_memorial: false,
+          is_line_of_duty_death: false,
+          publication_level: 'members',
+        },
+        {
+          id: 'e2e-history-2',
+          display_name: 'Robert Doyle',
+          last_name: 'Doyle',
+          first_name: 'Robert',
+          nickname: null,
+          service_years: 'c. 1923–1940',
+          titles: ['Assistant Engineer'],
+          is_memorial: true,
+          is_line_of_duty_death: true,
+          publication_level: 'public',
+        },
+      ],
+      total: 2,
+    }),
+  ],
 
   // Three pages now reject a payload that is valid JSON but not their declared
   // type, rather than substituting empty lists: an audit log that reads "no
@@ -560,6 +594,71 @@ const routes = ({
         hour,
         count: hour >= 7 && hour <= 20 ? 40 + hour : 2,
       })),
+    }),
+  ],
+
+  // Dues. The page prints the summary straight into stat tiles and threw on
+  // the catch-all's `{}` (`collectionRate.toFixed`), so every visit measured
+  // the ErrorBoundary. A schedule and one member in each state a row can show;
+  // the summary totals agree with them. Money is a string, as the API's
+  // Decimal fields serialize. `dues**` also matches `dues-schedules` and
+  // `dues/summary`, and a later route wins, so the list is registered first.
+  [
+    '**/api/v1/finance/dues**',
+    () =>
+      (
+        [
+          ['e2e-dues-1', 'Alex Tester', '150.00', 'paid', '2026-02-10T15:00:00Z'],
+          ['e2e-dues-2', 'Jordan Captain', '75.00', 'partial', null],
+          ['e2e-dues-3', 'Sam Probationary', '0.00', 'overdue', null],
+          ['e2e-dues-4', 'Riley Lifetime', '0.00', 'waived', null],
+        ] as const
+      ).map(([id, memberName, amountPaid, status, paidDate]) => ({
+        id,
+        organizationId: 'e2e-org',
+        duesScheduleId: 'e2e-dues-schedule',
+        userId: `${id}-member`,
+        amountDue: '150.00',
+        amountPaid,
+        status,
+        dueDate: '2026-03-01T05:00:00Z',
+        ...(paidDate ? { paidDate, paymentMethod: 'check' } : {}),
+        ...(status === 'waived' ? { waivedAt: '2026-01-15T15:00:00Z', waiveReason: 'Life member' } : {}),
+        memberName,
+        createdAt: '2026-01-02T15:00:00Z',
+        updatedAt: '2026-02-10T15:00:00Z',
+      })),
+  ],
+  [
+    '**/api/v1/finance/dues-schedules**',
+    () => [
+      {
+        id: 'e2e-dues-schedule',
+        organizationId: 'e2e-org',
+        name: '2026 Annual Membership Dues',
+        amount: '150.00',
+        frequency: 'annual',
+        dueDate: '2026-03-01T05:00:00Z',
+        gracePeriodDays: 30,
+        lateFeeAmount: '10.00',
+        isActive: true,
+        createdBy: TEST_USER.id,
+        createdAt: '2026-01-02T15:00:00Z',
+        updatedAt: '2026-01-02T15:00:00Z',
+      },
+    ],
+  ],
+  [
+    '**/api/v1/finance/dues/summary**',
+    () => ({
+      totalExpected: '600.00',
+      totalCollected: '225.00',
+      totalOutstanding: '225.00',
+      totalWaived: '150.00',
+      collectionRate: 37.5,
+      membersPaid: 1,
+      membersOverdue: 1,
+      membersWaived: 1,
     }),
   ],
 
@@ -868,7 +967,74 @@ const memberRecordRoutes = (): [string, () => unknown][] => [
     }),
   ],
   ['**/api/v1/users/*/audit-history**', () => []],
+
+  // Member evaluations: one in progress, and the member's figures measured
+  // now, so the evaluation pages are measured with their content rather than
+  // an empty state.
+  ['**/api/v1/evaluations?**', () => [EVALUATION_SUMMARY]],
+  ['**/api/v1/evaluations', () => [EVALUATION_SUMMARY]],
+  ['**/api/v1/evaluations/mine', () => [EVALUATION_SUMMARY]],
+  [
+    '**/api/v1/evaluations/draft-options',
+    () => ({
+      members: [
+        { id: TEST_USER.id, name: `${TEST_USER.first_name} ${TEST_USER.last_name}` },
+        { id: 'e2e-evaluator', name: 'Jordan Captain' },
+      ],
+      evaluators: [{ id: 'e2e-evaluator', name: 'Jordan Captain' }],
+      periods: [{ id: 'e2e-period', name: '2026 Annual Review', start_date: '2026-01-01', end_date: '2026-12-31' }],
+    }),
+  ],
+  [
+    '**/api/v1/evaluations/mine/live-data',
+    () => ({
+      period_id: 'e2e-period',
+      period_name: '2026 Annual Review',
+      coverage_start: '2026-01-01',
+      coverage_end: '2026-11-01',
+      excluded_ranges: [],
+      sources: [
+        {
+          key: 'training.hours',
+          label: 'Training hours',
+          unit: 'hours',
+          module: 'training',
+          description: 'Hours of completed training records in the period.',
+          scoreable: true,
+        },
+        {
+          key: 'events.meeting_attendance_pct',
+          label: 'Business meeting attendance',
+          unit: 'percent',
+          module: 'events',
+          description: 'Business meetings attended out of those held.',
+          scoreable: true,
+        },
+      ],
+      data: {
+        'training.hours': { available: true, value: 42.5 },
+        'events.meeting_attendance_pct': { available: true, value: 75, attended: 6, held: 8 },
+      },
+      note: null,
+    }),
+  ],
 ];
+
+const EVALUATION_SUMMARY = {
+  id: 'e2e-evaluation',
+  member: { id: TEST_USER.id, name: `${TEST_USER.first_name} ${TEST_USER.last_name}` },
+  evaluator: { id: 'e2e-evaluator', name: 'Jordan Captain' },
+  period_id: 'e2e-period',
+  period_name: '2026 Annual Review',
+  period_start: '2026-01-01',
+  period_end: '2026-12-31',
+  template_name: 'Operational Annual',
+  kind: 'annual',
+  status: 'in_progress',
+  current_step: 'Self-evaluation',
+  current_step_due: '2027-01-14',
+  created_at: '2026-11-01T12:00:00Z',
+};
 
 /**
  * Fulfil every `/api/v1/**` request with fixture data.

@@ -1212,15 +1212,15 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                           : 'border-yellow-500/30 bg-yellow-500/10'
                       }`}
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
+                      <div className="split-row gap-3 sm:items-center">
+                        <div className="split-row-main">
                           <p className="text-theme-text-primary font-medium">{mapping.external_course_name}</p>
                           <p className="text-theme-text-muted text-xs">
                             Course ID: {mapping.external_course_id} | {mapping.members_completed} member
                             {mapping.members_completed === 1 ? '' : 's'} completed
                           </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="split-row-aside flex flex-wrap items-center gap-2">
                           {mapping.is_mapped && (
                             <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
                               <CheckCircle className="h-4 w-4" aria-hidden="true" />
@@ -1255,8 +1255,8 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                         </div>
                       </div>
                       {suggestion && (
-                        <div className="mt-3 flex flex-col gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3 sm:flex-row sm:items-center sm:justify-between">
-                          <p className="text-theme-text-primary text-sm">
+                        <div className="split-row mt-3 gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3 sm:items-center">
+                          <p className="split-row-main text-theme-text-primary text-sm">
                             Looks like <strong>{suggestion.name}</strong> in your library — likely a new version of it.
                           </p>
                           <button
@@ -1264,7 +1264,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                               void mapCourse(mapping, suggestion.id);
                             }}
                             disabled={savingMappingId === mapping.id}
-                            className="btn-primary px-3 text-sm whitespace-nowrap"
+                            className="split-row-aside btn-primary px-3 text-sm whitespace-nowrap"
                           >
                             Map to {suggestion.name}
                           </button>
@@ -1291,15 +1291,15 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                         : 'border-yellow-500/30 bg-yellow-500/10'
                     }`}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
+                    <div className="split-row gap-3 sm:items-center">
+                      <div className="split-row-main">
                         <p className="text-theme-text-primary font-medium">{mapping.external_category_name}</p>
                         <p className="text-theme-text-muted text-xs">
                           External ID: {mapping.external_category_id}
                           {mapping.external_category_code && ` | Code: ${mapping.external_category_code}`}
                         </p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="split-row-aside flex flex-wrap items-center gap-2">
                         {mapping.is_mapped && (
                           <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" aria-hidden="true" />
@@ -1345,8 +1345,8 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                         : 'border-yellow-500/30 bg-yellow-500/10'
                     }`}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
+                    <div className="split-row gap-3 sm:items-center">
+                      <div className="split-row-main">
                         <p className="text-theme-text-primary font-medium">
                           {mapping.external_name || mapping.external_username || 'Unknown User'}
                         </p>
@@ -1355,7 +1355,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                           External ID: {mapping.external_user_id}
                         </p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="split-row-aside flex flex-wrap items-center gap-2">
                         {mapping.is_mapped && (
                           <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" aria-hidden="true" />
@@ -1520,14 +1520,17 @@ const AllMappingsPanel: React.FC<AllMappingsPanelProps> = ({ providers, refreshK
         if (!summary) return null;
         return (
           <section key={provider.id} className="card p-6" aria-labelledby={`all-mappings-${provider.id}`}>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 id={`all-mappings-${provider.id}`} className="text-theme-text-primary text-lg font-semibold">
+            <div className="split-row mb-4 gap-3 sm:items-center">
+              <h2
+                id={`all-mappings-${provider.id}`}
+                className="split-row-main text-theme-text-primary text-lg font-semibold"
+              >
                 {provider.name}
               </h2>
               <button
                 onClick={() => onOpenMappings(provider.id)}
                 aria-label={`Open mappings for ${provider.name}`}
-                className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
+                className="split-row-aside btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
               >
                 <FolderTree className="h-4 w-4" aria-hidden="true" />
                 Open mappings
@@ -1701,11 +1704,14 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
         if (!summary) return null;
         return (
           <section key={provider.id} className="card p-6" aria-labelledby={`import-queue-${provider.id}`}>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 id={`import-queue-${provider.id}`} className="text-theme-text-primary text-lg font-semibold">
+            <div className="split-row mb-4 gap-3 sm:items-center">
+              <h2
+                id={`import-queue-${provider.id}`}
+                className="split-row-main text-theme-text-primary text-lg font-semibold"
+              >
                 {provider.name}
               </h2>
-              <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+              <div className="split-row-aside flex flex-wrap gap-2 self-start sm:self-auto">
                 <button
                   onClick={() => void handleImportMatched(provider.id)}
                   disabled={importingProvider === provider.id}
@@ -1889,8 +1895,8 @@ const ExternalTrainingPage: React.FC = () => {
       <div className="py-6">
         {/* The hub's section nav already names this page, so the title stays for
             heading navigation only; the line under it says what the nav does not. */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="split-row mb-6 gap-4 sm:items-center">
+          <div className="split-row-main">
             <h2 className="sr-only">External Training Integrations</h2>
             <p className="text-theme-text-muted">
               Connect external training platforms to automatically sync completed training records
@@ -1898,7 +1904,7 @@ const ExternalTrainingPage: React.FC = () => {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
+            className="split-row-aside btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
           >
             <Plus className="h-5 w-5" aria-hidden="true" />
             Add Provider

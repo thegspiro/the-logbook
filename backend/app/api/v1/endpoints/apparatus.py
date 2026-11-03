@@ -6,7 +6,7 @@ maintenance tracking, equipment, operators, and fleet management.
 """
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import (
     APIRouter,
@@ -479,6 +479,15 @@ async def list_apparatus(
     year_max: int | None = Query(None, description="Maximum year"),
     make: str | None = Query(None, description="Filter by make"),
     search: str | None = Query(None, description="Search in unit number, name, VIN"),
+    service_status: Literal["unavailable"] | None = Query(
+        None, description="unavailable: out of service or in maintenance"
+    ),
+    has_deficiency: bool | None = Query(
+        None, description="Filter by an unresolved equipment deficiency"
+    ),
+    inspection: Literal["overdue"] | None = Query(
+        None, description="overdue: inspection expired before today"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -503,6 +512,9 @@ async def list_apparatus(
         year_max=year_max,
         make=make,
         search=search,
+        service_status=service_status,
+        has_deficiency=has_deficiency,
+        inspection=inspection,
     )
 
     skip = (page - 1) * page_size

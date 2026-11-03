@@ -87,6 +87,35 @@ app/api/v1/endpoints/elections.py::get_member_ballot
 app/api/v1/endpoints/elections.py::list_my_proxy_authorizations
 app/api/v1/endpoints/elections.py::submit_member_ballot
 
+# Member performance evaluations (2026-11-01). A member reaches their own
+# evaluations on sign-in alone: they acknowledge, refuse or respond to the
+# record, so a grant a department could withdraw would withhold it from them.
+# /mine and /mine/live-data filter on current_user.id within its organization.
+# The by-id routes resolve the evaluation org-scoped, then EvaluationService
+# admits only its member, its evaluator, an approver at an open approval step
+# or a holder of evaluations.view_all / manage, and answers anyone else 404;
+# each write further requires the author of that part (403 otherwise).
+# The PDF download (2026-11-02) admits exactly whom the evaluation page shows
+# the finalized record to; signing requires the signer the open step waits
+# on (an approval's position holder, or the member), a re-verified session,
+# and the signer's own name typed.
+app/api/v1/endpoints/evaluations.py::download_evaluation_document
+app/api/v1/endpoints/evaluations.py::get_evaluation
+app/api/v1/endpoints/evaluations.py::get_my_live_data
+# /mine/removed lists the deletion records of the caller's own evaluations,
+# filtered on current_user.id within its organization (2026-11-02).
+app/api/v1/endpoints/evaluations.py::list_my_deletion_records
+app/api/v1/endpoints/evaluations.py::list_my_evaluations
+# The member's written response (2026-11-02): the service admits only the
+# evaluated member, on their finalized evaluation in its organization, inside
+# the template's response window; anyone else gets 404 or 403.
+app/api/v1/endpoints/evaluations.py::save_evaluation_response
+app/api/v1/endpoints/evaluations.py::submit_evaluation_response
+app/api/v1/endpoints/evaluations.py::refresh_evaluation_data
+app/api/v1/endpoints/evaluations.py::save_evaluation_part
+app/api/v1/endpoints/evaluations.py::sign_evaluation
+app/api/v1/endpoints/evaluations.py::submit_evaluation_part
+
 app/api/v1/endpoints/equipment_check.py::download_csv_sample
 app/api/v1/endpoints/equipment_check.py::get_check_log
 app/api/v1/endpoints/equipment_check.py::get_my_checklist_history
@@ -228,8 +257,15 @@ app/api/v1/endpoints/member_leaves.py::get_my_leaves
 
 app/api/v1/endpoints/member_service_history.py::get_service_history
 
+# The caller's own supervisor history; anyone else's is refused in the body
+# without members.manage.
+app/api/v1/endpoints/member_supervisors.py::get_member_supervisor
+
 app/api/v1/endpoints/membership_pipeline.py::approve_step
 app/api/v1/endpoints/membership_pipeline.py::list_my_sign_offs
+# Scoped to the caller: the applicants they are assigned to, read from
+# prospect_assignments by their own user id. The assignment is the grant.
+app/api/v1/endpoints/membership_pipeline.py::list_my_applicants
 
 app/api/v1/endpoints/messages.py::acknowledge_message
 app/api/v1/endpoints/messages.py::get_inbox
@@ -329,6 +365,18 @@ app/api/v1/endpoints/scheduling.py::withdraw_from_shift
 
 app/api/v1/endpoints/scheduling_module_config.py::get_shift_settings
 
+# Shift evaluations. Filling one out and listing a shift's needs check
+# training.manage or being that shift's officer (_authorize_report_filing),
+# the same grant as filing the shift's reports.
+app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation_form
+app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation_roster
+app/api/v1/endpoints/shift_evaluations.py::save_shift_evaluation
+# Returns only the caller's own submitted evaluations they may see yet.
+app/api/v1/endpoints/shift_evaluations.py::list_my_shift_evaluations
+# training.manage, the evaluator, or the evaluated member once visible to
+# them; anyone else gets the same 404 as a missing row.
+app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation
+
 app/api/v1/endpoints/shift_completion.py::acknowledge_report
 app/api/v1/endpoints/shift_completion.py::batch_create_shift_reports
 app/api/v1/endpoints/shift_completion.py::create_shift_report
@@ -337,6 +385,8 @@ app/api/v1/endpoints/shift_completion.py::get_my_shift_reports
 app/api/v1/endpoints/shift_completion.py::get_my_shift_stats
 app/api/v1/endpoints/shift_completion.py::get_shift_crew_status
 app/api/v1/endpoints/shift_completion.py::get_shift_report
+# Answers only whether the caller may review shift reports; reveals no report.
+app/api/v1/endpoints/shift_completion.py::get_review_access
 app/api/v1/endpoints/shift_completion.py::submit_all_drafts
 app/api/v1/endpoints/shift_completion.py::update_shift_report
 
@@ -465,3 +515,24 @@ app/api/v1/endpoints/users.py::set_my_profile_visibility
 app/api/v1/endpoints/users.py::update_contact_info
 app/api/v1/endpoints/users.py::update_user_profile
 app/api/v1/endpoints/users.py::upload_photo
+
+# History (2026-11-03): published history is read by any signed-in member, so
+# these take no permission. Each is scoped in the handler: every query filters
+# the caller's organization, and HistoryService.Viewer decides what the caller
+# receives — drafts and the restricted fields only with history.view/manage/
+# publish (list_people, get_person, honor_roll, list_titles,
+# list_clearance_steps). list_revisions refuses unless the caller holds
+# history.view/manage or a clearance-step position. The clearance routes act
+# only for the caller: clearance_queue lists requests whose current step the
+# caller's own positions can decide, decide_clearance refuses anyone not holding
+# the current step's position, and review_clearance_request answers 404 unless
+# the caller is a keeper, the submitter or a holder of one of its positions.
+app/api/v1/endpoints/history.py::clearance_queue
+app/api/v1/endpoints/history.py::decide_clearance
+app/api/v1/endpoints/history.py::get_person
+app/api/v1/endpoints/history.py::honor_roll
+app/api/v1/endpoints/history.py::list_clearance_steps
+app/api/v1/endpoints/history.py::list_people
+app/api/v1/endpoints/history.py::list_revisions
+app/api/v1/endpoints/history.py::list_titles
+app/api/v1/endpoints/history.py::review_clearance_request

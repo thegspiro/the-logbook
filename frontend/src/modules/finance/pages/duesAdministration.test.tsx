@@ -278,7 +278,7 @@ describe('member dues', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('button', { name: 'Record a payment for Terry Heather' }));
+    await user.click(screen.getByRole('button', { name: 'Record payment for Terry Heather' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByLabelText('Amount received')).toHaveValue(100);
     await user.selectOptions(within(dialog).getByLabelText(/method/i), 'check');
@@ -300,7 +300,7 @@ describe('member dues', () => {
     recordPayment.mockRejectedValue(new Error('These dues are marked waived and are not owing.'));
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole('button', { name: 'Record a payment for Terry Heather' }));
+    await user.click(screen.getByRole('button', { name: 'Record payment for Terry Heather' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Record payment' }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('These dues are marked waived and are not owing.'));
   });
@@ -324,9 +324,9 @@ describe('member dues', () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(screen.queryByRole('button', { name: 'Record a payment for Ann Lee' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record payment for Ann Lee' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Waive the dues for Ann Lee' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Reverse the waiver for Ann Lee' }));
+    await user.click(screen.getByRole('button', { name: 'Reverse waiver for Ann Lee' }));
     const dialog = screen.getByRole('dialog');
     await user.type(within(dialog).getByLabelText(/why are you reversing/i), 'Waived by mistake');
     await user.click(within(dialog).getByRole('button', { name: 'Reverse waiver' }));

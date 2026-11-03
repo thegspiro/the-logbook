@@ -1004,15 +1004,15 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* Fiscal Years Section                                               */}
       {/* ================================================================== */}
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+        <div className="split-row mb-4 gap-3 sm:items-center">
+          <div className="split-row-main flex items-center gap-2">
             <Calendar className="text-theme-text-secondary h-5 w-5 shrink-0" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Fiscal Years</h2>
           </div>
           <button
             type="button"
             onClick={() => setShowCreateFY(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
+            className="split-row-aside inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
           >
             <Plus className="h-4 w-4" />
             New Fiscal Year
@@ -1049,8 +1049,8 @@ const FiscalYearSettingsPage: React.FC = () => {
           <div className="divide-theme-surface-border divide-y">
             {fiscalYears.map((fy) => (
               <div key={fy.id} className="py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
+                <div className="split-row gap-3 sm:items-center">
+                  <div className="split-row-main">
                     <div className="flex items-center gap-2">
                       <span className="text-theme-text-primary text-sm font-medium">{fy.name}</span>
                       <span
@@ -1067,7 +1067,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     <AdoptionRecord fy={fy} />
                     <CloseRecord fy={fy} />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="split-row-aside flex flex-wrap items-center gap-2">
                     {fy.status === 'draft' && (
                       <PlanningStageControls fy={fy} onChanged={() => void fetchFiscalYears()} />
                     )}
@@ -1092,15 +1092,15 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* Budget Categories Section                                          */}
       {/* ================================================================== */}
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+        <div className="split-row mb-4 gap-3 sm:items-center">
+          <div className="split-row-main flex items-center gap-2">
             <Tag className="text-theme-text-secondary h-5 w-5 shrink-0" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Budget Categories</h2>
           </div>
           <button
             type="button"
             onClick={() => setShowCreateCategory(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
+            className="split-row-aside inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
           >
             <Plus className="h-4 w-4" />
             New Category

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import install_httpx_url_redaction, redact_url_secrets
 from app.core.security import decrypt_data, email_fingerprints
+from app.core.utils import safe_error_detail
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalProviderType,
@@ -2242,7 +2243,7 @@ class ExternalTrainingSyncService:
                     f"Import of pending record {import_record.id} failed: {exc}"
                 )
                 import_record.import_status = "failed"
-                import_record.import_error = str(exc)
+                import_record.import_error = safe_error_detail(exc)
                 failed += 1
                 continue
             if import_record.import_status == "imported":

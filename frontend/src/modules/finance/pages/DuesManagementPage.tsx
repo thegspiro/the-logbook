@@ -33,6 +33,7 @@ import { DuesScheduleDialog } from '../components/DuesScheduleDialog';
 import { DUES_FREQUENCY_LABELS } from '../utils/dues';
 import { DuesPaymentDialog } from '../components/DuesPaymentDialog';
 import { DuesLedgerDialog } from '../components/DuesLedgerDialog';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // =============================================================================
 // Constants
@@ -77,7 +78,7 @@ for (const tab of STATUS_TABS) {
 // =============================================================================
 
 const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
-  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+  <StatGrid columns={4} gap={4}>
     <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4" />
@@ -99,7 +100,7 @@ const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
         <DollarSign className="h-4 w-4 text-red-600" />
         Outstanding
       </div>
-      <p className="mt-1 text-xl font-bold text-red-600">{formatCurrency(summary.totalOutstanding)}</p>
+      <p className="text-theme-accent-red mt-1 text-xl font-bold">{formatCurrency(summary.totalOutstanding)}</p>
     </div>
     <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
@@ -108,7 +109,7 @@ const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
       </div>
       <p className="text-theme-text-primary mt-1 text-xl font-bold">{summary.collectionRate.toFixed(1)}%</p>
     </div>
-  </div>
+  </StatGrid>
 );
 
 // =============================================================================
@@ -308,11 +309,11 @@ const DuesManagementPage: React.FC = () => {
             ))}
           </div>
           {canManage && selectedSchedule && (
-            <div className="border-theme-surface-border flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-theme-text-secondary text-sm">
+            <div className="split-row border-theme-surface-border gap-3 border-t pt-3 sm:items-center">
+              <p className="split-row-main text-theme-text-secondary text-sm">
                 {formatCurrency(selectedSchedule.amount)} per member, due {formatDate(selectedSchedule.dueDate, tz)}
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="split-row-aside flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void handleGenerate(selectedSchedule)}
@@ -437,7 +438,7 @@ const DuesManagementPage: React.FC = () => {
                       </td>
                       <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DUES_STATUS_COLORS[md.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DUES_STATUS_COLORS[md.status] ?? 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300'}`}
                         >
                           {STATUS_LABEL_MAP[md.status] ?? md.status}
                         </span>
@@ -458,7 +459,7 @@ const DuesManagementPage: React.FC = () => {
                               type="button"
                               onClick={() => setDialog({ kind: 'payment', dues: md })}
                               className="btn-secondary inline-flex items-center gap-2"
-                              aria-label={`Record a payment for ${label}`}
+                              aria-label={`Record payment for ${label}`}
                             >
                               <Receipt className="h-4 w-4" />
                               Record payment
@@ -479,7 +480,7 @@ const DuesManagementPage: React.FC = () => {
                               type="button"
                               onClick={() => setDialog({ kind: 'unwaive', dues: md })}
                               className="btn-secondary"
-                              aria-label={`Reverse the waiver for ${label}`}
+                              aria-label={`Reverse waiver for ${label}`}
                             >
                               Reverse waiver
                             </button>

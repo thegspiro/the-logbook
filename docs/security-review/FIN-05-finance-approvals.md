@@ -1,6 +1,152 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 14 (2026-10-31) — watchdog pickup: near-zero real delta (layout refactors, an error-message length cap reaching one finance refusal, an unrelated commit's incidental test-mock fix), 0 fixed, 0 new findings; all standing items re-verified
+
+**Scope.** Pass 13 merged as `dd47d8734` (PR #3807). `git diff
+dd47d8734..b7f72c67a` over this feature's full established scope
+(`endpoints/finance.py`, `finance_service.py`,
+`finance_budget_request_service.py`, `finance_budget_access.py`,
+`finance_report_service.py`, `finance_reimbursement.py`,
+`finance_approver_matching.py`, `finance_budget_ownership.py`,
+`finance_budget_request_notifications.py`, `utils/finance_settings.py`,
+`schemas/finance.py`, `models/finance.py`, `public/finance_approvals.py`,
+`frontend/src/modules/finance/`) touches exactly **2 files**: 11
+insertions / 3 deletions in `finance_service.py` and 15 frontend files with
+a combined 48/82 (cosmetic layout) plus the 4-line test-mock addition
+already counted in that total. 6 non-merge commits touch this scope
+(`92ec254c3`, `ab879fc7d`, `cf8fdae30`, `06dec4a13`, `18e105b48`,
+`530edfc18`); each read in full against its own diff, not taken on its
+message:
+
+- **`530edfc18` ("Cap three more refusals that list data through a
+  variable")** is the one change with any runtime effect in scope:
+  `_assert_budget_open_for_new_charges`'s inactive-category refusal
+  (`finance_service.py:8933`) now builds its message with the shared
+  `list_within_detail_limit()` (`app/core/utils.py:75`) instead of joining
+  every category name unbounded. Read `list_within_detail_limit` directly:
+  it shows as many names as fit under `MAX_ERROR_DETAIL_LENGTH` and says
+  "and N more" for the rest, never raising the cap — a length-DoS/
+  readability fix to an error message, not an access-control or
+  money-correctness change, and the names it lists are already
+  org-scoped (the caller's own category tree). No behavior change for the
+  common case (the message is unchanged whenever it already fit).
+- **`92ec254c3` ("Add case managers, interviewers and
+  prospective_members.view_all")** is a prospective-members/permissions
+  change outside this feature's scope; it touches `finance/` only
+  incidentally — the 4-line addition to
+  `restrictedFunds.test.tsx` (giving the test's finance service mock an
+  `approvalChainService.routePreview` stub) that pass 13 already reviewed
+  as this file's delta is from _this_ commit, confirmed by `git show
+--stat`. No finance code changed.
+- **`ab879fc7d`/`cf8fdae30`/`06dec4a13`/`18e105b48`** are the four shared
+  layout-utility commits (`split-row`, `page-header`, `StatGrid`/`KpiTile`)
+  behind the 15 frontend file diffs — confirmed cosmetic by direct read of
+  every diff: class-string/shared-component swaps only, same JSX
+  structure, same data flow, same permission gating on every button
+  (`canSubmit`/`canManage`/`canApprove` conditionals are untouched in each
+  file). No new API call, no new axios instance (Pitfall #7 n/a).
+
+**Route count.** `finance.py` re-enumerated fresh by AST (walking every
+`@router.<method>` decorator rather than trusting the stated count):
+**136 routes**, unchanged from pass 12/13. `public/finance_approvals.py`:
+**3 routes**, unchanged. Every one of the 136 carries an explicit
+`Depends(get_current_user)` or `Depends(require_permission(...))` /
+`require_all_permissions(...)` — checked by parsing each route handler's
+parameter defaults from the AST rather than a text/substring scan, zero
+routes with no auth dependency. The handful gated by bare
+`get_current_user` (`/charge-access`, `/budget-categories/{id}/charge-access`,
+`/my-budgets`, `/my-budgets/summary`, `/budgets/{id}`,
+`/budgets/{id}/amendments`, `/budgets/{id}/transactions`, every
+`/budget-requests*` route) are the documented self/owner-scoped shape —
+re-verified by direct read that each resolves ownership or
+requester-identity inside the service (`_requester_scope`,
+`set_category_charge_access`'s `tree.manageable_by(...)` check,
+`decide_request`'s submitted-by/owns-the-line check) rather than relying
+on the endpoint layer alone.
+
+**Standing items re-verified by direct code read, not taken on a prior
+pass's word:**
+
+- **FIN8-05-1 (MED) — still ✅ FIXED.** `FinanceBudgetRequestService
+.decide_request` (`finance_budget_request_service.py:701`) still refuses
+  a decider who submitted the request or owns its line
+  (`BudgetRequestForbiddenError`), unchanged since pass 13's commit
+  `49994b9c`.
+- **`waive_dues` row-lock + repeat-waiver refusal — still in place.**
+  `finance_service.py:6938` reads the dues row `.with_for_update()`,
+  applies `assert_different_person` (FIN-4), then refuses
+  (`ValueError("These dues are already waived.")`) if the record is
+  already `WAIVED` — unchanged since pass 13's commit `84073154`.
+- **`approve_step`/`deny_step` ordering and SoD — re-read in full.**
+  `_ensure_current_step` (`finance_service.py:3121`) locks the owning
+  entity and refuses any step that is not the chain's current pending one
+  (blocks both a later-step approver acting early and an approve racing a
+  cancel); `approve_step` (`:3260`) locks the step record scoped to the
+  caller's own org via the `ApprovalChain` join (closes the cross-tenant
+  IDOR a bare `step_record_id` lookup would otherwise allow), then calls
+  `assert_different_person(approver_id, creator_id, ...)` before writing
+  anything — a treasurer cannot walk their own purchase/check/expense
+  report through its own chain. `approve_by_token`
+  (`:3402`) separately blocks an EMAIL-type approver whose
+  `approver_value` is the requester's own address, unless the step opts
+  into `allow_self_approval`. All three guards read unchanged from pass
+  13's description.
+- **`_mutate_budget` overspend ceiling — re-read.**
+  (`finance_service.py:8802`) takes the budget row `.with_for_update()`
+  and raises `BudgetLimitExceededError` whenever
+  `new_spent + new_encumbered > amount_budgeted`, fail-closed, no
+  override path. Unchanged.
+- **FIN-30 (LOW) — still an accepted owner decision, not a live gap.**
+  `list_dues_payments` (`finance_service.py:6918`, confirmed byte-identical
+  body by direct read) still takes no `.offset()`/`.limit()`.
+  `docs/KNOWN_LIMITATIONS.md` already records the owner's 2026-10-05
+  decision to leave this as-is; still matches the code.
+- **CSV export / LIKE escaping — re-swept.** The one export path in scope
+  (`finance.py:2121`, `GET /export/transactions`) still calls
+  `SafeCsvWriter(output).writerows(rows)`; the one `.like()` call in scope
+  (`finance_service.py:4829`, request-number prefix search) still passes
+  `escape=LIKE_ESCAPE_CHAR` and the local variable is still named
+  `number_prefix` (not `like_pattern`, per SEC-00's SEC-2 fix) so it
+  cannot shadow the shared helper.
+- **`_validate_finance_fks`/`assert_in_org`/`assert_chargeable` — re-read**
+  (`finance_service.py:8833`): budget/category/fiscal-year/station/
+  apparatus/facility/fund-campaign FKs on budget/PR/CR/expense
+  create+update all still route through this one helper before being
+  persisted. Unchanged since pass 2/8's fixes (FIN-1, FIN-2, FIN-8).
+
+**Not security-relevant, confirmed by reading each commit's own diff:**
+all 6 — see above (4 cosmetic layout commits, 1 incidental cross-feature
+test-mock fix, 1 error-message length cap with no access-control effect).
+
+**0 fixed this pass, 0 new findings.** This is the fourth consecutive
+near-zero-delta pass (12, 13, 14) for a module the app-review and
+module-audit docs already describe as one of the best-hardened in the
+codebase; every money-movement, approval-chain-ordering, separation-of-
+duties, idempotency, tenant-isolation and injection control re-verified
+above continues to hold by direct read of the current code, not by
+re-stating a prior pass's conclusion.
+
+### Completion gate (pass 14)
+
+| Check                                                                                                                                                                                                                                                                                                   | Result                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin, verified by `--version`)                                                                                                                                                                                                                                | clean                                                                                                                   |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                                                                                                                                | clean, 2757 files unchanged                                                                                             |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                                                                                                                             | clean                                                                                                                   |
+| `scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                               | passed, 680 revisions, single head `3fbd0fe30e5b`                                                                       |
+| `scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                               | 281 routes, 0 errors, 0 warnings                                                                                        |
+| `pytest -k "finance or budget_request or approval_chain or dues or reimburs or quickbooks or waive"` (no `-m` exclusion — this feature's money-correctness tests are `db_session`-backed `integration` tests and the sandbox has a live MySQL, matching every prior pass's convention for this feature) | 1,562 passed, 2 skipped (both environment-only: `pywebpush`, and a time-zone-table fixture unavailable in this sandbox) |
+| Standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates, encryption-registry coverage, email-fingerprint, rotate-email-fingerprints)                                                         | 191 passed, 1 skipped (`pywebpush`)                                                                                     |
+| `frontend: npm run typecheck`                                                                                                                                                                                                                                                                           | 0 errors                                                                                                                |
+| `frontend: npm run lint`                                                                                                                                                                                                                                                                                | 0 errors, 0 warnings                                                                                                    |
+
+No code change was made this pass (nothing unsafe was found, and nothing
+safe needed fixing), so no new guard test was added. `docs/KNOWN_LIMITATIONS.md`'s
+FIN-30/FIN-7 row was re-checked against the code and needs no update.
 
 ---
 

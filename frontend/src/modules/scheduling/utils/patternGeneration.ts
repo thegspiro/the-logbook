@@ -13,8 +13,10 @@ export function generationSummary(result: PatternGenerateResponse): string {
   const count = Number(result.shifts_created ?? 0);
   if (count === 0) {
     // Zero is the normal answer to re-running a range, and it reads as a
-    // failure unless it says why.
-    return 'No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern’s own start and end.';
+    // failure unless it says why. The last clause matters since generation
+    // keeps a record of every occurrence it made: an officer who deleted one
+    // and generates again gets nothing back, and should be told that is why.
+    return 'No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern’s own start and end and dates whose generated shift was deleted or moved.';
   }
   return `Generated ${String(count)} shift${count === 1 ? '' : 's'}`;
 }

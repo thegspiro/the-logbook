@@ -2,7 +2,7 @@
  * Training type definitions
  */
 
-import type { PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
+import type { LeaveMonthRule, PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
@@ -761,6 +761,10 @@ export interface TrainingRequirement {
   required_courses?: string[];
   required_shifts?: number;
   required_calls?: number;
+  required_transports?: number | null;
+  required_refusals?: number | null;
+  /** Evaluated shifts: count only evaluations with no item at the form's lowest rating. */
+  evaluation_excludes_lowest_rating?: boolean;
   required_call_types?: string[];
   required_skills?: string[];
   checklist_items?: ChecklistItem[];
@@ -823,6 +827,9 @@ export interface TrainingRequirementCreate {
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;
   required_calls?: number | null | undefined;
+  required_transports?: number | null | undefined;
+  required_refusals?: number | null | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
   checklist_items?: ChecklistItem[] | null | undefined;
@@ -874,6 +881,9 @@ export interface TrainingRequirementUpdate {
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;
   required_calls?: number | null | undefined;
+  required_transports?: number | null | undefined;
+  required_refusals?: number | null | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
   checklist_items?: ChecklistItem[] | null | undefined;
@@ -949,7 +959,18 @@ export interface RequirementProgress {
 // ==================== Training Program Types ====================
 
 export type RequirementType =
-  'hours' | 'courses' | 'certification' | 'shifts' | 'calls' | 'skills_evaluation' | 'checklist' | 'knowledge_test';
+  | 'hours'
+  | 'courses'
+  | 'certification'
+  | 'shifts'
+  | 'calls'
+  | 'skills_evaluation'
+  | 'checklist'
+  | 'knowledge_test'
+  // Credited by submitted shift evaluations.
+  | 'evaluated_shifts'
+  | 'transports'
+  | 'refusals';
 
 export type RequirementSource = 'department' | 'state' | 'national';
 
@@ -1026,6 +1047,8 @@ export interface TrainingProgram {
   recert_interval_months?: number;
   recert_anchor_month?: number;
   recert_anchor_day?: number;
+  /** The shift evaluation form members enrolled in this program are evaluated on. */
+  shift_evaluation_template_id?: string | null;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -1048,6 +1071,7 @@ export interface TrainingProgramCreate {
   recert_interval_months?: number | undefined;
   recert_anchor_month?: number | undefined;
   recert_anchor_day?: number | undefined;
+  shift_evaluation_template_id?: string | undefined;
 }
 
 export interface ProgramPhase {
@@ -1144,6 +1168,8 @@ export interface TrainingProgramUpdate {
   /** Omit to leave alone; `[]` or `null` clears every prerequisite. */
   prerequisite_program_ids?: string[] | null | undefined;
   allows_concurrent_enrollment?: boolean | undefined;
+  /** Omit to leave alone; `null` removes the program's evaluation form. */
+  shift_evaluation_template_id?: string | null | undefined;
 }
 
 export interface ProgramPhaseUpdate {
@@ -1446,6 +1472,9 @@ export interface ProgramBuildRequirementInput {
   required_hours?: number | undefined;
   required_shifts?: number | undefined;
   required_calls?: number | undefined;
+  required_transports?: number | undefined;
+  required_refusals?: number | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   checklist_items?: ChecklistItem[] | undefined;
@@ -1900,6 +1929,11 @@ export interface TrainingSubmissionCreate {
   attachments?: string[] | undefined;
   /** Park the submission in the member's own list instead of sending it for review. */
   save_as_draft?: boolean | undefined;
+  /**
+   * Repeated on every send of this one submission, so a resend after a lost
+   * answer is stored once. Set by trainingSubmissionService.createSubmission.
+   */
+  client_request_id?: string | undefined;
 }
 
 /**
@@ -2092,12 +2126,25 @@ export interface MonthlyShiftData {
   calls?: number;
 }
 
+/**
+ * A member's average on one shift evaluation form, on that form's own scale.
+ * Never pooled with the 1-5 shift report rating or with another form.
+ */
+export interface ShiftEvaluationAverage {
+  template_id: string | null;
+  form_name: string;
+  scale_max: number;
+  average: number;
+  evaluations: number;
+}
+
 export interface TraineeShiftStats {
   total_reports: number;
   total_hours: number | null;
   total_calls: number | null;
   avg_rating: number | null;
   monthly: MonthlyShiftData[];
+  evaluation_averages?: ShiftEvaluationAverage[];
 }
 
 export interface OfficerAnalyticsTrainee {
@@ -2223,6 +2270,11 @@ export interface RequirementDetail {
   due_date?: string | null;
   days_until_due?: number | null;
   waived_months?: number;
+  /** Of `waived_months`, those a leave of absence and those a training waiver
+   * excused. A month both covered counts in both. */
+  leave_months?: number;
+  waiver_months?: number;
+  /** Fractional when a partial month was excused. */
   active_months?: number;
   cert_expired?: boolean;
   blocks_activity?: boolean;
@@ -2246,11 +2298,46 @@ export interface RequirementDetail {
   /**
    * Hours per calendar month over the window, zeros included, for an hours
    * requirement. These are the records the server counted, so they sum to
-   * `completed_hours`. `waived` marks a month covered by leave, the same
-   * months the requirement's target was prorated by. Null for every other
-   * requirement type.
+   * `completed_hours`, including hours earned while excused. `waived` marks a
+   * month leave or a waiver excused any of, the same months the requirement's
+   * target was prorated by. Null for every other requirement type.
    */
-  monthly_hours?: Array<{ month: string; hours: number; waived?: boolean }> | null;
+  monthly_hours?: RequirementMonth[] | null;
+}
+
+export interface RequirementMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  hours: number;
+  waived?: boolean;
+  /** Share of the month's target excused, 0–1; under 1 for a partial month. */
+  waived_share?: number;
+  /** A leave of absence covered part or all of the month. */
+  on_leave?: boolean;
+  /** A training waiver covered part or all of the month. */
+  on_waiver?: boolean;
+}
+
+/** A member's leave of absence as the officer view shows it: dates and type only. */
+export interface MemberLeavePeriod {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string | null;
+}
+
+/** `/training/module-config/members/{id}/requirements`: one member, officer's view. */
+export interface MemberRequirementsResponse {
+  user_id: string;
+  as_of: string;
+  leave_month_rule: LeaveMonthRule;
+  requirements_summary: {
+    total_requirements: number;
+    met_requirements: number;
+    avg_compliance: number | null;
+  };
+  requirements_detail: RequirementDetail[];
+  leaves_of_absence: MemberLeavePeriod[];
 }
 
 /** One training record on the History tab, from `/my-training/records`. */
@@ -2383,6 +2470,7 @@ export interface MyTrainingSummary {
     hours_reported: number;
     total_calls: number;
     avg_rating: number | null;
+    evaluation_averages?: ShiftEvaluationAverage[];
   };
   submissions?: Array<{
     id: string;
@@ -3151,6 +3239,8 @@ export interface ComplianceConfigData {
   atRiskThreshold: number;
   gracePeriodDays: number;
   includeCurrentMonth: boolean;
+  /** Absent from a server that predates the setting; read as `full_month`. */
+  leaveMonthRule?: LeaveMonthRule;
   autoReportFrequency: string;
   // `| null`, not just `| undefined`: the backend schema field is
   // `Optional[List[...]] = None`, so a config an officer explicitly cleared
@@ -3173,6 +3263,7 @@ export interface ComplianceConfigUpdate {
   at_risk_threshold?: number | undefined;
   grace_period_days?: number | undefined;
   include_current_month?: boolean | undefined;
+  leave_month_rule?: LeaveMonthRule | undefined;
   auto_report_frequency?: string | undefined;
   // `| null`: this payload also serves `PUT /config` (a partial update, per
   // `exclude_unset` on the backend), where an omitted key leaves the stored
@@ -3292,4 +3383,230 @@ export interface MemberPeriodStatusResponse {
   end_date: string;
   members: MemberPeriodStatusRow[];
   generated_at: string;
+}
+
+// ============================================
+// Shift Evaluation Templates
+// ============================================
+
+export const ShiftEvaluationStatistic = {
+  CALLS: 'calls',
+  TRANSPORTS: 'transports',
+  REFUSALS: 'refusals',
+} as const;
+export type ShiftEvaluationStatistic = (typeof ShiftEvaluationStatistic)[keyof typeof ShiftEvaluationStatistic];
+
+export const GeneralShiftEvaluationMode = {
+  OFF: 'off',
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+} as const;
+export type GeneralShiftEvaluationMode = (typeof GeneralShiftEvaluationMode)[keyof typeof GeneralShiftEvaluationMode];
+
+export interface ShiftEvaluationScaleLevel {
+  value: number;
+  label: string;
+}
+
+export interface ShiftEvaluationHeaderField {
+  /** Kept across edits; omitted for a new field and minted by the server. */
+  key?: string | undefined;
+  label: string;
+  type: 'text' | 'choice';
+  options: string[];
+  required: boolean;
+}
+
+export interface ShiftEvaluationTemplateItem {
+  key?: string | undefined;
+  label: string;
+  description?: string | null | undefined;
+  comment_always_required: boolean;
+}
+
+export interface ShiftEvaluationTemplateSection {
+  key?: string | undefined;
+  title: string;
+  column_heading: string;
+  items: ShiftEvaluationTemplateItem[];
+}
+
+/** The whole template as the editor saves it (create and update take the same body). */
+export interface ShiftEvaluationTemplateWrite {
+  name: string;
+  description?: string | null | undefined;
+  is_active: boolean;
+  scale: ShiftEvaluationScaleLevel[];
+  allow_not_applicable: boolean;
+  not_applicable_label: string;
+  comment_required_at_or_below: number | null;
+  header_fields: ShiftEvaluationHeaderField[];
+  statistics: ShiftEvaluationStatistic[];
+  sections: ShiftEvaluationTemplateSection[];
+  closing_comments_label?: string | null | undefined;
+  closing_comments_hint?: string | null | undefined;
+  evaluator_rule: 'shift_officer';
+  /** Seat tokens; read only when this is the department's general form. */
+  evaluated_seats: string[];
+}
+
+export interface ShiftEvaluationTemplate extends ShiftEvaluationTemplateWrite {
+  id: string;
+  organization_id: string;
+  version: number;
+  /** Programs that use this form. */
+  program_names: string[];
+  is_general_form: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftEvaluationSettings {
+  general_shift_evaluation_template_id: string | null;
+  general_shift_evaluation_mode: GeneralShiftEvaluationMode;
+  one_shift_evaluation_for_multiple_programs: boolean;
+}
+
+export interface ShiftEvaluationSettingsUpdate {
+  general_shift_evaluation_template_id?: string | null | undefined;
+  general_shift_evaluation_mode?: GeneralShiftEvaluationMode | undefined;
+  one_shift_evaluation_for_multiple_programs?: boolean | undefined;
+}
+
+// ============================================
+// Shift Evaluations (filled out)
+// ============================================
+
+/** A copy of the form an evaluation was filled out on (the server's snapshot). */
+export interface ShiftEvaluationFormSnapshot {
+  id?: string | undefined;
+  version?: number | undefined;
+  name: string;
+  scale: ShiftEvaluationScaleLevel[];
+  allow_not_applicable: boolean;
+  not_applicable_label: string;
+  comment_required_at_or_below: number | null;
+  header_fields: ShiftEvaluationHeaderField[];
+  statistics: ShiftEvaluationStatistic[];
+  sections: ShiftEvaluationTemplateSection[];
+  closing_comments_label?: string | null | undefined;
+  closing_comments_hint?: string | null | undefined;
+}
+
+export interface ShiftEvaluationItemAnswer {
+  rating: number | null;
+  not_applicable: boolean;
+  comment?: string | null | undefined;
+}
+
+export interface ShiftEvaluationSummary {
+  id: string;
+  status: 'draft' | 'submitted';
+  average_rating: number | null;
+  rated_count: number;
+  low_rating_count: number;
+  evaluator_name: string | null;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ShiftEvaluationRequirement {
+  member_id: string;
+  member_name: string;
+  seat: string | null;
+  /** An enrollment id, 'combined' or 'general'. */
+  scope_key: string;
+  program_names: string[];
+  required: boolean;
+  template_options: { id: string; name: string }[];
+  evaluation: ShiftEvaluationSummary | null;
+}
+
+/** What an evaluation is about: a department shift, or a shift logged on an outside agency's unit. */
+export type ShiftEvaluationOccasion = 'shift' | 'external';
+
+export interface ShiftEvaluationRoster {
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  platoon: string | null;
+  requirements: ShiftEvaluationRequirement[];
+}
+
+export interface ShiftEvaluationDetail {
+  id: string;
+  member_id: string;
+  member_name: string | null;
+  evaluator_id: string | null;
+  evaluator_name: string | null;
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
+  /** The outside preceptor named on an outside-shift evaluation. */
+  preceptor_name: string | null;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  scope_key: string;
+  program_names: string[];
+  template_id: string | null;
+  template_version: number;
+  template: ShiftEvaluationFormSnapshot;
+  status: 'draft' | 'submitted';
+  header_values: Record<string, string>;
+  statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+  responses: Record<string, ShiftEvaluationItemAnswer>;
+  closing_comments: string | null;
+  average_rating: number | null;
+  rated_count: number;
+  low_rating_count: number;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ShiftEvaluationFormResponse {
+  requirement: ShiftEvaluationRequirement;
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  platoon: string | null;
+  template: ShiftEvaluationFormSnapshot;
+  template_id: string | null;
+  evaluation: ShiftEvaluationDetail | null;
+  prefill_statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+}
+
+export interface ShiftEvaluationSaveBody {
+  template_id?: string | undefined;
+  header_values: Record<string, string>;
+  statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+  responses: Record<string, ShiftEvaluationItemAnswer>;
+  closing_comments?: string | null | undefined;
+  /** Outside shifts only: the preceptor who did the evaluating. */
+  preceptor_name?: string | null | undefined;
+  submit: boolean;
+}
+
+/** A logged outside shift still waiting on its evaluation. */
+export interface OutsideShiftAwaitingEvaluation {
+  entry_id: string;
+  member_id: string;
+  member_name: string | null;
+  shift_date: string;
+  start_at: string | null;
+  end_at: string | null;
+  agency_name: string;
+  apparatus_name: string;
+  evaluation_status: 'needed' | 'draft';
+  /** The evaluation to open first: the first one not yet submitted. */
+  scope_key: string;
 }

@@ -49,13 +49,24 @@ type FieldSpec = {
   fullWidth?: boolean;
 };
 
+interface PlatformSpec {
+  title: string;
+  /** What the platform does with these settings, under the heading. */
+  summary: string;
+  /** A caveat the operator must read before relying on the platform. */
+  notice?: string;
+  fields: FieldSpec[];
+}
+
 /**
  * Per-platform credential fields. Keys are camelCase and map to the snake_case
  * FileStorageSettings fields when the session is persisted at completion.
  */
-const PLATFORM_FIELDS: Record<string, { title: string; fields: FieldSpec[] }> = {
+const PLATFORM_FIELDS: Record<string, PlatformSpec> = {
   googledrive: {
     title: 'Google Drive',
+    summary:
+      'New documents, photos and attachments go to this Shared Drive once the connection test in Settings → Storage passes. Until then they are kept on the server.',
     fields: [
       {
         key: 'googleDriveServiceAccountKey',
@@ -83,6 +94,9 @@ const PLATFORM_FIELDS: Record<string, { title: string; fields: FieldSpec[] }> = 
   },
   onedrive: {
     title: 'OneDrive / SharePoint',
+    summary: 'These details are saved for when OneDrive / SharePoint is connected.',
+    notice:
+      'OneDrive / SharePoint is not connected yet: every file stays in the server’s upload folder whatever is entered here. Include that folder in your backups.',
     fields: [
       { key: 'oneDriveTenantId', label: 'Tenant ID', required: true },
       { key: 'oneDriveClientId', label: 'Client ID', required: true },
@@ -98,6 +112,8 @@ const PLATFORM_FIELDS: Record<string, { title: string; fields: FieldSpec[] }> = 
   },
   s3: {
     title: 'Amazon S3',
+    summary:
+      'New documents, photos and attachments go to this bucket once the connection test in Settings → Storage passes. Until then they are kept on the server.',
     fields: [
       { key: 's3BucketName', label: 'Bucket Name', required: true },
       { key: 's3Region', label: 'Region', placeholder: 'us-east-1', required: true },
@@ -114,12 +130,18 @@ const PLATFORM_FIELDS: Record<string, { title: string; fields: FieldSpec[] }> = 
   },
   local: {
     title: 'Local Storage',
+    summary: 'Documents, photos and attachments are kept in the server’s upload folder.',
+    // The path is stored but nothing reads it (KNOWN_LIMITATIONS, as above):
+    // uploads always go to the server's upload folder. Said here rather than
+    // left to look like it moved them.
+    notice:
+      'The server always uses its own upload folder (the uploads volume in Docker). A path entered here is recorded but not used yet — to put files somewhere else, mount that volume there. Include it in your backups.',
     fields: [
       {
         key: 'localStoragePath',
-        label: 'Storage Path',
+        label: 'Storage Path (not used yet)',
         placeholder: '/var/lib/logbook/uploads',
-        help: 'Leave blank to use the server default. The path must be writable and included in your backups.',
+        help: 'Leave blank. The server keeps files in its own upload folder.',
         fullWidth: true,
       },
     ],
@@ -240,12 +262,14 @@ const FileStorageConfiguration: React.FC = () => {
               <HardDrive className="h-7 w-7 text-red-500" aria-hidden="true" />
             </div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Configure {spec.title}</h2>
-            <p className="text-theme-text-secondary mx-auto mt-2 max-w-lg text-sm">
-              {platform === 'local'
-                ? 'Choose where on the server documents, photos, and attachments are kept.'
-                : `The Logbook uses these to store documents, photos, and attachments in your ${spec.title} account.`}
-            </p>
+            <p className="text-theme-text-secondary mx-auto mt-2 max-w-lg text-sm">{spec.summary}</p>
           </div>
+
+          {spec.notice && (
+            <div role="note" className="alert-warning mb-4 text-sm">
+              {spec.notice}
+            </div>
+          )}
 
           {error && (
             <div className="mb-4">
@@ -293,13 +317,16 @@ const FileStorageConfiguration: React.FC = () => {
               ))}
             </div>
 
-            <div className="border-theme-surface-border mt-5 flex items-start gap-2 border-t pt-4">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
-              <p className="text-theme-text-muted text-xs">
-                Secrets are encrypted with AES-256 before they are stored, and are never sent back to the browser once
-                saved.
-              </p>
-            </div>
+            {/* Only where there is a secret to encrypt — Local Storage has none. */}
+            {spec.fields.some((field) => field.secret) && (
+              <div className="border-theme-surface-border mt-5 flex items-start gap-2 border-t pt-4">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+                <p className="text-theme-text-muted text-xs">
+                  Secrets are encrypted with AES-256 before they are stored, and are never sent back to the browser once
+                  saved.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">

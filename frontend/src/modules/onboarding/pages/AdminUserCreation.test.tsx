@@ -60,7 +60,9 @@ const fillAccount = async (user: ReturnType<typeof userEvent.setup>, password: s
   await fill(/^confirm password/i, password);
 };
 
-const createButton = () => screen.getByRole('button', { name: /create system owner/i });
+// Found by the words it shows (W01-14): a voice-control user says what they
+// see, so the accessible name must contain the visible label.
+const createButton = () => screen.getByRole('button', { name: 'Create Account & Continue' });
 
 beforeEach(() => {
   navigate.mockReset();
@@ -128,5 +130,16 @@ describe('coming back after the account exists', () => {
 
     await waitFor(() => expect(getStatus).toHaveBeenCalled());
     expect(navigate).not.toHaveBeenCalledWith(nextStepPath('system_owner'), { replace: true });
+  });
+});
+
+describe('the password fields on a phone', () => {
+  // Both show/hide toggles were 20px square at phone width (found driving W01-13).
+  it('gives the show-password toggles the phone touch minimum', () => {
+    renderStep();
+
+    const toggles = screen.getAllByRole('button', { name: 'Show password' });
+    expect(toggles).toHaveLength(2);
+    for (const toggle of toggles) expect(toggle).toHaveClass('touch-target-phone');
   });
 });

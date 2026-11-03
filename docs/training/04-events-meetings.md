@@ -140,7 +140,7 @@ card, and the tools to check people in. Other members may see a **Who's
 going** list, if the department shares it (see
 [Who's going](#whos-going-rsvp-and-the-waitlist)).
 
-![Event detail page with the header, description, and RSVP controls](./images/04-02-event-detail.png)
+![An upcoming Training event's page as a member: RSVP Now and Add to Calendar beside the title and no View QR Code, then the Event Details, Training Session Details, Requirements & Programs and Event Information cards](./images/04-02-event-detail.png)
 
 **To RSVP:**
 
@@ -372,7 +372,7 @@ your department shares it.
 
 ![A member's event detail page while check-in is open: the Check In button beside the event's details](./images/04-79-event-check-in-open.png)
 
-![The same event page after check-in: You're checked in in place of the Check In button, with the hours and category credited](./images/04-80-event-checked-in.png)
+![The same event page after check-in: You're checked in in place of the Check In button, and Your RSVP reading Going](./images/04-80-event-checked-in.png)
 
 1. Scan the QR code with your phone's camera.
 2. Sign in if you are not already. The self check-in page opens.
@@ -604,11 +604,11 @@ is on. It shows whose card each tap was only to officers who can also issue ID
 cards. The full card list and tap log are on **Members Admin → Member ID
 cards** (see [Membership](./01-membership.md#the-member-id-cards-page)).
 
-<!-- Screenshot needed: The Card taps section on an event page, listing station taps with their outcomes and readers -->
+![The Card taps section of the in-progress drill's event page, listing each ID card tap with its time, member, outcome and the check-in station it was made at](./images/04-90-event-card-taps.png)
 
-<!-- Screenshot needed: The Card Check-ins tab of Events Admin, with its outcome, reader and date filters above the taps -->
+![Events Administration with the Check-ins area card chosen and its Card Check-ins page open: filters for outcome, reader and dates above the ID card taps, each with its outcome, member, card, the check-in station it was made at and its event](./images/04-91-card-checkins-tab.png)
 
-<!-- Screenshot needed: The Card Readers page with the Volunteer Office reader on and its kiosk taps over the last 7 days -->
+![The Card Readers page filtered to rooms with a reader on: the Volunteer Office marked Reader on, with its taps, refusals and last tap over the last 7 days](./images/04-92-card-readers.png)
 
 ### Monitoring Check-Ins
 
@@ -706,9 +706,9 @@ it will appear and shows it by itself at opening time (it refreshes every 30
 seconds). **Reset** is offered even while the code is hidden, for a code that
 leaked before the event.
 
-> **Screenshot to create:** the event QR page with the guest code and its
-> Reset button, and the print choice for one code. Also the card before
-> check-in opens, with the "will appear" note.
+![The Guest Check-In card on the Volunteer Interest Night's event page while check-in is open: the guest code, the guest check-in link with its copy button, Show full size and Reset code](./images/04-93-event-qr-guest-code.png)
+
+![The Guest Check-In card on the page of an event three days away: the code hidden until check-in opens, the times guests can sign in, the note that the code appears when check-in opens, Show full size and Reset code](./images/04-94-event-qr-guest-code-hidden.png)
 
 ### Signing in a walk-in yourself _(2026-10-25)_
 
@@ -719,7 +719,8 @@ that feeds the pipeline, a walk-in with an email who is not already an
 applicant gets an application opened, marked as entered by staff. A member
 account is left alone.
 
-### What the guest fills in
+![The Guests card on the Fall Recruitment Open House's page: Add guest beside the heading, the note that guests are not counted in attendance, and four guests signed in at the kiosk, each with email, phone and sign-in time](./images/04-95-event-guests-card.png)
+
 ### What the guest fills in
 
 This is the form at an event **without** the pipeline switch. Name is
@@ -745,9 +746,9 @@ page asks for an email address instead of a name:
    on their application, and links the event to it. **That's not me** returns
    them to the email box with a hint to check for typos; nothing is recorded.
 
-![The guest sign-in page on a phone, with the event name above the email field](./images/04-32-guest-sign-in-form.png)
+![The guest sign-in page at a recruitment event on a phone: the event's name, time and place, then the Email field and Continue](./images/04-32-guest-sign-in-form.png)
 
-![The guest sign-in confirmation naming the event and the time signed in](./images/04-33-guest-sign-in-confirmation.png)
+![The guest sign-in confirmation for an applicant who had already signed in: You're already checked in, Rosa D., the event, where it is and the time signed in, and the note that her attendance was added to her application](./images/04-33-guest-sign-in-confirmation.png)
 
 Anyone else is stopped with a message rather than signed in:
 
@@ -867,9 +868,11 @@ of **Manage Events**.
 > its own start — a deadline two days before the first drill closes RSVPs two
 > days before each drill.
 
-> **Attachments cannot be added from The Logbook.** The attachments area says
-> _"Files can't be attached from the app yet."_ — and there is no upload on
-> the event page either.
+> **Attaching files** _(2026-10-31)_. Files are attached from the event's own
+> page, not this form. If you can manage events, the **Attachments** card
+> there has **Attach file**: PDF, Office documents, text, CSV or images, up to
+> 25 MB each. Anyone who can see the event can download them. The bin icon
+> beside a file removes it, after asking.
 
 **Mandatory attendance.** Ticking **Mandatory attendance** opens **Mandatory
 for**, a checklist of your department's membership types. The form will not
@@ -1053,6 +1056,8 @@ which opens **Check In Members**. They can add and check in members,
 The organizer pair do not get **Edit**, **End Event**, **Finalize
 Attendance**, **Record Times**, the **More** menu or the **Monitoring
 Dashboard**. Those stay with officers who can manage events.
+
+![The next Monthly Officers Meeting as its alternate organizer, who does not manage events: Going, View QR Code, Add to Calendar and Check In beside the title, no Edit or More, and the Organized by row naming her as the alternate](./images/04-96-event-organizer-view.png)
 
 **Training managers run Training events.** A member with **training.manage**
 (in the standard setup: the chiefs, President, Training Officer, Captain,
@@ -1532,8 +1537,9 @@ cancelled.
    and future events in this series**, or **Delete all events in this
    series**.
 3. The dialog reads "Permanently delete "…"? Its RSVPs and attendance records
-   are deleted too. You can't undo this." Select **Delete Event** (or **Delete
-   Entire Series**), or **Keep Event** to back out.
+   are deleted too. You can't undo this." Select **Delete Event** (**Delete
+   This and Future** or **Delete Entire Series** for the other two choices), or
+   **Keep Event** to back out.
 
 > **What if I want to keep the history?** **Delete all events** removes every
 > occurrence, past ones included. To keep the past, choose **Delete this and
@@ -1557,7 +1563,7 @@ cancelled.
 > such event in a series blocks deleting the whole series. A finalized event
 > cannot be deleted either.
 
-![The Delete Event dialog on a recurring event, with the single/series choice](./images/04-39-delete-event-series.png)
+![The Delete Event dialog on a recurring event: Delete only this event, Delete this and future events in this series (selected) and Delete all events in this series, with Keep Event and Delete This and Future](./images/04-39-delete-event-series.png)
 
 ### Importing events from a CSV file
 
@@ -1656,9 +1662,11 @@ each result shows its status.
 
 **Minutes Settings.** _(2026-10-19)_ The department-wide choices about minutes
 are on one screen, opened with the **Settings** button beside **Outlines** at the
-top of the Minutes page (`minutes.manage`). It has four sections: **Attendance**
+top of the Minutes page (`minutes.manage`). It has five sections: **Attendance**
 (who the minutes name), **Signatures** (who signs adopted minutes), **Reminders**
-(following up action items) and **Publishing** (the library and the public page).
+(following up action items), **Publishing** (the library and the public page)
+and **Elections** (whether a closed election files its result with the minutes
+of its meeting).
 Anyone who manages minutes can read every section. Changing one needs the
 settings permission; without it the controls are greyed out, the section says a
 settings administrator changes it, and there is no Save. **Save** stays disabled
@@ -1666,11 +1674,11 @@ until something changes. Before 2026-10-19 these were four separate buttons on t
 Minutes page (**Reminders**, **Roll listing**, **Publishing**, **Signers**), each
 opening its own dialog.
 
-![Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row](./images/04-71-minutes-settings-attendance.png)
+![Minutes Settings under the Governance section header: the section tabs (Attendance, Signatures, Reminders, Publishing, Elections) above the Attendance section, How attendance is listed, and its Save button](./images/04-71-minutes-settings-attendance.png)
 
 ![Minutes Settings as a minutes manager without the settings permission: the Attendance section with disabled controls, a note that a settings administrator changes it, and no Save row](./images/04-72-minutes-settings-read-only.png)
 
-![The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted](./images/04-14-meeting-minutes.png)
+![The Meeting Minutes page under the Governance section header: Outlines, Settings, Attendance and Record Minutes, the summary tiles, the search box, and each meeting card listing its minutes with their state, one Circulated for review and one Draft](./images/04-14-meeting-minutes.png)
 
 ### Creating Minutes
 
@@ -1688,6 +1696,12 @@ opening its own dialog.
 Executive, Annual and Other. Minutes written from a meeting keep its type.
 Each type starts with its own sections. **Executive** minutes cannot be read
 by members, even once approved.
+
+**Two people editing one draft** _(2026-10-31)_. If someone else saves the
+minutes after you opened them, your next section save is refused rather than
+writing their sections back as they were. A banner says so, and what you
+were typing stays in the editor. Select **Reload** to see their changes, then
+save yours again.
 
 ### Motions
 
@@ -2064,8 +2078,9 @@ percentage.
 
 **The member's window** runs from the later of:
 
-- the start of the look-back period (the membership type's attendance period,
-  in calendar months), and
+- the start of the look-back period, in calendar months — the **Period** you
+  chose here, or, for the voting check, **Over the last (months)** on the
+  member's membership tier _(2026-10-29)_ — and
 - the start of the member's current service — their latest service period,
   otherwise their hire date —
 
@@ -2119,7 +2134,7 @@ parts most often looked for from here:
 | Linking an election to a meeting or event       | [Meeting Attendance Integration](./14-elections.md#meeting-attendance-integration) |
 | Election problems                               | [Elections troubleshooting](./14-elections.md#troubleshooting)                     |
 
-![The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them](./images/04-42-cast-ballot.png)
+![The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, a write-in and Abstain, the bylaw amendment beneath it, and one Cast Ballot button for the whole ballot](./images/04-42-cast-ballot.png)
 
 ![The Create New Election dialog — title, description, voting window, and the victory-condition and runoff settings](./images/04-43-create-election.png)
 

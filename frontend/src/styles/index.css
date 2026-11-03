@@ -752,6 +752,41 @@
   }
 }
 
+/* --- Split row ---
+   The same wrapping rule as page-header, for a row inside a card or a list:
+   content on the left, an aside (actions, a badge, a status) on the right,
+   stacked on a phone. The main column keeps 12rem rather than 16rem because
+   these rows sit in cards and list items, not across the page.
+
+   `flex-col sm:flex-row sm:justify-between` with an aside that could not
+   shrink was written ~90 times. From `sm` it is a row that never wraps, so in
+   a card beside the 256px sidebar the aside squeezed the content column — the
+   same failure as the page headers, one level down. Display, wrapping, gap,
+   alignment and margins stay with the call site. */
+@utility split-row {
+  display: flex;
+  flex-direction: column;
+  @media (min-width: 640px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@utility split-row-main {
+  min-width: 0;
+  @media (min-width: 640px) {
+    flex: 1 0 12rem;
+  }
+}
+
+@utility split-row-aside {
+  min-width: 0;
+  @media (min-width: 640px) {
+    margin-left: auto;
+  }
+}
+
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
   /* red-800, not red-600. White on red-600 measures 4.83:1 — AA for large
@@ -1105,6 +1140,23 @@
       @apply sr-only;
     }
   }
+}
+
+@utility field-grid {
+  /* Form fields in columns that follow the grid's own width, never the
+     viewport. The sidebar is open from md up, so `sm:grid-cols-2
+     md:grid-cols-3` put three ~140px inputs in a 768px tablet's content area,
+     too narrow for a typed name or an amount to stay readable.
+
+     The same formula as card-grid, with an 11rem floor: two fields side by
+     side inside a padded form card at that width, about 24rem, the same
+     ~185px columns its two-column neighbours draw there. Capped at three columns, as card-grid is. Field order is
+     preserved, so a grid holding first, middle and last name still reads in
+     that order as it reflows. A field that spans columns does not belong in
+     it: with one track, a col-span-2 child forces an implicit second column. */
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(11rem, calc(100% / 3 - 1rem))), 1fr));
 }
 
 @utility form-grid-2 {

@@ -156,6 +156,9 @@ const TrainingRequirementsPage: React.FC = () => {
         required_courses: requirement.required_courses,
         required_shifts: requirement.required_shifts,
         required_calls: requirement.required_calls,
+        required_transports: requirement.required_transports,
+        required_refusals: requirement.required_refusals,
+        evaluation_excludes_lowest_rating: requirement.evaluation_excludes_lowest_rating,
         required_call_types: requirement.required_call_types,
         required_skills: requirement.required_skills,
         checklist_items: requirement.checklist_items,
@@ -465,6 +468,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
         return 'Checklist';
       case 'knowledge_test':
         return 'Knowledge Test';
+      case 'evaluated_shifts':
+        return 'Evaluated Shifts';
+      case 'transports':
+        return 'Transports';
+      case 'refusals':
+        return 'Refusals';
       default:
         return type;
     }
@@ -497,8 +506,8 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
     <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex-1">
+        <div className="split-row gap-4 sm:items-start">
+          <div className="split-row-main">
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h2>
               {requirement.requirement_type && (
@@ -609,7 +618,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex flex-wrap items-center gap-2 sm:ml-4">
+          <div className="split-row-aside flex flex-wrap items-center gap-2 sm:ml-4">
             <button
               onClick={onToggleActive}
               className={`rounded-lg p-2 transition-colors ${
@@ -720,6 +729,22 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 )}
                 {requirement.required_calls != null && (
                   <DetailRow label="Required Calls" value={String(requirement.required_calls)} />
+                )}
+                {requirement.required_transports != null && (
+                  <DetailRow label="Required Transports" value={String(requirement.required_transports)} />
+                )}
+                {requirement.required_refusals != null && (
+                  <DetailRow label="Required Refusals" value={String(requirement.required_refusals)} />
+                )}
+                {requirement.requirement_type === 'evaluated_shifts' && (
+                  <DetailRow
+                    label="Lowest Rating"
+                    value={
+                      requirement.evaluation_excludes_lowest_rating
+                        ? 'An evaluation with any item at the lowest rating does not count'
+                        : 'Every submitted evaluation counts'
+                    }
+                  />
                 )}
                 {requirement.required_courses && requirement.required_courses.length > 0 && (
                   <DetailRow

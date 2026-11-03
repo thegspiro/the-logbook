@@ -33,6 +33,7 @@ const DonationsPage = lazyWithRetry(() => import('./pages/DonationsPage'));
 const DonationFormPage = lazyWithRetry(() => import('./pages/DonationFormPage'));
 const PledgesPage = lazyWithRetry(() => import('./pages/PledgesPage'));
 const FundraisingEventsPage = lazyWithRetry(() => import('./pages/FundraisingEventsPage'));
+const ZeffyPage = lazyWithRetry(() => import('./pages/ZeffyPage'));
 
 // Reports
 const GrantsReportsPage = lazyWithRetry(() => import('./pages/GrantsReportsPage'));
@@ -219,6 +220,20 @@ export const getGrantsFundraisingRoutes = () => {
             requiredPermission="fundraising.view"
           >
             <FundraisingEventsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Zeffy */}
+      <Route
+        path="/grants/zeffy"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
+            <ZeffyPage />
           </ProtectedRoute>
         }
       />

@@ -8,6 +8,9 @@ import {
   Contrast,
   ChevronDown,
   Bell,
+  ClipboardCheck,
+  ClipboardList,
+  CreditCard,
   UserCog,
   WifiOff,
   RefreshCw,
@@ -26,7 +29,7 @@ import { canOpenAdministrationSection } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
-import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { triggerAllOfflineDrains } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
@@ -34,6 +37,7 @@ import { governanceNavItems } from './governanceNavigation';
 import { trainingNavItems } from './trainingNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
+import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -87,10 +91,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
-  const practicalSkillsMethod = usePracticalSkillsMethod();
+  const practicalSkillsMethod = usePracticalSkillsMethod(!modulesLoading && isModuleOn('training'));
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const hasAssignedApplicants = useHasAssignedApplicants(
+    currentUser?.id,
+    !modulesLoading && isModuleOn('prospective_members')
+  );
   const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second
@@ -166,6 +174,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    // Gate mirrors SideNavigation's My Applicants — see there.
+    ...(hasAssignedApplicants
+      ? [{ label: 'My Applicants', path: '/prospective-members/my-applicants' } as NavItem]
+      : []),
     // Every member's inbox for department announcements, and the suggestion
     // box. SideNavigation has always listed both; without them here a
     // department on this layout had no way to reach either screen.
@@ -245,6 +257,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
           } as NavItem,
         ]
       : []),
+    ...(isModuleOn('history')
+      ? [
+          {
+            label: 'History',
+            path: '/history',
+            subItems: [
+              { label: 'Overview', path: '/history' },
+              { label: 'Past Members', path: '/history/people' },
+              { label: 'Honor Roll', path: '/history/honor-roll' },
+            ],
+          } as NavItem,
+        ]
+      : []),
 
     // ── Administration (only for admins) ──
     ...(hasAnyAdminPermission
@@ -280,6 +305,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   ]
                 : []),
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
+              ...(isModuleOn('medical_screening')
+                ? [{ label: 'Medical Screening', path: '/medical-screening', permission: 'medical_screening.view' }]
+                : []),
               DIV,
               { label: 'Manage Events', path: '/events', permission: 'events.manage' },
               ...(isModuleOn('training')
@@ -325,7 +353,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               ...(isModuleOn('integrations')
                 ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]
                 : []),
-              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports', permission: 'reports.view' }] : []),
+              ...(isModuleOn('reports')
+                ? [
+                    { label: 'Reports', path: '/reports', permission: 'reports.view' },
+                    {
+                      label: 'Member Evaluations',
+                      path: '/reports/evaluations',
+                      anyPermission: ['evaluations.configure', 'evaluations.manage'],
+                    },
+                  ]
+                : []),
               DIV,
               { label: 'Organization', path: '/settings', permission: 'settings.manage' },
               { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
@@ -401,6 +438,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   // off it is an entry to a refusal that can never show a number.
   const showNotifications = isModuleOn('notifications');
   const accountActive = isActive('/account');
+  const myIdCardPath = currentUser?.id ? `/members/${currentUser.id}/id-card` : null;
+  const myIdCardActive = myIdCardPath !== null && isActive(myIdCardPath);
+  const myEvaluationsActive = isActive('/reports/evaluations/mine');
+  const conductActive = isActive('/reports/evaluations/conduct');
+  // Gated like its route: the evaluations a member conducts, or all of them.
+  const canListEvaluations =
+    checkPermission('evaluations.conduct') ||
+    checkPermission('evaluations.view_all') ||
+    checkPermission('evaluations.manage');
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
     .filter((item) => item.path !== '#' && isActive(item.path))
@@ -691,7 +737,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   (pendingSyncCount > 0 && isOnline ? (
                     <button
                       onClick={() => {
-                        void triggerOfflineDrain();
+                        void triggerAllOfflineDrains();
                       }}
                       className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                       title="Click to retry syncing pending submissions"
@@ -913,7 +959,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   {isOnline && pendingSyncCount > 0 && (
                     <button
                       onClick={() => {
-                        void triggerOfflineDrain();
+                        void triggerAllOfflineDrains();
                       }}
                       className="flex w-full items-center space-x-2 rounded-md bg-blue-500/15 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                     >
@@ -943,6 +989,32 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       )}
                     </a>
                   )}
+                  {isModuleOn('reports') && (
+                    <a
+                      href="/reports/evaluations/mine"
+                      onClick={(e) => handleNavigation('/reports/evaluations/mine', e)}
+                      aria-current={myEvaluationsActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        myEvaluationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                      <span>My Evaluations</span>
+                    </a>
+                  )}
+                  {isModuleOn('reports') && canListEvaluations && (
+                    <a
+                      href="/reports/evaluations/conduct"
+                      onClick={(e) => handleNavigation('/reports/evaluations/conduct', e)}
+                      aria-current={conductActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        conductActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                      <span>Evaluations</span>
+                    </a>
+                  )}
                   <a
                     href="/account"
                     onClick={(e) => handleNavigation('/account', e)}
@@ -954,6 +1026,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     <UserCog className="h-4 w-4" aria-hidden="true" />
                     <span>My Account</span>
                   </a>
+                  {myIdCardPath && (
+                    <a
+                      href={myIdCardPath}
+                      onClick={(e) => handleNavigation(myIdCardPath, e)}
+                      aria-current={myIdCardActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        myIdCardActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <CreditCard className="h-4 w-4" aria-hidden="true" />
+                      <span>My ID Card</span>
+                    </a>
+                  )}
                   <button
                     onClick={cycleTheme}
                     className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"

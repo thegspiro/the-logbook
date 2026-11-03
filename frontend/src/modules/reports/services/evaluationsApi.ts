@@ -1,0 +1,268 @@
+/**
+ * Member Evaluations API Service — templates, review periods and evaluations.
+ */
+
+import { createApiClient } from '../../../utils/createApiClient';
+import { asArray } from '../../../utils/asArray';
+import type {
+  BuilderOptions,
+  BulkDraftItem,
+  BulkDraftPreview,
+  BulkDraftResponse,
+  DraftOptions,
+  EvaluationCreate,
+  EvaluationDeletionRecord,
+  EvaluationDetail,
+  EvaluationPartKind,
+  EvaluationSummary,
+  EvaluationTemplateKind,
+  LiveData,
+  PartContent,
+  SignatureWrite,
+  SignResult,
+  SubmitResult,
+  EvaluationDataSource,
+  EvaluationPeriod,
+  EvaluationPeriodCreate,
+  EvaluationPeriodUpdate,
+  EvaluationTemplateCreate,
+  EvaluationTemplateDetail,
+  EvaluationTemplateSummary,
+  EvaluationTemplateUpdate,
+  PublishResult,
+  TemplateDefinition,
+  TemplateWorkflow,
+} from '../types/evaluations';
+
+const api = createApiClient();
+
+export const evaluationTemplatesService = {
+  async list(): Promise<EvaluationTemplateSummary[]> {
+    const response = await api.get<EvaluationTemplateSummary[]>('/evaluations/templates');
+    return asArray(response.data);
+  },
+
+  async get(id: string): Promise<EvaluationTemplateDetail> {
+    const response = await api.get<EvaluationTemplateDetail>(`/evaluations/templates/${id}`);
+    return response.data;
+  },
+
+  async create(data: EvaluationTemplateCreate): Promise<EvaluationTemplateDetail> {
+    const response = await api.post<EvaluationTemplateDetail>('/evaluations/templates', data);
+    return response.data;
+  },
+
+  async update(id: string, data: EvaluationTemplateUpdate): Promise<EvaluationTemplateDetail> {
+    const response = await api.patch<EvaluationTemplateDetail>(`/evaluations/templates/${id}`, data);
+    return response.data;
+  },
+
+  async remove(id: string): Promise<void> {
+    await api.delete(`/evaluations/templates/${id}`);
+  },
+
+  async saveDraft(
+    id: string,
+    definition: TemplateDefinition,
+    workflow: TemplateWorkflow
+  ): Promise<EvaluationTemplateDetail> {
+    const response = await api.put<EvaluationTemplateDetail>(`/evaluations/templates/${id}/draft`, {
+      definition,
+      workflow,
+    });
+    return response.data;
+  },
+
+  async discardDraft(id: string): Promise<EvaluationTemplateDetail> {
+    const response = await api.delete<EvaluationTemplateDetail>(`/evaluations/templates/${id}/draft`);
+    return response.data;
+  },
+
+  async publish(id: string): Promise<PublishResult> {
+    const response = await api.post<PublishResult>(`/evaluations/templates/${id}/publish`);
+    return response.data;
+  },
+
+  async dataSources(): Promise<EvaluationDataSource[]> {
+    const response = await api.get<EvaluationDataSource[]>('/evaluations/data-sources');
+    return asArray(response.data);
+  },
+
+  async builderOptions(): Promise<BuilderOptions> {
+    const response = await api.get<BuilderOptions>('/evaluations/builder-options');
+    return response.data;
+  },
+};
+
+export const evaluationPeriodsService = {
+  async list(): Promise<EvaluationPeriod[]> {
+    const response = await api.get<EvaluationPeriod[]>('/evaluations/periods');
+    return asArray(response.data);
+  },
+
+  async create(data: EvaluationPeriodCreate): Promise<EvaluationPeriod> {
+    const response = await api.post<EvaluationPeriod>('/evaluations/periods', data);
+    return response.data;
+  },
+
+  async update(id: string, data: EvaluationPeriodUpdate): Promise<EvaluationPeriod> {
+    const response = await api.patch<EvaluationPeriod>(`/evaluations/periods/${id}`, data);
+    return response.data;
+  },
+
+  async remove(id: string): Promise<void> {
+    await api.delete(`/evaluations/periods/${id}`);
+  },
+};
+
+export const evaluationsService = {
+  async list(
+    params: { period_id?: string | undefined; status?: string | undefined } = {}
+  ): Promise<EvaluationSummary[]> {
+    const response = await api.get<EvaluationSummary[]>('/evaluations', { params });
+    return asArray(response.data);
+  },
+
+  async draftOptions(): Promise<DraftOptions> {
+    const response = await api.get<Partial<DraftOptions>>('/evaluations/draft-options');
+    const body = response.data;
+    return {
+      members: asArray(body.members ?? []),
+      evaluators: asArray(body.evaluators ?? []),
+      periods: asArray(body.periods ?? []),
+    };
+  },
+
+  async create(data: EvaluationCreate): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>('/evaluations', data);
+    return response.data;
+  },
+
+  async mine(): Promise<EvaluationSummary[]> {
+    const response = await api.get<EvaluationSummary[]>('/evaluations/mine');
+    return asArray(response.data);
+  },
+
+  async liveData(): Promise<LiveData> {
+    const response = await api.get<Partial<LiveData>>('/evaluations/mine/live-data');
+    const body = response.data;
+    return {
+      period_id: body.period_id ?? null,
+      period_name: body.period_name ?? null,
+      coverage_start: body.coverage_start ?? null,
+      coverage_end: body.coverage_end ?? null,
+      excluded_ranges: asArray(body.excluded_ranges ?? []),
+      sources: asArray(body.sources ?? []),
+      data: body.data ?? {},
+      note: body.note ?? null,
+    };
+  },
+
+  async get(id: string): Promise<EvaluationDetail> {
+    const response = await api.get<EvaluationDetail>(`/evaluations/${id}`);
+    return response.data;
+  },
+
+  async savePart(id: string, kind: EvaluationPartKind, content: PartContent): Promise<EvaluationDetail> {
+    const response = await api.put<EvaluationDetail>(`/evaluations/${id}/parts/${kind}`, { content });
+    return response.data;
+  },
+
+  async submitPart(id: string, kind: EvaluationPartKind): Promise<SubmitResult> {
+    const response = await api.post<SubmitResult>(`/evaluations/${id}/parts/${kind}/submit`);
+    return response.data;
+  },
+
+  async refreshData(id: string): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/refresh-data`);
+    return response.data;
+  },
+
+  /** Sign the step open to the caller. The server asks for step-up
+   * re-verification first; the shared client shows that prompt and retries. */
+  async sign(id: string, signature: SignatureWrite): Promise<SignResult> {
+    const response = await api.post<SignResult>(`/evaluations/${id}/sign`, signature);
+    return response.data;
+  },
+
+  /** The frozen PDF: `latest` carries the member's response once submitted;
+   * `signed` is always the PDF as it was signed. */
+  async document(id: string, version: 'latest' | 'signed' = 'latest'): Promise<Blob> {
+    const response = await api.get<Blob>(`/evaluations/${id}/document`, {
+      responseType: 'blob',
+      params: { version },
+    });
+    return response.data;
+  },
+
+  async saveResponse(id: string, text: string): Promise<EvaluationDetail> {
+    const response = await api.put<EvaluationDetail>(`/evaluations/${id}/response`, { text });
+    return response.data;
+  },
+
+  async submitResponse(id: string): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/response/submit`);
+    return response.data;
+  },
+
+  /** Complete calibration, flagging the evaluator's items to revisit (ticks
+   * only, never a note). */
+  async completeCalibration(id: string, flaggedItems: string[] = []): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/calibration/complete`, {
+      flagged_items: flaggedItems,
+    });
+    return response.data;
+  },
+
+  async bulkPreview(periodId: string, kind: EvaluationTemplateKind): Promise<BulkDraftPreview> {
+    const response = await api.get<Partial<BulkDraftPreview>>('/evaluations/bulk-preview', {
+      params: { period_id: periodId, kind },
+    });
+    const body = response.data;
+    // A missing list would read as "nobody to draft", which is a claim about
+    // the department; refuse it rather than show it.
+    if (!body.period || !Array.isArray(body.rows)) {
+      throw new Error('The drafting preview came back incomplete. Try again.');
+    }
+    return {
+      period: body.period,
+      kind: body.kind ?? kind,
+      rows: body.rows,
+      evaluators: asArray(body.evaluators ?? []),
+    };
+  },
+
+  async bulkDraft(periodId: string, kind: EvaluationTemplateKind, items: BulkDraftItem[]): Promise<BulkDraftResponse> {
+    const response = await api.post<Partial<BulkDraftResponse>>('/evaluations/bulk', {
+      period_id: periodId,
+      kind,
+      items,
+    });
+    return { drafted: response.data.drafted ?? 0, results: asArray(response.data.results ?? []) };
+  },
+
+  /** Reopen a finalized evaluation as a new revision, with the reason. */
+  async amend(id: string, reason: string): Promise<EvaluationDetail> {
+    const response = await api.post<EvaluationDetail>(`/evaluations/${id}/amend`, { reason });
+    return response.data;
+  },
+
+  /** Delete an evaluation with a reason. The server asks for step-up
+   * re-verification first; the shared client shows that prompt and retries. */
+  async remove(id: string, reason: string): Promise<EvaluationDeletionRecord> {
+    const response = await api.post<EvaluationDeletionRecord>(`/evaluations/${id}/delete`, { reason });
+    return response.data;
+  },
+
+  async removed(memberId?: string): Promise<EvaluationDeletionRecord[]> {
+    const response = await api.get<EvaluationDeletionRecord[]>('/evaluations/removed', {
+      params: memberId ? { member_id: memberId } : {},
+    });
+    return asArray(response.data);
+  },
+
+  async myRemoved(): Promise<EvaluationDeletionRecord[]> {
+    const response = await api.get<EvaluationDeletionRecord[]>('/evaluations/mine/removed');
+    return asArray(response.data);
+  },
+};

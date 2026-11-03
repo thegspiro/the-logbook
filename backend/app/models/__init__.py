@@ -88,6 +88,25 @@ from app.models.email_template import (
     EmailTemplateType,
 )
 from app.models.error_log import ErrorLog
+from app.models.evaluation import (
+    Evaluation,
+    EvaluationAmendment,
+    EvaluationDeletionRecord,
+    EvaluationDocument,
+    EvaluationPart,
+    EvaluationPartKind,
+    EvaluationPartStatus,
+    EvaluationPeriod,
+    EvaluationSignature,
+    EvaluationStatus,
+    EvaluationStep,
+    EvaluationStepStatus,
+    EvaluationStepType,
+    EvaluationTemplate,
+    EvaluationTemplateKind,
+    EvaluationTemplateVersion,
+    SignatureDisposition,
+)
 from app.models.event import (
     AttendancePetitionStatus,
     CheckInWindowType,
@@ -213,6 +232,17 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
+from app.models.history import (
+    HistoricalMember,
+    HistoricalMemberPeriodTitle,
+    HistoricalMemberRelation,
+    HistoricalMemberServicePeriod,
+    HistoryClearanceDecision,
+    HistoryClearanceRequest,
+    HistoryClearanceStep,
+    HistoryRevision,
+    HistoryTitle,
+)
 from app.models.integration import (
     CalendarSyncMapping,
     Integration,
@@ -308,6 +338,7 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.member_supervisor import MemberSupervisorAssignment
 from app.models.membership_pipeline import (
     ActionType,
     MembershipPipeline,
@@ -373,6 +404,7 @@ from app.models.public_portal import (
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
+from app.models.shift_evaluation import ShiftEvaluation, ShiftEvaluationTemplate
 from app.models.shift_history_import import (
     ShiftHistoryImport,
     ShiftHistoryImportMapping,
@@ -462,6 +494,12 @@ from app.models.user import (
     UserStatus,
     user_roles,
 )
+from app.models.zeffy import (
+    ZeffyCampaignLink,
+    ZeffyLinkTarget,
+    ZeffyPayment,
+    ZeffyPaymentState,
+)
 
 __all__ = [
     # Admin hours models
@@ -481,6 +519,7 @@ __all__ = [
     "user_roles",
     "MemberLeaveOfAbsence",
     "MemberServicePeriod",
+    "MemberSupervisorAssignment",
     "LeaveType",
     # Audit models
     "AuditChainHead",
@@ -552,6 +591,10 @@ __all__ = [
     "Integration",
     "IntegrationSyncLog",
     "WeatherAlert",
+    "ZeffyCampaignLink",
+    "ZeffyLinkTarget",
+    "ZeffyPayment",
+    "ZeffyPaymentState",
     "CalendarSyncMapping",
     "McpServiceKey",
     "UserPasskey",
@@ -617,6 +660,24 @@ __all__ = [
     "VotingToken",
     "Vote",
     "ElectionStatus",
+    # Member performance evaluation models
+    "Evaluation",
+    "EvaluationAmendment",
+    "EvaluationDeletionRecord",
+    "EvaluationDocument",
+    "EvaluationPart",
+    "EvaluationPartKind",
+    "EvaluationPartStatus",
+    "EvaluationPeriod",
+    "EvaluationSignature",
+    "EvaluationStatus",
+    "EvaluationStep",
+    "EvaluationStepStatus",
+    "EvaluationStepType",
+    "EvaluationTemplate",
+    "EvaluationTemplateKind",
+    "EvaluationTemplateVersion",
+    "SignatureDisposition",
     # Event models
     "Event",
     "EventRSVP",
@@ -666,6 +727,8 @@ __all__ = [
     "ShiftPreWorkSession",
     "PreWorkStatus",
     # Shift history import
+    "ShiftEvaluation",
+    "ShiftEvaluationTemplate",
     "ShiftHistoryImport",
     "ShiftHistoryImportMapping",
     "ShiftHistoryImportMappingKind",
@@ -756,6 +819,16 @@ __all__ = [
     "WriteOffStatus",
     "ReturnRequestStatus",
     "ReturnRequestType",
+    # History models
+    "HistoricalMember",
+    "HistoricalMemberPeriodTitle",
+    "HistoricalMemberRelation",
+    "HistoricalMemberServicePeriod",
+    "HistoryClearanceDecision",
+    "HistoryClearanceRequest",
+    "HistoryClearanceStep",
+    "HistoryRevision",
+    "HistoryTitle",
     # Medical screening models
     "ScreeningRequirement",
     "ScreeningRecord",

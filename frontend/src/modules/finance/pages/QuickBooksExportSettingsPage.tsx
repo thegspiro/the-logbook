@@ -280,7 +280,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                             <span className="text-theme-text-secondary mt-1 block text-xs">{statusHint(row)}</span>
                           )}
                         </td>
-                        <td className={`${CELL} text-right`}>
+                        <td data-label="Actions" className={`${CELL} text-right`}>
                           {onlyMapping ? (
                             <button
                               type="button"
@@ -369,7 +369,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                       <td data-label="Type" className={`${CELL} capitalize`}>
                         {mapping.mappingType}
                       </td>
-                      <td className={`${CELL} text-right`}>
+                      <td data-label="Actions" className={`${CELL} text-right`}>
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"

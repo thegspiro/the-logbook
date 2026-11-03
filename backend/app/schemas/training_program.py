@@ -59,6 +59,9 @@ class TrainingRequirementEnhancedBase(BaseModel):
     required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    evaluation_excludes_lowest_rating: bool = False
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -112,6 +115,9 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    evaluation_excludes_lowest_rating: Optional[bool] = None
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -226,6 +232,9 @@ class TrainingProgramBase(BaseModel):
     recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
     recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
     recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
+    # The shift evaluation form a member enrolled in this program is evaluated
+    # on. Validated in-org by the service before it is stored.
+    shift_evaluation_template_id: Optional[UUID] = None
 
 
 class TrainingProgramCreate(TrainingProgramBase):
@@ -262,6 +271,8 @@ class TrainingProgramUpdate(RefusesNull):
     # Omitted leaves the setting alone; null is rejected by the service, since
     # the column has no "unset" meaning the enrollment checks could honour.
     allows_concurrent_enrollment: Optional[bool] = None
+    # Omitted leaves the form alone; null clears it.
+    shift_evaluation_template_id: Optional[UUID] = None
 
     null_refused = frozenset(
         {
@@ -1068,6 +1079,9 @@ class ProgramBuildRequirementInput(BaseModel):
     required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    evaluation_excludes_lowest_rating: bool = False
     # Same type and (absent) validation as TrainingRequirementEnhancedBase, so a
     # requirement built here reads exactly like one created from the edit modal.
     # Omitted/None/[] all mean "every call counts".

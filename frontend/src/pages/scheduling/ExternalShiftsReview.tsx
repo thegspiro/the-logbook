@@ -18,6 +18,7 @@ import { formatCalendarDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
 import { externalShiftTimeRange } from './externalShiftTimes';
+import { ExternalShiftEvaluationBadge } from './ExternalShiftEvaluationBadge';
 
 interface ExternalShiftsReviewProps {
   /** YYYY-MM-DD, inclusive. */
@@ -102,8 +103,8 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
 
   return (
     <section className="mt-8" aria-labelledby="external-shifts-review-heading">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <div className="split-row mb-3 gap-3 sm:items-end">
+        <div className="split-row-main">
           <h2 id="external-shifts-review-heading" className="text-theme-text-primary text-lg font-semibold">
             Shifts with other departments
           </h2>
@@ -112,7 +113,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
             logged{canManage ? '; reject one to take it out of the totals.' : '.'}
           </p>
         </div>
-        <div>
+        <div className="split-row-aside">
           <label htmlFor="external-shifts-status" className="form-label">
             Show
           </label>
@@ -210,6 +211,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                           Counted
                         </span>
                       )}
+                      <ExternalShiftEvaluationBadge status={entry.evaluation_status} className="mt-1 block w-fit" />
                     </td>
                     {canManage && (
                       <td className="px-4 py-3 text-right" data-label="Actions">

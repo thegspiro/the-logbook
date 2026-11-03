@@ -889,23 +889,34 @@ export const ElectionsPage: React.FC = () => {
                                 e.preventDefault();
                                 addPosition();
                                 setShowPositionDropdown(false);
-                              } else if (e.key === 'Escape') {
+                              } else if (e.key === 'Escape' && positionListboxOpen) {
+                                // Escape dismisses the open list only. Left to
+                                // bubble, it also reaches the dialog's Escape
+                                // handlers and discards the whole form.
+                                e.stopPropagation();
                                 setShowPositionDropdown(false);
                               }
                             }}
                             placeholder="Select or type a position..."
                             aria-label="Position name"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded={positionListboxOpen}
+                            aria-controls={positionListboxOpen ? 'election-position-listbox' : undefined}
                             autoComplete="off"
                             className="form-input shadow-xs"
                           />
                           {positionListboxOpen && (
                             <ul
+                              id="election-position-listbox"
                               className="popover-panel absolute z-20 mt-1 max-h-48 w-full overflow-auto"
                               role="listbox"
                               aria-label="Available positions"
                             >
                               {positionSuggestions.map((suggestion) => (
-                                <li key={suggestion.key}>
+                                // presentation: the option, not a list item,
+                                // is the listbox's child in the a11y tree.
+                                <li key={suggestion.key} role="presentation">
                                   <button
                                     type="button"
                                     role="option"

@@ -153,6 +153,33 @@ describe('EventForm', () => {
       expect(screen.queryByText(/can't be attached/i)).not.toBeInTheDocument();
     });
 
+    it("names an attachment's type rather than printing its MIME type (W53-6)", () => {
+      renderWithRouter(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          editingEventId="evt-1"
+          initialData={{
+            title: 'Hose drill',
+            attachments: [
+              {
+                id: 'att-1',
+                file_name: 'drill-plan.pdf',
+                file_path: 'events/evt-1/drill-plan.pdf',
+                file_size: 2048,
+                file_type: 'application/pdf',
+                uploaded_by: 'user-1',
+                uploaded_at: '2026-10-01T12:00:00Z',
+              },
+            ],
+          }}
+        />
+      );
+
+      expect(screen.getByText(/· PDF$/)).toBeInTheDocument();
+      expect(screen.queryByText(/application\/pdf/)).not.toBeInTheDocument();
+    });
+
     it('should render submit and cancel buttons', () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} submitLabel="Create Event" />);
 

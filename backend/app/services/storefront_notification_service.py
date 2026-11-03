@@ -196,12 +196,19 @@ class StorefrontNotificationService:
 
         Admin-ness is a *position* slug, not a column on User — a member can
         hold several positions — so the roles relationship is eager-loaded and
-        matched against the shared ADMIN_NOTIFY_ROLE_SLUGS list.
+        matched against the shared ADMIN_NOTIFY_ROLE_SLUGS list. Scoped to
+        ``ACTIVE_ACCOUNT_STATUSES`` like its sibling ``get_member_recipients``
+        and ``get_admin_user_ids`` above/below it — a retired or dropped
+        quartermaster who still carries the position (nothing revokes it on
+        a status change) must not keep receiving every new order's customer
+        name, email and shipping address by mail indefinitely (CLAUDE.md
+        Pitfall #32).
         """
         result = await self.db.execute(
             select(User)
             .where(
                 User.organization_id == str(organization_id),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.email.isnot(None),
                 User.deleted_at.is_(None),
             )

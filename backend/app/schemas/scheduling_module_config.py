@@ -21,6 +21,9 @@ class CustomPositionSchema(BaseModel):
 
     value: str = Field(..., min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=100)
+    # A seat that drives the apparatus gets the same EVOC check as the built-in
+    # driver seat. Optional so a payload saved before the flag still validates.
+    drives_apparatus: bool = False
 
 
 class ApparatusTypeDefaultsSchema(BaseModel):

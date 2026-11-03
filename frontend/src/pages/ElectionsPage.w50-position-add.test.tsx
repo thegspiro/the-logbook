@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -75,7 +75,7 @@ describe('ElectionsPage position combobox (W50-63)', () => {
 
   it('never mounts a click-away scrim, open listbox or not', async () => {
     const container = await openCreateDialog();
-    const input = screen.getByRole('textbox', { name: 'Position name' });
+    const input = screen.getByRole('combobox', { name: 'Position name' });
 
     expect(scrim(container)).toBeNull();
 
@@ -90,7 +90,7 @@ describe('ElectionsPage position combobox (W50-63)', () => {
 
   it('closes the listbox when the input loses focus', async () => {
     await openCreateDialog();
-    const input = screen.getByRole('textbox', { name: 'Position name' });
+    const input = screen.getByRole('combobox', { name: 'Position name' });
 
     await userEvent.type(input, 'Chief');
     expect(screen.getByRole('listbox')).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe('ElectionsPage position combobox (W50-63)', () => {
 
   it('adds a typed position on the first Add click while the listbox is open', async () => {
     await openCreateDialog();
-    const input = screen.getByRole('textbox', { name: 'Position name' });
+    const input = screen.getByRole('combobox', { name: 'Position name' });
 
     await userEvent.type(input, 'Chief');
     expect(screen.getByRole('listbox')).toBeInTheDocument();
@@ -112,9 +112,45 @@ describe('ElectionsPage position combobox (W50-63)', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
+  // Escape with suggestions showing used to reach the dialog's own Escape
+  // handler too, closing the form and discarding everything typed into it.
+  it('closes only the listbox on Escape while suggestions are showing', async () => {
+    await openCreateDialog();
+    const input = screen.getByRole('combobox', { name: 'Position name' });
+
+    await userEvent.type(input, 'Chief');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(input).toHaveValue('Chief');
+
+    // With the list already closed, Escape still closes the dialog.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // W50-R5: a screen reader is told the suggestions opened, and where they are.
+  it('exposes the input as a combobox that reports its listbox', async () => {
+    await openCreateDialog();
+    const input = screen.getByRole('combobox', { name: 'Position name' });
+    expect(input).toHaveAttribute('aria-autocomplete', 'list');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.type(input, 'Chief');
+    const listbox = screen.getByRole('listbox', { name: 'Available positions' });
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(input).toHaveAttribute('aria-controls', listbox.id);
+    expect(within(listbox).getAllByRole('option').length).toBeGreaterThan(0);
+
+    await userEvent.keyboard('{Escape}');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('adds a typed position on the first Add click when nothing matches', async () => {
     await openCreateDialog();
-    const input = screen.getByRole('textbox', { name: 'Position name' });
+    const input = screen.getByRole('combobox', { name: 'Position name' });
 
     await userEvent.type(input, 'Treasurer');
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));

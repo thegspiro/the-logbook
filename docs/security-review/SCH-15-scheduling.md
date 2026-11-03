@@ -2,7 +2,8 @@
 
 **Prefix:** `SCH` · **Iteration:** 15 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
-(pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12) ·
+(pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12),
+2026-11-02 (pass 13) ·
 **PR:**
 [#1846](https://github.com/thegspiro/the-logbook/pull/1846) (pass 1),
 [#2628](https://github.com/thegspiro/the-logbook/pull/2628) (pass 6),
@@ -18,28 +19,38 @@ fixed, 0 new findings, SCH-19 re-confirmed OPEN),
 fixed, 1 new route, 0 new findings),
 pass 11 (1 fixed — an unrelated alembic triple-fork, riding along — 0 new
 findings),
-pass 12 (0 fixed in Scheduling itself — EC-17, shared with Feature 14, closed
-by a commit riding along in scope — 0 new findings)
+[#3840](https://github.com/thegspiro/the-logbook/pull/3840) (pass 12, 0 fixed
+in Scheduling itself — EC-17, shared with Feature 14, closed by a commit
+riding along in scope — 0 new findings),
+pass 13 (0 fixed, 0 new findings; real delta — the Shift Evaluations feature's
+own close-out gate plus an unbounded-pattern-generation guard)
 
-**Backend:** `api/v1/endpoints/scheduling.py` (4,476 L, 108 routes, up from
-107), `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),
+**Backend:** `api/v1/endpoints/scheduling.py` (109 routes, up from 108 — new
+`GET /shifts/{shift_id}/trainee-reports`),
+`api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),
 `api/v1/endpoints/calcom_sync.py` (1 route, unchanged),
-`services/scheduling_service.py` (11,172 L, up from 11,165 — pass 12's own
-two commits, below),
+`services/scheduling_service.py` (up ~400 lines this pass — trainee-report
+and shift-evaluation close-out gates, a generation-skip notice, an uncapped
+week/month fetch, a durable per-occurrence generation ledger, and a
+configurable driver-seat set),
 `services/scheduling_module_config_service.py`,
 `services/standing_shift_service.py` (unchanged logic, mypy-typed),
 `services/call_tracking_service.py` (887 L, up from ~700),
 `services/shift_eligibility_service.py` (1,491 L, up from ~1,200),
-`services/shift_completion_service.py` (2,283 L, up from 2,238 — shared with
-Feature 14, EC-17's fix, pass 12 below),
+`services/shift_completion_service.py` (up ~115 lines this pass — shift-
+evaluation credit sync hooked into the report write paths, shared with
+Feature 14),
 `services/integration_services/calcom_service.py` (zero diff since pass 6),
 `services/scheduling_widget_service.py` (185 L — in this pass's declared
 scope for the first time; a trivial mypy-narrowing diff, otherwise unchanged
 from the dashboard-widgets endpoint pass 1 already reviewed),
 `services/pre_shift_work_service.py` (714 L, **new this pass**),
-`mcp/tools/scheduling.py`, `schemas/scheduling.py`,
-`schemas/scheduling_module_config.py` (zero diff),
+`mcp/tools/scheduling.py`, `schemas/scheduling.py` (new
+`ShiftFinalizeRequest.override_missing_reports`/`report_override_reason`,
+new `TraineeReportRequirementResponse`),
+`schemas/scheduling_module_config.py` (new `CustomPositionSchema.drives_apparatus`),
 `models/call_tracking.py`, `models/scheduling_module_config.py`,
+`models/training.py` (new `ShiftPatternOccurrence`),
 `utils/scheduling_dates.py` (zero diff)
 **Frontend:** `modules/scheduling`, `pages/scheduling`
 **Migrations:** `20260823_1400_e7a41b6d09c2_add_standing_shift_claims.py` (from
@@ -48,7 +59,317 @@ on existing leadership positions); `20261006_0436_56c91e7d9e10` (pass 8
 window, widens `shift_assignments.position` / `standing_shift_claims.position`
 to VARCHAR — see Pass 8 below); `20261011_0030_46c55e6a3330` (pass 8 window,
 adds `shift_pre_work_sessions`, out-of-declared-scope table, reviewed
-opportunistically below)
+opportunistically below); `20261031_1830_db30a34afa5b_shift_pattern_occurrences.py`
+(pass 13 window, adds `shift_pattern_occurrences` — see Pass 13 below)
+
+---
+
+## Pass 13 (2026-11-02) — real delta (22 non-merge commits touch 2 of 18 declared backend files + 50 of the frontend's scheduling files, out of 218 non-merge commits repo-wide since baseline), 1 new route, 0 fixed, 0 new findings; all standing flags re-confirmed unchanged
+
+**Watchdog pickup.** `list_pull_requests` (state=open) found 0 open PRs at
+all, let alone one with a `claude/security-review-` head branch. PR #3927
+(Feature 14, Equipment check & shifts, pass 14) had just merged; `PROGRESS.md`
+row 15 still read `⬜` (the table lags a merge by one iteration, as pass 12's
+own note already explains — not evidence no review happened).
+
+### Scope
+
+Baseline: `25f0085b8` (PR #3840's merge, pass 12), found by `git log`
+against this file's own last-touching commit.
+
+**22 non-merge commits since `25f0085b8` touch the declared scope** (18
+backend files + `modules/scheduling`/`pages/scheduling`), out of **218**
+non-merge commits repo-wide in the same window — confirmed by `git log
+--oneline --no-merges 25f0085b8..HEAD` with and without the path filter.
+Real content changed in exactly **2 of the 18 backend files**:
+`scheduling_service.py` (+400/−57 across several commits) and
+`shift_completion_service.py` (+116/−6). **Zero diff**, confirmed by
+`git diff --stat`, in the other 16 backend files, including the two
+standing-flag files (`calcom_service.py`, and `scheduling.py` save for the
+new route below) and all four scope-boundary groups (External Shift Hours
+quartet, `pre_shift_work_service.py`, `shift_history_import_*` trio). 50 of
+the frontend's scheduling files changed — almost entirely the new Shift
+Evaluations feature (`ShiftEvaluationPage.tsx`, 374 new lines;
+`ShiftEvaluationPrintPage.tsx`, 130 new lines; a new `TraineeReportGate.tsx`
+component, 162 new lines) plus its tests.
+
+Nearly all 22 commits are one feature — **Shift Evaluations** (a new
+evaluation form attachable to a training program or required generally,
+submitted by the shift's officer or a `training.manage` holder, gating
+shift close-out) — landing across its own feature area (reviewed by Feature
+14/Equipment-check-and-shifts' own pass 14, which covers `ShiftEvaluation`
+itself) and this feature's close-out path, which is what this pass reviews.
+Two commits are unrelated to that feature:
+
+- **`f561b59aa`** (fix data loss and double-counting in the offline queues)
+  — touches `modules/scheduling`'s offline-sync utilities only incidentally
+  (a shared queue helper); the actual fix is in a cross-cutting offline-queue
+  module outside this feature's declared scope. Opportunistic read found no
+  scheduling-specific query or permission change — it is the same
+  `enqueue`/`dequeue` helper every module's offline queue shares.
+- **`d03f330de`** (scheduled shift generation tells the schedulers which
+  seats it left empty) — reviewed in full below; this is the pass's main
+  finding-worthy change.
+
+Every commit touching the two changed backend files, read in full:
+
+- **`d03f330de`** — `generate_from_pattern` (the scheduled, non-interactive
+  generation path) previously logged a seat-skip count to the server log
+  only; a department whose members lost a rank, qualification, or open
+  position saw crews generated short with nothing on screen saying so
+  (`KNOWN_LIMITATIONS.md`, shifts-module review item 2 — now resolved).
+  `notify_generation_skips` sends an in-app bell entry to every
+  `scheduling.manage` holder (resolved by walking `User.roles` and
+  `permission_matches` in Python — the same shape `_all_users_in_org`
+  elsewhere in this file uses, not a new query pattern) and an email to
+  those who keep Scheduling-officer-duties email on
+  (`member_receives_email(..., EmailKind.SCHEDULING_DUTIES, ...)`), one
+  message per address so a shared `To:` line can't expose the other
+  officers' emails to each other. Free text going into the HTML body
+  (pattern names, member-warning lines) is `html.escape`d at every
+  interpolation site (checked each of the three `_html.escape(...)` call
+  sites directly) — Checklist §4's "User text in email HTML is
+  `html.escape`d" holds. The list itself is capped
+  (`GENERATION_SKIP_LIST_LIMIT = 50`, an `…and N more` tail) — bounded, not
+  an unbounded-dict-into-email repeat of SCH-19's shape. The notify call is
+  wrapped in its own `try`/`except` that rolls back and logs rather than
+  failing the generation run — the shifts are already committed by that
+  point, so a failed notice must not report the whole run as failed; traced
+  by reading the call site, not assumed from the docstring.
+- **`d03f330de`** also adds a **durable per-occurrence generation ledger**
+  (`ShiftPatternOccurrence`, new table — see Schema notes) so that deleting a
+  generated shift or moving its start time no longer causes the next
+  scheduled run to regenerate it from scratch with a full crew
+  (`KNOWN_LIMITATIONS.md`, shifts-module review item 1 — now resolved). The
+  insert carries a `UniqueConstraint("pattern_id", "occurrence_date",
+"shift_type")`; two generation runs racing over the same date range
+  collide on that key at commit, and the loser's `db.flush()` raises (caught
+  by the pattern loop's own `except Exception` one level up, which logs and
+  continues to the next pattern) rather than double-creating the shift —
+  confirmed by reading the insert site and the unique constraint together,
+  not assumed from the docstring's own claim.
+- **`36ee2bf55`** — `_is_driver_position` gained a `driver_seats` parameter
+  (default `{"driver"}`, preserving every existing call site's behavior) so a
+  department whose EVOC-checked seat is a custom position
+  ("Driver/Operator", "Engineer") marked `drivesApparatus: true` in
+  Scheduling Settings is held to the same driver-qualification check as the
+  built-in seat (`KNOWN_LIMITATIONS.md`, shifts-module review item 8 — now
+  resolved). `_driver_seat_values` reads the org's stored
+  `scheduling_module_config` settings (`custom_positions[].drivesApparatus`)
+  — a read, not a client-supplied id, so no new by-id/FK surface — and
+  memoizes per service-instance (`self.__dict__.setdefault(...)`, scoped to
+  one request, confirmed by reading the cache key is keyed on
+  `organization_id` and never crosses a request). `drives_apparatus` on
+  `CustomPositionSchema` (`schemas/scheduling_module_config.py`) is a plain
+  `bool = False`, and that module's `alias_generator=to_camel` (confirmed
+  `grep alias_generator=to_camel backend/app/schemas/scheduling_module_config.py`)
+  is what makes `_driver_seat_values`'s `custom.get("drivesApparatus")` read
+  the matching camelCase key — the two sides agree per Pitfall #5's
+  per-module casing rule, not by accident.
+- **`e36813ce6`** (already reviewed under Feature 14's own pass 14 — see
+  that file — since it lands in the shared `shift_completion_service.py`;
+  not re-added here, per this file's standing practice for shared-file
+  commits).
+- **`96d2c47ee`/`d4e4cabea`/`a9b9bdef5`/`c4c32153e`** (Shift Evaluations
+  backend/frontend) — these hook into `scheduling_service.py`'s
+  `finalize_shift` and `shift_completion_service.py`'s report-write paths,
+  reviewed below under "Close-out gates", the pass's main finding-worthy
+  surface.
+- **`dcff89ed2`** (send swap requests' shift start times with a UTC offset)
+  — a display-fidelity fix in a swap-notification payload; the underlying
+  query is unchanged, only the serialized string format.
+- **`3ac808d20`, `4deaa77e3`, `ab879fc7d`, `4884fb171`, `24076815b`,
+  `06dec4a13`, `ab869ed42`, `7c808888e`, `1aaa25cf1`, `d7f0d206e`,
+  `ae095aa3b`, `308ba4c0d`, `9af732d9`, `5ec1897d`, `7416ef51`** — layout/CLS/
+  contrast fixes, an officer-in-charge qualification addition (outside
+  declared scope, data-only, already the shape pass 12's `7416ef51`-adjacent
+  entries describe), a Tailwind class rename, and the already-reviewed
+  members-feature exclusion-list widening pattern repeated from pass 12. No
+  query, permission, or org-scoping change in any of these — each read in
+  full to confirm, not assumed from its commit message.
+
+### Close-out gates (the pass's main finding-worthy surface)
+
+`finalize_shift` gained two new refusal conditions, both read in full against
+all seven `CHECKLIST.md` dimensions:
+
+1. **Missing trainee reports.** When the org's `shift_reports.
+post_shift_validation.require_officer_report` setting is on
+   (`trainee_reports_required`), close-out is refused while any member
+   seated in a training slot (`ShiftAssignment.is_training`) has no
+   `ShiftCompletionReport` filed for that shift. `missing_trainee_reports`
+   joins `ShiftAssignment`/`User` filtered on `ShiftAssignment.shift_id ==
+shift_id` **and** `User.organization_id == organization_id`, and checks
+   `ShiftCompletionReport` filtered on `shift_id` **and**
+   `organization_id` — both queries org-scoped directly, and `shift_id`
+   itself was already proven in-org by `_authorize_shift_management`'s own
+   `get_shift_by_id(shift_id, organization_id)` one call up the stack
+   (XC-3 holds structurally, not merely by the endpoint's outer gate).
+2. **Missing shift evaluations.** `ShiftEvaluationService.missing_required`
+   is unconditional (not gated by the report setting — attaching an
+   evaluation form to a program is itself the department's opt-in,
+   independent of whether reports are required) and is Feature 14's own
+   finding surface; here it is only a call site, org-scoped by its own
+   `organization_id` parameter, confirmed by reading the method (`get_shift`
+   resolves the shift in-org first, same shape as above).
+
+Both refusals are bypassable only with `override_missing_reports=True`, and
+the **endpoint**, not merely the service, enforces who may set it: the new
+check in `get_shift_trainee_report_requirement`'s sibling,
+`finalize_shift`'s route handler, 403s before calling the service when
+`body.override_missing_reports` is set and the caller lacks
+`scheduling.manage` — so a shift's own named officer (who `
+_authorize_shift_management` would otherwise let finalize the shift at all)
+cannot self-override the trainee-report/evaluation gate, only a
+department-wide scheduling admin can (confirmed by reading
+`scheduling.py:1000-1009`, not inferred from the docstring). A successful
+override is audit-logged (`shift_finalized_report_override`, WARNING,
+carrying the org id, shift id, and the caller's typed reason) — the reason
+field is a dict value written to the audit-log payload, not interpolated
+into a logger format string, so Pitfall #33 ("never combine an f-string
+message with logger arguments") does not apply here. `report_override_reason`
+is `Field(..., max_length=500)`-capped and required by a `model_validator`
+whenever `override_missing_reports` is set (`ValueError` → 400 on empty/
+missing), so an override always carries an audit trail, never a blank one.
+
+The new `GET /shifts/{shift_id}/trainee-reports` route (the close-out
+screen's own "what's still needed" read) carries no `require_permission`
+dependency by design — same self-scoped shape as the rest of this file's
+shift-management routes — but is gated inside the handler by
+`_authorize_shift_management(..., "scheduling.manage")`, which 404s a
+cross-org shift id and 403s a caller who is neither a `scheduling.manage`
+holder nor the shift's own officer. It is **not** registered in
+`tests/permissionless_route_baseline.txt` and correctly so — it requires
+`get_current_user`, it is merely permission-string-free, which is a
+different and already-covered shape (the route's own in-handler check is
+what gates it, matching e.g. the equipment-check-and-shifts feature's
+`GET /review-access` pattern reviewed by that feature's own pass 14).
+
+### Route inventory
+
+Re-enumerated by AST (not a diff sample): `scheduling.py` **109** routes
+(up from 108 — the one new `GET /shifts/{shift_id}/trainee-reports`),
+`scheduling_module_config.py` **3** (unchanged), `calcom_sync.py` **1**
+(unchanged). Total **113** (up from 112). The same walk confirms all 109 of
+`scheduling.py`'s routes still carry a recognized auth dependency
+(`get_current_user`/`get_optional_current_user`/`require_permission`) in
+their signature — 0 missing.
+
+### No new findings
+
+Worked against all seven `CHECKLIST.md` dimensions for the delta:
+authentication (the one new route carries `get_current_user`, confirmed
+above), authorization (the override gate is admin-only, enforced at the
+route, not merely the service — confirmed above; every other permission
+check in the delta is unchanged), tenant isolation (every new/changed query
+in `missing_trainee_reports`, the generation-skip notifier, and
+`_driver_seat_values` filters `organization_id` directly or resolves through
+an already-org-scoped parent — no new client-supplied FK), injection (no new
+`.like()`/`.ilike()`; email HTML interpolation is `html.escape`d at all three
+sites, checked directly), data exposure (the generation-skip notice's list is
+length-capped; the override audit event carries only ids and the caller's own
+typed reason, no PHI), abuse resistance (the uncapped `get_week_shifts`/
+`get_month_shifts` — see below — and the new ledger's unique-constraint race
+protection, both checked directly), schema/migration integrity (the new
+`ShiftPatternOccurrence.shift_id` is `ondelete="SET NULL"` **and**
+`nullable=True`, Pitfall #2 compliant — confirmed by reading the column
+definition; a migration exists and matches the model, confirmed by
+`validate_migrations.py --strict` below).
+
+**One deliberate, examined cap removal, not a new finding:**
+`get_week_shifts`/`get_month_shifts` changed from a fixed `limit=500` to
+`limit=None` (the commit's own rationale, confirmed by reading it: "a fixed
+cap of 500 silently dropped the end of the range for a department running
+enough units, with nothing on screen to say so"). This is not an unbounded
+org-wide query — `get_shifts` still filters by the caller's own
+`organization_id` and the caller-supplied `start_date`/`end_date`, and the
+two call sites bound that range to one calendar week or one calendar month
+respectively before calling it. A department cannot make this query larger
+by having more data; it can only be as large as one org's one week/month of
+shifts, which is the bound the Checklist's "no `all()` over an org-wide
+table" item is written to catch — this is not that shape.
+
+### Re-verified standing items
+
+- **SCH-9, SCH-13, SCH-18 (fixed, unchanged)** — `_all_users_in_org` is
+  unchanged; `finalize_shift`'s new refusal checks (above) are inserted
+  between the equipment-check gate and the `manual_hours` locking-read
+  block, entirely before any lock is taken — confirmed by reading
+  `scheduling_service.py:10549-10597` against the method's own lock-ordering
+  comment at its top — so SCH-13's organization-then-attendance /
+  shift-then-attendance lock ordering is unaffected; `attach_call_ids`'s
+  length cap is untouched.
+- **SCH-10 (flagged, cross-cutting, unchanged)** — `calcom_service.py` is
+  byte-identical to pass 6 (zero diff, confirmed by `git diff --stat`), now
+  seven passes running.
+- **SCH-15, SCH-17 (scope-boundary, unchanged)** — the External Shift Hours
+  quartet and the `pre_shift_work_service.py`/`shift_history_import_*` group
+  all show **zero diff** this window, confirmed by `git diff --stat`.
+- **SCH-16 (LOW, accepted, self-documented TOCTOU, unchanged)** — the
+  unlocked `slugs_named_by_requirements` check in
+  `_reject_deleting_a_used_call_type` is untouched by this pass's
+  `scheduling.py` diff (confirmed by reading the full 71-line diff: it is
+  entirely the new route and `finalize_shift`'s override gate, nowhere near
+  that function).
+- **SCH-19 (LOW, flagged, re-confirmed OPEN)** — `reported_call_types:
+Optional[dict[str, ...]]` and `member_call_counts: Optional[List[...]]`
+  (lines 325/329 of `schemas/scheduling.py`) are untouched by this pass's two
+  new fields (`override_missing_reports`/`report_override_reason`, added
+  further down the same file); still carry no cap. Unchanged disposition.
+
+### Schema & migration notes
+
+New table `shift_pattern_occurrences`
+(`20261031_1830_db30a34afa5b_shift_pattern_occurrences.py`), one revision,
+single head confirmed below. `shift_id` is `ForeignKey(...,
+ondelete="SET NULL")` **and** `nullable=True` (Pitfall #2). `organization_id`
+and `pattern_id` both `ondelete="CASCADE"`, `nullable=False` — a deleted
+pattern or org takes its occurrence rows with it, matching the model's own
+docstring ("Removed with its pattern"). `UniqueConstraint("pattern_id",
+"occurrence_date", "shift_type")` is the race-protection mechanism described
+above, not merely documentation of intent. `docs/DATABASE_SCHEMA.md` is
+regenerated and checked (below) rather than hand-edited.
+
+### Guard tests
+
+None added by this pass — 0 fixes needed, so no new class of bug to guard
+against. The delta's own feature commits carry their own dedicated tests
+(`test_shift_trainee_report_requirement.py`, `test_shift_evaluations.py`),
+confirmed to exist and pass in the scoped run below; not written by this
+security pass.
+
+### Completion gate
+
+| Check                                                 | Result                                          |
+| ----------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                  | ✅ clean, 2832 files unchanged                  |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 696 revisions, single head `38e0f552242d`    |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 289 routes, 0 errors, 0 warnings             |
+| `python3 scripts/generate_schema_docs.py --check`     | ✅ up to date                                   |
+| `pytest tests/ -k "scheduling or calcom"`             | ✅ 580 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings                         |
+
+### Risk checks
+
+- **Tenant isolation (XC-3)** — every new/changed query in this window's
+  real delta filters `organization_id` directly or resolves through an
+  already-org-scoped parent, confirmed above site by site.
+- **Authorization widening, checked not assumed** — the override gate is
+  enforced at the route (403 before the service call), not only documented
+  in a comment; confirmed by direct read of `scheduling.py:1000-1009`.
+- **Abuse resistance** — the one cap removal (`get_week_shifts`/
+  `get_month_shifts`) is bounded by one org's one calendar week/month, not
+  by client input; the new ledger's unique constraint is what makes the race
+  protection real, not merely claimed.
+- Every other risk-check line is untouched by this pass and is left for the
+  next pass to re-verify if it touches this feature again.
+
+**Next feature:** row 15 is now the last `⬜` in the current lap of
+`PROGRESS.md`'s rotation table at the time of this pass — see that file's
+own table for the next pending row.
 
 ---
 

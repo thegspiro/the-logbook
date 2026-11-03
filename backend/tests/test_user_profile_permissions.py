@@ -146,3 +146,60 @@ async def test_a_member_cannot_change_their_own_hire_date():
     assert exc.value.status_code == 403
     assert "hire date" in exc.value.detail
     db.commit.assert_not_awaited()
+
+
+async def test_a_member_cannot_probe_the_tier_ladder_through_member_status():
+    """USR-14 guard: member_status must be permission-checked before validated.
+
+    ``member_status`` is validated against the organization's configured
+    membership tiers (``_accepted_member_status_or_400``) before the
+    restricted-field permission check further down the handler used to run.
+    A self-edit from a member with no ``members.manage`` could send a bogus
+    ``member_status`` and have that validator's own 400 enumerate every real
+    tier id in the organization -- the same list ``get_membership_tier_config``
+    already restricts to ``members.manage``. The permission check must now run
+    first, refusing before any tier lookup (or its enumerating error) happens.
+    """
+    member_id = uuid4()
+    caller = _caller(["users.edit"], user_id=member_id)
+    db = AsyncMock()
+    # Only the restricted-field permission load should run; if the validator's
+    # organization/tier lookup ran first, there would be a second call here.
+    db.execute.side_effect = [_Result(caller)]
+
+    with pytest.raises(HTTPException) as exc:
+        await update_user_profile(
+            member_id,
+            UserUpdate(member_status="not-a-real-tier"),
+            db,
+            caller,
+        )
+
+    assert exc.value.status_code == 403
+    assert "membership class and status" in exc.value.detail
+    assert db.execute.await_count == 1
+    db.commit.assert_not_awaited()
+
+
+async def test_members_manage_still_reaches_the_tier_validator():
+    """The guard above must not block a caller who actually holds the grant."""
+    member_id = uuid4()
+    caller = _caller(["members.manage"], user_id=member_id)
+    db = AsyncMock()
+    # Permission load (passes), then the validator's own Organization lookup
+    # -- returning no organization short-circuits it to the built-in statuses,
+    # which "not-a-real-tier" is not one of, so it still 400s, but only after
+    # the permission check has already let it through.
+    db.execute.side_effect = [_Result(caller), _Result(None)]
+
+    with pytest.raises(HTTPException) as exc:
+        await update_user_profile(
+            member_id,
+            UserUpdate(member_status="not-a-real-tier"),
+            db,
+            caller,
+        )
+
+    assert exc.value.status_code == 400
+    assert "Unknown member_status" in exc.value.detail
+    assert db.execute.await_count == 2

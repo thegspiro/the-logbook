@@ -1276,3 +1276,82 @@ describe('ShiftDetailPanel delete and withdraw', () => {
     });
   });
 });
+
+/**
+ * The Crew card while the roster is still loading.
+ *
+ * The card counted the empty array the panel starts with, so every opening
+ * showed "0 assigned / 4 positions" on an amber short-staffed background for
+ * as long as the roster request took — on a crew that might be full — and then
+ * jumped to the real count.
+ */
+describe('ShiftDetailPanel crew count while loading', () => {
+  const sized = { ...shift, min_staffing: 4 };
+  const member = {
+    id: 'a1',
+    user_id: 'user-9',
+    user_name: 'Jordan Avery',
+    position: 'firefighter',
+    status: 'assigned',
+  };
+
+  beforeEach(() => {
+    vi.mocked(schedulingService.getShiftAssignments).mockReset();
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([]);
+  });
+
+  it('shows a placeholder, not a count of zero, until the roster arrives', async () => {
+    let resolveRoster: (value: unknown[]) => void = () => {};
+    vi.mocked(schedulingService.getShiftAssignments).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveRoster = resolve)) as never
+    );
+    renderWithRouter(<ShiftDetailPanel shift={sized as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Loading crew…')).toBeInTheDocument();
+    expect(screen.queryByText(/0 assigned/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveRoster([member]);
+    });
+
+    expect(await screen.findByText(/1 assigned/)).toBeInTheDocument();
+    expect(screen.queryByText('Loading crew…')).not.toBeInTheDocument();
+  });
+
+  it('holds "Fill All Open" back until it can count the open seats', async () => {
+    const onEngine = {
+      ...sized,
+      shift_officer_id: 'user-1',
+      shift_date: '2099-01-01',
+      start_time: '2099-01-01T08:00:00Z',
+      end_time: '2099-01-01T16:00:00Z',
+      apparatus_positions: [
+        { position: 'officer', required: true },
+        { position: 'driver', required: true },
+        { position: 'firefighter', required: true },
+        { position: 'firefighter', required: true },
+      ],
+    };
+    let resolveRoster: (value: unknown[]) => void = () => {};
+    vi.mocked(schedulingService.getShiftAssignments).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveRoster = resolve)) as never
+    );
+    renderWithRouter(<ShiftDetailPanel shift={onEngine as never} onClose={vi.fn()} />);
+
+    await screen.findByText('Loading crew…');
+    expect(screen.queryByRole('button', { name: /Fill All Open/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveRoster([member, { ...member, id: 'a2', user_id: 'user-8', user_name: 'Casey Morgan' }]);
+    });
+
+    expect(await screen.findByRole('button', { name: /Fill All Open \(2\)/ })).toBeInTheDocument();
+  });
+
+  it('still reports an empty crew as zero once the roster has loaded', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={sized as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/0 assigned/)).toBeInTheDocument();
+    expect(screen.queryByText('Loading crew…')).not.toBeInTheDocument();
+  });
+});

@@ -36,7 +36,26 @@ describe('SetupPrerequisites', () => {
 
     renderPage();
 
-    expect(screen.getByText(`${required.join(' and ')} — the only required steps.`)).toBeInTheDocument();
+    const names = `${required.slice(0, -1).join(', ')} and ${required[required.length - 1] ?? ''}`;
+    expect(screen.getByText(`${names} — the only required steps.`)).toBeInTheDocument();
+  });
+
+  // Workflow review W01, 2026-10-31: the heading said "Only the first two steps
+  // are required" beside a list of three, and the list read "A and B and C".
+  it('states the number of required steps the flow actually has', () => {
+    const required = ONBOARDING_STEPS.filter((s) => !s.optional);
+
+    renderPage();
+
+    expect(screen.getByText(new RegExp(`Only the first ${required.length} steps are required`))).toBeInTheDocument();
+    expect(screen.queryByText(/ and .* and .* — the only required steps/)).not.toBeInTheDocument();
+  });
+
+  it('offers only the storage platforms that actually store files', () => {
+    renderPage();
+
+    expect(screen.queryByText(/Azure/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/OneDrive/)).not.toBeInTheDocument();
   });
 
   it('counts the optional steps from the flow itself', () => {

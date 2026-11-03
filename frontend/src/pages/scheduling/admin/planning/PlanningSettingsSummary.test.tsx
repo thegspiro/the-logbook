@@ -40,7 +40,7 @@ const DEFAULTS = {
   apparatusTypeDefaults: {},
 };
 
-const FEATURE = { auto_generate_enabled: true, auto_generate_weeks: 4 };
+const FEATURE = { auto_generate_enabled: true, auto_generate_weeks: 4, max_hours_per_window: 0, hours_window_days: 7 };
 
 describe('PlanningSettingsSummary', () => {
   beforeEach(() => {
@@ -55,6 +55,15 @@ describe('PlanningSettingsSummary', () => {
 
     expect(await screen.findByText('24 hours')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('reports the overtime advisory the assignment warning reads', async () => {
+    mockGetFeatureSettings.mockResolvedValue({ ...FEATURE, max_hours_per_window: 72 });
+
+    renderWithRouter(<PlanningSettingsSummary />);
+
+    expect(await screen.findByText('Over 72 hours in 7 days')).toBeInTheDocument();
+    expect(screen.queryByText(/hours\/week/)).not.toBeInTheDocument();
   });
 
   it('says the values may be defaults when the settings did not load', async () => {

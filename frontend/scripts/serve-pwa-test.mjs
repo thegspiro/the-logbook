@@ -8,6 +8,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'd
 const portArgument = process.argv.indexOf('--port');
 const port = Number(portArgument >= 0 ? process.argv[portArgument + 1] : 4173);
 let serveUpgradedWorker = false;
+/** Training submissions the stand-in API received, for the background-sync test. */
+const receivedSubmissions = [];
+/** Equipment-check requests the stand-in API received, in order. */
+const receivedEquipment = [];
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -27,6 +31,60 @@ const server = createServer(async (request, response) => {
   if (request.method === 'POST' && url.pathname === '/__pwa-test/upgrade-worker') {
     serveUpgradedWorker = true;
     response.writeHead(204).end();
+    return;
+  }
+
+  // Test-only stand-ins for the two API calls the service worker's background
+  // sync makes for a queued training submission: who is signed in, and the
+  // submission itself, which is recorded with the CSRF header it carried.
+  if (request.method === 'GET' && url.pathname === '/api/v1/auth/me') {
+    response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: 'member-e2e' }));
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/api/v1/training/submissions') {
+    let raw = '';
+    for await (const chunk of request) raw += chunk;
+    receivedSubmissions.push({ body: JSON.parse(raw || 'null'), csrf: request.headers['x-csrf-token'] ?? null });
+    response.writeHead(201, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: 'submission-e2e' }));
+    return;
+  }
+  // Stand-ins for a queued equipment check: the check, then its photos, which
+  // arrive as multipart. The raw body is kept so the test can see the photo's
+  // file name, type and bytes survived IndexedDB and the worker.
+  if (request.method === 'POST' && url.pathname === '/api/v1/equipment-checks/shifts/shift-e2e/checks') {
+    let raw = '';
+    for await (const chunk of request) raw += chunk;
+    receivedEquipment.push({
+      kind: 'check',
+      body: JSON.parse(raw || 'null'),
+      csrf: request.headers['x-csrf-token'] ?? null,
+    });
+    response
+      .writeHead(201, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ id: 'check-e2e', items: [{ id: 'check-item-e2e', templateItemId: 'template-item-e2e' }] }));
+    return;
+  }
+  if (
+    request.method === 'POST' &&
+    url.pathname === '/api/v1/equipment-checks/checks/check-e2e/items/check-item-e2e/photos'
+  ) {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    receivedEquipment.push({
+      kind: 'photos',
+      contentType: request.headers['content-type'] ?? null,
+      csrf: request.headers['x-csrf-token'] ?? null,
+      body: Buffer.concat(chunks).toString('latin1'),
+    });
+    response.writeHead(201, { 'Content-Type': 'application/json' }).end(JSON.stringify({ photo_urls: [], count: 1 }));
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/__pwa-test/received-equipment') {
+    response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(receivedEquipment));
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/__pwa-test/received') {
+    response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(receivedSubmissions));
     return;
   }
 

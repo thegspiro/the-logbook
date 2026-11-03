@@ -772,3 +772,120 @@ export interface FundraisingReport {
   donationsByMethod: Record<string, number>;
   monthlyTotals: { month: string; total: number }[];
 }
+
+// =============================================================================
+// Zeffy
+// =============================================================================
+
+/** The Logbook record a Zeffy campaign's payments are applied to. */
+export const ZeffyLinkTarget = {
+  FUNDRAISING_CAMPAIGN: 'fundraising_campaign',
+  FUNDRAISING_EVENT: 'fundraising_event',
+  DUES_SCHEDULE: 'dues_schedule',
+} as const;
+export type ZeffyLinkTarget = (typeof ZeffyLinkTarget)[keyof typeof ZeffyLinkTarget];
+
+/** What the Logbook did with a Zeffy payment (`ZeffyPaymentState` on the backend). */
+export const ZeffyPaymentState = {
+  PENDING: 'pending',
+  IGNORED: 'ignored',
+  UNLINKED: 'unlinked',
+  BEFORE_START: 'before_start',
+  UNMATCHED: 'unmatched',
+  APPLIED: 'applied',
+  REVERSED: 'reversed',
+  NEEDS_REVIEW: 'needs_review',
+} as const;
+export type ZeffyPaymentState = (typeof ZeffyPaymentState)[keyof typeof ZeffyPaymentState];
+
+/** Decimal columns arrive as JSON strings. */
+type ZeffyAmount = number | string;
+
+export interface ZeffyStatus {
+  connected: boolean;
+  integrationId?: string | null;
+  webhookConfigured: boolean;
+  lastSyncAt?: string | null;
+  stateCounts: Record<string, number>;
+}
+
+export interface ZeffyLink {
+  id: string;
+  zeffyCampaignId: string;
+  zeffyCampaignTitle?: string | null;
+  targetType: ZeffyLinkTarget;
+  targetId?: string | null;
+  /** Null when the linked record has since been deleted. */
+  targetName?: string | null;
+  applyFrom: string;
+  syncedThrough?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ZeffyLinkPayload {
+  targetType: ZeffyLinkTarget;
+  targetId: string;
+  zeffyCampaignTitle?: string | undefined;
+  /** UTC instant. Omitted means payments from now on. */
+  applyFrom?: string | undefined;
+}
+
+export interface ZeffyCampaign {
+  id: string;
+  title?: string | null;
+  campaignType?: string | null;
+  category?: string | null;
+  status?: string | null;
+  url?: string | null;
+  isArchived: boolean;
+  raised: ZeffyAmount;
+  currency?: string | null;
+  link?: ZeffyLink | null;
+}
+
+export interface ZeffyPayment {
+  id: string;
+  zeffyPaymentId: string;
+  zeffyCampaignId?: string | null;
+  campaignTitle?: string | null;
+  campaignCategory?: string | null;
+  paymentType?: string | null;
+  zeffyStatus?: string | null;
+  refundStatus?: string | null;
+  amount: ZeffyAmount;
+  refundedAmount: ZeffyAmount;
+  currency: string;
+  ticketCount: number;
+  paidAt?: string | null;
+  payerName?: string | null;
+  receiptUrl?: string | null;
+  state: ZeffyPaymentState;
+  stateDetail?: string | null;
+  appliedTargetType?: ZeffyLinkTarget | null;
+  donationId?: string | null;
+  fundraisingEventId?: string | null;
+  memberDuesId?: string | null;
+  appliedAmount: ZeffyAmount;
+  updatedAt: string;
+}
+
+export interface ZeffyPaymentPage {
+  items: ZeffyPayment[];
+  total: number;
+}
+
+export interface ZeffySyncResult {
+  links: number;
+  paymentsRead: number;
+  retriedApplied: number;
+  complete: boolean;
+  rateLimited: boolean;
+}
+
+/** The fields of a dues schedule the link picker needs. */
+export interface ZeffyDuesScheduleOption {
+  id: string;
+  name: string;
+  isActive?: boolean;
+}

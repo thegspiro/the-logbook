@@ -20,6 +20,7 @@ What it covers
 - Plain single-value ciphertext columns:
     shift_completion_reports: areas_of_strength, areas_for_improvement,
                               officer_narrative, reviewer_notes
+    shift_evaluations:        responses, closing_comments
     users:                    mfa_secret
     integrations:             encrypted_config
     external_training_providers: api_key, api_secret, client_secret
@@ -80,6 +81,11 @@ _PLAIN_COLUMNS = [
             "officer_narrative",
             "reviewer_notes",
         ],
+    ),
+    (
+        "shift_evaluations",
+        "id",
+        ["responses", "closing_comments"],
     ),
     (
         "users",
@@ -158,6 +164,12 @@ _PLAIN_COLUMNS = [
         "id",
         ["provider_name", "result_summary", "notes", "result_data"],
     ),
+    (
+        "historical_members",
+        "id",
+        ["birth_date", "addresses", "verification_sources", "research_notes"],
+    ),
+    ("history_revisions", "id", ["snapshot"]),
     ("integrations", "id", ["encrypted_config"]),
     ("external_training_providers", "id", ["api_key", "api_secret", "client_secret"]),
     ("apparatus_report_configs", "id", ["email_recipients"]),
@@ -176,6 +188,7 @@ _PLAIN_COLUMNS = [
     ("scheduled_emails", "id", ["bcc_emails", "cc_emails", "to_emails"]),
     ("store_payment_events", "id", ["payer_email"]),
     ("xapi_statements", "id", ["actor_email"]),
+    ("zeffy_payments", "id", ["payer_email"]),
 ]
 
 

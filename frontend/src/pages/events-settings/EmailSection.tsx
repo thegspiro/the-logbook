@@ -77,12 +77,14 @@ const EmailSection: React.FC<EmailSectionProps> = ({
 
       {/* Email Templates */}
       <div className="border-theme-surface-border border-t pt-4">
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Email Templates</h3>
+        <div className="split-row mb-3 gap-3 sm:items-center">
+          <h3 className="split-row-main text-theme-text-muted text-xs font-semibold tracking-wider uppercase">
+            Email Templates
+          </h3>
           <button
             type="button"
             onClick={() => onToggleTemplateForm(!showTemplateForm)}
-            className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
+            className="split-row-aside btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
           >
             <Plus className="h-4 w-4" />
             New Template

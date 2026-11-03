@@ -427,7 +427,14 @@ const SystemOwnerCreation: React.FC = () => {
                   onChange={handleChange}
                   className="form-input placeholder-theme-text-muted py-3 transition-all"
                   placeholder="e.g., FF-1234"
+                  aria-describedby="membershipNumber-help"
                 />
+                {/* Blank is not "no number": with member numbers on, the server
+                    gives this account the first one in the sequence. */}
+                <p id="membershipNumber-help" className="text-theme-text-muted mt-1 text-xs">
+                  Leave blank to be given the first number in your department&apos;s sequence, if you turned member
+                  numbers on in the previous step.
+                </p>
               </div>
             </div>
 
@@ -512,7 +519,7 @@ const SystemOwnerCreation: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone touch:right-0.5 absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -644,7 +651,7 @@ const SystemOwnerCreation: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone touch:right-0.5 absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -690,7 +697,6 @@ const SystemOwnerCreation: React.FC = () => {
                     ? 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
-                aria-label="Create System Owner account and continue setup"
               >
                 {isSaving ? 'Creating System Owner Account...' : 'Create Account & Continue'}
               </button>

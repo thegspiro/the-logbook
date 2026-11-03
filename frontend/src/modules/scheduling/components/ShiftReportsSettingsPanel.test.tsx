@@ -199,7 +199,7 @@ describe('ShiftReportsSettingsPanel — settings that are not in effect yet', ()
     expect(screen.queryByText(/a shift can still be closed out without a report/)).not.toBeInTheDocument();
   });
 
-  it('says the reviewer role does not limit who can review', async () => {
+  it('says what the reviewer role grants', async () => {
     mockGetConfig.mockReset();
     mockGetConfig.mockResolvedValue({
       shift_reports_enabled: true,
@@ -219,7 +219,7 @@ describe('ShiftReportsSettingsPanel — settings that are not in effect yet', ()
     expect(await screen.findByText('Reviewer role')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Not in effect yet — anyone who can manage training can review reports, whatever is chosen here.'
+        'Members holding this position or rank can review reports about other members, as can anyone who manages training.'
       )
     ).toBeInTheDocument();
   });

@@ -25,7 +25,7 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, BadgeCheck, GraduationCap, Loader2, Search, Shield, Truck, Unlock, Users } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { PositionRosterMember, PositionRosterResponse } from '../../modules/scheduling/types';
-import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
+import { isDrivingSeat, positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { calendarDaysFromToday, formatCalendarDate, formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -119,7 +119,7 @@ const PositionRosterPage: React.FC = () => {
 
   // Only meaningful for driving positions, where an EVOC card is the
   // department's actual record of clearance.
-  const isDrivingPosition = loadedPosition === 'driver';
+  const isDrivingPosition = isDrivingSeat(loadedPosition);
   const uncertifiedCount = useMemo(
     () => (roster?.members ?? []).filter((member) => member.evoc_level_number === null).length,
     [roster]

@@ -217,6 +217,11 @@ const NotificationsPage: React.FC = () => {
   // The channel a fetch should ask for, resolved when the request is made
   // rather than when its caller was rendered.
   const logChannelFilterRef = useRef<'all' | 'email' | 'in_app'>('all');
+  // The failed filter and its scope, read the same way and for the same reason.
+  const logFailedFilterRef = useRef<{ failed: boolean; scope: NotificationLogScope }>({
+    failed: false,
+    scope: NotificationLogScope.MINE,
+  });
 
   // UI states
   const [loading, setLoading] = useState(true);
@@ -275,6 +280,16 @@ const NotificationsPage: React.FC = () => {
   // same footing as the inbox. The organization-wide view still exists behind
   // `scope=organization` + `notifications.manage`, for auditing deliverability.
   const requestedTab = searchParams.get('tab');
+  // The operations dashboard's Notification failures tile links here as
+  // ?status=failed. It counts every recipient's deliveries that recorded an
+  // error, so for a `notifications.manage` holder — the only caller who is
+  // shown that tile — the log is asked for the organization-wide view with
+  // the server's failed filter, which applies the tile's own predicate. Anyone
+  // else following such a link sees their own failed deliveries rather than a
+  // 403. Derived from the URL like the tab, so Back and the clear control
+  // cannot leave the list and the address bar disagreeing.
+  const failedOnly = searchParams.get('status') === 'failed';
+  const logScope = failedOnly && canManage ? NotificationLogScope.ORGANIZATION : NotificationLogScope.MINE;
   const tabIsAvailable: Record<'inbox' | 'rules' | 'templates' | 'log', boolean> = {
     inbox: true,
     rules: canView,
@@ -287,8 +302,16 @@ const NotificationsPage: React.FC = () => {
   // for a member before its button was.
   const isTabName = (value: string | null): value is keyof typeof tabIsAvailable =>
     value === 'inbox' || value === 'rules' || value === 'templates' || value === 'log';
+  // The failed filter belongs to the Send Log, so a link carrying it alone
+  // opens that tab rather than the default one.
   const activeTab: 'inbox' | 'rules' | 'templates' | 'log' =
-    isTabName(requestedTab) && tabIsAvailable[requestedTab] ? requestedTab : canView ? 'rules' : 'inbox';
+    isTabName(requestedTab) && tabIsAvailable[requestedTab]
+      ? requestedTab
+      : failedOnly
+        ? 'log'
+        : canView
+          ? 'rules'
+          : 'inbox';
   const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
   // Create form states
@@ -349,13 +372,15 @@ const NotificationsPage: React.FC = () => {
     // during that POST reloaded the *previous* channel — and, since the
     // reload is newer, that stale answer won.
     const channel = logChannelFilterRef.current;
+    const { failed, scope } = logFailedFilterRef.current;
     const requestId = ++logsRequestRef.current;
     if (append) setLoadingMoreLogs(true);
     else setLoadingLogs(true);
     setLogsError(null);
     try {
       const data = await notificationsService.getLogs({
-        scope: NotificationLogScope.MINE,
+        scope,
+        ...(failed ? { failed } : {}),
         ...(channel === 'all' ? {} : { channel }),
         ...(cursor ? { cursor } : {}),
         limit: LOG_PAGE_SIZE,
@@ -393,8 +418,9 @@ const NotificationsPage: React.FC = () => {
 
   useEffect(() => {
     logChannelFilterRef.current = logChannelFilter;
+    logFailedFilterRef.current = { failed: failedOnly, scope: logScope };
     void loadLogPage({ append: false });
-  }, [logChannelFilter, loadLogPage]);
+  }, [logChannelFilter, failedOnly, logScope, loadLogPage]);
 
   // Fetch admin data on mount (only if user has permission)
   useEffect(() => {
@@ -718,7 +744,12 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  // Leaving the Send Log drops its failed filter; reselecting it keeps it.
   const handleTabChange = (tab: typeof activeTab) => {
+    if (tab === 'log' && failedOnly) {
+      setSearchParams({ tab, status: 'failed' });
+      return;
+    }
     setSearchParams({ tab });
   };
 
@@ -750,7 +781,9 @@ const NotificationsPage: React.FC = () => {
                 {activeTab === 'inbox'
                   ? 'Your in-app notifications. Pinned ones stay at the top.'
                   : activeTab === 'log'
-                    ? 'Every notification sent to you, across all channels, with delivery status'
+                    ? logScope === NotificationLogScope.ORGANIZATION
+                      ? 'Notifications sent to anyone in the department, with delivery status'
+                      : 'Every notification sent to you, across all channels, with delivery status'
                     : 'Manage automated notification rules and email templates'}
               </p>
             </div>
@@ -1170,6 +1203,25 @@ const NotificationsPage: React.FC = () => {
                 <p className="flex-1 text-sm text-red-700 dark:text-red-300">{logsError}</p>
               </div>
             )}
+            {failedOnly && (
+              <div
+                className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm"
+                role="status"
+              >
+                <span>
+                  {logScope === NotificationLogScope.ORGANIZATION
+                    ? 'Showing only failed deliveries, for every member of the department.'
+                    : 'Showing only your failed deliveries.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearchParams({ tab: 'log' }, { replace: true })}
+                  className="touch-target-phone font-medium underline"
+                >
+                  Show all deliveries
+                </button>
+              </div>
+            )}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
                 {(
@@ -1193,7 +1245,9 @@ const NotificationsPage: React.FC = () => {
                   </button>
                 ))}
               </div>
-              {logs.some((l) => !l.read) && (
+              {/* "Mark all as read" clears the caller's whole log, which is
+                  not the set on screen under the failed filter. */}
+              {!failedOnly && logs.some((l) => !l.read) && (
                 <button
                   onClick={() => {
                     void handleMarkAllRead();
@@ -1222,9 +1276,11 @@ const NotificationsPage: React.FC = () => {
                 <Clock className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
                 <p className="text-theme-text-secondary mb-6">
-                  {logChannelFilter === 'all'
-                    ? 'Nothing has been sent to you yet. Each email and in-app notification you receive will be listed here with its delivery status.'
-                    : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
+                  {failedOnly
+                    ? 'No failed deliveries.'
+                    : logChannelFilter === 'all'
+                      ? 'Nothing has been sent to you yet. Each email and in-app notification you receive will be listed here with its delivery status.'
+                      : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
                 </p>
               </div>
             ) : (

@@ -278,12 +278,20 @@ describe('MemberIdCardPage', () => {
       });
     });
 
-    it('should display member status badge', async () => {
+    // The badge printed the stored value, so a card read "active" and a member
+    // on leave would carry "leave" (workflow re-check MR-6).
+    it('names the member status the way the roster does', async () => {
       renderWithRouter(<MemberIdCardPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('active')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Active')).toBeInTheDocument();
+      expect(screen.queryByText('active')).not.toBeInTheDocument();
+    });
+
+    it('spells out a status whose stored value is not a word on its own', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({ ...mockMember, status: 'leave' } as never);
+      renderWithRouter(<MemberIdCardPage />);
+
+      expect(await screen.findByText('On Leave')).toBeInTheDocument();
     });
 
     it('should display organization name', async () => {

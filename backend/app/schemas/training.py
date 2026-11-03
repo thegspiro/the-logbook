@@ -57,6 +57,9 @@ class RequirementType(str, Enum):
     SKILLS_EVALUATION = "skills_evaluation"
     CHECKLIST = "checklist"
     KNOWLEDGE_TEST = "knowledge_test"
+    EVALUATED_SHIFTS = "evaluated_shifts"
+    TRANSPORTS = "transports"
+    REFUSALS = "refusals"
 
 
 # Training Category Schemas
@@ -428,6 +431,9 @@ class TrainingRequirementBase(BaseModel):
     required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    evaluation_excludes_lowest_rating: bool = False
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -493,6 +499,12 @@ _REQUIREMENT_QUANTITY_FIELDS = {
     RequirementType.SHIFTS: ("required_shifts", "no shift count is set"),
     RequirementType.CALLS: ("required_calls", "no call count is set"),
     RequirementType.KNOWLEDGE_TEST: ("passing_score", "no passing score is set"),
+    RequirementType.EVALUATED_SHIFTS: (
+        "required_shifts",
+        "no number of evaluated shifts is set",
+    ),
+    RequirementType.TRANSPORTS: ("required_transports", "no transport count is set"),
+    RequirementType.REFUSALS: ("required_refusals", "no refusal count is set"),
 }
 
 
@@ -633,6 +645,9 @@ class TrainingRequirementUpdate(RefusesNull):
     required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    evaluation_excludes_lowest_rating: Optional[bool] = None
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -694,6 +709,7 @@ class TrainingRequirementUpdate(RefusesNull):
             "allows_external_credit",
             "applies_to_all",
             "due_date_type",
+            "evaluation_excludes_lowest_rating",
             "frequency",
             "is_editable",
             "name",

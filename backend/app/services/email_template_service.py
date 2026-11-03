@@ -27,6 +27,7 @@ from app.models.email_template import (
     MessageHistory,
 )
 from app.services import email_footers as _footers
+from app.services import email_templates_evaluations as _evaluation_templates
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
@@ -749,6 +750,34 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             ),
         },
     ],
+    "application_assigned": [
+        {"name": "recipient_name", "description": "Assigned member's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "role_label",
+            "description": 'What they were assigned as ("case manager", "interviewer")',
+        },
+        {"name": "assigned_by_name", "description": "Who made the assignment"},
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant on the member's My Applicants page",
+        },
+    ],
+    "application_needs_attention": [
+        {"name": "recipient_name", "description": "Case manager's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "event_summary",
+            "description": (
+                "What happened, as a sentence ending in a full stop: "
+                '"Alex Johnson submitted their follow-up form."'
+            ),
+        },
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant on the member's My Applicants page",
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -997,6 +1026,7 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
 # default bodies in their own module — ten more entries inline here would
 # bury the rest.
 TEMPLATE_VARIABLES.update(_storefront_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_evaluation_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -1485,6 +1515,30 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
         }
     ),
+    "application_assigned": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "role_label": "interviewer",
+            "assigned_by_name": "Sam Reed",
+            "applicant_url": (
+                "https://example.org/prospective-members/my-applicants?applicant=sample"
+            ),
+        }
+    ),
+    "application_needs_attention": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "event_summary": (
+                "Alex Johnson has reached the Board Interview stage, which "
+                "needs interviews."
+            ),
+            "applicant_url": (
+                "https://example.org/prospective-members/my-applicants?applicant=sample"
+            ),
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1683,6 +1737,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _storefront_templates.SAMPLE_CONTEXT.items()}
 )
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _evaluation_templates.SAMPLE_CONTEXT.items()}
+)
 
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
@@ -1744,6 +1801,15 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
         "recipient_name": "full",
         "applicant_name": "full",
     },
+    "application_assigned": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+        "assigned_by_name": "full",
+    },
+    "application_needs_attention": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+    },
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -1756,6 +1822,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
         "customer_name": "legal_full",
     },
 }
+TEST_RECIPIENT_FIELDS.update(_evaluation_templates.TEST_RECIPIENT_FIELDS)
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
 _DATE = "%B %d, %Y"
@@ -1844,6 +1911,12 @@ TEST_SAMPLE_DATES: Dict[
         "shift_start": (1, time(6, 0), _strf("%H:%M")),
     },
 }
+TEST_SAMPLE_DATES.update(
+    {
+        key: {"due_date": (days, None, _strf(_DATE))}
+        for key, days in _evaluation_templates.SAMPLE_DUE_DAYS.items()
+    }
+)
 
 
 # Dates that sit inside a prose value rather than a variable of their own:
@@ -2882,6 +2955,69 @@ View applicant: {{applicant_url}}
 DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT = (
     "{{applicant_name}} submitted {{form_name}}"
 )
+
+# Sent to a member assigned to an applicant as case manager or interviewer.
+# The assignment is what lets them see the applicant at all, so this email is
+# how a member with no other pipeline access learns there is something to do.
+# It names the applicant and links to them, and carries nothing from the file.
+DEFAULT_APPLICATION_ASSIGNED_HTML = build_shell(
+    "You Have Been Assigned an Applicant",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{assigned_by_name}} assigned you as <strong>{{role_label}}</strong>
+        for {{applicant_name}}, who is applying for membership.</p>
+        <p>You can see their application from My Applicants in the Logbook.</p>
+""" + action("{{applicant_url}}", "Open My Applicants"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_ASSIGNED_TEXT = """You Have Been Assigned an Applicant
+
+Hello {{recipient_name}},
+
+{{assigned_by_name}} assigned you as {{role_label}} for {{applicant_name}}, who
+is applying for membership. You can see their application from My Applicants
+in the Logbook.
+
+Open My Applicants: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_ASSIGNED_SUBJECT = (
+    "You are now {{role_label}} for {{applicant_name}}"
+)
+
+# Sent to an applicant's case managers when the applicant needs them: a
+# follow-up form came in, the applicant withdrew, or they reached a stage that
+# waits on interviews or sign-offs. Coordinators get their own notices for
+# these; a case manager need not be a coordinator, and is told here. Like the
+# assignment email it carries a link and a one-line summary, never anything
+# from the file.
+DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML = build_shell(
+    "An Applicant Needs Your Attention",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{event_summary}}</p>
+        <p>You are {{applicant_name}}'s case manager. You can see their
+        application from My Applicants in the Logbook.</p>
+""" + action("{{applicant_url}}", "Open My Applicants"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT = """An Applicant Needs Your Attention
+
+Hello {{recipient_name}},
+
+{{event_summary}}
+
+You are {{applicant_name}}'s case manager. You can see their application from
+My Applicants in the Logbook.
+
+Open My Applicants: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT = "{{applicant_name}} needs your attention"
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
@@ -5026,6 +5162,29 @@ class EmailTemplateService:
             ),
         },
         {
+            "type": EmailTemplateType.APPLICATION_ASSIGNED,
+            "name": "Applicant Assigned",
+            "subject": DEFAULT_APPLICATION_ASSIGNED_SUBJECT,
+            "html": DEFAULT_APPLICATION_ASSIGNED_HTML,
+            "text": DEFAULT_APPLICATION_ASSIGNED_TEXT,
+            "description": (
+                "Sent to a member assigned to an applicant as case manager or "
+                "interviewer, with a link to their My Applicants page."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_NEEDS_ATTENTION,
+            "name": "Applicant Needs Your Attention",
+            "subject": DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT,
+            "html": DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML,
+            "text": DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT,
+            "description": (
+                "Sent to an applicant's case managers when the applicant "
+                "submits a follow-up form, withdraws, or reaches an interview "
+                "or sign-off stage. Carries a link only."
+            ),
+        },
+        {
             "type": EmailTemplateType.SUGGESTION_SUBMITTED,
             "name": "Suggestion Submitted",
             "subject": DEFAULT_SUGGESTION_SUBMITTED_SUBJECT,
@@ -5120,6 +5279,9 @@ class EmailTemplateService:
         # email_templates_storefront.py for why they need raw-HTML
         # variables where other templates need none.
         *_storefront_templates.DEFAULT_TEMPLATE_DEFS,
+        # Performance evaluations' four notices; see
+        # email_templates_evaluations.py.
+        *_evaluation_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     # Stamp each definition with the colourway build_shell recorded for its

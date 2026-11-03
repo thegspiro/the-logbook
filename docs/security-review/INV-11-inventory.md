@@ -1,6 +1,62 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), pass 13 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), pass 13 (this PR)
+
+---
+
+## Pass 14 (2026-11-01) — watchdog pickup, no backend delta, 0 fixed, 0 new findings; INV-22 re-confirmed
+
+**Step 0.** The GitHub search tools were unavailable this iteration, so open PRs
+were read with `list_pull_requests` (state open): no head branch started with
+`claude/security-review-`. PR #3823 (this feature, pass 13) had merged. The
+rotation table showed rows 01–10 done for this lap and row 00 still marked 🔄
+(its pass 14 PR had merged while in progress), so row 11 was the first pending
+row; row 00 is corrected to ✅ in this PR.
+
+**Scope.** Baseline `d65ad33f7` (PR #3823's merge). Three commits touch the
+declared files since: `233b8af39` (labels: Code 128 bars a whole number of
+printer dots wide), `ab879fc7d` and `cf8fdae30` (page and list-row layout
+classes). `git show --stat` over `backend/` is empty for all three.
+
+**Verified good (mechanisms).**
+
+- **No backend change.** None of the five endpoint files, the service, schema or
+  model changed, so the 198 routes (150 HTTP plus the one WebSocket route in
+  `inventory.py`, 29 NFC, 12 labels, 4 kiosk, 2 last-seen) are as pass 13 left
+  them, each behind `require_permission`, `get_current_user` or the WebSocket's
+  origin check and token. `check_route_permissions.py --strict`: 0 errors,
+  0 warnings.
+- **`233b8af39`** adds `components/labels/barcodeGeometry.ts` (pure arithmetic
+  that rounds module widths to whole printer dots) and uses it from
+  `LabelPrintPage.tsx` and `InventoryBarcodePrintPage.tsx`. A scan of the diff
+  for `innerHTML`, `document.write`, `window.open`, `dangerouslySetInnerHTML`,
+  `fetch(`, browser dialogs and storage access found none; the preferences the
+  page already keeps (`inventory:labelPreset` and friends) are unchanged.
+- **Layout commits** change class names only.
+
+**Standing: INV-22** (full catalog materialized by `get_fulfillment_options` /
+`get_requestable_categories`, owner-accepted) is unchanged: neither function is
+in the window.
+
+**Repo-wide error found, not mine to fix here.** `validate_migrations.py
+--strict` fails on `main` (`2b1884237`): three Alembic heads, `aefb58788235`,
+`b65eaef983b9` and `e9bfa68963ce`, all revising `5781476f2012`. PR #3916 (a
+merge revision over all three) was open during this pass; #3915, which joins
+only the first two, would have left a second fork, and a comment saying so was
+left there. This PR adds no migration, so it does not touch the chain.
+
+### Completion gate (pass 14)
+
+| Check                                                                 | Result                                                                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                 | ✅ 0 violations                                                                                        |
+| `black --check app/ tests/ alembic/` (26.10.1)                        | ✅ clean                                                                                               |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                     | ✅ clean                                                                                               |
+| `python3 scripts/validate_migrations.py --strict`                     | ❌ three heads on `main`, see above; not caused by this PR                                             |
+| `python3 scripts/check_route_permissions.py --strict`                 | ✅ 0 errors, 0 warnings                                                                                |
+| `pytest -k "inventory or label or nfc or kiosk or vendor or encrypt"` | ✅ 2319 passed, 1 skipped (`py_vapid`); the sandbox database was migrated with `alembic upgrade heads` |
+| `cd frontend && npm run typecheck`                                    | ✅ exit 0 (after `npm ci`)                                                                             |
+| `cd frontend && npm run lint`                                         | ✅ exit 0, no errors or warnings (NODE_OPTIONS=--max-old-space-size=6144)                              |
 
 ---
 

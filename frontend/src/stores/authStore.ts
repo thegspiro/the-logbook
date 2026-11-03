@@ -19,6 +19,7 @@ import type { PasskeyAssertion } from '../utils/passkeys';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 import { clearCache } from '../utils/apiCache';
 import { clearInFlight } from '../utils/inFlight';
+import { releaseDevicePushSubscription, resyncDevicePushSubscription } from '../utils/devicePushSubscription';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import type { PurgeResult } from '../utils/purgeLocalMemberData';
 import { clearQueuedReports } from '../services/errorReporting';
@@ -186,6 +187,14 @@ const claimDeviceForMember = async (userId: string | undefined): Promise<void> =
   const previous = readDeviceMember();
   if (previous !== userId && (fresh || previous !== null)) {
     await purgeLocalMemberData();
+    // The push subscription is the browser's, and the server delivers to it
+    // by whoever registered it — so without this the previous member's
+    // notifications keep reaching this device. Deliberately here and not in
+    // purgeLocalMemberData, which logout also runs: a member signing out of
+    // their own phone keeps push until someone else signs in on it.
+    await releaseDevicePushSubscription();
+  } else if (fresh) {
+    void resyncDevicePushSubscription();
   }
   // SEC: every sign-in runs through here — password, MFA, registration and
   // the OAuth callback — which is the only place that covers the boundary

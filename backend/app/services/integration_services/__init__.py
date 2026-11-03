@@ -92,6 +92,13 @@ async def test_integration_connection(integration: Integration) -> str:
 
         return await paypal_test_connection(integration)
 
+    if itype == "zeffy":
+        from app.services.integration_services.zeffy_service import (
+            test_connection as zeffy_test_connection,
+        )
+
+        return await zeffy_test_connection(integration)
+
     if itype == "documenso":
         from app.services.integration_services.documenso_service import DocumensoService
 

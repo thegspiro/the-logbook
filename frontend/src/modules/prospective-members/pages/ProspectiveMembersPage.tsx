@@ -30,6 +30,7 @@ import {
   RotateCcw,
   Info,
   Archive,
+  UserCheck,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
@@ -56,6 +57,7 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useAuthStore } from '../../../stores/authStore';
 export const ProspectiveMembersPage: React.FC = () => {
   const { confirm } = useConfirm();
   const navigate = useNavigate();
@@ -167,6 +169,10 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [conversionApplicant, setConversionApplicant] = useState<Applicant | null>(null);
   const [selectedInactive, setSelectedInactive] = useState<Set<string>>(new Set());
+  // Bulk actions, badges and the purge reach every applicant they name, so
+  // the backend asks for prospective_members.view_all; without it a
+  // coordinator works their assigned applicants one at a time.
+  const seesAll = useAuthStore((st) => st.checkPermission)('prospective_members.view_all');
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
   const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
@@ -730,6 +736,25 @@ export const ProspectiveMembersPage: React.FC = () => {
               </select>
             )}
 
+            {/* A member who can see every applicant narrows the board and the
+              table to the ones they are assigned to. Without view_all the
+              server already shows only those, so there is nothing to narrow. */}
+            {seesAll && (
+              <button
+                type="button"
+                aria-pressed={filters.assigned_to_me === true}
+                onClick={() => setFilters({ assigned_to_me: filters.assigned_to_me ? undefined : true })}
+                className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  filters.assigned_to_me
+                    ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
+                    : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
+                }`}
+              >
+                <UserCheck className="h-4 w-4" aria-hidden="true" />
+                My applicants
+              </button>
+            )}
+
             {/* Status Filter */}
             <div className="relative">
               <button
@@ -856,7 +881,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             ) : (
               <>
                 {/* Bulk Actions Bar */}
-                {selectedApplicants.size > 0 && (
+                {selectedApplicants.size > 0 && seesAll && (
                   <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
                     <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                       <input
@@ -994,7 +1019,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         {activeTab === 'inactive' && (
           <div>
             {/* Inactive Bulk Actions */}
-            {selectedInactive.size > 0 && (
+            {selectedInactive.size > 0 && seesAll && (
               <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
                 <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
                 <div className="ml-auto flex items-center gap-2">

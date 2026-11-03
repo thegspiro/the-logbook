@@ -9,7 +9,7 @@ shift. DB mocked; no MySQL.
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.scheduling_service import SchedulingService
 
@@ -243,12 +243,20 @@ class TestFinalizeManualHoursScoping:
         db.add = MagicMock()
         db.flush = AsyncMock()
         svc = SchedulingService(db)
-        result, err = await svc.finalize_shift(
-            "s1",
-            "org-1",
-            finalized_by_user_id="officer-1",
-            manual_hours=[{"user_id": "uFOREIGN", "hours": 8}],
-        )
+        # The shift-evaluation check runs before the manual hours are read; it
+        # is not what this test is about, so it is stubbed out of the scripted
+        # queries above (covered in test_shift_evaluations.py).
+        with patch(
+            "app.services.shift_evaluation_service.ShiftEvaluationService"
+            ".missing_required",
+            AsyncMock(return_value=[]),
+        ):
+            result, err = await svc.finalize_shift(
+                "s1",
+                "org-1",
+                finalized_by_user_id="officer-1",
+                manual_hours=[{"user_id": "uFOREIGN", "hours": 8}],
+            )
         assert result is None
         assert err == "One or more members are not in your organization"
         db.add.assert_not_called()

@@ -327,6 +327,8 @@ For each field you can set:
   pre-filled: each setting is unavailable while the other is on. See
   [Prospective Members → Follow-up Forms](./15-prospective-members.md#follow-up-forms-2026-10-29).
 
+![The Edit Field window for Mobile phone: Required, the width, Sensitive unticked and unavailable, and Pre-fill from applicant (follow-up forms) set to Mobile with its note that a Follow-up Form stage opens the field with what the applicant record holds](./images/07-40-field-prefill-applicant.png)
+
 ### Sensitive fields _(2026-10-26)_
 
 Some questions need more protection than the rest of the form: criminal
@@ -334,6 +336,10 @@ history, driving record or medical history, for example. Tick **Sensitive**
 under **Required** in the field's settings, then select **Update Field** (or
 **Add Field**). The field shows a **Sensitive** badge in the builder. A
 duplicated field stays sensitive.
+
+![The Edit Field window for Criminal convictions, a Text Area question: Required and Sensitive ticked, the note that its answers are stored encrypted, shown only to staff allowed to view sensitive answers and left out of CSV downloads, and Pre-fill from applicant unavailable](./images/07-41-field-sensitive.png)
+
+![The form builder for Driver Background Disclosure: Mobile phone and Street address badged Pre-fills: Mobile and Pre-fills: Street address, and Moving violations in the last five years and Criminal convictions badged Sensitive with a lock](./images/07-42-builder-sensitive-badge.png)
 
 **Who can read the answers.** Only members who can manage forms
 (**forms.manage**) **and** hold **sensitive_answers.view** see answers to
@@ -346,10 +352,14 @@ their position (see
 someone opens submissions with these answers shown, it is recorded in the
 audit log.
 
+![Submissions for Driver Background Disclosure as the administrator, Nadia Belhaj's submission opened: her name, phone, address and licence number, then Moving violations in the last five years and Criminal convictions, each with a lock icon beside the question](./images/07-43-submission-sensitive-answers.png)
+
 **What everyone else sees.** A member who can manage forms but lacks the
 permission sees the other answers, and the note _"Restricted: this submission
 has answers to sensitive questions, which you do not have permission to
 view."_ The **Results** tab leaves sensitive questions out for them.
+
+![The same submission opened by the Secretary, who manages forms without sensitive_answers.view: name, phone, address and licence number, and below them, with a lock icon, Restricted: this submission has answers to sensitive questions, which you do not have permission to view](./images/07-44-submission-restricted.png)
 
 **Limits.**
 
@@ -497,6 +507,10 @@ needed, at two levels:
    code** and which sites it works on. Select **Copy embed code** and paste it
    into the page on your website, where your web host's editor accepts HTML.
 
+![Organization Settings, Forms: Websites allowed to embed forms with https://www.oakvillefire.example.org on it, the note to give one site per line starting with https:// and without a page path, and Save](./images/07-48-settings-forms-sites.png)
+
+![The embedding part of the Community Event Request Share window: Allow embedding on your website ticked, the Embed code box, Works on: https://www.oakvillefire.example.org and Copy embed code](./images/07-47-share-embed-code.png)
+
 The embedded form shows its title and questions only; your website already
 carries the department's name and logo. It grows to fit as visitors answer.
 
@@ -545,7 +559,7 @@ Public Form** lists only the forms connected to event requests, for officers
 who can manage events. See
 [Events & Meetings → Public Request Form](./04-events-meetings.md#public-request-form).
 
-![Form sharing dialog with the public URL and its QR code](./images/07-05-form-sharing.png)
+![The Share Form window for Community Event Request: Public Access on, the public URL and its QR code with the download buttons, and Allow embedding on your website ticked with the embed code beneath](./images/07-05-form-sharing.png)
 
 > **Tip.** Public forms suit community feedback, mutual aid incident reports,
 > and application forms linked from your department's public portal.
@@ -635,7 +649,7 @@ the newest one's subject as **Latest:** and an **unread** count.
 
 ![The same attendance-validations stack expanded, showing each of its notifications as its own row](./images/07-29-notification-stack-expanded.png)
 
-![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
+![Notification rules and logs page with summary cards and the rules list, each rule with its on/off switch and its edit and delete icons](./images/07-08-notification-rules.png)
 
 ### Notification Rules
 
@@ -695,6 +709,10 @@ rules sends while any of them is on.
   notification switched off, or the last one switched on for its trigger, the
   window says what deleting it changes and suggests editing or switching the
   rule instead. Select **Delete rule**, or **Keep it** to leave it as it is.
+
+![Edit Notification Rule for Drill reminder — 24 hours out: Rule Name, Trigger Event set to Event Reminder with its explanation, Description, and Save Changes](./images/07-46-rule-edit-dialog.png)
+
+![Delete this rule? for Gear request notices, the only Equipment Request Update rule and switched off: the warning that deleting it changes whether those notifications go out, the suggestion to edit the rule or switch it on or off instead, and Keep it beside Delete rule](./images/07-45-rule-delete-warning.png)
 
 ### Send Log
 

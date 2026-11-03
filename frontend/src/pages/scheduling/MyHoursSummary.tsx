@@ -198,12 +198,12 @@ export const MyHoursSummary: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h3 className="text-theme-text-primary text-lg font-semibold">My Hours</h3>
           <p className="text-theme-text-muted text-sm">Hours and calls credited to you once a shift is closed out.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="split-row-aside flex flex-wrap items-center gap-2">
           <label htmlFor="my-hours-year" className="form-label mb-0">
             Year
           </label>

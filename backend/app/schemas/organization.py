@@ -1262,7 +1262,10 @@ class ModuleSettings(BaseModel):
     apparatus: bool = Field(default=True, description="Apparatus Management module")
     minutes: bool = Field(default=True, description="Meeting Minutes module")
     reports: bool = Field(default=True, description="Reports & Analytics module")
-    notifications: bool = Field(default=True, description="Email Notifications module")
+    notifications: bool = Field(
+        default=True,
+        description="In-App Notifications module (bell, inbox, push, notification rules)",
+    )
     forms: bool = Field(default=True, description="Custom Forms module")
     integrations: bool = Field(default=True, description="External Integrations module")
     facilities: bool = Field(
@@ -1328,6 +1331,13 @@ class ModuleSettings(BaseModel):
         default=False,
         description="Testing Checklist module (page-by-page QA of the app)",
     )
+    # Off by default: a new module, not one an upgrade could be hiding from a
+    # department already using it. The Historian turns it on under
+    # Settings > Modules when the department is ready to start its archive.
+    history: bool = Field(
+        default=False,
+        description="History module (past members, honor roll, department archive)",
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -1374,6 +1384,7 @@ class ModuleSettingsUpdate(BaseModel):
     finance: Optional[bool] = None
     medical_screening: Optional[bool] = None
     testing: Optional[bool] = None
+    history: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):

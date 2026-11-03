@@ -122,11 +122,20 @@ class GuestCheckInService:
         normalized_email = (email or "").strip().lower() or None
         full_name = f"{first_name.strip()} {last_name.strip()}".strip()
 
+        # Find-then-insert: two taps of the QR code at once (a double-tap, or a
+        # retry of a POST that timed out after it was processed) would both
+        # find nobody and both insert, counting the guest twice. The attendee
+        # that would conflict does not exist yet, so the event row is what is
+        # locked, and the lookup is a locking read so it answers from the
+        # committed state rather than the snapshot taken when the caller
+        # resolved the event. The lock is released by the commit below.
+        await self._lock_event(str(event.id), organization_id)
         attendee = await self._find_existing_attendee(
             event_id=str(event.id),
             organization_id=organization_id,
             email=normalized_email,
             full_name=full_name,
+            for_update=True,
         )
 
         already_checked_in = bool(attendee and attendee.checked_in)
@@ -189,12 +198,24 @@ class GuestCheckInService:
         # nobody closes out.
         return attendee, None, prospect_created
 
+    async def _lock_event(self, event_id: str, organization_id: str) -> None:
+        """Take the event row's lock to serialize a guest sign-in on it."""
+        await self.db.execute(
+            select(Event.id)
+            .where(
+                Event.id == event_id,
+                Event.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+
     async def _find_existing_attendee(
         self,
         event_id: str,
         organization_id: str,
         email: Optional[str],
         full_name: str,
+        for_update: bool = False,
     ) -> Optional[EventExternalAttendee]:
         """Find a prior attendance row for this person at this event.
 
@@ -219,7 +240,10 @@ class GuestCheckInService:
                 EventExternalAttendee.email.is_(None),
             )
 
-        result = await self.db.execute(query.limit(1))
+        query = query.limit(1)
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         event_external_attendee: Optional[EventExternalAttendee] = (
             result.scalars().first()
         )

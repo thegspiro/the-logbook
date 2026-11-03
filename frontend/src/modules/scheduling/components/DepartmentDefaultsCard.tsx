@@ -1,12 +1,18 @@
 /**
  * Department Defaults Card
  *
- * Configures department-level scheduling defaults: shift duration,
- * minimum staffing and overtime threshold.
+ * Configures department-level scheduling defaults: shift duration and minimum
+ * staffing, which a new shift template starts from (2026-10-31).
  *
  * No control for `requireAssignmentConfirmation`: the backend stores it but
  * nothing acts on it, so a switch would claim an effect it does not have
  * (CLAUDE.md pitfall #19). The value still round-trips unchanged on save.
+ *
+ * Nor for `overtimeThresholdHoursPerWeek`: nothing read it, and the Overtime
+ * advisory card on the same screen is the overtime rule the assignment
+ * warning actually uses. Two limits that could disagree would be worse than
+ * one (owner decision 2026-10-31), so the field is gone and its stored value
+ * round-trips untouched like the switch above.
  */
 
 import React, { useId } from 'react';
@@ -18,24 +24,21 @@ interface DepartmentDefaultsCardProps {
 }
 
 export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ settings, onSettingsChange }) => {
-  // The three number fields have a <label> beside them rather than wrapping
+  // The number fields have a <label> beside them rather than wrapping
   // them, so each needs an htmlFor to be a label at all rather than a styled
   // caption. `useId` rather than literal ids because this is a component, not a
   // page: two cards on one screen would otherwise point every label at the
   // first card's inputs.
   const durationId = useId();
   const staffingId = useId();
-  const overtimeId = useId();
 
   return (
     <div className="card-secondary space-y-5 p-4 sm:p-5">
       <div>
         <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
-        {/* Pitfall #19: these three values are stored and shown on the settings summary, but no shift, template
-            or overtime warning reads them yet. */}
-        <p className="text-theme-alert-warning-text mt-1 text-xs font-medium">
-          Not in effect yet — these are saved, but new shifts and templates don&apos;t use them and no overtime warning
-          reads the threshold.
+        <p className="text-theme-text-muted mt-1 text-xs">
+          A new shift template starts with this length and minimum staffing. The overtime warning is set under Overtime
+          advisory.
         </p>
       </div>
 
@@ -80,25 +83,6 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
             className="form-input focus:ring-violet-500"
             min="1"
             max="50"
-          />
-        </div>
-        <div>
-          <label htmlFor={overtimeId} className="text-theme-text-secondary mb-1 block text-sm font-medium">
-            Overtime Threshold (hours/week)
-          </label>
-          <input
-            id={overtimeId}
-            type="number"
-            value={settings.overtimeThresholdHoursPerWeek}
-            onChange={(e) =>
-              onSettingsChange((prev) => ({
-                ...prev,
-                overtimeThresholdHoursPerWeek: parseInt(e.target.value, 10) || 48,
-              }))
-            }
-            className="form-input focus:ring-violet-500"
-            min="1"
-            max="168"
           />
         </div>
       </div>

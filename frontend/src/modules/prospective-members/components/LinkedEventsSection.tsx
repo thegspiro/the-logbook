@@ -15,6 +15,7 @@ import { ApplicantStatus } from '../../../constants/enums';
 import { eventService } from '../../../services/eventServices';
 import type { EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useApplicantAccess } from './ApplicantAccessContext';
 
 interface LinkedEventsSectionProps {
   applicant: Applicant;
@@ -22,6 +23,10 @@ interface LinkedEventsSectionProps {
 }
 
 const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz }) => {
+  // Changes are for the applicant's managers and case managers, and only while
+  // the application is open; anyone else assigned sees the list only.
+  const access = useApplicantAccess();
+  const canEdit = applicant.status === ApplicantStatus.ACTIVE && access.can_work;
   const [linkedEvents, setLinkedEvents] = useState<ProspectEventLink[]>([]);
   const [isLoadingLinkedEvents, setIsLoadingLinkedEvents] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
@@ -103,7 +108,7 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
           <Link2 className="h-3.5 w-3.5" />
           Linked Events
         </h3>
-        {applicant.status === ApplicantStatus.ACTIVE && (
+        {canEdit && (
           <button
             onClick={() => {
               void handleOpenEventPicker();
@@ -228,7 +233,7 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
                   )}
                 </p>
               </div>
-              {applicant.status === ApplicantStatus.ACTIVE && (
+              {canEdit && (
                 <button
                   onClick={() => {
                     void handleUnlinkEvent(link.id, link.event_title ?? 'This event');

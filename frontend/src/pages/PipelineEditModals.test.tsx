@@ -23,8 +23,14 @@ const mockGetPrograms = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
 const mockUpdateMilestone = vi.fn();
 const mockGetProgramEnrollments = vi.fn();
+// The program forms load the department's evaluation forms for their picker;
+// an empty list unless a test says otherwise.
+const mockListShiftEvaluationTemplates = vi.fn();
 
 vi.mock('../services/api', () => ({
+  shiftEvaluationTemplateService: {
+    list: (...a: unknown[]) => mockListShiftEvaluationTemplates(...a) as unknown,
+  },
   trainingProgramService: {
     addProgramRequirement: (...a: unknown[]) => mockAddProgramRequirement(...a) as unknown,
     createRequirementEnhanced: (...a: unknown[]) => mockCreateRequirementEnhanced(...a) as unknown,
@@ -94,6 +100,8 @@ const renderModal = (props: Partial<React.ComponentProps<typeof RequirementFormM
 
 describe('RequirementFormModal', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement, hipaaRequirement]);
     mockGetCourses.mockResolvedValue([]);
@@ -247,6 +255,8 @@ describe('RequirementFormModal — the requirement’s settings in this program'
   };
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockReset();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement, hipaaRequirement]);
@@ -339,6 +349,8 @@ const phases = [
 
 describe('PhaseFormModal — phase prerequisites', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockCreateProgramPhase.mockResolvedValue({ id: 'ph-3' });
     mockUpdateProgramPhase.mockResolvedValue({ id: 'ph-2' });
@@ -411,6 +423,8 @@ const program = {
 
 describe('EditProgramModal — deadline reminders', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockUpdateProgram.mockResolvedValue(program);
     mockGetPrograms.mockReset();
@@ -486,6 +500,8 @@ describe('EditProgramModal — enrollment rules', () => {
   const concurrencyLabel = 'Allow members to be enrolled in other programs at the same time';
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetPrograms.mockReset();
     mockGetPrograms.mockResolvedValue(others);
@@ -530,6 +546,7 @@ describe('EditProgramModal — enrollment rules', () => {
         recert_anchor_day: undefined,
         prerequisite_program_ids: ['prog-driver'],
         allows_concurrent_enrollment: false,
+        shift_evaluation_template_id: null,
       });
     });
     // The parent re-fetches the program on onSaved.
@@ -607,6 +624,8 @@ describe('EditProgramModal — deactivating', () => {
   ];
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetPrograms.mockReset();
     mockGetPrograms.mockResolvedValue([]);
@@ -668,6 +687,8 @@ describe('EditProgramModal — deactivating', () => {
 // so each of these forms must send an emptied field as null to clear it.
 describe('clearing a field on an edit sends null', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockUpdateProgram.mockReset();
     mockUpdateProgram.mockResolvedValue(program);
@@ -812,6 +833,101 @@ describe('clearing a field on an edit sends null', () => {
         'prog-1',
         'ms-1',
         expect.objectContaining({ description: null, notification_message: null })
+      );
+    });
+  });
+});
+
+describe('EditProgramModal — shift evaluation form', () => {
+  const template = (id: string, name: string, isActive = true) => ({
+    id,
+    name,
+    is_active: isActive,
+    program_names: [],
+    is_general_form: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([
+      template('tpl-emt', 'EMT Shift Evaluation'),
+      template('tpl-driver', 'Driver Evaluation'),
+      template('tpl-old', 'Old Evaluation', false),
+    ]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockUpdateProgram.mockReset();
+    mockUpdateProgram.mockResolvedValue(program);
+  });
+
+  it('offers the active forms, and keeps an inactive one the program already uses', async () => {
+    renderWithRouter(
+      <EditProgramModal
+        program={{ ...program, shift_evaluation_template_id: 'tpl-old' }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(select).toHaveValue('tpl-old');
+    const options = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual(
+      expect.arrayContaining([
+        'No evaluation form',
+        'EMT Shift Evaluation',
+        'Driver Evaluation',
+        'Old Evaluation (inactive)',
+      ])
+    );
+  });
+
+  it('does not offer an inactive form the program does not use', async () => {
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(screen.queryByRole('option', { name: 'Old Evaluation (inactive)' })).not.toBeInTheDocument();
+  });
+
+  it('sends the chosen form', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    await user.selectOptions(select, 'Driver Evaluation');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ shift_evaluation_template_id: 'tpl-driver' })
+      );
+    });
+  });
+
+  it('sends null when the form is removed, so the clear is saved', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EditProgramModal
+        program={{ ...program, shift_evaluation_template_id: 'tpl-emt' }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    await user.selectOptions(select, 'No evaluation form');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ shift_evaluation_template_id: null })
       );
     });
   });

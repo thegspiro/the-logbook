@@ -49,9 +49,11 @@ class PermissionCategory(str, Enum):
     NOTIFICATIONS = "notifications"
     SUGGESTIONS = "suggestions"
     REPORTS = "reports"
+    EVALUATIONS = "evaluations"
     PROSPECTIVE_MEMBERS = "prospective_members"
     ADMIN_HOURS = "admin_hours"
     FINANCE = "finance"
+    HISTORY = "history"
 
 
 class Permission:
@@ -125,6 +127,14 @@ PROSPECTIVE_MEMBERS_VIEW = Permission(
 PROSPECTIVE_MEMBERS_MANAGE = Permission(
     "prospective_members.manage",
     "Manage prospective members and pipeline",
+    PermissionCategory.PROSPECTIVE_MEMBERS,
+)
+# Without it, a holder of view or manage sees only the applicants they are
+# assigned to as case manager or interviewer (prospect_assignments). Unassigned
+# applicants, pipeline statistics and reports are visible to this alone.
+PROSPECTIVE_MEMBERS_VIEW_ALL = Permission(
+    "prospective_members.view_all",
+    "View every prospective member, assigned or not",
     PermissionCategory.PROSPECTIVE_MEMBERS,
 )
 
@@ -665,6 +675,44 @@ REPORTS_MANAGE = Permission(
     PermissionCategory.REPORTS,
 )
 
+# Member performance evaluations
+#
+# Only the grants something reads are registered (CLAUDE.md pitfall #19).
+#
+# There is no ``view_own``. A member reaches their own evaluations on
+# authentication alone, as with their own notifications: the member signs or
+# refuses the acknowledgement and may file a written response, so a grant a
+# department could withdraw would let it withhold a record the member is
+# entitled to see.
+EVALUATIONS_CONFIGURE = Permission(
+    "evaluations.configure",
+    "Build evaluation templates and their workflows",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_MANAGE = Permission(
+    "evaluations.manage",
+    "Open and close evaluation review periods",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_CONDUCT = Permission(
+    "evaluations.conduct",
+    "Evaluate members as their assigned evaluator",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_VIEW_ALL = Permission(
+    "evaluations.view_all",
+    "View every member's evaluations and record that calibration is complete",
+    PermissionCategory.EVALUATIONS,
+)
+# Removing a personnel record. Kept apart from ``manage`` so running the
+# review process does not carry the power to erase its results; a deletion
+# always leaves a record with its reason on the member's history.
+EVALUATIONS_DELETE = Permission(
+    "evaluations.delete",
+    "Delete an evaluation, with a reason kept on the member's history",
+    PermissionCategory.EVALUATIONS,
+)
+
 # Members (additional)
 #
 # Despite the name, this does NOT gate creating a member: POST /users requires
@@ -752,6 +800,30 @@ FINANCE_REQUEST = Permission(
     "Create, submit and track your own purchase requests, expense reports "
     "and check requests",
     PermissionCategory.FINANCE,
+)
+
+# ============================================
+# History Permissions
+# ============================================
+
+# Published history needs no permission at all: any signed-in member of a
+# department with the module on reads what is published to members. These
+# gate the archive behind publication — the drafts, the research, and the act
+# of putting something in front of the department or the public.
+HISTORY_VIEW = Permission(
+    "history.view",
+    "View unpublished history records, research and change history",
+    PermissionCategory.HISTORY,
+)
+HISTORY_MANAGE = Permission(
+    "history.manage",
+    "Create and edit history records, the title list and the clearance list",
+    PermissionCategory.HISTORY,
+)
+HISTORY_PUBLISH = Permission(
+    "history.publish",
+    "Publish history records to the department and the public",
+    PermissionCategory.HISTORY,
 )
 
 # ============================================
@@ -886,6 +958,12 @@ ALL_PERMISSIONS: list[Permission] = [
     # Reports
     REPORTS_VIEW,
     REPORTS_MANAGE,
+    # Member performance evaluations
+    EVALUATIONS_CONFIGURE,
+    EVALUATIONS_MANAGE,
+    EVALUATIONS_CONDUCT,
+    EVALUATIONS_VIEW_ALL,
+    EVALUATIONS_DELETE,
     # Members (additional)
     MEMBERS_CREATE,
     # Training (additional)
@@ -902,9 +980,14 @@ ALL_PERMISSIONS: list[Permission] = [
     FINANCE_CONFIGURE_APPROVALS,
     FINANCE_REQUEST,
     FINANCE_BUDGET_REVIEW,
+    # History
+    HISTORY_VIEW,
+    HISTORY_MANAGE,
+    HISTORY_PUBLISH,
     # Prospective Members
     PROSPECTIVE_MEMBERS_VIEW,
     PROSPECTIVE_MEMBERS_MANAGE,
+    PROSPECTIVE_MEMBERS_VIEW_ALL,
 ]
 
 
@@ -1393,6 +1476,7 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     NOTIFICATIONS_VIEW.name,
     REPORTS_VIEW.name,
     PROSPECTIVE_MEMBERS_VIEW.name,
+    PROSPECTIVE_MEMBERS_VIEW_ALL.name,
 ]
 
 # What a rank-and-file member of the department can see, whatever their
@@ -1531,6 +1615,13 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
             SUGGESTIONS_MANAGE.name,
+            # Evaluations are personnel records; setting up the forms and
+            # periods starts with the Chief, who delegates by position.
+            EVALUATIONS_CONFIGURE.name,
+            EVALUATIONS_MANAGE.name,
+            EVALUATIONS_CONDUCT.name,
+            EVALUATIONS_VIEW_ALL.name,
+            EVALUATIONS_DELETE.name,
             ADMIN_ACCESS.name,
             APPARATUS_MANAGE_NFC_TAGS.name,
             LOCATIONS_MANAGE_NFC_TAGS.name,
@@ -1960,6 +2051,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
@@ -2063,6 +2155,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -2161,6 +2254,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -2357,6 +2451,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             USERS_VIEW_CONSENTS.name,
+            HISTORY_VIEW.name,
+            HISTORY_MANAGE.name,
+            HISTORY_PUBLISH.name,
         ],
     },
     "apparatus_officer": {
@@ -2420,6 +2517,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
@@ -2455,6 +2553,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW.name,
             MEMBERS_VIEW.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             STOREFRONT_VIEW.name,

@@ -75,8 +75,8 @@ export const DuesLedgerDialog: React.FC<DuesLedgerDialogProps> = ({ dues, member
         ) : (
           <ul className="divide-theme-surface-border border-theme-surface-border divide-y rounded-lg border">
             {payments.map((payment) => (
-              <li key={payment.id} className="flex flex-col gap-1 p-3 text-sm sm:flex-row sm:justify-between">
-                <div>
+              <li key={payment.id} className="split-row gap-1 p-3 text-sm">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary font-medium">{formatCurrency(payment.amount)}</p>
                   <p className="text-theme-text-secondary text-xs">
                     {[
@@ -88,7 +88,7 @@ export const DuesLedgerDialog: React.FC<DuesLedgerDialogProps> = ({ dues, member
                   </p>
                   {payment.notes && <p className="text-theme-text-secondary mt-1 text-xs">{payment.notes}</p>}
                 </div>
-                <p className="text-theme-text-secondary text-xs sm:text-right">
+                <p className="split-row-aside text-theme-text-secondary text-xs sm:text-right">
                   {formatDateTime(payment.receivedAt, tz)}
                 </p>
               </li>

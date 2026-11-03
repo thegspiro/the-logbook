@@ -93,6 +93,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/facilities': {},
   '/finance': { permissions: ['finance.view'] },
   '/grants': { permissions: ['fundraising.view'] },
+  // Published history is read by any signed-in member.
+  '/history': {},
+  '/history/people': {},
   '/integrations': { permissions: ['settings.manage'] },
   '/inventory': { permissions: ['inventory.manage'] },
   '/ip-security': { permissions: ['security.manage', 'settings.manage'] },
@@ -105,6 +108,10 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/onboarding': {},
   '/prospective-members': { permissions: ['prospective_members.manage'] },
   '/reports': { permissions: ['reports.view'] },
+  '/reports/evaluations': {
+    label: 'Member Evaluations',
+    permissions: ['evaluations.configure', 'evaluations.manage'],
+  },
   '/scheduling': {},
   '/settings': { permissions: ['settings.manage'] },
   '/store': { permissions: ['storefront.view'] },

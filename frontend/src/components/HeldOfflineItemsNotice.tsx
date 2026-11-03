@@ -13,7 +13,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { triggerOfflineDrain } from '../hooks/useOfflineSyncEngine';
+import { triggerAllOfflineDrains } from '../hooks/useOfflineSyncEngine';
 import { useAuthStore } from '../stores/authStore';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -95,7 +95,7 @@ export const HeldOfflineItemsNotice: React.FC = () => {
       toast.success(
         claimed === 1 ? '1 held item will be sent as yours' : `${claimed} held items will be sent as yours`
       );
-      void triggerOfflineDrain();
+      void triggerAllOfflineDrains();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not release the held items'));
     } finally {

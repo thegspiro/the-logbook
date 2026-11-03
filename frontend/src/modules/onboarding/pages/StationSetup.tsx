@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { MapPin, Plus, Trash2, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
+  BackButton,
   OnboardingHeader,
   ProgressIndicator,
   ResetProgressButton,
@@ -12,7 +13,7 @@ import {
 import { useOnboardingStore, type OnboardingStationDraft } from '../store';
 import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';
-import { nextStepPath } from '../config/steps';
+import { nextStepPath, previousStepPath } from '../config/steps';
 
 const inputClass = 'form-input px-3';
 const labelClass = 'form-label-sm';
@@ -340,10 +341,12 @@ const StationSetup: React.FC = () => {
             </button>
           </div>
 
+          {/* Back, not the "organization details are already saved" note: that
+              note belongs to the steps beside Organization Setup, which cannot
+              be revisited, and Ranks & Positions can (workflow review W01-16).
+              The station drafts are already in the onboarding store. */}
           <div className="mt-6 flex items-center justify-between">
-            <p className="text-theme-text-muted max-w-md text-xs">
-              Organization details are already saved. You can update them from Settings after setup.
-            </p>
+            <BackButton to={previousStepPath('stations')} />
             <ResetProgressButton />
           </div>
 

@@ -40,6 +40,7 @@ from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
+from app.api.public.zeffy_webhook import router as zeffy_webhook_router
 from app.api.v1.api import api_router
 from app.core.cache import cache_manager
 from app.core.config import settings
@@ -2024,6 +2025,12 @@ async def lifespan(app: FastAPI):
     await ws_manager.stop_listener()
     await geoip_invalidation_listener.stop()
     await link_domain_listener.stop()
+    # Pushes queued by requests that have already answered. Bounded well inside
+    # Docker's default 10s stop grace period; whatever is left is dropped, which
+    # push has always been allowed to do — the notification itself is stored.
+    from app.services.push_dispatch import wait_for_queued_pushes
+
+    await wait_for_queued_pushes(timeout=5)
     await database_manager.disconnect()
     await cache_manager.disconnect()
     logger.info("Shutdown complete")
@@ -2467,6 +2474,9 @@ app.include_router(
 app.include_router(sf_webhook_router, prefix="/api", responses=public_responses.WEBHOOK)
 app.include_router(
     paypal_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
+)
+app.include_router(
+    zeffy_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
 )
 
 # Include Documenso & Cal.com inbound webhooks

@@ -335,11 +335,11 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
             the hub's own header and nav, where a second title and a trail back
             to the hub would sit inside the very page they point at. */}
         {embedded ? (
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-theme-text-muted text-sm">
+          <div className="split-row mb-6 gap-4 sm:items-center">
+            <p className="split-row-main text-theme-text-muted text-sm">
               Build programs, import requirements, and track member progress
             </p>
-            {headerActions}
+            <div className="split-row-aside flex flex-wrap items-center gap-2">{headerActions}</div>
           </div>
         ) : (
           <>
@@ -706,8 +706,15 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
                               )}
                               <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                                 {req.required_hours && <span>{req.required_hours} hours</span>}
-                                {req.required_shifts && <span>{req.required_shifts} shifts</span>}
+                                {req.required_shifts && (
+                                  <span>
+                                    {req.required_shifts}{' '}
+                                    {req.requirement_type === 'evaluated_shifts' ? 'evaluated shifts' : 'shifts'}
+                                  </span>
+                                )}
                                 {req.required_calls && <span>{req.required_calls} calls</span>}
+                                {req.required_transports && <span>{req.required_transports} transports</span>}
+                                {req.required_refusals && <span>{req.required_refusals} refusals</span>}
                                 <span>{req.frequency}</span>
                               </div>
                             </div>

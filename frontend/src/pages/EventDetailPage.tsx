@@ -14,6 +14,7 @@ import type { ElectionListItem } from '../types/election';
 import { getStatusBadgeClass } from '../utils/electionHelpers';
 import type {
   Event,
+  EventAttachment,
   EventAttendee,
   EventListItem,
   RSVP,
@@ -379,6 +380,45 @@ export const EventDetailPage: React.FC = () => {
       setError(getErrorDetail(err) || 'Failed to load event');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Files are kept on the event row itself, so the list is re-read from the
+  // server after each change rather than patched locally.
+  const reloadAttachments = async () => {
+    if (!eventId) return;
+    const attachments = await eventService.getAttachments(eventId);
+    setEvent((prev) => (prev ? { ...prev, attachments } : prev));
+  };
+
+  const handleAttachmentUpload = async (file: File) => {
+    if (!eventId) return;
+    try {
+      await eventService.uploadAttachment(eventId, file);
+      await reloadAttachments();
+      toast.success(`${file.name} attached`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'The file could not be attached'));
+    }
+  };
+
+  const handleAttachmentDelete = async (attachment: EventAttachment) => {
+    if (!eventId) return;
+    if (
+      !(await confirm({
+        title: 'Remove attachment',
+        message: `Remove ${attachment.file_name} from this event? Members will no longer be able to download it.`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
+    try {
+      await eventService.deleteAttachment(eventId, attachment.id);
+      await reloadAttachments();
+      toast.success('Attachment removed');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'The attachment could not be removed'));
     }
   };
 
@@ -1714,12 +1754,15 @@ export const EventDetailPage: React.FC = () => {
               />
             )}
 
-            {/* Attachments */}
-            {event.attachments && event.attachments.length > 0 && (
+            {/* Attachments. Shown empty to someone who manages events, who
+                can attach the first file from here. */}
+            {((event.attachments?.length ?? 0) > 0 || canManage) && (
               <EventAttachmentsList
-                attachments={event.attachments}
+                attachments={event.attachments ?? []}
                 eventId={event.id}
                 getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
+                onUpload={canManage ? handleAttachmentUpload : undefined}
+                onDelete={canManage ? handleAttachmentDelete : undefined}
               />
             )}
 

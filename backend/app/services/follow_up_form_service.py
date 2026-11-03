@@ -52,6 +52,7 @@ from app.models.membership_pipeline import (
 from app.models.user import Organization, User
 from app.schemas.membership_pipeline import PublicFollowUpFormField
 from app.services.forms_service import FormsService
+from app.services.prospect_assignment_service import ProspectAssignmentService
 
 # Statuses in which an application is still open. A link to an application
 # that was rejected, withdrawn, transferred or made inactive stops working, and
@@ -904,8 +905,11 @@ class FollowUpFormService:
 
         if email_change is not None and email_change["applied"]:
             await self._notify_previous_address(prospect, old_email)
-        await self._notify_coordinators_of_submission(
+        told = await self._notify_coordinators_of_submission(
             prospect, step, form, request, bool(contact_fields)
+        )
+        await ProspectAssignmentService(self.db).notify_case_managers(
+            prospect, "follow_up_submitted", detail=form.name, already_told=told
         )
 
         await pipeline.try_auto_advance_step(
@@ -1037,13 +1041,14 @@ class FollowUpFormService:
         form: Form,
         request: ProspectFormRequest,
         contact_changed: bool,
-    ) -> None:
+    ) -> List[str]:
         """Email the membership coordinators that a form came in.
 
         The same people the withdrawal notice reaches. After the commit and
         best-effort, like the old-address notice: the submission stands
         whether or not this goes out. The email links to the applicant and
-        never carries an answer.
+        never carries an answer. Returns the ids of the members it was sent
+        to, so the case managers' notice can skip them.
         """
         from app.services.email_policy import (
             EmailKind,
@@ -1059,7 +1064,7 @@ class FollowUpFormService:
 
             org = await self.db.get(Organization, prospect.organization_id)
             if org is None:
-                return
+                return []
             pipeline = MembershipPipelineService(self.db)
             recipients = recipients_for(
                 await pipeline._withdrawal_notice_recipients(str(org.id)),
@@ -1072,7 +1077,7 @@ class FollowUpFormService:
                     request.id,
                     prospect.id,
                 )
-                return
+                return []
 
             frontend_url = getattr(settings, "FRONTEND_URL", "") or ""
             applicant_url = (
@@ -1080,6 +1085,7 @@ class FollowUpFormService:
             )
             email_service = EmailService(org)
             delivered = 0
+            told: List[str] = []
             for user in recipients:
                 if await email_service.send_follow_up_submitted_email(
                     to_email=user.email,
@@ -1093,6 +1099,7 @@ class FollowUpFormService:
                     organization_id=str(org.id),
                 ):
                     delivered += 1
+                    told.append(str(user.id))
 
             await pipeline._log_activity(
                 prospect_id=str(prospect.id),
@@ -1104,6 +1111,7 @@ class FollowUpFormService:
                 },
             )
             await self.db.commit()
+            return told
         except Exception as e:
             logger.error(
                 "Failed to notify coordinators of follow-up form {} for prospect "
@@ -1112,6 +1120,7 @@ class FollowUpFormService:
                 prospect.id,
                 e,
             )
+            return []
 
     # ------------------------------------------------------------------
     # Reminders

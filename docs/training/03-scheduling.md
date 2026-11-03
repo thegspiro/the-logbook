@@ -102,7 +102,8 @@ that has turned shift reports off, you land on **Schedule** instead.
 The **Schedule** tab shows shifts on a calendar. Choose **Month** or **Week**
 at the top. Use the arrows to move back or forward, and **Today** to come back
 to the current date. On a phone you get the month view, with a coloured bar
-for each shift.
+for each shift. Both views list every shift in the range; a busy month is no
+longer cut off after 500 shifts.
 
 _(2026-10-18)_ An empty week or month looks up the first shift after it and offers
 **Go to the next shift**, so a member is not told nothing is published when next
@@ -142,7 +143,7 @@ calendar. On a screen narrower than 1280 pixels, such as a tablet, the panel is
 below the calendar so the days stay large enough to tap. Select **Shift
 details** on a shift to open the full **Shift Details** window.
 
-![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
+![The Shift Details window over the schedule: readiness, time, crew, apparatus and shift officer, then the crew board with each seat](./images/03-02-shift-detail-panel.png)
 
 ### The Shift Details window
 
@@ -2222,6 +2223,13 @@ enter anything in it.
 approved before the member can see them, and the **Review Queue** view
 appears.
 
+**Reviewer role** _(2026-10-31)_ appears once review is required. Choose
+**Training Officer**, **Captain** or **Chief**. Members holding that position or
+rank can review reports, in addition to anyone who can manage training. Chief
+covers the fire chief, deputy chief and assistant chief positions. A member who
+reviews by role sees the **Review Queue** and **Flagged** views on Shift
+Reports, but not reports about themselves, which someone else reviews.
+
 #### Rating Scale
 
 | Setting           | Starts as              | What it does                                                    |
@@ -2453,6 +2461,8 @@ Every item asks for one of five kinds of answer:
 | **Expiry**   | Check the serial number, lot number and expiry date on record, then pass or fail | The date on record has not passed. Items close to their date show amber on every shift until they are replaced |
 | **Present**  | Select **Present** or **Absent**                               | It is on the truck. **Absent** fails the item without a note — it already says what is wrong. **Not on truck** and **Out of service** are not offered |
 
+![The Utility 1 Walkaround check form on a phone: the Cab's Portable radio, Hand light and Traffic vest, each with Present and Absent buttons](./images/03-136-check-form-present.png)
+
 For an item linked to the department's stock, the expiry date, lot and serial
 number come from the stock records and you cannot change them on the check
 form. To record a replacement, use **Swap** (below) or
@@ -2464,6 +2474,8 @@ aboard, and its lot number if you read one. The item then reads as in date and
 passes. When you submit, the new date replaces the old one on the checklist,
 and the checklist's change log records that you made the change. A date that
 has already passed is refused.
+
+![The Eyewash bottle Date line on a phone, expiring in ten days and not linked to stock: Put in a replacement opened to its Replacement expires and lot number boxes](./images/03-137-check-form-replacement-date.png)
 
 **Items with no location.** Some items sit directly on the checklist rather
 than in a compartment or bag, such as the radios or the map book. They appear
@@ -2947,14 +2959,15 @@ locations and items are all rows in it.
   move option in the row's actions menu.
 
 Edit an item's **name**, **answer type** and **the number it is graded
-against** right in the row. The four answer types are:
+against** right in the row. The five answer types are:
 
-| In the row | On the check form | What it records               | Example                 |
-| ---------- | ----------------- | ----------------------------- | ----------------------- |
-| **Works**  | Function          | Pass / fail                   | "PA system"             |
-| **Count**  | Count             | A quantity against a par      | "SCBA bottles — par 4"  |
-| **Level**  | Level             | A reading against a minimum   | "Fuel — gallons"        |
-| **Date**   | Expiry            | The expiry date on record     | "EpiPen — exp: 2026-09" |
+| In the row  | On the check form | What it records               | Example                 |
+| ----------- | ----------------- | ----------------------------- | ----------------------- |
+| **Works**   | Function          | Pass / fail                   | "PA system"             |
+| **Count**   | Count             | A quantity against a par      | "SCBA bottles — par 4"  |
+| **Level**   | Level             | A reading against a minimum   | "Fuel — gallons"        |
+| **Date**    | Expiry            | The expiry date on record     | "EpiPen — exp: 2026-09" |
+| **Present** | Present           | Present / absent              | "Wheel chocks"          |
 
 The builder shows what each type stores beside its label. A **statement**
 (text the crew reads) and a **section header** are layout rows, not checks.
@@ -3024,6 +3037,8 @@ the empty field.
 
 On tablets and smaller laptops (narrower than 1440 pixels), the list is a bar
 along the bottom of the checklist that opens as a sheet.
+
+![The checklist builder on an unpublished checklist: the Cab location, two items placed directly on the checklist with no heading, Compartment 2 holding a Date line with no date, and the Before publishing list naming Burn kit needs an expiration date](./images/03-135-builder-publish-list.png)
 
 #### The preview
 
@@ -3142,18 +3157,24 @@ reactivated or the pattern is pointed at another template. To reactivate a
 template, select **Reactivate** on its card on the **Templates** tab
 _(2026-10-24)_; patterns using it generate shifts again.
 
+![The Patterns tab with the Reserve Engine Weekend Cover pattern, its Generate shifts button disabled and the warning that its template is inactive and the pattern is not generating shifts](./images/03-132-pattern-template-inactive.png)
+
+![Edit Pattern for Reserve Engine Weekend Cover: the Reserve Engine — Out of Service template chosen and marked inactive, with the Template inactive warning beneath it](./images/03-133-pattern-form-template-inactive.png)
+
 **Pausing a pattern** _(2026-10-24)_. Each pattern has **Pause** and
 **Resume**. A paused pattern reads **Paused**, generates nothing on the nightly
 run, and its **Generate** button is disabled. Shifts it already made stay.
 **Generate** is also disabled while the pattern's template is inactive.
 
-<!-- Screenshot needed: The Templates tab with an inactive template and its Reactivate button -->
+![The Templates tab with the Reserve Engine — Out of Service template marked inactive and its Reactivate button](./images/03-129-template-reactivate.png)
 
-<!-- Screenshot needed: The Patterns tab with a pattern reading Paused, its Resume button, and Generate disabled -->
+![The Patterns tab with the Summer Reserve Rotation pattern reading Paused, its Generate button disabled and Resume beside it](./images/03-130-pattern-paused.png)
 
 On the basic apparatus list, anyone with scheduling manage rights can turn on
 **Show inactive** and select **Reactivate**; reactivating changes only the flag
 and re-adds nothing to shifts.
+
+![Apparatus & Vehicles with Show inactive ticked: Reserve Engine 9 marked Inactive, with its Reactivate button](./images/03-134-basic-apparatus-inactive.png)
 
 | Field                                                                | What it does                                                                                                                                             |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -3290,7 +3311,7 @@ dates before you select **Generate**. Afterwards, The Logbook tells you:
 | Message                                                                                                                   | What it means                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **"Generated N shifts"**                                                                                                  | The number of shifts created                                                                                                                                              |
-| **"No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern's own start and end."**      | The normal answer when you run a range again. Nothing is wrong                                                                                                            |
+| **"No new shifts. Dates already on the schedule are skipped, as are dates outside the pattern's own start and end and dates whose generated shift was deleted or moved."** | The normal answer when you run a range again. Nothing is wrong                                                                                                            |
 | **"N driver seats were left unfilled: …"** (red, stays 8 seconds)                                                         | A member in the rotation doesn't hold the Emergency Vehicle Operations Course (EVOC) level the vehicle needs. The driver seat was left empty and each one is named. Fill them before the shift |
 
 ![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
@@ -3300,10 +3321,27 @@ dates before you select **Generate**. Afterwards, The Logbook tells you:
 **To extend a schedule,** generate the same pattern again for the next range.
 Dates already on the schedule are skipped, so overlapping ranges are safe.
 
+**A pattern generates each occurrence once** _(2026-10-31)_. The Logbook keeps a
+record of every shift a pattern has made. If you delete one of those shifts, or
+move its start time, generating again does not put the original back, whether
+you select **Generate** or automatic generation runs. To restore a deleted
+occurrence, add the shift by hand. Shifts generated before 2026-10-31 have no
+such record, so deleting one of those and generating again still rebuilds it.
+
 **Or let The Logbook do it.** Under **Scheduling Settings → General →
 Automatic shift generation**, active patterns keep generating shifts ahead by
 themselves. It is off unless you turn it on. **Weeks ahead** sets how far
 (1 to 52; 4 when first turned on).
+
+**When automatic generation leaves a seat empty** _(2026-10-31)_, everyone who
+can manage schedules gets a bell notification, _"Automatic shift generation
+left N seats unfilled"_. It names each pattern, date and member, with the
+reason. Those who keep **Scheduling officer duties** email also get the list by
+email. A seat is left empty for the same reasons a manual **Generate** reports
+one: the member's rank, qualifications or open positions don't fit the seat,
+the seat is full, the member is on leave or already working, or the driver
+seat needs an EVOC level the member does not hold. The seats stay open on the
+schedule for you to fill.
 
 #### Pausing a pattern and reactivating a template _(2026-10-25)_
 
@@ -3324,8 +3362,10 @@ themselves. It is off unless you turn it on. **Weeks ahead** sets how far
 - Shift dates are calendar days. They no longer shift by one day when your
   device's time zone is far from the department's.
 
-> **Screenshot to create:** Shift Patterns with a paused pattern and Resume;
-> the generate message listing members who were not seated.
+A paused pattern and its **Resume** button are pictured under
+[Templates](#templates) above.
+
+![Shift Patterns after Generate on the A/B/C Platoon Rotation: Generated 3 shifts, and beneath it the message that two members were not seated, each with the date and the reason](./images/03-131-pattern-generate-not-seated.png)
 
 ### Understanding Platoon Rotations
 
@@ -3477,7 +3517,7 @@ computer never sees your values.
 | **Enforce EVOC for drivers**                              | On unless you turn it off. See [Position Eligibility](#position-eligibility)                                                                                                                                   |
 | **Restrict check-in to assigned members**                 | Only members on a shift's roster can check in to it (open shifts are exempt)                                                                                                                                   |
 | **Allow pre-shift work**                                  | Lets a member time prep work, such as an early equipment check, before check-in opens. An officer approves the time before it counts                                                                           |
-| **Department Defaults**                                   | **Default Shift Duration (hours)**, **Default Min Staffing** and **Overtime Threshold (hours/week)**. These are shown as your department's defaults on Shift Planning. The card is marked **Not in effect yet**: new shifts and templates don't use them, and no overtime warning reads the threshold |
+| **Department Defaults**                                   | **Default Shift Duration (hours)** and **Default Min Staffing**. Since 2026-10-31 a new shift template starts with them: the end time is set that many hours after the 08:00 start, and minimum staffing is filled in. The built-in Day, Night and 24 Hour shift types use the minimum staffing too. Overtime is set under **Overtime advisory**, not here |
 | **Position Names**                                        | Add your own seats under **Add Custom Position**. See [Your department's own seats](#your-departments-own-seats). The on/off ticks for built-in seats are saved but marked **Not in effect yet**: templates and shifts still offer the full built-in list                                                                  |
 
 ### What the settings do not do
@@ -3850,6 +3890,14 @@ standing shift like any built-in seat.
 A shift that is open to all members also opens it. Paramedic is never on
 either list: that seat comes from a member's certification, not their rank.
 
+**A seat that drives the vehicle needs Drives apparatus ticked** _(2026-10-31)_.
+If your department calls its wheel seat something other than Driver, such as
+"Engineer", tick **Drives apparatus** beside it under **Position Names**. That
+seat then gets the same EVOC check as the Driver seat: a member without the
+vehicle's EVOC level is refused, a generated shift leaves the seat empty, and
+the position roster shows each member's EVOC card. Without the tick, the seat
+is not checked.
+
 **A member can only be put in a seat the shift has.** Asking for a seat the
 shift doesn't have is refused with _"'…' is not a seat on this shift. Choose
 one of the seats the shift lists, or add the seat to the shift first."_
@@ -3984,7 +4032,15 @@ certificate that runs out before the shift does not count.
 | **On** (unless your department turns it off)      | The member cannot be assigned, or sign up, as driver. Pattern generation leaves the driver seat empty and tells you      |
 | **Off**                                           | The assignment goes ahead with a warning naming the required level                                                      |
 
-A vehicle with no required level is never checked.
+A vehicle with no required level is never checked, and nor is a vehicle added
+during setup rather than in the Apparatus module.
+
+**A shift whose vehicle was deleted** _(2026-10-31)_ refuses its driver seat (or
+warns, with enforcement off): _"This shift's vehicle no longer exists, so its
+EVOC requirement cannot be checked. Choose the shift's vehicle again before
+seating a driver."_ Pick the vehicle again in the shift's edit form. A vehicle
+can no longer be deleted while a shift names it, so this only affects shifts
+from before that rule.
 
 **When an officer is refused,** a **Driver qualification required** window
 opens. It says the member was not assigned as driver, and lists **who can
@@ -4177,7 +4233,7 @@ assigned, time off is approved, shifts are generated, and staffing is checked.
 | What happened                                                  | What it means / what to do                                                                                                                                                          |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A template ends earlier in the day than it starts (e.g. 19:00–07:00) | The shift ends the next morning. The Logbook handles this for you                                                                                                             |
-| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has a shift **from this pattern's template** starting at the same time, including one that was cancelled. Since 2026-10-24 another unit's shift, or a shift added by hand, at the same time no longer stops the pattern's shift being made |
+| Some dates got no shift, or "no new shifts" were created       | The Logbook skips a date that already has a shift **from this pattern's template** starting at the same time, including one that was cancelled. Since 2026-10-24 another unit's shift, or a shift added by hand, at the same time no longer stops the pattern's shift being made. Since 2026-10-31 it also skips a date whose generated shift was deleted or moved |
 | The toast says some members were not seated                   | Each platoon member is placed in the first seat they are cleared for, with the same checks as assigning by hand: rank and seat eligibility, the seat's cap, leave, time off, another shift at the same time and the driver rule. The toast names who was left off and why. Their seat stays open |
 | An overnight or 24-hour shift on a daylight-saving day          | It ends at its usual clock time, not an hour early or late                                                                                                                         |
 | A shift made from a template that is open to all members        | The shift is open to all members too                                                                                                                                              |

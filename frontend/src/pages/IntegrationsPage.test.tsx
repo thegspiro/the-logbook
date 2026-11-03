@@ -806,6 +806,70 @@ describe('IntegrationsPage', () => {
       });
     });
 
+    describe('iCalendar feed settings', () => {
+      beforeEach(() => {
+        mockUpdateIntegration.mockReset();
+        mockUpdateIntegration.mockImplementation((id: string, config: Record<string, unknown>) =>
+          Promise.resolve({ ...calendarRow('ical', 'iCalendar (ICS)', 'connected'), id, config })
+        );
+        mockConnectIntegration.mockReset();
+        mockConnectIntegration.mockImplementation((id: string, config: Record<string, unknown>) =>
+          Promise.resolve({ ...calendarRow('ical', 'iCalendar (ICS)', 'connected'), id, config })
+        );
+      });
+
+      it('shows the stored filter and saves the event types and shifts chosen', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue([
+          {
+            ...calendarRow('ical', 'iCalendar (ICS)', 'connected'),
+            config: { included_event_types: ['training'], include_shifts: false, feed_token_hash: '••••' },
+          },
+        ]);
+
+        renderPage();
+        const card = await screen.findByTestId('integration-card-ical');
+        await user.click(within(card).getByRole('button', { name: 'iCalendar (ICS) settings' }));
+
+        const dialog = await screen.findByRole('dialog', { name: 'iCalendar (ICS) settings' });
+        expect(within(dialog).getByRole('checkbox', { name: 'Training' })).toBeChecked();
+        expect(within(dialog).getByRole('checkbox', { name: 'Fundraiser' })).not.toBeChecked();
+        const shifts = within(dialog).getByRole('checkbox', { name: /Include duty shifts/ });
+        expect(shifts).not.toBeChecked();
+        expect(dialog).toHaveTextContent('The feed link does not change.');
+
+        await user.click(within(dialog).getByRole('checkbox', { name: 'Fundraiser' }));
+        await user.click(within(dialog).getByRole('checkbox', { name: 'Training' }));
+        await user.click(shifts);
+        await user.click(within(dialog).getByTestId('settings-submit'));
+
+        await waitFor(() => {
+          expect(mockUpdateIntegration).toHaveBeenCalledWith('ical-1', {
+            included_event_types: ['fundraiser'],
+            include_shifts: true,
+          });
+        });
+      });
+
+      it('connects with every event type and no shifts unless chosen', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'available')]);
+
+        renderPage();
+        const card = await screen.findByTestId('integration-card-ical');
+        await user.click(within(card).getByRole('button', { name: 'Connect iCalendar (ICS)' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Connect iCalendar (ICS)' });
+        await user.click(within(dialog).getByTestId('connect-submit'));
+
+        await waitFor(() => {
+          expect(mockConnectIntegration).toHaveBeenCalledWith('ical-1', {
+            included_event_types: [],
+            include_shifts: false,
+          });
+        });
+      });
+    });
+
     it('does not fetch the feed link while the iCalendar card is not connected', async () => {
       mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'available')]);
 

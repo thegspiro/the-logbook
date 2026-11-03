@@ -20,7 +20,11 @@ from app.models.user import (
     User,
 )
 from app.services.member_service_history_service import MemberServiceHistoryService
-from app.services.membership_tier_service import attendance_window, tally_attendance
+from app.services.membership_tier_service import (
+    MembershipTierService,
+    attendance_window,
+    tally_attendance,
+)
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import scheduling_timezone, today_in
 
@@ -145,8 +149,10 @@ class AttendanceDashboardService:
             pct = tally.pct
 
             # Tier and voting info
-            member_tier_id = member.membership_type or "active"
-            tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
+            tier_def = MembershipTierService.tier_for_member(tiers, member)
+            member_tier_id = (
+                tier_def.get("id") if tier_def else member.membership_type or "active"
+            )
             benefits = tier_def.get("benefits", {}) if tier_def else {}
 
             voting_eligible = benefits.get("voting_eligible", True)

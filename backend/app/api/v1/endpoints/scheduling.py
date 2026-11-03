@@ -158,6 +158,7 @@ from app.services.scheduling_widget_service import (
     SchedulingWidgetService,
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
 from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
@@ -1082,7 +1083,7 @@ async def get_shift_trainee_report_requirement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Which trainee reports close-out still needs, when the department requires them.
+    """Which trainee reports and shift evaluations close-out still needs.
 
     **Permissions required:** scheduling.manage, or being the shift's officer.
     """
@@ -1103,9 +1104,15 @@ async def get_shift_trainee_report_requirement(
         if required
         else []
     )
+    missing_evaluations = await ShiftEvaluationService(db).missing_required(
+        shift_id, current_user.organization_id
+    )
     return {
         "required": required,
         "missing": [{"user_id": uid, "name": name} for uid, name in missing],
+        "missing_evaluations": [
+            {"user_id": uid, "name": label} for uid, label in missing_evaluations
+        ],
         "can_override": user_has_permission(current_user, "scheduling.manage"),
     }
 
@@ -1820,14 +1827,21 @@ async def get_my_attendance_history(
 
 @router.get(
     "/shifts/{shift_id}/my-attendance",
-    response_model=ShiftAttendanceResponse,
+    response_model=ShiftAttendanceResponse | None,
 )
 async def get_my_attendance(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the current member's attendance for a shift."""
+    """Get the current member's attendance for a shift.
+
+    ``null`` when they have none. Not having checked in is the normal state
+    before a shift, and the check-in page asks on every opening: a 404 here
+    logged a failed request on each ordinary visit. A shift the caller cannot
+    see answers ``null`` too, the same answer it gave as a 404 before, so
+    nothing is revealed about another department's shifts.
+    """
     service = SchedulingService(db)
     result = await service.get_my_attendance(
         shift_id=str(shift_id),
@@ -1835,10 +1849,7 @@ async def get_my_attendance(
         organization_id=current_user.organization_id,
     )
     if not result:
-        raise HTTPException(
-            status_code=404,
-            detail="No attendance record found",
-        )
+        return None
     enriched = await service.enrich_attendance_records([result])
     return enriched[0]
 

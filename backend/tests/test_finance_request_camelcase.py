@@ -28,6 +28,7 @@ from app.schemas.finance import (
     ApprovalChainStepCreate,
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
+    ApprovalEmailResendRequest,
     BudgetAmendmentCreate,
     BudgetAmendmentReject,
     BudgetAmendmentReverse,
@@ -202,6 +203,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "is_active": False,
     },
     ApprovalActionRequest: {"notes": "Looks fine"},
+    ApprovalEmailResendRequest: {"link_version": 3},
     FunctionalClassUpdate: {"functional_class": "fundraising"},
     BudgetCategoryChargeAccessUpdate: {
         "charge_access": "restricted",

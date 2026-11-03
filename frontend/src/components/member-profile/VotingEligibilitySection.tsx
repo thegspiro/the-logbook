@@ -18,7 +18,8 @@ import toast from 'react-hot-toast';
 import { electionService } from '../../services/api';
 import type { MemberVotingEligibility, MemberVotingEligibilityUpdate } from '../../types/election';
 import { MEETING_KIND_LABELS } from '../../modules/elections/eligibilityRules';
-import { formatCalendarDate } from '../../utils/dateFormatting';
+import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
+import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useConfirm } from '../../contexts/ConfirmContext';
 
@@ -53,6 +54,10 @@ export const VotingEligibilitySection: React.FC<VotingEligibilitySectionProps> =
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { confirm } = useConfirm();
+  const tz = useTimezone();
+  // The date says when the member became their type, so it cannot be ahead
+  // of the department's today; the server refuses one too.
+  const today = getTodayLocalDate(tz);
 
   const adopt = (next: MemberVotingEligibility) => {
     setData(next);
@@ -121,6 +126,11 @@ export const VotingEligibilitySection: React.FC<VotingEligibilitySectionProps> =
       setFormError('Give a reason for the override.');
       return;
     }
+    // ISO dates compare correctly as strings.
+    if (startDate && startDate > today) {
+      setFormError('The date the wait counts from cannot be after today.');
+      return;
+    }
     // Every field the form owns, so a cleared date is a clear (pitfall #1).
     void save(
       {
@@ -150,7 +160,10 @@ export const VotingEligibilitySection: React.FC<VotingEligibilitySectionProps> =
       <h2 id="voting-eligibility-heading" className="text-theme-text-primary text-lg font-semibold">
         Voting eligibility
       </h2>
-      <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+      {/* One column at every width: the card renders only in the profile's
+          narrow sidebar, and a viewport breakpoint cannot see that — `sm:`
+          split it into two ~120px columns on every desktop. */}
+      <dl data-testid="voting-eligibility-fields" className="mt-3 space-y-2 text-sm">
         <div>
           <dt className="text-theme-text-muted">Member type</dt>
           <dd className="text-theme-text-primary">{data.member_type_label ?? 'Not a voting member type'}</dd>
@@ -185,6 +198,7 @@ export const VotingEligibilitySection: React.FC<VotingEligibilitySectionProps> =
             type="date"
             className="form-input"
             value={startDate}
+            max={today}
             onChange={(e) => setStartDate(e.target.value)}
             aria-describedby="voting-wait-from-help"
           />

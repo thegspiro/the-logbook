@@ -256,15 +256,15 @@ const FollowUpFormPage: React.FC = () => {
             ))}
         </div>
 
-        <div className="border-theme-surface-border flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-theme-text-muted text-xs" aria-live="polite">
+        <div className="split-row border-theme-surface-border gap-3 border-t pt-4 sm:items-center">
+          <p className="split-row-main text-theme-text-muted text-xs" aria-live="polite">
             {saving
               ? 'Saving...'
               : savedAt
                 ? `Saved ${formatDateTime(savedAt, tz)}. You can come back to this link to finish.`
                 : 'Your answers save as you go.'}
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="split-row-aside flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={() => void saveDraft()}

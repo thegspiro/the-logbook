@@ -225,8 +225,11 @@ export const MemberAdminEditPage: React.FC = () => {
         profileUpdate.first_name = form.first_name;
         hasProfileChanges = true;
       }
+      // Optional text goes through blankToNull, like the dates below: an
+      // update is dumped with exclude_unset, so '' would be stored as an
+      // empty string rather than cleared (workflow re-check MR-5).
       if (form.middle_name !== initialForm.middle_name) {
-        profileUpdate.middle_name = form.middle_name;
+        profileUpdate.middle_name = blankToNull(form.middle_name);
         hasProfileChanges = true;
       }
       if (form.last_name !== initialForm.last_name) {
@@ -246,11 +249,11 @@ export const MemberAdminEditPage: React.FC = () => {
         hasProfileChanges = true;
       }
       if (form.personal_email !== initialForm.personal_email) {
-        profileUpdate.personal_email = form.personal_email;
+        profileUpdate.personal_email = blankToNull(form.personal_email);
         hasProfileChanges = true;
       }
       if (form.membership_number !== initialForm.membership_number) {
-        profileUpdate.membership_number = form.membership_number;
+        profileUpdate.membership_number = blankToNull(form.membership_number);
         hasProfileChanges = true;
       }
       if (form.rank !== initialForm.rank) {
@@ -258,11 +261,11 @@ export const MemberAdminEditPage: React.FC = () => {
         hasProfileChanges = true;
       }
       if (form.station !== initialForm.station) {
-        profileUpdate.station = form.station;
+        profileUpdate.station = blankToNull(form.station);
         hasProfileChanges = true;
       }
       if (form.platoon !== initialForm.platoon) {
-        profileUpdate.platoon = form.platoon;
+        profileUpdate.platoon = blankToNull(form.platoon);
         hasProfileChanges = true;
       }
       if (form.hire_date !== initialForm.hire_date) {
@@ -270,31 +273,31 @@ export const MemberAdminEditPage: React.FC = () => {
         hasProfileChanges = true;
       }
       if (form.phone !== initialForm.phone) {
-        profileUpdate.phone = form.phone;
+        profileUpdate.phone = blankToNull(form.phone);
         hasProfileChanges = true;
       }
       if (form.mobile !== initialForm.mobile) {
-        profileUpdate.mobile = form.mobile;
+        profileUpdate.mobile = blankToNull(form.mobile);
         hasProfileChanges = true;
       }
       if (form.address_street !== initialForm.address_street) {
-        profileUpdate.address_street = form.address_street;
+        profileUpdate.address_street = blankToNull(form.address_street);
         hasProfileChanges = true;
       }
       if (form.address_city !== initialForm.address_city) {
-        profileUpdate.address_city = form.address_city;
+        profileUpdate.address_city = blankToNull(form.address_city);
         hasProfileChanges = true;
       }
       if (form.address_state !== initialForm.address_state) {
-        profileUpdate.address_state = form.address_state;
+        profileUpdate.address_state = blankToNull(form.address_state);
         hasProfileChanges = true;
       }
       if (form.address_zip !== initialForm.address_zip) {
-        profileUpdate.address_zip = form.address_zip;
+        profileUpdate.address_zip = blankToNull(form.address_zip);
         hasProfileChanges = true;
       }
       if (form.address_country !== initialForm.address_country) {
-        profileUpdate.address_country = form.address_country;
+        profileUpdate.address_country = blankToNull(form.address_country);
         hasProfileChanges = true;
       }
 

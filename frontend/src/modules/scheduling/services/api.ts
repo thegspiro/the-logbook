@@ -596,6 +596,12 @@ export interface ExternalShiftEntry {
   role: string | null;
   notes: string | null;
   status: ExternalShiftStatus;
+  /**
+   * Whether the shift calls for a shift evaluation: ``needed`` until one is
+   * started, ``draft`` while it is, ``submitted`` once it is in; null when it
+   * calls for none.
+   */
+  evaluation_status?: 'needed' | 'draft' | 'submitted' | null;
   reviewed_by: string | null;
   reviewer_name: string | null;
   reviewed_at: string | null;
@@ -650,6 +656,8 @@ export interface ExternalAgency {
   id: string;
   name: string;
   is_active: boolean;
+  /** Shifts members log on its units call for a shift evaluation. */
+  evaluate_shifts: boolean;
   apparatus: ExternalApparatus[];
 }
 
@@ -664,6 +672,7 @@ export interface ExternalAgencyCreate {
 export interface ExternalAgencyUpdate {
   name?: string;
   is_active?: boolean;
+  evaluate_shifts?: boolean;
 }
 
 export interface ExternalApparatusCreate {
@@ -1098,9 +1107,14 @@ export const schedulingService = {
   },
   async getMyAttendance(shiftId: string): Promise<ShiftAttendanceRecord | null> {
     try {
-      const response = await api.get<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/my-attendance`);
-      return response.data;
+      // The endpoint answers 200 with a null body for a member not yet
+      // checked in. It used to answer 404, which logged a failed request on
+      // every ordinary opening of the check-in page.
+      const response = await api.get<ShiftAttendanceRecord | null>(`/scheduling/shifts/${shiftId}/my-attendance`);
+      return response.data ?? null;
     } catch (err: unknown) {
+      // Still read as "not checked in": a backend from before the change
+      // answers 404, and a frontend can reach one during a rolling upgrade.
       if (err instanceof AxiosError && err.response?.status === 404) return null;
       throw err;
     }
@@ -1197,6 +1211,25 @@ export const schedulingService = {
   async getTimeOffRequests(params?: TimeOffFilters): Promise<PaginatedResponse<SchedulingTimeOffRequest>> {
     const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', { params });
     return response.data;
+  },
+  /**
+   * Every approved time-off span of one member. `user_id` scopes an officer's
+   * read to that member; a member's own read is scoped server-side to them
+   * whatever is passed. Pages until the total is reached, because the list is
+   * ordered by creation and a cut-off page could drop a span still ahead.
+   */
+  async getApprovedTimeOffFor(userId: string, config?: AxiosRequestConfig): Promise<SchedulingTimeOffRequest[]> {
+    const pageSize = 1000;
+    const collected: SchedulingTimeOffRequest[] = [];
+    for (;;) {
+      const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', {
+        params: { status: 'approved', user_id: userId, skip: collected.length, limit: pageSize },
+        ...config,
+      });
+      const page = asArray(response.data?.items);
+      collected.push(...page);
+      if (page.length < pageSize || collected.length >= (response.data?.total ?? 0)) return collected;
+    }
   },
   async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
     const response = await api.post<SchedulingTimeOffRequest>('/scheduling/time-off', data);

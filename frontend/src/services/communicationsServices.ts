@@ -87,6 +87,8 @@ export const notificationsService = {
     cursor?: string;
     skip?: number;
     limit?: number;
+    /** Only deliveries that recorded an error, within the requested scope. */
+    failed?: boolean;
   }): Promise<NotificationLogPage> {
     const response = await api.get<NotificationLogPage>('/notifications/logs', { params });
     return response.data;
@@ -303,6 +305,9 @@ export interface ComplianceMatrixCell {
   /** The target before waiver proration; differs only when waived_months > 0. */
   base_required?: number | null;
   waived_months?: number;
+  /** `waived_months` by reason; a month both a leave and a waiver covered counts in both. */
+  leave_months?: number;
+  waiver_months?: number;
   window_start?: string | null;
   window_end?: string | null;
   /** The date this cell was judged against; overrides the matrix-level as_of. */

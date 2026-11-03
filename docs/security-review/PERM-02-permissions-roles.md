@@ -1,9 +1,250 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), pass 13 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), #3803 (pass 13, same stale-placeholder correction applied here), pass 14 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 14 (2026-10-31, watchdog pickup) — 1 fixed (PERM-12, LOW), 0 new OPEN findings; PERM-10/PERM-11 re-verified still open
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. Step 0 re-checked fresh against
+GitHub (`search_pull_requests`, `is:pr is:open head:claude/security-review-`):
+0 results. PR #3870 (Feature 01, Auth & session lifecycle, pass 14) had
+already merged (`f9220b364`, a true zero-delta pass for that feature plus
+an unrelated `follow-redirects` npm-audit fix). Rotation row 01 is `✅`; row
+02 (Permissions & roles) is the next `⬜` row, read directly off a
+freshly-pulled `main`.
+
+**Baseline:** `4f21727a` (main's state when pass 13 began its own review;
+pass 13's own merge, PR #3803, landed one commit later at `d2cd227fd` and
+touched only the two docs files, so it introduces no code delta to diff
+against). **Head:** current `main` (`f9220b364`, PR #3870's merge). 267
+commits between them (175 non-merge). `git diff --stat` against every one of the eleven files/pairs
+this feature tracks (`dependencies.py`, `core/permissions.py`, `roles.py` +
+`role_service.py`, `operational_ranks.py` + `operational_rank_service.py`,
+`officers.py` + `officer_service.py`, `org_chart.py` +
+`org_chart_service.py`, `admin_continuity_service.py`, and the
+rank/role-assignment surface in `users.py`) is non-empty in four:
+`roles.py` (+2), `core/permissions.py` (+109), `operational_rank_service.py`
+(+11/-4), `role_service.py` (+26), `users.py` (+62/-10, computed excluding
+the schema-import reordering). `dependencies.py`, `officers.py`,
+`officer_service.py`, `org_chart.py`, `org_chart_service.py`, and
+`admin_continuity_service.py` are byte-identical to pass 13.
+
+### Route inventory — re-enumerated by AST, not diffed
+
+**28 routes, unchanged from pass 13** — re-walked with a fresh AST script
+over all four endpoint files: `roles.py` (13), `operational_ranks.py` (7),
+`officers.py` (3), `org_chart.py` (5), same methods, same paths, same
+handler names as pass 13's inventory. `officers.py` and `org_chart.py` are
+byte-identical to pass 13, so neither could have regressed; `roles.py` and
+`operational_ranks.py` changed but not in a way that touches a route
+decorator, a `Depends`, or a permission string (confirmed by reading both
+diffs in full, below).
+
+### The four changed files, reviewed
+
+- **`core/permissions.py` + `role_service.py` + `roles.py` — a position now
+  carries a `kind`: `office`, `committee`, or `system`.** This is a new
+  feature (four seeded committee positions — `community_outreach_team`,
+  `history_committee`, `fundraising_committee`, `membership_committee` —
+  plus the ability for a department to mark its own custom position as a
+  committee), not a permissions change: `kind` decides how the member
+  screens group a held position and grants nothing of its own.
+  - **The four seeded committees carry a _copy_ of the `member` baseline
+    permission list, not the same list object**
+    (`core/permissions.py:2850-2886`: `DEFAULT_POSITIONS[_slug]["permissions"]
+= list(DEFAULT_POSITIONS["member"]["permissions"])`) — Pitfall #23's
+    exact failure mode (a rank/position grant reaching the database by way
+    of a shared mutable object) is the thing this code comment and the
+    `list()` copy are deliberately avoiding, and
+    `tests/test_position_kinds.py::test_a_committee_carries_the_baseline_as_a_copy`
+    machine-checks both the value equality and the `is not` identity check.
+    Not seeded with anything beyond the baseline — confirmed by reading the
+    four definitions (`permissions: []` in source, overwritten to the
+    baseline copy by the loop immediately below the dict, never the module
+    wildcard or any `*.manage` string).
+  - **Migration `d8f1a4c27b93`** (`backend/alembic/versions/20261029_1300_*`)
+    adds `positions.kind` with `server_default="office"` (settles existing
+    rows per Pitfall #35, rather than relying on an app-level default), is
+    guarded on `_has_table("positions")`/`_has_table("organizations")`
+    before touching either (Pitfall #26), inlines its own frozen copy of
+    the system-slug list and the baseline permission snapshot rather than
+    importing from `core/permissions.py` (Pitfall #20 — "a migration keeps
+    doing what it did the day it ran"), and the committee backfill is an
+    `INSERT ... WHERE (org, slug) NOT IN existing` per organization, so
+    running it twice inserts nothing twice. `downgrade()` deletes only the
+    seeded committee rows nobody holds (`id NOT IN (SELECT position_id FROM
+user_positions)`) and demotes the column rather than stripping a held
+    position from a member. Ran `validate_migrations.py --strict` against
+    it: single head, 678 revisions.
+  - **`kind` cannot be used to mint a fake system position — except through
+    one validation gap, found and fixed this pass (PERM-12, below).** The
+    `RoleCreate`/`RoleUpdate` Pydantic schemas restrict the field to
+    `Literal["office", "committee"]` (`schemas/role.py:35,47`), and
+    `role_service.update_role`'s `is_system` branch separately refuses any
+    `kind` change at all on a system row, and its non-system branch
+    separately refuses `kind="system"`
+    (`role_service.py:356-359,417-423`). `create_role`'s own check
+    (`role_service.py:217`, pre-fix) was `if kind not in POSITION_KINDS`,
+    and `POSITION_KINDS` **includes** `"system"` — so the service method
+    itself would have accepted `kind="system"` from any caller that
+    reaches it without going through the Pydantic schema. See **PERM-12**.
+  - **Placement relative to the ceiling checks is correct.** The `kind`
+    passthrough in `roles.py`'s `create_role`/`update_role` handlers
+    (`roles.py:258,368`) sits after the existing
+    `_enforce_permission_grant_ceiling` calls (`roles.py:244,344,354`, both
+    byte-identical to pass 13), so `kind` cannot be used to skip a ceiling
+    check that already ran — it is a field passed into an already-gated
+    call, not a new code path around the gate.
+  - **`clone_role`** (`role_service.py:597`) sets
+    `kind=source.kind if source.kind == "committee" else "office"` — never
+    `"system"`, so cloning a system position (e.g. a rank mirror) produces
+    an ordinary office, not a copy of the platform's own kind. Correct and
+    consistent with the rest of this feature's "system is never
+    client-mintable" invariant.
+  - **`operational_rank_service.py`'s own change is unrelated to `kind`** —
+    it's `delete_rank`'s org-chart-seat-conflict error message switching
+    from an unbounded joined string to `list_within_detail_limit()` (a
+    pre-existing shared util, already used elsewhere, that caps the
+    rendered detail at `MAX_ERROR_DETAIL_LENGTH` and says "and N more"
+    rather than growing with the data) — an abuse-resistance hardening
+    (checklist dimension 6), not a behavior or permission change. No
+    `require_stepup`/`require_permission`/org-scoping change in this file.
+  - **Frontend:** `types/role.ts` and `utils/positions.ts` gained `kind` /
+    `PositionKind` / `isCommittee()` / `groupPositionsByKind()` — read in
+    full; purely display grouping (which section a position chip renders
+    under), no permission-gating component (`ProtectedRoute`, a
+    `requiredPermission` prop, a permission-derived conditional render)
+    touches `kind` anywhere in the diff. Confirmed via
+    `grep -rn "kind" frontend/src/modules/settings` returning nothing and a
+    read of both changed files end to end.
+- **`users.py` — `create_member` and `update_user_profile` gained
+  `member_status` validation against the organization's own membership
+  tiers (`_accepted_member_status_or_400`, `users.py:1261-1303`).** This is
+  feature work for the membership-tiers/standing model
+  (commit `5ec1897d4`, "class and status as two controls; tiers become
+  statuses"), not a permissions or role-assignment change, and it sits in
+  functions this feature tracks only because `_enforce_rank_grant_ceiling`
+  also lives in both of them. Read in full since it is new code in a
+  tracked file:
+  - **No new permission or org-scoping surface.** The helper takes
+    `organization_id` from the caller (always `current_user.organization_id`
+    at both call sites, `users.py:471,2042` — never a client-supplied org
+    id) and locks that one `Organization` row (`.with_for_update()`) before
+    reading `settings["membership_tiers"]`. No new by-id fetch of another
+    table, no new client-supplied FK.
+  - **Lock ordering is stated and consistent with the rest of the file.**
+    The comment at the `update_user_profile` call site
+    (`users.py:2036-2039`) explains the helper's Organization-row lock must
+    run _before_ the function's own subsequent `User`-row lock, matching
+    "the order every other writer of a member's standing uses" — the same
+    Organization-before-member ordering `_enforce_rank_grant_ceiling` and
+    the quorum-calculation code already follow, so this does not introduce
+    a new lock-ordering hazard (Pitfall #27's deadlock risk is between two
+    _different_ orderings, not a single consistent one).
+  - **Fails closed.** An unrecognized `member_status` that is neither a
+    built-in status nor one of the org's own tier ids raises `HTTPException`
+    400; it is not silently stored.
+  - This is adjacent, reviewed-for-correctness territory for this pass, not
+    a PERM finding — it belongs to Feature 07 (Users & organizations) or
+    Feature 08 (Membership pipeline)'s own scope for anything beyond the
+    permissions-surface check given here.
+
+### Re-verified, not re-derived
+
+- **PERM-1 through PERM-9** — unaffected; every file they depend on is
+  either byte-identical to pass 13 or, where changed (`role_service.py`,
+  `operational_rank_service.py`), changed only in the ways described above,
+  none of which touch the ceiling machinery those findings concern.
+- **PERM-10 (MED, FLAGGED) and PERM-11 (MED, FLAGGED)** — re-read against
+  current `main` rather than trusted from pass 13's text.
+  `create_member` (`users.py:464`, ceiling call) and the rank-change branch
+  of `update_user_profile` (`users.py:2174`, ceiling call) still carry no
+  `require_stepup` — confirmed via `grep -n "require_stepup"
+app/api/v1/endpoints/users.py`, which lists every other sensitive handler
+  in the file (`admin_reset_password`, `admin_reset_mfa`,
+  `admin_remove_passkey`, `delete_user`, `assign_user_roles`, etc.) but not
+  these two line numbers. `operational_ranks.py`'s `create_rank`/
+  `update_rank`/`delete_rank` are byte-identical to pass 13 (confirmed by
+  the empty diff above) and so still carry none either. Both remain
+  **OPEN / FLAGGED** — still an owner decision belonging to Feature 01's
+  `STEPUP_HANDLERS` mechanism. `docs/KNOWN_LIMITATIONS.md`'s entries for
+  both are present and accurate, unchanged.
+- **OR-gate alternatives** — `positions.*`/`roles.*`/`members.manage`/
+  `organization.update_settings`/`orgchart.manage` re-confirmed not seeded
+  to `member` or `firefighter` (the new committee seeds carry an empty
+  permission list widened to only the `member` baseline, confirmed above —
+  none of the four gates this bullet tracks).
+
+### PERM-12 — LOW — `RoleManagementService.create_role`'s `kind` check was weaker than its sibling `update_role` check, and would have accepted `kind="system"` — ✅ FIXED
+
+**What:** `update_role` explicitly refuses `kind="system"` on a non-system
+role (`role_service.py:417-423`, pre-existing, unchanged this pass):
+"A position is an office or a committee; 'system' is reserved for the
+platform's own." `create_role`'s check did not carry the same exclusion —
+it was `if kind not in POSITION_KINDS`, and `POSITION_KINDS =
+("office", "committee", "system")` (`core/permissions.py`), so `"system"`
+passed this check and would have been stored.
+
+**Where:** `app/services/role_service.py:217-220` (pre-fix).
+
+**Failure scenario:** not reachable through the live HTTP API today —
+`RoleCreate.kind` is `Literal["office", "committee"]`
+(`schemas/role.py:35`), so the one route that calls `create_role`
+(`POST /roles`, `roles.py:249`) can never pass `"system"` through, and the
+only other live caller, `clone_role`, never passes it either (traced
+above). The gap is in the service method's own defense in depth: a future
+internal caller — a script, a new onboarding path, a different endpoint
+added later that calls `RoleManagementService.create_role()` directly
+without going through the `RoleCreate` schema — could create an ordinary
+organization-scoped role with `kind="system"`, which the frontend's
+`groupPositionsByKind()` and any future code trusting `kind == "system"` as
+"this is the platform's own, not a department's" would then misclassify.
+Not currently exploitable (no such caller exists), but it is exactly the
+kind of latent gap CLAUDE.md Pitfall #23's broader lesson warns about: a
+grant/classification-bearing field should not depend entirely on one
+caller's schema to stay correct.
+
+**Impact:** LOW — no live path reaches it, and `kind` grants no permission
+by itself (it is UI grouping metadata, not an authorization boundary) — but
+closing it is a one-line, mechanical, verifiable change that makes the two
+sibling methods consistent and removes the latent gap rather than merely
+noting it.
+
+**Fix:** changed the condition to `if kind not in POSITION_KINDS or kind ==
+"system"`, matching `update_role`'s existing exclusion, with a comment
+explaining why (system positions are built by `initialize_default_roles`
+directly via the ORM, never through `create_role`).
+
+**Guard test:**
+`TestTheService::test_create_role_also_refuses_system` in
+`tests/test_position_kinds.py` — calls `create_role(..., kind="system")`
+directly at the service layer (bypassing the Pydantic schema the way a
+future internal caller would) and asserts it raises. Verified this test
+fails against the pre-fix code (`DID NOT RAISE ValueError`) and passes
+against the fix, per CLAUDE.md Pitfall #37.
+
+### Completion gate (pass 14)
+
+| Check                                                                                       | Result                                                              |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                             | ✅ 0 violations                                                     |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                    | ✅ clean, 2744 files unchanged                                      |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                 | ✅ clean                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                           | ✅ single head `f90b1124e6f4`, 678 revisions                        |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                           | ✅ 280 routes, 0 errors, 0 warnings                                 |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart or passkey"`) | ✅ 1676 passed, 1 pre-existing skip (environment-only: `pywebpush`) |
+| `cd frontend && npm run typecheck`                                                          | n/a — no frontend files touched this pass                           |
+| `npm run lint` (frontend)                                                                   | n/a — no frontend files touched this pass                           |
+
+1 finding fixed this pass (PERM-12, LOW). PERM-10 and PERM-11 remain
+flagged (owner decision, Feature 01's test-pinned mechanism), re-verified
+open and unchanged.
 
 ---
 

@@ -19,7 +19,7 @@ import {
   RESOURCE_TYPE_OPTIONS,
   EVENT_TEMPLATE_STARTERS,
   getPositionOptions,
-  emptyTemplateForm,
+  newTemplateForm,
   resourcePositionName,
 } from './shiftTemplateTypes';
 import { getCachedShiftSettings } from '../services/shiftSettingsApi';
@@ -61,7 +61,9 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 }) => {
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
 
-  const [formData, setFormData] = useState<TemplateFormData>(initialData || emptyTemplateForm);
+  const [formData, setFormData] = useState<TemplateFormData>(
+    () => initialData || newTemplateForm(getCachedShiftSettings())
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const positionOptions = getPositionOptions();
 
@@ -79,7 +81,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   const [runsMultipleDays, setRunsMultipleDays] = useState(false);
 
   useEffect(() => {
-    const next = initialData || emptyTemplateForm;
+    const next = initialData || newTemplateForm(getCachedShiftSettings());
     setFormData(next);
     const span = hoursBetweenTimesOfDay(next.start_time_of_day, next.end_time_of_day);
     const stated = parseFloat(next.duration_hours);

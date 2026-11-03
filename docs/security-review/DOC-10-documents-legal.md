@@ -1,6 +1,100 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), (this PR) (pass 13)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), (this PR) (pass 14)
+
+---
+
+## Pass 14 (2026-11-01)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`.
+`gh api search/issues` (`is:pr is:open head:claude/security-review`) returned
+0 results: PR #3911 (Feature 09, Medical screening, pass 14) had already
+merged (`6a1ad334f`); row 09 was already ✅ from that PR's own commit. Row 10
+(Documents & legal) was the next `⬜`, confirmed fresh against the rotation
+table on a freshly pulled `main`.
+
+**Baseline** `e8a5c00b0` (PR #3816's merge, pass 13). `git diff --numstat`
+against it, across the full declared scope (`documents.py`,
+`station_documents.py`, `legal_documents.py`, `api/public/legal.py`,
+`documents_service.py`, `document_service.py`, `print_document_service.py`,
+`legal_service.py`, `admin_only_folder_digest.py`, `models/document.py`,
+`models/legal.py`, `schemas/documents.py`, `schemas/legal.py`,
+`mcp/tools/documents.py`, `DocumentsPage.tsx`, `LegalPage.tsx`, and the
+`documents/` frontend components): **zero backend files changed** — every
+one of the fourteen backend files listed above, including
+`api/public/legal.py`, is byte-identical to pass 13. Only three frontend
+files carry a diff, all cosmetic:
+
+| File                                                           | +/−     | What changed                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/src/pages/DocumentsPage.tsx`                         | +50/−41 | The page header JSX was extracted into a local `pageHeader` constant so it also renders during the initial folder-loading state (previously a bare full-screen spinner, which made the page jump ~400px once folders loaded). Same `canManage` gate, same two button handlers, same markup — a dedup/layout fix, not a behavior change. |
+| `frontend/src/components/documents/AdminOnlyFoldersNotice.tsx` | +5/−6   | Swapped a hand-rolled flex-row class string for the shared `split-row`/`split-row-main`/`split-row-aside` utilities (CLAUDE.md's "define it as an `@utility`" pattern). Same content, same `key={folder.id}`, same buttons.                                                                                                             |
+
+No route added or removed, no permission string changed, no migration. Two
+further frontend diffs this window (`OrgChartNodeModal.tsx`, `OrgChartPage.tsx`
+— `alert-error` → `alert-danger` class rename) belong to the governance
+module, not this feature's declared scope, and are left to Feature 02's own
+row.
+
+**Routes: 24, unchanged** (re-enumerated by AST, not grepped: `documents.py`
+15, `station_documents.py` 2, `legal_documents.py` 7 — identical to pass 13's
+table). `check_route_permissions.py --strict` — 283 routes repo-wide, 0
+errors/warnings. No migration landed in this window touches
+`document_folders`, `documents`, `legal_documents`, or
+`legal_document_revisions` (checked `git log e8a5c00b0..HEAD --
+backend/alembic/versions`: 25 unrelated migrations, all from other rotation
+rows — membership pipeline, scheduling, elections, weather/integrations,
+shift evaluations).
+
+### Reviewed in full
+
+- **`_release_document_references`** (`documents_service.py:1500-1580`) —
+  read directly, not assumed unchanged from the diff stat: still a plain
+  `SELECT` (not `.with_for_update()`) on `PurchaseRequest`/`ExpenseReport`,
+  still filtered on `organization_id == org_id` on both queries (XC-3 holds).
+  Byte-identical to pass 13's description — this is DOC-31's subject, below.
+- **DocumentsPage.tsx's header extraction** — confirmed it is purely
+  presentational: the `canManage` conditional, the `New Folder`/`Upload
+Document` button `onClick` handlers (`setFolderAccess(EMPTY_FOLDER_ACCESS)`
+  / `setCreateFolderError(null)` / `setShowCreateFolder(true)`;
+  `handleOpenUploadModal`), and every class are copied verbatim into the new
+  `pageHeader` constant and referenced from both the loading-state return and
+  the main return — no new conditional, no new state, no new call.
+
+## Findings — 0 fixed, 0 new findings
+
+- **DOC-31 — LOW — FLAGGED — re-confirmed OPEN, unaffected.**
+  `_release_document_references`'s refusal check
+  (`documents_service.py:1524, 1544`) is still a plain `SELECT`, not
+  `.with_for_update()`, on the referencing `PurchaseRequest`/`ExpenseReport`
+  rows before refusing a receipt-document delete — confirmed by direct read
+  this pass, zero diff since pass 13. Already in `docs/KNOWN_LIMITATIONS.md`;
+  no new information.
+
+No other standing OPEN/FLAGGED finding exists for this feature (passes 9-13
+all closed with none besides DOC-31).
+
+## Completion gate
+
+| Check                                                                                                                                                                                            | Result                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                                                                                                                                  | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/` (CI-pinned `black==26.10.1`, installed alongside a stale `26.5.1` shadowing it on `PATH` — invoked via `/usr/local/bin/black` to confirm the pinned binary) | ✅ 2776 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                                                                                                                                       | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                | ✅ 684 revisions, single head `5781476f2012`    |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                | ✅ 283 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only"`                                                                                            | ✅ 656 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                                                                                                               | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                                                                                                                    | ✅ 0 errors, 0 warnings                         |
+| `npx vitest run` (DocumentsPage × 3, legal/LegalPage × 2, governance/LegalDocumentsPage, `components/documents`)                                                                                 | ✅ 83 passed (8 files)                          |
+
+No source file needed a fix this pass — only this findings file and
+`PROGRESS.md` were updated.
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 

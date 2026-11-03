@@ -42,7 +42,7 @@ class TestPostCompletionGuard:
         ), patch("app.api.v1.onboarding.OnboardingService", return_value=svc):
             with pytest.raises(HTTPException) as exc:
                 await save_session_stations(
-                    MagicMock(), StationsRequest(stations=[]), MagicMock()
+                    MagicMock(), StationsRequest(stations=[]), AsyncMock()
                 )
         assert exc.value.status_code == 400
         assert "already been completed" in exc.value.detail
@@ -56,7 +56,7 @@ class TestPostCompletionGuard:
         ), patch("app.api.v1.onboarding.OnboardingService", return_value=svc):
             with pytest.raises(HTTPException) as exc:
                 await save_session_apparatus(
-                    MagicMock(), ApparatusListRequest(apparatus=[]), MagicMock()
+                    MagicMock(), ApparatusListRequest(apparatus=[]), AsyncMock()
                 )
         assert exc.value.status_code == 400
         assert "already been completed" in exc.value.detail

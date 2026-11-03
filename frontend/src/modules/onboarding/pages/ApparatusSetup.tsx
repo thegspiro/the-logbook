@@ -323,7 +323,7 @@ const ApparatusSetup: React.FC = () => {
                             <button
                               onClick={() => removePosition(row.id, seatIndex)}
                               aria-label={`Remove ${positionLabel(position)} (seat ${seatIndex + 1})`}
-                              className="hover:text-red-700 dark:hover:text-red-300"
+                              className="touch-target-phone hover:text-red-700 dark:hover:text-red-300"
                             >
                               <X className="h-3 w-3" aria-hidden="true" />
                             </button>
@@ -337,7 +337,7 @@ const ApparatusSetup: React.FC = () => {
                         <button
                           key={position}
                           onClick={() => addPosition(row.id, position)}
-                          className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary rounded-md border border-dashed px-2 py-1 text-xs capitalize transition-colors hover:border-red-500/40"
+                          className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary touch-target-phone rounded-md border border-dashed px-2 py-1 text-xs capitalize transition-colors hover:border-red-500/40"
                         >
                           + {positionLabel(position)}
                         </button>

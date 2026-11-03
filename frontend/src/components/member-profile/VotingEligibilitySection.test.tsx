@@ -8,6 +8,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import type { MemberVotingEligibility } from '../../types/election';
+import { getTodayLocalDate } from '../../utils/dateFormatting';
 
 const getMemberVotingEligibility = vi.fn();
 const updateMemberVotingEligibility = vi.fn();
@@ -53,6 +54,17 @@ describe('VotingEligibilitySection', () => {
     expect(screen.getByTestId('wait-outcome-annual')).toHaveTextContent('Not eligible to vote');
   });
 
+  // The card lives only in the profile's narrow sidebar, where a viewport
+  // breakpoint split it into two ~120px columns on every desktop. jsdom cannot
+  // measure layout, so this pins the class; the Playwright capture is the
+  // visual check.
+  it('stacks its fields in one column at every width', async () => {
+    renderWithRouter(<VotingEligibilitySection userId="u1" memberName="Sam Admin" />);
+
+    const fields = await screen.findByTestId('voting-eligibility-fields');
+    expect(fields.className).not.toMatch(/grid-cols/);
+  });
+
   it('requires a reason before waiving the wait', async () => {
     const user = userEvent.setup();
     renderWithRouter(<VotingEligibilitySection userId="u1" memberName="Sam Admin" />);
@@ -79,6 +91,22 @@ describe('VotingEligibilitySection', () => {
       })
     );
     expect(await screen.findByTestId('wait-outcome-regular')).toHaveTextContent('Waiting period waived');
+  });
+
+  it('refuses a start date after today, which would bar the member until it passed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VotingEligibilitySection userId="u1" memberName="Sam Admin" />);
+
+    const dateInput = await screen.findByLabelText('Count the wait from');
+    const today = getTodayLocalDate();
+    expect(dateInput).toHaveAttribute('max', today);
+
+    await user.type(dateInput, '2099-01-01');
+    await user.type(screen.getByLabelText('Reason'), 'Typo');
+    await user.click(screen.getByRole('button', { name: 'Save override' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('The date the wait counts from cannot be after today.');
+    expect(updateMemberVotingEligibility).not.toHaveBeenCalled();
   });
 
   it('asks before removing an override', async () => {

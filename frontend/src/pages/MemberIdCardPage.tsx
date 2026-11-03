@@ -37,6 +37,7 @@ import type { UserWithRoles } from '../types/role';
 import { isAdministrativeMember } from '../utils/membership';
 import { VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS, canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { displayNameOf, givenName } from '../utils/memberName';
+import { userStatusLabel } from '../constants/enums';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
@@ -258,7 +259,7 @@ export const MemberIdCardPage: React.FC = () => {
                 <span
                   className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${getStatusColor(member.status)} print:bg-gray-100 print:text-gray-800`}
                 >
-                  {member.status}
+                  {userStatusLabel(member.status)}
                 </span>
               </div>
             </div>

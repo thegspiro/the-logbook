@@ -29,6 +29,13 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.api.prospect_access import (
+    Level,
+    require_interview_access,
+    require_pipeline_reader,
+    require_prospect_access,
+    require_view_all,
+)
 from app.api.prospect_privacy import (
     block_self_interview_access,
     block_self_prospect_access,
@@ -45,7 +52,7 @@ from app.core.permissions import SENSITIVE_ANSWERS_VIEW
 from app.core.security_middleware import get_client_ip
 from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.event import Event
-from app.models.membership_pipeline import ProspectStatus
+from app.models.membership_pipeline import PipelineStepType, ProspectStatus
 from app.models.user import Role, User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
@@ -63,6 +70,7 @@ from app.schemas.membership_pipeline import (
     FollowUpAnswersResponse,
     FollowUpFormRequestResponse,
     InterviewCreate,
+    InterviewRequirementProgress,
     InterviewResponse,
     InterviewUpdate,
     KanbanBoardResponse,
@@ -77,6 +85,9 @@ from app.schemas.membership_pipeline import (
     PipelineStepResponse,
     PipelineStepUpdate,
     PipelineUpdate,
+    ProspectAccessResponse,
+    ProspectAssignmentCreate,
+    ProspectAssignmentResponse,
     ProspectCreate,
     ProspectDocumentResponse,
     ProspectEventLinkCreate,
@@ -110,7 +121,15 @@ from app.services.membership_pipeline_service import (
     MembershipPipelineService,
     describe_existing_applicant,
     duplicate_applicant_message,
+    effective_step_type,
+    interviewer_title,
 )
+from app.services.prospect_access import (
+    ProspectAccess,
+    assigned_prospect_ids,
+    visible_prospect_ids,
+)
+from app.services.prospect_assignment_service import ProspectAssignmentService
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -142,9 +161,7 @@ class PipelineWidgetResponse(BaseModel):
 @router.get("/widget-summary", response_model=PipelineWidgetResponse)
 async def pipeline_widget_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(require_view_all()),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """Aggregate the prospect workflow without exposing applicant records.
@@ -238,14 +255,12 @@ async def pipeline_widget_summary(
 async def list_pipelines(
     include_templates: bool = Query(True, description="Include template pipelines"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(require_pipeline_reader),
 ):
     """
     List all membership pipelines for the organization.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage or prospective_members.view_all, or an assignment to any applicant**
     """
     service = MembershipPipelineService(db)
     pipelines = await service.list_pipelines(
@@ -327,14 +342,12 @@ async def create_pipeline(
 async def get_pipeline(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(require_pipeline_reader),
 ):
     """
     Get a single pipeline with its steps.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage or prospective_members.view_all, or an assignment to any applicant**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.get_pipeline(
@@ -563,14 +576,12 @@ async def validate_form_for_pipeline(
 async def list_steps(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(require_pipeline_reader),
 ):
     """
     List all steps for a pipeline.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage or prospective_members.view_all, or an assignment to any applicant**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.get_pipeline(
@@ -740,6 +751,17 @@ async def delete_step(
     )
 
 
+async def _listed_prospect_ids(
+    db: AsyncSession, user: User, assigned_to_me: bool
+) -> set[str] | None:
+    """The applicants a board or list shows: everyone the caller may see, or,
+    with ``assigned_to_me``, only those they are assigned to. The assigned set
+    is always within what the caller may see, so the toggle can only narrow."""
+    if assigned_to_me:
+        return await assigned_prospect_ids(db, user)
+    return await visible_prospect_ids(db, user)
+
+
 # ============================================
 # Kanban Board Endpoint
 # ============================================
@@ -750,9 +772,17 @@ async def get_kanban_board(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
+        require_permission(
+            "prospective_members.view",
+            "prospective_members.manage",
+            "prospective_members.view_all",
+        )
     ),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+    assigned_to_me: bool = Query(
+        False,
+        description="Only the applicants the caller is assigned to",
+    ),
 ):
     """
     Get the kanban board view for a pipeline.
@@ -762,13 +792,14 @@ async def get_kanban_board(
     each column's ``count`` is the true total regardless, and ``truncated``
     says whether anything was withheld.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage or prospective_members.view_all.** Without prospective_members.view_all, only the applicants the caller is assigned to are included.
     """
     service = MembershipPipelineService(db)
     board = await service.get_kanban_board(
         str(pipeline_id),
         current_user.organization_id,
         exclude_prospect_ids=hidden_prospect_ids,
+        only_prospect_ids=await _listed_prospect_ids(db, current_user, assigned_to_me),
     )
     if not board:
         raise HTTPException(
@@ -813,9 +844,7 @@ async def get_pipeline_stats(
         None, description="Count only prospects linked to this event"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(require_view_all()),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
@@ -834,7 +863,7 @@ async def get_pipeline_stats(
     the open-pipeline view alone, and counting through it would zero the
     Rejected / Withdrawn / Converted badges this same response feeds.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all**
     """
     if event_id is not None:
         # A client-supplied FK, so confirm it is this organization's event
@@ -872,6 +901,7 @@ async def purge_inactive_prospects(
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
     ),
+    _sees_all: User = Depends(require_view_all()),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
@@ -887,7 +917,7 @@ async def purge_inactive_prospects(
 
     Requires `confirm: true` in the request body to execute.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, and prospective_members.view_all**
     """
     if not data.confirm:
         raise HTTPException(
@@ -1000,9 +1030,7 @@ async def _require_org_event(db: AsyncSession, event_id: str, organization_id: s
 @router.get("/source-events", response_model=list[ProspectSourceEventResponse])
 async def list_prospect_source_events(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(require_view_all()),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
@@ -1012,7 +1040,7 @@ async def list_prospect_source_events(
     least one sourced applicant appear — offering the whole calendar would bury
     the two open houses that matter under a year of business meetings.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all**
     """
     service = MembershipPipelineService(db)
     rows = await service.list_source_events(
@@ -1039,11 +1067,19 @@ async def list_prospects(
             "inactive and transferred records"
         ),
     ),
+    assigned_to_me: bool = Query(
+        False,
+        description="Only the applicants the caller is assigned to",
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
+        require_permission(
+            "prospective_members.view",
+            "prospective_members.manage",
+            "prospective_members.view_all",
+        )
     ),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
@@ -1061,10 +1097,13 @@ async def list_prospects(
     for — a rejected applicant is out of the pipeline. The archive tabs fetch
     one closed status at a time through ``status`` instead.
 
+    ``assigned_to_me`` narrows the list to the applicants the caller is
+    assigned to as case manager or interviewer.
+
     The caller's own prospective-membership record, if they have one, is
     omitted from the results and from ``total``.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view, prospective_members.manage or prospective_members.view_all.** Without prospective_members.view_all, only the applicants the caller is assigned to are included.
     """
     service = MembershipPipelineService(db)
 
@@ -1085,6 +1124,7 @@ async def list_prospects(
         offset=offset,
         exclude_prospect_ids=hidden_prospect_ids,
         open_only=open_only,
+        only_prospect_ids=await _listed_prospect_ids(db, current_user, assigned_to_me),
     )
 
     now = datetime.now(timezone.utc)
@@ -1288,14 +1328,13 @@ async def create_prospect(
 async def get_prospect(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
 ):
     """
     Get a prospective member's full details including step progress.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
     """
     service = MembershipPipelineService(db)
     prospect = await service.get_prospect(
@@ -1305,7 +1344,13 @@ async def get_prospect(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
-    return prospect
+    response = ProspectResponse.model_validate(prospect)
+    if not access.can_see_full:
+        # The coordinators' notes are written about the applicant, not for an
+        # interviewer assessing them; they go with the rest of the file an
+        # interviewer does not see (activity log, election package).
+        response.notes = None
+    return response
 
 
 @router.put("/prospects/{prospect_id}", response_model=ProspectResponse)
@@ -1314,14 +1359,13 @@ async def update_prospect(
     data: ProspectUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Update a prospective member's information.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     if data.target_role_id is not None:
@@ -1361,9 +1405,8 @@ async def complete_step(
     prospect_id: UUID,
     data: CompleteStepRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Mark a pipeline step as completed for a prospect.
@@ -1371,7 +1414,7 @@ async def complete_step(
     If the step is the final step and auto-transfer is enabled on the pipeline,
     the prospect will be automatically transferred to full membership.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1422,6 +1465,32 @@ async def list_my_sign_offs(
     return [
         entry for entry in sign_offs if entry["prospect_id"] not in hidden_prospect_ids
     ]
+
+
+@router.get("/my-applicants", response_model=list[ProspectListResponse])
+async def list_my_applicants(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """
+    The applicants the caller is assigned to as case manager or interviewer,
+    with their roles on each in ``my_roles``. Needs no pipeline permission:
+    the assignment is the grant, so this is how a member asked to interview
+    (a board member, a trustee) finds the applicant.
+    """
+    rows = await ProspectAssignmentService(db).my_applicants(current_user)
+    rows = [(p, roles) for p, roles in rows if str(p.id) not in hidden_prospect_ids]
+    now = datetime.now(timezone.utc)
+    pending = await FollowUpFormService(db).pending_contact_changes(
+        [str(p.id) for p, _ in rows], current_user.organization_id
+    )
+    items = []
+    for prospect, roles in rows:
+        item = _prospect_list_item(prospect, now, pending)
+        item.my_roles = roles
+        items.append(item)
+    return items
 
 
 @router.post(
@@ -1488,9 +1557,18 @@ async def skip_step(
     prospect_id: UUID,
     data: AdvanceProspectRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.WORK, manage_permissions=("prospective_members.manage",)
+        )
+    ),
 ):
-    """Explicitly bypass the current stage and record who skipped it."""
+    """
+    Explicitly bypass the current stage and record who skipped it.
+
+    **Requires permission: prospective_members.manage, or assignment to this applicant as case manager**
+    """
     service = MembershipPipelineService(db)
     try:
         prospect = await service.skip_current_step(
@@ -1516,14 +1594,13 @@ async def advance_prospect(
     prospect_id: UUID,
     data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Advance a prospect to the next step in the pipeline.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1562,9 +1639,8 @@ async def assign_prospect_stage(
     prospect_id: UUID,
     data: AssignStageRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.MANAGE)),
 ):
     """
     Place a prospect who is on no stage onto one.
@@ -1624,6 +1700,7 @@ async def bulk_advance_prospects(
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
     ),
+    _sees_all: User = Depends(require_view_all()),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
@@ -1634,7 +1711,7 @@ async def bulk_advance_prospects(
     the final stage is reported as a failure, not silently counted as
     advanced.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, and prospective_members.view_all**
     """
     service = MembershipPipelineService(db)
     results = await service.bulk_advance_prospects(
@@ -1666,20 +1743,29 @@ async def set_prospect_status(
     prospect_id: UUID,
     data: ProspectStatusChangeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Set one prospect's status (reject, place on hold, withdraw, reactivate).
+
+    A case manager may withdraw their applicant's application and nothing
+    else; every other status, reactivating a withdrawn one included, stays
+    with the pipeline's managers.
 
     ``reason`` is recorded in the prospect's activity log. Like the bulk
     endpoint, it deliberately does not touch the coordinator notes field —
     routing a rejection reason through the update endpoint as ``notes``
     overwrote whatever had been written about the applicant.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager (to withdraw only)**
     """
+    if not access.can_manage and data.status != ProspectStatus.WITHDRAWN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A case manager can withdraw an application but not set it to "
+            f"{data.status}",
+        )
     service = MembershipPipelineService(db)
     try:
         prospect = await service.set_prospect_status(
@@ -1716,6 +1802,7 @@ async def bulk_set_prospect_status(
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
     ),
+    _sees_all: User = Depends(require_view_all()),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
@@ -1727,7 +1814,7 @@ async def bulk_set_prospect_status(
     bulk path sent the reason through the update endpoint as ``notes``,
     overwriting whatever had been written about each applicant.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, and prospective_members.view_all**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1766,14 +1853,13 @@ async def regress_prospect(
     prospect_id: UUID,
     data: AdvanceProspectRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Move a prospect back to the previous step in the pipeline.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1823,9 +1909,8 @@ async def transfer_prospect(
     data: TransferProspectRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.MANAGE)),
 ):
     """
     Transfer a prospect to full membership (creates a User record).
@@ -2059,14 +2144,13 @@ async def get_prospect_activity(
     prospect_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.FULL)),
 ):
     """
     Get the activity log for a prospect.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     logs = await service.get_activity_log(
@@ -2121,14 +2205,13 @@ PROSPECT_DOCUMENT_RULES = FileRules(
 async def list_prospect_documents(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
 ):
     """
     List all documents for a prospect.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
     """
     service = MembershipPipelineService(db)
     docs = await service.get_prospect_documents(
@@ -2150,9 +2233,8 @@ async def add_prospect_document(
     ),
     step_id: UUID | None = Form(None, description="Associated pipeline step"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Upload and store a document for a prospect.
@@ -2161,7 +2243,7 @@ async def add_prospect_document(
     its metadata is recorded against the prospect. Retrieve it via the
     `/documents/{document_id}/download` endpoint.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager**
     """
     # Grouped per applicant under the organization (``<org>/applicants/
     # <prospect_id>/``) so each individual's files can be found, exported or
@@ -2209,14 +2291,13 @@ async def download_prospect_document(
     prospect_id: UUID,
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
 ):
     """
     Download a stored prospect document.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
     """
     service = MembershipPipelineService(db)
     # get_prospect_documents enforces that the prospect belongs to the caller's
@@ -2282,14 +2363,13 @@ async def delete_prospect_document(
     prospect_id: UUID,
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.WORK)),
 ):
     """
     Delete a prospect document.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     try:
@@ -2321,18 +2401,15 @@ async def delete_prospect_document(
 async def get_election_package(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission(
-            "prospective_members.view",
-            "prospective_members.manage",
-            "elections.manage",
-        )
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(Level.FULL, bypass_permissions=("elections.manage",))
     ),
 ):
     """
     Get the election package for a prospect.
 
-    **Requires permission: prospective_members.view, prospective_members.manage, or elections.manage**
+    **Requires permission: prospective_members.view_all or elections.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     pkg = await service.get_election_package(
@@ -2354,9 +2431,8 @@ async def create_election_package(
     prospect_id: UUID,
     data: ElectionPackageCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.MANAGE)),
 ):
     """
     Create an election package for a prospect.
@@ -2405,9 +2481,8 @@ async def update_election_package(
     prospect_id: UUID,
     data: ElectionPackageUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.MANAGE)),
 ):
     """
     Update an election package for a prospect.
@@ -2447,13 +2522,7 @@ async def list_election_packages(
         ),
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission(
-            "prospective_members.view",
-            "prospective_members.manage",
-            "elections.manage",
-        )
-    ),
+    current_user: User = Depends(require_view_all("elections.manage")),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
@@ -2466,7 +2535,7 @@ async def list_election_packages(
     The package built for the caller's own application is omitted — it
     bundles the interview and coordinator material the vote is based on.
 
-    **Requires permission: prospective_members.view, prospective_members.manage, or elections.manage**
+    **Requires permission: prospective_members.view_all or elections.manage**
     """
     service = MembershipPipelineService(db)
     packages = await service.list_election_packages(
@@ -2487,8 +2556,13 @@ async def assign_package_to_election(
     prospect_id: UUID,
     data: AssignPackageToElectionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("elections.manage", "prospective_members.manage")
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.MANAGE,
+            manage_permissions=("elections.manage", "prospective_members.manage"),
+            bypass_permissions=("elections.manage",),
+        )
     ),
 ):
     """
@@ -2524,13 +2598,14 @@ async def process_inactivity(
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
     ),
+    _sees_all: User = Depends(require_view_all()),
 ):
     """
     Process inactivity warnings for all prospects in the organization.
     Marks critical prospects as inactive and logs warnings.
     Can be triggered manually or via a scheduled job.
 
-    **Requires permission: members.manage or prospective_members.manage**
+    **Requires permission: members.manage or prospective_members.manage, and prospective_members.view_all**
     """
     service = MembershipPipelineService(db)
     result = await service.process_inactivity_warnings(
@@ -2577,15 +2652,14 @@ def _interview_to_response(interview) -> InterviewResponse:
 async def list_follow_up_forms(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
 ):
     """
     The follow-up forms sent to an applicant, with progress and any changes
     their submission made to the applicant record.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
     """
     prospect = await MembershipPipelineService(db).get_prospect(
         str(prospect_id), current_user.organization_id
@@ -2605,13 +2679,18 @@ async def send_follow_up_form(
     prospect_id: UUID,
     step_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.WORK, manage_permissions=("prospective_members.manage",)
+        )
+    ),
 ):
     """
     Send, or resend, a Follow-up Form stage's form to the applicant. A resend
     repeats the same link, and the applicant's draft is kept.
 
-    **Requires permission: prospective_members.manage**
+    **Requires permission: prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = FollowUpFormService(db)
     try:
@@ -2659,13 +2738,18 @@ async def review_follow_up_contact_change(
     prospect_id: UUID,
     request_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.WORK, manage_permissions=("prospective_members.manage",)
+        )
+    ),
 ):
     """
     Record that a coordinator has reviewed the contact details a follow-up
     form changed, which clears the flag on the applicant's card.
 
-    **Requires permission: prospective_members.manage**
+    **Requires permission: prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = FollowUpFormService(db)
     try:
@@ -2695,16 +2779,17 @@ async def get_follow_up_form_answers(
     prospect_id: UUID,
     request_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
 ):
     """
     A submitted follow-up form's answers. Sensitive answers are included only
-    for a viewer holding ``sensitive_answers.view``, and each such reveal is
-    audit-logged; anyone else sees them marked as withheld.
+    for a viewer holding ``sensitive_answers.view`` or assigned to interview
+    this applicant, and each such reveal is audit-logged with the grant it was
+    made under; anyone else, a case manager included, sees them marked as
+    withheld.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
     """
     try:
         result = await FollowUpFormService(db).submitted_answers(
@@ -2715,7 +2800,16 @@ async def get_follow_up_form_answers(
     if result is None:
         raise HTTPException(status_code=404, detail="Follow-up form not found")
 
-    reveal = user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name)
+    # An interviewer assignment is a grant for this one applicant: the
+    # interviewer reads the answers they are interviewing about, and nothing
+    # else the permission would open. The audit row records which applied.
+    if user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name):
+        via: str | None = "permission"
+    elif access.is_interviewer:
+        via = "interviewer_assignment"
+    else:
+        via = None
+    reveal = via is not None
     revealed = False
     for answer in result["answers"]:
         if answer["is_sensitive"]:
@@ -2736,11 +2830,153 @@ async def get_follow_up_form_answers(
                 "form_id": str(result["form_id"]) if result["form_id"] else None,
                 "follow_up_request_id": str(request_id),
                 "prospect_id": str(prospect_id),
+                "via": via,
             },
             user_id=str(current_user.id),
             username=current_user.username,
         )
     return result
+
+
+@router.get(
+    "/prospects/{prospect_id}/my-access",
+    response_model=ProspectAccessResponse,
+)
+async def get_my_prospect_access(
+    prospect_id: UUID,
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
+):
+    """
+    What the caller may do with this applicant, so the applicant's page offers
+    only the actions the backend will accept.
+    """
+    return {
+        **access.as_dict(),
+        "interviewer_title": interviewer_title(current_user.positions),
+    }
+
+
+@router.get(
+    "/prospects/{prospect_id}/assignments",
+    response_model=list[ProspectAssignmentResponse],
+)
+async def list_prospect_assignments(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
+):
+    """
+    The members assigned to an applicant as case manager or interviewer.
+    """
+    return await ProspectAssignmentService(db).list_for_prospect(
+        str(prospect_id), current_user.organization_id
+    )
+
+
+@router.post(
+    "/prospects/{prospect_id}/assignments",
+    response_model=ProspectAssignmentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_prospect_assignment(
+    prospect_id: UUID,
+    data: ProspectAssignmentCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.MANAGE, manage_permissions=("prospective_members.manage",)
+        )
+    ),
+):
+    """
+    Assign a current member as case manager or interviewer. The member then
+    sees this applicant (and only this one, unless they hold
+    ``prospective_members.view_all``) and is emailed a link. Assigning someone
+    already assigned in that role changes nothing.
+
+    **Requires permission: prospective_members.manage**
+    """
+    try:
+        assignment, created = await ProspectAssignmentService(db).assign(
+            str(prospect_id),
+            str(data.user_id),
+            data.role,
+            current_user.organization_id,
+            current_user,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if created:
+        await log_audit_event(
+            db=db,
+            event_type="membership_pipeline.assignment_added",
+            event_category="membership",
+            severity="info",
+            event_data={
+                "prospect_id": str(prospect_id),
+                "assignment_id": str(assignment["id"]),
+                "user_id": str(data.user_id),
+                "role": data.role,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            ip_address=get_client_ip(request),
+        )
+    return assignment
+
+
+@router.delete(
+    "/prospects/{prospect_id}/assignments/{assignment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_prospect_assignment(
+    prospect_id: UUID,
+    assignment_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.MANAGE, manage_permissions=("prospective_members.manage",)
+        )
+    ),
+):
+    """
+    Remove an assignment. The member stops seeing the applicant at once,
+    unless something else still grants it.
+
+    **Requires permission: prospective_members.manage**
+    """
+    removed = await ProspectAssignmentService(db).unassign(
+        str(prospect_id),
+        str(assignment_id),
+        current_user.organization_id,
+        current_user,
+    )
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.assignment_removed",
+        event_category="membership",
+        severity="info",
+        event_data={
+            "prospect_id": str(prospect_id),
+            "assignment_id": str(assignment_id),
+            "user_id": str(removed["user_id"]),
+            "role": removed["role"],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+        ip_address=get_client_ip(request),
+    )
+    return None
 
 
 @router.get(
@@ -2750,14 +2986,15 @@ async def get_follow_up_form_answers(
 async def list_interviews(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
 ):
     """
     List all interviews for a prospect.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
+
+    An interviewer who is not also a case manager sees only their own interview.
     """
     service = MembershipPipelineService(db)
     try:
@@ -2767,7 +3004,48 @@ async def list_interviews(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    if not access.sees_all_interviews:
+        # An interviewer who is only that sees their own interview, so each
+        # assessment is made without reading the others.
+        interviews = [
+            i for i in interviews if str(i.interviewer_id) == str(current_user.id)
+        ]
     return [_interview_to_response(i) for i in interviews]
+
+
+@router.get(
+    "/prospects/{prospect_id}/interview-requirement",
+    response_model=InterviewRequirementProgress | None,
+)
+async def get_interview_requirement_progress(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
+):
+    """
+    How far the applicant's current Interview Requirement stage has got:
+    interviews recorded against the stage, and which required interviewer
+    positions have interviewed. Null when the applicant is not on such a stage.
+
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
+    """
+    service = MembershipPipelineService(db)
+    prospect = await service.get_prospect(
+        str(prospect_id), current_user.organization_id
+    )
+    if prospect is None:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+    step = prospect.current_step
+    if (
+        step is None
+        or effective_step_type(step) != PipelineStepType.INTERVIEW_REQUIREMENT
+    ):
+        return None
+    progress = await service.interview_requirement_progress(prospect, step)
+    if not access.sees_all_interviews:
+        progress["recommendation_met"] = None
+    return progress
 
 
 @router.post(
@@ -2779,14 +3057,19 @@ async def create_interview(
     prospect_id: UUID,
     data: InterviewCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.INTERVIEW, manage_permissions=("prospective_members.manage",)
+        )
+    ),
 ):
     """
     Create a new interview record for a prospect.
 
     The current user is recorded as the interviewer.
 
-    **Requires permission: prospective_members.manage**
+    **Requires permission: prospective_members.manage, or an assignment to this applicant**
     """
     service = MembershipPipelineService(db)
     try:
@@ -2815,12 +3098,13 @@ async def update_interview(
     interview_id: UUID,
     data: InterviewUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_interview_access),
 ):
     """
     Update an interview record. Only the original interviewer can update.
 
-    **Requires permission: prospective_members.manage**
+    **Requires permission: prospective_members.manage, or being the interviewer while assigned to the applicant**
     """
     service = MembershipPipelineService(db)
     try:
@@ -2847,12 +3131,13 @@ async def update_interview(
 async def delete_interview(
     interview_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_interview_access),
 ):
     """
     Delete an interview record.
 
-    **Requires permission: prospective_members.manage**
+    **Requires permission: prospective_members.manage, or being the interviewer while assigned to the applicant**
     """
     service = MembershipPipelineService(db)
     deleted = await service.delete_interview(
@@ -2876,14 +3161,13 @@ async def delete_interview(
 async def list_prospect_event_links(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.view", "prospective_members.manage")
-    ),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.FULL)),
 ):
     """
     List all events linked to a prospect.
 
-    **Requires permission: prospective_members.view or prospective_members.manage**
+    **Requires permission: prospective_members.view_all, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     try:
@@ -2905,12 +3189,17 @@ async def link_event_to_prospect(
     prospect_id: UUID,
     data: ProspectEventLinkCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.WORK, manage_permissions=("prospective_members.manage",)
+        )
+    ),
 ):
     """
     Link an event to a prospect.
 
-    **Requires permission: prospective_members.manage**
+    **Requires permission: prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     try:
@@ -2933,12 +3222,17 @@ async def unlink_event_from_prospect(
     prospect_id: UUID,
     link_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("prospective_members.manage")),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(
+        require_prospect_access(
+            Level.WORK, manage_permissions=("prospective_members.manage",)
+        )
+    ),
 ):
     """
     Remove an event link from a prospect.
 
-    **Requires permission: prospective_members.manage**
+    **Requires permission: prospective_members.manage, or assignment to this applicant as case manager**
     """
     service = MembershipPipelineService(db)
     deleted = await service.unlink_event(

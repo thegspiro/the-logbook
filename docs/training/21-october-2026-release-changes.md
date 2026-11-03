@@ -1,3 +1,34 @@
+# October 31 – November 1, 2026 workflow updates
+
+Audit: [`docs/CHANGE_AUDIT_2026-11.md`](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Screenshots to create are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                  | Now in                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| Case managers, interviewers, My Applicants, `view_all` | [15 — Prospective Members](./15-prospective-members.md) |
+| Shift evaluation forms and per-shift evaluations       | [02 — Training](./02-training.md)                       |
+| Leave badges by date                                   | [01 — Membership](./01-membership.md)                   |
+| Scheduling fixes (ledger, swap times, time off)        | [03 — Scheduling](./03-scheduling.md) (already written) |
+
+---
+
+# October 29–30, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                        | Now in                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Member class and membership status; tier Counts as           | [01 — Membership](./01-membership.md), [08 — Admin & Reports](./08-admin-reports.md) |
+| Voter Eligibility settings; a member's voting waiting period | [14 — Elections](./14-elections.md)                                                  |
+| Follow-up form reminders, coordinator notice, answers        | [15 — Prospective Members](./15-prospective-members.md)                              |
+| Compliance profiles scoped by position                       | [02 — Training](./02-training.md), [08 — Admin & Reports](./08-admin-reports.md)     |
+| Class and status operator notes                              | Operator-facing: [`UPGRADING.md`](../UPGRADING.md)                                   |
+
+---
+
 # October 29, 2026 workflow updates
 
 Index for the latest window. Audit:

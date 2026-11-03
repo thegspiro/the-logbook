@@ -77,15 +77,15 @@ interface StepShellProps {
 
 const StepShell: React.FC<StepShellProps> = ({ title, intro, manageTo, manageLabel, children }) => (
   <div className="card-secondary p-4 sm:p-6">
-    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
+    <div className="split-row mb-4 gap-2 sm:items-start">
+      <div className="split-row-main">
         <h2 className="text-theme-text-primary text-lg font-semibold">{title}</h2>
         <p className="text-theme-text-secondary mt-1 text-sm">{intro}</p>
       </div>
       {manageTo && (
         <Link
           to={manageTo}
-          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 flex shrink-0 items-center gap-1 text-sm"
+          className="split-row-aside text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-sm"
         >
           {manageLabel ?? 'Open full page'}
           <ExternalLink className="h-3.5 w-3.5" />

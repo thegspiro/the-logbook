@@ -68,8 +68,12 @@ import type {
   InactivityAlertLevel,
   CurrentStageAction,
   NextMeeting,
+  AssignmentRole,
   FollowUpAnswers,
   FollowUpFormRequest,
+  InterviewRequirementProgress,
+  ProspectAccess,
+  ProspectAssignment,
   PublicFollowUpForm,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus, defaultStageConfig } from '../types';
@@ -430,6 +434,7 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     withdrawn_at: data.withdrawn_at || undefined,
     withdrawal_reason: data.withdrawal_reason || undefined,
     contact_change_pending: data.contact_change_pending ?? false,
+    my_roles: data.my_roles?.length ? data.my_roles : undefined,
     created_at: data.created_at,
   };
 }
@@ -683,6 +688,30 @@ interface BackendPaginatedProspectList {
 }
 
 export const applicantService = {
+  /** What the caller may do with this applicant (roles and allowed actions). */
+  async getMyAccess(applicantId: string): Promise<ProspectAccess> {
+    const response = await api.get<ProspectAccess>(`/prospective-members/prospects/${applicantId}/my-access`);
+    return { ...response.data, roles: asArray(response.data.roles) };
+  },
+
+  /**
+   * The applicant's current Interview Requirement stage as the server grades
+   * it, or null when they are not on one.
+   */
+  async getInterviewRequirement(applicantId: string): Promise<InterviewRequirementProgress | null> {
+    const response = await api.get<InterviewRequirementProgress | null>(
+      `/prospective-members/prospects/${applicantId}/interview-requirement`
+    );
+    const data = response.data;
+    return data ? { ...data, positions: asArray(data.positions) } : null;
+  },
+
+  /** The applicants the caller is assigned to, with their roles on each. */
+  async getMyApplicants(): Promise<ApplicantListItem[]> {
+    const response = await api.get<BackendProspectListResponse[]>('/prospective-members/my-applicants');
+    return asArray(response.data).map(mapProspectListToApplicantList);
+  },
+
   async getApplicants(params?: {
     filters?: ApplicantListFilters | undefined;
     page?: number | undefined;
@@ -713,6 +742,7 @@ export const applicantService = {
           // Omitted rather than sent as false, so the archive tabs' request
           // URLs (and their cache keys) are unchanged by this parameter.
           open_only: params?.openOnly ? true : undefined,
+          assigned_to_me: params?.filters?.assigned_to_me ? true : undefined,
           limit: pageSize,
           offset,
         },
@@ -1325,6 +1355,26 @@ export const followUpFormService = {
       `/prospective-members/prospects/${applicantId}/follow-up-forms/${requestId}/answers`
     );
     return { ...response.data, answers: asArray(response.data.answers) };
+  },
+};
+
+export const assignmentService = {
+  async list(applicantId: string): Promise<ProspectAssignment[]> {
+    const response = await api.get<ProspectAssignment[]>(`/prospective-members/prospects/${applicantId}/assignments`);
+    return asArray(response.data);
+  },
+
+  /** Assign a member; assigning someone already assigned in that role changes nothing. */
+  async add(applicantId: string, userId: string, role: AssignmentRole): Promise<ProspectAssignment> {
+    const response = await api.post<ProspectAssignment>(`/prospective-members/prospects/${applicantId}/assignments`, {
+      user_id: userId,
+      role,
+    });
+    return response.data;
+  },
+
+  async remove(applicantId: string, assignmentId: string): Promise<void> {
+    await api.delete(`/prospective-members/prospects/${applicantId}/assignments/${assignmentId}`);
   },
 };
 

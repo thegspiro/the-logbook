@@ -615,8 +615,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                     hover to reveal a title attribute — four bare glyphs on the
                     screen members open most is where a mis-tap costs a seat on
                     the truck. */}
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                  <div className="split-row gap-3 sm:items-center">
+                    <div className="split-row-main flex items-center gap-3 sm:gap-4">
                       {view === 'upcoming' &&
                         assignment.status === AssignmentStatus.ASSIGNED &&
                         pendingAssigned.length > 1 && (
@@ -689,7 +689,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                         </div>
                       </div>
                     </div>
-                    <div className="border-theme-surface-border flex shrink-0 flex-wrap items-center gap-2 border-t pt-3 sm:border-0 sm:pt-0">
+                    <div className="split-row-aside border-theme-surface-border flex flex-wrap items-center gap-2 border-t pt-3 sm:border-0 sm:pt-0">
                       <span
                         className={`hidden rounded-full border px-2.5 py-1 text-xs font-medium capitalize sm:inline-block ${statusColor}`}
                       >

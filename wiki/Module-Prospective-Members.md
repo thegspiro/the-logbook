@@ -245,7 +245,9 @@ A coordinator can reactivate it like any other withdrawal.
   `membership_pipeline_steps`, `prospective_members`, `prospect_step_progress`,
   `prospect_activity_log`, `prospect_documents`, `prospect_election_packages`,
   `prospect_interviews`, `prospect_event_links`, `prospect_form_requests`
-  (follow-up form links, drafts and reminders). A converted applicant is
+  (follow-up form links, drafts and reminders), `prospect_assignments` (case
+  managers and interviewers; the assignment is what lets a member without
+  `prospective_members.view_all` see the applicant). A converted applicant is
   stored as `transferred`; the frontend shows `converted`.
 - **Scheduled tasks:** `membership_inactivity_warnings`,
   `membership_auto_purge`, `prospect_attendance_advance`,

@@ -68,6 +68,7 @@ import MeetingConfig from './stage-config/MeetingConfig';
 import AutomatedEmailConfig from './stage-config/AutomatedEmailConfig';
 import ReferenceCheckStageConfig from './stage-config/ReferenceCheckConfig';
 import FollowUpFormConfig from './stage-config/FollowUpFormConfig';
+import InterviewerPositionsConfig from './stage-config/InterviewerPositionsConfig';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -1292,9 +1293,15 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                       If set, at least one interview must have this recommendation (or better) to advance.
                     </p>
                   </div>
+                  <InterviewerPositionsConfig
+                    value={interviewReqConfig.required_interviewer_positions ?? []}
+                    onChange={(positions) =>
+                      setConfig({ ...interviewReqConfig, required_interviewer_positions: positions })
+                    }
+                  />
                   <p className="text-theme-text-muted text-xs">
                     Interviews are recorded on the applicant&apos;s Interview page. The applicant cannot advance past
-                    this stage until the required number is recorded.
+                    this stage until the required number is recorded, and an interview from each required position.
                   </p>
                   <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                     <input

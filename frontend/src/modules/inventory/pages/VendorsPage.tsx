@@ -611,11 +611,8 @@ const VendorContactsModal: React.FC<{
         {vendor && vendor.contacts.length > 0 ? (
           <ul className="space-y-2">
             {vendor.contacts.map((contact) => (
-              <li
-                key={contact.id}
-                className="card-secondary flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
+              <li key={contact.id} className="split-row card-secondary gap-2 p-3 sm:items-center">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
                     {contact.name}
                     {contact.is_primary && (
@@ -635,7 +632,7 @@ const VendorContactsModal: React.FC<{
                       .join(' · ') || 'No contact details'}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1">
+                <div className="split-row-aside flex flex-wrap gap-1">
                   <button type="button" onClick={() => startEdit(contact)} className="btn-secondary btn-sm">
                     Edit
                   </button>

@@ -173,7 +173,7 @@ async function onboard(page, admin) {
   await page.locator("#email").fill(admin.email);
   await page.locator("#password").fill(admin.password);
   await page.locator("#confirmPassword").fill(admin.password);
-  await page.getByRole("button", { name: /create system owner/i }).click();
+  await page.getByRole("button", { name: /create account/i }).click();
   await page.waitForURL((url) => !url.pathname.endsWith("/system-owner"), {
     timeout: 20000,
   });

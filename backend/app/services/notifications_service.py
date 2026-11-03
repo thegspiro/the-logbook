@@ -185,20 +185,25 @@ class NotificationsService:
         Deliberately runs after the log row is committed and swallows all
         errors: the notification is already durably recorded, and a push
         service outage must not fail the action that produced it.
+
+        Queued rather than sent: callers log one notification per recipient,
+        and waiting on each member's devices in turn held the request that
+        caused them — see app/services/push_dispatch.py.
         """
         if log.channel != NotificationChannel.IN_APP or not log.recipient_id:
             return
         try:
+            from app.services.push_dispatch import schedule_push
             from app.services.push_service import PushService
 
-            push = PushService(self.db)
-            if not push.is_configured():
+            if not PushService.is_configured():
                 return
-            await push.send_to_user(
-                organization_id=organization_id,
-                user_id=log.recipient_id,
+            schedule_push(
+                organization_id=str(organization_id),
+                user_id=str(log.recipient_id),
                 title=log.subject or "The Logbook",
                 body=log.message or "",
+                url=log.action_url,
                 tag=log.category or "logbook",
             )
         except Exception:
@@ -212,6 +217,7 @@ class NotificationsService:
         skip: int = 0,
         limit: int = 100,
         cursor: Optional[str] = None,
+        failed_only: bool = False,
     ) -> Tuple[List[NotificationLog], int, Optional[str]]:
         """Get notification logs, by cursor when given and by offset otherwise.
 
@@ -227,12 +233,20 @@ class NotificationsService:
         ``skip`` stays supported because it is the published contract, and
         because the caller of a first page has no cursor to pass.
 
+        ``failed_only`` keeps the rows carrying a delivery error — the same
+        predicate the operations dashboard's Notification failures tile counts
+        (``error IS NOT NULL``), so the list that tile opens holds exactly what
+        it counted.
+
         Raises :class:`~app.utils.cursor_pagination.InvalidCursor` for a cursor
         this application did not issue.
         """
         query = select(NotificationLog).where(
             NotificationLog.organization_id == str(organization_id)
         )
+
+        if failed_only:
+            query = query.where(NotificationLog.error.is_not(None))
 
         if recipient_id is not None:
             query = query.where(NotificationLog.recipient_id == str(recipient_id))

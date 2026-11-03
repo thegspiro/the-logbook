@@ -113,13 +113,13 @@ def test_a_tier_with_no_permission_is_declared_rather_than_left_to_expand():
 
 
 def test_an_unoffered_checkbox_expands_to_nothing():
-    submitted = {
-        module_id: RolePermission(view=True, manage=True)
-        for module_id in _registry_module_ids()
-        if not module_checkbox_offered(module_id, "view")
-        and not module_checkbox_offered(module_id, "manage")
-    }
-    assert submitted, "expected at least one module with no permissions behind it"
+    # Named rather than found in the registry: Mobile App Access was the
+    # registry's only module with neither tier backed, and it was retired from
+    # setup on 2026-11-01 (W01-23). Its tiers stay in the backend map, and a
+    # setup session saved before then can still submit it.
+    assert not module_checkbox_offered("mobile", "view")
+    assert not module_checkbox_offered("mobile", "manage")
+    submitted = {"mobile": RolePermission(view=True, manage=True)}
     assert expand_module_checkboxes(submitted) == []
 
 

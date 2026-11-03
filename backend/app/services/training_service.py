@@ -32,10 +32,11 @@ from app.schemas.training import (
 from app.services.training_waiver_service import (
     WaiverPeriod,
     adjust_required,
+    excused_month_reasons,
     fetch_user_waivers,
     get_rolling_period_months,
+    month_waivers,
     total_months_in_period,
-    waived_month_keys,
 )
 from app.utils.hours import meets_required_hours
 from app.utils.org_timezone import resolve_org_today
@@ -231,6 +232,9 @@ class TrainingService:
             try:
                 from app.models.user import Organization as _Org
                 from app.models.user import User as _User
+                from app.services.membership_tier_service import (
+                    MembershipTierService,
+                )
 
                 user_result = await self.db.execute(
                     select(_User).where(
@@ -247,11 +251,8 @@ class TrainingService:
                     if _org:
                         _tier_cfg = (_org.settings or {}).get("membership_tiers", {})
                         _tiers = _tier_cfg.get("tiers", [])
-                        _member_tier_id = (
-                            getattr(_member, "membership_type", None) or "active"
-                        )
-                        _tier_def = next(
-                            (t for t in _tiers if t.get("id") == _member_tier_id), None
+                        _tier_def = MembershipTierService.tier_for_member(
+                            _tiers, _member
                         )
                         if _tier_def:
                             _benefits = _tier_def.get("benefits", {})
@@ -664,7 +665,7 @@ class TrainingService:
         base_required: float = 0
         adjusted_required: float = 0
         waived_months = 0
-        active_months = 0
+        active_months: float = 0
         cert_expired = False
         blocks_activity = False
         month_breakdown: Optional[List[Dict]] = None
@@ -681,7 +682,7 @@ class TrainingService:
                     type_matched,
                     start_date,
                     min(end_date, today),
-                    waived_month_keys(_waivers, start_date, end_date, str(req.id)),
+                    month_waivers(_waivers, start_date, end_date, str(req.id)),
                 )
             base_required = req.required_hours or 0
             adjusted_required = base_required
@@ -767,6 +768,7 @@ class TrainingService:
                     _waivers,
                     str(req.id),
                     period_months=get_rolling_period_months(req),
+                    whole_units=True,
                 )
 
         # ---- CALLS ----
@@ -788,6 +790,7 @@ class TrainingService:
                     _waivers,
                     str(req.id),
                     period_months=get_rolling_period_months(req),
+                    whole_units=True,
                 )
 
         # ---- Fallback ----
@@ -819,6 +822,10 @@ class TrainingService:
                 if meets_required_hours(completed_value, adjusted_required)
                 else min(completed_value / adjusted_required * 100, 100)
             )
+        elif base_required > 0:
+            # A shift or call target leave rounded down to nothing: the member
+            # owes nothing for the window.
+            pct = 100.0
         else:
             # No positive target (an unset/misconfigured hours target, or a
             # courses requirement with no courses linked): met only if something
@@ -959,6 +966,9 @@ class TrainingService:
             "due_date": str(effective_due_date) if effective_due_date else None,
             "days_until_due": days_until_due,
             "waived_months": waived_months,
+            **excused_month_reasons(
+                _waivers if waived_months else [], start_date, end_date, str(req.id)
+            ),
             "active_months": active_months,
             "cert_expired": cert_expired,
             "blocks_activity": blocks_activity,
@@ -1192,6 +1202,7 @@ class TrainingService:
         completed_value: float = 0
         required_value: float = 0
         is_complete = False
+        prorated_to_zero = False
 
         # ---- HOURS requirements ----
         if req_type == RequirementType.HOURS.value:
@@ -1390,12 +1401,14 @@ class TrainingService:
                     waivers,
                     str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
+                    whole_units=True,
                 )
+                prorated_to_zero = required_value <= 0
 
             is_complete = (
                 completed_value >= required_value
                 if required_value > 0
-                else completed_value > 0
+                else prorated_to_zero or completed_value > 0
             )
 
         # ---- CALLS requirements ----
@@ -1419,12 +1432,14 @@ class TrainingService:
                     waivers,
                     str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
+                    whole_units=True,
                 )
+                prorated_to_zero = required_value <= 0
 
             is_complete = (
                 completed_value >= required_value
                 if required_value > 0
-                else completed_value > 0
+                else prorated_to_zero or completed_value > 0
             )
 
         # ---- Fallback (skills_evaluation, checklist, etc.) ----
@@ -1464,6 +1479,9 @@ class TrainingService:
                 if meets_required_hours(completed_value, required_value)
                 else completed_value / required_value * 100
             )
+        elif prorated_to_zero:
+            # A shift or call target leave rounded down to nothing.
+            percentage = 100.0
         else:
             # No positive target: 100% only if something matching was actually
             # completed, otherwise 0% — never a default "compliant" for a member

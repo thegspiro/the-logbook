@@ -16,10 +16,12 @@ const mockGetRecentShifts = vi.fn();
 const mockGetByOfficer = vi.fn();
 const mockGetOfficerAnalytics = vi.fn();
 const mockGetShiftCrewStatus = vi.fn();
+const mockGetEvaluationRoster = vi.fn();
 const mockGetShift = vi.fn();
 const mockBatchCreate = vi.fn();
 const mockUpdateReport = vi.fn();
 const mockGetOrgSettings = vi.fn();
+const mockGetReviewAccess = vi.fn();
 let canManage = true;
 let canViewAnalytics = false;
 
@@ -36,9 +38,13 @@ vi.mock('../../services/api', () => ({
     getShiftCrewStatus: (...a: unknown[]) => mockGetShiftCrewStatus(...a) as unknown,
     batchCreateReports: (...a: unknown[]) => mockBatchCreate(...a) as unknown,
     updateReport: (...a: unknown[]) => mockUpdateReport(...a) as unknown,
+    getReviewAccess: (...a: unknown[]) => mockGetReviewAccess(...a) as unknown,
   },
   trainingModuleConfigService: {
     getConfig: (...a: unknown[]) => mockGetConfig(...a) as unknown,
+  },
+  shiftEvaluationService: {
+    getRoster: (...a: unknown[]) => mockGetEvaluationRoster(...a) as unknown,
   },
   userService: {
     getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
@@ -87,6 +93,9 @@ vi.mock('react-router', async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   searchParams = new URLSearchParams();
+  // No department form unless a block says otherwise.
+  mockGetEvaluationRoster.mockReset();
+  mockGetEvaluationRoster.mockResolvedValue({ shift_id: 'sh1', requirements: [] });
   canManage = true;
   canViewAnalytics = false;
   mockGetMyReports.mockResolvedValue([]);
@@ -103,6 +112,42 @@ beforeEach(() => {
   mockGetOfficerAnalytics.mockResolvedValue(null);
   mockGetOrgSettings.mockReset();
   mockGetOrgSettings.mockResolvedValue({});
+  mockGetReviewAccess.mockReset();
+  mockGetReviewAccess.mockResolvedValue({ can_review: false, by_role: false });
+});
+
+describe('ShiftReportsTab — a reviewer by the department role', () => {
+  // 2026-10-31: the reviewer role chosen in Shift Reports settings lets its
+  // holders review without training.manage. The server says who they are.
+  beforeEach(() => {
+    canManage = false;
+    mockGetReviewAccess.mockResolvedValue({ can_review: true, by_role: true });
+  });
+
+  it('offers the review queue and flagged lists', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftReportsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'Review Queue' }));
+
+    expect(screen.getByRole('button', { name: 'Flagged' })).toBeInTheDocument();
+    await waitFor(() => expect(mockGetPendingReview).toHaveBeenCalled());
+  });
+
+  it('opens the queue a notification links to', async () => {
+    searchParams = new URLSearchParams('view=pending-review');
+    renderWithRouter(<ShiftReportsTab />);
+
+    await waitFor(() => expect(mockGetPendingReview).toHaveBeenCalled());
+  });
+
+  it('offers neither to a member the role does not cover', async () => {
+    mockGetReviewAccess.mockResolvedValue({ can_review: false, by_role: false });
+    renderWithRouter(<ShiftReportsTab />);
+
+    await waitFor(() => expect(mockGetReviewAccess).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Review Queue' })).not.toBeInTheDocument();
+  });
 });
 
 describe('ShiftReportsTab — the view named in the URL', () => {
@@ -835,5 +880,69 @@ describe('ShiftReportsTab — completing a draft sends every field the form owns
       'd1',
       expect.objectContaining({ officer_narrative: null, review_status: 'approved' })
     );
+  });
+});
+
+describe('ShiftReportsTab — a trainee evaluated on a department form', () => {
+  beforeEach(() => {
+    mockGetShift.mockReset();
+    mockGetShiftCrewStatus.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Ambulance 106',
+      call_count: 5,
+    });
+    mockGetShiftCrewStatus.mockResolvedValue([
+      {
+        user_id: 'u2',
+        user_name: 'Marcus Bell',
+        has_active_enrollment: true,
+        enrollment_id: 'en-1',
+        program_name: 'EMT Field Internship',
+        has_existing_report: false,
+        calls_responded: 5,
+        calls_source: 'closeout',
+      },
+    ]);
+    mockGetEvaluationRoster.mockReset();
+    mockGetEvaluationRoster.mockResolvedValue({
+      shift_id: 'sh1',
+      shift_date: '2026-10-03',
+      requirements: [
+        {
+          member_id: 'u2',
+          member_name: 'Marcus Bell',
+          seat: 'ems',
+          scope_key: 'en-1',
+          program_names: ['EMT Field Internship'],
+          required: true,
+          template_options: [{ id: 'tpl-1', name: 'EMT Shift Evaluation' }],
+          evaluation: null,
+        },
+      ],
+    });
+  });
+
+  it('links to the evaluation page instead of offering the generic rating panel', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    const link = await screen.findByRole('link', { name: 'Start evaluation for Marcus Bell' });
+    expect(link).toHaveAttribute('href', '/scheduling/shift-reports/sh1/evaluations/u2/en-1');
+    expect(screen.getByText('Not started')).toBeInTheDocument();
+    expect(screen.getByText('Required before close-out')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Evaluate/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the generic panel for a trainee whose program has no form', async () => {
+    mockGetEvaluationRoster.mockResolvedValue({ shift_id: 'sh1', requirements: [] });
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    renderWithRouter(<ShiftReportsTab />);
+
+    expect(await screen.findByRole('button', { name: /Evaluate/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /evaluation for Marcus Bell/ })).not.toBeInTheDocument();
   });
 });

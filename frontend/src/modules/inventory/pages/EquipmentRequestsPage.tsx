@@ -379,8 +379,8 @@ const EquipmentRequestsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="max-w-5xl py-6 sm:py-8">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+        <div className="split-row mb-6 gap-3 sm:items-center">
+          <div className="split-row-main flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-purple-600 p-2">
               <ClipboardList className="h-5 w-5 text-white" />
             </div>
@@ -393,7 +393,7 @@ const EquipmentRequestsPage: React.FC = () => {
             onClick={() => {
               void loadRequests();
             }}
-            className="btn-secondary btn-md shrink-0 self-start sm:self-auto"
+            className="split-row-aside btn-secondary btn-md shrink-0 self-start sm:self-auto"
             aria-label="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />

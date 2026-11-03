@@ -810,14 +810,14 @@ const RecertificationSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Recertification Pathways</h2>
           <p className="text-theme-text-muted text-sm">
             Define renewal requirements for expiring certifications (NREMT, ACLS, etc.)
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="split-row-aside flex flex-col gap-2 sm:flex-row">
           <button
             disabled={generateBusy}
             onClick={() => {
@@ -928,8 +928,8 @@ const CompetencySection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Competency Matrices</h2>
           <p className="text-theme-text-muted text-sm">
             Define required skill levels by position (Dreyfus model: novice to expert)
@@ -937,7 +937,7 @@ const CompetencySection: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Add Matrix</span>
@@ -997,14 +997,14 @@ const InstructorsSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Instructor Qualifications</h2>
           <p className="text-theme-text-muted text-sm">Track who is qualified to instruct and evaluate per NFPA 1041</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Add Qualification</span>
@@ -1145,8 +1145,8 @@ const EffectivenessSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h2>
           <p className="text-theme-text-muted text-sm">
             Kirkpatrick Model evaluation: Reaction, Learning, Behavior, Results
@@ -1155,7 +1155,7 @@ const EffectivenessSection: React.FC = () => {
         <button
           type="button"
           onClick={() => setPickingMember(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Submit Evaluation</span>
@@ -1275,8 +1275,8 @@ const MultiAgencySection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Multi-Agency Training</h2>
           <p className="text-theme-text-muted text-sm">
             Joint exercises, mutual aid drills, and regional training per NFPA 1500 / NIMS
@@ -1284,7 +1284,7 @@ const MultiAgencySection: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Add Exercise</span>
@@ -1500,8 +1500,8 @@ const ReportsSection: React.FC = () => {
       </div>
 
       <div className="border-theme-surface-border border-t pt-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="split-row mb-4 gap-3 sm:items-center">
+          <div className="split-row-main">
             <h3 className="text-theme-text-primary text-sm font-medium">Compliance Forecast</h3>
             <p className="text-theme-text-muted text-xs">
               Predictive 30/60/90 day compliance based on expiring certifications
@@ -1512,7 +1512,7 @@ const ReportsSection: React.FC = () => {
               void handleLoadForecast();
             }}
             disabled={loading}
-            className="btn-secondary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+            className="split-row-aside btn-secondary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
             <span>Load Forecast</span>

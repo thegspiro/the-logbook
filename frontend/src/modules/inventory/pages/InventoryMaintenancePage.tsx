@@ -386,8 +386,8 @@ const InventoryMaintenancePage: React.FC = () => {
   return (
     <div className="max-w-5xl space-y-6 py-6 sm:py-8">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main flex items-center gap-3">
           <div className="shrink-0 rounded-lg bg-orange-500/10 p-2">
             <Wrench className="h-6 w-6 text-orange-700 dark:text-orange-400" />
           </div>
@@ -400,7 +400,7 @@ const InventoryMaintenancePage: React.FC = () => {
         </div>
         <button
           onClick={() => void loadData()}
-          className="btn-secondary btn-md flex shrink-0 items-center gap-2 self-start sm:self-auto"
+          className="split-row-aside btn-secondary btn-md flex shrink-0 items-center gap-2 self-start sm:self-auto"
           disabled={isLoading}
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /> Refresh

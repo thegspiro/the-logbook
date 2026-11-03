@@ -1,7 +1,7 @@
 # Integrations
 
 Integrations connect The Logbook to services outside it: chat apps, Salesforce,
-PayPal, e-signature and booking tools, training providers and Claude. Each one
+PayPal, Zeffy, e-signature and booking tools, training providers and Claude. Each one
 is switched on and managed from one page.
 
 ## Lesson at a Glance
@@ -31,20 +31,21 @@ Most members never open this page. The parts a member may meet are the
 5. [Documenso — Document E-Signatures](#documenso--document-e-signatures)
 6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
 7. [PayPal — Store Payment Reconciliation](#paypal--store-payment-reconciliation)
-8. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
+8. [Zeffy — Fundraising Payments](#zeffy--fundraising-payments)
+9. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
    - [Microsoft 365 — Member Accounts](#microsoft-365--member-accounts)
-9. [Calendar Integrations](#calendar-integrations)
-10. [Messaging Integrations](#messaging-integrations)
-11. [Weather Alerts](#weather-alerts)
-12. [EMS & Fire Reporting](#ems--fire-reporting)
-13. [Generic Webhooks](#generic-webhooks)
-14. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
-15. [Training Provider Integrations](#training-provider-integrations)
-16. [Claude (MCP)](#claude-mcp--asking-questions-of-your-logbook)
-17. [Monitoring Integration Health](#monitoring-integration-health)
-18. [Troubleshooting](#troubleshooting)
-19. [Realistic Example](#realistic-example-connecting-slack-and-the-shift-feed)
-20. [If You Learned an Older Version](#if-you-learned-an-older-version)
+10. [Calendar Integrations](#calendar-integrations)
+11. [Messaging Integrations](#messaging-integrations)
+12. [Weather Alerts](#weather-alerts)
+13. [EMS & Fire Reporting](#ems--fire-reporting)
+14. [Generic Webhooks](#generic-webhooks)
+15. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
+16. [Training Provider Integrations](#training-provider-integrations)
+17. [Claude (MCP)](#claude-mcp--asking-questions-of-your-logbook)
+18. [Monitoring Integration Health](#monitoring-integration-health)
+19. [Troubleshooting](#troubleshooting)
+20. [Realistic Example](#realistic-example-connecting-slack-and-the-shift-feed)
+21. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -90,6 +91,7 @@ The page shows:
 | **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                            |
 | **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                           |
 | **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                       |
+| **Payments**       | Zeffy              | Reads donations, event tickets and memberships sold through Zeffy into fundraising and dues      |
 | **Automation**     | Generic Webhooks   | Sends a signed message to a web address when an event, shift or training record is created       |
 | **Safety**         | NWS Weather Alerts | Shows severe weather alerts for your zone on the dashboard, in the bell or by email              |
 | **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                              |
@@ -517,6 +519,73 @@ For the whole store walkthrough, see [Department Store](./18-storefront.md).
 
 ---
 
+## Zeffy — Fundraising Payments
+
+**Zeffy** is a zero-fee fundraising platform for nonprofits: donation forms,
+event ticketing and membership sales. Connecting it lets The Logbook read what
+the department's Zeffy account received and record each payment where the
+department keeps its own books — a donation on a fundraising campaign, revenue
+and attendance on a fundraising event, or a payment on a member's dues.
+
+**The connection only reads.** Nothing is ever changed in Zeffy, no card details
+reach The Logbook, and Zeffy keeps issuing the tax receipts.
+
+> **Can your department use Zeffy?** Zeffy decides that, not The Logbook. It
+> serves registered nonprofits in the US and Canada. A volunteer fire company
+> organised as a nonprofit usually qualifies; a municipal department may not.
+
+This section covers connecting. Deciding where each Zeffy campaign's payments
+go, and reading what happened to each payment, is done by fundraising officers
+under **Grants & Fundraising → Zeffy** — see
+[Zeffy in the Grants & Fundraising guide](./12-grants-fundraising.md#zeffy--online-donations-tickets-and-memberships).
+
+### Configuration
+
+| Field                                 | What to enter                                                                                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API Key**                           | **Required.** The owner of the department's Zeffy account generates it in Zeffy under **Settings → Integrations**. Stored securely and never shown again |
+| **Webhook Signing Secret** (optional) | The secret Zeffy shows when you add the webhook (below). It starts with `whsec_`. Without it, payments still arrive, but only on the hourly sync         |
+
+Leave either box blank on a later edit to keep what is stored.
+
+**Test** reads one campaign from Zeffy to prove the key works. It adds a note if
+no signing secret is set, because payments will then arrive only once an hour.
+
+### Adding the Zeffy Webhook
+
+The webhook is optional but recommended. With it, payments arrive within
+seconds, and so does a refund made weeks after the sale.
+
+1. Copy the address shown in the Zeffy connect window. It looks like:
+
+   ```
+   https://your-logbook-host/api/public/v1/webhooks/zeffy/{integration_id}
+   ```
+
+2. In Zeffy, open **Settings → Integrations → Webhook**, add that address, and
+   subscribe it to the payment events: `payment.created`, `payment.completed`,
+   `payment.updated` and `payment.deleted`. Contact events are accepted and
+   ignored, so ticking them only adds noise.
+3. Copy the signing secret Zeffy shows into **Webhook Signing Secret** and save.
+
+> **Important.** Every message must carry Zeffy's signature, made with that
+> secret within the last five minutes; anything else is refused. The Logbook
+> then reads the payment again from Zeffy with your API key rather than trusting
+> the message itself. If you regenerate the secret in Zeffy, paste the new one
+> here **first** — Zeffy's old secret stops working immediately.
+
+### The Hourly Sync
+
+Every hour, The Logbook reads the payments of each **linked** Zeffy campaign
+from where it last got to. This is what records payments when there is no
+webhook, or while The Logbook was unreachable. A payment is never recorded
+twice, however it arrives. **Sync now** on the Zeffy page runs it at once.
+
+The sync reads payments by the day they were made and looks back seven days
+each time. A refund made more than seven days after the sale is therefore seen
+only through the webhook.
+---
+
 ## Google Workspace — Member Accounts
 
 **Google Workspace** gives each applicant the department converts to a member a Google account at their department email address. Only an organization administrator (`admin.access`) can connect, change or disconnect it.
@@ -562,6 +631,8 @@ day, listed under **N need attention** as "Left, but still in a group".
 
 When an account is waiting on something The Logbook could not finish — a departed member's suspension, an account never created, a password that never arrived — the Google Workspace card shows **N need attention**. It lists each member with the reason and a link to their profile. Anything waiting over a day is also emailed each morning to administrators (`admin.access`).
 
+![Microsoft 365 accounts needing attention: three members, one who left but whose account is not suspended (Over a day), one whose account was not created, and one suspended over 90 days and still in the directory, each with their department address and since when](./images/16-21-directory-attention-list.png)
+
 ### Members Who Joined Earlier
 
 Only accounts The Logbook created or linked are suspended. To cover members who were on the roster before the integration, an administrator clicks **Link existing members** on the Google Workspace card. It shows how many members have an account at exactly their Logbook email and why the others are skipped, then links them once confirmed. Members who have already left are not linked. Nothing changes in Google.
@@ -584,7 +655,11 @@ See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) f
 
 The app registration needs the Microsoft Graph application permissions `User.ReadWrite.All`, `User-PasswordProfile.ReadWrite.All`, `User.RevokeSessions.All`, `GroupMember.ReadWrite.All` and, with a license, `LicenseAssignment.ReadWrite.All`, with admin consent, and the **User Administrator** role.
 
+![The Microsoft 365 connect form with demo values: Directory (tenant) ID, Application (client) ID, the client secret, Client secret expires on, Domain, Usage location US, a License SKU ID, two groups, and Block sign-in when a member retires ticked, above the Graph permissions it needs](./images/16-19-microsoft-365-connect.png)
+
 Enter the secret's **Expires** date as **Client secret expires on**. From 30 days before it, the card shows the days left and administrators get a morning email at 30 days, 7 days and on the day. A new secret needs its new date entered with it. The Microsoft setting is **Block sign-in when a member retires**, and a group that assigns licenses is never edited, because removing the member would remove the license. Accounts still in the directory 90 days after suspension are listed under **N need attention** for information only; The Logbook never deletes an account.
+
+![The Microsoft 365 card connected, with Client secret expires in 12 days, 3 need attention, Link existing members, Settings and Details](./images/16-20-microsoft-365-card.png)
 
 Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
 
@@ -620,6 +695,8 @@ its client ID and secret on the integration.
    it cannot see or change any other calendar in the account.
 3. You come back to the Integrations page. The card shows the account, the
    new calendar's name and **Last published**.
+
+![The Google Calendar card connected: the Google account, the calendar Oakville Fire Department Events, Last published a few minutes ago, Sync event descriptions switched off, and Disconnect](./images/16-22-google-calendar-connected.png)
 
 The sign-in must be finished within ten minutes, in the same browser, by the
 person who started it.
@@ -676,6 +753,8 @@ its client ID, client secret and tenant ID on the integration.
 3. You come back to the Integrations page. The card shows the account, the
    new calendar's name and **Last published**.
 
+![The Microsoft Outlook card connected: the Microsoft 365 account, the calendar Oakville Fire Department Events, Last published a few minutes ago, Sync event descriptions switched off, and Disconnect](./images/16-23-outlook-connected.png)
+
 The sign-in must be finished within ten minutes, in the same browser, by the
 person who started it. **What is published**, **Sync event descriptions** and
 **Reconnect required** work exactly as for
@@ -716,6 +795,19 @@ Only people who can manage integrations see the link or can reset it. Each
 reset is recorded in the audit log.
 
 ![The connected iCalendar (ICS) card: the note that anyone with the link can see the department's published events, the feed link with its copy button, and Reset link](./images/16-16-ical-department-feed.png)
+
+**Choosing what the feed publishes** _(2026-11-01)_. On the connected
+iCalendar card, select **Settings**.
+
+- Tick the event types to publish, or leave them all unticked to publish every
+  type. Drafts and cancelled events are never published.
+- Tick **Include duty shifts** to add each scheduled shift's date, times and
+  platoon. Who is assigned and shift notes are never published.
+
+Saved settings apply the next time a subscribed calendar refreshes; the feed
+link does not change. The feed covers 30 days back to a year ahead, on the
+department's calendar. Members' own shifts are still in their personal feed
+whether or not this integration is connected.
 
 **A member's shift feed** is private to each member, and it is not set up on
 the Integrations page. Each member opens **Subscribe to my shifts** at the top
@@ -1552,6 +1644,9 @@ key or email address.
 | Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                                |
 | Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                                  |
 | Cal.com test fails                                         | Check the API key under **Settings > Developer > API keys** in Cal.com                                                                                                     |
+| Zeffy test fails                                           | Generate a new API key in Zeffy under **Settings → Integrations** (only the account owner can) and paste it in                                                             |
+| Zeffy payments arrive only once an hour                    | No webhook signing secret is set. Add the webhook in Zeffy and paste its `whsec_` secret. See [Adding the Zeffy Webhook](#adding-the-zeffy-webhook)                        |
+| Zeffy webhook deliveries are refused                       | The signing secret in The Logbook does not match Zeffy's current one, often after it was regenerated. Paste the new secret                                                 |
 | A signed document or booking did not move the applicant on | Check the Webhook Secret matches on both sides, the callback URL is right, the email matches the applicant, and the applicant's **current** stage uses that integration    |
 | A sign-in keeps expiring                                   | Most integrations renew it by themselves. If it keeps failing, disconnect and connect again                                                                                |
 

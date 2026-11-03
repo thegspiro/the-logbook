@@ -52,6 +52,9 @@ const REMEDIES = ['reload', 'purge'] as const;
 
 const STORAGE_KEY = 'logbook:update-attempts';
 
+/** The update this page is applying right now, if any — see applyAppUpdate. */
+let inFlight: Promise<UpdateRemedy> | null = null;
+
 /**
  * Forget an in-flight escalation after a day. Without this, a device that hit
  * the ladder months ago and was fixed some other way would start its next
@@ -152,7 +155,19 @@ export function clearUpdateAttempts(): void {
  * because a caller may not have one to hand; without it there is nothing to
  * count attempts against, so the plain reload is all that can be offered.
  */
-export async function applyAppUpdate(targetBuildId?: string): Promise<UpdateRemedy> {
+export function applyAppUpdate(targetBuildId?: string): Promise<UpdateRemedy> {
+  // A second call while one is pending — a double tap on "Reload now", or the
+  // next navigation's automatic apply — joins it. Started afresh, it would read
+  // the attempt the first call had just recorded as a *failed* one and purge
+  // every cache mid-swap, deleting the precache the incoming worker was
+  // filling, and leave the ladder exhausted after a single real reload.
+  inFlight ??= runUpdate(targetBuildId).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function runUpdate(targetBuildId: string | undefined): Promise<UpdateRemedy> {
   if (!targetBuildId) {
     await reloadForNewVersion();
     return 'reload';

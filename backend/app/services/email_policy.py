@@ -72,6 +72,7 @@ class EmailKind(str, enum.Enum):
     OVERDUE_EQUIPMENT = "overdue_equipment"
     TRAINING_RECORD_CHANGES = "training_record_changes"
     SECURITY_REPORT = "security_report"
+    PERFORMANCE_EVALUATIONS = "performance_evaluations"
 
     # Optional, about the member's own activity
     EVENT_REMINDERS = "event_reminders"
@@ -100,6 +101,8 @@ class EmailKind(str, enum.Enum):
     MINUTES_DUTIES = "minutes_duties"
     DOCUMENT_DUTIES = "document_duties"
     FUNDRAISING_DUTIES = "fundraising_duties"
+    EVALUATION_DUTIES = "evaluation_duties"
+    HISTORY_DUTIES = "history_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -201,6 +204,23 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_M,
         includes=("Checked-out equipment past its return date",),
         rationale="Department property the member is responsible for.",
+    ),
+    EmailKind.PERFORMANCE_EVALUATIONS: EmailPolicy(
+        label="Your performance evaluations",
+        required=True,
+        audience=_M,
+        includes=(
+            "Your self-evaluation is open",
+            "Your evaluation is ready for you to read and acknowledge",
+            "A step of yours is due soon, or overdue",
+            "Your evaluation is final",
+            "Your evaluation was amended",
+            "One of your evaluations was deleted",
+        ),
+        rationale=(
+            "A personnel record the member is asked to act on by a deadline, "
+            "and to which they may respond once it is final."
+        ),
     ),
     EmailKind.TRAINING_RECORD_CHANGES: EmailPolicy(
         label="Changes to your training record",
@@ -391,8 +411,40 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A member declined a shift",
             "Shift drafts finalized",
             "Attendance to validate after a shift",
+            "Seats automatic shift generation could not fill",
         ),
         rationale="The task also waits in the bell and on the schedule.",
+    ),
+    EmailKind.HISTORY_DUTIES: EmailPolicy(
+        label="History clearance",
+        required=False,
+        audience=_O,
+        includes=(
+            "A history record is waiting for your clearance",
+            "A record you submitted was cleared or returned",
+            "The History clearance list changed (administrators)",
+        ),
+        rationale=(
+            "History > Awaiting my clearance lists every record waiting on you, "
+            "and the bell shows each notice either way."
+        ),
+    ),
+    EmailKind.EVALUATION_DUTIES: EmailPolicy(
+        label="Evaluation duties",
+        required=False,
+        audience=_O,
+        includes=(
+            "An evaluation you conduct, calibrate or approve is waiting on you",
+            "A step you act on is due soon, or overdue",
+            "A step is overdue on any evaluation (evaluation managers)",
+            "An evaluation you conducted is final",
+            "An evaluation you signed was amended",
+            "A member responded to an evaluation you conducted, or as a manager",
+        ),
+        rationale=(
+            "Reports > Evaluations lists every evaluation waiting on you, "
+            "with its due date."
+        ),
     ),
     EmailKind.TRAINING_DUTIES: EmailPolicy(
         label="Training officer duties",

@@ -626,6 +626,12 @@ export interface TraineeReportRequirement {
   /** The department requires a report for each member in a training seat. */
   required: boolean;
   missing: { user_id: string; name: string }[];
+  /**
+   * Shift evaluations still to be submitted, whatever `required` says: a form
+   * attached to a program requires them. `name` carries the program(s).
+   * Absent from a server older than this field.
+   */
+  missing_evaluations?: { user_id: string; name: string }[] | undefined;
   /** The viewer may close out without them (scheduling.manage). */
   can_override: boolean;
 }

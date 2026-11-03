@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     email_templates,
     equipment_check,
     error_logs,
+    evaluations,
     event_attendance_petitions,
     event_requests,
     events,
@@ -39,6 +40,7 @@ from app.api.v1.endpoints import (
     google_calendar_oauth,
     google_workspace,
     grants,
+    history,
     integrations,
     inventory,
     inventory_kiosk,
@@ -61,6 +63,7 @@ from app.api.v1.endpoints import (
     member_qualifications,
     member_service_history,
     member_status,
+    member_supervisors,
     membership_pipeline,
     message_history,
     messages,
@@ -83,6 +86,8 @@ from app.api.v1.endpoints import (
     scheduling_module_config,
     security_monitoring,
     shift_completion,
+    shift_evaluation_templates,
+    shift_evaluations,
     shift_history_import,
     skill_evaluations,
     skills_testing,
@@ -99,6 +104,7 @@ from app.api.v1.endpoints import (
     training_submissions,
     training_waivers,
     users,
+    zeffy,
 )
 from app.core.security_middleware import verify_csrf_token
 
@@ -317,6 +323,18 @@ api_router.include_router(
     dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
+    shift_evaluations.router,
+    prefix="/training/shift-evaluations",
+    tags=["shift-evaluations"],
+    dependencies=module_gate("training", "Training"),
+)
+api_router.include_router(
+    shift_evaluation_templates.router,
+    prefix="/training/shift-evaluation-templates",
+    tags=["shift-evaluation-templates"],
+    dependencies=module_gate("training", "Training"),
+)
+api_router.include_router(
     training_module_config.router,
     prefix="/training/module-config",
     tags=["training-module-config"],
@@ -338,6 +356,9 @@ api_router.include_router(
     member_service_history.router, prefix="/users", tags=["member-status"]
 )
 api_router.include_router(
+    member_supervisors.router, prefix="/users", tags=["member-supervisors"]
+)
+api_router.include_router(
     member_qualifications.router, prefix="/users", tags=["member-qualifications"]
 )
 api_router.include_router(
@@ -351,6 +372,12 @@ api_router.include_router(
     prefix="/medical-screening",
     tags=["medical-screening"],
     dependencies=module_gate("medical_screening", "Medical Screening"),
+)
+api_router.include_router(
+    history.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
 )
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(
@@ -410,6 +437,13 @@ api_router.include_router(
     reports.router,
     prefix="/reports",
     tags=["reports"],
+    dependencies=module_gate("reports", "Reports"),
+)
+# Member evaluations sit in the Reports area, so they follow its module switch.
+api_router.include_router(
+    evaluations.router,
+    prefix="/evaluations",
+    tags=["evaluations"],
     dependencies=module_gate("reports", "Reports"),
 )
 api_router.include_router(
@@ -527,6 +561,12 @@ api_router.include_router(
 api_router.include_router(
     grants.router,
     prefix="/grants",
+    tags=["grants"],
+    dependencies=module_gate("grants", "Grants & Fundraising"),
+)
+api_router.include_router(
+    zeffy.router,
+    prefix="/grants/zeffy",
     tags=["grants"],
     dependencies=module_gate("grants", "Grants & Fundraising"),
 )

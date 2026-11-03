@@ -851,8 +851,8 @@ export const MembersAdminPage: React.FC = () => {
               return (
                 <div key={role.id} className="bg-theme-surface shadow-sm backdrop-blur-xs sm:rounded-lg">
                   <div className="border-theme-surface-border border-b px-6 py-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
+                    <div className="split-row gap-3 sm:items-center">
+                      <div className="split-row-main">
                         <div className="flex items-center gap-3">
                           <h3 className="text-theme-text-primary text-lg font-medium">{role.name}</h3>
                           {role.is_system && (
@@ -874,7 +874,7 @@ export const MembersAdminPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => handleEditMembers(role)}
-                        className="hover:bg-theme-surface-hover touch-target-phone shrink-0 self-start rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 sm:self-auto dark:text-blue-400 dark:hover:text-blue-300"
+                        className="split-row-aside hover:bg-theme-surface-hover touch-target-phone shrink-0 self-start rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 sm:self-auto dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Manage Members
                       </button>

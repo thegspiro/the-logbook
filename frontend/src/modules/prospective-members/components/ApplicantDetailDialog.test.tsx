@@ -32,6 +32,24 @@ vi.mock('../services/api', () => ({
     getDocuments: (...a: unknown[]) => mocks.getDocuments(...a) as unknown,
     getActivity: (...a: unknown[]) => mocks.getActivity(...a) as unknown,
     updateApplicant: (...a: unknown[]) => mocks.updateApplicant(...a) as unknown,
+    // These tests describe a coordinator, who may do everything; what an
+    // assigned case manager or interviewer sees is ApplicantDetailDialog.access.test.tsx.
+    getMyAccess: () =>
+      Promise.resolve({
+        roles: [],
+        view_all: true,
+        can_work: true,
+        can_manage: true,
+        can_see_full: true,
+        can_log_interview: true,
+      }),
+  },
+  // The dialog mounts the Assigned section, which lists on open; an applicant
+  // nobody is assigned to shows only the assign form.
+  assignmentService: {
+    list: () => Promise.resolve([]),
+    add: () => Promise.resolve(null),
+    remove: () => Promise.resolve(),
   },
   eventLinkService: {
     getLinkedEvents: (...a: unknown[]) => mocks.getLinkedEvents(...a) as unknown,
@@ -48,6 +66,9 @@ vi.mock('../services/api', () => ({
 vi.mock('../../../services/api', () => ({
   roleService: {
     getRoles: (...a: unknown[]) => mocks.getRoles(...a) as unknown,
+  },
+  userService: {
+    getUsers: () => Promise.resolve([]),
   },
 }));
 

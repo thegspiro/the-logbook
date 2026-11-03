@@ -27,6 +27,9 @@ const SetupPrerequisites: React.FC = () => {
 
   const requiredSteps = ONBOARDING_STEPS.filter((step) => !step.optional);
   const optionalSteps = ONBOARDING_STEPS.filter((step) => step.optional);
+  // The count used to be a literal ("the first two"), and the encryption-key
+  // step made it three without the sentence noticing.
+  const requiredNames = joinNames(requiredSteps.map((step) => step.name));
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
@@ -40,8 +43,8 @@ const SetupPrerequisites: React.FC = () => {
             </div>
             <h2 className="text-theme-text-primary text-3xl font-bold">What setup will ask for</h2>
             <p className="text-theme-text-secondary mx-auto mt-2 max-w-xl">
-              Only the first two steps are required. Everything after them can be skipped now and set up later from
-              Settings, so you don't need any passwords or keys to start.
+              Only the first {requiredSteps.length} steps are required. Everything after them can be skipped now and set
+              up later from Settings, so you don't need any third-party passwords or keys to start.
             </p>
           </div>
 
@@ -54,9 +57,7 @@ const SetupPrerequisites: React.FC = () => {
               <Building2 className="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden="true" />
               Have these ready
             </h3>
-            <p className="text-theme-text-muted mb-4 text-xs">
-              {requiredSteps.map((step) => step.name).join(' and ')} — the only required steps.
-            </p>
+            <p className="text-theme-text-muted mb-4 text-xs">{requiredNames} — the only required steps.</p>
             <ul className="space-y-3">
               {REQUIRED_ITEMS.map((entry) => (
                 <li key={entry.title} className="flex items-start gap-3">
@@ -82,7 +83,7 @@ const SetupPrerequisites: React.FC = () => {
               Useful to have, but skippable
             </h3>
             <p className="text-theme-text-muted mb-4 text-xs">
-              Each of these steps has a Skip button. You can set any of them up later.
+              Each of these steps can be skipped. You can set any of them up later.
             </p>
             <ul className="space-y-3">
               {OPTIONAL_ITEMS.map((entry) => (
@@ -117,6 +118,10 @@ const SetupPrerequisites: React.FC = () => {
   );
 };
 
+/** "A, B and C" — the list as a sentence says it, not "A and B and C". */
+const joinNames = (names: string[]): string =>
+  names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''}`;
+
 const REQUIRED_ITEMS: Array<{ title: string; description: string }> = [
   {
     title: 'Your department’s name and mailing address',
@@ -148,11 +153,13 @@ const OPTIONAL_ITEMS: Array<{ title: string; description: string }> = [
   },
   {
     title: 'File storage credentials',
-    description: 'Keys for S3, Google Drive, OneDrive or Azure. Local storage is the default and needs nothing.',
+    description:
+      'An Amazon S3 (or S3-compatible) bucket and keys, or a Google Workspace service account. Local storage on the server is the default and needs nothing.',
   },
   {
     title: 'A sign-in provider’s client ID and secret',
-    description: 'Only if members should sign in with Google or Microsoft. Username and password is the default.',
+    description:
+      'Only if members should sign in with Google, Microsoft or Authentik. These go in the server’s .env file, not into setup; until they are there, members sign in with a username and password.',
   },
 ];
 

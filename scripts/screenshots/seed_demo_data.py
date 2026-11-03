@@ -170,6 +170,14 @@ COMPLIANCE_OFFICER_USERNAME = "lnakamura"
 # `_assert_two_factor_account_is_unused` checks that at seed time.
 TWO_FACTOR_USERNAME = "whalloway"
 
+# The member the passkey shots (00-23, 00-33, 08-119) register a passkey for,
+# in the browser through a virtual authenticator, and remove it from again in
+# the same shot. Chosen because no shot signs in as it and the seeder only
+# reaches it through the all-members loops, so the few seconds it holds a
+# second factor cannot strand another step at the code prompt. Must match
+# PASSKEY_MEMBER_CREDENTIALS in manifest.mjs.
+PASSKEY_MEMBER_USERNAME = "eadeyemi"
+
 
 def password_login_members(members: list[dict]) -> list[dict]:
     """Members a step may sign in as with a password.
@@ -411,6 +419,71 @@ def write_admin_totp_secret(secret: str) -> Path:
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(f"{ADMIN_TOTP_ENV}={secret}\n")
     # O_CREAT's mode does not apply to a staging file left by an earlier crash.
+    os.chmod(staging, 0o600)
+    os.replace(staging, path)
+    return path
+
+
+# Members the captures sign in as whose positions require two-step sign-in.
+#
+# A privileged member who has not enrolled gets a grace period, and every page
+# they open carries a banner counting it down; once it lapses they are routed
+# to enrolment and reach nothing else. Left unenrolled, the secretary's dozen
+# shots each pictured that banner, and would all have broken two weeks after
+# seeding. They are enrolled like the administrator, and their secrets kept
+# beside its one — `Api._sign_in` completes the code step for any account
+# listed here, so the steps below that sign in as them need no change.
+#
+# Not every privileged member: the grace banner itself is pictured, as
+# MFA_GRACE_USERNAME, which must therefore stay unenrolled.
+ENROLLED_MEMBER_USERNAMES = ("okittredge",)
+
+# The privileged member the grace-period shots (00-35, 00-36) sign in as. An
+# assistant chief: the position requires two-step sign-in, and no other shot
+# signs in as this account, so its banner reaches no image but those two. Must
+# match DEMO_MFA_GRACE_CREDENTIALS in manifest.mjs, and must not be listed in
+# ENROLLED_MEMBER_USERNAMES.
+MFA_GRACE_USERNAME = "praman"
+
+
+def member_totp_path() -> Path:
+    return admin_totp_path().with_name("member-totp.env")
+
+
+def read_member_totp_secret(username: str) -> str | None:
+    """The stored TOTP secret for *username*, or None (`member_totp_path`)."""
+    try:
+        text = member_totp_path().read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() == username and value.strip():
+            return value.strip()
+    return None
+
+
+def write_member_totp_secret(username: str, secret: str) -> Path:
+    """Store *secret* for *username*, keeping every other member's line.
+
+    The same private, rename-into-place write as `write_admin_totp_secret`.
+    """
+    path = member_totp_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    kept: list[str] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, _ = line.partition("=")
+            if sep and key.strip() != username:
+                kept.append(line)
+    except FileNotFoundError:
+        pass
+    kept.append(f"{username}={secret}")
+    staging = path.with_name(path.name + ".tmp")
+    fd = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(kept) + "\n")
     os.chmod(staging, 0o600)
     os.replace(staging, path)
     return path
@@ -716,6 +789,8 @@ class Api:
         )
         if not (isinstance(result, dict) and result.get("mfa_required")):
             return False
+        if not self.totp_secret and username in ENROLLED_MEMBER_USERNAMES:
+            self.totp_secret = read_member_totp_secret(username)
         if not self.totp_secret:
             if username == DEMO_ADMIN_USERNAME:
                 raise SystemExit(
@@ -1661,6 +1736,78 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"two-factor: enrol {TWO_FACTOR_USERNAME}: {exc}")
+
+    def seed_backlog_00_passkey_member(self) -> None:
+        """Ready the member the passkey shots sign in as.
+
+        The shots sign this member in with a password, add a passkey (and, for
+        00-23, an authenticator app), photograph the result and take both off
+        again. That needs the account to sign in with DEMO_MEMBER_PASSWORD
+        without the forced password change every `POST /users` account
+        carries, and to hold no second factor to begin with.
+
+        A capture interrupted before its cleanup leaves a factor behind, and a
+        password sign-in then stops at the code step. Resetting it here is the
+        recovery: the administrator's Reset MFA removes the authenticator app,
+        every passkey and the recovery codes in one call.
+        """
+        member = next(
+            (
+                m
+                for m in items(self.api.get("/users/with-roles"), "users")
+                if pick(m, "username") == PASSKEY_MEMBER_USERNAME
+            ),
+            None,
+        )
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return
+        if pick(member, "mfa_enabled") or pick(member, "has_passkey"):
+            ADMIN_RESET_THROTTLE.wait()
+            self.api.post(f"/users/{user_id}/reset-mfa", {})
+        try:
+            self.member_session(self.base_url, user_id, PASSKEY_MEMBER_USERNAME)
+        except ApiError as exc:
+            self.blocked.append(f"passkey member: sign in: {exc}")
+
+    def seed_capture_member_two_factor(self) -> None:
+        """Enrol ENROLLED_MEMBER_USERNAMES in TOTP and keep their secrets.
+
+        An account already enrolled whose secret is stored is left alone. One
+        enrolled with no stored secret (the file was deleted, or a run died
+        between enrolment and the write) cannot sign in at all, so its second
+        factor is reset with the administrator's Reset MFA and it is enrolled
+        again — the recovery the README gives for the administrator.
+        """
+        assert MFA_GRACE_USERNAME not in ENROLLED_MEMBER_USERNAMES
+        rows = {
+            str(pick(row, "username")): row
+            for row in items(self.api.get("/users/with-roles"), "users")
+        }
+        for username in ENROLLED_MEMBER_USERNAMES:
+            row = rows.get(username)
+            user_id = pick(row or {}, "id")
+            if not user_id:
+                self.blocked.append(f"two-factor: {username} is not on the roster")
+                continue
+            stored = read_member_totp_secret(username)
+            if pick(row, "mfa_enabled"):
+                if stored:
+                    continue
+                ADMIN_RESET_THROTTLE.wait()
+                self.api.post(f"/users/{user_id}/reset-mfa", {})
+            try:
+                session = self.member_session(self.base_url, user_id, username)
+                secret = session.post("/auth/mfa/setup")["secret"]
+                # Stored before verification, as for the administrator: once
+                # verify-setup succeeds a password alone no longer signs in.
+                write_member_totp_secret(username, secret)
+                session.totp_secret = secret
+                session.post(
+                    "/auth/mfa/verify-setup", {"code": session.fresh_totp_code()}
+                )
+            except ApiError as exc:
+                self.blocked.append(f"two-factor: enrol {username}: {exc}")
 
     def _fill_in_the_administrator(self, members: list[dict]) -> None:
         """Give the demo administrator the contact details everyone else has.
@@ -5881,7 +6028,6 @@ class Seeder:
         self._deploy_lots(positions, catalog)
         self._report_one_used(positions, str(pick(medic, "id")))
         self._leave_one_short(positions)
-        self._expire_one_tourniquet()
         # Linking supply positions edits the template's items, which drafts it
         # again — and this step runs *after* `seed_equipment_checks`, so that
         # step's publish sweep has already been and gone. Without this the
@@ -6110,6 +6256,12 @@ class Seeder:
                         self.api.delete(f"/medical-supplies/lots/{pick(lot, 'id')}")
 
         templates = self._medical_checklists(apparatus, catalog)
+        # Here, not in `seed_supply_tracking`: the Rescue 7 checklist that
+        # carries the tourniquet is made just above, and supply tracking runs
+        # first, so on a fresh database it found no tourniquet and dated
+        # nothing. Before the publish, because dating the position drafts the
+        # checklist again.
+        self._expire_one_tourniquet()
         self._publish_seeded_templates()
         return {"created": created, "templates": templates}
 
@@ -7264,6 +7416,10 @@ class Seeder:
         published: list[str] = []
         for template in items(self.api.get("/equipment-checks/templates"), "templates"):
             if pick(template, "is_active", "isActive"):
+                continue
+            # Kept a draft on purpose: guide 03's builder shot pictures its
+            # dateless Date line, which publishing would refuse anyway.
+            if pick(template, "name") == self.BACKLOG_DRAFT_CHECKLIST:
                 continue
             template_id = pick(template, "id")
             if not template_id:
@@ -16856,6 +17012,394 @@ class Seeder:
                 },
             )
 
+    # -- screenshot backlog: guide 02 ----------------------------------
+
+    # Members no screenshot account and no other fixture leans on, so enrolling
+    # them in the backlog's programs changes nothing another shot pictures.
+    BACKLOG02_POOL = (
+        "ecaldwell",
+        "isolberg",
+        "mbell",
+        "praman",
+        "smarchetti",
+        "ytanaka",
+    )
+    BACKLOG02_FORM_NAME = "EMT Field Internship Evaluation"
+    BACKLOG02_INTERNSHIP = "EMT Field Internship"
+    BACKLOG02_NO_ACTIVE = "Hazmat Operations Refresher"
+    BACKLOG02_RETIRED = "Rope Rescue Technician"
+    BACKLOG02_HAND_REASON = (
+        "Completed the Fairfax County hazmat refresher in September; the "
+        "certificate is on file."
+    )
+
+    def _backlog02_program(self, name: str) -> dict | None:
+        return next(
+            (
+                p
+                for p in items(
+                    self.api.get("/training/programs/programs?include_inactive=true"),
+                    "programs",
+                )
+                if pick(p, "name") == name
+            ),
+            None,
+        )
+
+    def _backlog02_build(
+        self, name: str, code: str, requirement: str, hours: float, **extra: Any
+    ) -> dict:
+        """A one-phase pipeline with a single hours requirement."""
+        existing = self._backlog02_program(name)
+        if existing:
+            return existing
+        program = {
+            "name": name,
+            "code": code,
+            "description": f"{name}: one phase, completed on the hours it asks for.",
+            "structure_type": "phases",
+            "time_limit_days": 365,
+            **extra,
+        }
+        return self.api.post(
+            "/training/programs/programs/build",
+            {
+                "program": program,
+                "phases": [
+                    {
+                        "phase_number": 1,
+                        "name": "Coursework",
+                        "description": f"The {name.lower()} coursework.",
+                        "requires_manual_advancement": False,
+                        "requirements": [
+                            {
+                                "name": requirement,
+                                "requirement_type": "hours",
+                                "frequency": "one_time",
+                                "is_required": True,
+                                "sort_order": 0,
+                                "required_hours": hours,
+                            }
+                        ],
+                        "milestones": [],
+                    }
+                ],
+            },
+        )
+
+    def _backlog02_enroll(self, program_id: str, usernames: list[str]) -> list[dict]:
+        enrolled = items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+        have = {str(pick(e, "user_id")) for e in enrolled}
+        for username in usernames:
+            user_id = self._user_id(username)
+            if user_id and user_id not in have:
+                self.api.post(
+                    "/training/programs/enrollments",
+                    {"program_id": program_id, "user_id": user_id},
+                )
+        return items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+
+    def _backlog02_active_requirement_ids(self, program_id: str) -> list[str]:
+        detail = self.api.get(f"/training/programs/programs/{program_id}")
+        return [
+            str(pick(row, "id"))
+            for row in items(pick(detail, "requirements") or [])
+            if pick(row, "id") and pick(row, "active") is not False
+        ]
+
+    def seed_backlog_02_pipeline_states(self) -> None:
+        """The pipeline states guide 02's backlog screenshots picture.
+
+        - **Hazmat Operations Refresher**: its only requirement is deactivated,
+          so the pipeline reads "No active requirements" and the requirement
+          "Inactive — not currently required". Two members are enrolled: one
+          stays Active (the Mark pipeline complete control and its prompt),
+          the other was completed by hand ("Completed by hand: <reason>").
+        - **Rope Rescue Technician**: deactivated, nobody enrolled, so
+          **Show inactive** on the Programs list has an Inactive row with
+          **Reactivate**.
+        """
+        hazmat = self._backlog02_build(
+            self.BACKLOG02_NO_ACTIVE, "HAZ-REF", "Hazmat Operations Refresher", 8
+        )
+        hazmat_id = str(pick(hazmat, "id"))
+        enrollments = self._backlog02_enroll(hazmat_id, ["isolberg", "praman"])
+        for requirement_id in self._backlog02_active_requirement_ids(hazmat_id):
+            self.api.patch(
+                f"/training/requirements/{requirement_id}", {"active": False}
+            )
+        hand_done = self._user_id("praman")
+        target = next(
+            (e for e in enrollments if str(pick(e, "user_id")) == hand_done), None
+        )
+        if target and pick(target, "status") in ("active", "on_hold"):
+            self.api.post(
+                f"/training/programs/enrollments/{pick(target, 'id')}/complete",
+                {"reason": self.BACKLOG02_HAND_REASON},
+            )
+
+        rope = self._backlog02_build(
+            self.BACKLOG02_RETIRED, "ROPE-T", "Rope Rescue Technician Course", 40
+        )
+        if pick(rope, "active") is not False:
+            self.api.patch(
+                f"/training/programs/programs/{pick(rope, 'id')}", {"active": False}
+            )
+
+    def _backlog02_internship_shift(self, member_ids: set[str]) -> dict | None:
+        """A past, open shift with at least three pool members on its crew.
+
+        Neither the oldest past shift (closed out by seed_finalized_shift) nor
+        the newest (every shift-detail shot reaches for it), and not the first
+        Ladder 4 shift seed_batch_report_trainee crews a recruit onto.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        past = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+                and not pick(s, "is_finalized", "isFinalized")
+                and not pick(s, "is_cancelled", "isCancelled")
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+        )
+        ladder = next(
+            (
+                s
+                for s in past
+                if str(pick(s, "apparatus_unit_number", "apparatusUnitNumber")) == "L-4"
+            ),
+            None,
+        )
+        # The rotation crews two or three members a rig, so a shift already
+        # carrying two pool members is topped up to three with a third.
+        for shift in reversed(past[1:-1]):
+            if ladder and pick(shift, "id") == pick(ladder, "id"):
+                continue
+            shift_id = pick(shift, "id")
+            crew = items(self.api.get(f"/training/shift-reports/shift-crew/{shift_id}"))
+            mine = [c for c in crew if str(c.get("user_id")) in member_ids]
+            if len(mine) < 2:
+                continue
+            aboard = {str(c.get("user_id")) for c in crew}
+            for user_id in member_ids - aboard:
+                if len(mine) >= 3:
+                    break
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{shift_id}/assignments",
+                        {"user_id": user_id, "position": "firefighter"},
+                    )
+                except ApiError as exc:
+                    # Refused when already on another rig that day.
+                    if exc.code not in (400, 409):
+                        raise
+                    continue
+                crew = items(
+                    self.api.get(f"/training/shift-reports/shift-crew/{shift_id}")
+                )
+                mine = [c for c in crew if str(c.get("user_id")) in member_ids]
+            if len(mine) >= 3:
+                return {"shift": shift, "crew": mine[:3]}
+        return None
+
+    def _backlog02_answers(self, template: dict, rated: int | None) -> dict:
+        """Ratings for the first `rated` items (all, when None)."""
+        threshold = pick(template, "comment_required_at_or_below")
+        top = max(int(level["value"]) for level in template["scale"])
+        responses: dict[str, dict] = {}
+        position = 0
+        for section in template["sections"]:
+            for item in section["items"]:
+                if rated is not None and position >= rated:
+                    break
+                rating = top if position % 3 == 0 else top - 1
+                if position == 4 and threshold is not None:
+                    rating = int(threshold)
+                comment = None
+                if item.get("comment_always_required"):
+                    comment = "Placed the 12-lead and spiked the bag for the medic."
+                elif threshold is not None and rating <= int(threshold):
+                    comment = (
+                        "Hesitated on the stair chair; we practised it at the station."
+                    )
+                responses[item["key"]] = {
+                    "rating": rating,
+                    "not_applicable": False,
+                    "comment": comment,
+                }
+                position += 1
+        return responses
+
+    def seed_backlog_02_shift_evaluations(self) -> None:
+        """A shift evaluation form, a program that uses it, and one shift's worth.
+
+        Three pool members on one past shift are enrolled in the EMT Field
+        Internship, whose form is the department's copy of the EMT example. The
+        first member's evaluation is submitted, the second's is a draft and the
+        third is not started, so the Shift Completion Report's status lines show
+        all three states. The administrator is the evaluator (training.manage),
+        never one of the three.
+        """
+        templates = items(self.api.get("/training/shift-evaluation-templates"))
+        form = next(
+            (t for t in templates if pick(t, "name") == self.BACKLOG02_FORM_NAME), None
+        )
+        if form is None:
+            body = self.api.get("/training/shift-evaluation-templates/example")
+            body["name"] = self.BACKLOG02_FORM_NAME
+            body["description"] = (
+                "Preceptor evaluation of an EMT intern after each duty shift."
+            )
+            form = self.api.post("/training/shift-evaluation-templates", body)
+        form_id = str(pick(form, "id"))
+
+        program = self._backlog02_build(
+            self.BACKLOG02_INTERNSHIP,
+            "EMT-FI",
+            "Field Internship Hours",
+            48,
+            shift_evaluation_template_id=form_id,
+        )
+        program_id = str(pick(program, "id"))
+        if str(pick(program, "shift_evaluation_template_id") or "") != form_id:
+            self.api.patch(
+                f"/training/programs/programs/{program_id}",
+                {"shift_evaluation_template_id": form_id},
+            )
+
+        pool_ids = {self._user_id(u): u for u in self.BACKLOG02_POOL}
+        pool_ids.pop("", None)
+        # A re-run finds the shift through the evaluations already on file, so
+        # the fixture does not wander to another shift as new ones are seeded.
+        shift_id = None
+        for user_id in pool_ids:
+            for evaluation in items(
+                self.api.get(f"/training/shift-evaluations/members/{user_id}")
+            ):
+                if pick(evaluation, "shift_id"):
+                    shift_id = str(pick(evaluation, "shift_id"))
+                    break
+            if shift_id:
+                break
+        if shift_id is None:
+            chosen = self._backlog02_internship_shift(set(pool_ids))
+            if chosen is None:
+                self.blocked.append(
+                    "shift evaluations: no past shift with three pool members"
+                )
+                return
+            shift_id = str(pick(chosen["shift"], "id"))
+            self._backlog02_enroll(
+                program_id, [pool_ids[str(c["user_id"])] for c in chosen["crew"]]
+            )
+
+        roster = self.api.get(f"/training/shift-evaluations/shifts/{shift_id}")
+        rows = sorted(
+            (
+                r
+                for r in items(pick(roster, "requirements") or [])
+                if self.BACKLOG02_INTERNSHIP in (pick(r, "program_names") or [])
+            ),
+            key=lambda r: str(pick(r, "member_name")),
+        )
+        template = self.api.get(f"/training/shift-evaluation-templates/{form_id}")
+        platoon = str(pick(roster, "platoon") or "")
+        header = {"platoon": platoon if platoon in ("A", "B", "C") else "B"}
+        plan = [(True, None), (False, 6)]
+        for row, (submit, rated) in zip(rows, plan):
+            if pick(row, "evaluation"):
+                continue
+            path = (
+                f"/training/shift-evaluations/shifts/{shift_id}/members/"
+                f"{pick(row, 'member_id')}/{pick(row, 'scope_key')}"
+            )
+            body: dict[str, Any] = {
+                "template_id": form_id,
+                "header_values": header,
+                "responses": self._backlog02_answers(template, rated),
+                "submit": submit,
+            }
+            if submit:
+                body["statistics"] = {"calls": 5, "transports": 3, "refusals": 1}
+                body["closing_comments"] = (
+                    "Steady shift. Took the lead on two BLS patients and handed "
+                    "off cleanly at the hospital. Next shift: practise stair-chair "
+                    "carries with the crew."
+                )
+            self.api.put(path, body)
+
+    BACKLOG13_WAIVER = "Waived while recovering from knee surgery."
+
+    def seed_backlog_13_compliance_states(self) -> None:
+        """A screening that falls due by frequency, and a waiver about to lapse.
+
+        Both on one member with no other screening records, so their row on the
+        Compliance tab carries a "(by frequency)" due date and a Waived record,
+        and both reach the Screenings Expiring Within 60 Days list.
+        """
+        requirements = items(
+            self.api.get("/medical-screening/requirements"), "requirements"
+        )
+        by_type = {pick(r, "screening_type"): r for r in requirements}
+        physical = by_type.get("physical_exam")
+        fitness = by_type.get("fitness_assessment")
+        if not physical or not fitness:
+            self.blocked.append("medical compliance states: requirements missing")
+            return
+        records = items(self.api.get("/medical-screening/records"), "records")
+        if any(pick(r, "result_summary") == self.BACKLOG13_WAIVER for r in records):
+            return
+        with_records = {str(pick(r, "user_id")) for r in records}
+        subject = next(
+            (
+                uid
+                for uid in (
+                    self._user_id(u) for u in ("ytanaka", "mbell", "smarchetti")
+                )
+                if uid and uid not in with_records
+            ),
+            None,
+        )
+        if subject is None:
+            self.blocked.append("medical compliance states: no member without records")
+            return
+        # Twelve-month frequency, no expiration date: due 35 days from now.
+        completed = TODAY - timedelta(days=365 - 35)
+        self.api.post(
+            "/medical-screening/records",
+            {
+                "screening_type": "physical_exam",
+                "status": "passed",
+                "completed_date": str(completed),
+                "provider_name": "Oakville Occupational Health",
+                "result_summary": "Cleared for full duty.",
+                "requirement_id": pick(physical, "id"),
+                "user_id": subject,
+            },
+        )
+        self.api.post(
+            "/medical-screening/records",
+            {
+                "screening_type": "fitness_assessment",
+                "status": "waived",
+                "completed_date": str(TODAY - timedelta(days=160)),
+                "expiration_date": str(TODAY + timedelta(days=18)),
+                "provider_name": "Health & Safety Officer",
+                "result_summary": self.BACKLOG13_WAIVER,
+                "requirement_id": pick(fitness, "id"),
+                "user_id": subject,
+            },
+        )
+
     def seed_meeting_stage_applicant(self) -> None:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         pipeline = next(
@@ -17054,6 +17598,243 @@ class Seeder:
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/status",
                     {"status": wanted, "reason": reason},
                 )
+
+    # ── Guide 15 backlog: follow-up forms, case managers, stage emails ─────
+    #
+    # A fifth pipeline, for the same reason as the Reinstatement one: the
+    # default pipeline's board, builder and drawers are pictured elsewhere and
+    # must not gain a stage. It carries a Follow-up Form stage and an Automated
+    # Email stage whose saved Next Meeting event has already happened.
+    #
+    # The demo sends no email, so the follow-up link never reaches anyone and
+    # the applicant on that stage stays at "Not sent" with Send now offered.
+    # That is the real state a department whose email was down sees. A
+    # submitted form needs the link's token, which only the email carries, so
+    # this seeds none.
+    #
+    # The assignments go to the forwardee account (cfrazier), an ordinary
+    # member with no recruitment permission: the trustee the guide describes.
+    # Every other shot taken as that account is clipped to a panel, so the My
+    # Applicants entry the assignment adds to its menu is pictured nowhere else.
+    BACKLOG15_PIPELINE_NAME = "Junior Firefighter Pipeline"
+    BACKLOG15_FORM_NAME = "Applicant Details Confirmation"
+    BACKLOG15_FOLLOW_UP_STAGE = "Confirm Your Details"
+    BACKLOG15_EMAIL_STAGE = "Welcome Packet Email"
+    BACKLOG15_CASE_MANAGER = "cfrazier"
+    BACKLOG15_FOLLOW_UP_APPLICANT = ("Mateo", "Alvarez", "mateo.alvarez@example.org")
+    BACKLOG15_FIRST_APPLICANT = ("Grace", "Liu", "grace.liu@example.org")
+
+    def seed_backlog_15_follow_up(self) -> None:
+        form_id = self._backlog15_form()
+        pipeline = self._backlog15_pipeline(form_id)
+        pipeline_id = str(pick(pipeline, "id"))
+
+        first = self._backlog15_applicant(self.BACKLOG15_FIRST_APPLICANT, pipeline_id)
+        follow_up = self._backlog15_applicant(
+            self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+        )
+        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
+            self.api.post(
+                f"/prospective-members/prospects/{pick(follow_up, 'id')}/advance", {}
+            )
+            follow_up = self._backlog15_applicant(
+                self.BACKLOG15_FOLLOW_UP_APPLICANT, pipeline_id
+            )
+        if follow_up.get("current_step_name") != self.BACKLOG15_FOLLOW_UP_STAGE:
+            self.blocked.append(
+                "guide 15 backlog: "
+                f"{self.BACKLOG15_FOLLOW_UP_APPLICANT[0]} is on "
+                f"{follow_up.get('current_step_name')!r}, not the follow-up stage"
+            )
+
+        user_id = self._user_id(self.BACKLOG15_CASE_MANAGER)
+        if not user_id:
+            self.blocked.append(
+                f"guide 15 backlog: no member {self.BACKLOG15_CASE_MANAGER}"
+            )
+            return
+        for prospect, role in (
+            (follow_up, "case_manager"),
+            (first, "interviewer"),
+        ):
+            path = f"/prospective-members/prospects/{pick(prospect, 'id')}/assignments"
+            held = {
+                (str(pick(a, "user_id")), pick(a, "role"))
+                for a in items(self.api.get(path), "assignments")
+            }
+            if (user_id, role) not in held:
+                self.api.post(path, {"user_id": user_id, "role": role})
+
+    BACKLOG15_INTEREST = {
+        "interest_reason": "My older brother volunteers here and I want to "
+        "join the junior program.",
+        "referral_source": "Family member",
+    }
+
+    def _backlog15_applicant(self, who: tuple[str, str, str], pipeline_id: str):
+        """A junior applicant, created through the guide-15 helper.
+
+        That helper fills in a returning member's interest answers, which the
+        drawer and the case manager's dialog show; a junior applicant's own
+        replace them, on a first run and on an earlier run's records alike.
+        """
+        prospect = self._guide15_applicant(who, pipeline_id)
+        prospect_id = pick(prospect, "id")
+        detail = self.api.get(f"/prospective-members/prospects/{prospect_id}")
+        if any(detail.get(k) != v for k, v in self.BACKLOG15_INTEREST.items()):
+            self.api.put(
+                f"/prospective-members/prospects/{prospect_id}",
+                dict(self.BACKLOG15_INTEREST),
+            )
+        return prospect
+
+    def _backlog15_form(self) -> str:
+        found = next(
+            (
+                f
+                for f in items(self.api.get("/forms?limit=200"), "forms")
+                if f.get("name") == self.BACKLOG15_FORM_NAME
+            ),
+            None,
+        )
+        if found is None:
+            fields = [
+                ("First name", "text", True, "first_name"),
+                ("Last name", "text", True, "last_name"),
+                ("Email", "email", True, "email"),
+                ("Mobile phone", "phone", False, "mobile"),
+                ("Street address", "text", False, "address_street"),
+                ("City", "text", False, "address_city"),
+                ("Parent or guardian name", "text", True, None),
+                ("Which school do you attend?", "text", False, None),
+            ]
+            found = self.api.post(
+                "/forms",
+                {
+                    "name": self.BACKLOG15_FORM_NAME,
+                    "description": "Sent to junior applicants to confirm what "
+                    "their interest form said.",
+                    "category": "other",
+                    "is_public": False,
+                    "require_authentication": False,
+                    "notify_on_submission": False,
+                    "fields": [
+                        {
+                            "label": label,
+                            "field_type": field_type,
+                            "required": required,
+                            "sort_order": order,
+                            **({"applicant_field": prefill} if prefill else {}),
+                        }
+                        for order, (label, field_type, required, prefill) in enumerate(
+                            fields
+                        )
+                    ],
+                },
+            )
+        form_id = str(pick(found, "id"))
+        if found.get("status") != "published":
+            self.api.post(f"/forms/{form_id}/publish")
+        return form_id
+
+    def _backlog15_pipeline(self, form_id: str) -> dict:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        found = next(
+            (p for p in pipelines if p.get("name") == self.BACKLOG15_PIPELINE_NAME),
+            None,
+        )
+        if found is not None:
+            return found
+        # The email stage saves a business meeting that has already happened,
+        # so its editor previews the fallback: "The saved event has passed or
+        # was cancelled. The email will include the next one instead".
+        now = datetime.now(timezone.utc).isoformat()
+        past_meeting = next(
+            (
+                e
+                for e in sorted(
+                    items(self.api.get("/events?limit=100"), "events"),
+                    key=lambda e: str(e.get("start_datetime") or ""),
+                    reverse=True,
+                )
+                if e.get("event_type") == "business_meeting"
+                and str(e.get("start_datetime") or "") < now
+                and not e.get("is_draft")
+            ),
+            None,
+        )
+        stages = [
+            (
+                "Interest Form Received",
+                "manual_approval",
+                "A coordinator reads the interest form.",
+                {"approver_roles": [], "require_notes": False},
+            ),
+            (
+                self.BACKLOG15_FOLLOW_UP_STAGE,
+                "follow_up_form",
+                "The applicant confirms their details and adds a guardian.",
+                {
+                    "follow_up_form_id": form_id,
+                    "follow_up_form_name": self.BACKLOG15_FORM_NAME,
+                    "custom_message": "Please check what we have on file and "
+                    "tell us who your parent or guardian is.",
+                    "auto_advance": True,
+                },
+            ),
+            (
+                "Board Interview",
+                "manual_approval",
+                "An interview with a board member.",
+                {"approver_roles": [], "require_notes": False},
+            ),
+            (
+                self.BACKLOG15_EMAIL_STAGE,
+                "automated_email",
+                "Welcome packet and the next business meeting.",
+                {
+                    "email_subject": "Welcome to the Junior Firefighter program",
+                    "include_welcome": True,
+                    "welcome_message": "Welcome aboard. Your packet is attached.",
+                    "include_faq_link": False,
+                    "faq_url": "",
+                    "include_next_meeting": True,
+                    "next_meeting_event_type": "business_meeting",
+                    **(
+                        {"next_meeting_event_id": str(pick(past_meeting, "id"))}
+                        if past_meeting
+                        else {}
+                    ),
+                    "next_meeting_details": "",
+                    "include_status_tracker": False,
+                    "custom_sections": [],
+                },
+            ),
+        ]
+        return self.api.post(
+            "/prospective-members/pipelines",
+            {
+                "name": self.BACKLOG15_PIPELINE_NAME,
+                "description": "Members aged 14 to 17, with a guardian's consent.",
+                "is_default": False,
+                "is_active": True,
+                "steps": [
+                    {
+                        "name": name,
+                        "description": description,
+                        "step_type": step_type,
+                        "is_first_step": order == 0,
+                        "is_final_step": order == len(stages) - 1,
+                        "sort_order": order,
+                        "required": True,
+                        "config": config,
+                    }
+                    for order, (name, step_type, description, config) in enumerate(
+                        stages
+                    )
+                ],
+            },
+        )
 
     def _guide15_pipeline(self) -> dict:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
@@ -19144,8 +19925,12 @@ class Seeder:
                 category_id = categories.get(name)
                 if entry is None and category_id:
                     day = max(first_of_month, TODAY - timedelta(days=2 + index))
+                    # Spaced three hours apart, not one: in the first days of a
+                    # month the clamp to the 1st lands every entry on the same
+                    # day, and two-hour entries an hour apart overlap, which the
+                    # server refuses.
                     start = datetime.combine(
-                        day, time(hour=13 + index), tzinfo=ORG_TIMEZONE
+                        day, time(hour=13 + 3 * index), tzinfo=ORG_TIMEZONE
                     )
                     try:
                         entry = session.post(
@@ -19735,8 +20520,12 @@ class Seeder:
         return {"outcomes": outcomes}
 
     # A lot of its own, so recalling it moves nothing the other medical shots
-    # count: the saline's in-date stock stays NS-5520.
-    RECALLED_LOT = ("Normal Saline 1000mL", "NS-4471", 4)
+    # count: the cannula's in-date stock stays NC-2602. It has to be a supply in
+    # a *medical* category: the saline and gauze of the supply-tracking catalog
+    # are filed as consumable gear, which the Medical Supplies page, its lot
+    # lookup and its recall endpoint all leave out, so a recall against them
+    # is refused and the lookup never finds them.
+    RECALLED_LOT = ("Nasal Cannula", "NC-2519", 5)
 
     def seed_lot_recall(self) -> str:
         """One active recall, for the Recalled lots panel and the Recalled row."""
@@ -19758,7 +20547,7 @@ class Seeder:
             None,
         )
         if not item:
-            return "saline not found"
+            return f"{name} not found"
         item_id = pick(item, "id")
         lots = items(self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots")
         if not any(pick(lot, "lot_number", "lotNumber") == lot_number for lot in lots):
@@ -19781,6 +20570,97 @@ class Seeder:
         )
         return "recalled"
 
+    # A gear row for the low-stock email's link. Every reorder point the demo
+    # sets is on a medical supply, and Inventory Items narrowed with
+    # ?low_stock=true leaves medical items out (they link to Medical Supplies
+    # instead), so without one the notice sits over an empty list.
+    LOW_STOCK_GEAR = ("Firefighting Gloves", 10)
+
+    def seed_backlog_05_low_stock_gear(self) -> str:
+        """One gear item below its reorder point, for the low-stock notice."""
+        name, reorder_point = self.LOW_STOCK_GEAR
+        item = next(
+            (
+                i
+                for i in items(self.api.get("/inventory/items?limit=500"), "items")
+                if pick(i, "name") == name
+            ),
+            None,
+        )
+        if not item:
+            return f"{name} not found"
+        if pick(item, "reorder_point") == reorder_point:
+            return "already set"
+        self.api.patch(
+            f"/inventory/items/{pick(item, 'id')}", {"reorder_point": reorder_point}
+        )
+        return f"reorder point {reorder_point}"
+
+    # The recruit kit's lines are all single-size items, so neither the kit
+    # editor's "Member's size" choice nor the issue review's resolved size has
+    # anything to show. A sized product added on Member's size gives both: the
+    # coat is a variant group, and every demo member has a jacket size on file.
+    KIT_SIZED_LINE = ("New Recruit PPE Kit", "Structural Coat", "Structural PPE")
+
+    def seed_backlog_05_kit_member_size(self) -> str:
+        """Add Structural Coat on Member's size to the recruit kit."""
+        kit_name, product, category = self.KIT_SIZED_LINE
+        kit = next(
+            (
+                k
+                for k in items(self.api.get("/inventory/kits"), "kits")
+                if pick(k, "name") == kit_name
+            ),
+            None,
+        )
+        if not kit:
+            return f"{kit_name} not found"
+        detail = self.api.get(f"/inventory/kits/{pick(kit, 'id')}")
+        lines = sorted(
+            pick(detail, "line_items") or [],
+            key=lambda line: pick(line, "sort_order") or 0,
+        )
+        if any(pick(line, "item_name") == product for line in lines):
+            return "already sized"
+        variant = next(
+            (
+                i
+                for i in items(self.api.get("/inventory/items?limit=500"), "items")
+                if str(pick(i, "name") or "").startswith(f"{product} — ")
+                and pick(i, "variant_group_id")
+            ),
+            None,
+        )
+        if not variant:
+            return f"no {product} variant"
+        keep = [
+            {
+                key: pick(line, key)
+                for key in (
+                    "item_id",
+                    "category_id",
+                    "item_name",
+                    "quantity",
+                    "size_selectable",
+                    "optional",
+                )
+                if pick(line, key) is not None
+            }
+            for line in lines
+        ]
+        keep.insert(
+            0,
+            {
+                "item_id": pick(variant, "id"),
+                "category_id": pick(variant, "category_id"),
+                "item_name": product,
+                "quantity": 1,
+                "size_selectable": True,
+            },
+        )
+        self.api.patch(f"/inventory/kits/{pick(kit, 'id')}", {"line_items": keep})
+        return f"added {product} on Member's size"
+
     INACTIVE_TEMPLATE = "Reserve Engine — Out of Service"
     PAUSED_PATTERN = "Summer Reserve Rotation"
 
@@ -19789,7 +20669,9 @@ class Seeder:
         Resume controls. Neither is used by another shot, and the pattern is
         paused before anything generates from it."""
         result: dict[str, str] = {}
-        templates = items(self.api.get("/scheduling/templates"), "templates")
+        templates = items(
+            self.api.get("/scheduling/templates?active_only=false"), "templates"
+        )
         template = next(
             (t for t in templates if pick(t, "name") == self.INACTIVE_TEMPLATE), None
         )
@@ -19813,7 +20695,9 @@ class Seeder:
             )
             result["template"] = "deactivated"
 
-        patterns = items(self.api.get("/scheduling/patterns"), "patterns")
+        patterns = items(
+            self.api.get("/scheduling/patterns?active_only=false"), "patterns"
+        )
         pattern = next(
             (p for p in patterns if pick(p, "name") == self.PAUSED_PATTERN), None
         )
@@ -19838,6 +20722,219 @@ class Seeder:
                 f"/scheduling/patterns/{pick(pattern, 'id')}", {"is_active": False}
             )
             result["pattern"] = "paused"
+        return result
+
+    BACKLOG_BASIC_UNIT = "RE-9"
+    BACKLOG_BASIC_NAME = "Reserve Engine 9"
+
+    def seed_backlog_03_inactive_basic_apparatus(self) -> str:
+        """One inactive basic vehicle, for Show inactive and its Reactivate.
+
+        A basic vehicle in use is deactivated rather than deleted, so it is
+        made the way an officer makes one: the out-of-service template names
+        it, then it is deleted. The department's full Apparatus records
+        outrank the basic list in every picker, and an inactive row is in no
+        picker at all, so nothing else the demo pictures changes.
+        """
+        for row in items(self.api.get("/scheduling/apparatus?is_active=false")):
+            if pick(row, "unit_number") == self.BACKLOG_BASIC_UNIT:
+                return "already inactive"
+        template = next(
+            (
+                t
+                for t in items(
+                    self.api.get("/scheduling/templates?active_only=false"), "templates"
+                )
+                if pick(t, "name") == self.INACTIVE_TEMPLATE
+            ),
+            None,
+        )
+        if template is None:
+            return "blocked: no out-of-service template"
+        vehicle = next(
+            (
+                row
+                for row in items(self.api.get("/scheduling/apparatus"))
+                if pick(row, "unit_number") == self.BACKLOG_BASIC_UNIT
+            ),
+            None,
+        ) or self.api.post(
+            "/scheduling/apparatus",
+            {
+                "unit_number": self.BACKLOG_BASIC_UNIT,
+                "name": self.BACKLOG_BASIC_NAME,
+                "apparatus_type": "engine",
+                "min_staffing": 3,
+                "positions": ["officer", "driver", "firefighter"],
+            },
+        )
+        self.api.patch(
+            f"/scheduling/templates/{pick(template, 'id')}",
+            {"apparatus_id": pick(vehicle, "id")},
+        )
+        self.api.delete(f"/scheduling/apparatus/{pick(vehicle, 'id')}")
+        return "deactivated"
+
+    BACKLOG_HELD_PATTERN = "Reserve Engine Weekend Cover"
+
+    def seed_backlog_03_held_pattern(self) -> str:
+        """A pattern whose template is inactive, for its warning notice.
+
+        Named after the out-of-service template, so the server holds it: the
+        nightly run skips it and Generate is refused. It starts two weeks out
+        and is otherwise active, so the notice is the only thing stopping it.
+        """
+        patterns = items(
+            self.api.get("/scheduling/patterns?active_only=false"), "patterns"
+        )
+        if any(pick(p, "name") == self.BACKLOG_HELD_PATTERN for p in patterns):
+            return "exists"
+        template = next(
+            (
+                t
+                for t in items(
+                    self.api.get("/scheduling/templates?active_only=false"), "templates"
+                )
+                if pick(t, "name") == self.INACTIVE_TEMPLATE
+            ),
+            None,
+        )
+        if template is None:
+            return "blocked: no out-of-service template"
+        self.api.post(
+            "/scheduling/patterns",
+            {
+                "name": self.BACKLOG_HELD_PATTERN,
+                "description": "Saturday cover on the reserve engine.",
+                "pattern_type": "weekly",
+                "days_on": 1,
+                "days_off": 6,
+                "rotation_days": 7,
+                "start_date": str(TODAY + timedelta(days=14)),
+                "end_date": str(TODAY + timedelta(days=120)),
+                "template_id": pick(template, "id"),
+            },
+        )
+        return "created"
+
+    BACKLOG_DRAFT_CHECKLIST = "Reserve Engine 9 Check"
+    BACKLOG_CREW_CHECKLIST = "Utility 1 Walkaround"
+
+    def seed_backlog_03_checklist_lines(self) -> dict[str, str]:
+        """Two checklists for the builder and check-form shots of guide 03.
+
+        The draft carries what the builder flags: a Date line with no date,
+        between a location and a group of items placed directly on the
+        checklist. It stays unpublished, which is what lets it keep the
+        missing date. The walkaround is published, so it can be opened from
+        Unscheduled checklist, with Present lines and an untracked Date line
+        expiring inside its warning window, which is when the form offers to
+        date a replacement. Neither names an apparatus or a type, so neither
+        lands on any shift's checklists or in the reports.
+        """
+        existing = {
+            str(pick(t, "name"))
+            for t in items(self.api.get("/equipment-checks/templates"), "templates")
+        }
+
+        def present(name: str, order: int) -> dict:
+            return {
+                "name": name,
+                "sort_order": order,
+                "check_type": "presence",
+                "is_required": True,
+            }
+
+        result: dict[str, str] = {}
+        if self.BACKLOG_DRAFT_CHECKLIST not in existing:
+            self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": self.BACKLOG_DRAFT_CHECKLIST,
+                    "description": "Rebuilt for the reserve engine's return.",
+                    "check_timing": "start_of_shift",
+                    "template_type": "vehicle",
+                    "is_active": False,
+                    "compartments": [
+                        {
+                            "name": "Cab",
+                            "sort_order": 0,
+                            "items": [
+                                present("Portable radio", 0),
+                                present("Thermal imaging camera", 1),
+                            ],
+                        },
+                        {
+                            "name": "",
+                            "is_inline": True,
+                            "sort_order": 1,
+                            "items": [
+                                present("Map book", 0),
+                                present("Wheel chocks", 1),
+                            ],
+                        },
+                        {
+                            "name": "Compartment 2 — Officer Rear",
+                            "sort_order": 2,
+                            "items": [
+                                {
+                                    "name": "Burn kit",
+                                    "sort_order": 0,
+                                    "check_type": "expiry",
+                                    "is_required": True,
+                                },
+                                {
+                                    "name": "Road flares",
+                                    "sort_order": 1,
+                                    "check_type": "count",
+                                    "is_required": True,
+                                    "required_quantity": 6,
+                                    "expected_quantity": 6,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            )
+            result["draft"] = "created"
+        if self.BACKLOG_CREW_CHECKLIST not in existing:
+            self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": self.BACKLOG_CREW_CHECKLIST,
+                    "description": "Walk around the utility truck before it leaves.",
+                    "check_timing": "start_of_shift",
+                    "template_type": "vehicle",
+                    "is_active": True,
+                    "compartments": [
+                        {
+                            "name": "Cab",
+                            "sort_order": 0,
+                            "items": [
+                                present("Portable radio", 0),
+                                present("Hand light", 1),
+                                present("Traffic vest", 2),
+                            ],
+                        },
+                        {
+                            "name": "Rear Compartment",
+                            "sort_order": 1,
+                            "items": [
+                                {
+                                    "name": "Eyewash bottle",
+                                    "sort_order": 0,
+                                    "check_type": "expiry",
+                                    "is_required": True,
+                                    "expiration_date": str(TODAY + timedelta(days=10)),
+                                    "expiration_warning_days": 30,
+                                },
+                                present("Spill kit", 1),
+                            ],
+                        },
+                    ],
+                },
+            )
+            result["crew"] = "created"
         return result
 
     ICAL_INTEGRATION_TYPE = "ical"
@@ -19888,6 +20985,351 @@ class Seeder:
             self.api.post("/label-printers", printer)
             created += 1
         return created
+
+    BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE = "Community CPR Night"
+
+    def seed_backlog_04_upcoming_guest_event(self) -> str:
+        """An event a few days out with guest check-in switched on.
+
+        Guide 04 pictures the event QR page before check-in opens, when the
+        guest code is withheld and the card says when it will appear while
+        still offering Reset. The two guest events the demo already has are
+        slid into their check-in window on every run, so neither can show it.
+
+        No location: the room kiosk is not what is pictured, and a location
+        would refuse another booking in its window. Slid forward whenever it
+        has come within a day, so the window is never open on capture day.
+        """
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=200"), "events")
+                if e.get("title") == self.BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE
+            ),
+            None,
+        )
+        start = (NOW + timedelta(days=3)).replace(
+            hour=23, minute=0, second=0, microsecond=0
+        )
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=2)),
+        }
+        if existing and pick(existing, "id"):
+            starts = str(pick(existing, "start_datetime", "startDatetime") or "")
+            if starts and starts > iso(NOW + timedelta(days=1)):
+                return "present"
+            self.api.patch(f"/events/{pick(existing, 'id')}", window)
+            return "moved forward"
+        self.api.post(
+            "/events",
+            {
+                "title": self.BACKLOG_04_UPCOMING_GUEST_EVENT_TITLE,
+                "description": (
+                    "Hands-only CPR for neighbours, taught by our EMTs. Open to "
+                    "anyone; no account or sign-up needed."
+                ),
+                "event_type": "public_education",
+                "location": "Oakville Community Center",
+                "requires_rsvp": False,
+                "is_mandatory": False,
+                "send_reminders": False,
+                "is_draft": False,
+                "allow_guest_check_in": True,
+                **window,
+            },
+        )
+        return "created"
+
+    # One member with a leave behind them, one in force and one ahead, so the
+    # profile's Leave of Absence card shows its date badges side by side
+    # (Expired, Active, Future). Rafael Duarte, because he holds no shift
+    # seat in the coming month, so the leave in force cancels nothing another
+    # shot pictures. Each leave stays under 15 days in every calendar month it
+    # touches, so none reduces a requirement, and each is exempt from the
+    # linked training waiver, so the training waiver lists do not change.
+    BACKLOG_01_LEAVE_MEMBER = "rduarte"
+    BACKLOG_01_LEAVES = (
+        (-40, -30, "personal", "Family matter out of state."),
+        (-2, 9, "leave_of_absence", "Paternity leave."),
+        (45, 56, "military", "Annual reserve training."),
+    )
+
+    def seed_backlog_01_leave_badges(self) -> int:
+        user_id = self._user_id(self.BACKLOG_01_LEAVE_MEMBER)
+        if not user_id:
+            return 0
+        reasons = {
+            pick(lv, "reason")
+            for lv in items(self.api.get(f"/users/{user_id}/leaves-of-absence"))
+        }
+        created = 0
+        for start, end, kind, reason in self.BACKLOG_01_LEAVES:
+            if reason in reasons:
+                continue
+            self.api.post(
+                "/users/leaves-of-absence",
+                {
+                    "user_id": user_id,
+                    "leave_type": kind,
+                    "reason": reason,
+                    "start_date": str(TODAY + timedelta(days=start)),
+                    "end_date": str(TODAY + timedelta(days=end)),
+                    "exempt_from_training_waiver": True,
+                },
+            )
+            created += 1
+        return created
+
+    BACKLOG_07_SENSITIVE_FORM = "Driver Background Disclosure"
+    #: (label, type, required, sensitive, applicant field). The two sensitive
+    #: questions are the guide's own examples; the two pre-filled ones are
+    #: what the field editor's "Pre-fill from applicant" picture opens.
+    BACKLOG_07_SENSITIVE_FIELDS = [
+        ("Full name", "text", True, False, None),
+        ("Mobile phone", "phone", False, False, "mobile"),
+        ("Street address", "text", False, False, "address_street"),
+        ("Driver's license number", "text", True, False, None),
+        ("Moving violations in the last five years", "textarea", True, True, None),
+        ("Criminal convictions", "textarea", True, True, None),
+    ]
+    BACKLOG_07_SENSITIVE_ANSWERS = [
+        {
+            "Full name": "Nadia Belhaj",
+            "Mobile phone": "(703) 555-0171",
+            "Street address": "14 Linden Court",
+            "Driver's license number": "T41-882-109",
+            "Moving violations in the last five years": "One speeding ticket, 2023.",
+            "Criminal convictions": "None.",
+        },
+        {
+            "Full name": "Saoirse Nolan",
+            "Mobile phone": "(703) 555-0172",
+            "Street address": "302 Mill Race Road",
+            "Driver's license number": "N20-551-736",
+            "Moving violations in the last five years": "None.",
+            "Criminal convictions": "None.",
+        },
+    ]
+
+    def seed_backlog_07_sensitive_form(self) -> str:
+        """A published form with two Sensitive questions, answered twice.
+
+        Guide 07 pictures a Sensitive field in the editor, its badge in the
+        builder, the answers behind a lock icon for a viewer holding
+        ``sensitive_answers.view`` (the administrator's IT Manager position
+        has every permission) and the Restricted note for one who manages
+        forms without it (the Secretary). Two of its other fields pre-fill
+        from an applicant record, for the field editor's Pre-fill picture.
+        Answered by two ordinary members, so the rows name real submitters.
+        """
+        forms = items(self.api.get("/forms"), "forms")
+        form = next(
+            (f for f in forms if pick(f, "name") == self.BACKLOG_07_SENSITIVE_FORM),
+            None,
+        )
+        if form is None:
+            form = self.api.post(
+                "/forms",
+                {
+                    "name": self.BACKLOG_07_SENSITIVE_FORM,
+                    "description": (
+                        "For members asking to drive apparatus: your licence, "
+                        "driving record and any convictions."
+                    ),
+                    "category": "operations",
+                    "is_public": False,
+                    "require_authentication": True,
+                    "fields": [
+                        {
+                            "label": label,
+                            "field_type": field_type,
+                            "required": required,
+                            "sort_order": order,
+                            "is_sensitive": sensitive,
+                            **({"applicant_field": prefill} if prefill else {}),
+                        }
+                        for order, (
+                            label,
+                            field_type,
+                            required,
+                            sensitive,
+                            prefill,
+                        ) in enumerate(self.BACKLOG_07_SENSITIVE_FIELDS)
+                    ],
+                },
+            )
+        form_id = str(pick(form, "id"))
+        detail = self.api.get(f"/forms/{form_id}")
+        if str(pick(detail, "status") or "").lower() != "published":
+            detail = self.api.post(f"/forms/{form_id}/publish")
+        if items(self.api.get(f"/forms/{form_id}/submissions"), "submissions"):
+            return form_id
+        field_ids = {
+            pick(f, "label"): str(pick(f, "id")) for f in items(detail, "fields")
+        }
+        for username, answers in zip(
+            (DEMO_MEMBER_USERNAME, "snolan"), self.BACKLOG_07_SENSITIVE_ANSWERS
+        ):
+            submitter = self.member_session(
+                self.base_url, self._user_id(username), username
+            )
+            submitter.post(
+                f"/forms/{form_id}/submit",
+                {"data": {field_ids[label]: value for label, value in answers.items()}},
+            )
+        return form_id
+
+    BACKLOG_07_EMBED_ORIGIN = "https://www.oakvillefire.example.org"
+    BACKLOG_07_EMBED_FORM = "Community Event Request"
+
+    def seed_backlog_07_form_embedding(self) -> bool:
+        """List the department's website and let one public form embed.
+
+        The Share window's embed code and Settings → Forms are pictured with
+        one site listed and the community event form allowed on it. The
+        address is a reserved example domain, so nothing can actually frame
+        the form. Leaves an origin list someone has already changed alone.
+        """
+        forms_settings = (self.api.get("/organization/settings") or {}).get(
+            "forms"
+        ) or {}
+        if not forms_settings.get("embed_allowed_origins"):
+            self.api.patch(
+                "/organization/settings/forms",
+                {"embed_allowed_origins": [self.BACKLOG_07_EMBED_ORIGIN]},
+            )
+        form = next(
+            (
+                f
+                for f in items(self.api.get("/forms"), "forms")
+                if pick(f, "name") == self.BACKLOG_07_EMBED_FORM
+            ),
+            None,
+        )
+        if not form:
+            return False
+        if not pick(self.api.get(f"/forms/{pick(form, 'id')}"), "allow_embed"):
+            self.api.patch(f"/forms/{pick(form, 'id')}", {"allow_embed": True})
+        return True
+
+    BACKLOG_11_RETIRED_PARENT = "Public Education"
+    BACKLOG_11_RETIRED_CHILD = "Smoke alarm giveaway"
+    BACKLOG_11_DRAFT_TITLE = "Smoke alarms for the spring giveaway"
+
+    def seed_backlog_11_inactive_category(self) -> str:
+        """A deactivated category, a sub-line closed by it, and a draft on it.
+
+        Guide 11 pictures the category list with **Inactive** on the parent
+        and **Inactive through** on its still-active sub-category, and the
+        budget picker of a draft request already on that sub-line, which
+        names it "(inactive category)". The draft and the line are made
+        before the parent is deactivated, since an inactive category's lines
+        take no new charges.
+        """
+        categories = items(self.api.get("/finance/budget-categories"), "categories")
+        by_name = {pick(c, "name"): c for c in categories}
+        parent = by_name.get(self.BACKLOG_11_RETIRED_PARENT)
+        if parent is None:
+            parent = self.api.post(
+                "/finance/budget-categories",
+                {
+                    "name": self.BACKLOG_11_RETIRED_PARENT,
+                    "description": "School visits and community fire safety.",
+                },
+            )
+        child = by_name.get(self.BACKLOG_11_RETIRED_CHILD)
+        if child is None:
+            child = self.api.post(
+                "/finance/budget-categories",
+                {
+                    "name": self.BACKLOG_11_RETIRED_CHILD,
+                    "description": "Smoke alarms handed out at open houses.",
+                    "parent_category_id": str(pick(parent, "id")),
+                },
+            )
+        child_id = str(pick(child, "id"))
+        years = items(self.api.get("/finance/fiscal-years"), "fiscal_years")
+        year = next((y for y in years if pick(y, "status") == "active"), None)
+        if year is None:
+            self.blocked.append("backlog 11: no active fiscal year")
+            return ""
+        year_id = str(pick(year, "id"))
+        budget = next(
+            (
+                b
+                for b in items(self.api.get("/finance/budgets"), "budgets")
+                if str(pick(b, "category_id", "categoryId")) == child_id
+            ),
+            None,
+        )
+        if budget is None:
+            budget = self.api.post(
+                "/finance/budgets",
+                {
+                    "fiscal_year_id": year_id,
+                    "category_id": child_id,
+                    "amount_budgeted": 0,
+                    "notes": "Spring open house giveaway.",
+                },
+            )
+        requests = items(
+            self.api.get("/finance/purchase-requests"), "purchase_requests"
+        )
+        draft = next(
+            (r for r in requests if pick(r, "title") == self.BACKLOG_11_DRAFT_TITLE),
+            None,
+        )
+        if draft is None and pick(parent, "is_active", "isActive") is not False:
+            draft = self.api.post(
+                "/finance/purchase-requests",
+                {
+                    "fiscal_year_id": year_id,
+                    "budget_id": str(pick(budget, "id")),
+                    "title": self.BACKLOG_11_DRAFT_TITLE,
+                    "description": "Forty ten-year alarms for the spring open house.",
+                    "vendor": "Kidde Direct",
+                    "estimated_amount": 860,
+                    "priority": "low",
+                },
+            )
+        if pick(parent, "is_active", "isActive") is not False:
+            self.api.put(
+                f"/finance/budget-categories/{pick(parent, 'id')}",
+                {"is_active": False},
+            )
+        return str(pick(draft, "id")) if draft else ""
+
+    BACKLOG_12_RETIRED_OPPORTUNITY = "Volunteer Fire Assistance Grant"
+
+    def seed_backlog_12_retired_opportunity(self) -> bool:
+        """A retired program, for the library's Show retired view."""
+        names = {
+            pick(o, "name")
+            for o in items(self.api.get("/grants?active_only=false"), "opportunities")
+        }
+        if self.BACKLOG_12_RETIRED_OPPORTUNITY in names:
+            return False
+        created = self.api.post(
+            "/grants",
+            {
+                "name": self.BACKLOG_12_RETIRED_OPPORTUNITY,
+                "agency": "Virginia Department of Forestry",
+                "category": "equipment",
+                "description": (
+                    "Matching funds for wildland gear at volunteer departments. "
+                    "Closed after the 2025 round."
+                ),
+                "typicalAwardMin": 1_000,
+                "typicalAwardMax": 10_000,
+                "matchRequired": True,
+                "matchPercentage": 50,
+                "deadlineType": "recurring",
+                "eligibleUses": "Wildland PPE, hand tools and portable pumps.",
+            },
+        )
+        self.api.put(f"/grants/{pick(created, 'id')}", {"isActive": False})
+        return True
 
     def run(self) -> int:
         print("Seeding demo data...")
@@ -20066,6 +21508,7 @@ class Seeder:
         # vote outcomes above are the steps that assume one pipeline.
         self.step("meeting-stage applicant", self.seed_meeting_stage_applicant)
         self.step("guide 15 states", self.seed_guide15_states)
+        self.step("guide 15 follow-up forms", self.seed_backlog_15_follow_up)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
@@ -20106,7 +21549,15 @@ class Seeder:
         self.step("id cards", self.seed_id_cards)
         self.step("card taps", self.seed_card_taps)
         self.step("lot recall", self.seed_lot_recall)
+        self.step("low-stock gear", self.seed_backlog_05_low_stock_gear)
+        self.step("kit member size", self.seed_backlog_05_kit_member_size)
         self.step("paused scheduling", self.seed_paused_scheduling)
+        self.step(
+            "backlog 03 inactive basic apparatus",
+            self.seed_backlog_03_inactive_basic_apparatus,
+        )
+        self.step("backlog 03 held pattern", self.seed_backlog_03_held_pattern)
+        self.step("backlog 03 checklist lines", self.seed_backlog_03_checklist_lines)
         self.step("ical feed", self.seed_ical_feed)
         self.step("unused approval chain", self.seed_unused_approval_chain)
         self.step("guide 11 finance states", self.seed_guide11_finance_states)
@@ -20124,10 +21575,34 @@ class Seeder:
         self.step("photo consent", self.seed_photo_consent)
         self.step("waitlisted event", self.seed_waitlisted_event)
         self.step("out-of-stock size", self.seed_out_of_stock_size)
+        self.step("passkey member", self.seed_backlog_00_passkey_member)
+        self.step("capture member two-factor", self.seed_capture_member_two_factor)
         # Last: it parks two coats on a new shelf and issues gloves, which no
         # earlier step expects to find moved or issued.
         self.step("guide 05 states", self.seed_guide05_states)
         self.step("guide 02 states", self.seed_guide02_states)
+        self.step("backlog 02 pipeline states", self.seed_backlog_02_pipeline_states)
+        # After scheduling and the shift reports: it enrolls three members found
+        # on one past shift's crew and evaluates them on it.
+        self.step(
+            "backlog 02 shift evaluations", self.seed_backlog_02_shift_evaluations
+        )
+        self.step(
+            "backlog 13 compliance states", self.seed_backlog_13_compliance_states
+        )
+        self.step(
+            "backlog 04 upcoming guest event",
+            self.seed_backlog_04_upcoming_guest_event,
+        )
+        self.step("guide 01 leave badges", self.seed_backlog_01_leave_badges)
+        self.step("backlog 07 sensitive form", self.seed_backlog_07_sensitive_form)
+        self.step("backlog 07 form embedding", self.seed_backlog_07_form_embedding)
+        self.step(
+            "backlog 11 inactive category", self.seed_backlog_11_inactive_category
+        )
+        self.step(
+            "backlog 12 retired opportunity", self.seed_backlog_12_retired_opportunity
+        )
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

@@ -1047,8 +1047,8 @@ const FormsPage: React.FC = () => {
           >
             <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
               {/* Header */}
-              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
+              <div className="split-row mb-6 gap-3 sm:items-center">
+                <div className="split-row-main flex items-center gap-3">
                   <button
                     onClick={handleCloseEditor}
                     className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
@@ -1063,7 +1063,7 @@ const FormsPage: React.FC = () => {
                     <p className="text-theme-text-muted text-sm">{editingForm.description || 'No description'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="split-row-aside flex flex-wrap items-center gap-2">
                   <span className={`rounded-sm border px-2 py-0.5 text-xs ${statusColor(editingForm.status)}`}>
                     {capitalize(editingForm.status)}
                   </span>

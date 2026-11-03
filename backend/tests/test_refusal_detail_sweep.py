@@ -35,8 +35,30 @@ What the sweep can and cannot see:
   a class built inline (``FooService(db).describe(...)``), a name assigned
   from one, a parameter annotated with one, or a ``self`` attribute some
   method assigns or annotates that way. The method is looked up on that class
-  and then its bases. An object whose class only the running program knows
-  -- one returned from a call, or held in a container -- is not followed.
+  and then its bases. An object returned from a call has its callee's class:
+  from the return annotation when it names one, otherwise from the callee's
+  ``return`` values, which must all show the same class (a bare ``None``
+  aside). An object taken out of a container -- by indexing, ``.get``,
+  ``.pop``, ``.setdefault`` or a loop, including ``.items()``, ``.values()``
+  and ``enumerate`` -- has the class of the container's items: from an
+  annotation (``dict[str, Foo]``, ``list[Foo]``) when one names it, otherwise
+  from every item the code shows going in (literal items, a comprehension's
+  element, ``.append``, ``.add``, ``.insert``, ``c[k] = v``, ``.setdefault``,
+  ``.extend``, ``.update``), which must agree. A mapping yields values when
+  indexed and keys when iterated. Code outside ``app/`` is not read, but the
+  library calls that hand back one of app's own objects are known by shape:
+  a SQLAlchemy ``select(Model)``, built up and executed, then
+  ``.scalar_one_or_none()``, ``.scalar_one()`` or ``.scalar()`` on the
+  result, or ``.one()``, ``.one_or_none()`` or ``.first()`` on its
+  ``.scalars()`` (a ``Model``; the result's own ``.one()`` and ``.first()``
+  are a ``Row``), or ``.scalars()`` iterated or ``.all()``'d (``Model``
+  items); ``session.get(Model, ...)``,
+  ``session.scalar(stmt)`` and ``session.merge(obj)``; Pydantic's
+  ``Model.model_validate(...)`` and kin, and ``obj.model_copy()``; and
+  ``typing.cast`` and ``copy.copy``/``deepcopy``, recognised by what the
+  module imported rather than by name. Any other library call, a
+  select of a column or of several entities, and a container nothing in the
+  source fills, are not followed.
 * A message produced by a call is not text the first check can read, and is
   skipped there; the second check reads into it as above.
 * A raise that never reaches ``safe_error_detail`` is still checked. That is
@@ -164,6 +186,8 @@ class _ModuleFacts(ast.NodeVisitor):
         self.module = module
         self.class_defs = []
         self.imports = {}
+        self.library_imports = {}
+        self.module_aliases = {}
         self.owners = {}
         self._functions = [None]
         self._classes = [None]
@@ -191,9 +215,17 @@ class _ModuleFacts(ast.NodeVisitor):
         self._classes.pop()
 
     def visit_ImportFrom(self, node):
-        if (node.module or "").startswith("app"):
-            for alias in node.names:
-                self.imports[alias.asname or alias.name] = (node.module, alias.name)
+        imports = (
+            self.imports
+            if (node.module or "").startswith("app")
+            else self.library_imports
+        )
+        for alias in node.names:
+            imports[alias.asname or alias.name] = (node.module, alias.name)
+
+    def visit_Import(self, node):
+        for alias in node.names:
+            self.module_aliases[alias.asname or alias.name] = alias.name
 
     def visit_Raise(self, node):
         if isinstance(node.exc, ast.Call):
@@ -241,6 +273,82 @@ _SIZE_PRESERVING = frozenset(
     {"sorted", "list", "tuple", "set", "frozenset", "reversed"}
 )
 _DICT_VIEWS = frozenset({"keys", "values", "items"})
+
+#: Library calls that hand back one of app's own objects, and so lead the walk
+#: back into app code. Everything outside app/ is otherwise opaque to the
+#: index; these are the shapes app/ uses to get its models and schemas back.
+#: SQLAlchemy: a one-entity select(Model), built up and executed.
+_STATEMENT_BUILDERS = frozenset(
+    {
+        "where",
+        "filter",
+        "filter_by",
+        "order_by",
+        "limit",
+        "offset",
+        "options",
+        "join",
+        "outerjoin",
+        "join_from",
+        "distinct",
+        "with_for_update",
+        "execution_options",
+        "group_by",
+        "having",
+        "params",
+        "correlate",
+    }
+)
+#: The entity, from an executed Result. Its own one(), first() and
+#: one_or_none() return a Row, not the entity (SQLAlchemy 2.x Result).
+_RESULT_ENTITY_METHODS = frozenset({"scalar_one_or_none", "scalar_one", "scalar"})
+#: The entity, from a ScalarResult, which has no scalar_* methods of its own.
+_SCALARS_ENTITY_METHODS = frozenset({"one", "one_or_none", "first"})
+_TYPING_MODULES = frozenset({"typing", "typing_extensions"})
+#: Pydantic class methods that build an instance of the class they are called on.
+_PYDANTIC_CONSTRUCTORS = frozenset(
+    {
+        "model_validate",
+        "model_validate_json",
+        "model_validate_strings",
+        "model_construct",
+        "parse_obj",
+        "parse_raw",
+        "from_orm",
+    }
+)
+
+#: Methods that hand back one item of a container (a mapping's value).
+_LOOKUP_METHODS = frozenset({"get", "pop", "setdefault"})
+_MAPPING_TYPES = frozenset(
+    {
+        "dict",
+        "Dict",
+        "Mapping",
+        "MutableMapping",
+        "defaultdict",
+        "DefaultDict",
+        "OrderedDict",
+    }
+)
+_COLLECTION_TYPES = frozenset(
+    {
+        "list",
+        "List",
+        "Sequence",
+        "MutableSequence",
+        "Iterable",
+        "Iterator",
+        "Collection",
+        "set",
+        "Set",
+        "frozenset",
+        "FrozenSet",
+        "tuple",
+        "Tuple",
+        "deque",
+    }
+)
 _GROWING_METHODS = frozenset({"append", "add", "extend", "update", "insert"})
 
 
@@ -250,12 +358,25 @@ def _is_constant_name(name):
     return bool(bare) and bare[0].isupper()
 
 
+class _Element(NamedTuple):
+    """A loop target: an item of ``container``.
+
+    ``position`` is None for ``for item in container``, or the index of the
+    name in an unpacked target: ``for key, value in registry.items()``.
+    """
+
+    container: ast.expr
+    position: object
+
+
 def _assignments(scope):
     """Each name bound in ``scope``, with every value it is bound to.
 
     A value of None means the name is bound in a way whose size cannot be read:
-    a parameter, a loop or unpacking target, an augmented assignment, or a
-    collection grown by ``.append`` and its kin.
+    a parameter, an unpacking target, an augmented assignment, or a collection
+    grown by ``.append`` and its kin. A loop target is an :class:`_Element` of
+    what it iterates, so the class of the items can be read, though not their
+    size.
     """
     bound = {}
     if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -283,9 +404,23 @@ def _assignments(scope):
         elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
             bound.setdefault(node.target.id, []).append(None)
         elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
-            for name in ast.walk(node.target):
-                if isinstance(name, ast.Name):
-                    bound.setdefault(name.id, []).append(None)
+            target = node.target
+            if isinstance(target, ast.Name):
+                bound.setdefault(target.id, []).append(_Element(node.iter, None))
+            elif isinstance(target, ast.Tuple):
+                for position, elt in enumerate(target.elts):
+                    if isinstance(elt, ast.Name):
+                        bound.setdefault(elt.id, []).append(
+                            _Element(node.iter, position)
+                        )
+                    else:
+                        for name in ast.walk(elt):
+                            if isinstance(name, ast.Name):
+                                bound.setdefault(name.id, []).append(None)
+            else:
+                for name in ast.walk(target):
+                    if isinstance(name, ast.Name):
+                        bound.setdefault(name.id, []).append(None)
         elif (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
@@ -372,7 +507,7 @@ class _Argument(NamedTuple):
 
 
 def _is_bounded_value(value, scopes, seen):
-    if value is None:
+    if value is None or isinstance(value, _Element):
         return False
     if isinstance(value, _Argument):
         return _is_bounded(value.expression, value.scopes, seen)
@@ -426,6 +561,8 @@ class _Index:
         self.methods = {}
         self.owners = {}
         self.imports = {}
+        self.library_imports = {}
+        self.module_aliases = {}
         self.class_defs = {}
         self._module_scopes = {}
         self._local_scopes = {}
@@ -433,6 +570,8 @@ class _Index:
         for name, tree, facts in modules:
             self.trees[name] = tree
             self.imports[name] = facts.imports
+            self.library_imports[name] = facts.library_imports
+            self.module_aliases[name] = facts.module_aliases
             self.owners.update(facts.owners)
             functions = {}
             for node in tree.body:
@@ -549,14 +688,34 @@ class _Index:
         """The ``(module, class)`` of the object ``node`` evaluates to, if shown.
 
         The source shows it when the object is built by calling the class
-        (``FooService(db)``), comes from a name every binding of which is such
-        a call, is a parameter annotated with the class, or is a ``self``
-        attribute some method of the class assigns or annotates that way.
+        (``FooService(db)``), is returned from a call the index can resolve
+        (see :meth:`returned_class`), is taken out of a container whose items
+        show it (see :meth:`element_class`) by indexing, ``.get``, ``.pop``,
+        ``.setdefault`` or a loop, comes from a name every binding of which is
+        one of those, is a parameter annotated with the class, or is a
+        ``self`` attribute some method of the class assigns or annotates that
+        way.
         """
         if isinstance(node, ast.Await):
             return self.class_of(node.value, frame, seen)
         if isinstance(node, ast.Call):
-            return self.class_named(node.func, frame.module)
+            constructed = self.class_named(node.func, frame.module)
+            if constructed is not None:
+                return constructed
+            returned = self.returned_class(node, frame, seen)
+            if returned is not None:
+                return returned
+            from_library = self.library_instance_class(node, frame, seen)
+            if from_library is not None:
+                return from_library
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr in _LOOKUP_METHODS:
+                return self.element_class(func.value, frame, seen, "index")
+            return None
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.Slice):
+                return None
+            return self.element_class(node.value, frame, seen, "index")
         if isinstance(node, ast.Attribute):
             if (
                 isinstance(node.value, ast.Name)
@@ -571,13 +730,18 @@ class _Index:
                     if found is not None:
                         return found
             return None
-        if not isinstance(node, ast.Name) or node.id in seen:
+        if not isinstance(node, ast.Name):
             return None
         if node.id in ("self", "cls"):
             if frame.owner_class is None:
                 return None
             return (frame.module, frame.owner_class)
-        seen = seen | {node.id}
+        # Keyed by scope as well as name: a caller's ``x`` and its callee's
+        # ``x`` are different variables, and one must not block the other.
+        key = (id(frame.scopes[0]) if frame.scopes else None, node.id)
+        if key in seen:
+            return None
+        seen = seen | {key}
         if frame.function is not None:
             arguments = frame.function.args
             for param in [
@@ -598,6 +762,8 @@ class _Index:
                 value_class = self.class_of(
                     value.expression, frame._replace(scopes=value.scopes), seen
                 )
+            elif isinstance(value, _Element):
+                value_class = self.loop_item_class(value, frame, seen)
             elif value is not None:
                 value_class = self.class_of(value, frame, seen)
             else:
@@ -607,7 +773,453 @@ class _Index:
             found = value_class
         return found
 
-    def resolve(self, func, frame):
+    def element_of_annotation(self, annotation, module, access):
+        """The item class an annotation gives a container, if it names one.
+
+        A mapping (``dict[str, Foo]``) yields its values when indexed and its
+        keys when iterated; any other collection (``list[Foo]``,
+        ``Sequence[Foo]``, ``tuple[Foo, ...]``) yields its items either way.
+        """
+        if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+            try:
+                annotation = ast.parse(annotation.value, mode="eval").body
+            except SyntaxError:
+                return None
+        if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+            return self.element_of_annotation(
+                annotation.left, module, access
+            ) or self.element_of_annotation(annotation.right, module, access)
+        if not isinstance(annotation, ast.Subscript):
+            return None
+        base = _base_name(annotation.value)
+        arguments = (
+            annotation.slice.elts
+            if isinstance(annotation.slice, ast.Tuple)
+            else [annotation.slice]
+        )
+        if base == "Optional":
+            return self.element_of_annotation(arguments[0], module, access)
+        if base in _MAPPING_TYPES and len(arguments) == 2:
+            return self.class_named(arguments[1 if access == "index" else 0], module)
+        if base in _COLLECTION_TYPES and arguments:
+            return self.class_named(arguments[0], module)
+        return None
+
+    def _agreed(self, classes):
+        """The one class every piece of evidence shows, or None."""
+        found = None
+        for value_class in classes:
+            if value_class is None or (found is not None and value_class != found):
+                return None
+            found = value_class
+        return found
+
+    def _written_items(self, name, scope_node, access):
+        """What is put into the container ``name`` inside ``scope_node``.
+
+        ``.append``/``.add`` add an item, ``.insert`` its second argument;
+        ``c[key] = value`` and ``.setdefault(key, value)`` add a value when
+        the container is indexed and a key when it is iterated. ``.extend``
+        and ``.update`` add the items of another container, returned as
+        ``("from", container)`` for the caller to read.
+        """
+        for node in ast.walk(scope_node):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Subscript)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == name
+                    ):
+                        yield node.value if access == "index" else target.slice
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == name
+            ):
+                method, args = node.func.attr, node.args
+                if method in ("append", "add") and args:
+                    yield args[0]
+                elif method == "insert" and len(args) > 1:
+                    yield args[1]
+                elif method == "setdefault" and len(args) > 1:
+                    yield args[1] if access == "index" else args[0]
+                elif method in ("extend", "update") and args:
+                    yield ("from", args[0])
+
+    def _annotation_of(self, name, frame):
+        """The annotation ``name`` is declared with, in its function or module."""
+        if frame.function is not None:
+            arguments = frame.function.args
+            for param in [
+                *arguments.posonlyargs,
+                *arguments.args,
+                *arguments.kwonlyargs,
+            ]:
+                if param.arg == name and param.annotation is not None:
+                    return param.annotation
+        for scope_node in (frame.function, self.trees.get(frame.module)):
+            if scope_node is None:
+                continue
+            for node in ast.walk(scope_node):
+                if (
+                    isinstance(node, ast.AnnAssign)
+                    and isinstance(node.target, ast.Name)
+                    and node.target.id == name
+                ):
+                    return node.annotation
+        return None
+
+    def element_class(self, container, frame, seen, access):
+        """The class of the items taken out of ``container``, if shown.
+
+        ``access`` is ``"index"`` (``c[k]``, ``.get``, ``.values()``) or
+        ``"iterate"`` (a loop, ``.keys()``); they differ only for a mapping.
+        Every piece of evidence must show the same class: a literal's items, a
+        comprehension's element, an annotation, the items the code puts into
+        it, or the container a call returns.
+        """
+        if isinstance(container, ast.Await):
+            return self.element_class(container.value, frame, seen, access)
+        if isinstance(container, ast.Dict):
+            items = container.values if access == "index" else container.keys
+            return self._agreed(
+                self.class_of(item, frame, seen) for item in items if item is not None
+            )
+        if isinstance(container, (ast.List, ast.Tuple, ast.Set)):
+            return self._agreed(
+                (
+                    self.element_class(elt.value, frame, seen, "iterate")
+                    if isinstance(elt, ast.Starred)
+                    else self.class_of(elt, frame, seen)
+                )
+                for elt in container.elts
+            )
+        if isinstance(container, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+            return self.class_of(container.elt, frame, seen)
+        if isinstance(container, ast.DictComp):
+            item = container.value if access == "index" else container.key
+            return self.class_of(item, frame, seen)
+        if isinstance(container, ast.Call):
+            return self._called_container_class(container, frame, seen, access)
+        if isinstance(container, ast.Attribute):
+            if not (
+                isinstance(container.value, ast.Name)
+                and container.value.id == "self"
+                and frame.owner_class is not None
+            ):
+                return None
+            owner = (frame.module, frame.owner_class)
+            return self._agreed(
+                self.element_of_annotation(value, frame.module, access)
+                or self.element_class(value, frame, seen, access)
+                for value in self.attribute_values(owner).get(container.attr, [])
+            )
+        if not isinstance(container, ast.Name):
+            return None
+        annotation = self._annotation_of(container.id, frame)
+        if annotation is not None:
+            annotated = self.element_of_annotation(annotation, frame.module, access)
+            if annotated is not None:
+                return annotated
+        scope = next((s for s in frame.scopes if container.id in s), None)
+        if scope is None:
+            return None
+        key = ("items", id(scope), container.id, access)
+        if key in seen:
+            return None
+        seen = seen | {key}
+        local = scope is frame.scopes[0] and frame.function is not None
+        scope_node = frame.function if local else self.trees.get(frame.module)
+        evidence = []
+        for value in scope[container.id]:
+            if isinstance(value, _Argument):
+                evidence.append(
+                    self.element_class(
+                        value.expression,
+                        frame._replace(scopes=value.scopes),
+                        seen,
+                        access,
+                    )
+                )
+            elif isinstance(value, ast.AST) and not (
+                isinstance(value, (ast.Dict, ast.List, ast.Tuple, ast.Set))
+                and not (value.keys if isinstance(value, ast.Dict) else value.elts)
+            ):
+                # An empty literal says nothing about what will be put in it.
+                evidence.append(self.element_class(value, frame, seen, access))
+        for written in self._written_items(container.id, scope_node, access):
+            if isinstance(written, tuple):
+                evidence.append(self.element_class(written[1], frame, seen, access))
+            elif not (isinstance(written, ast.Constant) and written.value is None):
+                evidence.append(self.class_of(written, frame, seen))
+        return self._agreed(evidence) if evidence else None
+
+    def _called_container_class(self, call, frame, seen, access):
+        func = call.func
+        # A ScalarResult, iterated or .all()'d, yields the selected entity.
+        if isinstance(func, ast.Attribute) and func.attr == "all":
+            shape = self.query_shape(func.value, frame, seen)
+            if shape is not None and shape[0] == "scalars":
+                return shape[1]
+        shape = self.query_shape(call, frame, seen)
+        if shape is not None and shape[0] == "scalars":
+            return shape[1]
+        if isinstance(func, ast.Name) and func.id in _SIZE_PRESERVING and call.args:
+            return self.element_class(call.args[0], frame, seen, "iterate")
+        if isinstance(func, ast.Name) and func.id == "dict" and call.args:
+            return self.element_class(call.args[0], frame, seen, access)
+        if isinstance(func, ast.Attribute):
+            if func.attr == "values":
+                return self.element_class(func.value, frame, seen, "index")
+            if func.attr == "keys":
+                return self.element_class(func.value, frame, seen, "iterate")
+            if func.attr == "copy":
+                return self.element_class(func.value, frame, seen, access)
+        if frame.depth >= MAX_CALL_DEPTH:
+            return None
+        resolved = self.resolve(func, frame, seen)
+        if resolved is None:
+            return None
+        callee, implicit_first = resolved
+        key = ("items-call", id(callee), access)
+        if key in seen:
+            return None
+        callee_module, _ = self.owners[id(callee)]
+        if callee.returns is not None:
+            annotated = self.element_of_annotation(
+                callee.returns, callee_module, access
+            )
+            if annotated is not None:
+                return annotated
+        evidence = [
+            self.element_class(
+                returned.value,
+                self.callee_frame(callee, call, frame, implicit_first, returned.value),
+                seen | {key},
+                access,
+            )
+            for returned in _own_nodes(callee)
+            if isinstance(returned, ast.Return)
+            and returned.value is not None
+            and not (
+                isinstance(returned.value, ast.Constant)
+                and returned.value.value is None
+            )
+        ]
+        return self._agreed(evidence) if evidence else None
+
+    def loop_item_class(self, element, frame, seen):
+        """The class of a loop target, from the container it iterates."""
+        iterated, position = element.container, element.position
+        if isinstance(iterated, ast.Call):
+            func = iterated.func
+            if isinstance(func, ast.Attribute) and func.attr == "items":
+                if position == 0:
+                    return self.element_class(func.value, frame, seen, "iterate")
+                if position == 1:
+                    return self.element_class(func.value, frame, seen, "index")
+                return None
+            if (
+                isinstance(func, ast.Name)
+                and func.id == "enumerate"
+                and iterated.args
+                and position == 1
+            ):
+                return self.element_class(iterated.args[0], frame, seen, "iterate")
+        if position is not None:
+            return None
+        return self.element_class(iterated, frame, seen, "iterate")
+
+    def _bound_values(self, name, frame, seen):
+        """``(expression, frame)`` for each readable binding of ``name``."""
+        scope = next((s for s in frame.scopes if name.id in s), None)
+        if scope is None:
+            return None
+        key = ("bound", id(scope), name.id)
+        if key in seen:
+            return None
+        values = []
+        for value in scope[name.id]:
+            if isinstance(value, _Argument):
+                values.append((value.expression, frame._replace(scopes=value.scopes)))
+            elif isinstance(value, ast.AST):
+                values.append((value, frame))
+            else:
+                return None
+        return values, seen | {key}
+
+    def query_shape(self, node, frame, seen=frozenset()):
+        """``(shape, entity class)`` for a SQLAlchemy query over one app model.
+
+        ``shape`` is ``"stmt"`` for a ``select(Model)`` and the builder calls
+        chained on it, ``"result"`` once executed, and ``"scalars"`` for its
+        ScalarResult. A select of several columns or entities is not one
+        entity, and gives None.
+        """
+        if isinstance(node, ast.Await):
+            return self.query_shape(node.value, frame, seen)
+        if isinstance(node, ast.Name):
+            bound = self._bound_values(node, frame, seen)
+            if not bound:
+                return None
+            values, seen = bound
+            shapes = {self.query_shape(value, f, seen) for value, f in values}
+            return shapes.pop() if len(shapes) == 1 else None
+        if not isinstance(node, ast.Call):
+            return None
+        func = node.func
+        bare_select = isinstance(func, ast.Name) and func.id == "select"
+        module_select = (
+            isinstance(func, ast.Attribute)
+            and func.attr == "select"
+            and isinstance(func.value, ast.Name)
+            and func.value.id in ("sa", "sqlalchemy")
+        )
+        if bare_select or module_select:
+            if len(node.args) == 1 and not node.keywords:
+                entity = self.class_named(node.args[0], frame.module)
+                return ("stmt", entity) if entity is not None else None
+            return None
+        if not isinstance(func, ast.Attribute):
+            return None
+        if func.attr in _STATEMENT_BUILDERS:
+            shape = self.query_shape(func.value, frame, seen)
+            return shape if shape is not None and shape[0] == "stmt" else None
+        if func.attr in ("execute", "scalars") and node.args:
+            shape = self.query_shape(node.args[0], frame, seen)
+            if shape is None or shape[0] != "stmt":
+                return None
+            return ("result" if func.attr == "execute" else "scalars", shape[1])
+        if func.attr == "scalars" and not node.args:
+            shape = self.query_shape(func.value, frame, seen)
+            if shape is not None and shape[0] == "result":
+                return ("scalars", shape[1])
+            return None
+        if func.attr == "unique" and not node.args:
+            shape = self.query_shape(func.value, frame, seen)
+            if shape is not None and shape[0] in ("result", "scalars"):
+                return shape
+        return None
+
+    def is_library_function(self, func, module, libraries, name):
+        """Whether ``func`` names ``name`` from one of ``libraries``, as imported.
+
+        ``from copy import deepcopy`` then ``deepcopy(...)``, or ``import copy``
+        then ``copy.deepcopy(...)``. A function of the same name defined in
+        app, or imported from anywhere else (``sqlalchemy.cast``), is not it.
+        """
+        if isinstance(func, ast.Name):
+            target = self.library_imports.get(module, {}).get(func.id)
+            return target is not None and target[0] in libraries and (target[1] == name)
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == name
+            and isinstance(func.value, ast.Name)
+        ):
+            return self.module_aliases.get(module, {}).get(func.value.id) in libraries
+        return False
+
+    def library_instance_class(self, call, frame, seen):
+        """The app class of an object a library call hands back, if shown.
+
+        Only the library calls that return one of app's own objects matter
+        here, since only app code can build a refusal message; they are the
+        ones listed beside ``_RESULT_ENTITY_METHODS``,
+        ``_SCALARS_ENTITY_METHODS`` and ``_PYDANTIC_CONSTRUCTORS``, plus
+        ``typing.cast`` and ``copy.copy``/``deepcopy`` as the module imports
+        them.
+        """
+        func, module = call.func, frame.module
+        if (
+            self.is_library_function(func, module, _TYPING_MODULES, "cast")
+            and len(call.args) == 2
+        ):
+            return self.class_named(call.args[0], module)
+        if len(call.args) == 1 and any(
+            self.is_library_function(func, module, {"copy"}, name)
+            for name in ("copy", "deepcopy")
+        ):
+            return self.class_of(call.args[0], frame, seen)
+        if not isinstance(func, ast.Attribute):
+            return None
+        if func.attr in _PYDANTIC_CONSTRUCTORS:
+            return self.class_named(func.value, module)
+        if func.attr == "model_copy":
+            return self.class_of(func.value, frame, seen)
+        if func.attr == "get" and len(call.args) >= 2:
+            # session.get(Model, id); a mapping's .get(key) names no class.
+            return self.class_named(call.args[0], module)
+        if func.attr == "merge" and len(call.args) == 1:
+            return self.class_of(call.args[0], frame, seen)
+        if func.attr == "scalar" and call.args:
+            # session.scalar(stmt)
+            shape = self.query_shape(call.args[0], frame, seen)
+            return shape[1] if shape is not None and shape[0] == "stmt" else None
+        wanted = (
+            "result"
+            if func.attr in _RESULT_ENTITY_METHODS
+            else "scalars" if func.attr in _SCALARS_ENTITY_METHODS else None
+        )
+        if wanted is None or call.args:
+            return None
+        shape = self.query_shape(func.value, frame, seen)
+        return shape[1] if shape is not None and shape[0] == wanted else None
+
+    def callee_frame(self, callee, call, frame, implicit_first, expression):
+        """A frame reading ``expression`` inside ``callee`` as ``call`` invoked it."""
+        callee_module, callee_class = self.owners[id(callee)]
+        scopes = (
+            self.bound_scope(callee, call, frame.scopes, implicit_first),
+            self.module_scope(callee_module),
+        )
+        return _Frame(
+            expression, scopes, callee_module, callee_class, callee, frame.depth + 1
+        )
+
+    def returned_class(self, call, frame, seen):
+        """The class of what ``call`` returns, when the callee's source shows it.
+
+        Its return annotation decides when it names an app class (``->
+        FooService``, ``Optional[FooService]``, a string). Otherwise every
+        ``return`` that is not a bare ``None`` must show one class, read inside
+        the callee with its parameters bound to what this call passed. Followed
+        up to ``MAX_CALL_DEPTH`` calls, and never back into a callee already on
+        the way.
+        """
+        if frame.depth >= MAX_CALL_DEPTH:
+            return None
+        resolved = self.resolve(call.func, frame, seen)
+        if resolved is None:
+            return None
+        callee, implicit_first = resolved
+        key = ("call", id(callee))
+        if key in seen:
+            return None
+        callee_module, _ = self.owners[id(callee)]
+        if callee.returns is not None:
+            annotated = self.class_named(callee.returns, callee_module)
+            if annotated is not None:
+                return annotated
+        found = None
+        for returned in _own_nodes(callee):
+            if not isinstance(returned, ast.Return) or returned.value is None:
+                continue
+            value = returned.value
+            if isinstance(value, ast.Constant) and value.value is None:
+                continue
+            value_class = self.class_of(
+                value,
+                self.callee_frame(callee, call, frame, implicit_first, value),
+                seen | {key},
+            )
+            if value_class is None or (found is not None and value_class != found):
+                return None
+            found = value_class
+        return found
+
+    def resolve(self, func, frame, seen=frozenset()):
         """``(definition, first parameter is implicit)`` for a call, or None.
 
         The flag says the call binds the callee's first parameter itself: a
@@ -638,7 +1250,7 @@ class _Index:
             if source is not None and original is None:
                 found = self.functions.get(source, {}).get(func.attr)
                 return (found, False) if found is not None else None
-        found = self.method(self.class_of(receiver, frame), func.attr)
+        found = self.method(self.class_of(receiver, frame, seen), func.attr)
         if found is None:
             return None
         return found, "staticmethod" not in _decorator_names(found)
@@ -774,6 +1386,8 @@ def _message_frames(argument, scopes, module, owner_class, function, index):
                                 expression=value.expression, scopes=value.scopes
                             )
                         )
+                    elif isinstance(value, _Element):
+                        pending.append(frame._replace(expression=value.container))
                     elif value is not None:
                         pending.append(frame._replace(expression=value))
             elif (
@@ -785,22 +1399,13 @@ def _message_frames(argument, scopes, module, owner_class, function, index):
                 if resolved is None or id(node) in followed_calls:
                     continue
                 callee, implicit_first = resolved
-                callee_module, callee_class = index.owners[id(callee)]
+                callee_module, _ = index.owners[id(callee)]
                 if (callee_module, callee.name) in SELF_LIMITING_HELPERS:
                     continue
                 followed_calls.add(id(node))
-                callee_scopes = (
-                    index.bound_scope(callee, node, frame.scopes, implicit_first),
-                    index.module_scope(callee_module),
-                )
                 pending.extend(
-                    _Frame(
-                        returned.value,
-                        callee_scopes,
-                        callee_module,
-                        callee_class,
-                        callee,
-                        frame.depth + 1,
+                    index.callee_frame(
+                        callee, node, frame, implicit_first, returned.value
                     )
                     for returned in _own_nodes(callee)
                     if isinstance(returned, ast.Return) and returned.value is not None
@@ -1248,6 +1853,270 @@ def test_an_object_of_unknown_class_is_not_followed():
             "    either = Describer()\n"
             "    either = Other()\n"
             "    raise ValueError(describer.describe(ids) + either.describe(ids))\n"
+        )
+        == []
+    )
+
+
+def test_the_join_check_follows_objects_returned_from_calls():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    # From what the factory returns.
+    assert refusing(
+        "def make():\n"
+        "    return Describer()\n"
+        "def refuse(ids):\n"
+        "    raise ValueError(make().describe(ids))\n"
+    ) == ["names"]
+    # From the return annotation, plain, optional or as a string, sync or async.
+    for returns in ("Describer", "Optional[Describer]", '"Describer"'):
+        assert refusing(
+            f"async def lookup(key) -> {returns}:\n"
+            "    return REGISTRY[key]\n"
+            "async def refuse(ids):\n"
+            '    describer = await lookup("x")\n'
+            "    raise ValueError(describer.describe(ids))\n"
+        ) == ["names"], returns
+    # From a method, and through what a parameter was bound to.
+    assert refusing(
+        "def passthrough(describer):\n"
+        "    return describer\n"
+        "class Service:\n"
+        "    def describer(self):\n"
+        "        return passthrough(Describer())\n"
+        "    def refuse(self, ids):\n"
+        "        raise ValueError(self.describer().describe(ids))\n"
+    ) == ["names"]
+    # A bare None return does not stand in the way of the one class.
+    assert refusing(
+        "def maybe(flag):\n"
+        "    if flag:\n"
+        "        return None\n"
+        "    return Describer()\n"
+        "def refuse(ids, flag):\n"
+        "    raise ValueError(maybe(flag).describe(ids))\n"
+    ) == ["names"]
+
+
+def test_a_returned_object_of_unknown_class_is_not_followed():
+    other = (
+        "class Other:\n"
+        "    def describe(self, names):\n"
+        '        return "; ".join(names)\n'
+    )
+    # Returns that disagree on the class.
+    assert (
+        _joins(
+            _DESCRIBER + other + "def either(flag):\n"
+            "    if flag:\n"
+            "        return Describer()\n"
+            "    return Other()\n"
+            "def refuse(ids, flag):\n"
+            "    raise ValueError(either(flag).describe(ids))\n"
+        )
+        == []
+    )
+    # Calls that return each other, and a name rebound from itself, end
+    # rather than recursing.
+    assert (
+        _joins(
+            _DESCRIBER + "def a():\n"
+            "    return b()\n"
+            "def b():\n"
+            "    return a()\n"
+            "def refuse(ids, x):\n"
+            "    x = x.refresh()\n"
+            "    raise ValueError(a().describe(ids) + x.describe(ids))\n"
+        )
+        == []
+    )
+
+
+def test_the_join_check_follows_objects_taken_out_of_containers():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    registry = 'REGISTRY = {"plain": Describer()}\n'
+    # Indexing a literal, and the lookup methods.
+    for take in ('REGISTRY["plain"]', "REGISTRY.get(key)", "REGISTRY.pop(key)"):
+        assert refusing(
+            registry + "def refuse(ids, key):\n"
+            f"    raise ValueError({take}.describe(ids))\n"
+        ) == ["names"], take
+    # A loop over a list, over a mapping's values, and its items' second half.
+    for loop in (
+        "for d in [Describer(), Describer()]:",
+        "for d in REGISTRY.values():",
+        "for _, d in REGISTRY.items():",
+        "for _, d in enumerate([Describer()]):",
+    ):
+        assert refusing(
+            registry + "def refuse(ids):\n"
+            f"    {loop}\n"
+            "        raise ValueError(d.describe(ids))\n"
+        ) == ["names"], loop
+    # Filled after it was made: appended to, and written by key elsewhere.
+    assert refusing(
+        "def refuse(ids):\n"
+        "    found = []\n"
+        "    found.append(Describer())\n"
+        "    raise ValueError(found[0].describe(ids))\n"
+    ) == ["names"]
+    assert refusing(
+        "LATER = {}\n"
+        "def register(key):\n"
+        "    LATER[key] = Describer()\n"
+        "def refuse(ids, key):\n"
+        "    raise ValueError(LATER[key].describe(ids))\n"
+    ) == ["names"]
+
+
+def test_container_annotations_name_the_items():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    assert refusing(
+        "def refuse(found: list[Describer], ids):\n"
+        "    for d in found:\n"
+        "        raise ValueError(d.describe(ids))\n"
+    ) == ["names"]
+    assert refusing(
+        'def refuse(found: "dict[str, Describer]", ids, key):\n'
+        "    raise ValueError(found[key].describe(ids))\n"
+    ) == ["names"]
+    # The container a call returns, by its annotation.
+    assert refusing(
+        "def everyone() -> Optional[list[Describer]]:\n"
+        "    return load()\n"
+        "def refuse(ids):\n"
+        "    for d in everyone():\n"
+        "        raise ValueError(d.describe(ids))\n"
+    ) == ["names"]
+    # Iterating a mapping yields its keys, which here are strings.
+    assert (
+        refusing(
+            "def refuse(found: dict[str, Describer], ids):\n"
+            "    for d in found:\n"
+            "        raise ValueError(d.describe(ids))\n"
+        )
+        == []
+    )
+
+
+def test_a_container_of_unknown_items_is_not_followed():
+    other = (
+        "class Other:\n"
+        "    def describe(self, names):\n"
+        '        return "; ".join(names)\n'
+    )
+    # Items of two classes; a container nothing fills; one the source cannot see.
+    assert (
+        _joins(
+            _DESCRIBER + other + "def refuse(ids, key, outside):\n"
+            "    mixed = [Describer(), Other()]\n"
+            "    empty = {}\n"
+            "    raise ValueError(\n"
+            "        mixed[0].describe(ids)\n"
+            "        + empty[key].describe(ids)\n"
+            "        + outside[key].describe(ids)\n"
+            "    )\n"
+        )
+        == []
+    )
+
+
+def test_the_join_check_follows_objects_libraries_hand_back():
+    def refusing(body):
+        return _joins(_DESCRIBER + body)
+
+    # A SQLAlchemy select of one model, built up, executed and read back.
+    for read in (
+        "result.scalar_one_or_none()",
+        "result.scalar_one()",
+        "result.scalars().first()",
+        "result.unique().scalars().one()",
+    ):
+        assert refusing(
+            "async def refuse(db, ids, key):\n"
+            "    statement = select(Describer).where(Describer.key == key)\n"
+            "    result = await db.execute(statement.order_by(Describer.key))\n"
+            f"    raise ValueError({read}.describe(ids))\n"
+        ) == ["names"], read
+    # Through the session directly, and as a list of rows.
+    for take in (
+        "(await db.get(Describer, key))",
+        "(await db.scalar(select(Describer).limit(1)))",
+        "(await db.merge(Describer()))",
+    ):
+        assert refusing(
+            "async def refuse(db, ids, key):\n"
+            f"    raise ValueError({take}.describe(ids))\n"
+        ) == ["names"], take
+    for rows in (
+        "(await db.execute(select(Describer))).scalars().all()",
+        "(await db.scalars(select(Describer)))",
+    ):
+        assert refusing(
+            "async def refuse(db, ids):\n"
+            f"    for found in {rows}:\n"
+            "        raise ValueError(found.describe(ids))\n"
+        ) == ["names"], rows
+    # Pydantic, typing.cast and copy.
+    for made in (
+        "Describer.model_validate(data)",
+        "Describer().model_copy()",
+        'cast("Describer", data)',
+        "copy.deepcopy(Describer())",
+    ):
+        assert refusing(
+            "from typing import cast\n"
+            "import copy\n"
+            f"def refuse(ids, data):\n    raise ValueError({made}.describe(ids))\n"
+        ) == ["names"], made
+
+
+def test_library_calls_that_return_no_model_are_not_followed():
+    # A column, two entities, a mapping's .get, and an unknown library call.
+    assert (
+        _joins(
+            _DESCRIBER + "async def refuse(db, ids, settings):\n"
+            "    one = (await db.execute(select(Describer.key))).scalar_one()\n"
+            "    two = (await db.execute(select(Describer, Other))).scalar_one()\n"
+            '    three = settings.get("describer", None)\n'
+            "    four = somelib.fetch(Describer)\n"
+            "    raise ValueError(\n"
+            "        one.describe(ids) + two.describe(ids)\n"
+            "        + three.describe(ids) + four.describe(ids)\n"
+            "    )\n"
+        )
+        == []
+    )
+
+
+def test_a_result_row_and_lookalike_functions_are_not_followed():
+    # Result.one(), .first() and .one_or_none() return a Row, not the entity.
+    for read in ("result.one()", "result.first()", "result.one_or_none()"):
+        assert (
+            _joins(
+                _DESCRIBER + "async def refuse(db, ids):\n"
+                "    result = await db.execute(select(Describer))\n"
+                f"    raise ValueError({read}.describe(ids))\n"
+            )
+            == []
+        ), read
+    # sqlalchemy's cast is not typing's, and an app function named copy is
+    # not the copy module's.
+    assert (
+        _joins(
+            _DESCRIBER + "from sqlalchemy import cast\n"
+            "def copy(value):\n"
+            "    return lookup(value)\n"
+            "def refuse(ids, data):\n"
+            "    raise ValueError(\n"
+            '        cast("Describer", data).describe(ids)\n'
+            "        + copy(Describer()).describe(ids)\n"
+            "    )\n"
         )
         == []
     )

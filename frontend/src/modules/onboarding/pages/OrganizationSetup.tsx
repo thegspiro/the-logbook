@@ -378,6 +378,18 @@ const OrganizationSetup: React.FC = () => {
   const [dragActive, setDragActive] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  // Bumped on every failed Continue. The invalid fields only exist once the
+  // sections holding them have expanded, which happens in the render after
+  // validation, so focus moves in an effect rather than in the handler.
+  const [failedSubmitCount, setFailedSubmitCount] = useState(0);
+  const mainRef = useRef<HTMLElement>(null);
+
+  // A toast and a summary list the errors, but a keyboard or screen-reader
+  // user left on Continue had to hunt for the field (workflow review W01-15).
+  useEffect(() => {
+    if (failedSubmitCount === 0) return;
+    mainRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [failedSubmitCount]);
 
   // Warn before leaving with unsaved changes
   const hasUnsavedChanges = useFormChanged(formData, initialFormData);
@@ -674,6 +686,7 @@ const OrganizationSetup: React.FC = () => {
           { duration: 8000 } // Longer duration for multiple errors
         );
       }
+      setFailedSubmitCount((count) => count + 1);
       return;
     }
 
@@ -789,7 +802,7 @@ const OrganizationSetup: React.FC = () => {
           the screen sat outside a landmark. That is Bypass Blocks (2.4.1) on
           the one flow a chief walks through before the application has any
           other navigation at all. */}
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl">
+      <main ref={mainRef} id="main-content" tabIndex={-1} className="mx-auto max-w-3xl">
         {/* Back Button */}
         <div className="mb-4">
           <BackButton to="/" label="Back to Welcome" />

@@ -214,9 +214,15 @@ class RoleManagementService:
         if invalid:
             raise ValueError(describe_invalid_permission_grants(invalid))
 
-        if kind not in POSITION_KINDS:
+        if kind not in POSITION_KINDS or kind == "system":
+            # Mirrors update_role's check: a position is an office or a
+            # committee through this surface. "system" is reserved for the
+            # platform's own seeded rows (`initialize_default_roles` builds
+            # those directly, never through this method), so a future caller
+            # cannot mint a fake "system" position by calling create_role.
             raise ValueError(
-                f"Unknown position kind '{kind}'. Expected one of: {', '.join(POSITION_KINDS)}."
+                f"Unknown position kind '{kind}'. Expected one of: "
+                f"{', '.join(k for k in POSITION_KINDS if k != 'system')}."
             )
 
         # Create role

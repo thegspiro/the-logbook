@@ -9,8 +9,10 @@ of a login.
 - ``/{token}.ics`` — a member's personal shifts. Only the member's own shift
   times/notes are exposed — no other members' data.
 - ``/org/{token}.ics`` — the department's published events, behind the
-  ``ical`` integration. Only the fields in ``_org_feed_event`` are exposed:
-  no descriptions, attendees, RSVP answers, custom fields or organizer.
+  ``ical`` integration, plus its scheduled shifts when the integration's
+  ``include_shifts`` is on. Only the fields in ``_org_feed_event`` and
+  ``_org_feed_shift`` are exposed: no descriptions, notes, attendees or
+  assignees, RSVP answers, custom fields or organizer.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -26,6 +28,7 @@ from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.models.event import Event, EventType
 from app.models.integration import Integration
+from app.models.training import Shift, ShiftStatus
 from app.models.user import Organization
 from app.services.integration_services.ical_service import (
     ICAL_INTEGRATION_TYPE,
@@ -131,6 +134,23 @@ async def get_personal_calendar_feed(
     )
 
 
+def _org_feed_shift(shift: Shift) -> dict:
+    """The only shift fields the department feed publishes.
+
+    Title (with platoon) and times. Notes, pass-down notes, positions and who
+    is assigned are never included: the feed is a shared bearer link, and the
+    roster is each member's to see in the app or their personal feed.
+    """
+    return {
+        # Prefixed so a shift can never share a UID with an event.
+        "id": f"shift-{shift.id}",
+        "title": _shift_title(shift),
+        "start_time": shift.start_time,
+        "end_time": shift.end_time,
+        "categories": "Shift",
+    }
+
+
 def _event_type_label(event: Event) -> str:
     raw = getattr(event.event_type, "value", event.event_type)
     return str(raw).replace("_", " ").title() if raw else "Event"
@@ -186,7 +206,19 @@ async def get_department_events_feed(
     token: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the department's published events as an ICS feed (public, token-protected)."""
+    """Return the department's published events as an ICS feed (public, token-protected).
+
+    Serves 404 for an unknown token and for an ``ical`` integration that is not
+    connected and enabled (disconnecting also deletes the token).
+
+    Window: events that end no earlier than 30 days ago and start within the
+    next 365 days, published (not draft) and not cancelled, filtered to the
+    integration's ``included_event_types`` when that is non-empty. When
+    ``include_shifts`` is on, scheduled (not cancelled) shifts dated from 30
+    days before to 365 days after today on the department's calendar are
+    added, the same date-based selection the personal shift feed makes. Each
+    list is capped at ``ORG_FEED_MAX_EVENTS``.
+    """
     if not _plausible_token(token):
         raise _feed_not_found()
 
@@ -226,8 +258,31 @@ async def get_department_events_feed(
     events = (await db.execute(query)).scalars().all()
 
     frontend_url = (settings.FRONTEND_URL or "").rstrip("/")
+    entries = [_org_feed_event(e, frontend_url) for e in events]
+    if (integration.config or {}).get("include_shifts") is True:
+        today = org_today(org)
+        shifts = (
+            (
+                await db.execute(
+                    select(Shift)
+                    .where(
+                        Shift.organization_id == organization_id,
+                        Shift.status != ShiftStatus.CANCELLED,
+                        Shift.shift_date.between(
+                            today - timedelta(days=ORG_FEED_PAST_DAYS),
+                            today + timedelta(days=ORG_FEED_FUTURE_DAYS),
+                        ),
+                    )
+                    .order_by(Shift.start_time)
+                    .limit(ORG_FEED_MAX_EVENTS)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        entries.extend(_org_feed_shift(s) for s in shifts)
     ics = generate_ical_feed(
-        [_org_feed_event(e, frontend_url) for e in events],
+        entries,
         org_name=org_name,
         timezone_name=tz_name,
     )

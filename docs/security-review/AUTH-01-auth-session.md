@@ -1,9 +1,95 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), pass 13 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), pass 14 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 14 (2026-10-31, watchdog pickup) — 0 fixed, 0 new findings; true zero-delta pass, every tracked file byte-identical
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (confirmed via
+`ListAgents` → "No reachable agents" immediately before this iteration was
+dispatched). Step 0 re-verified fresh, not trusted from that briefing:
+`search_pull_requests` for `head:claude/security-review-` `is:open` against
+`thegspiro/the-logbook` returned 0 results. PR #3869 (Feature 00,
+Cross-cutting baseline, pass 14 — the full-rotation reset-and-restart
+iteration) had already merged (`10312c364`), resetting the rotation table
+from all-`✅` back to `⬜` and marking row 00 `✅` again for its own pass.
+Rotation row 01 (Auth & session lifecycle) was confirmed the next `⬜` row on
+a freshly fetched `origin/main` (`git fetch && git reset --hard origin/main`).
+
+**Baseline:** `4f21727a` (PR #3802's merge, pass 13). **Head:** `10312c364`
+(current `main`, PR #3869's merge). 263 commits between them, 172 non-merge.
+
+**Every one of the eighteen files this feature tracks is byte-identical to
+pass 13** — confirmed with `git diff --stat`/`git diff --quiet` across all of
+them at once, not inferred from an empty stat line on a subset:
+`auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`,
+`consent_service.py`, `passkey_service.py`, `models/passkey.py`,
+`dependencies.py`, `security.py`, `suspicious_ip.py`, `schemas/auth.py`
+(backend), and `authStore.ts`, `authService.ts`, `apiClient.ts`,
+`utils/passkeys.ts`, `components/settings/PasskeySettingsCard.tsx`,
+`contexts/StepUpContext.tsx`, `utils/stepUp.ts` (frontend). `git diff
+4f21727a..HEAD` against the full set of eighteen paths produced zero output.
+
+**Checked for a new file hiding the real change, per this skill's own
+warning that a diff table shows which files changed, not that one of them
+gained a route:** `git log --diff-filter=A --name-only 4f21727a..HEAD` over
+`backend/app` and `frontend/src`, filtered to `auth|mfa|oauth|session|
+passkey|stepup|webauthn` (case-insensitive) — zero matches. No new
+auth-adjacent file was added anywhere in the 263-commit range.
+
+### Route inventory — re-enumerated by AST, not assumed unchanged from the empty diff
+
+**Still 38 routes**, same set, same names, same order as pass 13's table.
+Re-walked `auth.py`'s AST directly (every `@router.<verb>` decorator) rather
+than trusting the zero-diff result to imply it — a route's decorator can in
+principle change without the surrounding bytes differing if, say, a
+`Depends(...)` default were edited in place elsewhere in the same
+expression, so this pass repeats the walk rather than skipping it for a file
+with no diff. Output matched pass 13's 38-route list exactly, route for
+route (`/branding` … `/validate-reset-token`). Public/private split
+unchanged at 17/21; `tests/test_endpoint_auth_coverage.py` (which encodes
+`ALLOWLISTED_PUBLIC`) re-run directly: 1 passed.
+
+### Standing items — reconfirmed unchanged from pass 13
+
+**AUTH-23 (MED, OPEN/FLAGGED)** re-verified still accurate and still the
+only open finding for this feature: `step_up`
+(`backend/app/api/v1/endpoints/auth.py:1486-1549`, unchanged byte-for-byte
+since pass 12) still has no account-tied lockout on its password/TOTP
+branches — re-read the handler directly rather than trusting the unchanged
+diff stat alone. `docs/KNOWN_LIMITATIONS.md`'s entry for it (under "A
+member checked in after an election opens cannot vote" / the step-up row)
+is present and unchanged — reconfirmed by direct read, not grep alone.
+
+AUTH-15, AUTH-17, AUTH-21 and AUTH-22 remain closed (pass 8's and pass 10's
+fixes); AUTH-4 (informational, unbounded roster query, accepted as an
+app-wide pattern out of scope for a single-endpoint fix) remains accepted
+and unchanged. No other AUTH finding exists in `docs/KNOWN_LIMITATIONS.md`
+to re-verify — reconfirmed by grep.
+
+### Completion gate (pass 14)
+
+| Check                                                                                                                                                                                                                                                              | Result                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                                                                                                                    | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                                                                                           | ✅ clean, 2744 files unchanged                                              |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                                                                                        | ✅ clean                                                                    |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                  | ✅ single head `f90b1124e6f4`, 678 revisions                                |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                              | ✅ 280 routes, 0 errors/0 warnings                                          |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification or stepup or kiosk or passkey or webauthn"`)                                                           | ✅ 1507 passed, 2 skipped (environment-only — `pywebpush`, Docker registry) |
+| standing guards (`account_status_gates`, `auth_lockout_race`, `auth_refresh_rotation`, `capacity_locking`, `endpoint_auth_coverage`, `like_escaping`, `mfa_policy`, `org_scoping_ratchet`, `password_expiry_gate`, `session_limits`, `sign_in_audit`) run directly | ✅ 209 passed                                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                 | ✅ 0 errors                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                               |
+
+No guard test added this pass: nothing was fixed, no new finding, and the
+file set under review did not change at all since pass 13.
+
+Rotation row 01 moves to `✅`.
 
 ---
 

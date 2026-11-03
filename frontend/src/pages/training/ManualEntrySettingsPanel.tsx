@@ -98,8 +98,8 @@ export const ManualEntrySettingsPanel: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Manual Shift Entry</h2>
           <p className="text-theme-text-muted mt-1 text-sm">
             Configure the manual shift report form for departments without the scheduling module.
@@ -110,7 +110,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
             void handleSave();
           }}
           disabled={saving}
-          className="btn-primary inline-flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
+          className="split-row-aside btn-primary inline-flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save Settings

@@ -564,6 +564,8 @@ class ProspectListResponse(UTCResponseBase):
     # A follow-up form changed this applicant's email or phone and no
     # coordinator has marked it reviewed yet.
     contact_change_pending: bool = False
+    # The caller's roles on this applicant; filled only by /my-applicants.
+    my_roles: List[str] = []
 
     model_config = _response_config
 
@@ -1157,6 +1159,65 @@ class FollowUpFormRequestResponse(UTCResponseBase):
     contact_changed: bool = False
     contact_change_reviewed_at: Optional[datetime] = None
     contact_change_reviewed_by_name: Optional[str] = None
+
+
+class ProspectAssignmentCreate(BaseModel):
+    """Assign a member to an applicant."""
+
+    user_id: UUID
+    role: Literal["case_manager", "interviewer"]
+
+
+class ProspectAssignmentResponse(UTCResponseBase):
+    """A member assigned to an applicant."""
+
+    id: UUID
+    prospect_id: UUID
+    user_id: UUID
+    user_name: Optional[str] = None
+    role: str
+    assigned_by_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class ProspectAccessResponse(BaseModel):
+    """What the caller may do with one applicant (app/services/prospect_access.py),
+    so the screen offers exactly the actions the backend will accept."""
+
+    roles: List[str] = []
+    view_all: bool = False
+    can_work: bool = False
+    can_manage: bool = False
+    can_see_full: bool = False
+    can_log_interview: bool = False
+    # The caller's most senior position, offered as the title an interview
+    # they log is signed with. A suggestion only; the form keeps it editable.
+    interviewer_title: Optional[str] = None
+
+
+class InterviewPositionProgress(BaseModel):
+    """One required interviewer position of an Interview Requirement stage."""
+
+    position: str
+    label: str
+    satisfied: bool
+
+
+class InterviewRequirementProgress(BaseModel):
+    """Where the applicant's current Interview Requirement stage stands.
+
+    ``recommendation_met`` is None when the stage asks for no recommendation,
+    and also for a caller who sees only their own interview: whether another
+    interviewer recommended the applicant is part of their assessment.
+    """
+
+    step_id: str
+    required_count: int
+    recorded_count: int
+    required_recommendation: Optional[str] = None
+    recommendation_met: Optional[bool] = None
+    positions: List[InterviewPositionProgress] = []
+    complete: bool
 
 
 class FollowUpAnswer(BaseModel):

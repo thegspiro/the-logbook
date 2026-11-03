@@ -494,3 +494,35 @@ describe('TemplateFormModal event resource defaults', () => {
     expect(submittedResourceSeats(submitted)).toEqual(['ems', 'ems']);
   });
 });
+
+describe('TemplateFormModal — a new template starts from the department defaults', () => {
+  // Scheduling Settings → Department Defaults was stored and read by nothing
+  // until 2026-10-31.
+  it('takes its length and minimum staffing from the settings', async () => {
+    mockCachedSettings.override = { defaultDurationHours: 10, defaultMinStaffing: 3 };
+    const user = userEvent.setup();
+    const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>().mockResolvedValue(undefined);
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="New template"
+        apparatusOptions={[]}
+        apparatusSource="default"
+      />
+    );
+
+    await user.type(screen.getByLabelText(/^Name/), 'Day Shift');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start_time_of_day: '08:00',
+        end_time_of_day: '18:00',
+        duration_hours: 10,
+        min_staffing: 3,
+      })
+    );
+  });
+});

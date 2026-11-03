@@ -11,6 +11,7 @@
  */
 
 import api from './apiClient';
+import { expectArray } from '../utils/asArray';
 import type {
   ExpiringLot,
   InventoryCategory,
@@ -345,7 +346,14 @@ export const medicalSuppliesService = {
   /** Rooms and active storage areas a supply can be filed under. */
   async getStorageOptions(): Promise<MedicalStorageOptions> {
     const response = await api.get<MedicalStorageOptions>('/medical-supplies/storage-options');
-    return response.data;
+    // Rejected rather than emptied: an empty room list reads as "this
+    // department has no storage rooms", and the item form already says when
+    // the storage areas could not be loaded. A body missing either list used
+    // to reach the form's render and take the dialog down instead.
+    return {
+      rooms: expectArray(response.data.rooms, 'storage rooms'),
+      areas: expectArray(response.data.areas, 'storage areas'),
+    };
   },
 
   /** The apparatus checklist positions that carry this supply. */

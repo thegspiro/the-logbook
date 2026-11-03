@@ -99,7 +99,7 @@ includes archived members, because those are the records officers look after.
 > their browser either. A member's directory carries only what it shows: no
 > usernames, hire dates, stations or platoons.
 
-![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
+![The Members roster: the member count tiles, the search with status, class and membership-status filters, and each member's name, rank, member number, status and hire date](./images/01-01-member-directory.png)
 
 ![The Member Directory as an ordinary member: name, rank, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
 
@@ -325,8 +325,9 @@ member in without showing their card.
 | **Contact Information** | Email, personal email, phone, mobile                                                     | Depends on the department setting and the member's own choices (see below)                |
 | **Address**             | Home address                                                                             | Where visible                                                                             |
 | **Emergency Contacts**  | The member's emergency contacts                                                          | **Only the member and officers who can manage members.** No setting can show it to others |
-| **Membership**          | Rank, member type, station, platoon and "Member since"                                   | Everyone; officers also see the status here                                               |
+| **Membership**          | Rank, member class and membership status, station, platoon and "Member since"            | Everyone; officers also see the status here                                               |
 | **Service History**     | Credited and earlier length of service, stint by stint                                   | The member, and officers who can manage members                                           |
+| **Reports To**          | Who the member reports to now, and who they reported to before                           | The member, and officers who can manage members                                           |
 | **Qualifications**      | What the member is certified to do (EMT, Paramedic, Driver / Operator, Firefighter I/II) | Officers who can manage members only                                                      |
 | **Quick Stats**         | Training, hours and equipment counts                                                     | Only the counts you are allowed to see                                                    |
 | **Leave of Absence**    | Any active leave periods                                                                 | The member, and officers who can manage members                                           |
@@ -339,6 +340,15 @@ added any, or your department keeps them private."
 
 **Service History** is explained in
 [Former Members Who Rejoin](#former-members-who-rejoin).
+
+**Reports To** _(2026-11-01)_. Officers who can manage members set a member's
+supervisor with **Set supervisor** or **Change supervisor**: pick a current
+member and a start date, which defaults to today. The previous supervisor's
+assignment ends the day before. Choosing the same start date as the current
+assignment corrects a mistake rather than recording a change. **End
+assignment** leaves the member with no supervisor as of today. A member cannot
+supervise themselves, and the supervisor must be a current member of the
+department.
 
 **Qualifications** marks each entry **In force** or **Not in force**, the way
 shift sign-up reads it today. It also says whether the entry is
@@ -700,7 +710,7 @@ The number appears on the member's **Admin Edit** page, under Department
 Information, next to Rank and Station. It also shows on their profile, as
 `#021` under their name.
 
-![The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, all editable](./images/01-36-membership-number-field.png)
+![The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, then Platoon, Hire Date, Member Class and Membership Status, all editable](./images/01-36-membership-number-field.png)
 
 The number is an ordinary box that officers can change. Two rules protect it:
 
@@ -895,8 +905,8 @@ The Admin Edit page has these sections:
 - **Personal Information:** name, preferred name, date of birth, personal
   email.
 - **Department Information:** membership number, rank and station (both chosen
-  from your department's lists), platoon, hire date, membership type, and
-  **Exempt from Compliance**.
+  from your department's lists), platoon, hire date, **Member class**,
+  **Membership status**, and **Exempt from Compliance**.
 - **Contact Information:** phone and mobile. The department email is shown but
   cannot be changed here.
 - **Address.**
@@ -908,7 +918,7 @@ Management. That list leaves out the positions named after a rank; a member
 who was given one before this version still sees it there, marked **Rank**,
 so it can be taken off.
 
-![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
+![The Edit Member page: Personal Information, Department Information with Member Class and Membership Status, Contact Information, Address and Emergency Contacts, with Save Changes at the foot](./images/01-07-admin-member-edit.png)
 
 > **Tip.** Rank and station are dropdowns filled from your department's own
 > lists, so every member record uses the same names.
@@ -1002,16 +1012,19 @@ To permanently delete a member:
    your own row has no delete control.
 3. The **Remove Member** dialog opens on its **Deactivate** tab, which keeps
    the member's records. Switch to **Permanently Delete**.
-4. Read the **Records affected** list: training records, inventory items
-   still signed out to the member, and documents whose uploader will be
-   cleared.
+4. Read the two lists. **Permanently deleted** names every kind of record
+   that belongs to the member (sessions, RSVPs, shift assignments, training
+   records and so on) with how many of each, and a total. **Kept** says what
+   stays: items they hold go back to stock, documents they uploaded stay with
+   no uploader shown, and other members' records show "Former member" in
+   their place.
 5. Type the member's name in the box as shown. Capital letters do not matter.
 6. Select **Permanently Delete**. The button stays greyed out until the name
    matches.
 
 There is no delete button on the profile or the Admin Edit page.
 
-![The Permanently Delete tab of the Remove Member dialog, with its impact breakdown and typed confirmation](./images/01-24-delete-member-modal.png)
+![The Permanently Delete tab of the Remove Member dialog for Nadia Belhaj: the warning, the Permanently deleted list with a count for each kind of record and the total, the Kept list, and the typed confirmation](./images/01-24-delete-member-modal.png)
 
 **What gets deleted:**
 
@@ -1362,7 +1375,7 @@ description, type and starting settings. The presets are:
 - Coordinator Approval, Reference Check, New Member Orientation, Interview
   Panel, Officer Sign-Off, Physical Exam.
 
-![The stage type picker in the Stage Configuration modal, showing the stage types](./images/01-27-stage-type-picker.png)
+![The stage type picker in the Stage Configuration modal, showing all thirteen stage types, the last of them Follow-up Form](./images/01-27-stage-type-picker.png)
 
 For each stage type's settings, see
 [Prospective Members → Stage Types](./15-prospective-members.md#stage-types).
@@ -1539,6 +1552,14 @@ department's own membership tiers** by name. The shipped ladder's "Active
 Member" rung is the regular status under that name, so it appears once; a rung
 such as "Senior Member" is a standing of its own. A tier a member reaches by
 years of service shows here exactly as one an officer set by hand.
+
+On the edit page, both controls sit in **Department Information**: **Member
+class** beside the hire date, **Membership status** below it. Each has a line
+beneath it saying what it means.
+
+![The Department Information block of Jonah Whitfield's edit page: Member class set to Administrative beside the hire date, Membership status below it, each with the line explaining it](./images/01-58-member-class-status.png)
+
+The older single
 
 The older single **Membership Type** value is still stored for reports and
 imports written against it, and The Logbook works it out from the pair. A
@@ -1800,13 +1821,15 @@ You change a member's account status from their profile page.
 5. Select **Update Status**. The button stays greyed out until you pick a
    status different from the current one.
 
-**Membership type and status move together for two statuses.** Setting a
-member's **Membership Type** to **Probationary** puts an Active account on
-**Probationary**, and any other type (including a custom tier and the monthly
-tier advance) moves a Probationary account back to **Active**. Inactive,
+**Membership status and account status move together for two statuses.**
+Setting a member's **Membership status** to **Probationary** (or to a
+department tier that **Counts as** probationary) puts an Active account on
+**Probationary**, and any other membership status (including the monthly tier
+advance) moves a Probationary account back to **Active**. The member's class
+does not affect this _(2026-10-29)_. Inactive,
 Suspended, Leave, Retired, Dropped and Archived are never touched. The status
 history records the move with the reason "Follows membership type". A status
-you set by hand in this dialog holds until the membership type is next
+you set by hand in this dialog holds until the membership status is next
 changed.
 
 **Archived is not in the list.** A dropped member is archived automatically
@@ -1950,6 +1973,11 @@ to confirm. It never repeats a reminder, so running it early does no harm.
 
 ## Leave of Absence
 
+> **Leave badges _(2026-10-31)_.** A leave on the member profile is badged by
+> its dates, not just "Active": **Future** before it starts, **Active** while
+> it runs, **Expired** after it ends, and **Permanent** for a leave with no
+> end date. The Waivers screen uses the same rule.
+
 **Who can do this:**
 
 - To see, edit or end a leave: officers who can manage member profiles (the
@@ -2004,10 +2032,13 @@ member is on leave for 3 months. They now need 9 hours (12 × 9 ÷ 12).
 
 - **Active Waivers** tab on Waiver Management: every leave in effect now.
   The **Training Waivers** view in Training Admin lists them too.
-- **Member profile**: shows the member's active leaves in the right-hand
-  column. You can't edit them there.
+- **Member profile**: shows every leave that has not been deactivated, in the
+  **Leave of Absence** card, each badged by its dates. You can't edit them
+  there.
 - **Past leaves**: open the **All Waivers** tab and choose the
   **Past/Inactive** filter.
+
+![The Leave of Absence card on Rafael Duarte's profile: a military leave in December badged Future, a leave of absence running now badged Active, and a personal leave that ended in October badged Expired, each with its dates and reason](./images/01-57-profile-leave-badges.png)
 
 > **Tip.** Ending a leave with **Deactivate** does not delete it. It stays in
 > the history under **All Waivers → Past/Inactive**.
@@ -2196,7 +2227,8 @@ Life rungs are the built-in statuses themselves and need nothing here.
 > it yet. Ask your administrator if it needs changing.
 
 **Changing one member's tier.** Open **Members Admin → Member Management**,
-select **Edit** beside the member, and change the **Membership Type** field.
+select **Edit** beside the member, and change the **Membership status** field
+_(2026-10-29; it was the single **Membership Type** field)_.
 This is separate from the member's status on their profile.
 
 > **What if no tiers are saved?** Then The Logbook does not check membership
@@ -2217,7 +2249,7 @@ of its own choosing.
 Auto-advancement follows three rules:
 
 - **Only up, never down.** Nobody is moved to a lower tier.
-- **Only along the ladder.** A member whose current membership type is not one
+- **Only along the ladder.** A member whose current membership status is not one
   of your tiers is skipped. Set a starting tier for them by hand.
 - **Only Active or Probationary members.** Members with any other status are
   not moved.
@@ -2304,7 +2336,7 @@ chosen area's pages with a line naming the open one.
 Adding and importing members need their own permission; without it, **Add &
 Import** holds only **Import Qualifications**.
 
-![The Members Admin hub, captured before its Settings tab was added](./images/01-22-member-lifecycle.png)
+![Members Administration: the Active, Probationary, Inactive and Needs attention tiles, the Roster, Add & Import and Settings area cards with Roster open and its Member Management page beneath, and the start of the roster with rank, membership (class and status) and positions in separate columns](./images/01-22-member-lifecycle.png)
 
 **What sits above the tabs.** Members Administration opens like the Training,
 Inventory and Events administration pages. It has a header, **four headline
@@ -2552,11 +2584,13 @@ card in the department, in four tabs:
 Deleting old taps does not touch attendance. The check-in itself stays on the
 shift, event or admin-hours record.
 
-<!-- Screenshot needed: The Member ID Cards page on the Cards tab with two cards ticked and the Suspend, Reactivate, Report lost and Revoke bar above the list -->
+![The Member ID Cards page on the Cards tab: the search and filters, two cards ticked, and the bar offering Suspend, Reactivate, Report lost and Revoke for them](./images/01-53-id-cards-roster.png)
 
-<!-- Screenshot needed: The Coverage tab of Member ID Cards: current members without a working card, cards held by former members, and active cards not used lately -->
+![The Coverage tab of Member ID Cards: 3 of 22 current members have a working card, the nineteen without one each with Issue card, and the Cards held by former members and Active cards not used in 180 days sections, both empty](./images/01-54-id-cards-coverage.png)
 
-<!-- Screenshot needed: The Tap log tab of Member ID Cards with the drill's taps, including an unknown card and a card that is not active -->
+![The Tap log tab of Member ID Cards: the outcome, reader and date filters with Export CSV, and the drill's taps at the check-in station (checked in, already checked in, checked out, a card not active and an unknown card) beside a tap refused at a room kiosk](./images/01-55-id-cards-tap-log.png)
+
+![The Settings tab of Member ID Cards: Keep the tap log for (months) set to 24, the note that it takes 3 to 84 months and that check-ins stay on their records, and Save](./images/01-56-id-cards-settings.png)
 
 A tap from a card nobody has registered is logged as **Unknown card**, without
 the card's number.
@@ -2598,7 +2632,7 @@ lost or revoked stays as it is.
 | An email fails with a connection error                         | Ask your administrator to check the email settings. Gmail and Office 365 use port 587; some self-hosted mail servers use port 465.                                                                                                                                                                                                               |
 | A dropped member still shows as active                         | The status change may not have saved. Check it on the member's profile.                                                                                                                                                                                                                                                                          |
 | No property return report is produced                          | The member must have equipment assigned. With none assigned, there is nothing to report.                                                                                                                                                                                                                                                         |
-| A member's tier did not go up                                  | Check that **Advance members automatically by years of service** is on; that the member is Active or Probationary; that their current membership type is one of your tiers; and that their hire date or Service History gives enough credited years. Advancement happens on the 1st of each month.                                               |
+| A member's tier did not go up                                  | Check that **Advance members automatically by years of service** is on; that the member is Active or Probationary; that their current membership status is one of your tiers; and that their hire date or Service History gives enough credited years. Advancement happens on the 1st of each month.                                             |
 | A leave of absence did not adjust training                     | On Waiver Management, look at the leave's **Applies to** column. **Meetings & Shifts** means training was left out. Create a separate training waiver on the same page.                                                                                                                                                                          |
 | A rank shows as not recognised                                 | The member's rank must exactly match a rank your department has set up, including capitals and spaces. Edit the member's rank, or add it under **Members Admin → Settings → Operational Ranks**.                                                                                                                                                 |
 | A member's audit history is empty                              | The history only holds changes made since the feature was turned on. Older changes do not appear.                                                                                                                                                                                                                                                |

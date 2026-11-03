@@ -20,6 +20,15 @@ AUTH_DEPS = {
     "require_permission",
     "require_all_permissions",
     "require_role",
+    # Per-applicant access (app/api/prospect_access.py); each resolves the
+    # caller through get_current_user before deciding.
+    "require_prospect_access",
+    "require_interview_access",
+    "require_pipeline_reader",
+    "require_view_all",
+    # Shift-report review (endpoints/shift_completion.py): training.manage or
+    # the department's reviewer role, resolved through get_current_user.
+    "require_report_reviewer",
 }
 
 # Reviewed, intentionally-public endpoints, keyed by (module, function). These

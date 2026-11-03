@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import type { AxiosInstance } from 'axios';
 import type { SkillTest } from '../types/skillsTesting';
+import { OFFLINE_DRAIN_LOCK } from '../sw/backgroundSyncProtocol';
 
 let signedIn: string | null = 'examiner-1';
 vi.mock('../stores/authStore', () => ({
@@ -194,6 +195,21 @@ describe('skillsTestOffline', () => {
     const kept = await getOwnSkillsPending('t1');
     expect(kept?.update?.elapsed_seconds).toBe(2);
     expect(kept?.baseVersion).toBe(4);
+  });
+
+  it('drains under the lock the service worker takes for background sync', async () => {
+    await enqueueSkillsUpdate({ id: 't1', label: 'SCBA', version: 3 }, { elapsed_seconds: 1 });
+    const request = vi.fn(<T>(_name: string, fn: () => Promise<T>) => fn());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+    const { axios } = fakeAxios(() => test({ version: 4 }));
+
+    try {
+      await drainSkillsQueue(axios);
+    } finally {
+      Reflect.deleteProperty(navigator, 'locks');
+    }
+
+    expect(request).toHaveBeenCalledWith(OFFLINE_DRAIN_LOCK, expect.any(Function));
   });
 
   describe('ownership (FE3-34-5)', () => {

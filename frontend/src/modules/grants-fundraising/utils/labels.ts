@@ -8,6 +8,8 @@ import {
   FundraisingEventType,
   GrantCategory,
   PledgeStatus,
+  ZeffyLinkTarget,
+  ZeffyPaymentState,
 } from '../types';
 import type { Donor } from '../types';
 
@@ -95,4 +97,32 @@ export const FUNDRAISING_EVENT_STATUS_COLORS: Record<string, string> = {
   [FundraisingEventStatus.SOLD_OUT]: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
   [FundraisingEventStatus.COMPLETED]: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
   [FundraisingEventStatus.CANCELLED]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
+};
+
+export const ZEFFY_TARGET_LABELS: Record<string, string> = {
+  [ZeffyLinkTarget.FUNDRAISING_CAMPAIGN]: 'Fundraising campaign',
+  [ZeffyLinkTarget.FUNDRAISING_EVENT]: 'Fundraising event',
+  [ZeffyLinkTarget.DUES_SCHEDULE]: 'Member dues',
+};
+
+export const ZEFFY_STATE_LABELS: Record<string, string> = {
+  [ZeffyPaymentState.PENDING]: 'Processing',
+  [ZeffyPaymentState.IGNORED]: 'Not counted',
+  [ZeffyPaymentState.UNLINKED]: 'Campaign not linked',
+  [ZeffyPaymentState.BEFORE_START]: 'Before link start',
+  [ZeffyPaymentState.UNMATCHED]: 'No member match',
+  [ZeffyPaymentState.APPLIED]: 'Applied',
+  [ZeffyPaymentState.REVERSED]: 'Reversed',
+  [ZeffyPaymentState.NEEDS_REVIEW]: 'Needs review',
+};
+
+export const ZEFFY_STATE_COLORS: Record<string, string> = {
+  [ZeffyPaymentState.PENDING]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  [ZeffyPaymentState.IGNORED]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  [ZeffyPaymentState.UNLINKED]: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
+  [ZeffyPaymentState.BEFORE_START]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  [ZeffyPaymentState.UNMATCHED]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
+  [ZeffyPaymentState.APPLIED]: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
+  [ZeffyPaymentState.REVERSED]: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
+  [ZeffyPaymentState.NEEDS_REVIEW]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
 };

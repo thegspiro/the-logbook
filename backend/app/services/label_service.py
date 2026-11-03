@@ -281,8 +281,11 @@ MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
     # view-level; prospective_members.view is not a baseline grant.
     "inventory": (("inventory.manage",), _build_inventory_specs),
     "apparatus": (("apparatus.view", "apparatus.manage"), _build_apparatus_specs),
+    # view_all, not view or manage: a label document names applicants by id,
+    # and without view_all a member sees only the applicants assigned to them
+    # (app/services/prospect_access.py).
     "prospective_members": (
-        ("prospective_members.view", "prospective_members.manage"),
+        ("prospective_members.view_all",),
         _build_prospect_specs,
     ),
     "facilities": (("facilities.view", "facilities.manage"), _build_facility_specs),

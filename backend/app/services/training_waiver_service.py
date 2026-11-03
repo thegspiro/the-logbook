@@ -21,18 +21,25 @@ Waivers come from two tables:
   2. ``member_leaves_of_absence`` – department-wide leaves that apply to
      *all* training requirements (no ``requirement_ids``).
 
-Both are merged into a single list and deduplicated by calendar-month so
+Both are merged into a single list and deduplicated by calendar day so
 that overlapping entries do not double-count waived time.
+
+How much of a month the covered days excuse is the department's
+``ComplianceConfig.leave_month_rule`` (see ``month_waivers``). The fetch
+helpers stamp it on every period they return, so the many callers that prorate
+a target pick it up without each having to load the config.
 """
 
 import calendar
-from dataclasses import dataclass
-from datetime import date
-from typing import Dict, List, Optional, Tuple
+import math
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.compliance_config import ComplianceConfig, LeaveMonthRule
 from app.models.training import TrainingWaiver
 from app.models.user import MemberLeaveOfAbsence
 
@@ -41,31 +48,85 @@ from app.models.user import MemberLeaveOfAbsence
 # ---------------------------------------------------------------------------
 
 
+SOURCE_LEAVE = "leave"
+SOURCE_WAIVER = "waiver"
+
+# Days of leave in a month at which the ``half`` rule excuses half of it.
+HALF_MONTH_DAYS = 15
+
+
 @dataclass
 class WaiverPeriod:
-    """Uniform representation of a waiver / leave period."""
+    """Uniform representation of a waiver / leave period.
+
+    ``source`` says which table it came from, so a screen can say "leave"
+    only where a leave of absence is the reason. ``month_rule`` is the
+    department's ``leave_month_rule``; it defaults to the column's own default
+    for periods built without a department to read it from.
+    """
 
     start_date: date
     end_date: date
     requirement_ids: Optional[List[str]] = None  # None → applies to all
+    source: str = SOURCE_WAIVER
+    month_rule: str = LeaveMonthRule.FULL_MONTH.value
+
+
+@dataclass
+class MonthWaiver:
+    """How much of one calendar month a member was excused from.
+
+    ``share`` is the fraction of the month's target excused (0 < share <= 1);
+    ``days_covered`` and ``days_in_window`` are the counts it came from.
+    """
+
+    share: float
+    days_covered: int
+    days_in_window: int
+    sources: Set[str] = field(default_factory=set)
+
+    @property
+    def partial(self) -> bool:
+        return self.share < 1
 
 
 _PERMANENT_END = date(9999, 12, 31)
 
 
-def _to_waiver_period(obj) -> WaiverPeriod:
+def _to_waiver_period(
+    obj, source: str, month_rule: str = LeaveMonthRule.FULL_MONTH.value
+) -> WaiverPeriod:
     """Convert a TrainingWaiver or MemberLeaveOfAbsence to a WaiverPeriod.
 
     Permanent waivers (``end_date is None``) are mapped to a far-future
-    sentinel so the calendar-month overlap math in ``count_waived_months``
-    works without special-casing ``None``.
+    sentinel so the calendar-month overlap math in ``month_waivers`` works
+    without special-casing ``None``.
     """
     req_ids = getattr(obj, "requirement_ids", None)
     return WaiverPeriod(
         start_date=obj.start_date,
         end_date=obj.end_date or _PERMANENT_END,
         requirement_ids=req_ids,
+        source=source,
+        month_rule=month_rule,
     )
+
+
+async def get_leave_month_rule(db: AsyncSession, org_id: str) -> str:
+    """The department's ``leave_month_rule``; ``full_month`` without a config.
+
+    An organization that never opened the compliance settings has no row, and
+    the column's default is what it would have been given.
+    """
+    rule = (
+        await db.execute(
+            select(ComplianceConfig.leave_month_rule).where(
+                ComplianceConfig.organization_id == str(org_id)
+            )
+        )
+    ).scalar_one_or_none()
+    valid = {r.value for r in LeaveMonthRule}
+    return rule if rule in valid else LeaveMonthRule.FULL_MONTH.value
 
 
 # ---------------------------------------------------------------------------
@@ -97,11 +158,17 @@ async def fetch_user_waivers(
         )
     )
 
+    waivers = tw_result.scalars().all()
+    leaves = ml_result.scalars().all()
+    if not waivers and not leaves:
+        # Most members have neither; the rule would go unread.
+        return []
+    rule = await get_leave_month_rule(db, org_id)
     periods: List[WaiverPeriod] = []
-    for w in tw_result.scalars().all():
-        periods.append(_to_waiver_period(w))
-    for leave in ml_result.scalars().all():
-        periods.append(_to_waiver_period(leave))
+    for w in waivers:
+        periods.append(_to_waiver_period(w, SOURCE_WAIVER, rule))
+    for leave in leaves:
+        periods.append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
     return periods
 
 
@@ -127,13 +194,18 @@ async def fetch_org_waivers(
         )
     )
 
+    waivers = tw_result.scalars().all()
+    leaves = ml_result.scalars().all()
+    if not waivers and not leaves:
+        return {}
+    rule = await get_leave_month_rule(db, org_id)
     by_user: Dict[str, List[WaiverPeriod]] = {}
-    for w in tw_result.scalars().all():
+    for w in waivers:
         uid = str(w.user_id)
-        by_user.setdefault(uid, []).append(_to_waiver_period(w))
-    for leave in ml_result.scalars().all():
+        by_user.setdefault(uid, []).append(_to_waiver_period(w, SOURCE_WAIVER, rule))
+    for leave in leaves:
         uid = str(leave.user_id)
-        by_user.setdefault(uid, []).append(_to_waiver_period(leave))
+        by_user.setdefault(uid, []).append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
     return by_user
 
 
@@ -160,19 +232,40 @@ def get_rolling_period_months(req) -> Optional[int]:
     return None
 
 
-def waived_month_keys(
+def _month_share(rule: str, covered: int, in_window: int) -> float:
+    """The fraction of a month's target that ``covered`` days of leave excuse."""
+    if covered <= 0 or in_window <= 0:
+        return 0.0
+    if covered >= in_window:
+        return 1.0
+    if rule == LeaveMonthRule.PROPORTIONAL.value:
+        return covered / in_window
+    if rule == LeaveMonthRule.HALF.value:
+        return 0.5 if covered >= HALF_MONTH_DAYS else 0.0
+    return 1.0
+
+
+def month_waivers(
     waivers: List[WaiverPeriod],
     period_start: date,
     period_end: date,
     req_id: Optional[str] = None,
-) -> set:
+) -> Dict[Tuple[int, int], MonthWaiver]:
     """
-    The ``(year, month)`` of every calendar month within
-    ``[period_start, period_end]`` covered by at least one waiver.
+    Every calendar month within ``[period_start, period_end]`` that a waiver
+    excuses at least part of, keyed by ``(year, month)``.
 
-    A month is considered "waived" when the waiver covers >= 15 days of
-    that month.  Overlapping waivers are deduplicated via a set of
-    (year, month) tuples.
+    Covered days are the union across all applicable waivers, so overlapping
+    periods never count a day twice. A month's days are counted within the
+    evaluation window, so a window opening mid-month measures that month
+    against the days it actually spans. The department's ``leave_month_rule``
+    (carried on the periods) turns the covered days into a share:
+
+    - ``full_month``   — any covered day excuses the whole month.
+    - ``proportional`` — covered days / days in the month.
+    - ``half``         — 15+ covered days excuses half; all of it, the whole.
+
+    A month whose share works out to nothing is left out.
 
     Parameters
     ----------
@@ -186,39 +279,86 @@ def waived_month_keys(
         always apply.
     """
     if not waivers or not period_start or not period_end:
-        return set()
+        return {}
 
-    waived: set = set()
-    for w in waivers:
-        # Skip requirement-specific waivers that don't cover this requirement
-        if w.requirement_ids and req_id and str(req_id) not in w.requirement_ids:
-            continue
+    applicable = [
+        w
+        for w in waivers
+        if not (w.requirement_ids and req_id and str(req_id) not in w.requirement_ids)
+    ]
+    if not applicable:
+        return {}
+    rule = applicable[0].month_rule
 
-        # Find overlap with the evaluation period
+    # Per month, the covered day ranges (clipped to the month and window) and
+    # the sources behind them; merged below so an overlap counts once.
+    spans: Dict[Tuple[int, int], List[Tuple[date, date]]] = {}
+    sources: Dict[Tuple[int, int], Set[str]] = {}
+    for w in applicable:
         overlap_start = max(w.start_date, period_start)
         overlap_end = min(w.end_date, period_end)
         if overlap_start > overlap_end:
             continue
-
-        # Walk month-by-month through the overlap
         y, m = overlap_start.year, overlap_start.month
         while date(y, m, 1) <= overlap_end:
-            month_start = date(y, m, 1)
-            month_end_day = calendar.monthrange(y, m)[1]
-            month_end = date(y, m, month_end_day)
+            month_end = date(y, m, calendar.monthrange(y, m)[1])
+            span = (max(overlap_start, date(y, m, 1)), min(overlap_end, month_end))
+            spans.setdefault((y, m), []).append(span)
+            sources.setdefault((y, m), set()).add(w.source)
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
 
-            cov_start = max(overlap_start, month_start)
-            cov_end = min(overlap_end, month_end)
-            covered_days = (cov_end - cov_start).days + 1
-            if covered_days >= 15:
-                waived.add((y, m))
+    result: Dict[Tuple[int, int], MonthWaiver] = {}
+    for (y, m), month_spans in spans.items():
+        days = 0
+        last_end: Optional[date] = None
+        for start, end in sorted(month_spans):
+            if last_end is not None and start <= last_end:
+                if end <= last_end:
+                    continue
+                start = last_end + timedelta(days=1)
+            days += (end - start).days + 1
+            last_end = end
+        month_start = max(date(y, m, 1), period_start)
+        month_end = min(date(y, m, calendar.monthrange(y, m)[1]), period_end)
+        in_window = (month_end - month_start).days + 1
+        share = _month_share(rule, days, in_window)
+        if share > 0:
+            result[(y, m)] = MonthWaiver(
+                share=share,
+                days_covered=days,
+                days_in_window=in_window,
+                sources=sources[(y, m)],
+            )
+    return result
 
-            m += 1
-            if m > 12:
-                m = 1
-                y += 1
 
-    return waived
+def excused_month_reasons(
+    waivers: List[WaiverPeriod],
+    period_start: Optional[date],
+    period_end: Optional[date],
+    req_id: Optional[str] = None,
+) -> Dict[str, int]:
+    """How many excused months a leave and how many a waiver accounted for.
+
+    ``{"leave_months": n, "waiver_months": m}``. A month both touched counts in
+    both, so a screen can say "on leave" only where a leave is the reason.
+    """
+    leave = waiver = 0
+    if period_start and period_end:
+        for mw in month_waivers(waivers, period_start, period_end, req_id).values():
+            leave += SOURCE_LEAVE in mw.sources
+            waiver += SOURCE_WAIVER in mw.sources
+    return {"leave_months": leave, "waiver_months": waiver}
+
+
+def waived_month_keys(
+    waivers: List[WaiverPeriod],
+    period_start: date,
+    period_end: date,
+    req_id: Optional[str] = None,
+) -> set:
+    """The ``(year, month)`` of every month a waiver excuses any part of."""
+    return set(month_waivers(waivers, period_start, period_end, req_id))
 
 
 def count_waived_months(
@@ -227,13 +367,13 @@ def count_waived_months(
     period_end: date,
     req_id: Optional[str] = None,
 ) -> int:
-    """How many calendar months of the window a waiver covers.
+    """How many calendar months of the window a waiver excuses any part of.
 
-    ``adjust_required`` prorates the target by this, and the monthly breakdown
-    marks the same months as leave (:func:`waived_month_keys`), so the card's
-    adjusted target and its month rows cannot disagree about what was waived.
+    The months ``adjust_required`` prorates by, and the ones the monthly
+    breakdown marks (:func:`month_waivers`), so the card's adjusted target and
+    its month rows cannot disagree about what was waived.
     """
-    return len(waived_month_keys(waivers, period_start, period_end, req_id))
+    return len(month_waivers(waivers, period_start, period_end, req_id))
 
 
 def total_months_in_period(period_start: date, period_end: date) -> int:
@@ -255,13 +395,15 @@ def adjust_required(
     waivers: List[WaiverPeriod],
     req_id: Optional[str] = None,
     period_months: Optional[int] = None,
-) -> Tuple[float, int, int]:
+    whole_units: bool = False,
+) -> Tuple[float, int, float]:
     """
     Adjust a requirement's target value for waived months.
 
     Formula::
 
         adjusted = base_required × (active_months / total_months)
+        active_months = total_months − Σ month shares   (at least 1)
 
     Parameters
     ----------
@@ -278,10 +420,15 @@ def adjust_required(
         ``rolling_period_months``), this overrides the calendar-month
         count from ``total_months_in_period`` which can be off-by-one
         for mid-month rolling windows.
+    whole_units : bool
+        Shifts and calls are counted in whole units, so a prorated target is
+        rounded down (owner decision 2026-11-02): a member owes 1 shift, not
+        1.5, and never more than the department's rate asks.
 
     Returns
     -------
-    (adjusted_required, waived_months_count, active_months_count)
+    (adjusted_required, waived_months_count, active_months)
+        ``active_months`` is fractional when a partial month was excused.
     """
     if not period_start or not period_end or base_required <= 0:
         return base_required, 0, 0
@@ -291,8 +438,20 @@ def adjust_required(
         if period_months
         else total_months_in_period(period_start, period_end)
     )
-    waived = count_waived_months(waivers, period_start, period_end, req_id)
-    active_months = max(total - waived, 1)
+    excused = month_waivers(waivers, period_start, period_end, req_id)
+    waived_share = sum(mw.share for mw in excused.values())
+    active = max(total - waived_share, 1)
 
-    adjusted = base_required * (active_months / total)
-    return round(adjusted, 2), waived, active_months
+    adjusted = base_required * (active / total)
+    if whole_units:
+        # The epsilon keeps 2.9999999 (float error on an exact 3) from
+        # rounding down to 2.
+        adjusted = float(math.floor(adjusted + 1e-9))
+    else:
+        adjusted = round(adjusted, 2)
+    # Rounded for display only, after the target is computed from the exact
+    # figure.
+    active_months = round(active, 2)
+    if active_months == int(active_months):
+        active_months = int(active_months)
+    return adjusted, len(excused), active_months

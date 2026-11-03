@@ -1,5 +1,39 @@
 # Script currency
 
+## Flagged by the 2026-11-01 → 11-02 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                          | Beat                           | Was                      | Now                                                                                                  |
+| ----------------------------------------------- | ------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **Fire Chief (04) / Training Officer (05, 16)** | Yearly or probationary reviews | Done outside the Logbook | Member performance evaluations: draft, calibrate, sign, PDF, member response (Reports → Evaluations) |
+| **Member guide (06)**                           | Your own reviews               | Not covered              | **My Evaluations**: read yours, respond within 30 days                                               |
+| **IT Manager (03)**                             | Email templates                | No evaluation emails     | Group "Performance Evaluations" in Communications                                                    |
+
+## Flagged by the 2026-10-31 → 11-01 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                          | Beat                | Was                                 | Now                                                                      |
+| ----------------------------------------------- | ------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
+| **Any recruitment beat**                        | Who sees applicants | Anyone with view or manage sees all | `view_all` sees all; others see assigned applicants (My Applicants)      |
+| **Training Officer, Part 1 (05) / Part 2 (16)** | After a shift       | Generic rating panel in the report  | Department evaluation form per member; build it under Shift Evaluations  |
+| **Any scheduling beat**                         | Department Defaults | Overtime field on the card          | Overtime lives in the Overtime advisory; defaults pre-fill new templates |
+
+## Flagged by the 2026-10-29 → 10-30 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                   | Beat                | Was                         | Now                                                                                |
+| ------------------------ | ------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| **Any membership beat**  | Editing a member    | One **Membership Type**     | **Member class** and **Membership status**                                         |
+| **Any elections beat**   | Who may vote        | Per-ballot eligibility only | Election Settings → **Voter Eligibility** sets attendance and waiting-period rules |
+| **Any recruitment beat** | Follow-up forms     | Link only                   | Reminders, a coordinator notice, answers on the Interview page                     |
+| **Any training beat**    | Compliance profiles | By membership type          | Also by position held                                                              |
+
 ## Flagged by the 2026-10-29 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).

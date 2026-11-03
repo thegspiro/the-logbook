@@ -262,6 +262,10 @@ and **Authentication** (Sign-in, MFA Policy). MFA Policy also holds the
 **Allow passkeys** switch _(2026-10-26)_; see
 [Using a passkey](./00-getting-started.md#using-a-passkey-for-two-step-sign-in-2026-10-26).
 
+![Settings → Authentication → MFA Policy: the Require two-factor authentication switch, off, and the Allow passkeys switch, on by default, each with its explanation](./images/08-118-mfa-policy-passkeys.png)
+
+![The Reset MFA dialog for a member who has a passkey: Passkeys, with Lost one phone? Remove just that passkey, My phone listed with its Remove link, then what Reset MFA removes, and Cancel / Reset MFA](./images/08-119-reset-mfa-passkeys.png)
+
 > **MFA Policy is a floor, not the whole rule.** Members holding administration
 > or health-record permissions must use two-step sign-in even when the policy is
 > off for everyone else, with a 14-day grace period that starts the first time
@@ -455,7 +459,10 @@ through and what each one gives:
 - whether they can vote;
 - whether they may hold elected office;
 - whether a meeting-attendance threshold applies before they may vote;
-- whether they are excused from training.
+- whether they are excused from training;
+- for a tier your department added, which built-in status it **Counts as**
+  _(2026-10-29)_. It is unset after an upgrade; see
+  [Member class and member status](./01-membership.md#member-class-and-member-status).
 
 Automatic advancement is **on by default**, and a monthly job acts on it. Turn
 it off if your department promotes by vote, by application, or on its own
@@ -1521,6 +1528,8 @@ changing. The form lists them too:
   records. Without them, Gmail, Outlook and Yahoo may send department mail to
   spam or reject it.
 
+![Settings → Email with Gmail chosen and App Password selected: the From address and app password fields, and the notes on a dedicated sending account, a password change revoking app passwords, and DKIM on your own domain](./images/08-122-gmail-app-password.png)
+
 **Gmail** on Google Workspace also offers **Service account**, which a
 password change does not affect. Choosing it needs **admin.access** (the Fire
 Chief, President and IT Manager positions hold it by default); anyone else sees
@@ -1537,6 +1546,8 @@ the option disabled. It sends through the Gmail API instead of signing in to
 4. Use an active user in your Workspace domain as the account email address,
    save, and select **Test Connection**. It checks that Google will let the key
    send as that address, and sends nothing.
+
+![Settings → Email with Gmail and Service account chosen and a key file picked: Key chosen for client ID 104857392018475629301, the three setup steps naming that client ID and the gmail.send scope, and the warning that the key can send as anyone in the domain. The key is made up for the picture](./images/08-123-gmail-service-account.png)
 
 The key can send as anyone in the domain; Google cannot limit it to one
 mailbox. Keep it in a Google Cloud project used only for this. Changing the
@@ -1690,8 +1701,10 @@ switch between them.
 - **Prospective Members** holds the emails applicants receive — **Application
   Step Completed**, **Application Status Link**, **Application Going
   Inactive**, **Application Withdrawn**, **Duplicate Application Notice**,
-  **Application Follow-up Form** and **Application Contact Details Changed**
-  _(2026-10-29)_ — and the coordinators' **Prospect Inactivity Warning**.
+  **Application Follow-up Form**, **Application Contact Details Changed** and
+  **Application Follow-up Form Reminder** _(2026-10-29)_ — and the
+  coordinators' **Prospect Inactivity Warning** and **Application Follow-up
+  Form Submitted** _(2026-10-29)_.
   _(2026-10-26)_ When
   each is sent, and its variables, is in
   [Prospective Members → Emails to Applicants](./15-prospective-members.md#emails-to-applicants).
@@ -1700,6 +1713,8 @@ switch between them.
   counted from your department's Message History.
 - **All**, **Active**, **Off** and **Edited** filter the list. **Edited** shows
   only templates you have changed.
+
+![Email Templates on the Off filter: the list holds one template, Event Reminder, under Events & Scheduling, its subtitle reading Off and its dot grey](./images/08-120-email-templates-off-filter.png)
 
 ![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
@@ -1715,6 +1730,8 @@ _(2026-10-29)_ **Application Follow-up Form** and **Application Contact
 Details Changed** (their switch is disabled). A department that never opened Email Templates keeps every
 email. Operators: check the **Off** filter before upgrading
 ([`UPGRADING.md`](../UPGRADING.md)).
+
+![The Password Reset template open in the editor: its header reads Always sent and the switch beside it is on and dimmed, because this email cannot be switched off](./images/08-121-template-always-sent.png)
 
 Five templates that used to be stored but never used are now sent, in your
 wording: **Cert Expiration** (it now says "expires today" or "tomorrow" rather
@@ -2598,11 +2615,13 @@ Profiles let different groups be held to different standards.
 
 1. Select **Add Profile**.
 2. Fill in:
-   - **Name** — for example "Line Officers" or "Probationary Members";
+   - **Profile Name** — for example "Line Officers" or "Probationary Members";
    - **Priority** — when a member matches more than one profile, the highest
      priority applies;
    - **Description**;
    - **Applies to Membership Types**;
+   - **Applies to Members Holding a Position** _(2026-10-29)_ — see
+     [Scoping a Compliance Profile by Position](./02-training.md#scoping-a-compliance-profile-by-position-2026-10-29);
    - optional **threshold overrides** for this group;
    - **Required Training Requirements** — what must be met;
    - **Optional/Tracked Requirements** — tracked, but not needed for

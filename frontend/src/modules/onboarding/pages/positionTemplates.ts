@@ -349,7 +349,7 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Public information, website, social media, newsletters, and notification management',
         icon: Megaphone,
         priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', ['notifications', 'mobile', 'events', 'documents']),
+        permissions: generateRolePermissions(modules, 'specialist', ['notifications', 'events', 'documents']),
       },
     ],
   },

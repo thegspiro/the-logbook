@@ -37,6 +37,21 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return output;
 }
 
+/**
+ * How long to wait for a service worker before giving up. `ready` never
+ * settles when no worker is registered (registration failed, or was skipped),
+ * and a toggle waiting on it stays busy forever with nothing said.
+ */
+const SERVICE_WORKER_READY_TIMEOUT_MS = 10_000;
+
+function serviceWorkerReady(): Promise<ServiceWorkerRegistration> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('No service worker became ready')), SERVICE_WORKER_READY_TIMEOUT_MS);
+  });
+  return Promise.race([navigator.serviceWorker.ready, timeout]).finally(() => clearTimeout(timer));
+}
+
 function browserSupportsPush(): boolean {
   return (
     typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
@@ -71,14 +86,20 @@ export function usePushNotifications(): UsePushNotifications {
         const { data } = await api.get<{ enabled: boolean; public_key: string | null }>('/notifications/push/config');
         if (cancelled) return;
         setConfig({ enabled: data.enabled, publicKey: data.public_key });
-
-        const reg = await navigator.serviceWorker.ready;
-        const existing = await reg.pushManager.getSubscription();
-        if (!cancelled) setSubscribed(existing !== null);
       } catch {
         // Config unreachable (offline, or endpoint absent on an older server):
         // treat push as unavailable rather than showing a broken toggle.
         if (!cancelled) setConfig({ enabled: false, publicKey: null });
+        return;
+      }
+
+      try {
+        const reg = await serviceWorkerReady();
+        const existing = await reg.pushManager.getSubscription();
+        if (!cancelled) setSubscribed(existing !== null);
+      } catch {
+        // No worker yet: this device has no subscription to report. Enabling
+        // push says so with an error rather than hiding the toggle.
       }
     })();
 
@@ -106,7 +127,7 @@ export function usePushNotifications(): UsePushNotifications {
         return false;
       }
 
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await serviceWorkerReady();
       const sub =
         (await reg.pushManager.getSubscription()) ??
         (await reg.pushManager.subscribe({
@@ -131,7 +152,7 @@ export function usePushNotifications(): UsePushNotifications {
     setBusy(true);
     setError(null);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await serviceWorkerReady();
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
         // Tell the server first: if the browser-side unsubscribe succeeds but

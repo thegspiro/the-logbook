@@ -86,5 +86,9 @@ assert.match(
   /addEventListener\('notificationclick'/,
   'the notification-click handler must be inlined into sw.js'
 );
+// Background Sync (src/sw/backgroundSyncWorker.ts), compiled and inlined by
+// the same plugin. Without it queued work sends only while the app is open.
+assert.match(serviceWorker, /addEventListener\(["']sync["']/, 'the background-sync handler must be inlined into sw.js');
+assert.match(serviceWorker, /logbook-offline-sync/, 'the background-sync handler must answer the offline-sync tag');
 
 console.log('PWA validation passed: manifest, install assets, app shell, and service worker are present.');

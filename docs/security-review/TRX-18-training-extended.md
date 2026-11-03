@@ -1,6 +1,6 @@
 # Security Review 18 — Training Extended
 
-**Prefix:** `TRX` · **Iteration:** 18 · **Reviewed:** 2026-10-19 (pass 9) ·
+**Prefix:** `TRX` · **Iteration:** 18 · **Reviewed:** 2026-11-02 (pass 13) ·
 **PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training_submissions.py` (730 L),
@@ -3518,5 +3518,146 @@ FLAGGED item exists after this pass.
 | `python3 scripts/validate_migrations.py --strict`                                                                                            | ✅ 678 revisions, single head `f90b1124e6f4`      |
 | `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or crew"` (via `python3.13`) | ✅ 2517 passed, 1 pre-existing skip (`pywebpush`) |
 | `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                            | ✅ 280 routes, 0 errors, 0 warnings               |
+| `cd frontend && npm run typecheck`                                                                                                           | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                                                                                                                | ✅ 0 errors, 0 warnings (`--max-warnings 10`)     |
+
+## Pass 13 (2026-11-02) — watchdog pickup, real delta, 0 new findings
+
+**Prefix:** `TRX13` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`, state=open — 0 results
+repo-wide). PR #3932 (Feature 17, Training core, pass 13) had already
+merged (`9cecb6fd2`). The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`
+("No reachable agents"). Rotation row 18 (Training extended) was confirmed
+the next pending feature by reading the rotation table directly on a
+freshly fetched `main`, matching PR #3932's own "next feature" note.
+
+### Real delta since pass 12 (baseline `28c7d9246`, PR #3843's merge)
+
+207 non-merge commits landed in the window. Across the fifteen-file
+declared scope, five files changed: `models/training.py`,
+`schemas/training_submission.py`, `services/training_submission_service.py`,
+`services/training_program_service.py`, and `services/external_training_service.py`.
+Read every real (non-merge) commit touching them in full via `git show`:
+
+- **`f561b59aa`** ("Fix data loss and double-counting in the offline
+  queues") adds a `client_request_id` idempotency key to
+  `TrainingSubmission`/`TrainingSubmissionCreate` and
+  `TrainingSubmissionService.create_submission`, closing a real duplicate-
+  credit bug (a resent offline submission was filed, and under
+  auto-approval credited, twice). Verified the Pitfall #36 shape directly
+  rather than taking the commit message's word: the lookup-before-insert
+  (`_find_by_client_request`) filters `organization_id` **and**
+  `submitted_by` (XC-3 — no cross-tenant or cross-member read), the column
+  is `nullable=True` with a `(submitted_by, client_request_id)` unique
+  constraint (MySQL admits unlimited NULLs, so existing rows are untouched),
+  and the race window between the lookup and the insert is closed by
+  catching `IntegrityError`, rolling back, and re-querying before
+  re-raising — the losing concurrent attempt returns the winner's row
+  rather than erroring. Migration `e9bfa68963ce` is `create_all`-tolerant
+  (`_has_table`/`_has_column`/`_has_constraint` guards on every step) and
+  idempotent on re-run. `TrainingSubmissionCreate.client_request_id` is
+  bounded (`min_length=8, max_length=64`, `^[A-Za-z0-9_-]+$`) — no
+  unbounded string reaching a unique index. The one caller that handles an
+  `IntegrityError` itself, `create_submission_with_attachment`
+  (`training_submissions.py`), only reaches its own except block when the
+  service's internal re-lookup already came back empty (a non-idempotency
+  integrity failure), so the uploaded-file cleanup there cannot fire on a
+  legitimate resend. No finding.
+- **`d4e4cabea`** ("Credit program requirements from shift evaluations")
+  adds three `RequirementType` values and their crediting logic to
+  `training_program_service.py`/`models/training.py`. This file is
+  Feature 17's (Training core) own — out of this iteration's list except
+  for the TRX-1 citation — and was reviewed under that feature's own pass
+  13 (PR #3932, which explicitly claims the new
+  `EVALUATED_SHIFTS`/`TRANSPORTS`/`REFUSALS` requirement types as "real
+  delta to training's own files"). Confirmed directly that this commit does
+  not touch TRX-1's citation: `bulk_enroll_members`'s batch `User` lookup
+  (still filtering `organization_id == str(organization_id)` at its current
+  line) is in a different function from every line this commit changed.
+  No finding; not re-reviewed in depth here, per the "do not re-derive what
+  another feature already settled" rule.
+- **`175bcbf21`** (SEC-00 pass 14, a cross-cutting-baseline watchdog
+  pickup, already reviewed and merged under that feature's own rotation
+  slot) switches `external_training_service.py`'s
+  `import_single_record`/`bulk_import_records`-adjacent exception handler
+  from `import_record.import_error = str(exc)` to
+  `safe_error_detail(exc)` — the same disclosure-hygiene pattern pass 12
+  already reviewed on `external_training.py`'s two import functions,
+  applied here to the service-layer sibling. Not a new vulnerability.
+
+One frontend commit touches this feature's declared surface without
+touching its backend: **`7ed3f1a6f`** ("Training: roster members see their
+own cohort's class schedule") relaxes `/training/cohorts/:id`'s **route**
+permission gate from `training.manage` to sign-in-only in
+`modules/training/routes.tsx`, and splits `CohortDetailPage.tsx`'s render
+into an officer view (full admin actions) and a member view (class
+timeline only, reschedule/cancel/shift/regenerate actions all hidden
+behind `canManage`). Confirmed this introduces no new backend exposure:
+`course_cohorts.py`'s `GET /{cohort_id}` (unchanged in this window, and
+unchanged since before pass 12's baseline) already depended only on
+`get_current_user` and already 404s a non-roster member while withholding
+`members`/attendance counts from a roster member who is not an officer
+(`CourseCohortService.get_cohort_detail`'s `include_member_data` gate,
+`is_roster_member` filtered on `organization_id` — read directly, not
+assumed). The write endpoints
+(`/regenerate`, `/shift`, `/cancel`, `/members*`) are untouched and remain
+`require_permission("training.manage")`-gated. This commit only lets the
+frontend route to a page the API already served safely; no finding.
+
+### Standing findings re-verified at their current citation
+
+TRX-1 through TRX-10, TRX3-1, TRX4-1/TRX4-2, and TRX7-1 re-read directly at
+their current file/line (not re-cited from a prior pass): the
+`bulk_enroll_members` batch `User` lookup still filters `organization_id`
+(TRX-1); `update_provider`, `CourseCohortService.update_cohort`,
+`CourseSyllabusService.update_class` still route through `apply_updates`
+(TRX-2/5/5b); `training_enhancements.py`'s effectiveness-evaluations read
+still confines non-officers via `can_view_officer_training_data` (TRX-3);
+`training_waivers.py` still calls `assert_all_in_org` (TRX-6);
+`training_submission_service.py` still calls `assert_in_org` at four sites
+(TRX-7, plus the three internal call sites already covered); `
+RecertificationService._validate_references` and its siblings in
+`training_enhancement_service.py` are present and called before every
+create/update (TRX-8/9); `XAPIService`'s `_provider_validated` flag and
+batch-once validation are unchanged (TRX-10). No OPEN or FLAGGED item
+existed as of pass 12; none is reopened by this pass's five-file diff.
+
+### Route re-enumeration
+
+Counted `@router.get/post/put/patch/delete` decorators directly across all
+six endpoint files: **100 routes** (22 + 5 + 30 + 20 + 17 + 6) — unchanged
+from pass 12, matching the zero diff on these six files this window.
+`python3 scripts/check_route_permissions.py --strict` (repo root):
+**289 total application routes, 0 errors, 0 warnings** — up from pass 12's
+280 from other features in the rotation merging in the interim, confirming
+no new top-level page from this feature (Pitfall #30a n/a).
+
+### Findings
+
+**0 new findings.** The window's real delta is one genuine correctness/
+idempotency fix to this feature's own service (`client_request_id`,
+verified org-scoped, race-safe, and `create_all`-tolerant — not a security
+finding to raise, since it closes a data-integrity bug rather than opening
+one), one requirement-crediting addition to a file this feature does not
+own (already reviewed under Feature 17's own slot), one already-reviewed
+cross-cutting disclosure-hygiene fix, and one frontend-only permission
+relaxation confirmed to match already-safe, unchanged backend
+authorization. Every standing TRX finding re-verified unchanged; no OPEN
+or FLAGGED item exists after this pass.
+
+## Completion gate (pass 13)
+
+| Check                                                                                                                                        | Result                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/`                                                                                                         | ✅ 2833 files unchanged                           |
+| `isort --check-only app/ tests/ alembic/`                                                                                                    | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                            | ✅ 696 revisions, single head `38e0f552242d`      |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or crew"` (via `python3.13`) | ✅ 2572 passed, 1 pre-existing skip (`pywebpush`) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                            | ✅ 289 routes, 0 errors, 0 warnings               |
+| `python3.13 scripts/generate_schema_docs.py --check` (backend)                                                                               | ✅ up to date                                     |
 | `cd frontend && npm run typecheck`                                                                                                           | ✅ 0 errors                                       |
 | `cd frontend && npm run lint`                                                                                                                | ✅ 0 errors, 0 warnings (`--max-warnings 10`)     |

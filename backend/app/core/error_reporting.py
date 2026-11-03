@@ -55,6 +55,11 @@ TOKEN_PATH_PATTERNS = (
     # An event's guest QR code token: the same credential for the same flow,
     # spelled /event-guest/{token} on both the page and the public API.
     re.compile(r"(/event-guest/)[^/?#]+", re.IGNORECASE),
+    # A follow-up form's personal link token: the frontend page is
+    # /application-form/{token}; the public API it calls is plural,
+    # /follow-up-forms/{token}/....
+    re.compile(r"(/application-form/)[^/?#]+", re.IGNORECASE),
+    re.compile(r"(/follow-up-forms/)[^/?#]+", re.IGNORECASE),
 )
 
 # ``error_logs.error_type`` is String(50); a longer value fails the insert and

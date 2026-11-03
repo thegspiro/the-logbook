@@ -95,6 +95,10 @@ class RequirementType(str, enum.Enum):
     SKILLS_EVALUATION = "skills_evaluation"  # Skills checkoff/evaluation
     CHECKLIST = "checklist"  # Checklist items to complete
     KNOWLEDGE_TEST = "knowledge_test"  # Written/paper-based knowledge test
+    # Credited by submitted shift evaluations (app/services/shift_evaluation_service.py).
+    EVALUATED_SHIFTS = "evaluated_shifts"  # Shifts with a submitted evaluation
+    TRANSPORTS = "transports"  # Patient transports recorded on evaluations
+    REFUSALS = "refusals"  # Patient refusals recorded on evaluations
 
 
 class RequirementSource(str, enum.Enum):
@@ -620,6 +624,16 @@ class TrainingRequirement(Base):
     )  # For COURSES type - list of course IDs
     required_shifts: Mapped[Optional[int]] = mapped_column(Integer)  # For SHIFTS type
     required_calls: Mapped[Optional[int]] = mapped_column(Integer)  # For CALLS type
+    # EVALUATED_SHIFTS counts against required_shifts. TRANSPORTS and REFUSALS
+    # have targets of their own rather than borrowing required_calls, which
+    # the call-matching and grading code reads as a number of calls.
+    required_transports: Mapped[Optional[int]] = mapped_column(Integer)
+    required_refusals: Mapped[Optional[int]] = mapped_column(Integer)
+    # EVALUATED_SHIFTS only: count a shift only when no item on its evaluation
+    # was given the form's lowest rating ("Unsatisfactory" on a 1-4 form).
+    evaluation_excludes_lowest_rating: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
     required_call_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # Specific incident types required
@@ -1603,6 +1617,19 @@ class TrainingProgram(Base):
     )  # Conditional reminder rules
     # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
 
+    # The evaluation form a member enrolled in this program is evaluated on
+    # after a shift (a driver candidate gets the driver evaluation). SET NULL:
+    # deleting a template leaves the program, now with no form (Pitfall #2).
+    shift_evaluation_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluation_templates.id",
+            ondelete="SET NULL",
+            name="fk_training_programs_shift_evaluation_template",
+        ),
+        nullable=True,
+    )
+
     # Recertification Cycle (auto-reset)
     # When enabled, an enrolled member's accumulated progress is cleared on a
     # recurring deadline so a fresh certification cycle can begin — e.g. NREMT's
@@ -2154,6 +2181,7 @@ class ProgressCreditSource(str, enum.Enum):
     SHIFT_REPORT = "shift_report"
     EXTERNAL_IMPORT = "external_import"
     OFFICER_APPLY = "officer_apply"
+    SHIFT_EVALUATION = "shift_evaluation"
 
 
 class RequirementProgressCredit(Base):
@@ -2638,6 +2666,28 @@ class TrainingModuleConfig(Base):
         String(30), nullable=True
     )
 
+    # Shift evaluations. The general form is for members in no training
+    # program who sat in one of its evaluated seats; NULL mode reads as "off"
+    # (GENERAL_EVALUATION_MODES in app/models/shift_evaluation.py), so a
+    # department that never chose one evaluates nobody new on upgrade.
+    general_shift_evaluation_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluation_templates.id",
+            ondelete="SET NULL",
+            name="fk_training_module_configs_general_shift_evaluation_template",
+        ),
+        nullable=True,
+    )
+    general_shift_evaluation_mode: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
+    # Whether one evaluation on a shift counts for every program the member is
+    # enrolled in, rather than one evaluation per program.
+    one_shift_evaluation_for_multiple_programs: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
+
     # Self-reported submissions
     show_submission_history: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="1", nullable=False
@@ -3068,6 +3118,15 @@ class TrainingSubmission(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # Chosen by the device before its first attempt to send, and repeated on
+    # every resend. A submission queued offline is sent again whenever its
+    # answer did not arrive (a dropped connection, the client's 30s timeout),
+    # including when the server had already stored it; under auto-approval
+    # that second copy became a second training record and the hours counted
+    # twice. Unique per member, and NULL for submissions made without one,
+    # which MySQL's unique index allows any number of.
+    client_request_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     # Relationships
     training_record: Mapped[Optional["TrainingRecord"]] = relationship("TrainingRecord")
 
@@ -3075,6 +3134,11 @@ class TrainingSubmission(Base):
         Index("idx_submission_org_status", "organization_id", "status"),
         Index("idx_submission_user", "submitted_by", "status"),
         Index("idx_submission_date", "completion_date"),
+        UniqueConstraint(
+            "submitted_by",
+            "client_request_id",
+            name="uq_submission_member_client_request",
+        ),
     )
 
     def __repr__(self):
@@ -3873,6 +3937,9 @@ class ShiftAttendance(Base):
     __table_args__ = (
         Index("idx_shift_att_shift", "shift_id"),
         Index("idx_shift_att_user", "user_id"),
+        # One attendance row per member per shift. The service paths lock the
+        # shift and check first; this is what holds when two requests race.
+        UniqueConstraint("shift_id", "user_id", name="uq_shift_attendance_shift_user"),
     )
 
     def __repr__(self):
@@ -4356,6 +4423,54 @@ class ShiftPattern(Base):
 
     def __repr__(self):
         return f"<ShiftPattern(name={self.name}, type={self.pattern_type})>"
+
+
+class ShiftPatternOccurrence(Base):
+    """
+    One row per occurrence a pattern has generated: the durable key that stops
+    generation recreating it.
+
+    The older guard matches a shift from the pattern's template starting at the
+    occurrence's date and time, so deleting a generated shift or moving its
+    start left nothing for that guard to find and the next scheduled run put
+    the original back with its full crew (KNOWN_LIMITATIONS, shifts-module
+    review item 1). This row outlives both: deleting the shift only clears
+    ``shift_id``. Removed with its pattern.
+    """
+
+    __tablename__ = "shift_pattern_occurrences"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    pattern_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("shift_patterns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    occurrence_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # "on" for a single-shift day, or the "day" / "night" side.
+    shift_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pattern_id",
+            "occurrence_date",
+            "shift_type",
+            name="uq_shift_pattern_occurrence",
+        ),
+        Index("idx_shift_pattern_occ_org", "organization_id"),
+        Index("idx_shift_pattern_occ_shift", "shift_id"),
+    )
 
 
 # ============================================

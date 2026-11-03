@@ -128,6 +128,22 @@ class TestTheService:
             )
         db.add.assert_not_called()
 
+    async def test_create_role_also_refuses_system(self):
+        """`kind="system"` is blocked by the RoleCreate schema before it ever
+        reaches the service, but the service itself must refuse it too: a
+        future internal caller that builds a role without going through the
+        schema (the way ``clone_role`` or a script might) must not be able to
+        mint a fake platform-owned position just by calling create_role."""
+        service = RoleManagementService()
+        service._assert_position_name_free = AsyncMock()
+        service.get_role_by_slug = AsyncMock(return_value=None)
+        db = _mutation_db()
+        with pytest.raises(ValueError, match="Unknown position kind"):
+            await service.create_role(
+                db, "org-1", "Fake Owner", [], "admin-1", kind="system"
+            )
+        db.add.assert_not_called()
+
     async def test_a_system_position_keeps_its_kind(self):
         service = RoleManagementService()
         service.get_role = AsyncMock(

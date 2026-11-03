@@ -4,6 +4,7 @@ import {
   Home,
   Users,
   UserPlus,
+  UserCheck,
   Calendar,
   FileText,
   Settings,
@@ -35,6 +36,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   ClipboardCheck,
+  ClipboardList,
   Activity,
   CreditCard,
   ScanLine,
@@ -42,6 +44,7 @@ import {
   Stethoscope,
   Store,
   HandCoins,
+  Landmark,
   Wallet,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
@@ -60,13 +63,14 @@ import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
-import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { triggerAllOfflineDrains } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
 import { trainingNavItems } from './trainingNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
+import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -128,11 +132,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const toggleFocusPending = useRef(false);
   const { canScrollUp, canScrollDown } = useScrollOverflow(navListRef);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
-  const practicalSkillsMethod = usePracticalSkillsMethod();
+  const practicalSkillsMethod = usePracticalSkillsMethod(!modulesLoading && isModuleOn('training'));
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
   const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const hasAssignedApplicants = useHasAssignedApplicants(
+    currentUser?.id,
+    !modulesLoading && isModuleOn('prospective_members')
+  );
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -203,6 +211,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
+    // Offered only to a member assigned to an applicant: the assignment, not a
+    // permission, is what opens the page (modules/prospective-members).
+    ...(hasAssignedApplicants
+      ? [{ label: 'My Applicants', path: '/prospective-members/my-applicants', icon: UserCheck } as NavItem]
+      : []),
     // The route requires `storefront.view` (modules/storefront/routes.tsx), so
     // the module toggle alone is not the gate: a member whose department was
     // seeded before the storefront module shipped holds no storefront grant
@@ -288,6 +301,22 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           } as NavItem,
         ]
       : []),
+    // Published history is read by every signed-in member, so the entry has no
+    // permission of its own; the module switch is the gate.
+    ...(isModuleOn('history')
+      ? [
+          {
+            label: 'History',
+            path: '/history',
+            icon: Landmark,
+            subItems: [
+              { label: 'Overview', path: '/history', icon: Landmark },
+              { label: 'Past Members', path: '/history/people', icon: Landmark },
+              { label: 'Honor Roll', path: '/history/honor-roll', icon: Landmark },
+            ],
+          } as NavItem,
+        ]
+      : []),
     ...(isModuleOn('notifications')
       ? [{ label: 'Notifications', path: '/notifications?tab=inbox', icon: Bell } as NavItem]
       : []),
@@ -302,6 +331,18 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'My ID Card',
             path: `/members/${currentUser.id}/id-card`,
             icon: CreditCard,
+          } as NavItem,
+        ]
+      : []),
+    ...(isModuleOn('reports')
+      ? [
+          { label: 'My Evaluations', path: '/reports/evaluations/mine', icon: ClipboardCheck } as NavItem,
+          // Gated like its route: the evaluations a member conducts, or all.
+          {
+            label: 'Evaluations',
+            path: '/reports/evaluations/conduct',
+            icon: ClipboardList,
+            anyPermission: ['evaluations.conduct', 'evaluations.view_all', 'evaluations.manage'],
           } as NavItem,
         ]
       : []),
@@ -522,6 +563,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   path: '/reports',
                   icon: BarChart3,
                   permission: 'reports.view',
+                } as NavItem,
+                // Its own entry, gated like its route: evaluation setup is
+                // delegated without reports.view, which the Reports entry needs.
+                {
+                  label: 'Member Evaluations',
+                  path: '/reports/evaluations',
+                  icon: ClipboardCheck,
+                  anyPermission: ['evaluations.configure', 'evaluations.manage'],
                 } as NavItem,
               ]
             : []),
@@ -1002,7 +1051,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             {isOnline && pendingSyncCount > 0 && (
               <button
                 onClick={() => {
-                  void triggerOfflineDrain();
+                  void triggerAllOfflineDrains();
                 }}
                 className={`focus:ring-theme-focus-ring touch:min-h-[44px] flex w-full items-center rounded-lg bg-blue-500/15 text-blue-700 transition-colors hover:bg-blue-500/25 focus:ring-2 focus:outline-hidden dark:text-blue-300 ${
                   collapsed ? 'justify-center p-2' : 'px-3 py-2'

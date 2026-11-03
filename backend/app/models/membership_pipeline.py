@@ -104,6 +104,18 @@ class InterviewRecommendation(str, enum.Enum):
     UNDECIDED = "undecided"
 
 
+class AssignmentRole(str, enum.Enum):
+    """What a member assigned to one applicant does for them.
+
+    A case manager works the applicant; an interviewer sees the applicant's
+    details and documents and logs their own interview. Neither sees any other
+    applicant through the assignment (prospect_access.py).
+    """
+
+    CASE_MANAGER = "case_manager"
+    INTERVIEWER = "interviewer"
+
+
 # --- Models ---
 
 
@@ -804,6 +816,15 @@ class ProspectInterview(Base):
     interviewer_role: Mapped[Optional[str]] = mapped_column(
         String(100)
     )  # e.g., "Membership Coordinator", "Chief"
+    # The position slugs, names and office keys the interviewer held when the
+    # interview was logged, casefolded. An Interview Requirement stage's
+    # required_interviewer_positions are graded against this, so an interview
+    # counts for the office its interviewer held that day. NULL on interviews
+    # logged before the column existed; the grader then reads the
+    # interviewer's current positions.
+    interviewer_positions: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Interview content
     notes: Mapped[Optional[str]] = mapped_column(Text)
@@ -1022,6 +1043,65 @@ class ProspectFormRequest(Base):
     def __repr__(self):
         return (
             f"<ProspectFormRequest(prospect={self.prospect_id}, step={self.step_id})>"
+        )
+
+
+class ProspectAssignment(Base):
+    """A member assigned to one applicant, as case manager or interviewer.
+
+    The assignment is itself the grant: a member holding no pipeline
+    permission (a board member asked to interview) reaches the applicant
+    through it, and a holder of view or manage without
+    ``prospective_members.view_all`` sees only the applicants they are
+    assigned to. One row per member per role per applicant
+    (``uq_prospect_assignment``), so assigning twice is a no-op.
+
+    ``role`` is a String rather than a database ENUM so a later role needs no
+    column rewrite; AssignmentRole is checked on every write.
+    """
+
+    __tablename__ = "prospect_assignments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    prospect_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    assigned_by: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    prospect: Mapped["ProspectiveMember"] = relationship(
+        "ProspectiveMember", backref="assignments"
+    )
+
+    __table_args__ = (
+        Index("uq_prospect_assignment", "prospect_id", "user_id", "role", unique=True),
+        Index("idx_prospect_assignment_user", "user_id", "organization_id"),
+        Index("idx_prospect_assignment_org", "organization_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProspectAssignment(prospect={self.prospect_id}, user={self.user_id}, "
+            f"role={self.role})>"
         )
 
 

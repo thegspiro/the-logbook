@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
+import { newRequestId } from '../utils/requestId';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { toAppError } from '../utils/errorHandling';
 import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
@@ -1354,7 +1355,10 @@ export const trainingSubmissionService = {
   },
 
   // Member submissions
-  async createSubmission(data: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+  async createSubmission(input: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+    // Chosen once, before the first attempt: a queued copy is resent whenever
+    // an answer goes missing, and the server stores a repeat of this key once.
+    const data: TrainingSubmissionCreate = { ...input, client_request_id: input.client_request_id || newRequestId() };
     // If the device is offline, persist the submission to IndexedDB so it
     // syncs when connectivity returns. This is the most-used action in the
     // product and must never silently drop because of weak station wifi.
@@ -1506,6 +1510,176 @@ export const trainingSubmissionService = {
 };
 
 // ============================================
+// Shift Evaluation Templates Service
+// ============================================
+
+export const shiftEvaluationTemplateService = {
+  async list(): Promise<import('../types/training').ShiftEvaluationTemplate[]> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplate[]>(
+      '/training/shift-evaluation-templates'
+    );
+    return asArray(response.data);
+  },
+
+  async get(templateId: string): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplate>(
+      `/training/shift-evaluation-templates/${templateId}`
+    );
+    return response.data;
+  },
+
+  /** An unsaved starting point for the editor. */
+  async getExample(): Promise<import('../types/training').ShiftEvaluationTemplateWrite> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplateWrite>(
+      '/training/shift-evaluation-templates/example'
+    );
+    return response.data;
+  },
+
+  async create(
+    body: import('../types/training').ShiftEvaluationTemplateWrite
+  ): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.post<import('../types/training').ShiftEvaluationTemplate>(
+      '/training/shift-evaluation-templates',
+      body
+    );
+    return response.data;
+  },
+
+  async update(
+    templateId: string,
+    body: import('../types/training').ShiftEvaluationTemplateWrite
+  ): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.put<import('../types/training').ShiftEvaluationTemplate>(
+      `/training/shift-evaluation-templates/${templateId}`,
+      body
+    );
+    return response.data;
+  },
+
+  async remove(templateId: string): Promise<void> {
+    await api.delete(`/training/shift-evaluation-templates/${templateId}`);
+  },
+
+  async getSettings(): Promise<import('../types/training').ShiftEvaluationSettings> {
+    const response = await api.get<import('../types/training').ShiftEvaluationSettings>(
+      '/training/shift-evaluation-templates/settings'
+    );
+    return response.data;
+  },
+
+  async updateSettings(
+    updates: import('../types/training').ShiftEvaluationSettingsUpdate
+  ): Promise<import('../types/training').ShiftEvaluationSettings> {
+    const response = await api.patch<import('../types/training').ShiftEvaluationSettings>(
+      '/training/shift-evaluation-templates/settings',
+      updates
+    );
+    return response.data;
+  },
+};
+
+// ============================================
+// Shift Evaluations Service
+// ============================================
+
+const evaluationPath = (shiftId: string, memberId: string, scopeKey: string) =>
+  `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}/members/${encodeURIComponent(
+    memberId
+  )}/${encodeURIComponent(scopeKey)}`;
+
+export const shiftEvaluationService = {
+  /** Who on a shift needs an evaluation, and where each one stands. */
+  async getRoster(shiftId: string): Promise<import('../types/training').ShiftEvaluationRoster> {
+    const response = await api.get<import('../types/training').ShiftEvaluationRoster>(
+      `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}`
+    );
+    return response.data;
+  },
+
+  async getForm(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    templateId?: string
+  ): Promise<import('../types/training').ShiftEvaluationFormResponse> {
+    const response = await api.get<import('../types/training').ShiftEvaluationFormResponse>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      templateId ? { params: { template_id: templateId } } : undefined
+    );
+    return response.data;
+  },
+
+  async save(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    body: import('../types/training').ShiftEvaluationSaveBody
+  ): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.put<import('../types/training').ShiftEvaluationDetail>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      body
+    );
+    return response.data;
+  },
+
+  async get(evaluationId: string): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail>(
+      `/training/shift-evaluations/${encodeURIComponent(evaluationId)}`
+    );
+    return response.data;
+  },
+
+  /** The evaluations a logged outside shift calls for (training.manage). */
+  async getOutsideRoster(entryId: string): Promise<import('../types/training').ShiftEvaluationRoster> {
+    const response = await api.get<import('../types/training').ShiftEvaluationRoster>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}`
+    );
+    return response.data;
+  },
+
+  async getOutsideForm(
+    entryId: string,
+    scopeKey: string,
+    templateId?: string
+  ): Promise<import('../types/training').ShiftEvaluationFormResponse> {
+    const response = await api.get<import('../types/training').ShiftEvaluationFormResponse>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}/${encodeURIComponent(scopeKey)}`,
+      templateId ? { params: { template_id: templateId } } : undefined
+    );
+    return response.data;
+  },
+
+  async saveOutside(
+    entryId: string,
+    scopeKey: string,
+    body: import('../types/training').ShiftEvaluationSaveBody
+  ): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.put<import('../types/training').ShiftEvaluationDetail>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}/${encodeURIComponent(scopeKey)}`,
+      body
+    );
+    return response.data;
+  },
+
+  /** Logged outside shifts whose evaluation is missing or unfinished. */
+  async listOutsideOutstanding(): Promise<import('../types/training').OutsideShiftAwaitingEvaluation[]> {
+    const response = await api.get<import('../types/training').OutsideShiftAwaitingEvaluation[]>(
+      '/training/shift-evaluations/external/outstanding'
+    );
+    return asArray(response.data);
+  },
+
+  /** The caller's own submitted evaluations they may see yet. */
+  async listMine(): Promise<import('../types/training').ShiftEvaluationDetail[]> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail[]>(
+      '/training/shift-evaluations/mine'
+    );
+    return asArray(response.data);
+  },
+};
+
+// ============================================
 // Shift Completion Reports Service
 // ============================================
 
@@ -1533,6 +1707,14 @@ export const trainingModuleConfigService = {
   async getMyTraining(): Promise<import('../types/training').MyTrainingSummary> {
     const response = await api.get<import('../types/training').MyTrainingSummary>(
       '/training/module-config/my-training'
+    );
+    return response.data;
+  },
+
+  /** One member's requirements as the training officer sees them (training.manage). */
+  async getMemberRequirements(userId: string): Promise<import('../types/training').MemberRequirementsResponse> {
+    const response = await api.get<import('../types/training').MemberRequirementsResponse>(
+      `/training/module-config/members/${encodeURIComponent(userId)}/requirements`
     );
     return response.data;
   },

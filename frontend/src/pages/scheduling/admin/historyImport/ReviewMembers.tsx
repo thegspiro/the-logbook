@@ -53,8 +53,8 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
 
   return (
     <section aria-labelledby="review-members-heading" className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 id="review-members-heading" className="text-theme-text-primary text-lg font-semibold">
             Members
           </h2>
@@ -64,7 +64,7 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
               : `${unresolved.length} of ${members.length} people need a decision.`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="split-row-aside flex flex-wrap gap-2">
           {creatable.length > 0 && (
             <button
               type="button"
@@ -105,8 +105,8 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
                   : AUTOMATIC;
             const candidates = new Set(member.candidate_ids);
             return (
-              <li key={member.key} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
+              <li key={member.key} className="split-row gap-3 p-4 sm:items-center">
+                <div className="split-row-main">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-theme-text-primary font-medium break-words">{memberSourceLabel(member)}</span>
                     <span className={`badge border ${HISTORY_IMPORT_RESOLUTION_COLORS[member.status] ?? ''}`}>
@@ -124,7 +124,7 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
                     </p>
                   )}
                 </div>
-                <div className="lg:w-80">
+                <div className="split-row-aside sm:w-80">
                   <label htmlFor={selectId} className="sr-only">
                     Who is {member.display_name || member.key}?
                   </label>

@@ -78,6 +78,15 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.APPLICATION_CONTACT_CHANGED.value: "f34e25e2c820",
     EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER.value: "30e5b112ec00",
     EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED.value: "30e5b112ec00",
+    EmailTemplateType.APPLICATION_ASSIGNED.value: "c588f525fdbb",
+    EmailTemplateType.APPLICATION_NEEDS_ATTENTION.value: "aefb58788235",
+    EmailTemplateType.EVALUATION_STEP_WAITING.value: "38e0f552242d",
+    EmailTemplateType.EVALUATION_DEADLINE_REMINDER.value: "38e0f552242d",
+    EmailTemplateType.EVALUATION_OVERDUE.value: "38e0f552242d",
+    EmailTemplateType.EVALUATION_FINALIZED.value: "38e0f552242d",
+    EmailTemplateType.EVALUATION_DELETED.value: "857291750c67",
+    EmailTemplateType.EVALUATION_AMENDED.value: "6b2f0c9d4e71",
+    EmailTemplateType.EVALUATION_RESPONSE.value: "9d3a71c5e2b8",
 }
 
 

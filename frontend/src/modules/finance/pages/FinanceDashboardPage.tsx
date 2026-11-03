@@ -114,7 +114,7 @@ const DashboardSkeleton: React.FC = () => (
         <Skeleton className="h-8 w-full" />
       </div>
     </div>
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="card-grid gap-3 [--card-grid-min:18rem]">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={`ql-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
@@ -257,7 +257,7 @@ const FinanceDashboardPage: React.FC = () => {
       {/* Quick Links */}
       <div>
         <h2 className="text-theme-text-primary mb-3 text-sm font-semibold">Quick Links</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="card-grid gap-3 [--card-grid-min:18rem]">
           {canApprove && (
             <QuickLinkCard
               to="/finance/approvals"

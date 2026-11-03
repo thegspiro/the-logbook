@@ -148,6 +148,33 @@ describe('applyAppUpdate', () => {
     expect(mockPurgeAppCaches).toHaveBeenCalledExactlyOnceWith();
   });
 
+  it('joins an update already in progress instead of starting a second attempt', async () => {
+    // The worker swap inside reloadForNewVersion can take seconds. A second
+    // tap on "Reload now", or a navigation, arriving in that window must not
+    // count as a failed attempt and escalate to a cache purge.
+    let finishReload: () => void = () => {};
+    mockReloadForNewVersion.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishReload = resolve;
+      })
+    );
+
+    const first = applyAppUpdate('build-a');
+    const second = applyAppUpdate('build-a');
+    finishReload();
+
+    await expect(Promise.all([first, second])).resolves.toEqual(['reload', 'reload']);
+    expect(mockPurgeAppCaches).not.toHaveBeenCalled();
+    expect(mockReloadForNewVersion).toHaveBeenCalledExactlyOnceWith();
+    expect(nextRemedy('build-a')).toBe('purge');
+  });
+
+  it('starts a fresh attempt once the previous one has finished', async () => {
+    await applyAppUpdate('build-a');
+
+    await expect(applyAppUpdate('build-a')).resolves.toBe('purge');
+  });
+
   it('falls back to a plain reload when there is no build id to count against', async () => {
     await expect(applyAppUpdate()).resolves.toBe('reload');
     await expect(applyAppUpdate()).resolves.toBe('reload');

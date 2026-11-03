@@ -80,6 +80,15 @@ class EmailTemplateType(str, enum.Enum):
     APPLICATION_CONTACT_CHANGED = "application_contact_changed"
     APPLICATION_FOLLOW_UP_REMINDER = "application_follow_up_reminder"
     APPLICATION_FOLLOW_UP_SUBMITTED = "application_follow_up_submitted"
+    APPLICATION_ASSIGNED = "application_assigned"
+    APPLICATION_NEEDS_ATTENTION = "application_needs_attention"
+    EVALUATION_STEP_WAITING = "evaluation_step_waiting"
+    EVALUATION_DEADLINE_REMINDER = "evaluation_deadline_reminder"
+    EVALUATION_OVERDUE = "evaluation_overdue"
+    EVALUATION_FINALIZED = "evaluation_finalized"
+    EVALUATION_DELETED = "evaluation_deleted"
+    EVALUATION_AMENDED = "evaluation_amended"
+    EVALUATION_RESPONSE = "evaluation_response"
     CUSTOM = "custom"
 
 

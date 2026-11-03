@@ -487,8 +487,8 @@ const PoolItemsPage: React.FC = () => {
   return (
     <div className="max-w-7xl space-y-6 py-6 sm:py-8">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
             <Package size={24} /> Pool Items
           </h2>
@@ -496,7 +496,7 @@ const PoolItemsPage: React.FC = () => {
             Quantity-based items issued from shared pools — uniforms, consumables, and supplies.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="split-row-aside flex flex-wrap items-center gap-2">
           <button
             type="button"
             className="btn-secondary btn-md flex items-center gap-1"

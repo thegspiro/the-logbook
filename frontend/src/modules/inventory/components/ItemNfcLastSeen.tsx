@@ -75,9 +75,9 @@ export const ItemNfcLastSeen: React.FC<ItemNfcLastSeenProps> = ({ itemId }) => {
       ) : (
         <ol className="divide-theme-surface-border divide-y">
           {scans.map((scan) => (
-            <li key={scan.id} className="flex flex-col gap-0.5 py-2 sm:flex-row sm:justify-between sm:gap-4">
-              <span className="text-theme-text-primary text-sm">{describeScan(scan)}</span>
-              <span className="text-theme-text-secondary text-xs sm:text-right">
+            <li key={scan.id} className="split-row gap-0.5 py-2 sm:gap-4">
+              <span className="split-row-main text-theme-text-primary text-sm">{describeScan(scan)}</span>
+              <span className="split-row-aside text-theme-text-secondary text-xs sm:text-right">
                 {formatDateTime(scan.scanned_at, tz)}
                 {scan.scanned_by_name ? ` · ${scan.scanned_by_name}` : ''}
               </span>

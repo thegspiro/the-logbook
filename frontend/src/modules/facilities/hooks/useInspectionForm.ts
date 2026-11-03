@@ -94,9 +94,11 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 interface UseInspectionFormOptions {
   facilityId?: string;
+  /** Only inspections whose next date falls from today through this many days ahead. */
+  dueWithinDays?: number | undefined;
 }
 
-export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {}) {
+export function useInspectionForm({ facilityId, dueWithinDays }: UseInspectionFormOptions = {}) {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [inspections, setInspections] = useState<Inspection[]>([]);
@@ -149,6 +151,7 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
       if (facilityId) params.facility_id = facilityId;
       if (resultFilter !== 'all') params.result = resultFilter;
       if (appliedSearch) params.search = appliedSearch;
+      if (dueWithinDays !== undefined) params.due_within_days = dueWithinDays;
       const result = await facilitiesService.getInspectionsPage(params);
       if (seq !== requestSeq.current) return;
       setInspections(result.items);
@@ -160,7 +163,7 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
     } finally {
       if (seq === requestSeq.current) setIsLoading(false);
     }
-  }, [facilityId, resultFilter, appliedSearch, page]);
+  }, [facilityId, resultFilter, appliedSearch, dueWithinDays, page]);
 
   useEffect(() => {
     void loadInspections();

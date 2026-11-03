@@ -281,6 +281,8 @@ export const inventoryService = {
     vendor_id?: string | undefined;
     /** Only items at or below their reorder point — the set the low-stock alert email lists. */
     low_stock?: boolean | undefined;
+    /** Only items filed under a category at or below its low-stock threshold — the categories the dashboard's Low stock tile counts. */
+    low_stock_categories?: boolean | undefined;
     /** These three reached the API untyped: the caller spreads a filter object,
      *  which slips past TS's excess-property check (CLAUDE.md pitfall #5). */
     size?: string | undefined;
@@ -483,7 +485,11 @@ export const inventoryService = {
   },
 
   async getOverdueTemporaryLoans(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
-    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
+    // The endpoint's maximum, not its default of 50: the dashboard's Overdue
+    // returns tile counts every overdue loan and links here (DASH-37).
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue', {
+      params: { limit: 200 },
+    });
     return response.data;
   },
 
@@ -1062,6 +1068,7 @@ export const inventoryService = {
     storage_area_id?: string | undefined;
     vendor_id?: string | undefined;
     low_stock?: boolean | undefined;
+    low_stock_categories?: boolean | undefined;
     search?: string | undefined;
     size?: string | undefined;
     color?: string | undefined;

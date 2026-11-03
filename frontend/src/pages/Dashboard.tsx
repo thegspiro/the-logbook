@@ -2104,8 +2104,8 @@ const Dashboard: React.FC = () => {
                   `beforeinstallprompt` get a one-tap Install button; iOS Safari
                   has no such event, so it gets Share-sheet instructions. */}
               {(canInstall || needsManualInstall) && !dismissedInstall && (
-                <div className="order-4 flex flex-col gap-3 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-3">
+                <div className="split-row order-4 gap-3 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4 sm:items-center">
+                  <div className="split-row-main flex items-start gap-3">
                     <Smartphone className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" aria-hidden="true" />
                     <div>
                       <p className="text-theme-text-primary text-sm font-medium">Install The Logbook</p>
@@ -2119,7 +2119,7 @@ const Dashboard: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="split-row-aside flex flex-wrap items-center gap-2">
                     <button
                       onClick={dismissInstallBanner}
                       className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target rounded px-3 text-sm"
@@ -2511,8 +2511,8 @@ const Dashboard: React.FC = () => {
               {canViewLegacyAdmin &&
                 (adminError ? (
                   <div className="card border-red-500/30 p-5" role="alert">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
+                    <div className="split-row gap-3 sm:items-center">
+                      <div className="split-row-main">
                         <p className="text-theme-text-primary font-semibold">Department summary is unavailable</p>
                         <p className="text-theme-text-muted mt-1 text-sm">
                           We could not load the department-wide metrics. Your personal dashboard is unaffected.
@@ -2521,7 +2521,7 @@ const Dashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void loadAdminSummary()}
-                        className="btn-primary min-h-[44px] px-4"
+                        className="split-row-aside btn-primary min-h-[44px] px-4"
                       >
                         Try again
                       </button>

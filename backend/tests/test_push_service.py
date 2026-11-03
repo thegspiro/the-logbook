@@ -40,6 +40,9 @@ Vapid02 = pytest.importorskip(
 
 from app.core.config import settings
 from app.core.database import database_manager
+from app.models.notification import NotificationChannel
+from app.services.notifications_service import NotificationsService
+from app.services.push_dispatch import wait_for_queued_pushes
 from app.services.push_service import (
     PYWEBPUSH_AVAILABLE,
     PushService,
@@ -465,6 +468,48 @@ class TestSend:
             "url": "/e/9",
             "tag": "events",
         }
+
+    @pytest.mark.parametrize(
+        ("requested", "delivered"),
+        [
+            ("/events/9", "/events/9"),
+            ("/notifications?tab=inbox", "/notifications?tab=inbox"),
+            # The worker opens or navigates to this on a tap. Anything that is
+            # not a path on this site falls back to the inbox.
+            ("https://elsewhere.example/phish", "/notifications?tab=inbox"),
+            ("//elsewhere.example/phish", "/notifications?tab=inbox"),
+            ("/\\elsewhere.example/phish", "/notifications?tab=inbox"),
+            ("javascript:alert(1)", "/notifications?tab=inbox"),
+            (None, "/notifications?tab=inbox"),
+            ("", "/notifications?tab=inbox"),
+        ],
+    )
+    async def test_the_click_target_is_always_a_path_on_this_site(
+        self,
+        db_session,
+        two_orgs,
+        push_service_url,
+        received,
+        vapid_keys,
+        requested,
+        delivered,
+    ):
+        org_id, user_id = two_orgs["a"]
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+        await svc.subscribe(org_id, user_id, f"{push_service_url}/ok", p256dh, auth)
+
+        captured: Dict[str, str] = {}
+        original = svc._send_one
+
+        def spy(sub_info, payload):
+            captured["payload"] = payload
+            return original(sub_info, payload)
+
+        svc._send_one = spy  # type: ignore[method-assign]
+        await svc.send_to_user(org_id, user_id, "Title", "Body", url=requested)
+
+        assert json.loads(captured["payload"])["url"] == delivered
 
     async def test_reaches_every_device_the_member_registered(
         self, db_session, two_orgs, push_service_url, received, vapid_keys
@@ -922,3 +967,57 @@ class TestConcurrentRefreshDuringTransferStaysConsistent:
             await session_old.close()
             await session_new.close()
             await _cleanup_users(org_old, org_new)
+
+
+class TestNotificationPush:
+    """The push that accompanies an in-app notification."""
+
+    async def test_logging_a_notification_does_not_wait_for_its_push(
+        self, db_session, two_orgs, vapid_keys, monkeypatch
+    ):
+        """An announcement logs one notification per member, so a push sent
+        in-line made the officer's request wait on every device in turn —
+        past the client's timeout on a large roster or a slow push service,
+        and a retry then notified everyone twice."""
+        org_id, user_id = two_orgs["a"]
+        release = asyncio.Event()
+        sent: List[Dict[str, Any]] = []
+
+        async def slow_push_service(self, **kwargs):
+            sent.append(kwargs)
+            await release.wait()
+            return 1
+
+        monkeypatch.setattr(PushService, "send_to_user", slow_push_service)
+
+        log, error = await asyncio.wait_for(
+            NotificationsService(db_session).log_notification(
+                org_id,
+                {
+                    "recipient_id": user_id,
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": "Drill: Ladder ops",
+                    "message": "New announcement",
+                    "category": "events",
+                    "action_url": "/events/42",
+                },
+            ),
+            timeout=5,
+        )
+
+        assert error is None
+        assert log is not None
+        release.set()
+        await wait_for_queued_pushes(timeout=5)
+
+        # The tap opens the event the notification is about, not the inbox.
+        assert sent == [
+            {
+                "organization_id": org_id,
+                "user_id": user_id,
+                "title": "Drill: Ladder ops",
+                "body": "New announcement",
+                "url": "/events/42",
+                "tag": "events",
+            }
+        ]

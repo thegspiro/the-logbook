@@ -229,7 +229,7 @@ class TestStatsEndpointScopesTheEvent:
                 "id": position_id,
                 "org": org_id,
                 "slug": f"coordinator-{position_id[:8]}",
-                "perms": '["prospective_members.manage"]',
+                "perms": '["prospective_members.manage", "prospective_members.view_all"]',
             },
         )
         await db_session.execute(

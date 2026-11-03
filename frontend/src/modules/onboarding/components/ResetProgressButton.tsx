@@ -88,8 +88,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ classN
       {/* Reset Button */}
       <button
         onClick={() => setShowModal(true)}
-        className={`inline-flex items-center rounded-lg border border-red-600/50 bg-transparent px-4 py-2 font-medium text-red-700 transition-all duration-300 hover:border-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${className}`}
-        aria-label="Reset onboarding progress"
+        className={`touch-target-phone inline-flex items-center rounded-lg border border-red-600/50 bg-transparent px-4 py-2 font-medium text-red-700 transition-all duration-300 hover:border-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${className}`}
       >
         <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
         Reset Progress

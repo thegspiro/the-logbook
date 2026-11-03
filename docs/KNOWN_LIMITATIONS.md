@@ -1,5 +1,240 @@
 # Known Limitations & Open Decisions
 
+## History — Decisions the Module Ships With (2026-11-03)
+
+The History module's first phase (past members, the Honor Roll, titles, family
+links and the clearance list; design in [HISTORY_MODULE.md](HISTORY_MODULE.md)).
+Each is an owner decision or a deliberate deferral, recorded so whoever handles
+an erasure request, a public-website question or a large upload knows it.
+
+- **Anonymizing a member does not touch their history record (owner decision,
+  Q-B option A).** A past-member record keeps its own copy of the person's
+  name and details from the moment it is created, even when it is linked to an
+  account. `member_anonymization_service` scrubs the account and leaves the
+  `historical_members` row, so the department's history outlives a right-to-
+  erasure request against the account. A request that should reach the
+  history record too has to be handled by the Historian by hand — editing or
+  deleting the record (a published one is unpublished first).
+- **"Public" is stored but not yet shown anywhere outside the app (owner
+  decision: the public feed ships in phase 7).** Publishing to the public
+  writes a cleared snapshot and the clearance list is enforced, but no public
+  portal endpoint reads it yet. The person page says so beside the button.
+- **Video and large audio are not accepted yet.** Phase 1 stores no files.
+  When photos and media arrive (phase 3) uploads stay under the 60 MB proxy
+  limit every nginx configuration sets (`client_max_body_size 60M`) — 55 MB
+  per file was agreed; long recordings wait for chunked uploads.
+- **Person merge and bulk import are phase 2.** Until then a duplicate is
+  warned about at entry but two records for one person are combined by hand.
+- **Reading published history needs no permission.** Any signed-in member of a
+  department with the module on reads what is published to members. This was
+  chosen over a `history.view` grant on every position, which would have
+  needed a positions migration for every department; `history.view` instead
+  reads drafts and research.
+
+## Medical Screening — Gaps for the Owner (2026-11-02)
+
+From the medical-screening deep dive
+([W71b](workflow-review/W71b-medical-screening-deep-dive.md)). Each was seen in
+the browser except the last, which was read from code. None is fixed, because
+each changes saved members' standing, writes PHI rows, or adds behaviour.
+
+- **A failed screening does not count against the member (W71b-1, HIGH).**
+  ✅ **Resolved 2026-11-02 (owner decision: the latest result decides).** A
+  failure leaves the requirement unmet until a later pass, completion or
+  waiver; the panel reads "Failed — not cleared", and the older pass leaves
+  the expiring list. `tests/test_medical_screening_failed_result.py`. Original
+  finding:
+  `_grade` considers only passed, completed and waived records. A member who
+  failed their physical last week, but passed one eleven months ago, reads
+  **compliant** on the roster, in the per-member panel and on their own
+  dashboard ("Clear, with conditions"). None of them mentions the failure.
+  Options:
+  - the latest dated result decides, so a failure makes the requirement
+    unmet;
+  - keep the grade but show "newer failed result" on the panel and roster;
+  - leave as is.
+- **Converting a prospect to a member leaves their screenings behind
+  (W71b-2, HIGH).** ✅ **Resolved 2026-11-02 (owner decision: re-link, and
+  migrate the prospects already converted).** Departments screen both before
+  and after the membership vote; the transfer now adds the new member's id to
+  the prospect's records (keeping `prospect_id`), and migration `beedcad5b36a`
+  does the same for earlier transfers. `tests/test_prospect_transfer_screenings.py`,
+  `tests/test_relink_transferred_prospect_screenings_migration.py`. Original
+  finding: `_do_transfer` does not re-link `screening_records`, so a
+  prospect who passed every pre-membership screening joins as "0 of N met".
+  The records stay on a TRANSFERRED prospect that no roster shows. The
+  proposed fix has two parts:
+  - set `user_id` on the prospect's records at transfer, keeping
+    `prospect_id`;
+  - a migration that backfills prospects already transferred, through
+    `transferred_user_id`, with a test that runs against existing rows.
+- **The Members administration hub grades screenings its own way (W71b-3,
+  MED).** "Screenings current" counts anyone with one unexpired passed
+  record of any type. It ignores requirements, the frequency rule, position
+  scoping and waivers, and read 20% where the Compliance tab had 2 of 20
+  fully compliant. The "expired screenings" attention item ignores
+  frequency-derived lapses. It also says "blocks duty assignment", which
+  nothing implements. The proposal is to build both from
+  `MedicalScreeningService.get_compliance_roster` (pitfall #29), which
+  changes what the tile counts. Separately, decide whether a lapsed
+  screening should in fact block scheduling, or the claim should go.
+- **Nothing reminds anyone a screening is about to expire (W71b-4, MED).**
+  Certifications get tiered 90/60/30/7-day emails, and screenings get none.
+  A lapse is visible only on the Compliance tab and the member's dashboard.
+  If added, reminders would be email-first (pitfall #18).
+- **A new requirement starts as one-time (W71b-5, LOW).** The One-time box
+  starts ticked, though the hidden frequency is pre-filled with 12, so an
+  annual physical added in a hurry never falls due. The fix is one line,
+  `ScreeningRequirementForm.tsx:32`.
+
+## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
+
+The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies
+Zeffy payments to donations, fundraising-event revenue and member dues. These
+were chosen deliberately and are open for the owner to confirm or change:
+
+- **A refund of dues already credited is flagged, not reversed.** The dues
+  ledger has no reversal entry, so the payment shows **Needs review** and the
+  treasurer adjusts the dues by hand. Donations and event revenue are adjusted
+  automatically.
+- **Linking starts "from now on" by default.** Earlier Zeffy payments are
+  recorded but applied only if the link's start date is moved back, so nothing
+  the treasurer already typed in is counted twice.
+- **A payment stays on the record it was first applied to** when its campaign's
+  link is pointed elsewhere.
+- **A refund made more than 7 days after the sale arrives only by webhook.**
+  Zeffy's payment list has no "changed since" filter, so the hourly sync cannot
+  find it. Departments without the webhook will not see such refunds.
+- **Membership payments are matched to members by email only.** A payer who
+  used a different address than the one on their profile is left **No member
+  match** for the treasurer.
+
+## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
+
+**Partly resolved (Mobile App Access removed 2026-11-01); Public Information still open.** Found in the workflow review's W01 third
+pass (`docs/workflow-review/W01-onboarding.md`).
+
+- **Mobile App Access (W01-23) — resolved 2026-11-01.** Owner decision: remove
+  it. It is no longer offered by the setup wizard or by Settings → Modules. The
+  `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
+  stored settings and the modules API do not change; nothing reads it.
+- **Public Information (W01-24).** The Modules step never offers it, but
+  saving the step writes every configurable module, so a new installation
+  stores it off while Settings → Modules lists it as enabled by default.
+  Either offer it during setup or leave it at its default.
+
+Also from the same pass, resolved 2026-11-01: the email step saved settings that
+had just failed their connection test without a word (W01-27). Owner decision:
+warn, but allow saving. The failure now stays on the page, and Continue asks
+before saving.
+
+## Members — Members See the Built-In Tier Names (2026-10-31)
+
+The department's membership tiers ("Active Member", "Senior Member", …) come
+from `GET /users/membership-tiers/config`, which requires `members.manage`. A
+member without that grant sees the built-in names instead. In the directory's
+status filter and on profiles that is "Regular member" and "Life member", and a
+custom tier such as Senior is missing from the filter. Officers and members
+therefore describe the same person differently (workflow re-check MR-3).
+
+**Open decision:** expose the tier _names_ to members through a read-only
+endpoint (ids and names only, without the advancement rules), or decide that
+tier naming is officer-facing and leave it as it is.
+
+## Members — No Supervisor or "Reports To" Relationship (2026-10-31)
+
+Nothing in the data model records who supervises whom. A member has a rank, a
+station is a free-text field, and positions say what a member does, but no
+column or table links a member to the officer they report to. So "my crew" and
+"the members I supervise" cannot be answered anywhere in the application.
+
+Member performance evaluations (`app/models/evaluation.py`) are the first
+feature to feel this. Until a relationship exists, anyone holding the
+evaluator permission may be assigned to evaluate any member (owner decision
+2026-10-31): the evaluator is named per evaluation, by whoever drafts it or in
+bulk by an evaluation manager, rather than derived from a supervisor. The one
+structural rule — an evaluator is never the member being evaluated — is
+enforced by the evaluation service, not the database (see the `Evaluation`
+model's docstring for why).
+
+**Open decision:** add a supervisor relationship to members (likely a nullable
+`reports_to_id` on `users`, or a dated assignment table so the history of who
+supervised a member is kept), and then decide which features read it —
+evaluator defaults, line-officer visibility of their own crew's evaluations,
+and approvals. Not started; it is a change to the member model and its editing
+screens, separate from the evaluations work.
+
+**Resolved (2026-11-01), owner decision: dated supervisor assignments.**
+`member_supervisor_assignments` (migration `a1c3e5f7b9d2`) records who a member
+reports to as inclusive date ranges.
+
+How the dates work:
+
+- A change from day D ends the previous assignment on D−1.
+- A change dated the day the current assignment began corrects it in place.
+- If a former supervisor's account is hard-deleted, the dates stay
+  (`SET NULL`).
+
+Rules:
+
+- One open assignment per member, held by a generated `open_marker` column
+  under a unique key and by a member-row lock.
+- The supervisor is a current member of the department, never the member.
+
+Members-managers set, change and end it on the profile (**Reports To**), and a
+member sees their own.
+
+**Still open:**
+
+- Only the evaluator default reads the relationship: a manager who drafts an
+  evaluation without naming an evaluator gets the member's current supervisor
+  when the supervisor holds `evaluations.conduct`, and is the evaluator
+  otherwise (`EvaluationService.create`, owner decision 2026-11-01).
+- Line-officer views of their own crew, approvals and an org chart do not read
+  it.
+- Two members may supervise each other.
+
+## Members — No History of Positions Held (2026-11-01)
+
+`user_positions` records only who holds each position now: assigning one adds
+a row stamped `assigned_at`, and removing one deletes the row. Nothing keeps a
+member's earlier offices or committee seats.
+
+Member performance evaluations show "Positions held" as a data source, and the
+owner chose (2026-11-01) to list the offices and committee seats the member
+holds when the figures are taken and that were assigned by the end of the
+review period (`EvaluationDataService._positions`). A position held earlier in
+the period and given up before the figures were taken does not appear, and the
+evaluation says the list is as of when the figures were taken.
+
+**Open decision:** keep a dated history of position assignments (an
+assignment table with start and end dates, written when a position is assigned
+or removed), after which evaluations can list what a member held during the
+period. The audit log records `user_role_assigned` / `user_role_removed`
+events, but rebuilding history from it depends on the log being complete and
+was not chosen.
+
+## Frontend API Cache — An Inventory Item's Detail Is Cacheable and Names the Holder (2026-10-31)
+
+`GET /inventory/items/{id}` fills in `assigned_to_name` — who currently holds the
+item — for a caller who manages inventory or who holds it themselves. The shared
+API cache (`frontend/src/utils/apiCache.ts`) keeps GET responses for 30 seconds
+fresh and 90 stale, and `/inventory/items/{id}` is not in `UNCACHEABLE_PREFIXES`,
+although `/inventory/checkout/` and `/inventory/users/` are excluded for exactly
+this reason (who holds what is PII).
+
+It is left as it is because an earlier decision (FE9-34, pinned by a test in
+`apiCache.test.ts`) deliberately keeps the item list and detail cacheable and
+excludes only the maintenance sub-resource. Excluding the detail needs a prefix
+that would also uncache the item's other sub-routes, which is a performance
+change to a hot screen. Choosing between that and the current exposure is an
+owner decision.
+
+Owner decision: either (a) keep it — the response is already redacted per
+viewer on the server, and the cache is cleared on logout; or (b) exclude
+`/inventory/items/{id}` itself (a narrower pattern than a prefix) and update the
+FE9-34 test to match.
+
 ## Members — Class, Status, Tiers and Committees (2026-10-29)
 
 The member standing rework (class and status as two controls, tiers as
@@ -1112,6 +1347,10 @@ Still open:
 
 - **OneDrive / SharePoint and "Other" are still unread.** The screen says
   files stay on the server for them, and lists what can be connected.
+  **Onboarding now says so too (2026-10-31, W01-29/W01-30):** the setup
+  wizard's OneDrive card and settings page used to say files would be stored
+  there; they now say it is not connected yet and files stay on the server.
+  The Local Storage page marks its path field as recorded but not used.
   **Resolved 2026-10-23: Google Drive works** (decision 32), through a
   service account and a Shared Drive. It needs Google Workspace; a personal
   Google account has no Shared Drives.
@@ -2424,11 +2663,28 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    and the My Training settings page) show "Not in effect yet — anyone who can
    manage training can review reports, whatever is chosen here." Wiring it is
    still open.
+   **Resolved (2026-10-31), owner decision: also allow that role.** While
+   review is required, members holding the chosen position (or rank) may work
+   the review queue, read and review pending or flagged reports, and batch
+   review, in addition to `training.manage` holders, who keep what they had.
+   "Chief" covers `fire_chief`, `deputy_chief` and `assistant_chief`. A role
+   reviewer never sees or reviews a report about themselves. The screen asks
+   `GET /training/shift-reports/review-access`. Covered by
+   `tests/test_shift_report_reviewer_role.py`.
 3. **Department Defaults** (default duration, minimum staffing, overtime
    threshold). Stored and shown on the settings summary, but nothing applies
    them: new shifts and templates do not pick them up, and no overtime warning
    reads the threshold. **Labelled (2026-10-11):** the card shows "Not in
    effect yet". Applying the defaults is still open.
+   **Resolved (2026-10-31), owner decision: apply them, and merge the
+   overtime threshold into the Overtime advisory.** A new shift template
+   starts from the default length (end time that many hours after 08:00) and
+   minimum staffing, and the built-in Day/Night/24 Hour shift types staff to
+   that minimum. The weekly overtime threshold field is removed: the Overtime
+   advisory card (hours limit over a window of days) already drives the
+   assignment warning, and two limits that could disagree would be worse. Its
+   stored value is kept untouched, and the settings summary now reports the
+   advisory instead.
 4. **Start-of-shift reminder emails default on in the backend, off on the
    screen.** `scheduled_tasks.py` (~line 2358) reads
    `reminder_cfg.get("send_email", True)` ("sent by default"); the
@@ -2490,6 +2746,14 @@ recorded here rather than built.
    To change a generated shift's start, cancel it and create the replacement
    by hand. A fix needs a stored pattern/occurrence key on generated shifts (a
    column and a migration).
+   **Resolved (2026-10-31), owner decision: add the key.** Generation now
+   records every occurrence it makes in `shift_pattern_occurrences` (pattern,
+   date, day/night side), and both a manual Generate and the scheduled run skip
+   an occurrence already recorded, whatever happened to its shift since.
+   Deleting the shift clears only the row's `shift_id`. Shifts generated before
+   the table existed are not backfilled (nothing records which pattern made
+   them), so they rely on the start-time guard as before. Covered by
+   `TestOccurrenceLedger` in `tests/test_scheduling_generation_fixes.py`.
 2. **The nightly run reports skipped seats as a count in the server log
    only.** Generation now seats a member only where the seat, eligibility,
    seat cap, leave and overlap checks an officer's assignment runs would allow
@@ -2499,6 +2763,12 @@ recorded here rather than built.
    position configured sees crews left unseated with no on-screen notice.
    Surfacing it (a notification to schedulers, or a badge on the pattern) is
    open.
+   **Resolved (2026-10-31), owner decision: notify the schedulers.** After a
+   scheduled run, every `scheduling.manage` holder gets a bell entry listing
+   each pattern's empty seats (driver seats included), and those who keep
+   Scheduling officer duties email get the same list by email. Sent once per
+   run; the occurrence ledger (item 1) keeps a rerun from repeating it. Covered
+   by `test_the_scheduled_run_tells_the_schedulers_who_was_not_seated`.
 3. **Editing an approved shift report does not restate its training
    credit — narrowed 2026-10-27 (EC-17), still open where review is off.**
    An edit to an approved report now sends it back to `pending_review` in any
@@ -2522,6 +2792,12 @@ recorded here rather than built.
    `member_check_in` already did, but `shift_attendance` has no unique
    constraint on `(shift_id, user_id)`. Adding one needs a migration that first
    settles any duplicate rows already stored (CLAUDE.md Pitfall #35).
+   **Resolved (2026-10-31), owner decision: add the key.** Migration
+   `1740b4886e52` merges any duplicates into the earliest row (earliest
+   check-in, latest check-out, the largest minutes and call count — not the
+   sum, which would double-count a stint recorded twice), deletes the rest, and
+   adds `uq_shift_attendance_shift_user`. Covered by
+   `tests/test_shift_attendance_unique_migration.py`.
 6. **Shift cancellation notices are in-app only.** `cancel_shift` notifies the
    crew in the app and sends no email, and unlike the decline and assignment
    notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
@@ -2542,6 +2818,12 @@ recorded here rather than built.
    "Engineer" or "Driver/Operator" seats members without the required EVOC
    level, with no block or warning. A fix is a "drives apparatus" flag on the
    seat definition or an alias list.
+   **Resolved (2026-10-31), owner decision: a "Drives apparatus" flag.** Each
+   custom position under Scheduling Settings → Position Names carries a
+   **Drives apparatus** tick (`drivesApparatus`, off by default). A ticked seat
+   gets the driver EVOC check everywhere `driver` does: assignment, editing
+   an assignment, re-timing or re-vehicling a shift, and pattern generation.
+   `driver` is always checked. Covered by `tests/test_custom_driver_seats.py`.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
@@ -3284,6 +3566,26 @@ Finishing it means deciding who may open a cohort page and building the
 member's half of `CohortDetailPage` — a permissions decision plus a feature,
 not a correctness fix. This loop does not widen route guards, so it needs an
 owner.
+
+**Resolved (2026-11-01), owner decision: give members their own view.**
+
+- My Training shows a **My classes** section listing the caller's cohorts
+  (`GET /training/cohorts/mine`), each linking to `/training/cohorts/:cohortId`.
+- That route is now gated only on sign-in and the Training module. The API
+  is the authority: it returns 404 to a member not on the roster, and
+  `members: []` with no attendance counts to one who is.
+- Without `training.manage`, `CohortDetailPage` draws the class timeline only:
+  no roster, classmates, progress or officer actions. A 404 shows "Cohort not
+  found". Officers keep the full page at the same URL.
+
+Still open, each the owner's call:
+
+- The member response still carries the cohort's `notes` and creator ids.
+  They are not displayed, but they are sent.
+- `is_roster_member` admits a withdrawn member, while `/mine` lists only
+  active ones.
+- A `training.view_all` holder without `training.manage` sees the member view
+  rather than a read-only roster.
 
 **Deferred by the owner (2026-10-05):** the member's view of a cohort is not
 being built now; the cohort page stays officer-only until it is.
@@ -6289,6 +6591,13 @@ can't be attached from the app yet." A department that needs a file on an event
 attaches it through the API. Building the control, or dropping the endpoint, is
 an owner decision.
 
+**Resolved (2026-10-31), owner decision: add the control.** The event page's
+**Attachments** card shows **Attach file** and a remove button for each file
+to `events.manage` holders. It shows even when the event has no files yet.
+It uses the existing endpoints and the server's type and size rules (25 MB,
+also checked in the browser before sending). Removing asks first. Covered by
+`EventAttachmentsList.test.tsx`.
+
 ## Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)
 
 Workflow review W44 (`docs/workflow-review/W44-nfc.md`) and the NFC design left
@@ -6402,6 +6711,19 @@ affected shift the moment it deployed.
 Either way the gate stops depending on a reference nothing maintains. Until one
 is chosen, the log line is the only signal.
 
+**Resolved (2026-10-31), owner decision: resolve both tables and fail
+closed.** A foreign key turned out not to be possible: `shifts.apparatus_id`
+names a row in either `apparatus` or `basic_apparatus`, depending on the
+department, so a key to one table would reject the other. Both deletes
+already refuse a vehicle a shift still names (`apparatus_in_use`), so only
+references from before those guards can dangle. The gate now treats a
+`basic_apparatus` id as having no requirement, which matches what it did
+before. An id found in neither table is ineligible, with a message telling
+the officer to pick the shift's vehicle again. The department's enforcement
+setting still decides whether that blocks or only warns, and a chief's
+exception still applies. No migration was needed. Covered by
+`TestDriverEligibility` in `tests/test_evoc_level_service.py`.
+
 ## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Showed At Most 100 Records (2026-10-11, resolved 2026-10-25)
 
 **Resolved.** `GET /facilities/maintenance/page` and `GET /facilities/inspections/page`
@@ -6436,6 +6758,16 @@ is shown ("reload and re-apply" versus a merge). **Owner decision:** whether
 concurrent editing of one draft is a supported workflow (the per-section
 endpoint) or is to be refused with a conflict message (the precondition). Same
 lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
+
+**Resolved (2026-10-31), owner decision: refuse with a conflict.**
+`meeting_minutes.edit_version` (migration `e15d635bbb98`) goes up by one on
+every content save. The minutes page sends the version it loaded as
+`expected_version` with every section edit (save, not-taken-up, reorder, add,
+delete). If someone has saved since, `PUT /minutes-records/{id}` refuses with 409. The version is read with a locking read, so two saves racing each other
+cannot both pass. The page keeps whatever was in the editor and shows a
+**Reload** banner. A save that sends no version is unconditional, as before.
+Covered by `tests/test_minutes_edit_conflict_integration.py` and the
+rich-text page test.
 
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
 
@@ -6538,6 +6870,25 @@ W62-6 and W62-7).
   - which details the emailed page and the email may show. At least the title
     and amount are needed to make the decision; the requester's name and the
     description are more sensitive.
+
+**Resolved (2026-11-01), owner decisions: show send status, allow re-send, and
+show title, amount and requester.**
+
+- **Send status.** Each emailed link records whether its email was sent or
+  failed (`approval_step_records.email_status` and `email_status_at`, migration
+  `b2d4f6a8c0e3`). Expiry is read from `token_expires_at`. The Approvals queue
+  shows one of: "Email sent <date>", "Email could not be sent", "Link expired",
+  "No link has been emailed", or, for links sent before tracking began, "Link
+  emailed (sending not recorded)".
+- **Re-send.** An approvals admin (`finance.approve` plus
+  `finance.configure_approvals`) can **Re-send link**.
+  - A fresh 7-day link is minted, and the old one stops working.
+  - The send is recorded and audit-logged as `finance.approval_link_resent`.
+  - A repeated click sends nothing (`email_link_version`).
+  - Staff never see or copy the link.
+- **What the approver sees.** The emailed page and the email show the
+  request's title, amount and requester's name. The description, vendor and
+  lines stay behind the login, and an expired or used link shows none of it.
 
 ## Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)
 
@@ -6693,6 +7044,25 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
 
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
+
+**Resolved (2026-11-01), owner decision: build the department events feed.**
+Most of it had shipped on 2026-10-16, a day before this entry. Connecting
+issues a secret feed URL, shown on the card with Copy and a confirmed
+**Reset link**, and `GET /api/public/v1/calendar/org/{token}.ics` serves the
+department's published, non-cancelled events, 30 days back to 365 ahead,
+filtered by `included_event_types`.
+
+What was missing, and is now built:
+
+- Nothing read `include_shifts`; the schema refused it outright.
+- No screen set either filter.
+
+The connected card now has **Settings**: event types to publish (none ticked
+means all) and **Include duty shifts**, which adds scheduled shifts showing
+times and platoon only, never who is assigned or notes. An unknown event
+type is refused on save. A disconnected or disabled integration serves 404.
+Members' personal feeds are unchanged. Covered by
+`tests/test_department_ical_feed.py` and `IntegrationsPage.test.tsx`.
 
 ## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23, resolved 2026-10-27)
 
@@ -7007,6 +7377,47 @@ seven of eight `widgetRegistry.ts` `aggregatePath` values that resolved to no
 mounted route (now marked in the file, 2026-10-11). Server-supplied and registry-declared navigation targets have
 both drifted from the routes they name, for the same reason — nothing in the
 type system connects either to a `path=` string.
+
+**Resolved (2026-10-31), owner decision: the pages honour the filter.**
+
+Every parameterised target now lands on the rows its tile counted, and the
+filter is shown on the page with a way to clear it:
+
+- **Apparatus** (`serviceStatus`, `hasDeficiency`, `inspection`): new optional
+  `GET /apparatus` filters. The out-of-service codes are one shared constant.
+- **Inspections** (`dueWithin`): `due_within_days` on
+  `GET /facilities/inspections/page`.
+- **Facilities** (`compliance=due`): a "Compliance deadlines in the next 30
+  days" list, from `due_within_days` on `GET /facilities/compliance-checklists`.
+- **Low stock** (`stock=low`): `low_stock_categories` on the item list and its
+  export. These are the items in the categories the tile counts. The tile
+  counts categories, so its number differs from the row count.
+- **Overdue returns** (`status=overdue`): opens the Overdue tab.
+  - The tile and the tab now share one overdue rule,
+    `overdue_checkout_clause` (in `inventory_service.py`). The tile used to count loans
+    whose stored flag was set even after they were extended.
+  - The tab loads up to 200 loans.
+- **Admin hours** (`status=pending`): opens Pending Review.
+- **Notifications** (`status=failed`): `failed` on `GET /notifications/logs`.
+- **Action items** (`status=overdue`, `source`): `overdue` and `source` on
+  `GET /dashboard/action-items`.
+  - The meeting tile now links with `source=meeting`.
+  - Minutes items are overdue by the department's calendar day, not the clock.
+    This changed the minutes tile's and the admin summary's counts slightly: an
+    item due today is no longer overdue from 00:00 UTC.
+- **Members** (`status=active`): seeds the status filter.
+- **Events** (`range=next-30-days`): a "Next 30 days" chip over the same
+  department-calendar window.
+
+A neutral total tile (the Inventory count) now says only **Open**.
+
+**Residual limits:**
+
+- Event and compliance lists cap at 500 rows.
+- Action-item tiles are gated on the `.manage` permissions, while the page
+  lists by the `.view` ones.
+- The out-of-service tile's fleet summary does not exclude archived apparatus.
+  Archiving changes the status, so the two agree in practice.
 
 ## DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)
 

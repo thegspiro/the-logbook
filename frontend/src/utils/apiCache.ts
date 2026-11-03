@@ -44,6 +44,7 @@ const UNCACHEABLE_PREFIXES = [
   '/officers', // office holders: member names, emails, phone numbers (PII)
   '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
   '/nfc-activity', // card taps by room and by event: who checked in where and when (PII)
+  '/grants/zeffy/', // Zeffy payers' names (PII); a stale ledger would also hide what a sync or a new link just applied
   '/integrations/google-workspace/', // a member's Google account address and its provisioning state (PII); a stale one hides a retry's result
   '/apparatus/operators', // per-member driving qualification: name, licence restrictions, restriction notes (PII)
   '/apparatus/driver-exceptions', // name + the justification and restrictions behind an exception — health-adjacent free text (PII); covers /approvers too
@@ -56,6 +57,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
+  '/training/shift-evaluations/', // a member's ratings and the officer's comments on them
   '/training/stats/user/', // individual compliance stats
   '/training/reports/user/', // individual training reports
   '/training/compliance-summary/', // per-member compliance status
@@ -64,6 +66,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/competency/', // per-member competency evaluations
   '/training/recertification/tasks/', // per-member renewal tasks
   '/training/module-config/my-training', // current user's full training record
+  '/training/module-config/members/', // a named member's requirements and leave dates/types (leave type can be medical)
   '/training/programs/enrollments/', // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/instructors/validate/', // GET /validate/{user_id}/{course_id}: a named member's qualification verdict
@@ -108,6 +111,8 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
   '/dashboard/action-items', // unified meeting/minutes action items: assignee_name + free-text description (RPT-29)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
+  '/reports/saved', // saved-report configs list their recipients' email addresses (PII)
+  '/public-portal/access-logs', // external callers' IP addresses, user agents and referers; a stale page hides a new flagged entry
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
   '/inventory/members/', // member size preferences — body measurements (PII)
   '/inventory/my/', // current user's own size preferences (PII)

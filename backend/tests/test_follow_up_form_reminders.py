@@ -36,6 +36,8 @@ from app.services.follow_up_form_service import (
     display_answer,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
+from app.services.prospect_access import ProspectAccess
+from app.services.prospect_assignment_service import ProspectAssignmentService
 from tests.test_follow_up_forms import (
     SECRET,
     _answers,
@@ -311,11 +313,13 @@ class TestCoordinatorNotice:
     def coordinators(self):
         people = [
             SimpleNamespace(
+                id="coord-id",
                 email="coord@example.org",
                 full_name="Maria Lopez",
                 notification_preferences=None,
             ),
             SimpleNamespace(
+                id="assist-id",
                 email="assist@example.org",
                 full_name="Sam Reed",
                 notification_preferences=None,
@@ -351,6 +355,25 @@ class TestCoordinatorNotice:
         )
         assert SECRET not in everything_sent
         assert "555-0177" not in everything_sent
+
+    async def test_the_case_managers_are_told_too_without_the_coordinators(
+        self, db_session, mail, coordinators
+    ):
+        seed = await _seed(db_session)
+        await _arrive(db_session, seed)
+        notify = AsyncMock(return_value=1)
+
+        with patch.object(ProspectAssignmentService, "notify_case_managers", notify):
+            await FollowUpFormService(db_session).submit(
+                _token_from(mail.link), _answers(seed)
+            )
+
+        notify.assert_awaited_once()
+        assert notify.await_args.args[1] == "follow_up_submitted"
+        assert notify.await_args.kwargs == {
+            "detail": "Background Questionnaire",
+            "already_told": ["coord-id", "assist-id"],
+        }
 
     async def test_an_unchanged_contact_is_not_called_out(
         self, db_session, mail, coordinators
@@ -390,7 +413,11 @@ class TestAnswers:
         )
         return seed, await _request(db, seed)
 
-    async def _call(self, db, seed, request_id, *, can_view_sensitive: bool):
+    async def _call(
+        self, db, seed, request_id, *, can_view_sensitive: bool, roles=frozenset()
+    ):
+        """Called as FastAPI would: ``access`` is what require_prospect_access
+        resolved, here a view_all holder with the given assignments."""
         user = SimpleNamespace(
             id="viewer-1", username="viewer", organization_id=seed.org_id
         )
@@ -406,6 +433,7 @@ class TestAnswers:
                 request_id=request_id,
                 db=db,
                 current_user=user,
+                access=ProspectAccess(True, False, frozenset(roles)),
             )
         return result, audit
 
@@ -460,6 +488,44 @@ class TestAnswers:
         assert audit.await_args.kwargs["event_data"]["follow_up_request_id"] == str(
             request.id
         )
+        assert audit.await_args.kwargs["event_data"]["via"] == "permission"
+
+    async def test_an_assigned_interviewer_reads_it_and_the_reveal_says_why(
+        self, db_session, mail
+    ):
+        seed, request = await self._submitted(db_session, mail)
+
+        result, audit = await self._call(
+            db_session,
+            seed,
+            request.id,
+            can_view_sensitive=False,
+            roles={"interviewer"},
+        )
+
+        secret = next(a for a in result["answers"] if a["label"] == "Criminal history")
+        assert secret["answer"] == SECRET
+        assert not secret.get("withheld")
+        audit.assert_awaited_once()
+        assert audit.await_args.kwargs["event_data"]["via"] == (
+            "interviewer_assignment"
+        )
+
+    async def test_a_case_manager_does_not(self, db_session, mail):
+        seed, request = await self._submitted(db_session, mail)
+
+        result, audit = await self._call(
+            db_session,
+            seed,
+            request.id,
+            can_view_sensitive=False,
+            roles={"case_manager"},
+        )
+
+        secret = next(a for a in result["answers"] if a["label"] == "Criminal history")
+        assert secret["answer"] is None
+        assert secret["withheld"] is True
+        audit.assert_not_awaited()
 
     async def test_an_unsubmitted_form_is_409(self, db_session, mail):
         seed = await _seed(db_session)

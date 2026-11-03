@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CourseLibraryPicker } from './CourseLibraryPicker';
 import { RecencyWindowField } from './RecencyWindowField';
+import { EvaluationRequirementFields } from './EvaluationRequirementFields';
 import { ChecklistItemsEditor } from './ChecklistItemsEditor';
 import { ChangeScopeDialog } from './ChangeScopeDialog';
 import { useCourseLibrary } from '../../hooks/useCourseLibrary';
@@ -78,6 +79,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_hours: seed?.required_hours || undefined,
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
+    required_transports: seed?.required_transports || undefined,
+    required_refusals: seed?.required_refusals || undefined,
+    evaluation_excludes_lowest_rating: seed?.evaluation_excludes_lowest_rating ?? false,
     required_call_types: seed?.required_call_types ?? ([] as string[]),
     checklist_items: seed?.checklist_items ?? [],
     passing_score: seed?.passing_score || undefined,
@@ -179,6 +183,18 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       toast.error('Required calls must be set for a calls requirement');
       return;
     }
+    if (formData.requirement_type === 'evaluated_shifts' && !formData.required_shifts) {
+      toast.error('Required evaluated shifts must be set for an evaluated shifts requirement');
+      return;
+    }
+    if (formData.requirement_type === 'transports' && !formData.required_transports) {
+      toast.error('Required transports must be set for a transports requirement');
+      return;
+    }
+    if (formData.requirement_type === 'refusals' && !formData.required_refusals) {
+      toast.error('Required refusals must be set for a refusals requirement');
+      return;
+    }
     if (formData.requirement_type === 'knowledge_test' && !formData.passing_score) {
       toast.error('Passing score must be set for a knowledge test requirement');
       return;
@@ -229,8 +245,16 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
           ? (recencyDays ?? null)
           : null,
-      required_shifts: formData.requirement_type === 'shifts' ? (formData.required_shifts ?? null) : null,
+      required_shifts:
+        formData.requirement_type === 'shifts' || formData.requirement_type === 'evaluated_shifts'
+          ? (formData.required_shifts ?? null)
+          : null,
       required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
+      required_transports: formData.requirement_type === 'transports' ? (formData.required_transports ?? null) : null,
+      required_refusals: formData.requirement_type === 'refusals' ? (formData.required_refusals ?? null) : null,
+      // A boolean on every save: the column refuses null.
+      evaluation_excludes_lowest_rating:
+        formData.requirement_type === 'evaluated_shifts' && formData.evaluation_excludes_lowest_rating,
       // An empty list means every call counts, so switching away clears it.
       required_call_types: formData.requirement_type === 'calls' ? formData.required_call_types : [],
       checklist_items: formData.requirement_type === 'checklist' ? checklistItems : null,
@@ -440,6 +464,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <option value="skills_evaluation">Skills Evaluation</option>
                   <option value="checklist">Checklist</option>
                   <option value="knowledge_test">Knowledge Test</option>
+                  <option value="evaluated_shifts">Evaluated Shifts</option>
+                  <option value="transports">Transports</option>
+                  <option value="refusals">Refusals</option>
                 </select>
               </div>
 
@@ -571,6 +598,19 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   </div>
                 </div>
               )}
+
+              <EvaluationRequirementFields
+                idPrefix="req"
+                type={formData.requirement_type}
+                shifts={formData.required_shifts?.toString() ?? ''}
+                transports={formData.required_transports?.toString() ?? ''}
+                refusals={formData.required_refusals?.toString() ?? ''}
+                excludesLowest={formData.evaluation_excludes_lowest_rating}
+                onShiftsChange={(v) => setFormData({ ...formData, required_shifts: v ? Number(v) : undefined })}
+                onTransportsChange={(v) => setFormData({ ...formData, required_transports: v ? Number(v) : undefined })}
+                onRefusalsChange={(v) => setFormData({ ...formData, required_refusals: v ? Number(v) : undefined })}
+                onExcludesLowestChange={(v) => setFormData({ ...formData, evaluation_excludes_lowest_rating: v })}
+              />
 
               {formData.requirement_type === 'checklist' && (
                 <ChecklistItemsEditor

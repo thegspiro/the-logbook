@@ -167,7 +167,12 @@ from app.utils.membership import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
-from app.utils.org_timezone import local_date, resolve_scheduling_timezone, today_in
+from app.utils.org_timezone import (
+    local_date,
+    org_today,
+    resolve_scheduling_timezone,
+    today_in,
+)
 
 router = APIRouter()
 
@@ -1585,6 +1590,18 @@ async def update_member_voting_eligibility(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A reason is required to override a member's waiting period",
         )
+    # The date says when the member became their type, so it cannot be ahead
+    # of the department's today: a future one would bar them from voting
+    # until it passed and the wait then ran out, with nothing on screen
+    # saying why.
+    wait_from = changes.get("voting_wait_from")
+    if wait_from is not None:
+        org = await db.get(Organization, str(current_user.organization_id))
+        if wait_from > org_today(org):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The date the wait counts from cannot be in the future",
+            )
     try:
         apply_updates(member, changes)
     except ValueError as e:

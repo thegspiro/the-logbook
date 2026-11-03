@@ -151,40 +151,25 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Reports and inventory activities** — three `DialogPanel` dialogs have no
-  `role` on the panel or a wrapper: the report viewer, and
-  InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The
-  inventory pair sits inside another modal; check its tests' dialog queries
-  when changing it.
 - **Any run touching the app shell, or an accessibility activity** — every
   page carries two "Skip to main content" links, one in `index.html` and one
   in `AppLayout` (W20).
-- **A fresh install** — tap targets under 44px on the onboarding Modules,
-  Ranks & Positions and Apparatus steps at 390px wide (W01-13); setup cannot
-  be replayed on an installed department, so W79 could not drive it.
-- **Any run touching the app shell** — nothing keeps `TopNavigation` and
-  `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
-  whole Forms & Comms admin group present only in the side layout. A test
-  comparing the two link sets would catch the next one (W55).
-- **Any run touching Finance Reports or the QuickBooks export settings** —
-  `FinanceReportsPage.tsx` and `QuickBooksExportSettingsPage.tsx` have table
-  cells with no `data-label`. Inside an `rwd-table` body, such a cell is
-  hidden under 768px; that is how W66-2 lost the dues actions on a phone.
-  Check those tables at 390×844.
+
+- **Dashboard, or any activity touching a module left off at setup** — on a
+  fresh install with every module skipped, the administrator's first dashboard
+  asked `GET /training/module-config/config` and was refused `403 LB-ORG-002`
+  ("module is not enabled"). The weather and `/integrations/connected` half of
+  this lead was fixed in the W01 third pass (W01-33); the training call was not
+  seen there, because that install had Training on.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
-- **W33 / W34** — the shift-assignment notice names the equipment checklists
-  but opens the schedule rather than My Checklists, and prints the shift date
-  as `2026-09-30` (W46-16).
 - **W50 follow-up** — the election meeting-link → Import Attendees → unlink
   round trip could not be driven in W50. W51 left a business-meeting event for
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
-- **Documents, a later pass** — a document's type shows as a raw MIME type
-  ("TEXT/PLAIN") in the list (W53-6).
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
@@ -221,6 +206,164 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — Documents named their type by MIME string — 2026-11-02
+
+Read from code and component-tested, not re-driven. Fixed (W53-6): the
+documents list printed a file's type as its MIME string in capitals
+("APPLICATION/PDF", and for a Word file
+"APPLICATION/VND.OPENXMLFORMATS-OFFICEDOCUMENT…"), on the cards and in the list
+view. A new `utils/fileTypeLabel.ts` names every type the documents upload
+accepts ("PDF", "Word", "Excel", "Text", "PNG image") and falls back to the
+family ("Image") or "File". The event form's attachment list printed the same
+raw string beside the size and now uses the same helper. The tests for both
+screens failed against the old rendering. Gate: typecheck and lint clean, and
+the documents, event form and reflow-table tests pass.
+
+### Lead — Shift notices printed ISO dates — 2026-11-02
+
+Read from code and unit-tested, not re-driven: the change is the text of a
+notification body. Fixed (W46-16): the assignment notice said "the 2026-09-30
+shift", and the cancellation, decline, swap, confirmation and time-off notices
+built their dates the same way. All seven now print `Sep 30, 2026`, the form
+the scheduled reminders already use, through one `_notice_date` helper in
+`scheduling_service.py`; `test_shift_notice_dates.py` failed on the ISO form
+and passes now, and the cancellation test that pinned the ISO subject was
+updated with it. Held: the assignment notice still opens the shift rather than
+My Checklists. It is the notice of an assignment, and the shift is what it
+announces. The end-of-shift checklist reminder is the notice that opens `/inventory/checklists/my?shift=…`. Gate: flake8, black and isort clean on the
+changed files, and the scheduling, swap, time-off and shift-completion suites
+pass.
+
+### W71b — Medical screening, deep dive — 2026-11-02
+
+Driven as `admin`, as `member2` holding a new Medical Officer position, and as
+`member`, on a fresh database at 1280×900 and 390×844. It covered what W71 left
+out (prospects, a prospect transferred to membership, deletion, a non-admin
+officer recording their own screening), and checked the module against the
+dashboard and the Members hub. Held: prospect recording, self-recording with
+its label, frequency grading of an undated record, waivers counting, the
+delete itself, and `member` refused. Fixed (LOW, each with a test seen to
+fail first):
+
+- View opened the member's panel off-screen, on a phone and on a laptop;
+- a Failed result was given a one-year expiration;
+- the delete confirmation did not say whose record it was;
+- dialog buttons were 36px on a phone.
+
+Flagged, mirrored to KNOWN_LIMITATIONS:
+
+- W71b-1 (HIGH): a newer failed physical leaves the member reading cleared
+  everywhere.
+- W71b-2 (HIGH): transferring a prospect leaves their screenings on the
+  prospect, so the new member owes them again.
+- W71b-3 (MED): the Members hub re-derives screening status and disagrees
+  with the Compliance tab. It also claims the lapse "blocks duty assignment".
+- W71b-4 (MED): no expiry reminders.
+- W71b-5 (LOW): new requirements default to one-time.
+
+Gate: typecheck and lint clean; 183 medical-screening and date-utility tests
+and 12 integrity tests pass.
+
+### Leads — Navigation parity and dialog roles — 2026-11-02
+
+Driven as: `admin` in the top layout at 390×844, on a reseeded review
+database. Fixed: the top layout lacked two destinations the side layout
+offers, both added there on 2026-10-26 (#3755): Medical Screening under
+Admin, and My ID Card among the member's own links. Both are now in the top
+layout, gated as in the side one, and the new `navigationParity.test.tsx`
+renders both layouts with every permission and module on, opens every group,
+and fails when either reaches a destination the other does not (80 against 82
+before the fix). Re-driven: both appear in the top layout's menu, and My ID Card
+opens the admin's own card. The W14-2 dialog-role lead was already fixed on
+main: all 56 `DialogPanel` uses carry `role="dialog"` on the panel or a
+wrapper. Gate: typecheck and lint clean, and the navigation tests pass.
+
+### Lead — Reflow table cells a phone hid — 2026-11-01
+
+Driven as: `admin` at 390×844. Fixed: every body cell of a `rwd-table` with no
+`data-label` is hidden below 768px, which took the row actions off the
+QuickBooks mapping tables and the pledges list, and every cell of the documents
+list view (a document row rendered as an empty card). Those cells now carry
+labels, and `rwdTableLabelIntegrity.test.ts` fails on the next unlabeled body
+cell, allowing only the inventory desktop actions cell (a phone gets its own)
+and the decorative bar in My Hours. Finance Reports, named in the lead, was
+clean: its unlabeled cells are in tables that do not reflow or in totals rows,
+which the rule leaves alone. Re-driven: the QuickBooks "Add a mapping", the
+pledge's Edit and a document's name, size, type and date all show on a phone;
+without the fix the document row showed nothing. Gate: typecheck and lint
+clean, and the tests for the changed pages pass.
+
+### Lead — The dashboard asked two modules that were off — 2026-10-31
+
+Driven as: `admin` at 1280×900, with Integrations and Training switched off
+over `PATCH /organization/modules` and back on afterwards. Fixed: the
+dashboard's severe-weather banner asks only while Integrations is on, and the
+side and top navigation and the command palette ask for the practical-skills
+setting only while Training is on (`usePracticalSkillsMethod` takes the module
+check from its caller; Training's own pages are behind its route gate already).
+Without the fix the dashboard sent three requests and all three were refused
+`403 LB-ORG-002`; with it, the dashboard, Events and the phone layout sent none.
+With the modules back on, both requests were sent again and answered. Gate:
+typecheck and lint clean; the 281 test files related to the changed files pass,
+and every new test fails without the fix.
+
+### W01 third pass — Onboarding options and wording, as an IT manager — 2026-10-31
+
+Driven as: a fresh install, twice (find, then re-drive), anonymous → system
+owner, at 1280×900, in the review database only. Covered what the first two
+passes left out: every option on every step against what the app did after
+(stored rows, first sign-in, navigation, Settings), the email and storage
+configuration forms, the logo upload, and the sign-in choice on a server with
+no SSO client. Held: organization and logo stored as entered, member numbering,
+IT-contact accounts without duplicates, seat lists, the SMTP test's error, and
+W01-11 (choosing an unconfigured provider keeps passwords and reset; now
+resolved). Fixed: W01-17 to W01-22, W01-25, W01-26, W01-28 to W01-33. One
+HIGH (W01-29: the OneDrive card and page said files would be stored in
+OneDrive; nothing reads that choice), now worded truthfully; the limitation
+stands per the owner's 2026-10-08 decision. Flagged: W01-23 (MED, Mobile App
+Access has no reader), W01-24 (LOW, onboarding turns Public Information off
+without offering it), W01-27 (LOW, email settings that failed their test are
+saved without a word). Resolved the dashboard lead's integrations half
+(W01-33). Gate: typecheck and lint clean, every new test seen failing first,
+the full frontend suite passes, flake8 and black clean on the two backend files.
+Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
+from onboarding and Settings (the stored field is kept, retired). Owner decided
+W01-27: a failed email test now warns on the page and Continue asks before
+saving, but saving is allowed.
+
+### Membership re-check (W08, W10–W15) — 2026-10-31
+
+Driven as: `admin`, `member` and `member2` on a fresh install, at 1280×900 and
+390×844. Held: every admin route and mutation refused for `member`, and contact
+data redacted from colleagues. Add member saved exactly one record on a double
+click. Clearing date of birth and phone saved the clear. The class and status
+filters and search found the edited member. The audit history recorded the edit.
+Waiver date validation worked. Deactivate worked through the step-up prompt.
+Nothing overflowed on a phone. Fixed: MR-1 (MED — the profile called future and
+expired leaves "Active"; it now shares the Waivers screen's rule) and MR-2 (LOW —
+the directory fired a refused tier-config request for every member). Flagged:
+MR-3 (LOW — members see built-in tier names; mirrored to KNOWN_LIMITATIONS),
+MR-4 (LOW — profile views crowd the audit history) and MR-7 (NIT — an unused
+membership store). MR-5 and MR-6 (NIT) were fixed in a 2026-11-01 follow-up. Gate: typecheck and lint clean;
+lint needed a larger Node heap with the harness running. The touched suites
+pass. See W10-W15-membership-recheck.md.
+
+### W01 follow-up — The open onboarding findings — 2026-10-31
+
+Driven as: a fresh install, three times, at 390×844 (the review database only,
+reset with `start.sh --reset` and seeded again afterwards). Fixed: W01-12 (owner
+decision: refuse a backup email equal to the administrator's), W01-13 (measured
+again first; every control under 44px on Modules, Ranks & Positions and
+Apparatus, and the four more the drive found on the administrator, IT Contacts
+and setup-complete steps and Reset Progress, now take `touch-target-phone`),
+W01-14 (the Create button, and Reset Progress, are named by their visible
+words), W01-15 (a failed Continue on Organization Setup focuses the first invalid
+field) and W01-16 (Stations has Back). Re-driven: every onboarding step measures
+clean at 390px, and `seed.mjs` onboards with the renamed button. New lead: the
+first dashboard asks two disabled modules and is refused. Gate: typecheck and
+lint clean, and the onboarding tests and the tests related to the changed files
+pass.
 
 ### W08-6 follow-up — Requests held while a password change is required — 2026-10-25
 
@@ -1253,6 +1396,14 @@ tests and 4083 backend tests (minutes and meetings) pass, as does the full front
 9002 tests).
 
 Next: W52.
+
+### W50 (re-drive) — Voter-eligibility rules and the lifecycle — 2026-10-31
+
+Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a fresh database, at 1280×900 and 390×844. Covered: department defaults (regular and annual), the waiting period per member type, the profile override, a status change, count-mode attendance, the frozen roll, voting, close and results. Findings are in [W50-elections.md](./W50-elections.md#w50-re-drive--2026-10-31-voter-eligibility-rules-and-the-lifecycle).
+
+- Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
+- W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll): flagged, then fixed 2026-11-02 on the owner's decision.
+- Fixed 2026-11-01: W50-R4 and W50-R5 (NIT).
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 

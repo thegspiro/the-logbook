@@ -57,4 +57,31 @@ describe('OrganizationSetup — field errors', () => {
     expect(screen.getByLabelText(/^city/i)).toHaveAccessibleDescription('City is required');
     expect(screen.getByLabelText(/^state/i)).toHaveAccessibleDescription('State is required');
   });
+
+  // W01-15: the errors were listed in a toast and a summary while focus stayed
+  // on Continue, so a keyboard or screen-reader user had to hunt for the field.
+  it('moves focus to the first invalid field when Continue fails', async () => {
+    render(
+      <ThemeProvider>
+        <OrganizationSetup />
+      </ThemeProvider>
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^continue/i }));
+
+    expect(screen.getByLabelText(/^organization name/i)).toHaveFocus();
+  });
+
+  it('moves focus past the fields that are already valid', async () => {
+    render(
+      <ThemeProvider>
+        <OrganizationSetup />
+      </ThemeProvider>
+    );
+
+    await userEvent.type(screen.getByLabelText(/^organization name/i), 'Valley Fire');
+    await userEvent.click(screen.getByRole('button', { name: /^continue/i }));
+
+    expect(screen.getByLabelText(/^street address/i)).toHaveFocus();
+  });
 });

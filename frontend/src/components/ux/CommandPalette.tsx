@@ -378,8 +378,11 @@ export const CommandPalette: React.FC = () => {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
-  const { enabledModules } = useEnabledModules();
-  const practicalSkillsMethod = usePracticalSkillsMethod();
+  const { enabledModules, isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  // The palette is mounted on every page, so asking for the Training module's
+  // setting while that module is off drew a refused request on each one. With
+  // Training off there is no practical-skills command to choose between anyway.
+  const practicalSkillsMethod = usePracticalSkillsMethod(!modulesLoading && isModuleOn('training'));
 
   // Filter commands by permissions, module supersession, and search query
   const filteredCommands = useMemo(() => {

@@ -20,7 +20,6 @@ import {
   FileText,
   BarChart3,
   Bell,
-  Smartphone,
   ClipboardList,
   Plug,
   Loader2,
@@ -42,6 +41,7 @@ import {
   Stethoscope,
   ClipboardCheck,
   HeartPulse,
+  Landmark,
   Wallet,
   Printer,
   AtSign,
@@ -211,8 +211,10 @@ const STANDARD_MODULES: ConfigurableModule[] = [
   },
   {
     key: 'notifications',
-    name: 'Email Notifications',
-    description: 'Automated email alerts and notification rules',
+    // Not an email switch: it gates the bell, push and notification rules, and
+    // email goes out either way (workflow review W01, 2026-10-31).
+    name: 'In-App Notifications',
+    description: 'Notification bell and inbox, push notifications, and notification rules. Email is sent either way',
     icon: <Bell className="h-5 w-5" />,
   },
   {
@@ -262,12 +264,6 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     icon: <Vote className="h-5 w-5" />,
   },
   {
-    key: 'mobile',
-    name: 'Mobile App Access',
-    description: 'Mobile-optimized access with pull-to-refresh and responsive UI',
-    icon: <Smartphone className="h-5 w-5" />,
-  },
-  {
     key: 'incidents',
     name: 'Incidents & Reports',
     description: 'Incident logging, run reports, and analytics',
@@ -297,6 +293,12 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     name: 'Finance',
     description: 'Budgets, member dues, expenses, purchase requests, and check requests',
     icon: <Wallet className="h-5 w-5" />,
+  },
+  {
+    key: 'history',
+    name: 'History',
+    description: 'The department archive: past members, the Honor Roll, and a review list before anything goes public',
+    icon: <Landmark className="h-5 w-5" />,
   },
   {
     key: 'medical_screening',

@@ -255,7 +255,11 @@ export interface ChecklistConfig {
 export interface InterviewRequirementConfig {
   required_count: number;
   required_recommendation?: InterviewRecommendation | undefined;
-  interviewer_roles?: string[] | undefined;
+  /**
+   * Position slugs the stage needs an interview from, graded server-side
+   * against the positions each interviewer held when they interviewed.
+   */
+  required_interviewer_positions?: string[] | undefined;
   auto_advance?: boolean | undefined;
 }
 
@@ -759,6 +763,8 @@ export interface ApplicantListItem {
   withdrawal_reason?: string | undefined;
   /** A follow-up form changed their email or phone, and nobody has reviewed it. */
   contact_change_pending?: boolean | undefined;
+  /** The caller's roles on this applicant; filled only on My Applicants. */
+  my_roles?: AssignmentRole[] | undefined;
   created_at: string;
 }
 
@@ -1010,6 +1016,8 @@ export interface ApplicantListFilters {
   include_inactive?: boolean | undefined;
   /** Only applicants linked to this event — what one open house brought in. */
   event_id?: string | undefined;
+  /** Only the applicants the caller is assigned to as case manager or interviewer. */
+  assigned_to_me?: boolean | undefined;
 }
 
 /** An event applicants are linked to, for the "came from" filter. */
@@ -1289,6 +1297,7 @@ export interface BackendProspectResponse {
 
 /** Backend prospect list item response (ProspectListResponse schema). */
 export interface BackendProspectListResponse {
+  my_roles?: AssignmentRole[] | undefined;
   contact_change_pending?: boolean | undefined;
   target_role_name: string | null;
   deactivated_at: string | null;
@@ -1508,4 +1517,65 @@ export interface InterviewUpdate {
   recommendation_notes?: string | null | undefined;
   interviewer_role?: string | null | undefined;
   interview_date?: string | null | undefined;
+}
+
+// =============================================================================
+// Assignments and per-applicant access
+// =============================================================================
+
+/** What a member assigned to one applicant does for them. */
+export const AssignmentRole = {
+  CASE_MANAGER: 'case_manager',
+  INTERVIEWER: 'interviewer',
+} as const;
+export type AssignmentRole = (typeof AssignmentRole)[keyof typeof AssignmentRole];
+
+/** A member assigned to an applicant (snake_case, as the API sends it). */
+export interface ProspectAssignment {
+  id: string;
+  prospect_id: string;
+  user_id: string;
+  user_name?: string | null | undefined;
+  role: AssignmentRole;
+  assigned_by_name?: string | null | undefined;
+  created_at?: string | null | undefined;
+}
+
+/**
+ * What the caller may do with one applicant, as the backend decided it
+ * (app/services/prospect_access.py). The applicant's page offers exactly these
+ * actions rather than re-deriving them from permissions.
+ */
+export interface ProspectAccess {
+  roles: AssignmentRole[];
+  view_all: boolean;
+  can_work: boolean;
+  can_manage: boolean;
+  can_see_full: boolean;
+  can_log_interview: boolean;
+  /** The caller's most senior position, suggested as the title they interview under. */
+  interviewer_title?: string | null | undefined;
+}
+
+/** One required interviewer position of an Interview Requirement stage. */
+export interface InterviewPositionProgress {
+  position: string;
+  label: string;
+  satisfied: boolean;
+}
+
+/**
+ * Where the applicant's current Interview Requirement stage stands, as the
+ * server grades it — the same grading that decides whether the stage may
+ * complete. `recommendation_met` is null when the stage asks for none, and
+ * for a caller who sees only their own interview.
+ */
+export interface InterviewRequirementProgress {
+  step_id: string;
+  required_count: number;
+  recorded_count: number;
+  required_recommendation: string | null;
+  recommendation_met: boolean | null;
+  positions: InterviewPositionProgress[];
+  complete: boolean;
 }

@@ -220,7 +220,7 @@ const PledgesPage: React.FC = () => {
                         </span>
                       </td>
                       {canManage && (
-                        <td className={`${CELL} text-right`}>
+                        <td data-label="Actions" className={`${CELL} text-right`}>
                           <button
                             type="button"
                             onClick={() => setDialog({ pledge })}

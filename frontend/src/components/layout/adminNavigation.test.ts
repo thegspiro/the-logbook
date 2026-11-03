@@ -11,7 +11,7 @@ describe('hasAdministrationAccess', () => {
     expect(hasAdministrationAccess(checkerFor('forms.view'))).toBe(false);
   });
 
-  it.each(['forms.manage', 'reports.view', 'settings.manage'])(
+  it.each(['forms.manage', 'reports.view', 'settings.manage', 'evaluations.configure', 'evaluations.manage'])(
     'recognizes %s as administrative access',
     (permission) => {
       expect(hasAdministrationAccess(checkerFor(permission))).toBe(true);

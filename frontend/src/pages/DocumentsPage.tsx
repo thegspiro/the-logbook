@@ -43,6 +43,7 @@ import {
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { fileTypeLabel } from '../utils/fileTypeLabel';
 
 type ViewMode = 'grid' | 'list';
 
@@ -778,7 +779,7 @@ const DocumentsPage: React.FC = () => {
                           <div className="mt-2 flex items-center gap-3">
                             <span className="text-theme-text-muted text-xs">{formatFileSize(doc.file_size)}</span>
                             {doc.file_type && (
-                              <span className="text-theme-text-muted text-xs uppercase">{doc.file_type}</span>
+                              <span className="text-theme-text-muted text-xs">{fileTypeLabel(doc.file_type)}</span>
                             )}
                             <div className="ml-auto flex shrink-0 items-center gap-1">
                               {doc.has_file && (
@@ -864,7 +865,7 @@ const DocumentsPage: React.FC = () => {
                           key={doc.id}
                           className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
                         >
-                          <td className="px-4 py-3">
+                          <td data-label="Name" className="rwd-table-lead px-4 py-3">
                             <div className="flex items-center space-x-2">
                               <File className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                               <div>
@@ -883,14 +884,16 @@ const DocumentsPage: React.FC = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td data-label="Size" className="text-theme-text-secondary px-4 py-3 text-sm">
                             {formatFileSize(doc.file_size)}
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm uppercase">
-                            {doc.file_type || '-'}
+                          <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
+                            {fileTypeLabel(doc.file_type) ?? '-'}
                           </td>
-                          <td className="text-theme-text-muted px-4 py-3 text-sm">{formatDate(doc.created_at, tz)}</td>
-                          <td className="px-4 py-3 text-right">
+                          <td data-label="Uploaded" className="text-theme-text-muted px-4 py-3 text-sm">
+                            {formatDate(doc.created_at, tz)}
+                          </td>
+                          <td data-label="Actions" className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end space-x-1">
                               {doc.has_file && (
                                 <button
