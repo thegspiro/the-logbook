@@ -338,10 +338,15 @@ pass (`docs/workflow-review/W01-onboarding.md`).
   it on by default. Completing setup now writes only the modules setup asked
   about from the answers; every other module keeps its declared default
   (`modules_from_setup_answers` in `services/onboarding.py`, used by both
-  writers). **Installations set up before this keep the `false` setup stored**
-  — nothing migrates them, because turning on public pages for a department
-  that may have seen them off is not this change's call. An administrator can
-  turn it on under Settings → Modules.
+  writers). Existing installations were backfilled by migration `289504a34d3c`
+  (owner decision 2026-11-03): Public Information turns on where setup stored
+  it off, but not where the audit log shows an administrator set it under
+  Settings → Modules. See `docs/UPGRADING.md`.
+  **Still open, small:** an installation old enough to have no stored module
+  settings at all has them built once, on first read, from its legacy
+  onboarding record (`OrganizationService`), and that writer also stores Public
+  Information off. Such an install upgrading after this migration has run would
+  get `false` again with no backfill.
 
 Also from the same pass, resolved 2026-11-01: the email step saved settings that
 had just failed their connection test without a word (W01-27). Owner decision:
