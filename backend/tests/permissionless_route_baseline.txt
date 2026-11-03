@@ -515,3 +515,24 @@ app/api/v1/endpoints/users.py::set_my_profile_visibility
 app/api/v1/endpoints/users.py::update_contact_info
 app/api/v1/endpoints/users.py::update_user_profile
 app/api/v1/endpoints/users.py::upload_photo
+
+# History (2026-11-03): published history is read by any signed-in member, so
+# these take no permission. Each is scoped in the handler: every query filters
+# the caller's organization, and HistoryService.Viewer decides what the caller
+# receives — drafts and the restricted fields only with history.view/manage/
+# publish (list_people, get_person, honor_roll, list_titles,
+# list_clearance_steps). list_revisions refuses unless the caller holds
+# history.view/manage or a clearance-step position. The clearance routes act
+# only for the caller: clearance_queue lists requests whose current step the
+# caller's own positions can decide, decide_clearance refuses anyone not holding
+# the current step's position, and review_clearance_request answers 404 unless
+# the caller is a keeper, the submitter or a holder of one of its positions.
+app/api/v1/endpoints/history.py::clearance_queue
+app/api/v1/endpoints/history.py::decide_clearance
+app/api/v1/endpoints/history.py::get_person
+app/api/v1/endpoints/history.py::honor_roll
+app/api/v1/endpoints/history.py::list_clearance_steps
+app/api/v1/endpoints/history.py::list_people
+app/api/v1/endpoints/history.py::list_revisions
+app/api/v1/endpoints/history.py::list_titles
+app/api/v1/endpoints/history.py::review_clearance_request

@@ -345,6 +345,11 @@ class HistoricalMemberServicePeriod(Base):
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Periods are replaced as a set on every save, so this is when the current
+    # set was written; the change history holds what came before.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     member: Mapped["HistoricalMember"] = relationship(
         "HistoricalMember", back_populates="service_periods"
@@ -420,6 +425,7 @@ class HistoricalMemberRelation(Base):
             name="uq_historical_member_relation",
         ),
         Index("ix_hist_relations_related", "related_member_id"),
+        Index("ix_hist_relations_org_member", "organization_id", "member_id"),
     )
 
 

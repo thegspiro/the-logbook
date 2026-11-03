@@ -214,6 +214,7 @@ def upgrade() -> None:
             _flag("is_ongoing"),
             sa.Column("notes", sa.Text(), nullable=True),
             sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
+            _created_at(),
         )
         op.create_index(
             "ix_hist_service_periods_member",
@@ -283,6 +284,11 @@ def upgrade() -> None:
             "ix_hist_relations_related",
             "historical_member_relations",
             ["related_member_id"],
+        )
+        op.create_index(
+            "ix_hist_relations_org_member",
+            "historical_member_relations",
+            ["organization_id", "member_id"],
         )
 
     if not _has_table("history_revisions"):

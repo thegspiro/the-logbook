@@ -19,6 +19,7 @@ inside the caller's department before it is stored (CLAUDE.md pitfall #14).
 """
 
 import copy
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any, Iterable, Optional
@@ -158,13 +159,16 @@ class Viewer:
 # --- Small pure helpers ---
 
 
-def title_key(name: str) -> str:
-    """What two titles must differ in to both be on the list."""
-    return " ".join(name.split()).casefold()
+_WHITESPACE = re.compile(r"\s+")
 
 
 def clean_title_name(name: str) -> str:
-    return " ".join(name.split())
+    return _WHITESPACE.sub(" ", name).strip()
+
+
+def title_key(name: str) -> str:
+    """What two titles must differ in to both be on the list."""
+    return clean_title_name(name).casefold()
 
 
 def normalize_partial_date(

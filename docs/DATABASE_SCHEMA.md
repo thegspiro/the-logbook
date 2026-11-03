@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**349 tables · 5714 columns · 1175 foreign keys**
+**349 tables · 5716 columns · 1175 foreign keys**
 
 ---
 
@@ -335,13 +335,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`historical_member_period_titles`](#historical_member_period_titles) | `HistoricalMemberPeriodTitle` | 2 | A title held during one service period. |
 | [`historical_member_relations`](#historical_member_relations) | `HistoricalMemberRelation` | 8 | A family link between two people, stored once and read from both ends. |
-| [`historical_member_service_periods`](#historical_member_service_periods) | `HistoricalMemberServicePeriod` | 11 | One stretch of service. A person who left and rejoined has several. |
+| [`historical_member_service_periods`](#historical_member_service_periods) | `HistoricalMemberServicePeriod` | 12 | One stretch of service. A person who left and rejoined has several. |
 | [`historical_members`](#historical_members) | `HistoricalMember` | 37 | A person who served the department, as the archive records them. |
 | [`history_clearance_decisions`](#history_clearance_decisions) | `HistoryClearanceDecision` | 9 | One step's decision on one request. |
 | [`history_clearance_requests`](#history_clearance_requests) | `HistoryClearanceRequest` | 12 | One submission of one revision through the clearance list. |
 | [`history_clearance_steps`](#history_clearance_steps) | `HistoryClearanceStep` | 7 | One step in a department's clearance list, in order. |
 | [`history_revisions`](#history_revisions) | `HistoryRevision` | 10 | One entry in an archive record's change history. |
-| [`history_titles`](#history_titles) | `HistoryTitle` | 9 | One entry in a department's managed list of historical titles. |
+| [`history_titles`](#history_titles) | `HistoryTitle` | 10 | One entry in a department's managed list of historical titles. |
 
 ### IP Security
 
@@ -5341,7 +5341,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `member_id` | VARCHAR(36) | no | FK |  | → `historical_members.id` ON DELETE CASCADE |
 | `related_member_id` | VARCHAR(36) | no | FK, IDX |  | → `historical_members.id` ON DELETE CASCADE |
 | `relation_type` | ENUM(`parent_of`, `grandparent_of`, `sibling`, `spouse`, `other`) | no |  |  |  |
@@ -5351,6 +5351,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_hist_relations_org_member` (`organization_id`, `member_id`)
 - `ix_hist_relations_related` (`related_member_id`)
 
 **Constraints**
@@ -5376,6 +5377,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_ongoing` | BOOL | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
 
@@ -5538,6 +5540,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name_key` | VARCHAR(150) | no |  |  |  |
 | `source` | ENUM(`rank`, `position`, `custom`) | no |  | `'custom'` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
+| `is_retired` | BOOL | no |  | `0` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
