@@ -362,7 +362,16 @@ jobs:
   backend-test:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The suite itself now runs ~17-18 minutes (18,776 tests), and checkout +
+    # dependency install + the post-test coverage/schema-doc steps eat the
+    # rest of a 20-minute budget on an ordinarily-fast runner. On 2026-11-03
+    # this job was cancelled mid-run three times in a few hours — on PR
+    # #3981 twice and on main's own post-merge CI once — always at the
+    # 20:09-20:16 mark, with every test already passed each time (confirmed
+    # from the job logs: the cancellation lands after the last test line,
+    # never mid-suite). That is a margin that is now too tight, not a flake
+    # to retry around. 30 minutes gives headroom without masking a real hang.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: backend
