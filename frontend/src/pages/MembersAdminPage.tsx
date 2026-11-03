@@ -655,43 +655,43 @@ export const MembersAdminPage: React.FC = () => {
                 <tr>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Member
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Member #
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Rank
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Membership
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Positions
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Status
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
                   >
                     Actions
                   </th>
@@ -700,37 +700,34 @@ export const MembersAdminPage: React.FC = () => {
               <tbody className="divide-theme-surface-border divide-y">
                 {users.map((user) => (
                   <tr key={user.id} className="hover:bg-theme-surface-hover">
-                    <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Member" className="px-4 py-4">
                       <div className="flex items-center">
                         <div className="bg-theme-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                           <span className="text-theme-text-secondary font-medium">
                             {(givenName(user)[0] || user.username[0] || '').toUpperCase()}
                           </span>
                         </div>
-                        <div className="ml-4">
+                        <div className="ml-4 min-w-36">
                           <Link
                             to={`/members/${user.id}`}
                             className="text-theme-text-primary text-sm font-medium hover:underline"
                           >
                             {displayNameOf(user) || user.username}
                           </Link>
-                          <div className="text-theme-text-muted text-sm">@{user.username}</div>
+                          <div className="text-theme-text-muted text-sm break-all">@{user.username}</div>
                         </div>
                       </div>
                     </td>
-                    <td data-label="Member #" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Member #" className="text-theme-text-muted px-4 py-4 text-sm whitespace-nowrap">
                       {user.membership_number || '-'}
                     </td>
-                    <td data-label="Rank" className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Rank" className="text-theme-text-secondary px-4 py-4 text-sm whitespace-nowrap">
                       {formatRank(user.rank) || '-'}
                     </td>
-                    <td
-                      data-label="Membership"
-                      className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap"
-                    >
+                    <td data-label="Membership" className="text-theme-text-secondary px-4 py-4 text-sm">
                       {membershipSummary(user)}
                     </td>
-                    <td data-label="Positions" className="px-6 py-4">
+                    <td data-label="Positions" className="px-4 py-4">
                       <div className="flex flex-wrap justify-end gap-1 md:justify-start">
                         {withoutRankMirrors(user.roles).length === 0 ? (
                           <span className="text-theme-text-muted text-sm">No positions</span>
@@ -764,7 +761,7 @@ export const MembersAdminPage: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Status" className="px-4 py-4 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${
                           user.status === UserStatus.ACTIVE
@@ -780,7 +777,7 @@ export const MembersAdminPage: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td data-label="Actions" className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
+                    <td data-label="Actions" className="px-4 py-4 text-right text-sm font-medium whitespace-nowrap">
                       <div className="flex flex-wrap justify-end gap-3">
                         <button
                           onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
