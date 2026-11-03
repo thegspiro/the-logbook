@@ -612,12 +612,14 @@ export const pipelineService = {
    */
   async getPipelineStats(
     pipelineId: string,
-    filters?: Pick<ApplicantListFilters, 'search' | 'event_id'>
+    filters?: Pick<ApplicantListFilters, 'search' | 'event_id' | 'assigned_to_me'>
   ): Promise<PipelineStats> {
     const response = await api.get<BackendPipelineStatsResponse>(`/prospective-members/pipelines/${pipelineId}/stats`, {
       params: {
         search: filters?.search,
         event_id: filters?.event_id,
+        // Omitted rather than false, so the whole-pipeline request is unchanged.
+        assigned_to_me: filters?.assigned_to_me ? true : undefined,
       },
     });
     return mapPipelineStatsResponse(response.data);
@@ -1002,6 +1004,8 @@ export const applicantService = {
   async getInactiveApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -1010,6 +1014,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'inactive',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
@@ -1019,6 +1025,8 @@ export const applicantService = {
   async getWithdrawnApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -1027,6 +1035,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'withdrawn',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
@@ -1036,6 +1046,8 @@ export const applicantService = {
   async getRejectedApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -1044,6 +1056,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'rejected',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
@@ -1053,6 +1067,8 @@ export const applicantService = {
   async getConvertedApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -1061,6 +1077,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'converted',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
