@@ -538,8 +538,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/dues',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/approvals',

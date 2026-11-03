@@ -414,6 +414,11 @@ test.describe('mobile presentation', () => {
           return [...document.body.querySelectorAll('*')]
             .filter((el) => {
               if (el.closest('[data-mobile-scroll-region]')) return false;
+              // The shapes inside an icon are judged by the <svg> that holds
+              // them. An <svg> clips its own content by default, so the walk
+              // below would stop at it and blame an icon scrolled out of a
+              // table's card, though the card it scrolls in is on screen.
+              if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) return false;
               const b = el.getBoundingClientRect();
               if (!(b.width > 0 && b.height > 0 && b.right > 0 && (b.right > width + 1 || b.left < -1))) return false;
               // A table wider than its card is fine when the card scrolls and

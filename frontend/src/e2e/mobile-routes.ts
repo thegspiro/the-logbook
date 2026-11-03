@@ -959,6 +959,16 @@ export const ALL_ROUTES: RouteCheck[] = [
   //: the ErrorBoundary, and the other eight carried 39 controls under 44px and
   //: 7 elements running off the side of the screen between them.
   { path: '/finance', maxSmallTargets: 0, maxTinyText: 0, permissions: ['finance.view'] },
+  // Exempt until the fixtures above gave it data: the catch-all's `{}` threw in
+  // the summary tiles, so a visit would have measured the ErrorBoundary. The
+  // manage grant draws the schedule controls and the row actions as well.
+  {
+    path: '/finance/dues',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Collection Rate',
+  },
   { path: '/grants', maxSmallTargets: 0, maxTinyText: 0, permissions: ['fundraising.view'] },
   { path: '/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view'] },
   { path: '/reports/saved', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view', 'reports.manage'] },

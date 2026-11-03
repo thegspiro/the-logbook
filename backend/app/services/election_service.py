@@ -1764,20 +1764,17 @@ class ElectionService:
         # When a snapshot exists, eligibility means "on the roll when voting
         # opened" — a mid-election membership change cannot add voters. A
         # secretary override granted during the meeting still counts.
+        #
+        # A member off the roll is refused either way, but not yet: the tier
+        # and election-wide rules below run first, so one who still fails
+        # them is told that rule (a waiting period, attendance) rather than
+        # pointed at the administrator over a rule working as set. The roll
+        # is named only once those pass — a member who became eligible after
+        # opening, which is what the roll exists to hold back (W50-R3).
         snapshot = getattr(election, "eligible_roster_snapshot", None)
-        if snapshot is not None and not _has_override:
-            if str(user_id) not in snapshot:
-                return VoterEligibility(
-                    is_eligible=False,
-                    has_voted=False,
-                    positions_voted=[],
-                    positions_remaining=[],
-                    reason=(
-                        "You are not on the voter roll that was frozen when "
-                        "this election opened. Contact the election "
-                        "administrator if you believe this is an error."
-                    ),
-                )
+        off_frozen_roll = (
+            snapshot is not None and not _has_override and str(user_id) not in snapshot
+        )
 
         # ---- Membership tier voting rules ----
         # Look up the member's tier in org settings and enforce voting_eligible
@@ -1851,6 +1848,21 @@ class ElectionService:
                     positions_remaining=[],
                     reason=rules_reason,
                 )
+
+        # Returned before the position and ballot-item checks: the roll bars
+        # every race, so one race's voter types would misstate the reason.
+        if off_frozen_roll:
+            return VoterEligibility(
+                is_eligible=False,
+                has_voted=False,
+                positions_voted=[],
+                positions_remaining=[],
+                reason=(
+                    "You are not on the voter roll that was frozen when "
+                    "this election opened. Contact the election "
+                    "administrator if you believe this is an error."
+                ),
+            )
 
         # Check position-specific eligibility (if checking for a specific position)
         if position and election.position_eligibility:

@@ -939,7 +939,7 @@ export const GrantDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowExpenditureModal(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                  className="split-row-aside inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
                 >
                   <Plus className="h-4 w-4" />
                   Record Expenditure
@@ -1053,7 +1053,7 @@ export const GrantDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowComplianceModal(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                  className="split-row-aside inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
                 >
                   <Plus className="h-4 w-4" />
                   Add Task
