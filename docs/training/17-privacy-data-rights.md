@@ -48,15 +48,12 @@ decline; leaving both blank means "not answered", so the department can still
 ask you. **Text message notifications** stays a switch, because it is also the
 text-message consent record.
 
-> **Screenshot to replace:** 17-01 shows checkboxes for photo use and roster
-> listing; re-shoot with the Yes / No pairs.
-
 The same tab holds **Profile visibility**. There you choose which contact
 details other members can see: work email, personal email, phone, mobile and
 mailing address. Leadership can always see everything. Your date of birth and
 emergency contacts are never shown to other members.
 
-![My Account, Privacy tab: Profile visibility for each contact detail, then the Privacy Choices checkboxes for photo use, public roster listing and text message notifications, and Your Data](./images/17-01-privacy-choices.png)
+![My Account, Privacy tab: Profile visibility for each contact detail, then Privacy Choices with a Yes / No pair for photo use and for public roster listing, both not answered, the Text message notifications checkbox, and Your Data](./images/17-01-privacy-choices.png)
 
 Three things worth knowing:
 
@@ -461,7 +458,7 @@ prove the member was compliant at the time.
 
 ---
 
-![The Membership card on a dropped member's profile, as an administrator: Rank, Member type, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it](./images/17-05-dropped-member-anonymize.png)
+![The Membership card on a dropped member's profile, as an administrator: Rank, Member class, Membership status, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it](./images/17-05-dropped-member-anonymize.png)
 
 ## Audit Records and Retention (Admin)
 

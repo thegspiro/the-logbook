@@ -143,7 +143,7 @@ calendar. On a screen narrower than 1280 pixels, such as a tablet, the panel is
 below the calendar so the days stay large enough to tap. Select **Shift
 details** on a shift to open the full **Shift Details** window.
 
-![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
+![The Shift Details window over the schedule: readiness, time, crew, apparatus and shift officer, then the crew board with each seat](./images/03-02-shift-detail-panel.png)
 
 ### The Shift Details window
 
@@ -2461,6 +2461,8 @@ Every item asks for one of five kinds of answer:
 | **Expiry**   | Check the serial number, lot number and expiry date on record, then pass or fail | The date on record has not passed. Items close to their date show amber on every shift until they are replaced |
 | **Present**  | Select **Present** or **Absent**                               | It is on the truck. **Absent** fails the item without a note — it already says what is wrong. **Not on truck** and **Out of service** are not offered |
 
+![The Utility 1 Walkaround check form on a phone: the Cab's Portable radio, Hand light and Traffic vest, each with Present and Absent buttons](./images/03-136-check-form-present.png)
+
 For an item linked to the department's stock, the expiry date, lot and serial
 number come from the stock records and you cannot change them on the check
 form. To record a replacement, use **Swap** (below) or
@@ -2472,6 +2474,8 @@ aboard, and its lot number if you read one. The item then reads as in date and
 passes. When you submit, the new date replaces the old one on the checklist,
 and the checklist's change log records that you made the change. A date that
 has already passed is refused.
+
+![The Eyewash bottle Date line on a phone, expiring in ten days and not linked to stock: Put in a replacement opened to its Replacement expires and lot number boxes](./images/03-137-check-form-replacement-date.png)
 
 **Items with no location.** Some items sit directly on the checklist rather
 than in a compartment or bag, such as the radios or the map book. They appear
@@ -2955,14 +2959,15 @@ locations and items are all rows in it.
   move option in the row's actions menu.
 
 Edit an item's **name**, **answer type** and **the number it is graded
-against** right in the row. The four answer types are:
+against** right in the row. The five answer types are:
 
-| In the row | On the check form | What it records               | Example                 |
-| ---------- | ----------------- | ----------------------------- | ----------------------- |
-| **Works**  | Function          | Pass / fail                   | "PA system"             |
-| **Count**  | Count             | A quantity against a par      | "SCBA bottles — par 4"  |
-| **Level**  | Level             | A reading against a minimum   | "Fuel — gallons"        |
-| **Date**   | Expiry            | The expiry date on record     | "EpiPen — exp: 2026-09" |
+| In the row  | On the check form | What it records               | Example                 |
+| ----------- | ----------------- | ----------------------------- | ----------------------- |
+| **Works**   | Function          | Pass / fail                   | "PA system"             |
+| **Count**   | Count             | A quantity against a par      | "SCBA bottles — par 4"  |
+| **Level**   | Level             | A reading against a minimum   | "Fuel — gallons"        |
+| **Date**    | Expiry            | The expiry date on record     | "EpiPen — exp: 2026-09" |
+| **Present** | Present           | Present / absent              | "Wheel chocks"          |
 
 The builder shows what each type stores beside its label. A **statement**
 (text the crew reads) and a **section header** are layout rows, not checks.
@@ -3032,6 +3037,8 @@ the empty field.
 
 On tablets and smaller laptops (narrower than 1440 pixels), the list is a bar
 along the bottom of the checklist that opens as a sheet.
+
+![The checklist builder on an unpublished checklist: the Cab location, two items placed directly on the checklist with no heading, Compartment 2 holding a Date line with no date, and the Before publishing list naming Burn kit needs an expiration date](./images/03-135-builder-publish-list.png)
 
 #### The preview
 
@@ -3150,18 +3157,24 @@ reactivated or the pattern is pointed at another template. To reactivate a
 template, select **Reactivate** on its card on the **Templates** tab
 _(2026-10-24)_; patterns using it generate shifts again.
 
+![The Patterns tab with the Reserve Engine Weekend Cover pattern, its Generate shifts button disabled and the warning that its template is inactive and the pattern is not generating shifts](./images/03-132-pattern-template-inactive.png)
+
+![Edit Pattern for Reserve Engine Weekend Cover: the Reserve Engine — Out of Service template chosen and marked inactive, with the Template inactive warning beneath it](./images/03-133-pattern-form-template-inactive.png)
+
 **Pausing a pattern** _(2026-10-24)_. Each pattern has **Pause** and
 **Resume**. A paused pattern reads **Paused**, generates nothing on the nightly
 run, and its **Generate** button is disabled. Shifts it already made stay.
 **Generate** is also disabled while the pattern's template is inactive.
 
-<!-- Screenshot needed: The Templates tab with an inactive template and its Reactivate button -->
+![The Templates tab with the Reserve Engine — Out of Service template marked inactive and its Reactivate button](./images/03-129-template-reactivate.png)
 
-<!-- Screenshot needed: The Patterns tab with a pattern reading Paused, its Resume button, and Generate disabled -->
+![The Patterns tab with the Summer Reserve Rotation pattern reading Paused, its Generate button disabled and Resume beside it](./images/03-130-pattern-paused.png)
 
 On the basic apparatus list, anyone with scheduling manage rights can turn on
 **Show inactive** and select **Reactivate**; reactivating changes only the flag
 and re-adds nothing to shifts.
+
+![Apparatus & Vehicles with Show inactive ticked: Reserve Engine 9 marked Inactive, with its Reactivate button](./images/03-134-basic-apparatus-inactive.png)
 
 | Field                                                                | What it does                                                                                                                                             |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -3349,8 +3362,10 @@ schedule for you to fill.
 - Shift dates are calendar days. They no longer shift by one day when your
   device's time zone is far from the department's.
 
-> **Screenshot to create:** Shift Patterns with a paused pattern and Resume;
-> the generate message listing members who were not seated.
+A paused pattern and its **Resume** button are pictured under
+[Templates](#templates) above.
+
+![Shift Patterns after Generate on the A/B/C Platoon Rotation: Generated 3 shifts, and beneath it the message that two members were not seated, each with the date and the reason](./images/03-131-pattern-generate-not-seated.png)
 
 ### Understanding Platoon Rotations
 
