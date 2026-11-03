@@ -12,6 +12,7 @@ import React from 'react';
 import type { ComplianceStatusReport } from '../../types';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { renderCalendarDate } from '../../utils/reportDates';
 
 interface Props {
   data: ComplianceStatusReport;
@@ -65,7 +66,9 @@ export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
         if (items.length === 0) return <span className="text-theme-text-muted text-xs">-</span>;
         return (
           <span className="text-xs">
-            {items.map((d: { name: string; due_date: string }) => `${d.name} (${d.due_date})`).join(', ')}
+            {items
+              .map((d: { name: string; due_date: string }) => `${d.name} (${renderCalendarDate(d.due_date)})`)
+              .join(', ')}
           </span>
         );
       },

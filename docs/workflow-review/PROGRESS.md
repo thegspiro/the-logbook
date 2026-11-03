@@ -181,9 +181,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Admin hours, a later pass** — scanning a second category's QR code while
   clocked in is refused, but the page neither names the running session nor
   offers its Clock Out (W70-5).
-- **Reports, a later pass** — every renderer prints its period and row dates
-  as ISO strings (`2026-01-01 — 2026-12-31`), unlike the rest of the app
-  (W72-4).
 
 - **Integrations, a later pass** — the `integration.connected` and
   `integration.disconnected` audit rows carry no IP address (W75).
@@ -204,6 +201,20 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — Reports printed ISO dates — 2026-11-03
+
+Read from code and component-tested, not re-driven. Fixed (W72-4): report
+tables, the period under a report's title, the previous-period heading, the
+Call Volume "Busiest Day" card and the compliance deadlines all printed
+`2026-01-01 — 2026-12-31` and `2026-10-15`. They now read `Jan 1, 2026` through
+the app's `formatCalendarDate`, which keeps a calendar date on its written day
+for every viewer; the one instant in the tables, Training Progress "Enrolled",
+goes through `formatDate` in the department's timezone. The helpers live in
+`modules/reports/utils/reportDates.ts`. Only the display columns changed: every
+export keeps ISO values, so a CSV still sorts in a spreadsheet. The Call Volume
+renderer test failed against the old rendering. Gate: typecheck and lint clean,
+and the 161 reports tests pass.
 
 ### Lead — A meeting's status now follows its minutes — 2026-11-03
 

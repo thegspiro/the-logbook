@@ -8,6 +8,7 @@ import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 import { formatNumber } from '@/utils/dateFormatting';
+import { renderCalendarDate } from '../../utils/reportDates';
 
 interface Props {
   data: InventoryStatusReport;
@@ -41,7 +42,7 @@ export const InventoryStatusRenderer: React.FC<Props> = ({ data }) => {
           <span className="text-theme-text-muted text-xs">OK</span>
         ),
     },
-    { key: 'last_audit_date', header: 'Last Audit' },
+    { key: 'last_audit_date', header: 'Last Audit', render: renderCalendarDate },
   ];
 
   return (

@@ -7,6 +7,7 @@ import type { CallVolumeReport } from '../../types';
 import { formatCalendarDate } from '../../../../utils/dateFormatting';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { renderCalendarDate } from '../../utils/reportDates';
 
 interface Props {
   data: CallVolumeReport;
@@ -54,7 +55,7 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
   const unitRuns = Object.entries(summary.by_apparatus_runs ?? {}).sort(([, a], [, b]) => b - a);
 
   const columns = [
-    { key: 'date', header: 'Date' },
+    { key: 'date', header: 'Date', render: renderCalendarDate },
     { key: 'total_calls', header: totalLabel, align: 'right' as const },
     {
       key: 'by_type',
@@ -101,7 +102,7 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label={totalLabel} value={summary.total_calls} />
         <StatCard label={perDayLabel} value={summary.avg_calls_per_day.toFixed(1)} />
-        <StatCard label="Busiest Day" value={summary.busiest_day} />
+        <StatCard label="Busiest Day" value={summary.busiest_day ? formatCalendarDate(summary.busiest_day) : '-'} />
         <StatCard label={peakLabel} value={summary.busiest_day_count} />
       </div>
 
