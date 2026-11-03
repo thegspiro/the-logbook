@@ -66,6 +66,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/competency/', // per-member competency evaluations
   '/training/recertification/tasks/', // per-member renewal tasks
   '/training/module-config/my-training', // current user's full training record
+  '/training/module-config/members/', // a named member's requirements and leave dates/types (leave type can be medical)
   '/training/programs/enrollments/', // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/instructors/validate/', // GET /validate/{user_id}/{course_id}: a named member's qualification verdict

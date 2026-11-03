@@ -982,17 +982,25 @@ class TestWaiverCalculations:
         assert count == 3
 
     def test_count_waived_months_partial_under_threshold(self):
-        """A waiver covering less than 15 days of a month does not waive it."""
+        """Under the half rule, fewer than 15 days of a month do not waive it."""
         waivers = [
-            WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 3, 14))
+            WaiverPeriod(
+                start_date=date(2026, 3, 1),
+                end_date=date(2026, 3, 14),
+                month_rule="half",
+            )
         ]
         count = count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31))
         assert count == 0
 
     def test_count_waived_months_partial_at_threshold(self):
-        """A waiver covering exactly 15 days counts."""
+        """Under the half rule, a waiver covering exactly 15 days counts."""
         waivers = [
-            WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 3, 15))
+            WaiverPeriod(
+                start_date=date(2026, 3, 1),
+                end_date=date(2026, 3, 15),
+                month_rule="half",
+            )
         ]
         count = count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31))
         assert count == 1
@@ -1213,6 +1221,8 @@ class TestEvaluateRequirementDetailFields:
             "due_date",
             "days_until_due",
             "waived_months",
+            "leave_months",
+            "waiver_months",
             "active_months",
             "cert_expired",
             "blocks_activity",
@@ -1631,6 +1641,14 @@ class TestRollingWindow:
         assert result["completed_hours"] == 2.0
 
 
+NOT_EXCUSED = {
+    "waived": False,
+    "waived_share": 0.0,
+    "on_leave": False,
+    "on_waiver": False,
+}
+
+
 class TestMonthlyHours:
     def test_lists_every_month_including_empty_ones(self):
         from app.services.training_compliance import monthly_hours
@@ -1642,10 +1660,56 @@ class TestMonthlyHours:
         ]
         months = monthly_hours(records, date(2025, 11, 1), date(2026, 2, 28))
         assert months == [
-            {"month": "2025-11", "hours": 0.0, "waived": False},
-            {"month": "2025-12", "hours": 2.5, "waived": False},
-            {"month": "2026-01", "hours": 0.0, "waived": False},
-            {"month": "2026-02", "hours": 1.0, "waived": False},
+            {"month": "2025-11", "hours": 0.0, **NOT_EXCUSED},
+            {"month": "2025-12", "hours": 2.5, **NOT_EXCUSED},
+            {"month": "2026-01", "hours": 0.0, **NOT_EXCUSED},
+            {"month": "2026-02", "hours": 1.0, **NOT_EXCUSED},
+        ]
+
+    def test_excused_months_keep_their_hours_and_say_why(self):
+        from app.services.training_compliance import monthly_hours
+        from app.services.training_waiver_service import month_waivers
+
+        records = [
+            _make_record(completion_date=date(2026, 1, 9), hours_completed=4.0),
+        ]
+        excused = month_waivers(
+            [
+                WaiverPeriod(
+                    date(2026, 1, 1),
+                    date(2026, 1, 31),
+                    source="leave",
+                    month_rule="proportional",
+                ),
+                WaiverPeriod(
+                    date(2026, 2, 1),
+                    date(2026, 2, 14),
+                    source="waiver",
+                    month_rule="proportional",
+                ),
+            ],
+            date(2025, 12, 1),
+            date(2026, 2, 28),
+        )
+        months = monthly_hours(records, date(2025, 12, 1), date(2026, 2, 28), excused)
+        assert months == [
+            {"month": "2025-12", "hours": 0.0, **NOT_EXCUSED},
+            {
+                "month": "2026-01",
+                "hours": 4.0,
+                "waived": True,
+                "waived_share": 1.0,
+                "on_leave": True,
+                "on_waiver": False,
+            },
+            {
+                "month": "2026-02",
+                "hours": 0.0,
+                "waived": True,
+                "waived_share": 0.5,
+                "on_leave": False,
+                "on_waiver": True,
+            },
         ]
 
     def test_ignores_undated_records_and_records_outside_the_range(self):
@@ -1683,8 +1747,8 @@ class TestRollingHoursDetail:
         )
         months = result["monthly_hours"]
         assert len(months) == 12
-        assert months[0] == {"month": "2025-11", "hours": 2.0, "waived": False}
-        assert months[-1] == {"month": "2026-10", "hours": 1.0, "waived": False}
+        assert months[0] == {"month": "2025-11", "hours": 2.0, **NOT_EXCUSED}
+        assert months[-1] == {"month": "2026-10", "hours": 1.0, **NOT_EXCUSED}
         assert sum(m["hours"] for m in months) == result["completed_hours"] == 6.0
         assert result["window_start"] == "2025-11-01"
         assert result["window_months"] == 12
