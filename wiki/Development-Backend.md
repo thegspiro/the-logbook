@@ -379,7 +379,7 @@ def get_items(ids: List[str], filter: Optional[str] = None) -> Dict[str, int]:
 `production`). The production stage, abridged:
 
 ```dockerfile
-FROM python:3.14-slim as base
+FROM python:3.13-slim as base
 # ... system packages, appuser, WORKDIR /app
 
 FROM base as dependencies

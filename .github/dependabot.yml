@@ -50,14 +50,27 @@ updates:
       interval: "weekly"
       day: "monday"
 
+  # The Python and Node base images are pinned to the versions CI tests on
+  # (owner decision 2026-11-01; backend/tests/test_image_runtime_versions.py).
+  # A bump past them belongs in the same change as the setup-python /
+  # setup-node bump in the workflows, so Dependabot is not asked to propose
+  # one on its own. Patch releases within the pinned tag still arrive by
+  # re-pulling the tag.
   - package-ecosystem: "docker"
     directory: "/backend"
     schedule:
       interval: "weekly"
       day: "monday"
+    ignore:
+      - dependency-name: "python"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

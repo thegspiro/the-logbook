@@ -441,6 +441,29 @@ docker push ghcr.io/thegspiro/the-logbook-frontend:latest
 Full procedure, including making the packages public:
 [DOCKER-BUILD-PUBLISH.md](https://github.com/thegspiro/the-logbook/blob/main/docs/DOCKER-BUILD-PUBLISH.md).
 
+### Combined image (`ghcr.io/thegspiro/the-logbook`)
+
+The Unraid Community Applications template runs a third image: nginx and the
+API in one container, assembled by `docker-bake.hcl` from the two production
+images above (`docker/combined/Dockerfile`). It listens on **3000** — the web
+interface, with `/api` and `/health` proxied to uvicorn on `127.0.0.1:3001`
+inside the container — runs as uid 1000, and starts migrations the same way
+the backend image does. MySQL and Redis stay outside it; give it `DB_*`,
+`REDIS_*`, `SECRET_KEY`, `ENCRYPTION_KEY`, `ENCRYPTION_SALT` and, in
+production, the startup-gate settings listed in `unraid/the-logbook.xml`.
+
+The `Release Image` workflow publishes it for amd64 and arm64 when a `v*.*.*`
+tag is pushed. To build it yourself (BuildKit's bake is required; a plain
+`docker build` of that Dockerfile cannot supply the two images it starts
+from):
+
+```bash
+docker buildx bake -f docker-bake.hcl combined --load
+```
+
+Name the file with `-f`: without it bake also reads `docker-compose.yml` and
+stops on its required secrets.
+
 ---
 
 **See also:** [Installation](Installation) | [Unraid Deployment](Deployment-Unraid) | [Production Deployment](Deployment-Production) | [Environment Variables](Configuration-Environment)
