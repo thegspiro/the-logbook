@@ -7,6 +7,7 @@ import type { MemberRosterReport } from '../../types';
 import { toDisplayString } from '../../../../utils/displayValue';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { renderCalendarDate } from '../../utils/reportDates';
 
 interface Props {
   data: MemberRosterReport;
@@ -34,7 +35,7 @@ export const MemberRosterRenderer: React.FC<Props> = ({ data }) => {
       header: 'Roles',
       render: (v: unknown) => (Array.isArray(v) ? v.join(', ') : v != null ? toDisplayString(v) : '-'),
     },
-    { key: 'joined_date', header: 'Joined' },
+    { key: 'joined_date', header: 'Joined', render: renderCalendarDate },
   ];
 
   return (

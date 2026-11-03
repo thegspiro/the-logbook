@@ -1,5 +1,17 @@
 # Script currency
 
+## Flagged by the 2026-11-02 → 11-03 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                  | Beat                   | Was                                       | Now                                                                       |
+| ----------------------- | ---------------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| **Any membership beat** | Departed members       | No archive                                | The **History** module keeps past members, the Honor Roll and titles      |
+| **Any training beat**   | Leave and requirements | A month excused only at 15+ days of leave | **Months on leave** rule, Full month by default; leave shown beside hours |
+| **Any meetings beat**   | Adopting minutes       | The meeting stayed a draft                | **Adopt Minutes** approves the meeting too                                |
+| **Any offline beat**    | Sending saved work     | Open the page to send                     | Chrome and Edge send queued checks by themselves                          |
+
 ## Flagged by the 2026-11-01 → 11-02 changes
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).

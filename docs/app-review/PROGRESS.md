@@ -22,7 +22,7 @@ been through a review pass.
 | A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
-| A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
+| A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ⬜     |
 | A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ⬜     |
@@ -3547,3 +3547,14 @@ secrets redacted for non-admins. See
   delivery is a single attempt per recipient. MAIL-4, MAIL-22 unchanged. Email/template/notification/
   fingerprint/encryption tests: 3,809 passed, 1 skipped. See email-templates.md → Pass 6. Next: A5 course
   cohorts & syllabus.
+- **A5 course cohorts & syllabus ✅ (pass 6, 2026-11-03) — 1 fixed, 2 flagged.** The service grew from 1,544 to
+  2,283 lines after pass 3, mostly W27-3: a member added to a running cohort needs an officer to credit them for
+  each earlier class or schedule a make-up. **CC-8 (fixed):** the decision was an unlocked read-then-write. The
+  unique key stopped two first decisions only as a 500; after a cancelled make-up the row is updated rather than
+  inserted, so two officers acting together produced two training records for one class, or two make-up classes
+  with one orphaned. The decision path now locks the roster row and re-reads decisions with a locking read
+  (pitfall #27; roster row first to avoid the gap-lock deadlock found in A2). `TestADecisionIsSerialized` was
+  seen red, then green; it asserts the statements, not a live race. **Flagged:** CC-9 (a cancelled cohort still
+  takes decisions, make-ups and new classes), CC-10 (class sequence and cap are read-then-write; the unique key
+  makes it a 500, not corruption). Cohort, syllabus, late-joiner and capacity-locking tests pass. See
+  course-cohorts.md → Pass 6. Next: A6 member lifecycle & offboarding.

@@ -5,6 +5,27 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 2 – 3, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).
+
+- **A History module** keeps the department's archive: past members, an Honor
+  Roll of line-of-duty deaths, historical titles, and a review before a record
+  goes public. Turn it on under Settings → Modules.
+- **Leave and training:** leave now shows beside training hours, and a new
+  **Months on leave** rule decides how a partly covered month counts. Every
+  department starts on Full month, so some members' standing changes on
+  upgrade (`docs/UPGRADING.md`).
+- **Shifts on outside agencies' units** can be evaluated, once switched on for
+  that agency.
+- **Adopting minutes** now approves their meeting; meetings with adopted minutes
+  are approved on upgrade.
+- **Label printing** lets you set the printer's resolution for each label size.
+- **Offline work** (equipment checks, skills scoring) can send by itself in
+  Chrome and Edge, even with the app closed.
+- Screenshots to create are in `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: November 1 – 2, 2026
 
 The engineering audit is

@@ -27,7 +27,7 @@ vi.mock('../../../utils/createApiClient', () => ({
 }));
 
 // Import after the mock is registered.
-import { applicantService } from './api';
+import { applicantService, pipelineService } from './api';
 
 const prospectResponse = {
   data: {
@@ -127,6 +127,14 @@ describe('applicantService list scoping', () => {
     expect(requestedParams().assigned_to_me).toBeUndefined();
   });
 
+  it('lists an archive tab through the source event and My applicants', async () => {
+    await applicantService.getRejectedApplicants({ event_id: 'evt-1', assigned_to_me: true });
+
+    const params = requestedParams();
+    expect(params.event_id).toBe('evt-1');
+    expect(params.assigned_to_me).toBe(true);
+  });
+
   it('leaves open_only off the archive fetches, which filter to one closed status', async () => {
     await applicantService.getRejectedApplicants({ page: 1, pageSize: 25 });
 
@@ -170,5 +178,26 @@ describe('applicantService interview requirement', () => {
     mockGet.mockResolvedValue({ data: null });
 
     expect(await applicantService.getInterviewRequirement('p1')).toBeNull();
+  });
+});
+
+describe('pipelineService counts', () => {
+  it('counts only the caller’s applicants when My applicants is on', async () => {
+    mockGet.mockResolvedValue({ data: { pipeline_id: 'pipe-1', by_step: [] } });
+
+    await pipelineService.getPipelineStats('pipe-1', { assigned_to_me: true });
+
+    const [url, config] = mockGet.mock.calls[0] as [string, { params: Record<string, unknown> }];
+    expect(url).toBe('/prospective-members/pipelines/pipe-1/stats');
+    expect(config.params.assigned_to_me).toBe(true);
+  });
+
+  it('leaves assigned_to_me off the whole-pipeline count', async () => {
+    mockGet.mockResolvedValue({ data: { pipeline_id: 'pipe-1', by_step: [] } });
+
+    await pipelineService.getPipelineStats('pipe-1', { assigned_to_me: false });
+
+    const [, config] = mockGet.mock.calls[0] as [string, { params: Record<string, unknown> }];
+    expect(config.params.assigned_to_me).toBeUndefined();
   });
 });

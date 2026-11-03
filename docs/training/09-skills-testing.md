@@ -402,6 +402,10 @@ don't have to do anything.
   then.
 - Saves made offline are combined. An hour without signal sends one update,
   and the submission is always sent last.
+- **In Chrome or Edge, including on Android, the scoring sends even if The
+  Logbook is closed** when the signal comes back. Safari on an iPhone or iPad
+  sends it only once you open The Logbook with a connection. See
+  [What Happens When You Lose Connection](./10-mobile-pwa.md#what-happens-when-you-lose-connection).
 - **If The Logbook refuses it** — the test was voided or completed elsewhere,
   or someone else changed it — you get a message naming the test and the
   candidate. A red banner on the test gives the reason. The scoring stays on
