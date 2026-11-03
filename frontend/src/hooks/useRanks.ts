@@ -8,6 +8,16 @@ import { useAuthStore } from '../stores/authStore';
 
 export { invalidateRanksCache } from './ranksCache';
 
+export interface UseRanksOptions {
+  /**
+   * When false, nothing is requested: `ranks` is whatever is already cached
+   * (else empty) and `loading` is false. For components that render on public
+   * pages and need ranks only in some states. `/operational-ranks` needs a
+   * session, and a 401 from it sends a signed-out visitor to /login.
+   */
+  enabled?: boolean;
+}
+
 /**
  * Hook that fetches operational ranks from the API and caches them.
  * Returns { ranks, loading, refetch }.
@@ -15,7 +25,7 @@ export { invalidateRanksCache } from './ranksCache';
  * The `ranks` array is sorted by sort_order (highest rank first).
  * Only active ranks are returned by default.
  */
-export function useRanks(activeOnly = true) {
+export function useRanks(activeOnly = true, { enabled = true }: UseRanksOptions = {}) {
   const organizationId = useAuthStore((state) => state.user?.organization_id ?? null);
   const cacheKey = useMemo<RanksCacheKey>(() => ({ activeOnly, organizationId }), [activeOnly, organizationId]);
   const cacheKeyString = JSON.stringify([organizationId, activeOnly]);
@@ -44,7 +54,8 @@ export function useRanks(activeOnly = true) {
     () => (rankState.key === cacheKeyString ? rankState.ranks : (getCachedRanks(cacheKey) ?? [])),
     [cacheKey, cacheKeyString, rankState]
   );
-  const loading = loadingState.key === cacheKeyString ? loadingState.loading : getCachedRanks(cacheKey) === null;
+  const loading =
+    enabled && (loadingState.key === cacheKeyString ? loadingState.loading : getCachedRanks(cacheKey) === null);
 
   const fetchRanks = useCallback(async () => {
     try {
@@ -84,6 +95,7 @@ export function useRanks(activeOnly = true) {
   }, [activeOnly, cacheKey, cacheKeyString, setFailed]);
 
   useEffect(() => {
+    if (!enabled) return;
     const cachedRanks = getCachedRanks(cacheKey);
     if (cachedRanks !== null) {
       setRankState({ key: cacheKeyString, ranks: cachedRanks });
@@ -92,7 +104,7 @@ export function useRanks(activeOnly = true) {
     }
     setRankState({ key: cacheKeyString, ranks: [] });
     void fetchRanks();
-  }, [cacheKey, cacheKeyString, fetchRanks]);
+  }, [cacheKey, cacheKeyString, enabled, fetchRanks]);
 
   const refetch = useCallback(async () => {
     // Both caches, not just this hook's. `/operational-ranks` is not in
