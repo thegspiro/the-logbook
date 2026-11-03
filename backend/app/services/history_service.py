@@ -210,14 +210,15 @@ def service_years(periods: Iterable[HistoricalMemberServicePeriod]) -> Optional[
         if any(p.is_ongoing for p in periods):
             return "present"
         return None
-    first = min(starts, key=lambda p: p.start_date) if starts else None
+    # Filtered to dated periods above; the fallback only satisfies the type.
+    first = min(starts, key=lambda p: p.start_date or date.max) if starts else None
     start = _year_text(first.start_date, first.start_circa) if first else "?"
     if any(p.is_ongoing for p in periods):
         return f"{start}–present"
     ends = [p for p in periods if p.end_date is not None]
     if not ends:
         return f"{start}–"
-    last = max(ends, key=lambda p: p.end_date)
+    last = max(ends, key=lambda p: p.end_date or date.min)
     end = _year_text(last.end_date, last.end_circa)
     return start if end == start else f"{start}–{end}"
 
@@ -417,15 +418,25 @@ class HistoryService:
         if source.organization_id != target.organization_id:
             raise ValueError("Title not found")
         # A period carrying both keeps the one row it already has for target.
-        already = select(HistoricalMemberPeriodTitle.period_id).where(
-            HistoricalMemberPeriodTitle.title_id == target.id
+        # The ids are read first rather than used as a subquery: MySQL refuses
+        # a DELETE whose WHERE selects from the table being deleted from
+        # (error 1093), though MariaDB accepts it.
+        already = list(
+            (
+                await self.db.execute(
+                    select(HistoricalMemberPeriodTitle.period_id).where(
+                        HistoricalMemberPeriodTitle.title_id == target.id
+                    )
+                )
+            ).scalars()
         )
-        await self.db.execute(
-            delete(HistoricalMemberPeriodTitle).where(
-                HistoricalMemberPeriodTitle.title_id == source.id,
-                HistoricalMemberPeriodTitle.period_id.in_(already.scalar_subquery()),
+        if already:
+            await self.db.execute(
+                delete(HistoricalMemberPeriodTitle).where(
+                    HistoricalMemberPeriodTitle.title_id == source.id,
+                    HistoricalMemberPeriodTitle.period_id.in_(already),
+                )
             )
-        )
         await self.db.execute(
             update(HistoricalMemberPeriodTitle)
             .where(HistoricalMemberPeriodTitle.title_id == source.id)
@@ -969,9 +980,11 @@ class HistoryService:
         self._settle_dates(person)
         self.db.add(person)
         await self.db.flush()
-        person = await self.get_person(organization_id, person.id)
-        await self._log(person, RevisionKind.CREATED, actor_id, with_snapshot=True)
-        return person
+        created = await self.get_person(organization_id, person.id)
+        if created is None:
+            raise ValueError("The new record could not be read back")
+        await self._log(created, RevisionKind.CREATED, actor_id, with_snapshot=True)
+        return created
 
     async def create_from_member(
         self, organization_id: str, user_id: str, actor_id: str
