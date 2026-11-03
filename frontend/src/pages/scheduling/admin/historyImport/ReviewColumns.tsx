@@ -80,7 +80,7 @@ const ReviewColumns: React.FC<ReviewColumnsProps> = ({ detail, busy, onSettings 
           A member needs a name, ID, email or username; every row needs a unit, a start time and an end time, and a date
           unless the start time column carries one.
         </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="field-grid gap-4">
           {detail.fields.map((field) => {
             const id = `column-${field}`;
             const current = mapping[field] ?? '';

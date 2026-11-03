@@ -207,13 +207,17 @@ export const CHECK_REQUEST_STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
+// -900 / -300 rather than the -800 / -400 the other status maps use: a dues
+// badge is 12px text, which needs 7:1 to clear AAA, and green-800 on green-100
+// (6.49:1) and red-400 on its tint over the high-contrast black (6.16:1) did
+// not. The mobile accessibility sweep holds this page's AAA budget at zero.
 export const DUES_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  partial: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  overdue: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  waived: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  exempt: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+  pending: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  paid: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  partial: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  overdue: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  waived: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  exempt: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
 };
 
 export const APPROVAL_STEP_STATUS_COLORS: Record<string, string> = {

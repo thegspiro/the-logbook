@@ -563,6 +563,71 @@ const routes = ({
     }),
   ],
 
+  // Dues. The page prints the summary straight into stat tiles and threw on
+  // the catch-all's `{}` (`collectionRate.toFixed`), so every visit measured
+  // the ErrorBoundary. A schedule and one member in each state a row can show;
+  // the summary totals agree with them. Money is a string, as the API's
+  // Decimal fields serialize. `dues**` also matches `dues-schedules` and
+  // `dues/summary`, and a later route wins, so the list is registered first.
+  [
+    '**/api/v1/finance/dues**',
+    () =>
+      (
+        [
+          ['e2e-dues-1', 'Alex Tester', '150.00', 'paid', '2026-02-10T15:00:00Z'],
+          ['e2e-dues-2', 'Jordan Captain', '75.00', 'partial', null],
+          ['e2e-dues-3', 'Sam Probationary', '0.00', 'overdue', null],
+          ['e2e-dues-4', 'Riley Lifetime', '0.00', 'waived', null],
+        ] as const
+      ).map(([id, memberName, amountPaid, status, paidDate]) => ({
+        id,
+        organizationId: 'e2e-org',
+        duesScheduleId: 'e2e-dues-schedule',
+        userId: `${id}-member`,
+        amountDue: '150.00',
+        amountPaid,
+        status,
+        dueDate: '2026-03-01T05:00:00Z',
+        ...(paidDate ? { paidDate, paymentMethod: 'check' } : {}),
+        ...(status === 'waived' ? { waivedAt: '2026-01-15T15:00:00Z', waiveReason: 'Life member' } : {}),
+        memberName,
+        createdAt: '2026-01-02T15:00:00Z',
+        updatedAt: '2026-02-10T15:00:00Z',
+      })),
+  ],
+  [
+    '**/api/v1/finance/dues-schedules**',
+    () => [
+      {
+        id: 'e2e-dues-schedule',
+        organizationId: 'e2e-org',
+        name: '2026 Annual Membership Dues',
+        amount: '150.00',
+        frequency: 'annual',
+        dueDate: '2026-03-01T05:00:00Z',
+        gracePeriodDays: 30,
+        lateFeeAmount: '10.00',
+        isActive: true,
+        createdBy: TEST_USER.id,
+        createdAt: '2026-01-02T15:00:00Z',
+        updatedAt: '2026-01-02T15:00:00Z',
+      },
+    ],
+  ],
+  [
+    '**/api/v1/finance/dues/summary**',
+    () => ({
+      totalExpected: '600.00',
+      totalCollected: '225.00',
+      totalOutstanding: '225.00',
+      totalWaived: '150.00',
+      collectionRate: 37.5,
+      membersPaid: 1,
+      membersOverdue: 1,
+      membersWaived: 1,
+    }),
+  ],
+
   ['**/api/v1/medical-supplies/lots/expiring**', () => []],
   ['**/api/v1/medical-supplies/categories**', () => []],
   ['**/api/v1/medical-supplies/items**', () => ({ items: [], total: 0, skip: 0, limit: 200 })],

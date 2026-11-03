@@ -2460,7 +2460,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Not working? Check these causes**:
 
 1. **Leave is not active**: Go to **Members > Admin > Waivers** and verify the leave is active (not deactivated)
-2. **Leave doesn't cover enough days**: A month is only waived if the leave covers ≥15 days of that month. A leave from Jan 20–Jan 31 (12 days) does NOT waive January.
+2. **Leave doesn't cover enough days**: under the department's **Months on leave** setting set to a 15-day rule, a month with fewer than 15 days of leave is owed in full (`half`) or only partly reduced (`proportional`). Under the default, full month, any day of leave excuses the month.
 3. **Wrong requirement type**: Only Hours, Shifts, and Calls requirements are adjusted proportionally. Courses and Certifications are binary (complete or not) and are never adjusted.
 4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Members > Admin > Waivers) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
 
@@ -3080,7 +3080,7 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 
 1. The leave has `exempt_from_training_waiver = true` set
 2. The auto-linked training waiver was not created (backend service error)
-3. The leave does not cover ≥15 days of any calendar month
+3. The department uses a 15-day rule (**Months on leave** on the compliance settings page) and the leave covers fewer than 15 days of any calendar month
 
 **Solutions**:
 

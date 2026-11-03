@@ -4261,6 +4261,75 @@ the **Member Records (All Members)** PDF for the quarter from **Training Admin
 
 ---
 
+## Member Performance Evaluations
+
+_Added 2026-11-02._ A periodic, signed review of a member (a probationary
+review, an annual review) that is separate from the per-shift **Shift
+Evaluations** above. The department builds the form once, drafts one evaluation
+per member for a review period, and each person completes their part in turn.
+
+### Where things are
+
+| You are...                | Go to                                                                |
+| ------------------------- | -------------------------------------------------------------------- |
+| Setting up forms, periods | **Reports → Evaluations** (setup; `evaluations.configure`)           |
+| Drafting and conducting   | **Reports → Evaluations → Conduct** (`evaluations.conduct`)          |
+| A member reading your own | **My Evaluations** (every member), with your figures for this period |
+
+### How an evaluation moves
+
+1. **Draft.** A manager (`evaluations.manage`) or conductor drafts it. If a
+   manager does not name an evaluator, the member's current supervisor
+   (**Reports To**) is used when they hold `evaluations.conduct`; otherwise the
+   manager is the evaluator. **Draft a review period** previews every current
+   member with the form and evaluator that would be used (or why they are left
+   out), lets you untick people, then drafts the rest; a member who cannot be
+   drafted is reported and the others still go ahead (500 at most).
+2. **Self-evaluation, evaluator, calibration.** Each part is filled in on the
+   evaluation page. Every item shows the member's figure and a suggested rating;
+   a rating that departs from the suggestion needs a reason, and some levels need
+   an example. At calibration the reviewer may **tick the evaluator's items to
+   revisit** (ticks only, no notes). The evaluator is told items are flagged;
+   the member sees the ticks once the evaluation is released to them.
+3. **Approvals and signing.** The approving position signs; the member
+   acknowledges receipt or refuses with a reason. Signing asks you to re-verify
+   your session and type your own name. The last signature finalizes the
+   evaluation and freezes a **PDF** on the department letterhead.
+4. **Member's response.** For 30 days (the form's setting) after finalization the
+   member may write a response: **Save draft** (only they see it), then
+   **Submit response** (final). A second PDF carries the response; **Signed PDF,
+   without response** downloads the original.
+5. **Amending.** An evaluations manager may reopen a finalized evaluation with a
+   written reason (not their own). It becomes a new revision: the evaluator's
+   part returns as a draft with their earlier answers, and calibration,
+   approvals and acknowledgement run again. The earlier text and PDF are
+   **not kept**; the reason and who amended it are shown on the evaluation and
+   printed in the next PDF.
+6. **Deleting.** Only the Chief (`evaluations.delete`) can delete, with a reason
+   and a re-verified session. A record of who, when and why is kept and shown
+   under **Removed evaluations**; the member is emailed without the reason.
+
+### Emails
+
+Editable under **Communications → Email Templates**, group **Performance
+Evaluations**: Waiting on You, Step Due Soon, Step Overdue, Finalized, Amended,
+Response, Deleted. They name the member, period, step, due date and a link, never
+a rating or comment. A daily task sends reminders and overdue notices once each.
+
+### Edge cases
+
+- Nobody evaluates, amends or deletes their own evaluation.
+- An evaluation is visible only to its member, evaluator, approvers at an open
+  step and holders of view-all or manage; anyone else sees "not found".
+- Shift-evaluation credit (**Evaluated shifts**, **Transports**, **Refusals**
+  requirement types) is described under Shift Evaluations, not here.
+
+> **Screenshots needed:** see `SCREENSHOT_CURRENCY.md` (evaluations list, draft
+> dialog, evaluation page, sign dialog, calibration flags, response card, amend
+> and delete dialogs).
+
+---
+
 ## If You Learned an Older Version
 
 If you are following older notes, an older recording or an SOP, these things

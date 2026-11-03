@@ -5,6 +5,16 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 1 – 2, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+
+- **Member performance evaluations** are described in their own entry below.
+- **Top navigation** now has Medical Screening and My ID Card like the side menu.
+- **Fixes:** Reports and Medical Supplies no longer show the error screen on a
+  malformed response.
+
 ## Recent changes: Zeffy integration, November 2, 2026
 
 The engineering audit is

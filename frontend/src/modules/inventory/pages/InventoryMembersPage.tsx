@@ -496,7 +496,7 @@ const InventoryMembersPage: React.FC = () => {
                               <Package className="h-3.5 w-3.5" /> Permanent Assignments (
                               {memberDetail.permanent_assignments.length})
                             </h4>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="card-grid gap-2 [--card-grid-min:18rem]">
                               {memberDetail.permanent_assignments.map((it) => (
                                 <div key={it.assignment_id} className="card-secondary p-3">
                                   <Link
@@ -523,7 +523,7 @@ const InventoryMembersPage: React.FC = () => {
                               <Package className="h-3.5 w-3.5" /> Active Checkouts (
                               {memberDetail.active_checkouts.length})
                             </h4>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="card-grid gap-2 [--card-grid-min:18rem]">
                               {memberDetail.active_checkouts.map((it) => (
                                 <div
                                   key={it.checkout_id}
@@ -553,7 +553,7 @@ const InventoryMembersPage: React.FC = () => {
                             <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-purple-700 uppercase dark:text-purple-400">
                               <Package className="h-3.5 w-3.5" /> Issued Items ({memberDetail.issued_items.length})
                             </h4>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="card-grid gap-2 [--card-grid-min:18rem]">
                               {memberDetail.issued_items.map((it) => (
                                 <div key={it.issuance_id} className="card-secondary p-3">
                                   <Link

@@ -486,7 +486,7 @@ export const MyChecklistsPage: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    {statusBadge(item.status)}
+                    <span className="split-row-aside">{statusBadge(item.status)}</span>
                   </div>
                 ))}
               </div>

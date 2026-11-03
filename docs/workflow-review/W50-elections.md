@@ -1412,7 +1412,7 @@ with nothing saying why.
 Tests: `test_a_date_after_the_departments_today_is_refused` and a case in
 `VotingEligibilitySection.test.tsx`, both red first.
 
-### W50-R3 — LOW — An ineligible member is told only that they are not on the frozen roll — FLAGGED
+### W50-R3 — LOW — An ineligible member is told only that they are not on the frozen roll — ✅ FIXED (2026-11-02)
 
 **Did:** as `treasurer` (waiting until 30 April 2027), opened the election.
 **Saw:** "You are not on the voter roll that was frozen when this election
@@ -1423,6 +1423,34 @@ eligibility gate.
 **Flagged:** which reason to show when they differ is a product choice. A
 member waived after opening is correctly told "not on the frozen roll".
 Showing the live reason only when it still fails would cover both cases.
+
+**Owner decision (2026-11-02):** show the member's own reason while they
+still fail it, and the frozen-roll message only once they pass.
+
+**Fix:** `check_voter_eligibility` no longer returns at the snapshot check.
+It records that the member is off the roll and lets the tier rules and the
+election-wide rules run. Whichever of those still fails supplies the reason;
+if both pass, the frozen-roll message is returned. That return comes before
+the position and ballot-item checks, because the roll bars every race. Tests:
+`TestOffTheFrozenRoll` in `test_election_eligibility_rules.py`. The two
+behaviour cases failed against the old code.
+
+**Re-driven in the browser:**
+
+- `treasurer` (Tess Park) was off the roll of a freshly opened election. The
+  page read "Your meeting attendance is 0.0% over the last 12 months, below
+  the 50% minimum required to vote".
+- After two meetings were marked attended and the wait was waived, it read
+  the frozen-roll message, at 390×844 as well.
+- `member2`, now Probationary, read "Members at the 'Probationary' tier are
+  not eligible to vote".
+
+**Not changed:** the token ballot (`/ballot`) still says only "not on the
+voter roll". An emailed link is checked against a hashed token, not a
+signed-in member, so the live rules are not evaluated there. The
+secretary's eligibility roster still gives every off-roll member "Not on the
+voter roll frozen when the election opened", which is a separate,
+officer-facing code path. Both are left as they are.
 
 ### W50-R4 — NIT — The roster's "eligible from" date is day-first — ✅ FIXED (2026-11-01)
 
