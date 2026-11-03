@@ -249,7 +249,7 @@ const ModuleOverview: React.FC = () => {
                 void handleContinue();
               }}
               disabled={isSaving || enabledCount === 0}
-              className={`touch-target-phone rounded-lg px-6 py-2 font-semibold transition-all ${
+              className={`split-row-aside touch-target-phone rounded-lg px-6 py-2 font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
                   ? 'bg-linear-to-r from-red-700 to-orange-700 text-white hover:from-red-800 hover:to-orange-800'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'

@@ -109,7 +109,7 @@ export const SkillSheetLibraryModal: React.FC<SkillSheetLibraryModalProps> = ({ 
                 </div>
 
                 {sheet.already_imported ? (
-                  <span className="text-theme-text-muted flex shrink-0 items-center gap-1.5 text-sm">
+                  <span className="split-row-aside text-theme-text-muted flex items-center gap-1.5 text-sm">
                     <Check className="h-4 w-4" aria-hidden="true" />
                     Already added
                   </span>
@@ -117,7 +117,7 @@ export const SkillSheetLibraryModal: React.FC<SkillSheetLibraryModalProps> = ({ 
                   <button
                     onClick={() => void handleImport(sheet)}
                     disabled={importingSlug !== null}
-                    className="mobile-touch-target flex shrink-0 items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="split-row-aside mobile-touch-target flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {importingSlug === sheet.slug ? (
                       'Adding…'

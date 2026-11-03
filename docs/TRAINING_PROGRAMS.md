@@ -2570,7 +2570,7 @@ When a member has an active Leave of Absence with an auto-linked training waiver
 - The member's program enrollment remains in `active` status during the leave
 - Progress percentages reflect the adjusted targets
 
-> **Edge Case:** If a waiver covers exactly 15 days of a month, that month IS waived. If it covers 14 days, it is NOT waived. A single day can change the adjusted requirement significantly. See [Training Compliance Calculations](./training-compliance-calculations.md#edge-case-near-the-15-day-threshold) for a detailed example.
+> **Edge Case:** How a partly covered month counts is the department's **Months on leave** setting. Under the default, any day of leave excuses the whole month; the two 15-day rules excuse it proportionally or by half. See [Training Compliance Calculations](./training-compliance-calculations.md#edge-case-a-partly-covered-month) for a worked example.
 
 ### Skills Testing Module
 

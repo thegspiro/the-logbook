@@ -165,9 +165,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
-- **W33 / W34** — the shift-assignment notice names the equipment checklists
-  but opens the schedule rather than My Checklists, and prints the shift date
-  as `2026-09-30` (W46-16).
 - **W50 follow-up** — the election meeting-link → Import Attendees → unlink
   round trip could not be driven in W50. W51 left a business-meeting event for
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
@@ -211,6 +208,21 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — Shift notices printed ISO dates — 2026-11-02
+
+Read from code and unit-tested, not re-driven: the change is the text of a
+notification body. Fixed (W46-16): the assignment notice said "the 2026-09-30
+shift", and the cancellation, decline, swap, confirmation and time-off notices
+built their dates the same way. All seven now print `Sep 30, 2026`, the form
+the scheduled reminders already use, through one `_notice_date` helper in
+`scheduling_service.py`; `test_shift_notice_dates.py` failed on the ISO form
+and passes now, and the cancellation test that pinned the ISO subject was
+updated with it. Held: the assignment notice still opens the shift rather than
+My Checklists. It is the notice of an assignment, and the shift is what it
+announces. The end-of-shift checklist reminder is the notice that opens `/inventory/checklists/my?shift=…`. Gate: flake8, black and isort clean on the
+changed files, and the scheduling, swap, time-off and shift-completion suites
+pass.
 
 ### W71b — Medical screening, deep dive — 2026-11-02
 
@@ -1379,7 +1391,7 @@ Next: W52.
 Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a fresh database, at 1280×900 and 390×844. Covered: department defaults (regular and annual), the waiting period per member type, the profile override, a status change, count-mode attendance, the frozen roll, voting, close and results. Findings are in [W50-elections.md](./W50-elections.md#w50-re-drive--2026-10-31-voter-eligibility-rules-and-the-lifecycle).
 
 - Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
-- Flagged: W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll).
+- W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll): flagged, then fixed 2026-11-02 on the owner's decision.
 - Fixed 2026-11-01: W50-R4 and W50-R5 (NIT).
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30

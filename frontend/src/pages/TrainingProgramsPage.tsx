@@ -339,7 +339,7 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
             <p className="split-row-main text-theme-text-muted text-sm">
               Build programs, import requirements, and track member progress
             </p>
-            {headerActions}
+            <div className="split-row-aside flex flex-wrap items-center gap-2">{headerActions}</div>
           </div>
         ) : (
           <>

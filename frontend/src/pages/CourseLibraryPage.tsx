@@ -639,7 +639,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             <p className="split-row-main text-theme-text-muted text-sm">
               Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
             </p>
-            {addCourseButton}
+            <div className="split-row-aside">{addCourseButton}</div>
           </div>
         ) : (
           <TrainingPageHeader

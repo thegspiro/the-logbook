@@ -305,6 +305,9 @@ export interface ComplianceMatrixCell {
   /** The target before waiver proration; differs only when waived_months > 0. */
   base_required?: number | null;
   waived_months?: number;
+  /** `waived_months` by reason; a month both a leave and a waiver covered counts in both. */
+  leave_months?: number;
+  waiver_months?: number;
   window_start?: string | null;
   window_end?: string | null;
   /** The date this cell was judged against; overrides the matrix-level as_of. */

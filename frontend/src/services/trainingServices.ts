@@ -1711,6 +1711,14 @@ export const trainingModuleConfigService = {
     return response.data;
   },
 
+  /** One member's requirements as the training officer sees them (training.manage). */
+  async getMemberRequirements(userId: string): Promise<import('../types/training').MemberRequirementsResponse> {
+    const response = await api.get<import('../types/training').MemberRequirementsResponse>(
+      `/training/module-config/members/${encodeURIComponent(userId)}/requirements`
+    );
+    return response.data;
+  },
+
   async getMyTrainingRecords(
     params: { year?: string; search?: string; trainingType?: string; page?: number; pageSize?: number } = {}
   ): Promise<import('../types/training').MyTrainingHistoryPage> {

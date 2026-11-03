@@ -1,5 +1,35 @@
 # Screenshot currency
 
+## Queued by the November 1 – 2 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | Evaluations list (Conduct) with status filter and removed records | Create |
+| 02 | **Draft a review period** dialog (preview with exclusions) | Create |
+| 02 | Evaluation page: form with figures and suggested ratings, steps beside | Create |
+| 02 | Calibration dialog with flag checkboxes; "Flagged at calibration" mark | Create |
+| 02 | Sign / Acknowledge dialog | Create |
+| 02 | Response card and the two PDF download buttons | Create |
+| 02 | Amend dialog and Amendments panel; Delete dialog | Create |
+| 02 | My Evaluations | Create |
+| 02 | Email Templates, group Performance Evaluations | Create |
+| 00 | Top navigation menu (Medical Screening, My ID Card) | Re-check |
+
+## Queued by the November 2 Zeffy documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 16 | Integrations catalog with the **Zeffy** card, and its connect dialog (API key, signing secret, webhook address) | Create |
+| 12 | **Grants & Fundraising → Zeffy**: connection panel, campaign cards and the payments list | Create |
+| 12 | **Link Zeffy campaign** dialog | Create |
+| 12 | Grants & Fundraising menu with the **Zeffy** entry | Replace |
+
 ## The October 16 – November 1 queues, captured 2026-11-02
 
 Every queue from the October 16 – 18 pass to the October 31 – November 1 pass
@@ -105,18 +135,6 @@ code:
 - An unchanged draft purchase request reads "Saving soon…" as soon as it opens.
 - A case manager without manage rights sees **Send now**, which guide 15 says
   needs `prospective_members.manage`.
-
-## Queued by the November 2 Zeffy documentation pass
-
-Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
-Nothing was captured by this pass.
-
-| Guide | Screen | Action |
-| --- | --- | --- |
-| 16 | Integrations catalog with the **Zeffy** card, and its connect dialog (API key, signing secret, webhook address) | Create |
-| 12 | **Grants & Fundraising → Zeffy**: connection panel, campaign cards and the payments list | Create |
-| 12 | **Link Zeffy campaign** dialog | Create |
-| 12 | Grants & Fundraising menu with the **Zeffy** entry | Replace |
 
 ## Queued by the October 31 – November 1 documentation pass
 

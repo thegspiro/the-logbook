@@ -768,7 +768,7 @@ const ComplianceMatrixTab: React.FC = () => {
                   {activeMember && (
                     <Link
                       to={`/members/${activeMember.member.user_id}/training`}
-                      className="btn-secondary btn-sm inline-flex shrink-0 items-center gap-1.5"
+                      className="split-row-aside btn-secondary btn-sm inline-flex items-center gap-1.5"
                     >
                       <ExternalLink className="h-4 w-4" aria-hidden="true" />
                       Training record
