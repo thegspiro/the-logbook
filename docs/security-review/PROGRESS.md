@@ -46307,8 +46307,8 @@ routes, 0 errors/warnings; `npm run typecheck` and `npx eslint` on the
 changed frontend file clean; `npx vitest run src/pages/IntegrationsPage.test.tsx`
 — 90 passed; targeted backend suite (`-k "integration or salesforce or
 calcom or zeffy or ical_feed or mcp_key or google_workspace or
-google_calendar_oauth or outlook_calendar_oauth"`) run in the background —
-see this PR for the final count.
+google_calendar_oauth or outlook_calendar_oauth"`) — 9254 passed, 22
+skipped (all pre-existing environment skips), 0 failed.
 
 Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
 & IP) — re-check `list_pull_requests` fresh rather than trusting this note.
