@@ -165,11 +165,12 @@ describe('TopNavigation overflow into More', () => {
     await user.click(nav.getByRole('button', { name: 'More' }));
 
     // More holds Documents, Learning Center, [Training], Admin Hours, Shift
-    // Scheduling, [Operations], [Governance]. The boundaries are before
-    // Training, after it (before Admin Hours, which is not a Training page),
-    // before Operations and before Governance: four. Without the one after a
-    // group, Admin Hours sat directly under My Training and read as its page.
-    expect(nav.getAllByRole('separator')).toHaveLength(4);
+    // Scheduling, [Operations], [Governance], [History]. The boundaries are
+    // before Training, after it (before Admin Hours, which is not a Training
+    // page), before Operations, before Governance and before History: five.
+    // Without the one after a group, Admin Hours sat directly under My
+    // Training and read as its page.
+    expect(nav.getAllByRole('separator')).toHaveLength(5);
     expect(
       within(nav.getByRole('group', { name: 'Training' })).queryByRole('link', { name: 'Admin Hours' })
     ).toBeNull();

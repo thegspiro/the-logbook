@@ -93,6 +93,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/facilities': {},
   '/finance': { permissions: ['finance.view'] },
   '/grants': { permissions: ['fundraising.view'] },
+  // Published history is read by any signed-in member.
+  '/history': {},
+  '/history/people': {},
   '/integrations': { permissions: ['settings.manage'] },
   '/inventory': { permissions: ['inventory.manage'] },
   '/ip-security': { permissions: ['security.manage', 'settings.manage'] },

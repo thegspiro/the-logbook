@@ -232,6 +232,17 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
+from app.models.history import (
+    HistoricalMember,
+    HistoricalMemberPeriodTitle,
+    HistoricalMemberRelation,
+    HistoricalMemberServicePeriod,
+    HistoryClearanceDecision,
+    HistoryClearanceRequest,
+    HistoryClearanceStep,
+    HistoryRevision,
+    HistoryTitle,
+)
 from app.models.integration import (
     CalendarSyncMapping,
     Integration,
@@ -808,6 +819,16 @@ __all__ = [
     "WriteOffStatus",
     "ReturnRequestStatus",
     "ReturnRequestType",
+    # History models
+    "HistoricalMember",
+    "HistoricalMemberPeriodTitle",
+    "HistoricalMemberRelation",
+    "HistoricalMemberServicePeriod",
+    "HistoryClearanceDecision",
+    "HistoryClearanceRequest",
+    "HistoryClearanceStep",
+    "HistoryRevision",
+    "HistoryTitle",
     # Medical screening models
     "ScreeningRequirement",
     "ScreeningRecord",

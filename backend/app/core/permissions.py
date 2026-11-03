@@ -53,6 +53,7 @@ class PermissionCategory(str, Enum):
     PROSPECTIVE_MEMBERS = "prospective_members"
     ADMIN_HOURS = "admin_hours"
     FINANCE = "finance"
+    HISTORY = "history"
 
 
 class Permission:
@@ -802,6 +803,30 @@ FINANCE_REQUEST = Permission(
 )
 
 # ============================================
+# History Permissions
+# ============================================
+
+# Published history needs no permission at all: any signed-in member of a
+# department with the module on reads what is published to members. These
+# gate the archive behind publication — the drafts, the research, and the act
+# of putting something in front of the department or the public.
+HISTORY_VIEW = Permission(
+    "history.view",
+    "View unpublished history records, research and change history",
+    PermissionCategory.HISTORY,
+)
+HISTORY_MANAGE = Permission(
+    "history.manage",
+    "Create and edit history records, the title list and the clearance list",
+    PermissionCategory.HISTORY,
+)
+HISTORY_PUBLISH = Permission(
+    "history.publish",
+    "Publish history records to the department and the public",
+    PermissionCategory.HISTORY,
+)
+
+# ============================================
 # All Permissions Registry
 # ============================================
 
@@ -955,6 +980,10 @@ ALL_PERMISSIONS: list[Permission] = [
     FINANCE_CONFIGURE_APPROVALS,
     FINANCE_REQUEST,
     FINANCE_BUDGET_REVIEW,
+    # History
+    HISTORY_VIEW,
+    HISTORY_MANAGE,
+    HISTORY_PUBLISH,
     # Prospective Members
     PROSPECTIVE_MEMBERS_VIEW,
     PROSPECTIVE_MEMBERS_MANAGE,
@@ -2422,6 +2451,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             USERS_VIEW_CONSENTS.name,
+            HISTORY_VIEW.name,
+            HISTORY_MANAGE.name,
+            HISTORY_PUBLISH.name,
         ],
     },
     "apparatus_officer": {

@@ -41,6 +41,7 @@ import {
   Stethoscope,
   ClipboardCheck,
   HeartPulse,
+  Landmark,
   Wallet,
   Printer,
   AtSign,
@@ -292,6 +293,12 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     name: 'Finance',
     description: 'Budgets, member dues, expenses, purchase requests, and check requests',
     icon: <Wallet className="h-5 w-5" />,
+  },
+  {
+    key: 'history',
+    name: 'History',
+    description: 'The department archive: past members, the Honor Roll, and a review list before anything goes public',
+    icon: <Landmark className="h-5 w-5" />,
   },
   {
     key: 'medical_screening',
