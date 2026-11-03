@@ -460,6 +460,40 @@ const routes = ({
   ['**/api/v1/onboarding/status', () => ({ is_complete: true })],
 
   ['**/api/v1/organization/modules', () => ({})],
+  // History home: nothing awaiting clearance, two published records.
+  ['**/api/v1/history/clearance/queue', () => []],
+  [
+    '**/api/v1/history/people**',
+    () => ({
+      items: [
+        {
+          id: 'e2e-history-1',
+          display_name: 'John "Jack" Smith Jr.',
+          last_name: 'Smith',
+          first_name: 'John',
+          nickname: 'Jack',
+          service_years: '1951–1972',
+          titles: ['Chief', 'Foreman'],
+          is_memorial: false,
+          is_line_of_duty_death: false,
+          publication_level: 'members',
+        },
+        {
+          id: 'e2e-history-2',
+          display_name: 'Robert Doyle',
+          last_name: 'Doyle',
+          first_name: 'Robert',
+          nickname: null,
+          service_years: 'c. 1923–1940',
+          titles: ['Assistant Engineer'],
+          is_memorial: true,
+          is_line_of_duty_death: true,
+          publication_level: 'public',
+        },
+      ],
+      total: 2,
+    }),
+  ],
 
   // Three pages now reject a payload that is valid JSON but not their declared
   // type, rather than substituting empty lists: an audit log that reads "no

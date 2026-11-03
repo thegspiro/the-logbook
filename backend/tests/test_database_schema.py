@@ -557,6 +557,9 @@ class TestColumnConstraints:
             # evaluation_deletion_records: the row is the deletion, stamped
             # when it happened and never updated.
             "deleted_at",
+            # history_clearance_decisions: the row is the decision, stamped
+            # when it is made and never updated.
+            "decided_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():

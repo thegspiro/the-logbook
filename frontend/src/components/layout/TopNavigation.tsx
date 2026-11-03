@@ -257,6 +257,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
           } as NavItem,
         ]
       : []),
+    ...(isModuleOn('history')
+      ? [
+          {
+            label: 'History',
+            path: '/history',
+            subItems: [
+              { label: 'Overview', path: '/history' },
+              { label: 'Past Members', path: '/history/people' },
+              { label: 'Honor Roll', path: '/history/honor-roll' },
+            ],
+          } as NavItem,
+        ]
+      : []),
 
     // ── Administration (only for admins) ──
     ...(hasAnyAdminPermission

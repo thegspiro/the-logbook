@@ -55,6 +55,7 @@ DOMAIN_TITLES = {
     "finance": "Finance",
     "forms": "Forms",
     "grant": "Grants & Fundraising",
+    "history": "History",
     "integration": "Integrations",
     "inventory": "Inventory",
     "ip_security": "IP Security",
