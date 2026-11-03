@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Queued by the November 2 – 3 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | History: **Department History** overview, **Past Members** list, a past-member page with **Publication**, the **Honor Roll** | Create |
+| 01 | History → **Titles and clearance** (clearance list and **Historical titles**); a clearance review with **Clear this step** / **Return for changes** | Create |
+| 02 | Compliance Configure → **Thresholds** with **Months on leave** | Create |
+| 02 | A member's Training History **Requirements** section with the **Leave of absence** box | Create |
+| 02 | `02-108-monthly-hours-leave`: an excused month now keeps its hours and reads **Leave** | Replace |
+| 03 | Outside Apparatus settings with **Evaluate shifts on _agency_'s units**; an **Evaluation needed** badge | Create |
+| 05 | The **Before you print** checklist with **Printer resolution** (Code 128) | Create |
+
 ## Queued by the November 1 – 2 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
