@@ -1,7 +1,63 @@
 # Application Review — Email Templates & Delivery
 
 **Prefix:** `MAIL` · **Iteration:** A4 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-09-09 (pass 5)
+2026-08-08 (pass 2), 2026-09-09 (pass 5), 2026-11-02 (pass 6)
+
+## Pass 6 (2026-11-02) — the encryption rollout, measured across the whole backend
+
+Since pass 5 the module changed in three ways that matter: addresses and phones are now encrypted at rest
+with a keyed fingerprint beside them, a template switched Off now suppresses its email, and four more
+emails were moved onto templates. Pass 5's lens was the send path's org filter; this pass asked what the
+**encryption** did to every query that used to read an address, because that failure is silent: the
+ciphertext is randomised, so `WHERE email = 'a@b.org'` compares plaintext to ciphertext and matches nothing,
+ever. A login, a duplicate check or a search finds nobody and nothing raises. **0 defects; 1 guard added.**
+
+### Result
+
+91 columns across 59 attribute names are encrypted (`EncryptedText`, `EncryptedJSON`, `EncryptedDate`).
+An AST sweep of every file under `app/` for a comparison, `IN`, `LIKE`, `BETWEEN`, SQL function (`func.lower`
+and the like), `filter_by`, `ORDER BY` or raw-SQL predicate on any of them found **none**. The rollout
+(`43c11090`, "Match emails by fingerprint") was thorough.
+
+A clean result is only worth something if the sweep can find one, so it was checked first: it recognises the
+columns it should (`User.email`, `StoreOrder.customer_email`, `NotificationLog.recipient_email`,
+`StorePaymentEvent.payer_email`), and it fires on a synthetic `User.email == x`, `func.lower(User.email)`,
+`filter_by(email=...)` and a raw `WHERE email = :e`. A first version covered only `Class.attr == x`; it would
+have missed the commonest real form, `func.lower(User.email) == x`, so the shapes were widened before the
+zero was trusted.
+
+### The guard
+
+`tests/test_encrypted_column_predicates.py` makes the sweep permanent. More columns are expected to be
+encrypted, and the next one is the one whose lookups would silently die. The test fails on any such
+predicate and names `file:line`; demonstrated by planting `User.email == "x"` in a real service file (red,
+naming the line), then restoring it (green). It also checks the detector against a synthetic tree (eleven
+shapes it must flag, six safe ones it must not, including `IS NULL`, which is fine under encryption) and
+that it still recognises known columns, so a parser change cannot make a green run vacuous. It does **not**
+see a column reached through an alias (`aliased(User)`) or a variable, and said so in its docstring.
+
+### Verified good
+
+- **The Off switch (`0a7e2a9e`).** `is_switched_off` is true only when the department has a stored row of
+  that type and none is on, so a department that never opened the screen keeps every email (pitfall #19:
+  absence means current behaviour, never off). Seven types cannot be switched off (`ALWAYS_SENT_TYPES`).
+- **Member security notices cannot be silenced by it.** MFA and recovery-code notices are built directly by
+  `security_notifications.py` and are not template types at all, so an administrator has no switch for them.
+- **Delivery is one attempt per recipient.** `send_email` has no reconnect-retry that could re-send to
+  addresses already served (its own comment says so).
+
+### Still flagged (unchanged)
+
+- **MAIL-4** — scheduled email accepts client-supplied recipients; a recorded product decision (outside
+  auditors and vendors are a legitimate use), cross-referenced to CS-9.
+- **MAIL-22** — the detected MIME type is validated and then discarded.
+- Template bodies are trusted HTML authored by administrators while variables are escaped; the model is
+  still undocumented outside the code.
+
+**Completion gate (pass 6):** `flake8`, `black --check`, `isort --check-only` on the new test; email,
+template, notification, fingerprint and encryption tests — see the PROGRESS entry.
+
+---
 
 ## Pass 5 (2026-09-09) — the send path's org filter, and two smaller repairs
 
