@@ -16,6 +16,7 @@ import type {
   EvaluationPartKind,
   EvaluationSummary,
   EvaluationTemplateKind,
+  Grades,
   LiveData,
   PartContent,
   SignatureWrite,
@@ -164,6 +165,16 @@ export const evaluationsService = {
   async mine(): Promise<EvaluationSummary[]> {
     const response = await api.get<EvaluationSummary[]>('/evaluations/mine');
     return asArray(response.data);
+  },
+
+  /**
+   * Section and overall grades for a form and a set of ratings, from the
+   * server's calculation, so a screen never works grades out for itself.
+   * Null for a form that is not graded by section.
+   */
+  async grades(definition: TemplateDefinition, content: PartContent): Promise<Grades | null> {
+    const response = await api.post<Grades | null>('/evaluations/grades', { definition, content });
+    return response.data ?? null;
   },
 
   async liveData(): Promise<LiveData> {

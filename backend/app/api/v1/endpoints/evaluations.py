@@ -68,6 +68,8 @@ from app.schemas.evaluation import (
     EvaluationTemplateDetail,
     EvaluationTemplateSummary,
     EvaluationTemplateUpdate,
+    GradeRequest,
+    GradesResponse,
     LiveDataResponse,
     PartWrite,
     PreviewOptions,
@@ -82,6 +84,7 @@ from app.schemas.evaluation import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.evaluation_document_service import EvaluationDocumentService
+from app.services.evaluation_grading import grade_content
 from app.services.evaluation_service import EvaluationService
 from app.services.evaluation_template_service import EvaluationTemplateService
 
@@ -341,6 +344,27 @@ async def publish_template(
         {"template_id": template_id, "version": detail["published_version"]},
     )
     return PublishResult(published=True, template=detail)
+
+
+@router.post("/grades", response_model=Optional[GradesResponse])
+async def calculate_grades(
+    data: GradeRequest,
+    current_user: User = Depends(
+        require_permission(
+            "evaluations.conduct", "evaluations.manage", "evaluations.configure"
+        )
+    ),
+):
+    """Section and overall grades for a form and a set of ratings, so the
+    evaluation screen and the builder's preview can show them as ratings
+    change, from the same calculation the record and the PDF use.
+
+    Requires ``evaluations.conduct``, ``evaluations.manage`` or
+    ``evaluations.configure``: whoever grades an evaluation or builds a form.
+    It reads nothing from the database and returns only arithmetic on what
+    was sent. ``null`` for a form that is not graded by section.
+    """
+    return grade_content(data.definition, data.content)
 
 
 @router.get("/data-sources", response_model=List[DataSourceResponse])

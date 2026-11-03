@@ -110,9 +110,30 @@ responded to, call response rate (hidden when call tracking is off),
 administrative hours, skills tests passed, certifications held, and positions
 held.
 
-**Overall rating:** worked out from the weighted items, chosen by the
-evaluator from a fixed five-level scale (Unsatisfactory, Needs improvement,
-Meets expectations, Exceeds expectations, Outstanding), or none.
+**Overall rating** — one of:
+
+- **Graded by section** (the Annual starter uses this). Each section gets a
+  **weight** in the overall, and its items' weights are shares of that
+  section; both must add up to 100%. Every rating is placed on a 1–5 scale (a
+  3 of 5 is 3.0, the middle of a three-level scale is 3.0, meets / does not
+  meet is 5 / 1), so a section's score is the weighted average of its ratings
+  and the overall is the weighted average of the sections'. Each score is shown
+  to one decimal with its grade — for example "3.6 of 5 — Exceeds
+  expectations" — read from the **grade ranges** you set on the form (by
+  default: Outstanding from 4.5, Exceeds from 3.5, Meets from 2.5, Needs
+  improvement from 1.5, Unsatisfactory below). A section weighted 0, such as
+  written goals, is not graded. The evaluator sees the grades update as they
+  rate and may give a section, or the overall, a different grade with a
+  written reason; the evaluation, its PDF and the member then show both the
+  calculated grade and the evaluator's, with the reason. A section the
+  evaluator regraded counts in the overall at the grade they gave it.
+- **Calculated from item weights** — the older single percentage, where the
+  lowest level of each item is 0% and the highest 100%, so "Meets
+  expectations" on a five-level scale counts as 50%. Forms built with it keep
+  scoring this way.
+- **Chosen by the evaluator** from the fixed five-level scale (Unsatisfactory,
+  Needs improvement, Meets expectations, Exceeds expectations, Outstanding).
+- **None.**
 
 ### 2. Set the steps
 

@@ -34,6 +34,7 @@ import type {
   SignatureWrite,
   SigningOption,
 } from '../types/evaluations';
+import { useLiveGrades } from '../hooks/useLiveGrades';
 import { emptyContent } from '../utils/evaluationRecord';
 
 const PART_TITLES: Record<string, string> = {
@@ -66,6 +67,13 @@ const EvaluationDetailPage: React.FC = () => {
   const [detail, setDetail] = useState<EvaluationDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<PartContent>(emptyContent());
+  // Called before the early returns below, as hooks must be; it asks for
+  // nothing until the evaluator's own part is open for editing.
+  const live = useLiveGrades(
+    detail && editableKind(detail) === 'evaluator' ? detail.definition : null,
+    draft,
+    detail?.grades ?? null
+  );
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signing, setSigning] = useState<SigningOption | null>(null);
@@ -405,6 +413,8 @@ const EvaluationDetailPage: React.FC = () => {
                   suggested={detail.suggested_scores}
                   overallLevels={detail.overall_levels}
                   flagged={detail.calibration_flags}
+                  grades={live.grades}
+                  gradesError={live.error}
                 />
                 <div className="action-bar-safe flex flex-wrap justify-end gap-2">
                   <button type="button" className="btn-secondary" disabled={busy || !dirty} onClick={() => void save()}>
@@ -440,6 +450,7 @@ const EvaluationDetailPage: React.FC = () => {
                   suggested={detail.suggested_scores}
                   overallLevels={detail.overall_levels}
                   flagged={detail.calibration_flags}
+                  grades={part.kind === 'evaluator' ? detail.grades : null}
                 />
               </section>
             ))}

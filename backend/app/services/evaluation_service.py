@@ -76,6 +76,11 @@ from app.services.evaluation_data_service import (
     sources_used,
 )
 from app.services.evaluation_data_sources import DATA_SOURCES, DATA_SOURCES_BY_KEY
+from app.services.evaluation_grading import (
+    grade_content,
+    grade_errors,
+    override_reason_errors,
+)
 from app.services.evaluation_notice_service import EvaluationNoticeService
 from app.services.member_supervisor_service import MemberSupervisorService
 from app.utils.membership import canonical_member_status, effective_member_class
@@ -723,6 +728,15 @@ class EvaluationService:
                     if evaluator_part is not None
                     and evaluator_visible
                     and definition.overall_mode == "weighted"
+                    else None
+                ),
+                # Visible exactly where the evaluator's ratings are, since
+                # the grades are read from them.
+                "grades": (
+                    grade_content(
+                        definition, PartContent.model_validate(evaluator_part.content)
+                    )
+                    if evaluator_part is not None and evaluator_visible
                     else None
                 ),
                 "viewer": {
@@ -1606,8 +1620,14 @@ class EvaluationService:
         if loaded is None:
             return None
         evaluation, _steps, parts, _step = loaded
-        items = form_items(self._definition(evaluation), kind)
+        definition = self._definition(evaluation)
+        items = form_items(definition, kind)
         _raise_if(shape_errors(content, items, kind))
+        _raise_if(
+            grade_errors(
+                definition, content, kind == EvaluationPartKind.EVALUATOR.value
+            )
+        )
         part = parts.get(kind)
         stored = content.model_dump(mode="json")
         if part is None:
@@ -1645,10 +1665,13 @@ class EvaluationService:
         content = PartContent.model_validate(part.content)
         suggested = (evaluation.data_snapshot or {}).get("suggested_scores") or {}
         _raise_if(shape_errors(content, items, kind))
+        evaluator = kind == EvaluationPartKind.EVALUATOR.value
+        _raise_if(grade_errors(definition, content, evaluator))
         _raise_if(
             completeness_errors(
                 content, items, kind, definition.overall_mode, suggested
             )
+            + (override_reason_errors(definition, content) if evaluator else [])
         )
         now = datetime.now(timezone.utc)
 
