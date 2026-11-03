@@ -9,7 +9,6 @@ import {
   ChevronDown,
   Bell,
   ClipboardCheck,
-  ClipboardList,
   CreditCard,
   UserCog,
   WifiOff,
@@ -35,6 +34,7 @@ import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
 import { trainingNavItems } from './trainingNavigation';
+import { EVALUATIONS_AREA_PREFIX, EVALUATIONS_HOME_PATH } from './evaluationsNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
@@ -52,6 +52,12 @@ interface SubNavItem {
   /** Any one of these permissions grants access (OR logic). */
   anyPermission?: string[];
   isDivider?: boolean;
+  /**
+   * Prefixes under this entry's URL that belong to another entry, so the two
+   * are never marked current together: `/reports/evaluations` is Evaluations,
+   * not Reports.
+   */
+  excludePrefixes?: string[];
 }
 
 interface NavItem {
@@ -355,11 +361,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 : []),
               ...(isModuleOn('reports')
                 ? [
-                    { label: 'Reports', path: '/reports', permission: 'reports.view' },
                     {
-                      label: 'Member Evaluations',
-                      path: '/reports/evaluations',
-                      anyPermission: ['evaluations.configure', 'evaluations.manage'],
+                      label: 'Reports',
+                      path: '/reports',
+                      permission: 'reports.view',
+                      excludePrefixes: [EVALUATIONS_AREA_PREFIX],
                     },
                   ]
                 : []),
@@ -387,7 +393,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  const isSubItemActive = (path: string, siblings: { path: string }[]) => {
+  const isExcluded = (entry: { excludePrefixes?: string[] | undefined }) =>
+    (entry.excludePrefixes ?? []).some((prefix) => isActive(prefix));
+
+  const isEntryActive = (entry: { path: string; excludePrefixes?: string[] | undefined }) =>
+    isActive(entry.path) && !isExcluded(entry);
+
+  const isSubItemActive = (subItem: SubNavItem, siblings: { path: string }[]) => {
+    const { path } = subItem;
+    if (isExcluded(subItem)) return false;
     if (location.pathname === path) return true;
     if (!location.pathname.startsWith(path + '/')) return false;
     // Don't prefix-match if a sibling is a more specific match
@@ -401,9 +415,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
-      return item.subItems.some((sub) => isActive(sub.path));
+      return item.subItems.some(isEntryActive);
     }
-    return isActive(item.path);
+    return isEntryActive(item);
   };
 
   // Close dropdown when clicking outside
@@ -440,16 +454,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const accountActive = isActive('/account');
   const myIdCardPath = currentUser?.id ? `/members/${currentUser.id}/id-card` : null;
   const myIdCardActive = myIdCardPath !== null && isActive(myIdCardPath);
-  const myEvaluationsActive = isActive('/reports/evaluations/mine');
-  const conductActive = isActive('/reports/evaluations/conduct');
-  // Gated like its route: the evaluations a member conducts, or all of them.
-  const canListEvaluations =
-    checkPermission('evaluations.conduct') ||
-    checkPermission('evaluations.view_all') ||
-    checkPermission('evaluations.manage');
+  const evaluationsActive = isActive(EVALUATIONS_AREA_PREFIX);
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
-    .filter((item) => item.path !== '#' && isActive(item.path))
+    .filter((item) => item.path !== '#' && isEntryActive(item))
     .sort((a, b) => b.path.length - a.path.length)[0];
 
   // The groups this viewer may see, filtered once so the bar, the More menu and
@@ -522,7 +530,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
         return <div key={`div-${idx}`} className="border-theme-surface-border my-1 border-t" role="separator" />;
       }
       const subActive = isSubItemActive(
-        subItem.path,
+        subItem,
         (item.subItems || []).filter((s) => !s.isDivider)
       );
       return (
@@ -900,7 +908,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                                 );
                               }
                               const subActive = isSubItemActive(
-                                subItem.path,
+                                subItem,
                                 (item.subItems || []).filter((s) => !s.isDivider)
                               );
                               return (
@@ -989,29 +997,18 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       )}
                     </a>
                   )}
+                  {/* One entry for the whole area; conducting and setup are
+                      reached from the strip at the top of the evaluation pages. */}
                   {isModuleOn('reports') && (
                     <a
-                      href="/reports/evaluations/mine"
-                      onClick={(e) => handleNavigation('/reports/evaluations/mine', e)}
-                      aria-current={myEvaluationsActive ? 'page' : undefined}
+                      href={EVALUATIONS_HOME_PATH}
+                      onClick={(e) => handleNavigation(EVALUATIONS_HOME_PATH, e)}
+                      aria-current={evaluationsActive ? 'page' : undefined}
                       className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                        myEvaluationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                        evaluationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}
                     >
                       <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
-                      <span>My Evaluations</span>
-                    </a>
-                  )}
-                  {isModuleOn('reports') && canListEvaluations && (
-                    <a
-                      href="/reports/evaluations/conduct"
-                      onClick={(e) => handleNavigation('/reports/evaluations/conduct', e)}
-                      aria-current={conductActive ? 'page' : undefined}
-                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                        conductActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
-                      }`}
-                    >
-                      <ClipboardList className="h-4 w-4" aria-hidden="true" />
                       <span>Evaluations</span>
                     </a>
                   )}

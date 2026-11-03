@@ -13,7 +13,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowLeft, CalendarRange, ClipboardCheck, Info, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarRange, ClipboardCheck, Info, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -21,6 +21,8 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { EVALUATION_SETUP_LABEL, conductListLabel } from '../../../components/layout/evaluationsNavigation';
+import { EvaluationsPageHeader } from '../components/evaluations/EvaluationsPageHeader';
 import { evaluationPeriodsService, evaluationTemplatesService } from '../services/evaluationsApi';
 import {
   EvaluationTemplateKind,
@@ -73,6 +75,14 @@ const EvaluationsPage: React.FC = () => {
   const { confirm } = useConfirm();
   const canConfigure = useAuthStore((state) => state.checkPermission('evaluations.configure'));
   const canManage = useAuthStore((state) => state.checkPermission('evaluations.manage'));
+  const conductLabel = useAuthStore((state) => conductListLabel(state.checkPermission));
+  // Matches the conduct list's route gate: a setup-only grant is refused there.
+  const canOpenConductList = useAuthStore(
+    (state) =>
+      state.checkPermission('evaluations.conduct') ||
+      state.checkPermission('evaluations.view_all') ||
+      state.checkPermission('evaluations.manage')
+  );
 
   const [templates, setTemplates] = useState<EvaluationTemplateSummary[]>([]);
   const [periods, setPeriods] = useState<EvaluationPeriod[]>([]);
@@ -184,30 +194,24 @@ const EvaluationsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link
-          to="/reports"
-          className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Reports
-        </Link>
-        <div className="page-header mb-6 gap-3 sm:items-start">
-          <div className="page-header-title">
-            <h1 className="text-theme-text-primary text-3xl font-bold">Member Evaluations</h1>
-            <p className="text-theme-text-secondary mt-1">
-              Build the evaluation forms for each kind of member and open the review periods they are completed for.
-            </p>
-          </div>
-        </div>
+        <EvaluationsPageHeader
+          icon={Settings2}
+          title={EVALUATION_SETUP_LABEL}
+          subtitle="Build the evaluation forms for each kind of member and open the review periods they are completed for."
+        />
 
         <div className="alert-info mb-6 flex gap-3">
           <Info className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p className="text-theme-alert-info-text text-sm">
             <span className="text-theme-alert-info-title font-medium">Where evaluations happen.</span> Evaluations are
             drafted, completed and signed from the{' '}
-            <Link to="/reports/evaluations/conduct" className="underline">
-              Evaluations
-            </Link>{' '}
+            {canOpenConductList ? (
+              <Link to="/reports/evaluations/conduct" className="underline">
+                {conductLabel}
+              </Link>
+            ) : (
+              conductLabel
+            )}{' '}
             list, and each finalized evaluation keeps its signed PDF. People are emailed when a step is waiting on them,
             before it is due and once it is overdue. The wording of those emails is edited in{' '}
             <Link to="/communications/email-templates" className="underline">

@@ -86,7 +86,11 @@ describe('EvaluationsPage', () => {
   it('points to where evaluations are drafted and where their emails are worded', async () => {
     renderWithRouter(<EvaluationsPage />);
     expect(await screen.findByText(/Where evaluations happen/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Evaluations' })).toHaveAttribute('href', '/reports/evaluations/conduct');
+    // A manager sees every evaluation, so the conduct list is named for that —
+    // in the note and in the section strip alike.
+    const conductLinks = screen.getAllByRole('link', { name: 'All evaluations' });
+    expect(conductLinks).toHaveLength(2);
+    for (const link of conductLinks) expect(link).toHaveAttribute('href', '/reports/evaluations/conduct');
     expect(screen.getByRole('link', { name: 'Email Templates' })).toHaveAttribute(
       'href',
       '/communications/email-templates'
@@ -187,6 +191,33 @@ describe('EvaluationsPage', () => {
     expect(screen.queryByRole('button', { name: /new template/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /open builder/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /new review period/i })).toBeInTheDocument();
+  });
+
+  it('draws the Evaluations sections the viewer may open, with setup marked current', async () => {
+    window.history.pushState({}, '', '/reports/evaluations');
+    renderWithRouter(<EvaluationsPage />);
+    const strip = await screen.findByRole('navigation', { name: 'Evaluations sections' });
+    expect(within(strip).getByRole('link', { name: 'My evaluations' })).toHaveAttribute(
+      'href',
+      '/reports/evaluations/mine'
+    );
+    expect(within(strip).getByRole('link', { name: 'All evaluations' })).toBeInTheDocument();
+    expect(within(strip).getByRole('link', { name: 'Templates & periods' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('names the conduct list without linking it for a builder its route refuses', async () => {
+    granted = new Set(['evaluations.configure']);
+    window.history.pushState({}, '', '/reports/evaluations');
+    renderWithRouter(<EvaluationsPage />);
+
+    expect(await screen.findByText(/Evaluations I conduct/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Evaluations I conduct' })).not.toBeInTheDocument();
+    const strip = screen.getByRole('navigation', { name: 'Evaluations sections' });
+    expect(
+      within(strip)
+        .getAllByRole('link')
+        .map((link) => link.textContent)
+    ).toEqual(['My evaluations', 'Templates & periods']);
   });
 
   it('gives a template builder read-only periods', async () => {

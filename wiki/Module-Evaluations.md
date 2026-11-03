@@ -17,12 +17,17 @@ evaluation is changed or removed, the member is told and the reason is kept.
 
 ## Where it lives
 
-| Screen                 | Path                           | Who sees it                                                                                               |
-| ---------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| **Member Evaluations** | `/reports/evaluations`         | `evaluations.configure` or `evaluations.manage`: forms and review periods                                 |
-| **Evaluations**        | `/reports/evaluations/conduct` | `evaluations.conduct`, `view_all` or `manage`: the evaluations to work on                                 |
-| **My Evaluations**     | `/reports/evaluations/mine`    | every member: their own evaluations, deleted-evaluation records, and their figures for the current period |
-| An evaluation          | `/reports/evaluations/<id>`    | the member, the evaluator, approvers at their step, and `view_all` holders                                |
+Every member has one **Evaluations** entry in the navigation, which opens
+**My evaluations**. The other sections appear as a strip across the top of the
+evaluation pages, and only for a member whose permissions open them. A member
+with neither grant sees no strip at all.
+
+| Section                                         | Path                           | Who sees it                                                                                                                     |
+| ----------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| **My evaluations**                              | `/reports/evaluations/mine`    | every member: their own evaluations, deleted-evaluation records, and their figures for the current period                       |
+| **Evaluations I conduct** / **All evaluations** | `/reports/evaluations/conduct` | `evaluations.conduct`, `view_all` or `manage`: the evaluations to work on (named "All evaluations" for `view_all` and `manage`) |
+| **Templates & periods**                         | `/reports/evaluations`         | `evaluations.configure` or `evaluations.manage`: forms and review periods                                                       |
+| An evaluation                                   | `/reports/evaluations/<id>`    | the member, the evaluator, approvers at their step, and `view_all` holders                                                      |
 
 ## Who can do what
 
@@ -53,7 +58,7 @@ evaluation is changed or removed, the member is told and the reason is kept.
 
 ### 1. Build the forms
 
-**Member Evaluations → Templates → New template.** Choose:
+**Evaluations → Templates & periods → New template.** Choose:
 
 - **Annual evaluation** or **Check-in.** A check-in has only the
   self-evaluation and the evaluator's part, and no signatures.
@@ -114,7 +119,7 @@ form never rewrites an evaluation in progress.
 
 ### 3. Open a review period
 
-**Member Evaluations → Review periods → New period**, with a name and dates
+**Evaluations → Templates & periods → New review period**, with a name and dates
 (for example, "2026 Annual Review", January 1 to December 31). Closing a
 period stops new evaluations being drafted for it.
 
@@ -196,7 +201,7 @@ read the evaluation can **Download PDF**; every download is recorded.
 - **Deleting** (`evaluations.delete`). **Delete** removes an evaluation, its
   signatures and its PDF for good, with a reason. A record that it was
   deleted, by whom and why stays on the member's history, where the member
-  reads it under **My Evaluations → Deleted evaluations**.
+  reads it under **Evaluations → My evaluations → Deleted evaluations**.
 
 ---
 
