@@ -620,3 +620,33 @@ class TestAssignedToMe:
             p["id"] for column in res.json()["columns"] for p in column["prospects"]
         }
         assert shown == {board.applicant_id}
+
+    @pytest.mark.parametrize(
+        ("query", "total", "on_first_stage"),
+        [("", 2, 2), ("?assigned_to_me=true", 1, 1)],
+    )
+    async def test_the_counts(self, db_session, board, query, total, on_first_stage):
+        """The header and tab badges count what the toggled board shows."""
+        db_session.add(
+            ProspectAssignment(
+                organization_id=board.org_id,
+                prospect_id=board.applicant_id,
+                user_id=board.coordinator.id,
+                role="case_manager",
+                assigned_by=board.coordinator.id,
+            )
+        )
+        await db_session.commit()
+
+        res = await _call(
+            db_session,
+            await _as(db_session, board.coordinator),
+            "GET",
+            f"/pipelines/{board.pipeline_id}/stats{query}",
+        )
+
+        assert res.status_code == 200
+        stats = res.json()
+        assert (stats["total_prospects"], stats["active_count"]) == (total, total)
+        first = next(s for s in stats["by_step"] if s["stage_name"] == "Application")
+        assert first["count"] == on_first_stage

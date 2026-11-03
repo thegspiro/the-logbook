@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Queued by the November 2 – 3 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | History: **Department History** overview, **Past Members** list, a past-member page with **Publication**, the **Honor Roll** | Create |
+| 01 | History → **Titles and clearance** (clearance list and **Historical titles**); a clearance review with **Clear this step** / **Return for changes** | Create |
+| 02 | Compliance Configure → **Thresholds** with **Months on leave** | Create |
+| 02 | A member's Training History **Requirements** section with the **Leave of absence** box | Create |
+| 02 | `02-108-monthly-hours-leave`: an excused month now keeps its hours and reads **Leave** | Replace |
+| 03 | Outside Apparatus settings with **Evaluate shifts on _agency_'s units**; an **Evaluation needed** badge | Create |
+| 05 | The **Before you print** checklist with **Printer resolution** (Code 128) | Create |
+
 ## Queued by the November 1 – 2 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
@@ -110,7 +125,7 @@ are what the demo cannot reach without a real external account or a real send:
 
 | Queue | Screen | Why |
 | --- | --- | --- |
-| Oct 29, Oct 29 – 30 | Applicant follow-up form page with **Save and finish later**; Interview page **Follow-up Forms** panel; drawer **Resend** / **Mark reviewed**; **Contact details changed** | App defect: signed out, `/application-form/:token` redirects to sign-in. `FieldRenderer` always requests `/operational-ranks`, and the 401 ends the session. The other three need a submitted form, which that page cannot produce. The placeholder stays in guide 15 |
+| Oct 29, Oct 29 – 30 | Applicant follow-up form page with **Save and finish later**; Interview page **Follow-up Forms** panel; drawer **Resend** / **Mark reviewed**; **Contact details changed** | Blocked until 2026-11-03 by an app defect, since fixed: signed out, `/application-form/:token` redirected to sign-in, because `FieldRenderer` requested `/operational-ranks` for every field and the 401 ended the session. It now asks only for a member lookup. The form page and the three screens after a submission can now be produced; the placeholder stays in guide 15 until they are captured |
 | Oct 25 – 26 | Event QR page with the guest code and print-one-code choice | App defect: `get_qr_check_in_data` never returns `allow_guest_check_in`, so the QR page always says guest check-in is off. `04-93` and `04-94` show the code on the event page instead |
 | Oct 24 – 25 | Shift Patterns listing a paused pattern with **Resume** | App defect: `PatternsTab.tsx` lists active patterns only. `03-130` is taken from the Shift Templates page's Patterns tab |
 | Oct 24 afternoon | NFC Tag Register, compartment-only view | Needs an account with `check_manage` and not `inventory.manage`. The demo has none |

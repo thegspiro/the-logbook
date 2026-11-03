@@ -258,10 +258,27 @@ The months use the same records as the total on the card, so they add up to
 it. If a month looks short, it is short: the class is missing, not yet
 approved, or counted somewhere else.
 
-A month covered by **leave of absence** is marked **Leave** and left out of the
-average. The pace still uses the department's full yearly hours. These are the
-same months the card's "adjusted for waived months" note uses to reduce your
-target.
+**Months on leave keep their hours** _(2026-11-02)_. A month that leave or a
+training waiver excused has a label above its hours:
+
+| Label             | Why the month was excused                                 |
+| ----------------- | --------------------------------------------------------- |
+| **Leave**         | A leave of absence covered it                             |
+| **Waived**        | A training waiver covered it, and no leave of absence did |
+| **Partial leave** | Leave excused only part of it                             |
+| **Partly waived** | A training waiver excused only part of it                 |
+
+How much of a month is excused is your department's
+[**Months on leave**](#months-on-leave--the-department-rule-2026-11-02)
+setting. Training you did while on leave still counts toward the total, and the
+summary line says how much of the total was earned on leave. The average is
+your pace in the months nothing excused, measured on those months' hours only.
+The pace still uses the department's full yearly hours. A partly excused
+month's bar is scaled to the part of the pace it still owes.
+
+These are the same months the card's "Adjusted for …" note counts when it
+reduces your target. The note names the reason: "3 months on leave", "1 waived
+month", or both.
 
 ---
 
@@ -1567,11 +1584,14 @@ certification, a course, a checklist — keeps its due date: the member's last
 completion plus the interval.
 
 If a member has an active **Leave of Absence** during part of the window, the
-months on leave are left out and the requirement is reduced to match. Those
-months are marked **Leave** in the member's monthly hours.
+months on leave are excused and the requirement is reduced to match. How much
+a partly covered month is excused is the department's
+[**Months on leave**](#months-on-leave--the-department-rule-2026-11-02)
+setting. Those months are marked **Leave** in the member's monthly hours, and
+training done in them still counts.
 
 **Example:** A requirement of 12 hours over 12 rolling months, for a member
-with 3 months of leave, becomes 9 hours (12 × 9/12).
+with 3 whole months of leave, becomes 9 hours (12 × 9/12).
 
 See [Membership > Leave of Absence](./01-membership.md#leave-of-absence) for
 managing leave.
@@ -2048,12 +2068,11 @@ member is graded by.
 
 ### Leave of Absence Adjustments
 
-When a member has an active **Leave of Absence** (created in **Members > Admin
-
-> Waivers**), every compliance view adjusts the requirements counted in
-> amounts — hours, shifts and calls. The member is not penalized for time they
-> were inactive. This includes the Compliance Matrix, the Competency Matrix and
-> training reports.
+When a member has an active **Leave of Absence** (created in
+**Members > Admin > Waivers**), every compliance view adjusts the requirements
+counted in amounts — hours, shifts and calls. The member is not penalized for
+time they were inactive. This includes the Compliance Matrix, the Competency
+Matrix, training reports and the Shift Compliance report in Scheduling.
 
 The adjustment is:
 
@@ -2062,13 +2081,78 @@ The adjustment is:
 For example, a member who takes 3 months of leave during a 12-month yearly
 requirement of 24 hours needs 24 × (9 ÷ 12) = 18 hours.
 
-A calendar month is only waived if the leave covers **15 or more days** of it.
-Courses and certifications are not adjusted, because they are either done or
-not.
+How much of a month that leave covers only partly is excused is the
+department's **Months on leave** setting, below. Courses and certifications are
+not adjusted, because they are either done or not.
 
-Members see a blue information banner on My Training showing the adjustment.
-Officers see the adjusted values in the compliance and competency matrices,
-training reports and requirement progress.
+**Shift and call targets are rounded down** _(2026-11-02)_ to whole shifts and
+calls. A target of 3 shifts a year with half a month excused is 2.875, so the
+member owes 2. A target that rounds down to 0 is met. Hours targets keep two
+decimals.
+
+**Training done during leave still counts.** It is added to the member's total
+like any other training, and the monthly hours show it under the month's
+**Leave** label, so the leave and the hours are both on the record.
+
+### Where leave shows beside training hours _(2026-11-02)_
+
+- **My Training** — each requirement card the leave reduced has a blue note,
+  "Adjusted for 3 months on leave" (or "… waived months" where a training
+  waiver was the reason), with the original and adjusted targets. **Show
+  monthly hours** labels each excused month (see
+  [Checking an Hours Requirement Month by Month](#checking-an-hours-requirement-month-by-month)).
+- **The member's Training History page** (from their profile), for officers
+  with `training.manage` — a **Requirements** section above the records lists
+  the member's requirements with the same cards the member sees on My
+  Training, and "N of M met". If the member has leave, a **Leave of absence**
+  box lists each leave's type and dates, and says in one sentence what the
+  department's rule does with a partly covered month. A member opening their
+  own history does not see this section; their requirements are on My
+  Training.
+- **The Compliance Matrix** — a reduced cell's note names the months as "on
+  leave" only where a leave of absence covered them, and as "waived months"
+  where a training waiver did.
+- **The Shift Compliance report** (Scheduling) — counts leaves of absence only,
+  as before, but now excuses each month by the same department rule, so a
+  month reads the same there as on the member's training screen.
+
+### Months on leave — the department rule _(2026-11-02)_
+
+**Who can do this:** compliance officers (`compliance.manage`) or
+administrators (`settings.manage`).
+
+1. Open **Training Admin → Compliance Reporting** and select **Configure**.
+2. On the **Thresholds** tab, find **Months on leave**.
+3. Choose one:
+
+   | Option                        | A month that leave covers only partly …                                                                                |
+   | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+   | **Full month (default)**      | is excused in full if leave covers **any** day of it. A leave ending September 1 excuses all of September.             |
+   | **15-day rule: proportional** | is excused by the share of its days on leave. 10 days of a 30-day month on leave leaves two thirds of that month owed. |
+   | **15-day rule: half**         | is half excused at 15 or more days on leave, and owed in full below 15.                                                |
+
+4. Select **Save Configuration**.
+
+Under every option, a month that leave covers entirely is excused in full. The
+rule applies to leaves of absence and training waivers alike, and to every
+hours, shift and call requirement on every screen above.
+
+**Example.** A member's leave covers February through April and May 1–14. The
+requirement is 36 hours a year.
+
+| Option                        | May excused     | Hours owed           |
+| ----------------------------- | --------------- | -------------------- |
+| **Full month (default)**      | all of it       | 36 × 8/12 = 24.0     |
+| **15-day rule: proportional** | 14 of 31 days   | 36 × 8.55/12 = 25.65 |
+| **15-day rule: half**         | none (under 15) | 36 × 9/12 = 27.0     |
+
+> **What changes on upgrade?** Every department starts on **Full month
+> (default)**. Before 2026-11-02 a month was excused only when leave covered 15
+> or more of its days, and that rule is no longer offered. So a member whose
+> leave covers part of a month — fewer than 15 days of it — now has that whole
+> month excused, and their hours, shift and call targets may drop. Shift and
+> call targets are also now rounded down, so some drop by one. Choose a 15-day
+> rule if your department's policy needs one.
 
 For creating and managing leaves of absence, see
 [Membership > Leave of Absence](./01-membership.md#leave-of-absence).
@@ -2768,13 +2852,77 @@ no such program, in a seat the general form covers, gets the general form.
 
 - The shift officer or a `training.manage` holder fills it out; **never your own**.
 - Rating buttons are full-size touch targets; required comments open by themselves.
-- Drafts autosave. **Submit** locks the evaluation.
+- Drafts autosave. **Submit evaluation** files it and fixes which form it is
+  on. A submitted evaluation can still be corrected: the button then reads
+  **Save changes**, and the credit follows the correction.
 - A **print** view gives the paper layout.
 - Ratings and comments are encrypted at rest.
 
 ![A shift evaluation in progress: the intern, shift and unit at the top, the Shift (A, B, C) choice, and each Clinical Performance item with its row of rating buttons, a required comment open beneath a low rating](./images/02-131-shift-evaluation-page.png)
 
 ![The printable shift evaluation: the shift details and statistics, the rating key, Clinical Performance and Professionalism & Affect as tables of ratings and comments, and the closing comments](./images/02-132-shift-evaluation-print.png)
+
+**What a submitted evaluation credits.** It counts toward the member's program
+requirements of three types: an **Evaluated shifts** requirement counts it as
+one shift (or none, where the requirement leaves out an evaluation with any
+item at the form's lowest rating), and **Transports** and **Refusals**
+requirements take the counts on the form's statistics.
+
+### Shifts on an outside agency's unit _(2026-11-02)_
+
+A member in a training program can ride another department's unit — an
+internship on a neighbouring agency's ambulance, say — and log it under
+**Shifts with other departments** (see
+[Shifts & Scheduling](./03-scheduling.md#shifts-with-other-departments)). That
+agency's preceptor evaluates them on paper, and a training officer types the
+form in.
+
+**Turning it on, per agency.** A scheduling officer (`scheduling.manage`) opens
+**Scheduling Admin → Settings → Outside Apparatus** and ticks **Evaluate shifts
+on _agency_'s units** under the agency. It is off for every agency to start
+with, so a mutual-aid neighbour asks for nothing.
+
+**Which shifts need one.** Once it is on, each shift a member logs on that
+agency's units needs an evaluation if:
+
+- the member is enrolled in a program with a **Shift evaluation form**, and was
+  already enrolled on the shift's date; and
+- the shift still counts — a rejected one drops off the list.
+
+The department's general form is never used for an outside shift, because the
+general form is chosen by seat and an outside shift has none. Nothing is
+blocked while an evaluation is outstanding: an outside shift has no close-out
+to hold.
+
+**Where it shows.** The shift carries a badge in the member's own **Shifts with
+other departments** list and in the officers' review on Member Hours:
+**Evaluation needed**, **Evaluation started** or **Evaluated**.
+
+**Entering the preceptor's form** (needs `training.manage`):
+
+1. Open **Training Admin → Settings & Data → Shift Evaluations**. The list
+   **Outside shifts awaiting an evaluation** is at the top, newest shift first,
+   with each member, the date and times, and the agency and unit. Each reads
+   **Not started** or **Started**.
+2. Select **Enter evaluation** (or **Continue** on one already started).
+3. Type the **Preceptor** — the agency's preceptor who filled out the paper
+   form. It is required to submit. You are recorded as the person who entered
+   it.
+4. Fill out the form as on paper. The statistics are typed in, since there is
+   no call log here for an outside shift. Drafts autosave.
+5. Select **Submit evaluation**. You return to the list. **Back** (or **Back to
+   outside shifts** at the top) leaves without submitting.
+
+Nobody enters an evaluation of their own shift: on your own, the form is
+read-only.
+
+**Credit and visibility.** A submitted outside-shift evaluation credits the
+member's program exactly as a department shift's does (above). The member sees
+it as soon as it is submitted, while the logged shift counts — there is no
+shift report for it to wait on. If an officer rejects the logged shift, the
+evaluation stops crediting the program; restoring the shift gives the credit
+back. If the member deletes the entry, the evaluation stays on record but no
+longer credits anything.
 
 ## Manual Shift Report Entry
 
@@ -3515,37 +3663,38 @@ Configuration**).
 
 ### Waiver Behavior
 
-| What happened                                 | What it means                                                                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| A waiver covers fewer than 15 days of a month | That month is **not** waived. The member must meet the full requirement for it.                                                       |
-| A waiver covers 15 or more days of a month    | The whole month is waived and the requirement is reduced to match.                                                                    |
-| A permanent waiver (no end date)              | Shows as **Permanent** and never ends.                                                                                                |
-| A leave of absence is turned off by an edit   | Its linked training waiver is turned off in the same save. Turning the leave back on restores it. Deleting the leave also removes it. |
-| A leave with an unusual leave type            | Its linked training waiver is typed **Other**. It still works.                                                                        |
+| What happened                                 | What it means                                                                                                                           |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| A waiver covers only part of a month          | Decided by the department's **Months on leave** setting. Under **Full month (default)** any day excuses the whole month. _(2026-11-02)_ |
+| A waiver covers 15 or more days of a month    | Under **15-day rule: half**, half the month is excused; under **15-day rule: proportional**, the share of its days on leave.            |
+| A waiver covers fewer than 15 days of a month | Under **15-day rule: half**, the month is owed in full. Under the other two options it is still excused, in full or in part.            |
+| A permanent waiver (no end date)              | Shows as **Permanent** and never ends.                                                                                                  |
+| A leave of absence is turned off by an edit   | Its linked training waiver is turned off in the same save. Turning the leave back on restores it. Deleting the leave also removes it.   |
+| A leave with an unusual leave type            | Its linked training waiver is typed **Other**. It still works.                                                                          |
 
 ---
 
 ## Troubleshooting
 
-| Problem                                                | What to do                                                                                                                                                                                                                      |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "My training submission was rejected"                  | Read the reason in your notification. Fix the problem and submit again.                                                                                                                                                         |
-| Hours are not counting toward a requirement            | Check the record's course is linked to the right requirement, and that the record is approved.                                                                                                                                  |
-| A yearly class is not counted (HIPAA, yearly training) | Work through [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted): the requirement's window, the course link and the provider's course matching, the freshness window, and the imported-credit setting.       |
-| An hours requirement shows no due date                 | This is intended for an hours requirement that rolls. It is a running count, so the card shows the months it counts and the upcoming list shows the hours still to go.                                                          |
-| Program progress does not update after a shift         | A shift completion report must be filed. Automatic credit only works for enrolled members with matching requirement types.                                                                                                      |
-| The Compliance Matrix looks wrong                      | Check the requirement's frequency and due-date type. Rolling periods count whole months ending with this one.                                                                                                                   |
-| A member on leave still shows non-compliant            | Check the leave of absence is active under **Members > Admin > Waivers**. It must cover 15 or more days of a month for that month to be waived. Only hours, shifts and calls requirements are adjusted.                         |
-| A leave was created but training was not adjusted      | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waiver Management page. |
-| A duplicate training record warning                    | The Logbook spots records with the same member, the same course name (ignoring capitals) and a completion date within a day. Check the warning, then go ahead or skip the duplicate.                                            |
-| The compliance card shows the wrong color              | Red = an expired certification or fewer than half the requirements met. Yellow = a certification expiring soon, or some requirements not met. Green = all met. Check each requirement's progress.                               |
-| A certification alert was not received                 | Each alert stage (90, 60, 30, 7 days) is sent only once. If all stages have been sent, no more alerts come.                                                                                                                     |
-| A rank shows as unrecognized                           | Open Members Admin to see the rank check. Change the member's rank to one of the ranks set up in Settings.                                                                                                                      |
-| You cannot see the Training module                     | Training is an optional module. Your administrator must turn it on in Settings > Modules.                                                                                                                                       |
-| An outside integration is not syncing                  | Check the provider's settings and sync history, select **Test**, and check the user matching.                                                                                                                                   |
-| Recertification reminders are not sending              | Check: (1) the certification has an expiry date; (2) a pathway's renewal window is set; (3) email is set up for your department. If all three are right, ask your system administrator to check the reminder schedule.          |
-| The competency heat-map is out of date                 | It is read when the Competency tab opens. Switch away and back to see an evaluation recorded since.                                                                                                                             |
-| Effectiveness scores are not showing                   | Scores appear only once at least one evaluation has been submitted.                                                                                                                                                             |
+| Problem                                                | What to do                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "My training submission was rejected"                  | Read the reason in your notification. Fix the problem and submit again.                                                                                                                                                                                                          |
+| Hours are not counting toward a requirement            | Check the record's course is linked to the right requirement, and that the record is approved.                                                                                                                                                                                   |
+| A yearly class is not counted (HIPAA, yearly training) | Work through [When a Yearly Class Isn't Counted](#when-a-yearly-class-isnt-counted): the requirement's window, the course link and the provider's course matching, the freshness window, and the imported-credit setting.                                                        |
+| An hours requirement shows no due date                 | This is intended for an hours requirement that rolls. It is a running count, so the card shows the months it counts and the upcoming list shows the hours still to go.                                                                                                           |
+| Program progress does not update after a shift         | A shift completion report must be filed. Automatic credit only works for enrolled members with matching requirement types.                                                                                                                                                       |
+| The Compliance Matrix looks wrong                      | Check the requirement's frequency and due-date type. Rolling periods count whole months ending with this one.                                                                                                                                                                    |
+| A member on leave still shows non-compliant            | Check the leave of absence is active under **Members > Admin > Waivers**. Check the department's **Months on leave** setting: under a 15-day rule, a month with only a few days of leave is still mostly or wholly owed. Only hours, shifts and calls requirements are adjusted. |
+| A leave was created but training was not adjusted      | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waiver Management page.                                                  |
+| A duplicate training record warning                    | The Logbook spots records with the same member, the same course name (ignoring capitals) and a completion date within a day. Check the warning, then go ahead or skip the duplicate.                                                                                             |
+| The compliance card shows the wrong color              | Red = an expired certification or fewer than half the requirements met. Yellow = a certification expiring soon, or some requirements not met. Green = all met. Check each requirement's progress.                                                                                |
+| A certification alert was not received                 | Each alert stage (90, 60, 30, 7 days) is sent only once. If all stages have been sent, no more alerts come.                                                                                                                                                                      |
+| A rank shows as unrecognized                           | Open Members Admin to see the rank check. Change the member's rank to one of the ranks set up in Settings.                                                                                                                                                                       |
+| You cannot see the Training module                     | Training is an optional module. Your administrator must turn it on in Settings > Modules.                                                                                                                                                                                        |
+| An outside integration is not syncing                  | Check the provider's settings and sync history, select **Test**, and check the user matching.                                                                                                                                                                                    |
+| Recertification reminders are not sending              | Check: (1) the certification has an expiry date; (2) a pathway's renewal window is set; (3) email is set up for your department. If all three are right, ask your system administrator to check the reminder schedule.                                                           |
+| The competency heat-map is out of date                 | It is read when the Competency tab opens. Switch away and back to see an evaluation recorded since.                                                                                                                                                                              |
+| Effectiveness scores are not showing                   | Scores appear only once at least one evaluation has been submitted.                                                                                                                                                                                                              |
 
 ---
 
@@ -4419,6 +4568,11 @@ have moved, been renamed or work differently.
   requirements. Link the course.
 - **Rolling requirements** count whole calendar months, and a rolling hours
   requirement has no due date.
+- **A month of leave no longer needs 15 days to count** _(2026-11-02)_. By
+  default any day of leave excuses the month; a department can choose a 15-day
+  rule under **Months on leave**. Shift and call targets reduced for leave are
+  rounded down, and the hours a member earned on leave stay in their monthly
+  hours instead of reading just **Leave**.
 - **A member nothing grades** reads **Not applicable**, not 100% compliant,
   and is left out of department percentages. A department with no
   requirements reads **Not set up**.

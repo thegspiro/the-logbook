@@ -518,6 +518,13 @@ or delete your own entry. If an officer decides an entry should not count,
 they reject it with a reason. It then reads **Not counted**, with the reason
 below it, and you can no longer change it. An officer can restore it.
 
+**Shift evaluations** _(2026-11-02)_. If your department evaluates shifts on
+that agency's units and you are in a training program with an evaluation form,
+the shift carries a badge: **Evaluation needed**, **Evaluation started** or
+**Evaluated**. The agency's preceptor fills out the paper form, and a training
+officer enters it. Nothing about logging the shift changes, and nothing waits
+on the evaluation.
+
 > **What if an old entry has only a date and hours?** Some entries were logged
 > that way. They open with _"This shift was logged as a date and hours,
 > without its start and end times."_ Select **Enter start and end times
@@ -547,12 +554,20 @@ You need to be able to manage schedules for both of these.
   have been logged on it, so it stays on record. Turn it off to hide it from
   members instead."_ Each logged shift keeps the names it was logged under, so
   renaming an entry never changes past records.
+- **Evaluations on an agency's units** _(2026-11-02)_. Under each department in
+  the list, tick **Evaluate shifts on _agency_'s units** if its preceptors
+  evaluate your trainees. It is off to start with. With it on, a member in a
+  training program with a shift evaluation form needs one for each shift they
+  log there, and a training officer enters the preceptor's paper form. See
+  [Training > Shifts on an outside agency's unit](./02-training.md#shifts-on-an-outside-agencys-unit-2026-11-02).
 - **The review.** **Scheduling Reports → Member Hours** has two sections under
   the table. **Outside apparatus staffed** shows shifts, hours and members per
   unit for the period. **Shifts with other departments** lists every entry,
   with a **Show** filter (All / Counted / Not counted) and **Reject** (with a
   reason) or **Restore**. Officers who can only view reports see the list but
   can't reject or restore.
+  An entry that needs a shift evaluation carries the same badge as on the
+  member's list _(2026-11-02)_.
 
 ![Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, and the Add a department field](./images/03-110-outside-apparatus-settings.png)
 
@@ -2325,7 +2340,15 @@ adjusted target = base target × (active months ÷ total months)
 
 For example, take a requirement of 8 shifts per quarter. A member with 1 month
 of leave has 2 active months out of 3. The target becomes 8 × 2/3 = 5.33.
-Because shifts are whole, the member needs **6 shifts**.
+Because shifts are whole, the target is **rounded down** _(2026-11-02)_: the
+member needs **5 shifts**. (Before 2026-11-02 the member needed 6.)
+
+How much of a month that leave covers only partly is excused is the training
+department's **Months on leave** setting _(2026-11-02)_. By default any day of
+leave excuses the whole month; the two 15-day rules excuse it by share or by
+half. This report and the Training screens use the same rule, so a month reads
+the same on both. See
+[Training > Months on leave](./02-training.md#months-on-leave--the-department-rule-2026-11-02).
 
 > For full details on leave adjustments, see
 > [Membership > Leave of Absence](./01-membership.md#leave-of-absence) and
