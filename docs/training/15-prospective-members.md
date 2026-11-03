@@ -224,6 +224,8 @@ Each stage can be set up with:
 
 ![Editing the Attend a Business Meeting stage: Auto-Link Event Type set to Next Business Meeting, its help text saying that naming an event makes attendance required, the next upcoming meeting it will link, and the checkbox reading Auto-advance when the event's attendance is finalized, with its explanation that a sign-in at the door is not enough on its own](./images/15-15-meeting-stage-config.png)
 
+![Prospect Communication in a stage's settings: Notify prospect when this stage is completed, ticked, with its note that the applicant is emailed when they advance past the stage, and Show this stage on the public status page](./images/15-37-notify-prospect.png)
+
 **Required stages cannot be skipped.** **Skip** is refused on a stage marked
 Required, and the button is disabled with an explanation. To bypass one, untick
 **Required** on the stage first. That is a deliberate change to the pipeline
@@ -240,6 +242,10 @@ passed or was cancelled. The email will include the next one instead". Drafts
 are never named. If no event of the type is coming up, the email goes out with
 only your **Additional details**, and the applicant's activity log records that
 the meeting was missing.
+
+![Next Meeting Details on the Welcome Packet Email stage: Pull from upcoming event set to Next Business Meeting, and the preview reading The saved event has passed or was cancelled. The email will include the next one instead, above the next business meeting](./images/15-38-email-stage-next-meeting.png)
+
+![Editing the Welcome Packet Email stage: the Email Template picker at the top reading None, build the email from the sections below, its note on the template variables, and the Email Subject and sections underneath](./images/15-39-email-stage-template-picker.png)
 
 ### Using Cal.com and Documenso in Stages
 
@@ -315,7 +321,7 @@ address:
 - An **archived member** has it → a suggestion to reactivate them instead
 - Another **applicant** has it → a warning with the applicant's details
 
-<!-- Screenshot needed: The Add Applicant dialog warning that the email belongs to an active applicant, naming their pipeline and stage -->
+![The Already an applicant warning: the person is already an active applicant with this email, naming their pipeline and stage, with Go back and Open existing applicant](./images/15-30-duplicate-applicant.png)
 
 ![Add Applicant dialog with contact fields, membership type and the Target Role picker](./images/15-03-create-applicant.png)
 
@@ -1081,7 +1087,7 @@ Application**.
 > theirs with the next pipeline email that carries the status tracker, or when
 > you re-send it from their record.
 
-![Public application status page showing an applicant's progress through the pipeline](./images/15-13-application-status.png)
+![Public application status page showing an applicant's progress through the pipeline, with the Your next step card naming the next business meeting, its time in the department's time zone, Add to calendar and Get directions](./images/15-13-application-status.png)
 
 ---
 
@@ -1103,6 +1109,8 @@ applicant only corrects what has changed.
 3. Optionally write a **Message in the link email (optional)**.
 4. Leave **Advance the applicant when they submit the form** ticked, or untick
    it to complete the stage yourself.
+
+![Editing the Confirm Your Details stage, a Follow-up Form stage: the Form picker set to Applicant Details Confirmation, the Message in the link email, and Advance the applicant when they submit the form ticked](./images/15-35-follow-up-stage-config.png)
 
 ### What the applicant receives
 
@@ -1131,6 +1139,8 @@ applicant only corrects what has changed.
   is shown next to the question.
 - Once submitted, the link shows a thank-you page. It cannot be submitted
   twice.
+
+<!-- Screenshot needed: The applicant's follow-up form page, greeted by first name, with what is on file filled in and Save and finish later beside Submit -->
 
 ### What a submission changes
 
@@ -1178,6 +1188,8 @@ submitted.
   is in progress or on hold. Neither is offered once the form is submitted.
 - If the stage's form was deleted or unpublished, nothing is sent and you are
   told why. Publish the form, or pick another on the stage.
+
+![The Follow-up Forms section of Mateo Alvarez's drawer: Confirm Your Details, Applicant Details Confirmation, Not sent, with Send now](./images/15-34-follow-up-drawer-send-now.png)
 
 ### How the stage completes
 
@@ -1258,12 +1270,16 @@ Election Package section. A package made before the form was submitted does not
 pick the answers up: make the package again with **Create Package** while it is
 still **Draft** or **Ready**.
 
+![Election Package Contents on the Membership Vote stage, with Include follow-up form answers ticked and its note that answers to sensitive questions are never included](./images/15-36-election-vote-follow-up-answers.png)
+
 **On the applicant's status page.** While the applicant is on the stage and
 has not submitted, their status page shows a card reading "Complete your
 form:" and the form's name, with an **Open the form** button that opens the same link. When a
 draft is saved, the card says their answers so far are saved. Like the stage
 itself, the card appears only when the stage is visible to applicants and the
 pipeline's **Show upcoming stages** is on.
+
+![Mateo Alvarez's status page on the Confirm Your Details stage: the card reading Complete your form: Applicant Details Confirmation, The department needs a few more details from you, and Open the form](./images/15-41-status-follow-up-card.png)
 
 **When the member is anonymized.** Anonymizing a converted member empties
 their follow-up submissions, and cuts each election package's copy of the
@@ -1295,8 +1311,11 @@ check **Positions** if you want a position to see only its own applicants.
 **Withdrawing as a case manager.** The status dialog offers a case manager only
 **Withdraw** (no Reject, Hold or Resume).
 
-> **Screenshots to create:** the **My Applicants** page; the status dialog as a
-> case manager sees it; an applicant's assignment control.
+![My Applicants for a member with no recruitment permission: Mateo Alvarez on Confirm Your Details with the Case manager badge, Grace Liu on Interest Form Received with the Interviewer badge, each with Open and Interview](./images/15-31-my-applicants.png)
+
+![Mateo Alvarez's applicant dialog as his case manager: Callum Frazier named as case manager, and an action row offering Interview, Back, Withdraw, Skip and Advance, with no Hold or Reject](./images/15-32-case-manager-dialog.png)
+
+![The Assigned section of Mateo Alvarez's drawer: Callum Frazier as case manager, with the control to assign another member](./images/15-33-assigned-section.png)
 
 ## Emails to Applicants
 
@@ -1307,6 +1326,8 @@ group. Editing, previewing, **Send Test to Me** and **Reset** work as for any
 template; see
 [Administration → Email Templates](./08-admin-reports.md#email-templates). Each
 one sent to an applicant closes with the **Public** footer by default.
+
+![Email Templates filtered to Application: the Prospective Members group listing Application Step Completed, Application Status Link and the other applicant templates](./images/15-42-applicant-email-templates.png)
 
 | Template                                                | Sent when                                                                                                                                                       | Variables                                                                                                                |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |

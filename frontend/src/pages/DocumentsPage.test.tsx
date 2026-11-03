@@ -662,3 +662,38 @@ describe('DocumentsPage folders only administrators can open (decision 30)', () 
     expect(mockGetAdminOnlyFolders).not.toHaveBeenCalled();
   });
 });
+
+describe('DocumentsPage document type (W53-6)', () => {
+  const word = makeDocument({
+    id: 'd-word',
+    name: 'Bylaws',
+    file_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+
+  beforeEach(() => {
+    mockGetDocuments.mockReset();
+    mockGetDocuments.mockResolvedValue({ documents: [word], total: 1, skip: 0, limit: 20 });
+  });
+
+  it('names the type on the card rather than printing its MIME type', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+    const card = await screen.findByTestId('document-card-d-word');
+    expect(within(card).getByText('Word')).toBeInTheDocument();
+    expect(within(card).queryByText(/application\//i)).not.toBeInTheDocument();
+  });
+
+  it('names it in the list view too', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await screen.findByText('Bylaws');
+    await user.click(screen.getByRole('button', { name: 'List view' }));
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Word')).toBeInTheDocument();
+    expect(within(table).queryByText(/application\//i)).not.toBeInTheDocument();
+  });
+});

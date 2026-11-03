@@ -170,8 +170,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
-- **Documents, a later pass** — a document's type shows as a raw MIME type
-  ("TEXT/PLAIN") in the list (W53-6).
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
@@ -208,6 +206,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — Documents named their type by MIME string — 2026-11-02
+
+Read from code and component-tested, not re-driven. Fixed (W53-6): the
+documents list printed a file's type as its MIME string in capitals
+("APPLICATION/PDF", and for a Word file
+"APPLICATION/VND.OPENXMLFORMATS-OFFICEDOCUMENT…"), on the cards and in the list
+view. A new `utils/fileTypeLabel.ts` names every type the documents upload
+accepts ("PDF", "Word", "Excel", "Text", "PNG image") and falls back to the
+family ("Image") or "File". The event form's attachment list printed the same
+raw string beside the size and now uses the same helper. The tests for both
+screens failed against the old rendering. Gate: typecheck and lint clean, and
+the documents, event form and reflow-table tests pass.
 
 ### Lead — Shift notices printed ISO dates — 2026-11-02
 
