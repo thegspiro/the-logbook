@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None yet** — Feature 26 (Forms), pass 12, a watchdog pickup. PR #3980
+(Feature 25, Messaging & notifications, pass 12) merged
+(`12f1430d2`). This iteration found a true zero-delta: every one of this
+feature's declared backend and frontend scope files is byte-identical to
+pass 11's head; the only path matching `forms` in the 490-commit window was
+a cosmetic layout-utility swap in `FormsPage.tsx`. 0 fixed, 0 new findings.
+See `docs/security-review/FORM-26-forms.md`'s **Pass 12** section. (PR
+number recorded here once opened.)
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 12, PR #3980, merged), preserved for history</summary>
+
 **PR [#3980](https://github.com/thegspiro/the-logbook/pull/3980)** (branch
 `claude/security-review-messaging-notifications-p12`) — Feature 25
 (Messaging & notifications), pass 12, a watchdog pickup. Real delta: web
@@ -24529,7 +24541,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                          | ⬜     |
@@ -24585,6 +24597,34 @@ section (which also notes that pass 11's own completion-gate section was
 found empty — a documentation gap, not a security finding).
 
 Next in rotation: Feature 26 (Forms).
+
+### 2026-11-03 — Feature 25 (Messaging & notifications, pass 12) merged; Feature 26 (Forms, pass 12) — watchdog pickup, true zero-delta, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` ("No reachable agents"). PR #3980 (Feature 25, Messaging &
+notifications, pass 12) had already merged (`12f1430d2`); a GitHub search
+for `is:pr is:open head:claude/security-review` returned zero results,
+confirming row 26 (Forms) as the next `⬜` row.
+
+Baseline `a41ff44dc` (pass 11's merge, PR #3852) to head `12f1430d2`: of 490
+commits on `main` since pass 11's baseline, `git diff --stat` restricted to
+all six declared backend scope files plus the frontend forms/embed/public-form
+surface produced **no output at all** — every file byte-identical to pass
+11's head. The only path matching `forms` outside this feature's own files
+was a cosmetic layout-utility swap in `frontend/src/pages/FormsPage.tsx`
+(3 commits, a repo-wide `page-header`/`split-row`/`StatGrid` sweep — read in
+full, no query/permission/route/data change). Route count re-enumerated by
+AST rather than trusted from the empty diff: 22 + 3 = 25, unchanged, same
+per-route dependency set as pass 11 (`forms.view` ×3, `forms.manage` ×17,
+bare `get_current_user` ×2).
+
+**0 fixed, 0 new findings.** FORM-4 (flagged by design) and FORM-12
+(correctness-only) re-confirmed unchanged; nothing in this window touches
+either. Full write-up: `docs/security-review/FORM-26-forms.md`'s **Pass 12**
+section.
+
+Next in rotation: Feature 27 (Integrations).
 
 ### 2026-11-03 — Feature 23 (Medical supplies, pass 19) merged; Feature 24 (Meetings & minutes, pass 12) — watchdog pickup, MM5-4 resolved by other work, 0 new findings
 
