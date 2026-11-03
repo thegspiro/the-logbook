@@ -57,11 +57,9 @@ import { MAX_LABEL_SETUPS, MAX_SETUP_NAME, usableSetupLines } from '../utils/lab
 import type { LabelSetup } from '../utils/labelSetups';
 import { Breadcrumbs, PromptDialog } from '../../../components/ux';
 import { BARCODE_SVG_PRINT_CSS } from '../../../components/labels/barcodePrintCss';
-import {
-  drawCode128ForPrinter,
-  horizontalPaddingInches,
-  printerDpiFor,
-} from '../../../components/labels/barcodeGeometry';
+import { drawCode128ForPrinter, horizontalPaddingInches } from '../../../components/labels/barcodeGeometry';
+import { PrinterDpiSelect } from '../../../components/labels/PrinterDpiSelect';
+import { usePrinterDpi } from '../../../components/labels/printerDpi';
 import { LABEL_FONT_FAMILY, labelNameStyle } from '../../../components/labels/labelText';
 import { PrintSetupChecklist } from '../../../components/labels/PrintSetupChecklist';
 import { isPrintChecklistSkipped } from '../../../components/labels/printChecklist';
@@ -397,6 +395,8 @@ interface BarcodeLabelProps {
   symbology: Symbology;
   labelLines: string[];
   names: LabelNames;
+  /** Printer resolution the Code 128 is sized for. */
+  dpi: number;
   /** Bumped by the page each time it resets its ready count; see below. */
   renderGeneration: number;
   onRendered?: () => void;
@@ -408,6 +408,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
   symbology,
   labelLines,
   names,
+  dpi,
   renderGeneration,
   onRendered,
 }) => {
@@ -431,7 +432,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
           fontSizeCssPx: preset.barcodeFontSize,
         },
         parseFloat(preset.width) - horizontalPaddingInches(preset.padding),
-        printerDpiFor(preset.id)
+        dpi
       );
     } catch {
       // Invalid barcode value — SVG stays empty
@@ -443,9 +444,9 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
     preset.barcodeWidth,
     preset.barcodeHeight,
     preset.barcodeFontSize,
-    preset.id,
     preset.width,
     preset.padding,
+    dpi,
     renderGeneration,
     onRendered,
   ]);
@@ -630,6 +631,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     ? buildCustomPreset(customValid ? customW : 2, customValid ? customH : 1)
     : (LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset);
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
+  const printerDpi = usePrinterDpi(preset.id);
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
   const isThermal = preset.columns === 1;
   // A custom size is its own stock, so "don't show again" is per dimension.
@@ -1887,6 +1889,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 </div>
               </div>
 
+              {symbology === Symbology.CODE128 && (
+                <PrinterDpiSelect
+                  id="label-printer-dpi"
+                  value={printerDpi.override}
+                  autoDpi={printerDpi.autoDpi}
+                  onChange={printerDpi.setOverride}
+                />
+              )}
+
               <div>
                 <label
                   htmlFor="label-copies"
@@ -2109,6 +2120,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   symbology={symbology}
                   labelLines={labelLines}
                   names={labelNames}
+                  dpi={printerDpi.dpi}
                   renderGeneration={renderGeneration}
                   onRendered={handleLabelRendered}
                 />
