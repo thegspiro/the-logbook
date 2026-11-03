@@ -636,8 +636,9 @@ export const MembersAdminPage: React.FC = () => {
 
         {/* View by Member */}
         {viewMode === 'by-member' && (
-          // A named, focusable scroll region: on a tablet the table is wider
-          // than its card, and with no member rows yet nothing inside it can
+          // A named, focusable scroll region: below 1024px the table reflows
+          // to cards (rwd-table-lg), but at 1024px with the side navigation
+          // open it can still be wider than its card, and with no member rows yet nothing inside it can
           // take focus, so a keyboard could not scroll to the cut-off columns
           // (axe scrollable-region-focusable).
           <div
@@ -648,7 +649,7 @@ export const MembersAdminPage: React.FC = () => {
             data-mobile-scroll-region
           >
             <table
-              className="rwd-table divide-theme-surface-border min-w-full divide-y"
+              className="rwd-table rwd-table-lg divide-theme-surface-border min-w-full divide-y"
               aria-label="Members and their positions"
             >
               <thead className="bg-theme-surface-secondary">
@@ -728,7 +729,7 @@ export const MembersAdminPage: React.FC = () => {
                       {membershipSummary(user)}
                     </td>
                     <td data-label="Positions" className="px-4 py-4">
-                      <div className="flex flex-wrap justify-end gap-1 md:justify-start">
+                      <div className="flex flex-wrap justify-end gap-1 lg:justify-start">
                         {withoutRankMirrors(user.roles).length === 0 ? (
                           <span className="text-theme-text-muted text-sm">No positions</span>
                         ) : (

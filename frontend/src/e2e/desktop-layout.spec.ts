@@ -91,7 +91,15 @@ test.describe('A touch screen keeps its 44px targets', () => {
 // padding, so three ordinary members were 58px wider than the card at
 // 1366x768. Long names, usernames and membership labels are what force it,
 // so the fixture carries them.
-test.describe('The member roster fits its card on a laptop', () => {
+// A tablet keeps the side navigation open, so the page body there is narrower
+// than seven columns need however they wrap; below 1024px the roster reflows
+// into one card per member instead.
+const ROSTER_TABLETS = [
+  { name: 'iPad portrait 820x1180', width: 820, height: 1180 },
+  { name: 'tablet 1000x800', width: 1000, height: 800 },
+];
+
+test.describe('The member roster fits its card on a laptop or tablet', () => {
   const position = (id: string, name: string) => ({
     id,
     name,
@@ -136,7 +144,7 @@ test.describe('The member roster fits its card on a laptop', () => {
     ]),
   ];
 
-  for (const viewport of DESKTOPS) {
+  for (const viewport of [...DESKTOPS, ...ROSTER_TABLETS]) {
     test(`/members/admin — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'members.manage'] });
