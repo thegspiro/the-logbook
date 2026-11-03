@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this iteration's own, number assigned at push time)** (branch
+**PR [#3980](https://github.com/thegspiro/the-logbook/pull/3980)** (branch
 `claude/security-review-messaging-notifications-p12`) — Feature 25
 (Messaging & notifications), pass 12, a watchdog pickup. Real delta: web
 push dispatch queue + click-URL validation, History module's new notice
