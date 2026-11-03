@@ -16,14 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3962 (Feature 22, Grants & fundraising, pass 13) and PR #3976
-(Feature 23, Medical supplies, pass 19) both merged 2026-11-03. This
-iteration (Feature 24, Meetings & minutes, pass 12, a watchdog pickup) found
-MM5-4 — open since pass 2 (2026-08-31) — resolved by other work's new
+**PR [#3978](https://github.com/thegspiro/the-logbook/pull/3978)** (branch
+`claude/security-review-meetings-minutes-p12`) — Feature 24 (Meetings &
+minutes), pass 12, a watchdog pickup. MM5-4 — open since pass 2
+(2026-08-31) — found resolved by other work's new
 `meeting_minutes.edit_version` optimistic-concurrency check, independently
-verified against the real diff; 0 new findings. Still open as this row is
-written; see `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 12**
-section.
+verified against the real diff; 0 fixed by this pass, 0 new findings. See
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 12** section.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 19, PR #3976, merged), preserved for history</summary>
