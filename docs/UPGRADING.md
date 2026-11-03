@@ -625,6 +625,17 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Adopting minutes now approves their meeting, and existing meetings catch up (2026-11-03)
+
+**Adopt Minutes** now also approves the meeting the minutes record. Migration
+`6b81e95d4157` brings existing data in line: every meeting whose minutes were
+already adopted becomes **approved**, stamped with the earliest adoption's
+approver and date. Those meetings stop reading _Draft_ and can no longer be
+deleted from the meeting list. A meeting already approved keeps its own stamp,
+and minutes adopted before adoptions were stamped give their meeting no
+approver or date. See
+[Events & Meetings](training/04-events-meetings.md#submitting-and-approving-minutes).
+
 ### A month partly on leave now excuses the whole month by default (2026-11-02)
 
 Training compliance has a new department rule, **Months on leave** (Training
