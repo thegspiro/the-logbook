@@ -16,6 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3962](https://github.com/thegspiro/the-logbook/pull/3962)** (branch
+`claude/security-review-grants-fundraising-p13`) — Feature 22 (Grants &
+fundraising), pass 13, a watchdog pickup. Substantial real delta this
+time — a complete new Zeffy payments integration (~2,900 lines) reviewed in
+full against all seven checklist dimensions: signed/rate-limited webhook
+that never trusts the body for money, org-scoped throughout, secrets and
+payer email encrypted at rest, idempotent via a unique
+`(organization_id, zeffy_payment_id)` constraint, every by-id financial
+mutation row-locked before read. 0 new findings. See
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 13** section
+for the full review.
+
+**2026-11-03 watchdog tend:** CI on this PR's head SHA is red across
+`Migration Chain`, `Backend Type Check`, `Backend Unit Tests`, both
+`Backend Integration Tests` jobs and both `Backend API Contract Tests`
+jobs — but this PR's own diff touches only two docs files
+(`GF-22-grants-fundraising.md`, this tracker), confirmed via
+`git diff --stat origin/main...HEAD`. Root cause is on `main`, not this
+PR: `alembic heads` reports two heads (`038ade7a5cd0`, `cbb9726e8af7`) —
+two independently-opened merge revisions
+(`02c94bb742d6`/`cbb9726e8af7`) each rejoined the same fork
+(`5438939506b9`, `b840c0d2b961`) minutes apart, and `038ade7a5cd0`
+(Create the History module tables) landed on top of one of them,
+stranding both as heads. Per the security-review rotation's own rule
+("if it is red on the base branch too, say so once and stop pushing for
+it"), the fix is **not** pushed to this branch; it is
+[PR #3975](https://github.com/thegspiro/the-logbook/pull/3975) against
+`main` (a no-op merge revision joining the two heads, verified with
+`validate_migrations.py --strict`, the alembic migration test guards, and
+a full `alembic upgrade head` against a populated database). Once #3975
+merges, merging `main` into this branch (not a rebase) should clear the
+CI red here without any further change to this PR's own content.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 13, PR #3955, merged), preserved for history</summary>
+
 **PR [#3955](https://github.com/thegspiro/the-logbook/pull/3955)** (branch
 `claude/security-review-admin-hours-p13`) — Feature 21 (Admin hours), pass
 13, a watchdog pickup. Zero backend delta since pass 12 (PR #3846): the
@@ -24341,6 +24377,8 @@ findings are all resolved with no open items. Rotation row 33 -> done.
 
 </details>
 
+</details>
+
 ---
 
 ## Relationship to the existing review passes
@@ -24453,7 +24491,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                            | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                                                   | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                            | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                       | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                 | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ⬜     |
@@ -45965,3 +46003,74 @@ section.
 Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
 fundraising) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+### 2026-11-02 (Feature 22, Grants & fundraising, pass 13, watchdog pickup)
+
+**Step 0.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`
+("No reachable agents"). `gh api search/issues` for `is:pr is:open
+head:claude/security-review` returned 0 matches — PR #3955 (Feature 21,
+Admin hours, pass 13) had just merged (`9264961d` → `d4a510b60`). Reading
+the rotation table fresh against `origin/main` showed row 21 (Admin hours)
+already `✅` and row 22 (Grants & fundraising) the next `⬜`.
+
+**Baseline `f16fd9cbe`** (PR #3847's merge, pass 12). Unlike the last two
+watchdog passes, this one found a **real, substantial delta**: a complete
+new third-party integration, Zeffy (donation/ticketing/membership
+platform), landing via `4cb2afc77` and three follow-up commits — ~2,900
+new lines across `models/zeffy.py`, `schemas/zeffy.py`,
+`api/v1/endpoints/zeffy.py`, `api/public/zeffy_webhook.py`,
+`services/integration_services/zeffy_service.py`,
+`services/zeffy_sync_service.py`, one migration, three backend test files,
+and a frontend `ZeffyPage`/`ZeffyLinkDialog`. `grants.py`/`schemas/grant.py`
+are byte-identical — fully additive, no change to the existing surface.
+
+**Reviewed in full against all seven checklist dimensions** (not sampled):
+the public webhook requires a per-integration `whsec_` HMAC-SHA256
+signature (`hmac.compare_digest`, 5-minute timestamp tolerance both
+directions, refuses rather than trusts when no secret is configured) and is
+rate-limited before any DB/API work; the webhook body is never trusted for
+money — only `type`/`data.id` are read, then the payment is re-fetched from
+Zeffy's API with the integration's own key; every query is
+`organization_id`-scoped from the authenticated caller or the webhook's
+`integration_id` path segment (never the body); client-supplied
+`target_id`s are validated in-org (XC-1) before a link is saved; dues
+linking additionally requires `finance.manage` (sensitivity-matching);
+secrets are AES-encrypted via the existing `Integration.set_secret`, never
+echoed back; `payer_email` is `EncryptedText`, stripped from the stored
+`raw_payload` JSON, and deliberately absent from the response schema; the
+sync is request-budgeted and stops cleanly on Zeffy's 429; every by-id
+financial mutation locks its target row with `.with_for_update()` before
+reading (Pitfall #27, cited by name in the code's own comment); the
+idempotency key is a unique `(organization_id, zeffy_payment_id)`
+constraint, not a replay cache, with the insert race handled via a nested
+transaction + `IntegrityError` re-fetch; all `SET NULL` FKs are
+`nullable=True`.
+
+**Findings: 0 fixed, 0 new flagged.** No defect found to fix or flag across
+any dimension. One deliberate business-rule choice recorded rather than
+flagged: a dues credit already applied is never auto-reversed by a later
+Zeffy change — the payment is marked `NEEDS_REVIEW` for the treasurer
+instead. GF-1 through GF-9/14/15/24a/27a/33/35/36 all re-confirmed
+unchanged; this window's delta touches neither `grants.py` nor
+`schemas/grant.py`.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 700
+revisions, single head; the three new Zeffy test files — 88 passed; `pytest
+tests/ -q -k "grant or fundraising or donor or zeffy"` (via `python3.13`) —
+1401 passed, 1 pre-existing skip; `check_route_permissions.py --strict` —
+289 routes, 0 errors/warnings; `generate_schema_docs.py --check` —
+`DATABASE_SCHEMA.md` up to date; frontend `npm run typecheck`/`npm run
+lint` — 0 errors, 0 warnings; `npx vitest run src/modules/grants-fundraising`
+— 136 passed (24 files); the new `/grants/zeffy` route confirmed registered
+in all three Pitfall #30a registries by their own enforcement checks
+(`testingRegistry.test.ts` — 12 passed; `mobile-route-integrity.spec.ts` —
+1 passed; `check_route_permissions.py` above).
+
+Full write-up: `docs/security-review/GF-22-grants-fundraising.md`'s **Pass
+13** section.
+
+Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.

@@ -4,7 +4,7 @@
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30
-(pass 12) · **PR:**
+(pass 12), 2026-11-02 (pass 13) · **PR:**
 [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
 6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
@@ -12,7 +12,198 @@ pass 8 merged as PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339),
 pass 9 merged as PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454),
 pass 10 merged as PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633),
 pass 11 merged as PR [#3765](https://github.com/thegspiro/the-logbook/pull/3765),
-pass 12 (this PR)
+pass 12 merged as PR [#3847](https://github.com/thegspiro/the-logbook/pull/3847),
+pass 13 (this PR)
+
+---
+
+## Pass 13 (2026-11-02) — watchdog pickup, substantial real delta (new Zeffy payments integration), 0 fixed by this pass itself, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per `ListAgents`
+("No reachable agents"). `gh api search/issues` for `is:pr is:open
+head:claude/security-review` returned 0 matches — PR #3955 (Feature 21,
+Admin hours, pass 13) had just merged (`9264961d` → `d4a510b60`). Row 21
+confirmed ✅ and row 22 (Grants & fundraising) confirmed the next `⬜` by
+reading the rotation table on a freshly fetched `main`.
+
+**Baseline `f16fd9cbe`** (PR #3847's merge, pass 12; confirmed an ancestor of
+`HEAD` via `git merge-base --is-ancestor`). `git diff f16fd9cbe..HEAD --stat`
+against the declared scope found a **real, substantial** delta this time, not
+a zero-delta watchdog pass: a complete new third-party integration, **Zeffy**
+(a zero-fee donation/ticketing/membership platform), landing across a non-
+rotation commit window (`4cb2afc77` "Add Zeffy integration", plus
+`75c13d795`, `93ed1ac31`, `ddb69b94f`, `9d1e5e1fa`). New files: `models/zeffy.py`
+(271 L), `schemas/zeffy.py` (125 L), `api/v1/endpoints/zeffy.py` (426 L),
+`api/public/zeffy_webhook.py` (180 L), `services/integration_services/zeffy_service.py`
+(401 L), `services/zeffy_sync_service.py` (894 L), one migration
+(`62144ac214`), and three backend test files (876 L combined). Frontend:
+`pages/ZeffyPage.tsx` (507 L) + its test file (435 L),
+`components/ZeffyLinkDialog.tsx` (222 L), route registration, API service,
+types, labels — plus a repo-wide `KpiTile`/`StatGrid` design-system swap in
+`GrantsDashboardPage.tsx` unrelated to Zeffy. `grants.py` and `schemas/grant.py`
+are byte-identical — the new surface is fully additive, not a change to the
+existing grant/donor/campaign endpoints this doc already covers.
+
+Read every new file in full, against all seven checklist dimensions, not
+sampled:
+
+### 1–2. Authentication & authorization
+
+The 7 new `/grants/zeffy/*` routes (`status`, `campaigns`, `links` GET/PUT/DELETE,
+`payments`, `sync`) all require `fundraising.view` or `fundraising.manage` —
+matching the module's existing gate. `upsert_zeffy_link`/`delete_zeffy_link`
+additionally require `finance.manage` whenever `target_type` is
+`DUES_SCHEDULE` (`_require_dues_permission`, `zeffy.py:96-103`), checked both
+for the new value and, on an existing link, the value already stored — a
+`fundraising.manage` holder without `finance.manage` cannot link or re-link a
+campaign to dues, matching the sensitivity-escalation rule (checklist item
+2.1) the same way an existing dues-payment endpoint does. The one public
+route, `POST /public/v1/webhooks/zeffy/{integration_id}` (`zeffy_webhook.py`),
+is intentionally unauthenticated — its compensating controls: a 60/minute
+per-IP rate limit (`_rate_limit_webhook`) applied **before** the signature
+check or any DB write; and `verify_signature` (`zeffy_service.py:70-104`),
+which requires a configured `whsec_` secret (refuses — not trusts — when
+none is set), parses every `v1=` value in a `Zeffy-Signature: t=…,v1=…`
+header, computes `HMAC-SHA256("{t}.{body}", secret)` and compares with
+`hmac.compare_digest` (timing-safe), and rejects a timestamp more than 5
+minutes (either direction) from now — a captured, valid request cannot be
+replayed later. Confirmed by direct read, not taken from the docstring's own
+claim.
+
+### 3. Tenant isolation
+
+Every query in `zeffy.py` filters `organization_id == current_user.organization_id`
+(never a client-supplied org id). `_target_name` (XC-1) re-validates a
+client-supplied `target_id` against the target model's own `organization_id`
+before a link is allowed to point at it — including the `FundraisingCampaign.active`
+check `FundraisingService.get_campaign` also applies, so a link cannot be
+made to a soft-deleted campaign either. The webhook resolves its organization
+from the **path's `integration_id`** (`Integration.organization_id`,
+`Integration.integration_type == "zeffy"`, `Integration.enabled.is_(True)` —
+`zeffy_webhook.py:83-94`), never from the request body, so a forged body
+cannot claim a different org's id; and the payment amount/state applied is
+always the one re-fetched from Zeffy's API with that integration's own key
+(see dimension 4), never the body's own figures. `ZeffySyncService._apply_dues`
+matches a member by `email_hash` (HMAC fingerprint, existing
+`User.email_hash` column/index from the repo's email-encryption sweep) scoped
+to `organization_id`, excluding `deleted_at` rows — cannot cross into another
+org's member or a removed one.
+
+### 4. Injection & untrusted output
+
+The webhook's body is read only to extract `type` and `data.id`; the amount,
+payer, and every other applied field are re-fetched from Zeffy's API with the
+integration's own key and re-parsed by `parse_payment` — **the inbound
+webhook body itself is never trusted for anything that moves money**,
+exactly as the module's own docstring states, confirmed by reading
+`zeffy_inbound_webhook` line by line. No raw SQL; no `.ilike()` in any new
+file (Zeffy has no search endpoint). `redact_payment` (`zeffy_service.py:265-281`)
+strips the buyer's email, address, and checkout-question answers from the
+JSON kept in `ZeffyPayment.raw_payload`, before it is ever written —
+`payer_email` is stored separately through `EncryptedText`
+(`models/zeffy.py:206`), and `ZeffyPaymentResponse` deliberately omits both
+`payer_email` and `raw_payload` (`schemas/zeffy.py:81-108`, comment confirms
+intent) — grepped the full response-model list, no other field carries the
+buyer's address or checkout answers either.
+
+### 5. Data exposure
+
+Secrets (`api_key`, `webhook_secret`) are stored only via `Integration.set_secret`,
+which AES-encrypts through `encrypt_data` before persisting
+(`models/integration.py:106-141`, pre-existing, unmodified) — never written
+in plaintext, never echoed back by any new route (`ZeffyStatusResponse`
+reports only a boolean `webhook_configured`). `payer_email` is `EncryptedText`
+at rest. No new endpoint is in `UNCACHEABLE_PREFIXES`'s gap: `/grants/zeffy/*`
+carries no auth token and the global axios cache only caches `GET`s for 30s
+client-side for the signed-in caller's own request — same exposure class as
+every other grants-module `GET`, not a new category. Errors from Zeffy's API
+go through `ZeffyError`'s own hand-written messages or `safe_error_detail()`
+(`upsert_zeffy_link`'s `ValueError` path); `sanitize_connector_error` was
+extended (pre-existing file, `integrations.py:1509`) to trust `ZeffyError`'s
+message alongside `PayPalError`'s, the same pattern the module already used
+for its other provider.
+
+### 6. Abuse resistance
+
+Webhook: rate-limited before any DB/API work (dimension 1-2). Sync: bounded
+by `MAX_REQUESTS_PER_RUN = 60` per call and `MAX_RETRIES_PER_RUN = 500` rows,
+stops cleanly on Zeffy's own 429 (`ZeffyRateLimited`, carrying `Retry-After`)
+rather than retrying inline, and commits after each sync window so a run that
+exhausts its budget keeps what it already read and resumes by cursor next
+time — no unbounded loop, no N+1 (`list_payments_page` is the only Zeffy API
+call per page, paginated at 100). The `/sync` "run now" button is
+`fundraising.manage`-gated (authenticated, trusted role), not public.
+
+### 7. Schema & migration integrity
+
+Migration `62144ac214`: `down_revision` single-parent, confirmed via
+`validate_migrations.py --strict` (700 revisions, single head, no duplicate
+ids). All four `SET NULL` foreign keys (`fundraising_campaign_id`,
+`fundraising_event_id`, `dues_schedule_id` on `ZeffyCampaignLink`;
+`donation_id`, `fundraising_event_id`, `member_dues_id` on `ZeffyPayment`)
+are `nullable=True` (Pitfall #2), each commented with _why_ it's SET NULL
+rather than CASCADE (so a deleted target leaves the link/payment visibly
+pointing at nothing instead of destroying payment history). Idempotency
+(Pitfall #36): `uq_zeffy_payments_org_payment` — a unique constraint on
+`(organization_id, zeffy_payment_id)` — is the durable idempotency key, not a
+replay cache (the docstring explicitly explains why a cache would be worse
+here: it would mark a failed 503 delivery as "seen" before Zeffy's retry
+could complete it). `_insert_row` handles the webhook/sync insert race with a
+nested transaction and an `IntegrityError` catch that re-reads the row the
+other writer created, rather than assuming it won't happen. Every by-id
+financial mutation (`_apply_donation`, `_apply_event`, `_apply_dues`) locks
+its target row with `.with_for_update()` before reading and writing it —
+`_apply_dues`'s comment explicitly cites Pitfall #27 by name for why the
+_read_ of open dues must also be a locking read, not just the write. JSON
+column (`raw_payload`): written once per row via plain assignment inside the
+same transaction that holds the row lock, never a shallow-copy-then-mutate
+(Pitfall #12 n/a — no nested mutation of an existing dict).
+
+### No finding
+
+Reviewed in full against all seven dimensions; found no defect to fix or
+flag. This is not a "trust the implementation" conclusion — every claim
+above was checked by reading the cited line ranges directly, not inferred
+from a docstring or a commit message. The one deliberate business-rule
+choice worth recording rather than flagging: a dues credit, once applied,
+is never auto-reversed by a later Zeffy change (`_adjust_applied`) — the
+payment is marked `NEEDS_REVIEW` with the old and new amounts in
+`state_detail` instead, because unwinding a dues credit is a financial
+decision for the treasurer, not a side effect of a webhook retry.
+
+### Re-confirmed unchanged (not re-derived)
+
+GF-1 through GF-9, GF-14, GF-15, GF-24a, GF-27a, GF-33, GF-35, GF-36 — all
+unchanged since pass 12; this window's delta touches none of
+`grants.py`/`schemas/grant.py`, and the one touched pre-existing file
+(`integrations.py`) only adds `ZeffyError` to an existing trusted-exception
+tuple, reviewed above under dimension 5.
+
+### Completion gate (pass 13)
+
+| Check                                                                                                                | Result                                   |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                        | ✅ 0 violations                          |
+| `black --check app/ tests/ alembic/`                                                                                 | ✅ 2838 files unchanged                  |
+| `isort --check-only app/ tests/ alembic/`                                                                            | ✅ clean                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                    | ✅ 700 revisions, single head            |
+| `python3.13 -m pytest tests/test_zeffy_endpoints.py tests/test_zeffy_service.py tests/test_zeffy_sync_service.py -q` | ✅ 88 passed                             |
+| `python3.13 -m pytest tests/ -q -k "grant or fundraising or donor or zeffy"`                                         | ✅ 1401 passed, 1 pre-existing skip      |
+| `python3 scripts/check_route_permissions.py --strict`                                                                | ✅ 289 routes, 0 errors, 0 warnings      |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                 | ✅ `DATABASE_SCHEMA.md` up to date       |
+| `npm run typecheck`                                                                                                  | ✅ 0 errors                              |
+| `npm run lint`                                                                                                       | ✅ 0 errors, 0 warnings                  |
+| `npx vitest run src/modules/grants-fundraising`                                                                      | ✅ 136 passed (24 files)                 |
+| `npx vitest run src/modules/testing/testingRegistry.test.ts`                                                         | ✅ 12 passed (new `/grants/zeffy` entry) |
+| `npx playwright test src/e2e/mobile-route-integrity.spec.ts --project=chromium`                                      | ✅ 1 passed                              |
+
+The new route (`/grants/zeffy`) is registered in all three places Pitfall
+#30a requires — `APPLICATION_PAGES.md:1411`,
+`testingRegistry.ts:1204`, `mobile-route-inventory.ts:665` — confirmed by
+the three checks above, not by grep alone. No source file was changed this
+pass; the entire real delta had already landed correctly before this pass
+began.
 
 ---
 
