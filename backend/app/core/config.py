@@ -74,6 +74,41 @@ def _is_private_network_url(url: str) -> bool:
     return addr.is_private or addr.is_link_local
 
 
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def normalize_endpoint_url(url: str) -> str:
+    """The form two endpoint URLs are compared in: lowercase scheme and host,
+    an explicit port, and the path without a trailing slash.
+
+    Used for ``S3_ALLOWED_ENDPOINTS``, where the comparison is an exact match
+    on this form — never a prefix or substring, which would let
+    ``https://minio.example.org.attacker.net`` or ``…:9000@evil`` ride on a
+    listed name. Raises ValueError for anything that is not an absolute
+    http(s) URL with a host, or that carries credentials, a query or a
+    fragment: none belongs in an endpoint, and credentials in one would be
+    shown to administrators and written to logs.
+    """
+    try:
+        parts = urlsplit((url or "").strip())
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("not a valid URL") from exc
+    scheme = parts.scheme.lower()
+    if scheme not in _DEFAULT_PORTS:
+        raise ValueError("must start with http:// or https://")
+    host = parts.hostname
+    if not host:
+        raise ValueError("must name a host")
+    if parts.username is not None or parts.password is not None:
+        raise ValueError("must not contain a user name or password")
+    if parts.query or parts.fragment:
+        raise ValueError("must not contain a query or fragment")
+    host_text = f"[{host}]" if ":" in host else host
+    path = parts.path.rstrip("/")
+    return f"{scheme}://{host_text}:{port or _DEFAULT_PORTS[scheme]}{path}"
+
+
 # Settings that no longer do anything. pydantic-settings refuses an unknown
 # key in a .env file, so deleting a setting outright would stop every
 # installation whose .env still names it from booting. Each retired name is
@@ -291,6 +326,16 @@ class Settings(BaseSettings):
     # Minutes a successful step-up (POST /auth/step-up) keeps sensitive actions
     # open on that session.
     STEPUP_WINDOW_MINUTES: int = Field(default=10, ge=1)
+    # Failed step-ups one account may make in a window before further attempts
+    # are refused with a 429 (AUTH-23). Counted per account, not per address,
+    # because the attacker this stops already holds the member's session and
+    # can move address. Deliberately NOT fed into failed_login_attempts /
+    # locked_until: a session thief failing on purpose must not be able to lock
+    # the real owner out of signing in (owner decision, 2026-11-01). Longer than
+    # the sign-in limiter's minute, since a member re-verifies a few times a day
+    # at most and 5 guesses per 15 minutes bounds a 6-digit code to ~480/day.
+    STEPUP_MAX_FAILED_ATTEMPTS: int = Field(default=5, ge=1)
+    STEPUP_FAILURE_WINDOW_MINUTES: int = Field(default=15, ge=1)
     HIPAA_PASSWORD_HISTORY_COUNT: int = (
         12  # Previous passwords remembered (§164.312(d))
     )
@@ -332,6 +377,18 @@ class Settings(BaseSettings):
     # signed requests at any internal service. Cloud-metadata hosts stay
     # blocked either way.
     S3_ALLOW_PRIVATE_ENDPOINT: bool = False
+    # The self-hosted S3/MinIO endpoints a department may store files at,
+    # comma-separated (e.g. ``http://minio:9000,https://s3.example.org``).
+    # Owner decision 2026-11-01 (clarified 2026-11-03): a custom endpoint is
+    # chosen by whoever runs the installation, never typed by a department
+    # administrator, because botocore resolves the hostname itself and the
+    # up-front SSRF check cannot pin the connection (KNOWN_LIMITATIONS SCH-10).
+    # A department picks one of these on screen; empty means only AWS S3's own
+    # region-derived endpoints. Matching is exact on scheme, host, port and
+    # path — see normalize_endpoint_url. Listing an endpoint decides *which*
+    # endpoint; S3_ALLOW_PRIVATE_ENDPOINT above still decides whether one on a
+    # private address or plain HTTP may be reached.
+    S3_ALLOWED_ENDPOINTS: str = ""
     # Comma-separated IP addresses/CIDRs containing operator-approved label
     # printers. Empty disables direct network printing. This is deliberately a
     # platform setting rather than tenant-managed configuration: organization
@@ -885,6 +942,39 @@ class Settings(BaseSettings):
                 "This is insecure when credentials are enabled."
             )
         return warnings
+
+    @field_validator("S3_ALLOWED_ENDPOINTS", mode="after")
+    @classmethod
+    def _check_s3_allowed_endpoints(cls, v: str) -> str:
+        """Refuse a malformed entry at startup. Ignoring it instead would
+        surface only as a department's bucket being refused, far from the
+        typo that caused it. The message names the entry by position rather
+        than repeating it (pydantic's own error still shows the raw value, as
+        it does for every setting)."""
+        entries = [entry for entry in v.split(",") if entry.strip()]
+        for position, entry in enumerate(entries, start=1):
+            try:
+                normalize_endpoint_url(entry)
+            except ValueError as exc:
+                raise ValueError(
+                    f"S3_ALLOWED_ENDPOINTS entry {position} {exc}"
+                ) from exc
+        return v
+
+    def get_s3_allowed_endpoints(self) -> list[str]:
+        """The operator's listed S3 endpoints as written (trimmed, without a
+        trailing slash), skipping any that do not parse."""
+        endpoints: list[str] = []
+        for entry in (self.S3_ALLOWED_ENDPOINTS or "").split(","):
+            text = entry.strip().rstrip("/")
+            if not text:
+                continue
+            try:
+                normalize_endpoint_url(text)
+            except ValueError:
+                continue
+            endpoints.append(text)
+        return endpoints
 
     def get_trusted_proxy_ips(self) -> set:
         """Get trusted proxy IPs as a set (raw entries; may include CIDRs)."""
