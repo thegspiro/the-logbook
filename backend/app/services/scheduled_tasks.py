@@ -163,7 +163,14 @@ from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
-from app.utils.org_timezone import org_today, resolve_scheduling_timezone, to_local
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    org_today,
+    resolve_scheduling_timezone,
+    scheduling_timezone,
+    to_local,
+    today_in,
+)
 from app.utils.positions import position_label
 from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
@@ -5512,6 +5519,29 @@ async def run_nfc_card_tap_purge(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfc_card_tap_purge", process)
 
 
+#: `NotificationLog.category` of the overdue-gear email, and so the key of its
+#: sent-log. See `run_inventory_overdue_alerts`.
+OVERDUE_CHECKOUT_LOG_CATEGORY = "inventory_overdue_checkout"
+
+
+async def _members_emailed_since(
+    db: AsyncSession, organization_id: str, category: str, since: datetime
+) -> set[str]:
+    """Ids of the members an email of ``category`` has already gone to since
+    ``since``, read from the email-channel `NotificationLog` sent-log."""
+    from app.models.notification import NotificationChannel, NotificationLog
+
+    result = await db.execute(
+        select(NotificationLog.recipient_id).where(
+            NotificationLog.organization_id == organization_id,
+            NotificationLog.channel == NotificationChannel.EMAIL,
+            NotificationLog.category == category,
+            NotificationLog.sent_at >= since,
+        )
+    )
+    return {str(member_id) for member_id in result.scalars().all() if member_id}
+
+
 async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts for overdue checkouts. Daily at 07:30.
@@ -5519,6 +5549,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     from zoneinfo import ZoneInfo
 
+    from app.models.notification import NotificationChannel, NotificationLog
     from app.services.email_service import EmailService
     from app.services.inventory_service import InventoryService
 
@@ -5548,9 +5579,24 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
         email_svc = EmailService(organization=org)
         alerts_sent = 0
 
+        # This task cannot assume it runs once a day: the scheduler keeps its
+        # last-run times in memory only, so every restart runs every task at
+        # once, and a deploy re-sent this email to everyone holding overdue
+        # gear. A member already emailed on the department's current calendar
+        # day is skipped; tomorrow's run reminds them again.
+        tz = scheduling_timezone(org)
+        emailed_today = await _members_emailed_since(
+            db_session,
+            str(org.id),
+            OVERDUE_CHECKOUT_LOG_CATEGORY,
+            local_day_start_utc(today_in(tz), tz),
+        )
+
         for uid, user_checkouts in by_user.items():
             user_obj = user_checkouts[0].user if user_checkouts[0].user else None
             if not user_obj or not user_obj.email:
+                continue
+            if uid in emailed_today:
                 continue
 
             items_list = ""
@@ -5589,6 +5635,21 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             )
             if success_count > 0:
                 alerts_sent += 1
+                # Recorded after the send, so a crash between the two repeats
+                # the reminder rather than losing it (pitfall #36), and per
+                # member so the repeat covers one member, not the batch.
+                db_session.add(
+                    NotificationLog(
+                        organization_id=str(org.id),
+                        recipient_id=uid,
+                        recipient_email=user_obj.email,
+                        channel=NotificationChannel.EMAIL,
+                        category=OVERDUE_CHECKOUT_LOG_CATEGORY,
+                        subject=f"Overdue Equipment Reminder — {len(user_checkouts)} item(s)",
+                        delivered=True,
+                    )
+                )
+                await db_session.commit()
 
         return alerts_sent
 
