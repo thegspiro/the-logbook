@@ -21,7 +21,7 @@ been through a review pass.
 | A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
 | A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
-| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
+| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ⬜     |
@@ -3534,3 +3534,16 @@ secrets redacted for non-admins. See
   **CRON-42 OPEN (LOW):** the low-stock, supply-expiry and NFPA officer digests have the same gap — their
   `dedupe_key` guards the bell entry, not the email. Scheduled/overdue/inventory/notification/cron tests:
   2,164 passed, 1 skipped. See scheduled-tasks.md → Pass 6. Next: A4 email templates & delivery.
+- **A4 email templates & delivery ✅ (pass 6, 2026-11-02) — 0 defects, 1 guard added.** Since pass 5 the
+  module's addresses and phones were encrypted at rest (91 columns, 59 names, three encrypted types), and the
+  failure that causes is silent: ciphertext is randomised, so `WHERE email = x` matches nothing and nothing
+  raises. Swept every file under `app/` for a comparison, `IN`, `LIKE`, `BETWEEN`, SQL function, `filter_by`,
+  `ORDER BY` or raw-SQL predicate on any of them: **none**. The first version of the sweep would have missed
+  `func.lower(User.email) == x`, the commonest real form, so it was widened and proven against a synthetic
+  tree before the zero was trusted. **Guard:** `tests/test_encrypted_column_predicates.py` makes the sweep
+  permanent (planting `User.email == "x"` in a real service turned it red naming the line; restoring turned
+  it green; eleven shapes it must flag and six safe ones it must not). **Verified:** the new Off switch sends
+  by default (pitfall #19) and cannot silence the member security notices, which are not template types;
+  delivery is a single attempt per recipient. MAIL-4, MAIL-22 unchanged. Email/template/notification/
+  fingerprint/encryption tests: 3,809 passed, 1 skipped. See email-templates.md → Pass 6. Next: A5 course
+  cohorts & syllabus.
