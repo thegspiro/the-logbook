@@ -34,6 +34,7 @@ import {
   Building2,
   Stethoscope,
   Store,
+  Globe,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -386,6 +387,28 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       view: ['Receive notifications', 'Set personal preferences', 'View notification history'],
       manage: ['Configure templates', 'Set notification triggers', 'Manage global settings'],
       defaultManagePositions: ['it_manager', 'communications_officer'],
+    },
+  },
+
+  {
+    id: 'public_info',
+    // Offered during setup (owner decision 2026-11-01, W01-24). Before, the
+    // step never asked and its save stored it off, while Settings → Modules
+    // showed it on by default. It has no permissions of its own: its admin
+    // screens need Organization Settings access, so the Positions step shows
+    // no row for it (MODULE_CHECKBOX_TIERS).
+    name: 'Public Information',
+    description:
+      'Public-facing pages for the community: a department information page, outreach and fire safety education. Managed by whoever manages organization settings.',
+    icon: Globe,
+    priority: 'optional',
+    category: 'Communication',
+    permissions: {
+      viewDescription: 'Anyone can read the public pages; no sign-in needed',
+      manageDescription: 'Managed through Organization Settings access',
+      view: ['Read the public pages'],
+      manage: ['Edit public pages (needs Organization Settings access)'],
+      defaultManagePositions: [],
     },
   },
 

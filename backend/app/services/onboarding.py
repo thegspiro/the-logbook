@@ -75,6 +75,10 @@ ONBOARDING_OFFERED_MODULES = [
     "reports",
     # Communication
     "notifications",
+    # Owner decision 2026-11-01 (workflow review W01-24): asked during setup
+    # rather than left at its default, so the department decides whether it
+    # runs public pages.
+    "public_info",
     # Advanced
     "integrations",
     # Membership
@@ -95,7 +99,6 @@ ONBOARDING_SETTINGS_ONLY_MODULES = [
     "hr_payroll",
     "incidents",
     "medical_screening",
-    "public_info",
     "testing",
 ]
 
