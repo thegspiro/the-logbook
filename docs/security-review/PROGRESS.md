@@ -28,6 +28,27 @@ mutation row-locked before read. 0 new findings. See
 `docs/security-review/GF-22-grants-fundraising.md`'s **Pass 13** section
 for the full review.
 
+**2026-11-03 watchdog tend:** CI on this PR's head SHA is red across
+`Migration Chain`, `Backend Type Check`, `Backend Unit Tests`, both
+`Backend Integration Tests` jobs and both `Backend API Contract Tests`
+jobs — but this PR's own diff touches only two docs files
+(`GF-22-grants-fundraising.md`, this tracker), confirmed via
+`git diff --stat origin/main...HEAD`. Root cause is on `main`, not this
+PR: `alembic heads` reports two heads (`038ade7a5cd0`, `cbb9726e8af7`) —
+two independently-opened merge revisions
+(`02c94bb742d6`/`cbb9726e8af7`) each rejoined the same fork
+(`5438939506b9`, `b840c0d2b961`) minutes apart, and `038ade7a5cd0`
+(Create the History module tables) landed on top of one of them,
+stranding both as heads. Per the security-review rotation's own rule
+("if it is red on the base branch too, say so once and stop pushing for
+it"), the fix is **not** pushed to this branch; it is
+[PR #3975](https://github.com/thegspiro/the-logbook/pull/3975) against
+`main` (a no-op merge revision joining the two heads, verified with
+`validate_migrations.py --strict`, the alembic migration test guards, and
+a full `alembic upgrade head` against a populated database). Once #3975
+merges, merging `main` into this branch (not a rebase) should clear the
+CI red here without any further change to this PR's own content.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 13, PR #3955, merged), preserved for history</summary>
 
