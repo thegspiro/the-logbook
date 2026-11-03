@@ -305,9 +305,9 @@ class HistoryClearanceService:
         )
         first = steps[0].position_id
         notify = await self.holders_of(person.organization_id, first) if first else []
-        request = await self.get_request(person.organization_id, request.id)
-        assert request is not None
-        return request, notify
+        refreshed = await self.get_request(person.organization_id, request.id)
+        assert refreshed is not None
+        return refreshed, notify
 
     async def withdraw_pending(
         self,
