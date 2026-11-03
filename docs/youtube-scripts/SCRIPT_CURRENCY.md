@@ -1,5 +1,16 @@
 # Script currency
 
+## Flagged by the 2026-11-01 → 11-02 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                          | Beat                           | Was                      | Now                                                                                                  |
+| ----------------------------------------------- | ------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **Fire Chief (04) / Training Officer (05, 16)** | Yearly or probationary reviews | Done outside the Logbook | Member performance evaluations: draft, calibrate, sign, PDF, member response (Reports → Evaluations) |
+| **Member guide (06)**                           | Your own reviews               | Not covered              | **My Evaluations**: read yours, respond within 30 days                                               |
+| **IT Manager (03)**                             | Email templates                | No evaluation emails     | Group "Performance Evaluations" in Communications                                                    |
+
 ## Flagged by the 2026-10-31 → 11-01 changes
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).

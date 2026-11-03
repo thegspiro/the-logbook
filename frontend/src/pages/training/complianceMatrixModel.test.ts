@@ -158,6 +158,26 @@ describe('evaluateCell', () => {
     expect(result.waiverNote).toBe('Target reduced 24 → 20 hours for 2 waived months');
   });
 
+  it('says "on leave" only for the months a leave of absence covered', () => {
+    const reduced = {
+      status: 'in_progress',
+      progress_current: 3,
+      progress_required: 6,
+      base_required: 72,
+      progress_unit: 'hours',
+      waived_months: 11,
+    } as const;
+    expect(evaluateCell(cell({ ...reduced, leave_months: 11 }), requirement(), AS_OF).waiverNote).toBe(
+      'Target reduced 72 → 6 hours for 11 months on leave'
+    );
+    expect(evaluateCell(cell({ ...reduced, waiver_months: 11 }), requirement(), AS_OF).waiverNote).toBe(
+      'Target reduced 72 → 6 hours for 11 waived months'
+    );
+    expect(evaluateCell(cell({ ...reduced, leave_months: 9, waiver_months: 2 }), requirement(), AS_OF).waiverNote).toBe(
+      'Target reduced 72 → 6 hours for 9 months on leave and 2 waived months'
+    );
+  });
+
   it('adds no waiver note when no months were waived', () => {
     expect(evaluateCell(cell(), requirement(), AS_OF).waiverNote).toBeNull();
   });

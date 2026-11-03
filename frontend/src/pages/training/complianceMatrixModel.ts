@@ -270,11 +270,17 @@ const waiverNoteOf = (cell: ComplianceMatrixCell): string | null => {
   if (waived <= 0) return null;
   const base = cell.base_required;
   const adjusted = cell.progress_required;
-  // Not "on leave": fetch_org_waivers merges leave-of-absence periods with
-  // training waivers (new_member, administrative, other) and the cell reports
-  // only a count of waived months, so the source is not knowable here. Saying
-  // "on leave" put a reason on the record that may be untrue of the member.
-  const months = `${waived} waived month${waived === 1 ? '' : 's'}`;
+  // "On leave" only for the months a leave of absence covered: the cell splits
+  // its count by reason, and naming leave where a training waiver (new
+  // member, administrative) was the reason puts an untrue reason on the
+  // record. A server that does not split the count reads as waived months.
+  const leave = cell.leave_months ?? 0;
+  const waiver = cell.waiver_months ?? 0;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts: string[] = [];
+  if (leave > 0) parts.push(`${plural(leave, 'month')} on leave`);
+  if (waiver > 0) parts.push(plural(waiver, 'waived month'));
+  const months = parts.length > 0 ? parts.join(' and ') : plural(waived, 'waived month');
   if (base != null && adjusted != null && base !== adjusted) {
     return `Target reduced ${num(base)} → ${num(adjusted)} ${unitLabel(cell.progress_unit, adjusted)} for ${months}`;
   }
