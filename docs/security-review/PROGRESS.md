@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None yet** — Feature 27 (Integrations), pass 12, a watchdog pickup. PR
-#3981 (Feature 26, Forms, pass 12) merged (`b6ab744a`). This iteration
-found a real but narrow delta: the department ICS feed can now optionally
-publish scheduled shifts, and Zeffy was added to the integration catalog
-(the actual Zeffy service logic is Feature 22's own scope, reviewed there
-at pass 13 and confirmed byte-identical since). 0 fixed, 0 new findings.
-See `docs/security-review/INT-27-integrations.md`'s **Pass 12** section.
-(PR number recorded here once opened.)
+**PR [#3996](https://github.com/thegspiro/the-logbook/pull/3996)** (branch
+`claude/security-review-integrations-p12`) — Feature 27 (Integrations),
+pass 12, a watchdog pickup. Real but narrow delta: the department ICS feed
+can now optionally publish scheduled shifts, and Zeffy was added to the
+integration catalog (the actual Zeffy service logic is Feature 22's own
+scope, reviewed there at pass 13 and confirmed byte-identical since). 0
+fixed, 0 new findings. See `docs/security-review/INT-27-integrations.md`'s
+**Pass 12** section.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 12, PR #3981, merged), preserved for history</summary>
