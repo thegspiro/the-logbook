@@ -22,6 +22,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { EVALUATION_SETUP_LABEL, conductListLabel } from '../../../components/layout/evaluationsNavigation';
+import { EvaluationSetupChecklist } from '../components/evaluations/EvaluationSetupChecklist';
 import { EvaluationsPageHeader } from '../components/evaluations/EvaluationsPageHeader';
 import { evaluationPeriodsService, evaluationTemplatesService } from '../services/evaluationsApi';
 import {
@@ -29,6 +30,7 @@ import {
   MEMBER_CLASS_OPTIONS,
   MEMBER_STATUS_OPTIONS,
   type EvaluationPeriod,
+  type EvaluationStarter,
   type EvaluationTemplateSummary,
 } from '../types/evaluations';
 import { describeMatching } from '../utils/evaluationTemplate';
@@ -39,6 +41,8 @@ interface TemplateFormState {
   kind: EvaluationTemplateKind;
   member_class: string;
   member_status: string;
+  /** A starter's key, or '' for a blank form. */
+  starter: string;
 }
 
 const EMPTY_TEMPLATE: TemplateFormState = {
@@ -47,7 +51,20 @@ const EMPTY_TEMPLATE: TemplateFormState = {
   kind: EvaluationTemplateKind.ANNUAL,
   member_class: '',
   member_status: '',
+  starter: '',
 };
+
+/** The dialog's fields as a starter fills them; each stays editable. */
+function fromStarter(starter: EvaluationStarter): TemplateFormState {
+  return {
+    name: starter.name,
+    description: starter.description,
+    kind: starter.kind,
+    member_class: starter.member_class ?? '',
+    member_status: starter.member_status ?? '',
+    starter: starter.key,
+  };
+}
 
 interface PeriodFormState {
   id: string | null;
@@ -89,6 +106,7 @@ const EvaluationsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState<TemplateFormState | null>(null);
+  const [starters, setStarters] = useState<EvaluationStarter[]>([]);
   const [periodForm, setPeriodForm] = useState<PeriodFormState | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -113,6 +131,24 @@ const EvaluationsPage: React.FC = () => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!canConfigure) return;
+    let cancelled = false;
+    evaluationTemplatesService
+      .starters()
+      .then((list) => {
+        if (!cancelled) setStarters(list);
+      })
+      .catch(() => {
+        // Starters are a convenience: without them the dialog offers a blank
+        // form, as it always has.
+        if (!cancelled) setStarters([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canConfigure]);
+
   const submitTemplate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!templateForm) return;
@@ -124,6 +160,7 @@ const EvaluationsPage: React.FC = () => {
         kind: templateForm.kind,
         member_class: templateForm.member_class || undefined,
         member_status: templateForm.member_status || undefined,
+        starter: templateForm.starter || undefined,
       });
       toast.success('Template created');
       setTemplateForm(null);
@@ -221,6 +258,18 @@ const EvaluationsPage: React.FC = () => {
           </p>
         </div>
 
+        {!loading && !loadError && (canConfigure || canManage) && (
+          <EvaluationSetupChecklist
+            templates={templates}
+            periods={periods}
+            canConfigure={canConfigure}
+            canManage={canManage}
+            canOpenConductList={canOpenConductList}
+            onNewTemplate={() => setTemplateForm(EMPTY_TEMPLATE)}
+            onNewPeriod={() => setPeriodForm(EMPTY_PERIOD)}
+          />
+        )}
+
         {loadError && (
           <div className="alert-danger mb-6 flex flex-wrap items-center justify-between gap-3">
             <p className="text-theme-alert-danger-text text-sm">{loadError}</p>
@@ -253,14 +302,46 @@ const EvaluationsPage: React.FC = () => {
           {loading && templates.length === 0 ? (
             <p className="text-theme-text-secondary text-sm">Loading templates…</p>
           ) : templates.length === 0 && !loadError ? (
-            <EmptyState
-              title="No templates yet"
-              description={
-                canConfigure
-                  ? 'Start with one template per member class, plus one for probationary members.'
-                  : 'Nobody has built an evaluation template yet.'
-              }
-            />
+            canConfigure && starters.length > 0 ? (
+              <div>
+                <p className="text-theme-text-secondary mb-3 text-sm">
+                  No templates yet. Start from a ready-made form and change anything in the builder before you publish
+                  it, or start from a blank form.
+                </p>
+                <ul className="card-grid">
+                  {starters.map((starter) => (
+                    <li key={starter.key} className="card flex flex-col gap-3 p-4">
+                      <h3 className="text-theme-text-primary text-lg font-semibold">{starter.name}</h3>
+                      <p className="text-theme-text-secondary text-sm">
+                        {describeMatching(starter.member_class, starter.member_status)} ·{' '}
+                        {starter.kind === EvaluationTemplateKind.INTERIM ? 'Check-in' : 'Annual'}
+                      </p>
+                      <p className="text-theme-text-secondary text-sm">{starter.description}</p>
+                      <p className="text-theme-text-muted text-xs">Sections: {starter.section_titles.join(', ')}</p>
+                      <div className="mt-auto">
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          aria-label={`Start from ${starter.name}`}
+                          onClick={() => setTemplateForm(fromStarter(starter))}
+                        >
+                          Start from this form
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <EmptyState
+                title="No templates yet"
+                description={
+                  canConfigure
+                    ? 'Start with one form that applies to every member. You can add one for probationary members later.'
+                    : 'Nobody has built an evaluation template yet.'
+                }
+              />
+            )
           ) : (
             <ul className="card-grid">
               {templates.map((template) => {
@@ -440,6 +521,34 @@ const EvaluationsPage: React.FC = () => {
       >
         {templateForm && (
           <div className="space-y-4">
+            {starters.length > 0 && (
+              <div>
+                <label htmlFor="template-starter" className="form-label">
+                  Start from
+                </label>
+                <select
+                  id="template-starter"
+                  className="form-input"
+                  value={templateForm.starter}
+                  onChange={(e) => {
+                    const chosen = starters.find((starter) => starter.key === e.target.value);
+                    setTemplateForm(chosen ? fromStarter(chosen) : { ...templateForm, starter: '' });
+                  }}
+                >
+                  <option value="">A blank form</option>
+                  {starters.map((starter) => (
+                    <option key={starter.key} value={starter.key}>
+                      {starter.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  {templateForm.starter
+                    ? 'The builder opens with this form filled in. Change any wording, weights or score bands before you publish it.'
+                    : 'The builder opens with an empty form.'}
+                </p>
+              </div>
+            )}
             <div>
               <label htmlFor="template-name" className="form-label">
                 Name
@@ -461,7 +570,16 @@ const EvaluationsPage: React.FC = () => {
                 id="template-kind"
                 className="form-input"
                 value={templateForm.kind}
-                onChange={(e) => setTemplateForm({ ...templateForm, kind: e.target.value as EvaluationTemplateKind })}
+                onChange={(e) => {
+                  const kind = e.target.value as EvaluationTemplateKind;
+                  const starter = starters.find((st) => st.key === templateForm.starter);
+                  // A starter is written for one kind; the server refuses the pair.
+                  setTemplateForm({
+                    ...templateForm,
+                    kind,
+                    starter: starter?.kind === kind ? templateForm.starter : '',
+                  });
+                }}
               >
                 <option value={EvaluationTemplateKind.ANNUAL}>Annual evaluation (with signatures)</option>
                 <option value={EvaluationTemplateKind.INTERIM}>Check-in (no signatures)</option>

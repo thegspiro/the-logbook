@@ -56,9 +56,29 @@ with neither grant sees no strip at all.
 
 ## Setting up
 
+Until evaluations are under way, **Templates & periods** shows a **Getting
+started** checklist: publish a form, open a review period, give someone besides
+the Chief the Conduct evaluations permission, and draft. Each step is ticked off
+from what the department already has, and the checklist goes away once the
+first evaluation is drafted. Once a form is published and a period is open, it
+also lists the members that drafting the period would leave out, and why — no
+form fits them, or they served no full month — so they can be fixed before
+drafting rather than during it.
+
 ### 1. Build the forms
 
 **Evaluations → Templates & periods → New template.** Choose:
+
+- **Start from** a blank form or a ready-made one. Two are offered: an
+  **Annual Member Evaluation** (training, operational performance,
+  professionalism and goals, weighted to 100%, with training hours, required
+  training and meeting attendance suggesting a rating) and a **Probationary
+  Check-in** (training, skills, participation and attitude on a three-level
+  scale, with no signatures). A ready-made form publishes as it stands, but its
+  wording, weights and especially its score bands are generic — change them to
+  your department's expectations first. Neither includes an officer-only
+  section, since that needs your own ranks. Choosing one fills in the name, the
+  kind and who it applies to; all of them stay editable.
 
 - **Annual evaluation** or **Check-in.** A check-in has only the
   self-evaluation and the evaluator's part, and no signatures.
@@ -111,6 +131,14 @@ how many days before a due date reminders go out (3 by default), whether the
 evaluator may go on when the member misses the self-evaluation deadline (yes
 by default), and how many days the member has to attach a written response
 after the evaluation is final (30 by default).
+
+**Preview** shows the form as it stands, unsaved changes included, as the
+evaluator fills it in or as the member's self-evaluation, with figures in it
+and the rating each figure suggests. Choose the review period to measure over
+(the latest one, or this year so far before any exists). A builder who also
+holds `evaluations.view_all` can choose a member and see that member's real
+figures; everyone else sees sample figures. Previewing with a member's figures
+is recorded in the audit log. Nothing typed into a preview is kept.
 
 **Save draft** keeps your changes without affecting anything in use.
 **Publish** freezes that version: an
