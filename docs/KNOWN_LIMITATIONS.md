@@ -31,7 +31,7 @@ an erasure request, a public-website question or a large upload knows it.
   needed a positions migration for every department; `history.view` instead
   reads drafts and research.
 
-## Medical Screening — Gaps for the Owner (2026-11-02)
+## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
 From the medical-screening deep dive
 ([W71b](workflow-review/W71b-medical-screening-deep-dive.md)). Each was seen in
@@ -69,7 +69,13 @@ each changes saved members' standing, writes PHI rows, or adds behaviour.
   - a migration that backfills prospects already transferred, through
     `transferred_user_id`, with a test that runs against existing rows.
 - **The Members administration hub grades screenings its own way (W71b-3,
-  MED).** "Screenings current" counts anyone with one unexpired passed
+  MED).** ✅ **Resolved 2026-11-03 (owner decision: use the Compliance tab's
+  numbers).** The tile and the attention item now read
+  `get_compliance_roster`, members only; the item is "N members not compliant
+  with medical screening", links to the Compliance tab, and no longer claims
+  the lapse blocks duty assignment. Whether a lapse should block scheduling
+  remains a separate, unbuilt feature. `tests/test_admin_hub_db.py`. Original
+  finding: "Screenings current" counts anyone with one unexpired passed
   record of any type. It ignores requirements, the frequency rule, position
   scoping and waivers, and read 20% where the Compliance tab had 2 of 20
   fully compliant. The "expired screenings" attention item ignores
