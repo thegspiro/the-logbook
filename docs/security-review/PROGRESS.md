@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3998](https://github.com/thegspiro/the-logbook/pull/3998)** (branch
+`claude/security-review-security-audit-ip-p12`) — Feature 28 (Security,
+audit & IP), pass 12, a watchdog pickup. True zero-delta: all nine backend
+scope files byte-identical to pass 11; the one frontend diff is the
+repo-wide page-header layout sweep, cosmetic only. 0 fixed, 0 new findings.
+SEC2-28-6 (IP-exception duplicate-request TOCTOU) and the dead
+detector-code note re-verified unchanged. See
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 12** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 12, PR #3996, merged), preserved for history</summary>
+
 **PR [#3996](https://github.com/thegspiro/the-logbook/pull/3996)** (branch
 `claude/security-review-integrations-p12`) — Feature 27 (Integrations),
 pass 12, a watchdog pickup. Real but narrow delta: the department ICS feed
