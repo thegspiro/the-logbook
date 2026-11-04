@@ -17,14 +17,21 @@ the same format as the uploads volume), so the bucket's operator never holds
 plaintext and a leaked bucket gives nothing away without the installation's
 file key.
 
-**The endpoint is checked before any request** (``check_endpoint``). A
-department administrator types it, so without the check the server's signed
-requests could be pointed at an internal service. Private addresses and plain
-HTTP need the operator's ``S3_ALLOW_PRIVATE_ENDPOINT``; cloud-metadata hosts
-are refused regardless. botocore resolves the host again when it connects, so
-a DNS-rebinding window remains between the check and the request — the same
-as the other integrations' save-time checks, narrowed by re-checking each
-time ``file_storage_service`` builds a client (its config cache is short).
+**A custom endpoint must be one the operator listed** in
+``S3_ALLOWED_ENDPOINTS`` (owner decision 2026-11-01, clarified 2026-11-03).
+Without one, botocore derives AWS's own endpoint from the region. The
+allowlist is enforced when settings are saved and again whenever a client is
+built (``check_config`` and ``S3Backend``), so an endpoint stored before the
+allowlist existed stops being used rather than being grandfathered in.
+
+**The endpoint is then checked before any request** (``check_endpoint``).
+Private addresses and plain HTTP need the operator's
+``S3_ALLOW_PRIVATE_ENDPOINT``; cloud-metadata hosts are refused regardless.
+botocore resolves the host again when it connects, so a DNS-rebinding window
+remains between the check and the request, narrowed by re-checking each time
+``file_storage_service`` builds a client (its config cache is short). The
+allowlist is what makes that window tolerable: the hostname is now the
+operator's choice, not a department administrator's.
 """
 
 import hashlib
@@ -41,7 +48,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from loguru import logger
 
 from app.core import file_encryption
-from app.core.config import settings
+from app.core.config import normalize_endpoint_url, settings
 from app.services.remote_storage import (
     RemoteBackend,
     RemoteConfig,
@@ -182,10 +189,61 @@ def check_config(config: S3Config) -> None:
             "letters, digits, dots or hyphens)."
         )
     if config.endpoint_url:
+        assert_endpoint_allowed(config.endpoint_url)
         check_endpoint(config.endpoint_url)
 
 
+ENDPOINT_NOT_ALLOWED = (
+    "This S3 endpoint is not one this installation allows. A self-hosted S3 "
+    "or MinIO endpoint is set by whoever runs the installation, in the "
+    "S3_ALLOWED_ENDPOINTS server setting; ask them to add it, or clear the "
+    "endpoint to use Amazon S3."
+)
+
+
+def endpoint_allowed(url: Optional[str]) -> bool:
+    """Whether *url* is exactly one of the operator's S3_ALLOWED_ENDPOINTS,
+    compared in normalised form. A URL that does not parse is not allowed."""
+    try:
+        wanted = normalize_endpoint_url(url or "")
+    except ValueError:
+        return False
+    for entry in settings.get_s3_allowed_endpoints():
+        try:
+            if normalize_endpoint_url(entry) == wanted:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def same_endpoint(a: Optional[str], b: Optional[str]) -> bool:
+    """Whether two stored endpoint values name the same endpoint."""
+    left, right = (a or "").strip(), (b or "").strip()
+    if not left or not right:
+        return left == right
+    try:
+        return normalize_endpoint_url(left) == normalize_endpoint_url(right)
+    except ValueError:
+        return left == right
+
+
+def assert_endpoint_allowed(url: str) -> None:
+    """Raise ValueError unless *url* is an operator-listed endpoint. The
+    message deliberately does not repeat the URL: it is logged with the
+    department's id wherever a refused store is reported."""
+    if not endpoint_allowed(url):
+        raise ValueError(ENDPOINT_NOT_ALLOWED)
+
+
 def check_endpoint(url: str) -> None:
+    # Deliberately still run for an allowlisted endpoint. The allowlist names
+    # a hostname; this check is what notices that the name now resolves to an
+    # internal or metadata address (a listed third-party provider's DNS is not
+    # the operator's to control). An operator whose listed endpoint is a LAN
+    # MinIO says so once more with S3_ALLOW_PRIVATE_ENDPOINT, which existing
+    # bundled-MinIO installations already set — so listing never silently
+    # widens what a hostname may resolve to.
     allow_private = settings.S3_ALLOW_PRIVATE_ENDPOINT
     parsed = urlparse(url.strip())
     if parsed.scheme == "http":
@@ -224,6 +282,11 @@ class S3Backend:
     """
 
     def __init__(self, config: S3Config, client: Any = None):
+        # Fail closed at the builder too, not only in check_config: a client
+        # is never made for an endpoint the operator has not listed, whatever
+        # path reached here.
+        if config.endpoint_url:
+            assert_endpoint_allowed(config.endpoint_url)
         self.config = config
         self._client = client or boto3.client(
             "s3",

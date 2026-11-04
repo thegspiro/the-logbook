@@ -444,6 +444,12 @@ SCHEDULE = {
         "recommended_time": "03:45",
         "cron": "45 3 * * *",
     },
+    "stored_file_malware_scan": {
+        "description": "Malware-scan files and images stored before upload scanning covered them (owner decision 2026-11-01), a bounded batch per run, until each has been scanned once. Does nothing while CLAMAV_ENABLED is false; an infected file is removed and audited as upload_malware_detected.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "20 * * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -4434,6 +4440,17 @@ async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, An
     return result
 
 
+async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
+    """Scan stored files and images that never met the upload scanner.
+
+    See app/services/stored_file_rescan.py. Commits each verdict itself, and
+    returns without touching the database while scanning is disabled.
+    """
+    from app.services.stored_file_rescan import StoredFileRescan
+
+    return await StoredFileRescan(db).run()
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
     Legacy alias for message-history retention (kept for existing crontabs).
@@ -8215,6 +8232,7 @@ TASK_RUNNERS = {
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
+    "stored_file_malware_scan": run_stored_file_malware_scan,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -8374,6 +8392,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
     "self_report_attachment_retention": 86400,
+    # Hourly, a bounded batch per run; once every stored object has a ledger
+    # row a run only compares references (stored_file_rescan).
+    "stored_file_malware_scan": 3600,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }
