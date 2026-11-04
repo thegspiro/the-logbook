@@ -436,3 +436,44 @@ describe('PatternsTab pausing a pattern', () => {
     expect(screen.getByRole('button', { name: 'Generate shifts from A-Shift 24/48' })).toBeDisabled();
   });
 });
+
+// Pausing a pattern sets it inactive, and the list endpoint answers active
+// patterns only unless asked. The list asked without the flag, so pausing a
+// pattern made it vanish, and its Resume could not be reached from here.
+describe('PatternsTab with a paused pattern', () => {
+  const PAUSED = { ...PATTERN, id: 'pat-paused', name: 'Summer Reserve Rotation', is_active: false };
+
+  beforeEach(() => {
+    mockGetPatterns.mockReset();
+    // As the server does: inactive patterns only when asked for.
+    mockGetPatterns.mockImplementation((params?: { active_only?: boolean }) =>
+      Promise.resolve(params?.active_only === false ? [PATTERN, PAUSED] : [PATTERN])
+    );
+  });
+
+  // Pause and Resume sit in a card's details, and only the first card opens
+  // on load, so open the paused one the way an officer would.
+  const openPausedCard = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole('button', { name: /Summer Reserve Rotation/, expanded: false }));
+  };
+
+  it('lists it, badged Paused, with Resume', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    expect(await screen.findByText('Summer Reserve Rotation')).toBeInTheDocument();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    await openPausedCard(user);
+    expect(screen.getByRole('button', { name: 'Resume Summer Reserve Rotation' })).toBeInTheDocument();
+  });
+
+  it('resumes it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    await openPausedCard(user);
+    await user.click(screen.getByRole('button', { name: 'Resume Summer Reserve Rotation' }));
+
+    expect(mockUpdatePattern).toHaveBeenCalledWith('pat-paused', { is_active: true });
+  });
+});
