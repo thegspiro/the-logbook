@@ -524,6 +524,17 @@ describe('RequirementModal', () => {
       );
     });
 
+    it('does not offer the hours and training-type fields it never reads', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      expect(screen.getByLabelText(/^Required Hours/)).toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+
+      expect(screen.queryByLabelText(/^Required Hours/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Training Type/)).not.toBeInTheDocument();
+    });
+
     it('will not create one without a percentage', async () => {
       const user = userEvent.setup();
       render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
