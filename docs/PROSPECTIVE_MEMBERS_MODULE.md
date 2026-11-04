@@ -798,6 +798,16 @@ membership-admin email, so a member who has switched that off is not sent it.
 Like the stage's own emails, the stage-entry notice goes out within the move,
 best-effort.
 
+**Interviewers are asked** _(2026-11-04)_. When an applicant reaches an
+Interview Requirement stage, by any of the movements above, each assigned
+interviewer is emailed (template **Interview Requested**) with a link to the
+applicant's Interview page. An interviewer who has already logged an interview
+for that stage is not asked again, which matters when an applicant is moved
+back onto a stage they already passed. A member assigned as both interviewer
+and case manager gets the interview request only, not the case managers' notice
+for the same arrival. It is membership-admin email, like the case managers'
+notice, and goes out within the move, best-effort.
+
 **My applicants.** A `view_all` holder can narrow the pipeline board and table
 to the applicants they are assigned to with the **My applicants** toggle
 (`assigned_to_me` on the list, kanban and stats endpoints). The header counts,
