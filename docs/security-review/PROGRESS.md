@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-cross-cutting-baseline-p15`) —
+**PR [#4019](https://github.com/thegspiro/the-logbook/pull/4019)** (branch
+`claude/security-review-cross-cutting-baseline-p15`) —
 Feature 00 (Cross-cutting baseline), pass 15, a watchdog pickup. PR #4018
 (Feature 34, Frontend shared, pass 14) had already merged and was the last
 `⬜` row, so **this PR's own commit resets all 35 rows (00–34) to `⬜` for a
