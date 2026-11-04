@@ -4268,6 +4268,11 @@ class EventService:
             "location_name": location_name,
             "require_checkout": event.require_checkout or False,
             "timezone": org_timezone,
+            # The QR page decides from this whether to show the guest code and
+            # offer to print it; left out, the schema's False told every manager
+            # guest check-in was off. The token itself is not here: it is a
+            # credential, served only to events.manage by the guest-link route.
+            "allow_guest_check_in": bool(event.allow_guest_check_in),
             "records_training": records_training,
             "training_requires_approval": training_requires_approval,
             "user_checked_in_at": (
