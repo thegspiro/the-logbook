@@ -26,6 +26,7 @@ from app.core.permissions import (
     get_rank_default_permissions,
     permission_matches,
 )
+from app.core.utils import list_within_detail_limit
 from app.models.member_supervisor import MemberSupervisorAssignment
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.utils.org_timezone import resolve_org_today
@@ -462,14 +463,21 @@ class MemberSupervisorService:
             return
         names = await self.names_by_id(organization_id, set(chain))
         member_name = names.get(str(member_id), "this member")
-        # "A would report to B, who reports to C, who reports to A".
-        described = f"{member_name} would report to " + ", who reports to ".join(
-            names.get(i, "a former member") for i in chain
-        )
+        # "A would report to B, who reports to C, who reports to A". A chain is
+        # as long as the data makes it, so the names that do not fit under the
+        # detail cap are counted rather than sent whole and replaced by a
+        # generic error.
         raise SupervisionLoopError(
-            f"This would create a supervision loop: {described}. "
-            f"{member_name} cannot report to someone they supervise, directly "
-            "or through others."
+            list_within_detail_limit(
+                f"This would create a supervision loop: {member_name} would "
+                "report to ",
+                [names.get(i, "a former member") for i in chain],
+                suffix=(
+                    f". {member_name} cannot report to someone they supervise, "
+                    "directly or through others."
+                ),
+                separator=", who reports to ",
+            )
         )
 
     async def _require_supervisor(
