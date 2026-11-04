@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-locations-kiosk-pass12`) —
+**PR [#4016](https://github.com/thegspiro/the-logbook/pull/4016)** (branch
+`claude/security-review-locations-kiosk-pass12`) —
 Feature 32 (Locations & kiosk), pass 12, a watchdog pickup. Real delta: a
 locked-read fix to `GuestCheckInService.check_in_guest` (already merged
 before this pass started) closed the two-simultaneous-QR-scans race, but
