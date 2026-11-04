@@ -8,6 +8,8 @@
  * was written in and the one the reviewer is checking against.
  */
 
+import type { ShiftDutyType } from '../../../constants/enums';
+
 export const HistoryImportStatus = {
   DRAFT: 'draft',
   COMMITTED: 'committed',
@@ -25,6 +27,10 @@ export interface HistoryImportCommitSummary {
   duplicates_skipped: number;
   rows_skipped: number;
   rows_excluded: number;
+  /** Calls filed by type on the shifts created. */
+  calls_recorded: number;
+  /** Rows entered in the ledger, so a later import skips them. */
+  source_rows_recorded: number;
 }
 
 export interface HistoryImportSummary {
@@ -38,6 +44,9 @@ export interface HistoryImportSummary {
   created_at?: string | null;
   committed_at?: string | null;
   summary?: Partial<HistoryImportCommitSummary> | null;
+  /** Set when a historical data import created this draft as a review batch. */
+  source_system?: string | null;
+  historical_import_id?: string | null;
 }
 
 export interface HistoryImportIssue {
@@ -64,6 +73,10 @@ export interface HistoryImportRow {
   end?: string | null;
   local_date?: string | null;
   minutes?: number | null;
+  /** Minutes from a mapped hours column, credited instead of `minutes`. */
+  stated_minutes?: number | null;
+  duty_type?: ShiftDutyType;
+  source_id?: string | null;
   member_key?: string | null;
   unit_key?: string | null;
   position_key?: string | null;
@@ -92,6 +105,9 @@ export interface HistoryImportMember {
   username: string;
   status: MemberResolutionStatus;
   user_id?: string | null;
+  /** A name typed for a member the commit will create. */
+  new_first_name?: string;
+  new_last_name?: string;
   candidate_ids: string[];
   reason: string;
   row_count: number;
@@ -117,6 +133,8 @@ export interface HistoryImportUnit {
   candidates: { kind: string; id: string }[];
   new_agency_name: string;
   new_unit_name: string;
+  /** The seat a member takes on this unit when the file names no position. */
+  default_seat?: string | null;
   row_count: number;
   /** Settled by a decision remembered from an earlier import. */
   remembered: boolean;
@@ -146,8 +164,12 @@ export interface HistoryImportAttendance {
   start: string;
   end: string;
   local_date: string;
+  /** Minutes credited: recorded hours where the file gives them, else the span. */
   minutes: number;
   call_count?: number | null;
+  /** Calls by the department's call-type slug. */
+  call_counts?: Record<string, number>;
+  duty_type?: ShiftDutyType;
   joined: boolean;
   confidence: number;
   needs_confirmation: boolean;
@@ -172,6 +194,7 @@ export interface HistoryImportShift {
   existing_shift_id?: string | null;
   existing_confidence?: number | null;
   existing_status: ExistingShiftStatus;
+  duty_type?: ShiftDutyType;
   attendances: HistoryImportAttendance[];
 }
 
@@ -199,6 +222,13 @@ export interface HistoryImportOptionUnit {
   id: string;
   name: string;
   agency_name?: string | null;
+  /** Own units: the seats the apparatus record lists. */
+  seats?: string[];
+}
+
+export interface HistoryImportCallType {
+  slug: string;
+  label: string;
 }
 
 export interface HistoryImportOptions {
@@ -226,6 +256,8 @@ export interface HistoryImportDetail {
   headers: string[];
   column_mapping: Record<string, string>;
   fields: string[];
+  /** The department's call types, mapped as `calls:<slug>` fields. */
+  call_types?: HistoryImportCallType[];
   member_mappings: Record<string, unknown>;
   unit_mappings: Record<string, unknown>;
   position_mappings: Record<string, unknown>;
@@ -236,10 +268,14 @@ export interface HistoryImportDetail {
 
 export type MatchDecision = 'accept' | 'separate';
 
-export type MemberMapping = { action: 'map'; user_id: string } | { action: 'create' };
+export type MemberMapping =
+  | { action: 'map'; user_id: string }
+  | { action: 'create'; first_name?: string | undefined; last_name?: string | undefined };
 
 export type UnitMapping =
-  { action: 'own' | 'external'; id: string } | { action: 'create_external'; agency_name: string; unit_name: string };
+  | { action: 'own'; id: string; default_seat?: string | undefined }
+  | { action: 'external'; id: string }
+  | { action: 'create_external'; agency_name: string; unit_name: string };
 
 export interface PositionMapping {
   seat: string;
@@ -284,4 +320,10 @@ export const HISTORY_IMPORT_FIELD_LABELS: Record<string, string> = {
   end_time: 'End time',
   call_count: 'Calls',
   status: 'Status',
+  hours: 'Hours credited',
+  duty_type: 'Duty type (in station / on call)',
+  source_id: 'Source row ID',
 };
+
+/** The field a column of one call type is mapped under. */
+export const callTypeField = (slug: string): string => `calls:${slug}`;

@@ -8,6 +8,7 @@ import { AxiosError, type AxiosRequestConfig } from 'axios';
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray, expectArray } from '../../../utils/asArray';
 import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
+import type { ShiftDutyType } from '../../../constants/enums';
 import type {
   Assignment,
   SwapRequest as SchedulingSwapRequest,
@@ -131,6 +132,8 @@ export interface ShiftRecord {
    */
   is_outreach?: boolean;
   outreach_roles?: OutreachRoleSlot[];
+  /** `on_call` for a recall shift (crew at home). Absent on older responses. */
+  duty_type?: ShiftDutyType;
   attendee_count: number;
   /** Occupied seats. Empty on responses served before the roster existed. */
   roster?: ShiftRosterSeat[];

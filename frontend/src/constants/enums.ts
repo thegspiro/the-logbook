@@ -761,6 +761,28 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
 };
 
+/**
+ * Where a shift's crew is while on duty. `on_call` is a recall shift: at home,
+ * responding if paged. Both count toward shift hours.
+ */
+export const ShiftDutyType = {
+  IN_STATION: 'in_station',
+  ON_CALL: 'on_call',
+} as const;
+export type ShiftDutyType = (typeof ShiftDutyType)[keyof typeof ShiftDutyType];
+
+/**
+ * Historical data import: what a row's hours become. `ignore` drops a column.
+ */
+export const HistoricalRecordType = {
+  SHIFT: 'shift',
+  ON_CALL: 'on_call',
+  TRAINING: 'training',
+  ADMIN: 'admin',
+  IGNORE: 'ignore',
+} as const;
+export type HistoricalRecordType = (typeof HistoricalRecordType)[keyof typeof HistoricalRecordType];
+
 /** Shift history import: a draft under review, or committed to the schedule. */
 export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
   draft: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',

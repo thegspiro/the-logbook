@@ -82,7 +82,51 @@ FIELDS: Tuple[str, ...] = (
     "end_time",
     "call_count",
     "status",
+    "hours",
+    "duty_type",
+    "source_id",
 )
+
+# Fields a column must be mapped to deliberately, never by header spelling.
+# Each changes what an existing file would import if it were detected: a column
+# that happens to be called "Hours" would start overriding the start/end span,
+# and a "Shift Type" holding Day/Night would fail every row as an unknown duty
+# type. A historical data import maps them explicitly.
+EXPLICIT_ONLY_FIELDS: Tuple[str, ...] = ("hours", "duty_type", "source_id")
+
+# Calls counted by type arrive in one column per type, mapped under
+# ``calls:<slug>`` where the slug is one of the department's configured call
+# types. They replace the single ``call_count`` column; a file maps one or the
+# other.
+CALL_TYPE_FIELD_PREFIX = "calls:"
+
+
+def call_type_field(slug: str) -> str:
+    return f"{CALL_TYPE_FIELD_PREFIX}{slug}"
+
+
+def call_type_slug(field_name: str) -> Optional[str]:
+    if field_name.startswith(CALL_TYPE_FIELD_PREFIX):
+        slug = field_name[len(CALL_TYPE_FIELD_PREFIX) :]
+        return slug or None
+    return None
+
+
+DUTY_IN_STATION = "in_station"
+DUTY_ON_CALL = "on_call"
+DUTY_TYPES: Tuple[str, ...] = (DUTY_IN_STATION, DUTY_ON_CALL)
+# Spellings accepted for each duty type, compared with everything but letters
+# removed. "Standby" is deliberately absent: departments use it for both.
+_DUTY_ALIASES: Dict[str, str] = {
+    "": DUTY_IN_STATION,
+    "instation": DUTY_IN_STATION,
+    "station": DUTY_IN_STATION,
+    "inhouse": DUTY_IN_STATION,
+    "oncall": DUTY_ON_CALL,
+    "recall": DUTY_ON_CALL,
+    "home": DUTY_ON_CALL,
+    "fromhome": DUTY_ON_CALL,
+}
 
 # What the downloadable template's header row carries. ``first_name`` /
 # ``last_name`` are accepted on upload but the template uses one name column.
@@ -164,6 +208,10 @@ HEADER_ALIASES: Dict[str, Tuple[str, ...]] = {
         "call_total",
     ),
     "status": ("status", "shift_status", "attendance_status"),
+    # See EXPLICIT_ONLY_FIELDS: never detected.
+    "hours": (),
+    "duty_type": (),
+    "source_id": (),
 }
 
 _FIELD_MAX_LENGTH = {
@@ -176,6 +224,7 @@ _FIELD_MAX_LENGTH = {
     "unit": 100,
     "agency": 255,
     "position": 100,
+    "source_id": 100,
 }
 
 # Status values that mean the member did not work the shift. Compared with
@@ -210,9 +259,11 @@ def effective_values(
     column_mapping: Mapping[str, Any],
 ) -> Dict[str, str]:
     """A row's field values: the reviewer's edit where there is one, else the
-    mapped cell, trimmed."""
+    mapped cell, trimmed. Call-type columns are included under their
+    ``calls:<slug>`` field names."""
     values: Dict[str, str] = {}
-    for field_name in FIELDS:
+    call_fields = [f for f in column_mapping if call_type_slug(str(f))]
+    for field_name in (*FIELDS, *call_fields):
         if edits and field_name in edits:
             value = edits[field_name]
         else:
@@ -440,9 +491,25 @@ class ParsedRow:
     end: Optional[datetime] = None
     local_date: Optional[date] = None
     call_count: Optional[int] = None
+    # Calls by the department's call-type slug, when typed columns are mapped.
+    call_counts: Dict[str, int] = field(default_factory=dict)
+    # Minutes the file says the member is credited with, when an hours column
+    # is mapped. It wins over the start/end span: the previous system's
+    # recorded hours are what the member was credited, and a span that
+    # disagrees with them (a 24-hour shift logged 0800-0800, a break taken off
+    # the total) is the clock being wrong, not the credit.
+    stated_minutes: Optional[int] = None
+    duty_type: str = DUTY_IN_STATION
+    source_id: str = ""
     skipped_reason: Optional[str] = None
     errors: List[str] = field(default_factory=list)
     keep_separate: bool = False
+
+    @property
+    def credited_minutes(self) -> Optional[int]:
+        if self.stated_minutes is not None:
+            return self.stated_minutes
+        return self.minutes
 
     @property
     def active(self) -> bool:
@@ -550,18 +617,63 @@ def parse_row(
         parsed.errors.append("The shift has not ended yet; only past shifts import.")
 
     if values["call_count"]:
-        try:
-            calls = float(values["call_count"])
-        except ValueError:
-            calls = -1.0
-        if calls < 0 or calls != int(calls) or calls > MAX_CALL_COUNT:
+        calls = _parse_call_count(values["call_count"])
+        if calls is None:
             parsed.errors.append(
                 f"Call count '{values['call_count']}' is not a whole number "
                 f"from 0 to {MAX_CALL_COUNT}."
             )
         else:
-            parsed.call_count = int(calls)
+            parsed.call_count = calls
+    for field_name, cell in values.items():
+        slug = call_type_slug(field_name)
+        if slug is None or not cell:
+            continue
+        calls = _parse_call_count(cell)
+        if calls is None:
+            parsed.errors.append(
+                f"'{cell}' {slug} calls is not a whole number from 0 to "
+                f"{MAX_CALL_COUNT}."
+            )
+        elif calls:
+            parsed.call_counts[slug] = calls
+    if any(call_type_slug(f) for f in values):
+        parsed.call_count = sum(parsed.call_counts.values())
+
+    duty = _DUTY_ALIASES.get(re.sub(r"[^a-z]", "", values["duty_type"].casefold()))
+    if duty is None:
+        parsed.errors.append(
+            f"Duty type '{values['duty_type']}' is neither in station nor on call."
+        )
+    else:
+        parsed.duty_type = duty
+    parsed.source_id = values["source_id"]
+
+    if values["hours"]:
+        try:
+            hours = float(values["hours"])
+        except ValueError:
+            hours = -1.0
+        if hours == 0:
+            parsed.skipped_reason = "Recorded as 0 hours."
+        elif not 0 < hours <= MAX_ATTENDANCE_MINUTES / 60:
+            parsed.errors.append(
+                f"Hours '{values['hours']}' is not a number of hours from 0 to "
+                f"{MAX_ATTENDANCE_MINUTES // 60}."
+            )
+        else:
+            parsed.stated_minutes = int(round(hours * 60))
     return parsed
+
+
+def _parse_call_count(cell: str) -> Optional[int]:
+    try:
+        calls = float(cell)
+    except ValueError:
+        return None
+    if calls < 0 or calls != int(calls) or calls > MAX_CALL_COUNT:
+        return None
+    return int(calls)
 
 
 def parse_rows(
@@ -600,6 +712,9 @@ class OwnUnit:
     id: str
     unit_number: str
     name: str
+    # The seats the unit is staffed by, as the apparatus record lists them.
+    # Empty when the record lists none.
+    seats: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -618,6 +733,7 @@ class ExistingShift:
     start: datetime
     end: Optional[datetime]
     attendee_ids: frozenset
+    duty_type: str = DUTY_IN_STATION
 
 
 @dataclass(frozen=True)
@@ -651,6 +767,9 @@ class AnalysisContext:
     saved_member_mappings: Mapping[str, Any] = field(default_factory=dict)
     saved_unit_mappings: Mapping[str, Any] = field(default_factory=dict)
     saved_position_mappings: Mapping[str, Any] = field(default_factory=dict)
+    # Source ids the ledger already holds for this draft's source system. A
+    # row carrying one was written by an earlier import and is skipped.
+    imported_source_ids: frozenset = frozenset()
 
 
 # ---------------------------------------------------------------------------
@@ -691,6 +810,10 @@ class MemberResolution:
     row_ids: List[str] = field(default_factory=list)
     # Settled by a decision remembered from an earlier import.
     remembered: bool = False
+    # A name the reviewer typed for a member being created, overriding the
+    # file's — an export keyed by membership number alone carries none.
+    new_first: str = ""
+    new_last: str = ""
 
     @property
     def ref(self) -> Optional[str]:
@@ -714,6 +837,8 @@ class UnitResolution:
     candidates: List[Tuple[str, str]] = field(default_factory=list)
     new_agency_name: str = ""
     new_unit_name: str = ""
+    # The seat a member takes on this unit when the file names no position.
+    default_seat: Optional[str] = None
     row_ids: List[str] = field(default_factory=list)
     remembered: bool = False
 
@@ -826,7 +951,33 @@ def resolve_member(
         resolution.status = MEMBER_CREATE
         resolution.user_id = None
         resolution.reason = ""
+        resolution.new_first = str(mapping.get("first_name") or "").strip()
+        resolution.new_last = str(mapping.get("last_name") or "").strip()
     return resolution
+
+
+# Name given to a former member created from a file that names them only by
+# membership number, when the reviewer typed none. Plainly a placeholder, and
+# carries the number so the record can be found and renamed.
+FORMER_MEMBER_FIRST_NAME = "Former member"
+
+
+def new_member_name(resolution: MemberResolution) -> Optional[Tuple[str, str]]:
+    """The first and last name a member created for ``resolution`` gets.
+
+    The reviewer's typed name first, then the file's. A file keyed by
+    membership number alone still identifies the person, so the record is
+    named for the number rather than refused. ``None`` only when there is
+    nothing at all to call the record by.
+    """
+    if resolution.new_first or resolution.new_last:
+        return resolution.new_first, resolution.new_last
+    identity = resolution.identity
+    if identity.first or identity.last:
+        return identity.first, identity.last
+    if identity.membership_number:
+        return FORMER_MEMBER_FIRST_NAME, identity.membership_number
+    return None
 
 
 def auto_match_unit(
@@ -887,6 +1038,8 @@ def resolve_unit(
     if action == OWN and any(u.id == target for u in context.own_units):
         resolution.status, resolution.target_kind = UNIT_MAPPED, OWN
         resolution.target_id = target
+        seat = mapping.get("default_seat")
+        resolution.default_seat = str(seat) if seat else None
     elif action == EXTERNAL and any(u.id == target for u in context.external_units):
         resolution.status, resolution.target_kind = UNIT_MAPPED, EXTERNAL
         resolution.target_id = target
@@ -899,6 +1052,25 @@ def resolve_unit(
             resolution.new_agency_name = agency_name
             resolution.new_unit_name = unit_name
     return resolution
+
+
+def unit_default_seat(
+    unit: UnitResolution, own_units: Sequence[OwnUnit]
+) -> Optional[str]:
+    """The seat for a member on an own unit when the file names no position.
+
+    The reviewer's choice for the unit first. Failing that, ``firefighter``
+    when the unit lists no seats (the long-standing default) or lists it among
+    them. A unit whose seats do not include it — an ambulance staffed by an
+    EMT and a driver — has no safe default, and the reviewer is asked.
+    """
+    if unit.default_seat:
+        return unit.default_seat
+    record = next((u for u in own_units if u.id == unit.target_id), None)
+    seats = record.seats if record else ()
+    if not seats or any(_squash(s) == DEFAULT_SEAT for s in seats):
+        return DEFAULT_SEAT
+    return None
 
 
 def resolve_position(
@@ -974,14 +1146,26 @@ class Attendance:
     confidence: int = 100
     needs_confirmation: bool = False
     duplicate_existing: bool = False
+    duty_type: str = DUTY_IN_STATION
+    call_counts: Dict[str, int] = field(default_factory=dict)
 
     @property
     def joined(self) -> bool:
         return len(self.rows) > 1
 
     @property
-    def minutes(self) -> int:
+    def span_minutes(self) -> int:
         return int(round((self.end - self.start).total_seconds() / 60))
+
+    @property
+    def minutes(self) -> int:
+        """Minutes credited. The span from first start to last end, unless a
+        row states its hours, when each row's credit is summed instead — a
+        stated figure is what the member was credited, and the gap between
+        two joined rows is not time anyone recorded."""
+        if not any(r.stated_minutes is not None for r in self.rows):
+            return self.span_minutes
+        return sum(r.credited_minutes or 0 for r in self.rows)
 
     @property
     def seed(self) -> ParsedRow:
@@ -1006,6 +1190,7 @@ class ProposedShift:
     existing_shift_id: Optional[str] = None
     existing_confidence: Optional[int] = None
     existing_status: str = EXISTING_NONE
+    duty_type: str = DUTY_IN_STATION
 
     @property
     def start(self) -> datetime:
@@ -1050,7 +1235,7 @@ class Analysis:
 
 
 def _join(
-    attendances_by_pair: Dict[Tuple[str, Tuple[str, str]], List[Attendance]],
+    attendances_by_pair: Dict[Tuple[str, Tuple[str, str], str], List[Attendance]],
     issues: List[Issue],
 ) -> List[Attendance]:
     joined: List[Attendance] = []
@@ -1083,6 +1268,8 @@ def _join(
                 current.end = max(current.end, piece.end)
                 if piece.call_count is not None:
                     current.call_count = (current.call_count or 0) + piece.call_count
+                for slug, calls in piece.call_counts.items():
+                    current.call_counts[slug] = current.call_counts.get(slug, 0) + calls
             else:
                 joined.append(current)
                 current = piece
@@ -1092,13 +1279,18 @@ def _join(
 
 
 def _group(attendances: List[Attendance], issues: List[Issue]) -> List[ProposedShift]:
-    buckets: Dict[Tuple[str, date], List[Attendance]] = {}
+    # Duty type is part of the bucket: an on-call crew paged for the same unit
+    # on the same day as the in-station crew is a different shift, never a
+    # late arrival to the station one.
+    buckets: Dict[Tuple[str, date, str], List[Attendance]] = {}
     for att in attendances:
-        buckets.setdefault((att.unit_ref[1], att.local_date), []).append(att)
+        buckets.setdefault((att.unit_ref[1], att.local_date, att.duty_type), []).append(
+            att
+        )
 
     shifts: List[ProposedShift] = []
-    for (apparatus_id, shift_date), members in sorted(
-        buckets.items(), key=lambda kv: (kv[0][1], kv[0][0])
+    for (apparatus_id, shift_date, duty_type), members in sorted(
+        buckets.items(), key=lambda kv: (kv[0][1], kv[0][0], kv[0][2])
     ):
         members.sort(key=lambda a: (a.start, -a.minutes, a.seed.line_number))
         proposed: List[ProposedShift] = []
@@ -1145,6 +1337,7 @@ def _group(attendances: List[Attendance], issues: List[Issue]) -> List[ProposedS
                         anchor_start=att.start,
                         anchor_end=att.end,
                         attendances=[att],
+                        duty_type=duty_type,
                     )
                 )
         for shift in proposed:
@@ -1178,13 +1371,16 @@ def _match_existing(
     decisions: Mapping[str, Any],
     issues: List[Issue],
 ) -> None:
-    by_slot: Dict[Tuple[str, date], List[ExistingShift]] = {}
+    by_slot: Dict[Tuple[str, date, str], List[ExistingShift]] = {}
     for shift in existing:
-        by_slot.setdefault((shift.apparatus_id, shift.shift_date), []).append(shift)
+        by_slot.setdefault(
+            (shift.apparatus_id, shift.shift_date, shift.duty_type), []
+        ).append(shift)
     for proposed in shifts:
         best: Optional[ExistingShift] = None
         best_score = -1
-        for candidate in by_slot.get((proposed.apparatus_id, proposed.shift_date), []):
+        slot = (proposed.apparatus_id, proposed.shift_date, proposed.duty_type)
+        for candidate in by_slot.get(slot, []):
             score = match_confidence(
                 proposed.anchor_start,
                 proposed.anchor_end,
@@ -1266,14 +1462,14 @@ def _check_new_members(
         if resolution.status != MEMBER_CREATE:
             continue
         identity = resolution.identity
-        if not identity.first and not identity.last:
+        if new_member_name(resolution) is None:
             issues.append(
                 Issue(
                     code="new_member_without_name",
                     message=(
                         f"'{resolution.key}' has no name in the file, so a "
                         "member cannot be created for it. Map it to an "
-                        "existing member, or add the name to its rows."
+                        "existing member, or type a name for the new member."
                     ),
                     blocking=True,
                     row_ids=list(resolution.row_ids),
@@ -1324,6 +1520,8 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
     members: Dict[str, MemberResolution] = {}
     units: Dict[str, UnitResolution] = {}
     positions: Dict[str, PositionResolution] = {}
+
+    _apply_source_ids(parsed, context.imported_source_ids, issues)
 
     for row in parsed:
         if row.excluded or row.skipped_reason:
@@ -1404,7 +1602,8 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
 
     # Seats matter only for the department's own shifts; time on another
     # agency's unit keeps the file's wording as its role.
-    pairs: Dict[Tuple[str, Tuple[str, str]], List[Attendance]] = {}
+    pairs: Dict[Tuple[str, Tuple[str, str], str], List[Attendance]] = {}
+    units_without_seat: Dict[str, UnitResolution] = {}
     for row in parsed:
         if not row.active:
             continue
@@ -1415,7 +1614,15 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
         if member_ref is None or unit_ref is None:
             continue
         seat = ""
-        if unit_ref[0] == OWN:
+        if unit_ref[0] == OWN and not row.position_key and unit is not None:
+            # No position in the file: the unit decides, so a crew on an
+            # ambulance is not seated as firefighters.
+            default = unit_default_seat(unit, context.own_units)
+            if default is None:
+                units_without_seat.setdefault(unit.key, unit)
+                continue
+            seat = default
+        elif unit_ref[0] == OWN:
             position = positions.get(row.position_key)
             if position is None:
                 mapping, from_saved = _decision(
@@ -1434,7 +1641,7 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
             seat = position.seat
         if row.start is None or row.end is None or row.local_date is None:
             continue
-        pairs.setdefault((member_ref, unit_ref), []).append(
+        pairs.setdefault((member_ref, unit_ref, row.duty_type), []).append(
             Attendance(
                 key=row.id,
                 rows=[row],
@@ -1446,6 +1653,24 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
                 end=row.end,
                 local_date=row.local_date,
                 call_count=row.call_count,
+                duty_type=row.duty_type,
+                call_counts=dict(row.call_counts),
+            )
+        )
+
+    for unit in units_without_seat.values():
+        label = f"{unit.unit} ({unit.agency})" if unit.agency else unit.unit
+        issues.append(
+            Issue(
+                code="unit_default_seat",
+                message=(
+                    f"The file names no position for members on '{label}', and "
+                    "that unit is not staffed by firefighters. Choose the "
+                    "position its crew takes."
+                ),
+                blocking=True,
+                row_ids=list(unit.row_ids),
+                ref=unit.key,
             )
         )
 
@@ -1500,6 +1725,45 @@ def analyze(parsed: List[ParsedRow], context: AnalysisContext) -> Analysis:
         external=external,
         issues=issues,
     )
+
+
+def _apply_source_ids(
+    parsed: List[ParsedRow], imported: frozenset, issues: List[Issue]
+) -> None:
+    """Skip rows an earlier import already wrote; refuse a repeated id.
+
+    A row id the ledger holds is the ledger's guarantee doing its job, so the
+    row is skipped rather than flagged. The same id twice in one file is a
+    different matter — either the export repeated a row or two rows share an
+    id, and committing would ledger one and silently lose the other.
+    """
+    seen: Dict[str, ParsedRow] = {}
+    for row in parsed:
+        if not row.source_id or row.excluded or row.skipped_reason:
+            continue
+        if row.source_id in imported:
+            row.skipped_reason = f"Already imported (source row {row.source_id})."
+            continue
+        prior = seen.get(row.source_id)
+        if prior is not None:
+            issues.append(
+                Issue(
+                    code="duplicate_source_id",
+                    message=(
+                        f"Lines {prior.line_number} and {row.line_number} carry "
+                        f"the same source row id '{row.source_id}'. Exclude one."
+                    ),
+                    blocking=True,
+                    row_ids=[prior.id, row.id],
+                )
+            )
+        else:
+            seen[row.source_id] = row
+
+
+def source_ids(parsed: Sequence[ParsedRow]) -> List[str]:
+    """Every source id the draft carries, for the ledger lookup."""
+    return sorted({r.source_id for r in parsed if r.source_id})
 
 
 def date_span(parsed: Sequence[ParsedRow]) -> Optional[Tuple[date, date]]:

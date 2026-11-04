@@ -642,6 +642,17 @@ INTEGRATIONS_MCP_KEYS = Permission(
     "Issue and revoke Claude MCP service keys",
     PermissionCategory.INTEGRATIONS,
 )
+# Bringing a previous system's history in writes years of shifts, attendance
+# and calls across every member in one pass, and creates archived member
+# records for people the department no longer has. Granted to no default role:
+# only the wildcard-holding ``it_manager`` System Owner has it, because the
+# owner decided the IT administrator runs an import (2026-11-04). A chief who
+# wants to delegate it grants it to a position explicitly.
+INTEGRATIONS_HISTORICAL_IMPORT = Permission(
+    "integrations.historical_import",
+    "Import historical hours from a previous system",
+    PermissionCategory.INTEGRATIONS,
+)
 
 # Notifications
 NOTIFICATIONS_VIEW = Permission(
@@ -950,6 +961,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Integrations
     INTEGRATIONS_MANAGE,
     INTEGRATIONS_MCP_KEYS,
+    INTEGRATIONS_HISTORICAL_IMPORT,
     # Notifications
     NOTIFICATIONS_VIEW,
     NOTIFICATIONS_MANAGE,

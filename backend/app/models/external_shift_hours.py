@@ -159,6 +159,10 @@ class ExternalShiftHours(Base):
     agency_name: Mapped[str] = mapped_column(String(255), nullable=False)
     apparatus_name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Calls the member ran on the outside unit. Only a historical import sets
+    # it: the outside agency keeps the call record itself, so it is a member
+    # credit and never feeds the department's call volume.
+    call_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(

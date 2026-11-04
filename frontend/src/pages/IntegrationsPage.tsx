@@ -11,6 +11,7 @@ import {
 } from '../components/integrations/calendarProviders';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
+  History,
   Plug,
   Calendar,
   MessageSquare,
@@ -407,6 +408,9 @@ const IntegrationsPage: React.FC = () => {
   // A delegated key manager holds the key permission alongside the screen's
   // own gate, not necessarily integrations.manage; the key panel is theirs too.
   const canIssueKeys = checkPermission('integrations.mcp_keys');
+  // IT administrator only by default, like the MCP keys: an import writes years
+  // of every member's hours in one pass.
+  const canImportHistory = checkPermission('integrations.historical_import');
   const isOrgAdmin = checkPermission('admin.access');
   const canChange = (integrationType: string): boolean =>
     canManage && (!ADMIN_ONLY_TYPES.has(integrationType) || isOrgAdmin);
@@ -2273,6 +2277,23 @@ const IntegrationsPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {canImportHistory && (
+          <div className="card split-row mb-8 gap-3 p-4 sm:items-center">
+            <div className="split-row-main flex items-start gap-3">
+              <History className="text-theme-text-secondary mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <div>
+                <h2 className="text-theme-text-primary font-semibold">Historical Data Import</h2>
+                <p className="text-theme-text-secondary text-sm">
+                  Bring in shifts, on-call time and other hours members logged in a previous system.
+                </p>
+              </div>
+            </div>
+            <RouterLink to="/integrations/historical-import" className="split-row-aside btn-secondary">
+              Open
+            </RouterLink>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3" role="region" aria-label="Integration statistics">

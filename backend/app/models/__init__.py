@@ -232,6 +232,14 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
+from app.models.historical_import import (
+    HistoricalImport,
+    HistoricalImportRow,
+    HistoricalImportStatus,
+    HistoricalRecordType,
+    ImportedRecordKind,
+    ImportedSourceRecord,
+)
 from app.models.history import (
     HistoricalMember,
     HistoricalMemberPeriodTitle,
@@ -729,6 +737,12 @@ __all__ = [
     # Shift history import
     "ShiftEvaluation",
     "ShiftEvaluationTemplate",
+    "HistoricalImport",
+    "HistoricalImportRow",
+    "HistoricalImportStatus",
+    "HistoricalRecordType",
+    "ImportedRecordKind",
+    "ImportedSourceRecord",
     "ShiftHistoryImport",
     "ShiftHistoryImportMapping",
     "ShiftHistoryImportMappingKind",
