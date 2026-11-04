@@ -8,7 +8,16 @@ import asyncio
 from functools import partial
 from typing import Any, Mapping
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from fastapi.responses import Response
 from loguru import logger
 from sqlalchemy import func, or_, select
@@ -17,8 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import (
     _collect_user_permissions,
     _has_permission,
+    access_token_from,
     ensure_stepup,
     get_current_user,
+    request_access_token,
     require_permission,
     require_stepup,
     user_has_permission,
@@ -194,11 +205,8 @@ async def update_organization_settings(
     # ensure_stepup (not the require_stepup Depends) is used because the vast
     # majority of saves through this route are low-stakes (modules, forms,
     # membership ID format, ...) and should not all demand a fresh step-up.
+    token = request_access_token(request, access_token)
     if "auth" in settings_dict or "file_storage" in settings_dict:
-        scheme, _, bearer = request.headers.get("authorization", "").partition(" ")
-        token = access_token or (
-            bearer if scheme.lower() == "bearer" and bearer else None
-        )
         await ensure_stepup(db, token)
 
     # Update settings
@@ -209,6 +217,7 @@ async def update_organization_settings(
             may_configure_delegated_email=user_has_permission(
                 current_user, "admin.access"
             ),
+            confirm_delegated_email_change=lambda: ensure_stepup(db, token),
         )
 
         await log_audit_event(
@@ -291,6 +300,8 @@ async def update_email_settings(
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
     ),
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
 ):
     """
     Update email service settings
@@ -314,6 +325,11 @@ async def update_email_settings(
             settings_dict,
             may_configure_delegated_email=user_has_permission(
                 current_user, "admin.access"
+            ),
+            # USR-12: re-verify only when the service account is set up or
+            # changed; the service decides, as it does the admin check.
+            confirm_delegated_email_change=lambda: ensure_stepup(
+                db, access_token_from(authorization, access_token)
             ),
         )
 
@@ -695,6 +711,7 @@ async def _file_storage_status(
         problem=view.problems.get(view.platform),
         s3_problem=view.problems.get("s3"),
         private_endpoints_allowed=app_settings.S3_ALLOW_PRIVATE_ENDPOINT,
+        allowed_s3_endpoints=app_settings.get_s3_allowed_endpoints(),
     )
 
 
@@ -1163,6 +1180,7 @@ async def get_setup_checklist(
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
     from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.public_portal import PublicPortalConfig
     from app.models.storefront import StoreProduct, StoreProductStatus
     from app.models.training import (
         BasicApparatus,
@@ -1310,6 +1328,25 @@ async def get_setup_checklist(
 
     # A published product, not a draft: an order window over a catalog of
     # drafts opens a store with nothing in it.
+    # Turning Public Information on publishes nothing: the portal has its own
+    # switch and serves data only when both are on, so the step is done once
+    # the department has switched it on.
+    public_portal_enabled = False
+    try:
+        public_portal_enabled = bool(
+            (
+                await db.execute(
+                    select(PublicPortalConfig.enabled).where(
+                        PublicPortalConfig.organization_id == org_id
+                    )
+                )
+            ).scalar()
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to read the public portal switch for setup checklist: {}", e
+        )
+
     store_product_count = 0
     try:
         store_product_count = (
@@ -1590,6 +1627,22 @@ async def get_setup_checklist(
                 category="storefront",
                 is_complete=store_product_count > 0,
                 count=store_product_count,
+                required=False,
+            )
+        )
+
+    if "public_info" in enabled_modules:
+        items.append(
+            SetupChecklistItem(
+                key="public_info",
+                title="Set Up the Public Portal",
+                description=(
+                    "Choose what the public pages show and switch the portal on. "
+                    "Turning on Public Information alone publishes nothing."
+                ),
+                path="/admin/public-portal",
+                category="public_info",
+                is_complete=public_portal_enabled,
                 required=False,
             )
         )

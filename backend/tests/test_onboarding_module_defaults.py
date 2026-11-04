@@ -1,11 +1,13 @@
 """Setup decides only the modules it asked about.
 
-Owner decision 2026-11-01 (workflow review W01-24): leave Public Information
-on by default. The setup wizard never offers it, but completing setup wrote
-every ModuleSettings field from the session's enabled list, so a module the
-wizard never showed was stored as False, which reads as "the department said
-no". Public Information defaults to on and lists as on in Settings → Modules,
-so every fresh install came up with it off.
+Completing setup wrote every ModuleSettings field from the session's enabled
+list, so a module the wizard never showed was stored as False, which reads as
+"the department said no". Public Information, which defaults to on, was the
+module that exposed it: every fresh install came up with it off.
+
+Owner decision 2026-11-01 (workflow review W01-24), confirmed 2026-11-04: the
+wizard now asks about Public Information, so for it the department's answer
+decides. Modules setup still does not ask about keep their declared default.
 
 The service-side module save already kept the declared default for a module
 setup does not offer. The completion path, which copies the session into
@@ -40,7 +42,6 @@ class TestTheRule:
         defaults = ModuleSettings()
         for key in ONBOARDING_SETTINGS_ONLY_MODULES:
             assert stored[key] == getattr(defaults, key), key
-        assert stored["public_info"] is True
 
     def test_a_module_setup_offers_follows_the_answer(self):
         stored = modules_from_setup_answers(["members", "events", "training"])
@@ -68,11 +69,15 @@ class TestTheRule:
 
         assert set(stored) == set(ModuleSettings.model_fields)
 
-    def test_the_asked_set_is_what_setup_shows(self):
-        # Guard on the premise: if Public Information were ever offered by
-        # setup, the answer, not the default, would have to decide it.
+    def test_public_information_is_asked_so_the_answer_decides(self):
         asked = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
-        assert "public_info" not in asked
+        assert "public_info" in asked
+
+        assert modules_from_setup_answers(["members"])["public_info"] is False
+        assert (
+            modules_from_setup_answers(["members", "public_info"])["public_info"]
+            is True
+        )
 
 
 async def _create_org(db_session: AsyncSession):
@@ -92,7 +97,7 @@ async def _create_org(db_session: AsyncSession):
 @pytest.mark.integration
 @pytest.mark.onboarding
 class TestCompletionStoresTheRule:
-    async def test_completing_setup_leaves_public_information_on(
+    async def test_completing_setup_stores_the_public_information_answer(
         self, db_session: AsyncSession
     ):
         org = await _create_org(db_session)
@@ -106,7 +111,8 @@ class TestCompletionStoresTheRule:
 
         await db_session.refresh(org)
         modules = org.settings["modules"]
-        assert modules["public_info"] is True
+        # Not chosen in the Modules step, which now asks about it.
+        assert modules["public_info"] is False
         assert modules["training"] is True
         assert modules["inventory"] is False
         assert modules["finance"] is False

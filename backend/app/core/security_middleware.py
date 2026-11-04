@@ -923,6 +923,7 @@ async def check_rate_limit(
     window_seconds: int = 60,
     lockout_seconds: int = 1800,
     scope: str = "auth",
+    account: str | None = None,
 ) -> None:
     """
     Dependency to check rate limits.
@@ -937,6 +938,14 @@ async def check_rate_limit(
     other's budget — e.g. the token refreshes fired after a password change
     (which revokes all sessions) would exhaust the login limit and 429 the
     user's legitimate re-login. Each scope now tracks independently.
+
+    ``account``, when given, narrows the bucket to that account at this
+    address, so members sharing an address do not spend each other's
+    allowance. It is appended after a ``#`` (which neither an IPv4 nor an IPv6
+    address contains), leaving the scope prefix ``_scope_of`` reads unchanged.
+
+    ``lockout_seconds=0`` on the in-memory fallback means the plain sliding
+    window, the same behaviour Redis gives — no lockout beyond it.
 
     Usage:
         @router.post("/endpoint", dependencies=[Depends(check_rate_limit)])
@@ -957,6 +966,7 @@ async def check_rate_limit(
     # lock out everyone (global DoS). get_client_ip() only trusts forwarded
     # headers from configured TRUSTED_PROXY_IPS, so it is not spoofable.
     client_ip = get_client_ip(request)
+    identifier = f"{client_ip}#{account}" if account else client_ip
 
     # Try Redis-backed sliding-window rate limiting first
     try:
@@ -965,7 +975,7 @@ async def check_rate_limit(
 
         if cache_manager.is_connected and cache_manager.redis_client:
             exceeded = await redis_rate_limited(
-                key=f"auth:{scope}:{client_ip}",
+                key=f"auth:{scope}:{identifier}",
                 limit=max_requests,
                 window_seconds=window_seconds,
                 fail_closed=False,
@@ -993,7 +1003,7 @@ async def check_rate_limit(
 
     # Fallback: in-memory rate limiter
     is_limited, reason = rate_limiter.is_rate_limited(
-        key=f"{scope}:{client_ip}",
+        key=f"{scope}:{identifier}",
         max_requests=max_requests,
         window_seconds=window_seconds,
         lockout_seconds=lockout_seconds,
@@ -1002,21 +1012,79 @@ async def check_rate_limit(
     if is_limited:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=reason or "Too many requests. Please try again later.",
-            headers={"Retry-After": str(lockout_seconds)},
+            # With no lockout the limiter's own reason ("locked for 0
+            # minutes") would be wrong.
+            detail=(reason if lockout_seconds else None)
+            or "Too many requests. Please try again later.",
+            headers={"Retry-After": str(lockout_seconds or window_seconds)},
         )
 
 
-def rate_limit_login():
-    """Stricter rate limit for login: 5 attempts per 60 seconds."""
+# Sign-in limits (owner decision of 2026-11-01, "Sign-in From a Shared Station
+# Address" in docs/KNOWN_LIMITATIONS.md). A station's members share one public
+# address, so the tight limit is counted per account *at* an address: member A's
+# typos no longer spend member B's allowance, and on the in-memory fallback the
+# 30-minute lockout lands on that one account at that address, not on everyone
+# behind it. The per-address backstop is looser — sized for a shift change — and
+# exists so one address cannot try accounts without bound; it is a plain
+# sliding window (no lockout), the same on Redis and the fallback. The
+# cross-account case is also covered by account lockout and the suspicious-IP
+# throttle (app/core/suspicious_ip.py), which count failures and are unchanged.
+#
+# infrastructure/nginx/{nginx.conf,docker.conf} size their per-address
+# login_limit zone to LOGIN_ADDRESS_MAX_ATTEMPTS per minute; change them
+# together (tests/test_login_rate_limit_per_account.py checks it).
+LOGIN_ACCOUNT_MAX_ATTEMPTS = 5
+LOGIN_ACCOUNT_WINDOW_SECONDS = 60
+LOGIN_ACCOUNT_LOCKOUT_SECONDS = 1800
+LOGIN_ADDRESS_MAX_ATTEMPTS = 30
+LOGIN_ADDRESS_WINDOW_SECONDS = 60
 
-    async def _dependency(request: Request) -> None:
+
+def login_account_key(identifier: str) -> str:
+    """The limiter key for a submitted username or email.
+
+    Normalised (trimmed, case-folded) so "Alice" and "alice " are one account,
+    and hashed so no member's username or address is written into Redis keys
+    or limiter state.
+    """
+    normalised = identifier.strip().casefold()
+    return "name:" + hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:32]
+
+
+async def _unattributed() -> None:
+    return None
+
+
+def rate_limit_login(account=None):
+    """Sign-in rate limit: 5 per account per address a minute, 30 per address.
+
+    ``account`` is a FastAPI dependency returning the account the attempt is
+    for (``None`` when it cannot be told), resolved by each route from what it
+    has: the submitted username on ``/login``, the pending-MFA token's member on
+    ``/mfa/login``, the session's member on the signed-in routes. Attempts with
+    no account share one allowance per address, as every attempt used to.
+    """
+
+    async def _dependency(
+        request: Request, account_key: str | None = Depends(account or _unattributed)
+    ) -> None:
+        # The backstop first, so an attempt it refuses does not also count
+        # against the account.
         await check_rate_limit(
             request,
-            max_requests=5,
-            window_seconds=60,
-            lockout_seconds=1800,
+            max_requests=LOGIN_ADDRESS_MAX_ATTEMPTS,
+            window_seconds=LOGIN_ADDRESS_WINDOW_SECONDS,
+            lockout_seconds=0,
+            scope="login_address",
+        )
+        await check_rate_limit(
+            request,
+            max_requests=LOGIN_ACCOUNT_MAX_ATTEMPTS,
+            window_seconds=LOGIN_ACCOUNT_WINDOW_SECONDS,
+            lockout_seconds=LOGIN_ACCOUNT_LOCKOUT_SECONDS,
             scope="login",
+            account=account_key or "-",
         )
 
     return Depends(_dependency)

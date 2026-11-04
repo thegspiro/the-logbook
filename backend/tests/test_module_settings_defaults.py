@@ -315,3 +315,33 @@ async def test_the_legacy_record_keeps_a_module_it_named_that_setup_no_longer_of
 
     assert resolved.communications is True
     assert resolved.forms is True
+
+
+async def _configure(enabled):
+    org = SimpleNamespace(settings={}, name="Test FD")
+    service = OnboardingService(MagicMock())
+    service.db.flush = AsyncMock()
+    service.db.execute = AsyncMock(
+        return_value=SimpleNamespace(scalar_one_or_none=lambda: org)
+    )
+    service.get_onboarding_status = AsyncMock(
+        return_value=SimpleNamespace(enabled_modules=[], organization_name="Test FD")
+    )
+    service._mark_step_completed = AsyncMock()
+    await service.configure_modules(enabled)
+    return org.settings["modules"]
+
+
+@pytest.mark.parametrize(
+    ("chosen", "stored"), [(True, True), (False, False)], ids=["chosen", "declined"]
+)
+async def test_setup_records_the_departments_answer_on_public_information(
+    chosen, stored
+):
+    """Owner decision 2026-11-01 (W01-24): setup asks about Public Information,
+    so the answer given is the one stored, not the declared default."""
+    enabled = list(ONBOARDING_CORE_MODULES) + (["public_info"] if chosen else [])
+
+    written = await _configure(enabled)
+
+    assert written["public_info"] is stored

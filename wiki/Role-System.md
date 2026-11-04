@@ -254,6 +254,7 @@ groups the Role Management screen shows.
 | Analytics                                  | `analytics.view`                     | View analytics and dashboards                                                                |
 | Integrations                               | `integrations.manage`                | Manage third-party integrations                                                              |
 |                                            | `integrations.mcp_keys`              | Issue and revoke Claude MCP service keys                                                     |
+|                                            | `integrations.historical_import`     | Import historical hours from a previous system                                               |
 | Notifications                              | `notifications.view`                 | View notifications                                                                           |
 |                                            | `notifications.manage`               | Manage notification rules                                                                    |
 | Suggestions                                | `suggestions.manage`                 | Create and configure suggestion boxes and their reviewers                                    |
@@ -288,9 +289,11 @@ groups the Role Management screen shows.
   submissions.
 - **`apparatus.manage_nfc_tags`** and **`locations.manage_nfc_tags`** decide
   who the app offers the NFC tag writer to. A tag carries no secret.
-- **`integrations.mcp_keys`** (issuing and revoking the Claude MCP service key)
-  and **`system.manage_link_domain`** (the address emailed links use) are held
-  by no default position; only the IT Manager's `*` matches them.
+- **`integrations.mcp_keys`** (issuing and revoking the Claude MCP service key),
+  **`integrations.historical_import`** (Integrations > Historical Data Import,
+  which writes years of every member's hours in one pass) and
+  **`system.manage_link_domain`** (the address emailed links use) are held by
+  no default position; only the IT Manager's `*` matches them.
 - **`compliance.view`** is accepted, alongside `training.manage` and
   `reports.view`, by `GET /api/v1/compliance/contributed-hours`.
 - **A module wildcard covers the whole module.** `inventory.*` includes the

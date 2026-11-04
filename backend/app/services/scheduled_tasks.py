@@ -145,6 +145,7 @@ from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reporting import persist_task_error_log
+from app.core.utils import safe_error_detail
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -443,6 +444,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "03:45",
         "cron": "45 3 * * *",
+    },
+    "stored_file_malware_scan": {
+        "description": "Malware-scan files and images stored before upload scanning covered them (owner decision 2026-11-01), a bounded batch per run, until each has been scanned once. Does nothing while CLAMAV_ENABLED is false; an infected file is removed and audited as upload_malware_detected.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "20 * * * *",
     },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
@@ -4376,7 +4383,12 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             logger.error("Failed to send scheduled email {}: {}", item.id, e)
             try:
                 item.status = ScheduledEmailStatus.FAILED
-                item.error_message = str(e)[:500]
+                # error_message is returned to the client verbatim by
+                # ScheduledEmailResponse (GET /scheduled, settings.manage-
+                # gated but not a reason to leak SQL/driver internals to it)
+                # — sanitize the same way safe_error_detail() does elsewhere
+                # for this exact class of leak (see SEC13-1/SEC14-1).
+                item.error_message = safe_error_detail(e)[:500]
                 failed += 1
                 await db.commit()
             except Exception:
@@ -4432,6 +4444,17 @@ async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, An
     result = await SelfReportAttachmentRetention(db).sweep()
     result["task"] = "self_report_attachment_retention"
     return result
+
+
+async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
+    """Scan stored files and images that never met the upload scanner.
+
+    See app/services/stored_file_rescan.py. Commits each verdict itself, and
+    returns without touching the database while scanning is disabled.
+    """
+    from app.services.stored_file_rescan import StoredFileRescan
+
+    return await StoredFileRescan(db).run()
 
 
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
@@ -8215,6 +8238,7 @@ TASK_RUNNERS = {
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
+    "stored_file_malware_scan": run_stored_file_malware_scan,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
@@ -8374,6 +8398,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
     "self_report_attachment_retention": 86400,
+    # Hourly, a bounded batch per run; once every stored object has a ledger
+    # row a run only compares references (stored_file_rescan).
+    "stored_file_malware_scan": 3600,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

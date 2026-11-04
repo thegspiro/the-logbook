@@ -1,0 +1,95 @@
+# Builds and publishes the combined image (web + API in one container) that
+# the Unraid Community Applications template runs. Owner decision of
+# 2026-11-01; see docs/KNOWN_LIMITATIONS.md, "Unraid Community Apps Template".
+#
+# Runs when a release tag (v1.2.3) is pushed, or by hand from the Actions tab.
+# A tag push publishes :1.2.3, :1.2, :v1.2.3 and moves :latest; a manual run
+# against a branch publishes :sha-<short> only, so trying the workflow never
+# moves the tag the template installs. Somebody has to own pushing release
+# tags: until the first one, the template's image does not exist.
+#
+# The image is built from docker-bake.hcl, which assembles it from the
+# production stages of backend/Dockerfile and frontend/Dockerfile.
+name: Release Image
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two runs for the same ref would race to push the same tags; queue them.
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Must match <Repository> in unraid/the-logbook.xml and IMAGE in
+  # docker-bake.hcl; tests/test_combined_image.py holds the three together.
+  IMAGE: ghcr.io/thegspiro/the-logbook
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  publish:
+    name: Build and publish combined image
+    # A fork has no write access to this package; without the guard every tag
+    # pushed to a fork would end in a failed push.
+    if: github.repository == 'thegspiro/the-logbook'
+    runs-on: ubuntu-latest
+    # arm64 is built under QEMU emulation, which is several times slower than
+    # the native amd64 build.
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Third-party actions are pinned to a commit SHA, not a tag, as in
+      # supply-chain.yml: a tag can be repointed at new code, and this job
+      # holds a token that can publish the image every installation pulls.
+      # Dependabot's github-actions ecosystem bumps these SHAs.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=tag
+            type=sha
+          # `latest` only for a release tag, so a manual run on a branch
+          # cannot move what the template installs.
+          flavor: |
+            latest=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build and push
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        # PLATFORMS (job env above) is read by docker-bake.hcl's variable of
+        # the same name.
+        with:
+          # The checked-out tree rather than a fresh Git context, so the bake
+          # file and the metadata files below resolve as local paths.
+          source: .
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.meta.outputs.bake-file-tags }}
+            ${{ steps.meta.outputs.bake-file-labels }}
+          targets: combined
+          push: true

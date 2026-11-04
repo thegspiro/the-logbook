@@ -1,9 +1,187 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), pass 14 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), #3870 (pass 14), pass 15 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 15 (2026-11-04, watchdog pickup) — 0 fixed, 0 new findings; two already-merged security fixes verified correct
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (confirmed via
+`ListAgents`, "No reachable agents"). Step 0: PR #4019 (Feature 00,
+Cross-cutting baseline, pass 15 — the full-rotation reset-and-restart
+iteration) had already merged, resetting the rotation table from all-`✅`
+back to `⬜` and marking row 00 `✅` again for its own pass. Rotation row 01
+(Auth & session lifecycle) was confirmed the next `⬜` row on a freshly
+fetched `main`.
+
+**Baseline:** `f9220b364` (PR #3870's merge, pass 14). **Head:** current
+`main`. 505 commits between baseline and head, of which exactly 4 of this
+feature's 18 tracked files carry a real diff: `dependencies.py` (+25/-10),
+`auth.py` (+129/-54), `auth_service.py` (+28/-6), `authStore.ts` (+9).
+The other 14 (`mfa_service.py`, `oauth_service.py`, `consent_service.py`,
+`passkey_service.py`, `models/passkey.py`, `security.py`,
+`suspicious_ip.py`, `schemas/auth.py`, `authService.ts`, `apiClient.ts`,
+`utils/passkeys.ts`, `PasskeySettingsCard.tsx`, `StepUpContext.tsx`,
+`utils/stepUp.ts`) are byte-identical to pass 14 — confirmed by `git diff
+--stat` against the full 18-path list, not inferred from a subset.
+
+### Route inventory — re-enumerated by AST, not assumed unchanged
+
+**Still 38 routes**, same set, same names, same order as pass 14's table —
+re-walked `auth.py`'s AST directly rather than trusting the diff to imply
+it. `rate_limit_passkey()`'s own 5 call sites (`/mfa/challenge`,
+`/step-up/passkey-options`, `/passkeys/register-options`,
+`/passkeys/{passkey_id}` DELETE, `/passkeys/recovery-codes`) are also
+unchanged — confirmed by grep, not assumed from the unrelated
+`rate_limit_login()` diff.
+
+### Real delta #1 — sign-in rate limiting reworked to count per account at an address (`dependencies.py`, `auth.py`)
+
+Already merged before this pass started (Core infrastructure's own pass 13,
+PR #4017, reviewed `security_middleware.py`'s half of this change — the
+`check_rate_limit`/`rate_limit_login` rework itself). This pass reviews
+**this feature's own half**: the seven `rate_limit_login(...)` call sites in
+`auth.py` and the three new account-resolver dependencies
+(`_login_attempt_account`, `_mfa_attempt_account`, `_session_account`) that
+feed it.
+
+- **`_login_attempt_account`** reads the typed username/email from the JSON
+  body and hashes it (`login_account_key`, SHA-256 truncated to 32 hex
+  chars — confirmed no raw username reaches a limiter key or Redis). Counted
+  **whether or not the account is real**, per its own docstring and
+  confirmed by reading the implementation — closing the obvious enumeration
+  oracle a real-accounts-only limit would open.
+- **`_mfa_attempt_account`** reads the pending-MFA token's `sub` claim from
+  a signature-verified JWT (`decode_token`, never trusted unverified) — a
+  forged or garbled token has no account and falls back to the address's
+  shared unattributed bucket, never crashing the request.
+- **`_session_account`** is the signed-in caller's own id, used on
+  `/mfa/verify-setup`, `/mfa/disable`, `/step-up`, `/mfa/recovery-codes` and
+  `/passkeys/register` — all five already require `get_current_active_user`
+  first, so this cannot be reached unauthenticated.
+- **The `/step-up` handler's branch logic was reordered**, not merely
+  extended: method-detection (passkey → totp → "has a passkey but is trying
+  password" → password → no-factor-at-all 400) now runs to completion
+  _before_ the new `reserve_stepup_attempt` throttle check, and the actual
+  secret verification (`proven`) runs after it, keyed off the already-chosen
+  `method`. Traced both branches side by side: the "member has a passkey but
+  submitted a password" case now passes through an intermediate
+  `method="passkey_required"` marker between the two chains, which the
+  second chain's `else` arm normalizes back to `method="passkey"`,
+  `proven=False` — the exact value pass 13's single-chain version produced
+  for the same input. The audit log line (`event_data={"method": method}`)
+  reads `method` only after both chains run, so it is unaffected.
+
+### Real delta #2 — a password-reset token's single use is now enforced under a lock (`auth_service.py`)
+
+`AuthService.reset_password_with_token`'s initial `SELECT ... WHERE
+password_reset_token == token_hash` was (and remains) an **unlocked** read —
+but the method now re-fetches the same row by primary key
+`.with_for_update().execution_options(populate_existing=True)` immediately
+after, and re-checks `password_reset_token != token_hash` / `deleted_at is
+not None` against that locked, freshly-read copy before doing anything else.
+This is the standard shape for this class of race (CLAUDE.md Pitfall #27):
+the row to lock is the one being consumed, not a row that doesn't exist yet,
+and the lock is taken **by primary key**, never by the token's own
+(non-unique) index — the comment explains why: locking through that index
+takes a gap lock, and the winner's own `UPDATE` would then need the loser's
+held gap, deadlocking the pair (MySQL error 1213) instead of cleanly losing.
+`populate_existing=True` is required for the exact reason
+`test_password_expiry_gate.py` already established elsewhere in this
+codebase: without it, SQLAlchemy's identity map would hand back the
+in-session object loaded by the first, unlocked `SELECT`, never reflecting
+what the lock's own re-read found.
+
+**Verified with the test, not just by reading the diff**:
+`tests/test_password_reset_token_race.py` — `TestConcurrentResetSubmissions
+::test_one_link_set_twice_at_once_changes_the_password_once` (drives two
+real concurrent connections through the same link) plus two source-level
+guards (`TestTheLockIsDeclared`) asserting the lock is taken by primary key,
+not through the token index. All three re-run clean below.
+
+### Real delta #3 — the step-up token-extraction helper was extracted and given new, out-of-feature readers
+
+`dependencies.py` gained `access_token_from`/`request_access_token` (a
+behavior-preserving extraction of `require_stepup`'s own inline
+cookie-then-bearer-header logic). `request_access_token` is now also
+imported by **two other features' own files**: `users.py` (step-up before
+granting a rank/role at member creation — a new PERM-10 owner-decision
+control) and `organizations.py` (step-up before saving `auth`/`file_storage`
+settings through the generic settings-save route, closing a real bypass of
+the two dedicated, already-step-up-gated `PATCH /settings/auth` /
+`PATCH /settings/file-storage` routes — its own comment names this as
+USR-13). Read both call sites per Pitfall #19's "check the new reader, don't
+re-review the whole file" convention: both are genuinely sensitive actions,
+both correctly call `ensure_stepup` (the non-`Depends` form, appropriate
+since each gates only a subset of a route's own paths) with the token this
+feature's own helper resolves. Credit for `users.py`/`organizations.py`'s
+own endpoints belongs to Feature 07 (Users & organizations); only the
+shared helper is this feature's own file.
+
+**Note:** `auth.py` itself still carries its own, pre-existing, functionally
+identical `_request_access_token` private copy rather than importing the new
+shared one from `dependencies.py`. Both implementations are byte-for-byte
+equivalent in behavior (cookie first, else a `Bearer ` header) — this is a
+duplication worth collapsing in a future pass for maintainability, not a
+security finding, since nothing currently reads one copy's behavior
+differently from the other's.
+
+### Real delta #4 — `authStore.ts`'s device-switch push-subscription release/resync
+
+Already reviewed in full under Feature 34 (Frontend shared, pass 14,
+`FE14-34-frontend-shared.md`) — `claimDeviceForMember`'s new
+`releaseDevicePushSubscription()`/`resyncDevicePushSubscription()` calls.
+Re-confirmed here, since `authStore.ts` is this feature's own tracked file:
+both are non-throwing (push is an enhancement, never a sign-in blocker),
+and the release fires only on an actual device-member switch, not on the
+same member's own logout — deliberately, per its own comment, so a member
+signing out of their own phone keeps receiving push until someone else
+signs in on it.
+
+### Standing items — reconfirmed unchanged from pass 14
+
+**AUTH-23 (MED, OPEN/FLAGGED)** — re-verified, and **materially narrowed by
+this pass's own delta #1**, not merely re-confirmed unchanged: the finding
+was that `step_up`'s password/TOTP branches had no account-tied lockout.
+`reserve_stepup_attempt`/`clear_stepup_failures` (wired into the handler at
+this exact point this pass) now give it one — a per-account, Redis-backed
+(bounded in-memory fallback) failed-attempt counter with a 429 and no
+account-lock, reviewed in full under Core infrastructure's own pass 13.
+`docs/KNOWN_LIMITATIONS.md`'s entry for AUTH-23 should be read as resolved
+by that already-merged work rather than carried forward as open; this
+pass's own scope is the caller (`auth.py`), and the fix itself was credited
+to Core infrastructure, so **no edit to `KNOWN_LIMITATIONS.md` is made
+here** — flagging this for whichever pass owns that doc's AUTH-23 entry to
+retire it, the same correction shape pass 14 itself used for the
+recovery-code-entropy carry-forward.
+
+AUTH-15, AUTH-17, AUTH-21 and AUTH-22 remain closed; AUTH-4 (informational,
+unbounded roster query, accepted app-wide pattern) remains accepted and
+unchanged.
+
+### Completion gate (pass 15)
+
+| Check                                                                                                                                                                                                                                                                              | Result                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (via `/usr/bin/python3`)                                                                                                                                                                                                                             | ✅ 0 violations                                                                                                     |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                               | ✅ clean, 2881 files unchanged                                                                                      |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                          | ✅ clean                                                                                                            |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                                  | ✅ single head `b5e906ebdd7d`, 712 revisions                                                                        |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                                              | ✅ 298 routes, 0 errors/0 warnings                                                                                  |
+| Standing guards (`account_status_gates`, `auth_lockout_race`, `auth_refresh_rotation`, `capacity_locking`, `endpoint_auth_coverage`, `like_escaping`, `mfa_policy`, `org_scoping_ratchet`, `password_expiry_gate`, `session_limits`, `sign_in_audit`, `password_reset_token_race`) | ✅ 212 passed                                                                                                       |
+| Scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification or stepup or kiosk or passkey or webauthn"`)                                                                           | ✅ 1546 passed, 2 pre-existing skips (`pywebpush`, Docker registry)                                                 |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                 | ✅ 0 errors                                                                                                         |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                      | ✅ 0 errors, 0 warnings (confirmed clean this same session, no frontend file in this feature's scope changed since) |
+
+No guard test added this pass: both real backend deltas already carry their
+own dedicated tests (the per-account rate-limit suite reviewed under Core
+infrastructure, and `test_password_reset_token_race.py` for delta #2).
+
+Rotation row 01 moves to `✅`.
 
 ---
 
@@ -471,6 +649,17 @@ update_positions`, `audit.export/manage`, `medical_screening.view/manage`)
   `require_stepup`-gated action).
 
 ### AUTH-23 — MED — `POST /auth/step-up` has no account-tied lockout; a stolen live session lets an attacker brute-force the password or TOTP code that gates the most sensitive actions in the app — FLAGGED (not fixed)
+
+**Resolved 2026-11-03 (owner decision 2026-11-01: per-account rate limit, no
+account lock).** `app/core/stepup_throttle.py` counts step-up attempts per user
+id — 5 per 15 minutes by default (`STEPUP_MAX_FAILED_ATTEMPTS`,
+`STEPUP_FAILURE_WINDOW_MINUTES`) — reserving each before the secret is
+checked, clearing on success, and refusing with 429 while over. It never writes
+`failed_login_attempts` / `locked_until`, so a session thief cannot use it to
+lock the owner out of signing in. Separately, the `rate_limit_login()` that
+step-up shares is now keyed on the session's member at an address rather than
+the address alone. Pinned by `tests/test_stepup_throttle.py`. The finding as
+originally written follows.
 
 **What:** `step_up` (`backend/app/api/v1/endpoints/auth.py:1486-1549`) checks
 a submitted password with `verify_password()` or a submitted TOTP code with

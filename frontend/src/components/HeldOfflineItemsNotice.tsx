@@ -63,7 +63,10 @@ export const HeldOfflineItemsNotice: React.FC = () => {
   if (items.length === 0) return null;
 
   const memberName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'you';
-  const sentFromTheirPage = items.some((item) => item.queue !== 'generic');
+  // Everything else is sent by triggerAllOfflineDrains the moment the member
+  // confirms; only equipment checks depend on the browser offering Background
+  // Sync, and the drain's own toast says which case this device is in.
+  const holdsEquipmentChecks = items.some((item) => item.queue === 'check');
 
   const handleSend = async () => {
     const ok = await confirm({
@@ -77,9 +80,10 @@ export const HeldOfflineItemsNotice: React.FC = () => {
             Only do this if you saved them yourself. This device cannot tell who did — if another member did, their work
             will be recorded as yours.
           </p>
-          {sentFromTheirPage && (
+          {holdsEquipmentChecks && (
             <p className="mt-2">
-              Equipment checks and shift reports are sent the next time you open their page with a connection.
+              Equipment checks are sent in the background where this browser supports it. Otherwise, open the equipment
+              check with a connection to send them.
             </p>
           )}
         </>

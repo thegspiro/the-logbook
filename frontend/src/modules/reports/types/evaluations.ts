@@ -175,6 +175,19 @@ export interface EvaluationTemplateCreate {
   kind: EvaluationTemplateKind;
   member_class?: string | undefined;
   member_status?: string | undefined;
+  /** A starter's key: the first draft is filled from it instead of left empty. */
+  starter?: string | undefined;
+}
+
+/** A ready-made form a new template can start from. */
+export interface EvaluationStarter {
+  key: string;
+  name: string;
+  description: string;
+  kind: EvaluationTemplateKind;
+  member_class: string | null;
+  member_status: string | null;
+  section_titles: string[];
 }
 
 /** Partial update: omit to leave alone, null to clear. */
@@ -415,6 +428,31 @@ export interface DraftOptions {
   members: PersonRef[];
   evaluators: PersonRef[];
   periods: { id: string; name: string; start_date: string; end_date: string }[];
+}
+
+/** Who and when a template preview can be measured for. */
+export interface PreviewOptions {
+  /** Whether the viewer may preview with a real member's figures (needs view_all). */
+  can_use_member_data: boolean;
+  members: PersonRef[];
+  periods: { id: string; name: string; start_date: string; end_date: string; is_closed: boolean }[];
+}
+
+/** A form filled with figures, as an evaluation drafted from it would show them. Stored nowhere. */
+export interface TemplatePreview {
+  sample: boolean;
+  member_name: string | null;
+  period_name: string | null;
+  period_start: string;
+  period_end: string;
+  coverage_start: string | null;
+  coverage_end: string | null;
+  includes_officer_sections: boolean;
+  sources: EvaluationDataSource[];
+  data: Record<string, DataEntry>;
+  suggested_scores: Record<string, number>;
+  overall_levels: ScaleLevel[];
+  note: string | null;
 }
 
 export interface LiveData {

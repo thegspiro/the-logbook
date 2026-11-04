@@ -75,6 +75,10 @@ ONBOARDING_OFFERED_MODULES = [
     "reports",
     # Communication
     "notifications",
+    # Owner decision 2026-11-01 (workflow review W01-24): asked during setup
+    # rather than left at its default, so the department decides whether it
+    # runs public pages.
+    "public_info",
     # Advanced
     "integrations",
     # Membership
@@ -95,7 +99,6 @@ ONBOARDING_SETTINGS_ONLY_MODULES = [
     "hr_payroll",
     "incidents",
     "medical_screening",
-    "public_info",
     "testing",
 ]
 
@@ -152,8 +155,9 @@ def modules_from_setup_answers(enabled: Iterable[str]) -> dict[str, bool]:
 
     Writing False for a module the wizard never showed turns "nobody was asked"
     into "the department said no", which is how Public Information came to be
-    stored off on every fresh install despite defaulting on (owner decision
-    2026-11-01, workflow review W01-24: leave it on by default). A module the
+    stored off on every fresh install despite defaulting on. Setup now asks
+    about Public Information itself (owner decision 2026-11-01, confirmed
+    2026-11-04, workflow review W01-24), so its answer decides. A module the
     answers do name stays on even if today's wizard no longer offers it, so a
     choice recorded by an older setup is not dropped.
 

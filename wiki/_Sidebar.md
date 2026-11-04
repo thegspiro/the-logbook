@@ -67,6 +67,7 @@
 - [Documenso Integration](Integration-Documenso)
 - [Cal.com Integration](Integration-Calcom)
 - [Claude (MCP) Integration](Integration-Claude-MCP)
+- [Historical Data Import](Integration-Historical-Data-Import)
 - [Google Workspace Integration](Integration-Google-Workspace)
 - [Microsoft 365 Integration](Integration-Microsoft-365)
 

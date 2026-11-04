@@ -98,16 +98,16 @@ class GuestCheckInService:
         organization_name: Optional[str] = None,
         interest_reason: Optional[str] = None,
         source: str = SOURCE_KIOSK_QR,
-    ) -> Tuple[Optional[EventExternalAttendee], Optional[str], bool]:
+    ) -> Tuple[Optional[EventExternalAttendee], Optional[str], bool, bool]:
         """Record a guest's attendance at *event*.
 
-        Returns ``(attendee, error, prospect_created)``. The event is expected
-        to have been resolved and gated by the caller (org scope, guest opt-in
-        and check-in window); this method owns only what gets written.
-        ``source`` says which QR code the guest scanned.
+        Returns ``(attendee, error, prospect_created, already_checked_in)``.
+        The event is expected to have been resolved and gated by the caller
+        (org scope, guest opt-in and check-in window); this method owns only
+        what gets written. ``source`` says which QR code the guest scanned.
         """
         if not event.allow_guest_check_in:
-            return None, "Guest check-in is not enabled for this event.", False
+            return None, "Guest check-in is not enabled for this event.", False, False
 
         # This is an unauthenticated write reached from a room tablet, so it
         # gets the same lock the member paths do — the sentence, not the
@@ -116,6 +116,7 @@ class GuestCheckInService:
             return (
                 None,
                 "Attendance for this event has been closed.",
+                False,
                 False,
             )
 
@@ -196,7 +197,7 @@ class GuestCheckInService:
         # GuestCheckInService.advance_prospects_for_settled_event, which
         # finalize calls, and run_prospect_attendance_advance for the events
         # nobody closes out.
-        return attendee, None, prospect_created
+        return attendee, None, prospect_created, already_checked_in
 
     async def _lock_event(self, event_id: str, organization_id: str) -> None:
         """Take the event row's lock to serialize a guest sign-in on it."""
@@ -656,8 +657,11 @@ class GuestCheckInService:
         again rather than trusted from the lookup: it may have been withdrawn
         in the minutes between the two taps, and an applicant who is no longer
         active is not one the kiosk recognises. The attendance itself goes
-        through :meth:`check_in_guest` with the details already on file, so a
-        repeat confirm is the same idempotent re-scan a typed sign-in is.
+        through :meth:`check_in_guest`, which is where ``already_checked_in``
+        comes from — it decides the same value under the event row's lock, so
+        a second confirm tapped concurrently with the first cannot see the
+        pre-lock "not yet checked in" snapshot this method used to read for
+        itself and report the first-time status to both.
         """
         prospect = (
             await self.db.execute(
@@ -676,15 +680,7 @@ class GuestCheckInService:
             )
 
         email = (prospect.email or "").strip().lower()
-        existing = await self._find_existing_attendee(
-            event_id=str(event.id),
-            organization_id=organization_id,
-            email=email or None,
-            full_name=f"{prospect.first_name} {prospect.last_name}".strip(),
-        )
-        already_checked_in = bool(existing and existing.checked_in)
-
-        attendee, error, _created = await self.check_in_guest(
+        attendee, error, _created, already_checked_in = await self.check_in_guest(
             event=event,
             organization_id=organization_id,
             first_name=prospect.first_name,

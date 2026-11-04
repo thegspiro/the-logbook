@@ -215,7 +215,8 @@ export interface FileStorageSettings {
   s3_secret_access_key?: string;
   s3_bucket_name?: string;
   s3_region?: string;
-  s3_endpoint_url?: string;
+  /** Null clears it, meaning Amazon S3's own endpoint for the region. */
+  s3_endpoint_url?: string | null | undefined;
   // Local
   local_storage_path?: string;
 }
@@ -247,6 +248,12 @@ export interface FileStorageStatus {
   problem: string | null;
   s3_problem: string | null;
   private_endpoints_allowed: boolean;
+  /**
+   * The self-hosted S3/MinIO endpoints the installation operator listed
+   * (`S3_ALLOWED_ENDPOINTS`): the only custom endpoints a department may pick.
+   * Empty means Amazon S3 only.
+   */
+  allowed_s3_endpoints: string[];
 }
 
 /**

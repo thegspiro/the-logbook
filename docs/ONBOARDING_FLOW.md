@@ -1529,7 +1529,9 @@ answers under a key nothing reads.
 `false` by finishing setup, rather than keeping its default. Exactly one is
 affected today, and it is a live regression rather than a hypothetical:
 `public_info` defaults to **true** and the wizard never offers it, so
-completing onboarding turns the Public Information module off. The other seven
+completing onboarding turns the Public Information module off. _(Since
+fixed: both writers share `modules_from_setup_answers`, and from 2026-11-04
+the Modules step asks about Public Information, so its answer is stored.)_ The other seven
 default to false, so the two paths agree on them by coincidence.
 
 That holds only when something was submitted. `_persist_session_data_to_org()`

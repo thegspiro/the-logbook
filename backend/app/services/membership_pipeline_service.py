@@ -7878,21 +7878,31 @@ class MembershipPipelineService:
         self, prospect: ProspectiveMember, step: Optional[MembershipPipelineStep]
     ) -> int:
         """Tell the applicant's case managers they reached an interview or
-        sign-off stage.
+        sign-off stage, and ask their interviewers to interview them at an
+        interview stage.
 
         Called beside _send_follow_up_on_entry on every path that moves an
         existing applicant onto a stage. Creation is not one of them: nobody
         can be assigned to an applicant before the applicant exists. Sent
         within the entry, as the stage's own emails are; best-effort, so a
-        mail failure never undoes the move.
+        mail failure never undoes the move. A member who is both interviewer
+        and case manager gets the interview request only: it is the more
+        specific ask. Returns how many case managers were told.
         """
         if step is None:
             return 0
-        event = self._CASE_MANAGER_ENTRY_NOTICES.get(effective_step_type(step))
+        step_type = effective_step_type(step)
+        event = self._CASE_MANAGER_ENTRY_NOTICES.get(step_type)
         if event is None or prospect.status != ProspectStatus.ACTIVE:
             return 0
-        return await ProspectAssignmentService(self.db).notify_case_managers(
-            prospect, event, detail=step.name
+        assignments = ProspectAssignmentService(self.db)
+        asked: List[str] = []
+        if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
+            asked = await assignments.notify_interviewers(
+                prospect, str(step.id), step.name
+            )
+        return await assignments.notify_case_managers(
+            prospect, event, detail=step.name, already_told=asked
         )
 
     async def ensure_election_package_on_entry(

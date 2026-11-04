@@ -20,6 +20,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { blankToNull } from '../../../utils/formValues';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { SectionsEditor } from '../components/evaluations/SectionsEditor';
+import { TemplatePreviewPanel } from '../components/evaluations/TemplatePreviewPanel';
 import { WorkflowEditor } from '../components/evaluations/WorkflowEditor';
 import { evaluationTemplatesService } from '../services/evaluationsApi';
 import {
@@ -34,11 +35,12 @@ import {
 } from '../types/evaluations';
 import { describeMatching } from '../utils/evaluationTemplate';
 
-type Tab = 'sections' | 'workflow' | 'details';
+type Tab = 'sections' | 'workflow' | 'preview' | 'details';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'sections', label: 'Sections & items' },
   { id: 'workflow', label: 'Workflow & deadlines' },
+  { id: 'preview', label: 'Preview' },
   { id: 'details', label: 'Details & matching' },
 ];
 
@@ -378,6 +380,7 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
               onChange={editWorkflow}
             />
           )}
+          {tab === 'preview' && <TemplatePreviewPanel definition={definition} />}
           {tab === 'details' && (
             <form className="card max-w-3xl space-y-4 p-4 sm:p-6" onSubmit={(event) => void saveDetails(event)}>
               <div className="alert-info flex gap-3">

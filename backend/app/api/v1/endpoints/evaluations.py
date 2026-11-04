@@ -34,7 +34,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission, require_stepup
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    require_stepup,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip
@@ -57,6 +62,7 @@ from app.schemas.evaluation import (
     EvaluationPeriodCreate,
     EvaluationPeriodResponse,
     EvaluationPeriodUpdate,
+    EvaluationStarterResponse,
     EvaluationSummary,
     EvaluationTemplateCreate,
     EvaluationTemplateDetail,
@@ -64,12 +70,15 @@ from app.schemas.evaluation import (
     EvaluationTemplateUpdate,
     LiveDataResponse,
     PartWrite,
+    PreviewOptions,
     PublishResult,
     ResponseWrite,
     SignatureWrite,
     SignResult,
     SubmitResult,
     TemplateDraftWrite,
+    TemplatePreviewRequest,
+    TemplatePreviewResponse,
 )
 from app.services import file_storage_service as file_storage
 from app.services.evaluation_document_service import EvaluationDocumentService
@@ -121,6 +130,66 @@ async def list_templates(
     )
 
 
+@router.get("/templates/starters", response_model=List[EvaluationStarterResponse])
+async def list_template_starters(
+    current_user: User = Depends(require_permission("evaluations.configure")),
+):
+    """Ready-made forms a new template can start from. Fixed content, the
+    same for every department; nothing is read from the database."""
+    return EvaluationTemplateService.starters()
+
+
+@router.get("/templates/preview-options", response_model=PreviewOptions)
+async def get_preview_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.configure")),
+):
+    """Review periods to measure a preview over, and — for a builder who also
+    holds ``evaluations.view_all`` — the members whose figures it can show."""
+    return await EvaluationService(db).preview_options(
+        current_user.organization_id,
+        user_has_permission(current_user, "evaluations.view_all"),
+    )
+
+
+@router.post("/templates/preview", response_model=TemplatePreviewResponse)
+async def preview_template(
+    data: TemplatePreviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.configure")),
+):
+    """The form as it stands in the builder, filled with figures.
+
+    Building a form does not by itself let someone read members' figures
+    (owner decision 2026-11-03), so a real member's figures also need
+    ``evaluations.view_all``; without it the preview uses sample figures.
+    Nothing is stored. A preview of a real member is audited, since it reads
+    their records.
+    """
+    if data.member_id is not None and not user_has_permission(
+        current_user, "evaluations.view_all"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Previewing with a member's figures needs evaluations.view_all.",
+        )
+    async with handle_service_errors("Failed to preview the template"):
+        preview = await EvaluationService(db).preview_template(
+            current_user.organization_id,
+            data.definition,
+            data.member_id,
+            data.period_id,
+        )
+    if data.member_id is not None:
+        await _audit(
+            db,
+            current_user,
+            "evaluation_template_previewed",
+            {"member_id": data.member_id, "period_id": data.period_id},
+        )
+    return preview
+
+
 @router.post("/templates", response_model=EvaluationTemplateDetail, status_code=201)
 async def create_template(
     data: EvaluationTemplateCreate,
@@ -136,7 +205,7 @@ async def create_template(
         db,
         current_user,
         "evaluation_template_created",
-        {"template_id": template_id, "kind": data.kind.value},
+        {"template_id": template_id, "kind": data.kind.value, "starter": data.starter},
     )
     return await _detail(service, current_user, template_id)
 

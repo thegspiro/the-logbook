@@ -778,6 +778,15 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Link to the applicant on the member's My Applicants page",
         },
     ],
+    "application_interview_requested": [
+        {"name": "recipient_name", "description": "Interviewer's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "stage_name", "description": "The interview stage reached"},
+        {
+            "name": "interview_url",
+            "description": "Link to the applicant's Interview page",
+        },
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1539,6 +1548,16 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
         }
     ),
+    "application_interview_requested": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "stage_name": "Board Interview",
+            "interview_url": (
+                "https://example.org/prospective-members/sample/interview"
+            ),
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1807,6 +1826,10 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
         "assigned_by_name": "full",
     },
     "application_needs_attention": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+    },
+    "application_interview_requested": {
         "recipient_name": "full",
         "applicant_name": "full",
     },
@@ -3018,6 +3041,40 @@ Open My Applicants: {{applicant_url}}
 {{footer_text}}"""
 
 DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT = "{{applicant_name}} needs your attention"
+
+# Sent to an applicant's assigned interviewers when the applicant reaches an
+# Interview Requirement stage, so the people being asked to interview hear of
+# it directly. Links to the applicant's Interview page and carries nothing from
+# the file.
+DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML = build_shell(
+    "An Interview Is Requested",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{applicant_name}} has reached the {{stage_name}} stage of their
+        application, and you are one of their interviewers.</p>
+        <p>When you have interviewed them, record it on their Interview page in
+        the Logbook.</p>
+""" + action("{{interview_url}}", "Open the Interview page"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT = """An Interview Is Requested
+
+Hello {{recipient_name}},
+
+{{applicant_name}} has reached the {{stage_name}} stage of their application,
+and you are one of their interviewers.
+
+When you have interviewed them, record it on their Interview page in the
+Logbook.
+
+Open the Interview page: {{interview_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT = (
+    "Interview requested: {{applicant_name}}"
+)
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
@@ -5182,6 +5239,18 @@ class EmailTemplateService:
                 "Sent to an applicant's case managers when the applicant "
                 "submits a follow-up form, withdraws, or reaches an interview "
                 "or sign-off stage. Carries a link only."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_INTERVIEW_REQUESTED,
+            "name": "Interview Requested",
+            "subject": DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT,
+            "html": DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML,
+            "text": DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT,
+            "description": (
+                "Sent to an applicant's assigned interviewers when the "
+                "applicant reaches an Interview Requirement stage, with a link "
+                "to the Interview page."
             ),
         },
         {
