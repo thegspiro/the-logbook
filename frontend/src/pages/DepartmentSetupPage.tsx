@@ -33,6 +33,7 @@ import {
   FileText,
   Stethoscope,
   Store,
+  Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService } from '../services/api';
@@ -48,6 +49,7 @@ const CATEGORY_STYLES: Record<string, { bgClass: string; textClass: string }> = 
   inventory: { bgClass: 'bg-orange-500/10', textClass: 'text-orange-500' },
   storefront: { bgClass: 'bg-teal-500/10', textClass: 'text-teal-500' },
   integrations: { bgClass: 'bg-cyan-500/10', textClass: 'text-cyan-500' },
+  public_info: { bgClass: 'bg-sky-500/10', textClass: 'text-sky-500' },
 };
 
 const ITEM_ICONS: Record<string, React.ReactNode> = {
@@ -71,6 +73,7 @@ const ITEM_ICONS: Record<string, React.ReactNode> = {
   email: <Mail className="h-5 w-5" />,
   pipeline: <UserPlus className="h-5 w-5" />,
   integrations: <Plug className="h-5 w-5" />,
+  public_info: <Globe className="h-5 w-5" />,
 };
 
 const DepartmentSetupPage: React.FC = () => {
