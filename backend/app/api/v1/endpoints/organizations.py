@@ -1180,6 +1180,7 @@ async def get_setup_checklist(
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
     from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.public_portal import PublicPortalConfig
     from app.models.storefront import StoreProduct, StoreProductStatus
     from app.models.training import (
         BasicApparatus,
@@ -1327,6 +1328,25 @@ async def get_setup_checklist(
 
     # A published product, not a draft: an order window over a catalog of
     # drafts opens a store with nothing in it.
+    # Turning Public Information on publishes nothing: the portal has its own
+    # switch and serves data only when both are on, so the step is done once
+    # the department has switched it on.
+    public_portal_enabled = False
+    try:
+        public_portal_enabled = bool(
+            (
+                await db.execute(
+                    select(PublicPortalConfig.enabled).where(
+                        PublicPortalConfig.organization_id == org_id
+                    )
+                )
+            ).scalar()
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to read the public portal switch for setup checklist: {}", e
+        )
+
     store_product_count = 0
     try:
         store_product_count = (
@@ -1607,6 +1627,22 @@ async def get_setup_checklist(
                 category="storefront",
                 is_complete=store_product_count > 0,
                 count=store_product_count,
+                required=False,
+            )
+        )
+
+    if "public_info" in enabled_modules:
+        items.append(
+            SetupChecklistItem(
+                key="public_info",
+                title="Set Up the Public Portal",
+                description=(
+                    "Choose what the public pages show and switch the portal on. "
+                    "Turning on Public Information alone publishes nothing."
+                ),
+                path="/admin/public-portal",
+                category="public_info",
+                is_complete=public_portal_enabled,
                 required=False,
             )
         )

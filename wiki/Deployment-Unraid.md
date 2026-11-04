@@ -6,8 +6,17 @@ scripts and compose files live in the repository's
 directory; the longer reference is
 [docs/deployment/unraid.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/unraid.md).
 
-The Logbook is not yet published to Unraid Community Applications, so the Apps
-tab will not find it. Docker Compose is the supported install path.
+The Logbook is not yet listed in Unraid Community Applications, so the Apps
+tab will not find it, and Docker Compose — which also runs MySQL, Redis, ClamAV
+and the nightly backup — is the fuller install path. A Community Applications
+template
+([`unraid/the-logbook.xml`](https://github.com/thegspiro/the-logbook/blob/main/unraid/the-logbook.xml))
+runs one combined container, `ghcr.io/thegspiro/the-logbook`, holding the web
+interface (port 3000 in the container) and the API, with MySQL and Redis as
+separate containers. The `Release Image` workflow publishes that image when a
+`v*.*.*` release tag is pushed, so it can be installed only once the first
+release is out; see
+[UNRAID-INSTALLATION.md](https://github.com/thegspiro/the-logbook/blob/main/unraid/UNRAID-INSTALLATION.md).
 
 ---
 

@@ -673,3 +673,269 @@ class TestConfidence:
         )
         message = next(i.message for i in analysis.issues if i.code == "probable_match")
         assert message.startswith("Line 3 is an 85% match for the shift starting")
+
+
+# ---------------------------------------------------------------------------
+# Rows routed here by a historical data import: stated hours, duty type,
+# calls by type, source ids, per-unit seats, number-only former members.
+# ---------------------------------------------------------------------------
+
+AMBULANCE = OwnUnit(
+    id="app-a102", unit_number="A102", name="Ambulance", seats=("driver", "emt")
+)
+LADDER = OwnUnit(
+    id="app-la106",
+    unit_number="LA106",
+    name="Ladder",
+    seats=("driver", "officer", "firefighter"),
+)
+
+
+class TestStatedHours:
+    def test_stated_hours_are_credited_over_the_clock_span(self):
+        analysis = _analyze(
+            [
+                _row(
+                    2,
+                    membership_number="101",
+                    start_time="0945",
+                    end_time="1015",
+                    hours="2.5",
+                )
+            ]
+        )
+        attendance = analysis.shifts[0].attendances[0]
+        assert attendance.span_minutes == 30
+        assert attendance.minutes == 150
+
+    def test_a_24_hour_shift_logged_0800_to_0800_keeps_its_24_hours(self):
+        analysis = _analyze(
+            [
+                _row(
+                    2,
+                    membership_number="101",
+                    start_time="0800",
+                    end_time="0800",
+                    hours="24.0",
+                )
+            ]
+        )
+        assert analysis.shifts[0].attendances[0].minutes == 24 * 60
+
+    def test_zero_hours_is_skipped_not_an_error(self):
+        parsed = _parse(hours="0.0")
+        assert parsed.skipped_reason == "Recorded as 0 hours."
+        assert parsed.errors == []
+
+    def test_unreadable_hours_is_an_error(self):
+        assert _parse(hours="twelve").errors
+
+    def test_joined_rows_sum_their_stated_hours_not_the_gap(self):
+        analysis = _analyze(
+            [
+                _row(
+                    2,
+                    membership_number="101",
+                    start_time="0700",
+                    end_time="1200",
+                    hours="5",
+                ),
+                _row(
+                    3,
+                    membership_number="101",
+                    start_time="1220",
+                    end_time="1500",
+                    hours="2",
+                ),
+            ]
+        )
+        attendance = analysis.shifts[0].attendances[0]
+        assert attendance.joined
+        assert attendance.minutes == 7 * 60
+
+    def test_without_an_hours_column_the_span_is_credited_as_before(self):
+        analysis = _analyze(
+            [_row(2, membership_number="101", start_time="0700", end_time="1900")]
+        )
+        assert analysis.shifts[0].attendances[0].minutes == 12 * 60
+
+    def test_hours_is_never_detected_from_a_header(self):
+        mapping = engine.detect_column_mapping(
+            ["Name", "Unit", "Date", "Hours", "Shift Type"]
+        )
+        assert "hours" not in mapping
+        assert "duty_type" not in mapping
+
+
+class TestDutyType:
+    def test_on_call_and_in_station_on_one_unit_and_day_are_separate_shifts(self):
+        analysis = _analyze(
+            [
+                _row(2, membership_number="101", start_time="0700", end_time="1900"),
+                _row(
+                    3,
+                    membership_number="102",
+                    start_time="0700",
+                    end_time="1900",
+                    duty_type="on_call",
+                ),
+            ]
+        )
+        assert sorted(s.duty_type for s in analysis.shifts) == ["in_station", "on_call"]
+        assert all(len(s.attendances) == 1 for s in analysis.shifts)
+
+    def test_recall_is_read_as_on_call(self):
+        assert _parse(duty_type="Recall").duty_type == "on_call"
+
+    def test_standby_is_not_guessed(self):
+        assert _parse(duty_type="Standby").errors
+
+    def test_on_call_never_attaches_to_an_in_station_shift_on_the_schedule(self):
+        start = datetime(2025, 3, 1, 12, tzinfo=timezone.utc)
+        existing = ExistingShift(
+            id="s-existing",
+            apparatus_id="app-e1",
+            shift_date=date(2025, 3, 1),
+            start=start,
+            end=start + timedelta(hours=24),
+            attendee_ids=frozenset(),
+        )
+        analysis = _analyze(
+            [_row(2, membership_number="101", duty_type="on_call")],
+            existing_shifts=[existing],
+        )
+        assert analysis.shifts[0].existing_shift_id is None
+
+
+class TestCallTypes:
+    def test_typed_columns_total_into_the_call_count(self):
+        rows = [
+            _row(2, membership_number="101", **{"calls:ems": "3", "calls:fire": "1"})
+        ]
+        mapping = {**MAPPING, "calls:ems": "calls:ems", "calls:fire": "calls:fire"}
+        parsed = engine.parse_rows(rows, mapping, NY, NOW)
+        assert parsed[0].call_counts == {"ems": 3, "fire": 1}
+        assert parsed[0].call_count == 4
+
+    def test_joined_rows_add_their_typed_calls(self):
+        rows = [
+            _row(
+                2,
+                membership_number="101",
+                start_time="0700",
+                end_time="1200",
+                **{"calls:ems": "2"},
+            ),
+            _row(
+                3,
+                membership_number="101",
+                start_time="1210",
+                end_time="1500",
+                **{"calls:ems": "1"},
+            ),
+        ]
+        mapping = {**MAPPING, "calls:ems": "calls:ems"}
+        analysis = engine.analyze(engine.parse_rows(rows, mapping, NY, NOW), _context())
+        assert analysis.shifts[0].attendances[0].call_counts == {"ems": 3}
+
+    def test_a_bad_typed_count_is_an_error(self):
+        rows = [_row(2, membership_number="101", **{"calls:ems": "two"})]
+        mapping = {**MAPPING, "calls:ems": "calls:ems"}
+        assert engine.parse_rows(rows, mapping, NY, NOW)[0].errors
+
+
+class TestSourceIds:
+    def test_a_row_the_ledger_holds_is_skipped(self):
+        analysis = _analyze(
+            [_row(2, membership_number="101", source_id="81395")],
+            imported_source_ids=frozenset({"81395"}),
+        )
+        assert analysis.rows[0].skipped_reason == "Already imported (source row 81395)."
+        assert not analysis.can_commit
+
+    def test_one_id_twice_in_a_file_is_blocking(self):
+        analysis = _analyze(
+            [
+                _row(2, membership_number="101", source_id="7"),
+                _row(3, membership_number="102", source_id="7", date="2025-03-02"),
+            ]
+        )
+        assert "duplicate_source_id" in _codes(analysis)
+
+    def test_source_ids_are_collected_for_the_ledger_lookup(self):
+        parsed = engine.parse_rows(
+            [
+                _row(2, membership_number="101", source_id="b"),
+                _row(3, membership_number="101", source_id="a"),
+            ],
+            MAPPING,
+            NY,
+            NOW,
+        )
+        assert engine.source_ids(parsed) == ["a", "b"]
+
+
+class TestUnitDefaultSeat:
+    def test_an_ambulance_crew_is_not_seated_as_firefighters(self):
+        analysis = _analyze(
+            [_row(2, membership_number="101", unit="A102")],
+            own_units=[AMBULANCE, E1],
+        )
+        assert "unit_default_seat" in _codes(analysis)
+        assert analysis.shifts == []
+
+    def test_the_reviewer_chooses_the_units_seat(self):
+        analysis = _analyze(
+            [_row(2, membership_number="101", unit="A102")],
+            own_units=[AMBULANCE, E1],
+            unit_mappings={
+                "|a102": {"action": "own", "id": "app-a102", "default_seat": "emt"}
+            },
+        )
+        assert analysis.can_commit
+        assert analysis.shifts[0].attendances[0].seat == "emt"
+
+    def test_a_unit_listing_firefighter_keeps_the_default(self):
+        analysis = _analyze(
+            [_row(2, membership_number="101", unit="LA106")],
+            own_units=[LADDER],
+        )
+        assert analysis.shifts[0].attendances[0].seat == "firefighter"
+
+    def test_a_named_position_still_wins_over_the_unit_default(self):
+        analysis = _analyze(
+            [_row(2, membership_number="101", unit="A102", position="driver")],
+            own_units=[AMBULANCE],
+        )
+        assert analysis.shifts[0].attendances[0].seat == "driver"
+
+
+class TestNumberOnlyFormerMembers:
+    def test_a_number_only_member_can_be_created(self):
+        analysis = _analyze(
+            [_row(2, membership_number="6178")],
+            member_mappings={"number:6178": {"action": "create"}},
+        )
+        assert "new_member_without_name" not in _codes(analysis)
+        member = analysis.members[0]
+        assert engine.new_member_name(member) == ("Former member", "6178")
+
+    def test_a_typed_name_is_used_for_the_new_member(self):
+        analysis = _analyze(
+            [_row(2, membership_number="6178")],
+            member_mappings={
+                "number:6178": {
+                    "action": "create",
+                    "first_name": "Pat",
+                    "last_name": "Lee",
+                }
+            },
+        )
+        assert engine.new_member_name(analysis.members[0]) == ("Pat", "Lee")
+
+    def test_a_member_with_nothing_to_be_called_by_is_still_refused(self):
+        analysis = _analyze(
+            [_row(2, email="nobody@fd.test")],
+            member_mappings={"email:nobody@fd.test": {"action": "create"}},
+        )
+        assert "new_member_without_name" in _codes(analysis)

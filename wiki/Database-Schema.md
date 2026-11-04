@@ -115,8 +115,8 @@ included after the timestamp.
 
 - **A fresh install does not replay the migration chain.** On first start,
   `backend/main.py`'s `_fast_path_init()` creates every table from the models
-  (`create_all`), runs the few migration-only and seed-data files
-  (`MIGRATION_ONLY_FILES`, `SEED_DATA_FILES`), and stamps Alembic at head. The
+  (`create_all`), runs the seed-data files (`SEED_DATA_FILES`), and stamps
+  Alembic at head. The
   models in `app/models/` are therefore the schema a new deployment receives.
 - **An existing database is upgraded** to head with Alembic, which the backend
   runs at startup.

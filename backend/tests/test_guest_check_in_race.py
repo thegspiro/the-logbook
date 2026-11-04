@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import database_manager
 from app.models.event import CheckInWindowType, Event, EventType
+from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
 from app.models.user import Organization
 from app.services.guest_check_in_service import GuestCheckInService
 
@@ -53,6 +54,18 @@ class TestTheLockIsDeclared:
         source = inspect.getsource(GuestCheckInService._lock_event)
         assert "with_for_update()" in source
         assert "organization_id" in source
+
+    def test_known_prospect_confirm_does_not_re_derive_already_checked_in(self):
+        """`check_in_known_prospect` used to answer `already_checked_in` from
+        its own unlocked pre-check -- the same unlocked read this file's lock
+        exists to replace -- taken before `check_in_guest`'s own locked
+        answer. Two confirms racing the same way `check_in_guest`'s own race
+        does could both read "not yet checked in" and both report (and log)
+        a fresh sign-in. It must use the value `check_in_guest` decided under
+        the event lock instead of asking the question a second time itself."""
+        source = inspect.getsource(GuestCheckInService.check_in_known_prospect)
+        assert "_find_existing_attendee(" not in source
+        assert "already_checked_in = await self.check_in_guest(" in source
 
 
 @pytest.mark.integration
@@ -112,9 +125,12 @@ class TestConcurrentGuestScans:
                 session = AsyncSession(bind=conn, expire_on_commit=False)
                 try:
                     event = await session.get(Event, event_id)
-                    attendee, error, _created = await GuestCheckInService(
-                        session
-                    ).check_in_guest(
+                    (
+                        attendee,
+                        error,
+                        _created,
+                        _already_checked_in,
+                    ) = await GuestCheckInService(session).check_in_guest(
                         event=event,
                         organization_id=org_id,
                         first_name="Dana",
@@ -159,6 +175,145 @@ class TestConcurrentGuestScans:
                             "WHERE event_id = :e"
                         ),
                         {"e": event_id},
+                    )
+                    await cleanup_conn.execute(
+                        text("DELETE FROM events WHERE id = :e"), {"e": event_id}
+                    )
+                    await cleanup_conn.execute(
+                        text("DELETE FROM organizations WHERE id = :o"),
+                        {"o": org_id},
+                    )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+class TestConcurrentKnownProspectConfirms:
+    """Two simultaneous kiosk confirms for the same recognised applicant must
+    not both report (and log) a fresh sign-in.
+
+    `check_in_known_prospect` used to decide `already_checked_in` from its own
+    unlocked read, taken before `check_in_guest`'s locked one -- the same
+    pre-lock snapshot that let two simultaneous QR scans both insert, applied
+    here to a status flag instead of a row. Two confirms racing the same way
+    could both see "not yet checked in" and both tell the kiosk, and the
+    audit log, that this was the first sign-in."""
+
+    async def test_two_simultaneous_confirms_disagree_on_already_checked_in(
+        self, db_session
+    ):
+        # `db_session` is taken only for its `_initialize_database` dependency.
+        marker = uuid.uuid4().hex[:8]
+        org_id = str(uuid.uuid4())
+        event_id = str(uuid.uuid4())
+        prospect_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+
+        async with database_manager.engine.connect() as setup_conn:
+            setup = AsyncSession(bind=setup_conn, expire_on_commit=False)
+            setup.add(
+                Organization(
+                    id=org_id, name=f"Confirm Race {marker}", slug=f"cr-{marker}"
+                )
+            )
+            await setup.flush()
+            setup.add(
+                Event(
+                    id=event_id,
+                    organization_id=org_id,
+                    title="Open House",
+                    event_type=EventType.PUBLIC_EDUCATION,
+                    start_datetime=now - timedelta(minutes=10),
+                    end_datetime=now + timedelta(hours=2),
+                    check_in_window_type=CheckInWindowType.FLEXIBLE,
+                    allow_guest_check_in=True,
+                    guest_check_in_creates_prospect=False,
+                    is_cancelled=False,
+                )
+            )
+            setup.add(
+                ProspectiveMember(
+                    id=prospect_id,
+                    organization_id=org_id,
+                    first_name="Dana",
+                    last_name="Guest",
+                    email=f"dana-{marker}@example.com",
+                    status=ProspectStatus.ACTIVE,
+                )
+            )
+            await setup.commit()
+            await setup.close()
+
+        arrivals = 0
+        both_arrived = asyncio.Event()
+        real_find = GuestCheckInService._find_existing_attendee
+
+        async def meet_then_find(self, *args, **kwargs):
+            nonlocal arrivals
+            arrivals += 1
+            if arrivals >= 2:
+                both_arrived.set()
+            try:
+                await asyncio.wait_for(both_arrived.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                pass
+            return await real_find(self, *args, **kwargs)
+
+        async def confirm():
+            async with database_manager.engine.connect() as conn:
+                session = AsyncSession(bind=conn, expire_on_commit=False)
+                try:
+                    event = await session.get(Event, event_id)
+                    _attendee, error, already_checked_in = await GuestCheckInService(
+                        session
+                    ).check_in_known_prospect(
+                        event=event,
+                        organization_id=org_id,
+                        prospect_id=prospect_id,
+                    )
+                    assert error is None, error
+                    return already_checked_in
+                finally:
+                    await session.close()
+
+        try:
+            with patch.object(
+                GuestCheckInService, "_find_existing_attendee", meet_then_find
+            ):
+                results = await asyncio.gather(confirm(), confirm())
+
+            async with database_manager.engine.connect() as check_conn:
+                count = (
+                    await check_conn.execute(
+                        text(
+                            "SELECT COUNT(*) FROM event_external_attendees "
+                            "WHERE event_id = :e"
+                        ),
+                        {"e": event_id},
+                    )
+                ).scalar()
+            assert count == 1, (
+                f"{count} attendee rows exist after two simultaneous confirms "
+                "by the same applicant, not 1"
+            )
+            assert sorted(results) == [False, True], (
+                f"both confirms reported already_checked_in={results}; one "
+                "must be the fresh sign-in (False) and the other the repeat "
+                "(True) -- both False means each raced past the other's "
+                "unlocked pre-check, as `check_in_known_prospect` used to"
+            )
+        finally:
+            async with database_manager.engine.connect() as cleanup_conn:
+                async with cleanup_conn.begin():
+                    await cleanup_conn.execute(
+                        text(
+                            "DELETE FROM event_external_attendees "
+                            "WHERE event_id = :e"
+                        ),
+                        {"e": event_id},
+                    )
+                    await cleanup_conn.execute(
+                        text("DELETE FROM prospective_members WHERE id = :p"),
+                        {"p": prospect_id},
                     )
                     await cleanup_conn.execute(
                         text("DELETE FROM events WHERE id = :e"), {"e": event_id}

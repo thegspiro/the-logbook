@@ -152,6 +152,7 @@ export const MemberIdCardsPanel: React.FC<MemberIdCardsPanelProps> = ({ userId, 
 
       {!loading && !loadError && cards.length === 0 && (
         <EmptyState
+          compact
           headingLevel={3}
           icon={CreditCard}
           title="No ID cards issued"

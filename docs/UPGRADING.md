@@ -127,12 +127,38 @@ _is_ the upgrade. Before it:
   locally.
 - **Never downgrade to "repair" a migration fork.** Several migrations
   deliberately do not reverse, and one loses data on the way down — the entries
-  below name them.
+  below name them. Downgrading past `20260201_0016` is no longer possible at
+  all: `d75ecbc15bae` dropped the tables that revision's downgrade removes.
 
 ## Changes that can stop an existing deployment from starting
 
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
+
+### `REDIS_REQUIRED=true` now refuses to start without Redis (2026-11-04)
+
+`REDIS_REQUIRED` was documented — here, in `.env.example.full` and in the
+deployment guides — as making the backend refuse to start when it cannot reach
+Redis. It never did: the startup code caught the connection failure, logged a
+warning and carried on in degraded mode (caching off, rate limiting per
+process). It now does what it says. After its connection retries
+(`REDIS_CONNECT_RETRIES`, default 3) the backend logs
+`Redis connection failed and REDIS_REQUIRED is true - refusing to start` and
+exits, and Docker restarts it until Redis answers.
+
+**Only a deployment that sets `REDIS_REQUIRED=true` is affected**; the default
+is `false`, and nothing shipped in this repository sets it. If yours does,
+check that the backend actually reaches Redis on the version you are leaving:
+
+```bash
+docker compose logs backend | grep -E "Redis connected|Redis connection failed|degraded mode"
+```
+
+`✓ Redis connected` means nothing changes. `Redis connection failed` or
+`degraded mode` means the backend has been running without Redis and will
+**not start** after this upgrade until the Redis settings are fixed — the host,
+port, `REDIS_PASSWORD`, or `REDIS_SSL` / `REDIS_SSL_CA`. To keep the old
+behaviour while you fix them, set `REDIS_REQUIRED=false`.
 
 ### A self-hosted S3 / MinIO endpoint must be listed in `S3_ALLOWED_ENDPOINTS` (2026-11-03)
 
@@ -730,6 +756,28 @@ it off is how a department retires its public portal, so that choice is kept).
 - A department changed by this carries `settings.modules._public_info_backfilled`
   (a timestamp). The downgrade turns it back off for those departments unless
   an administrator has set Public Information since.
+
+### Eight unused tables are dropped, with any rows in them (2026-11-03)
+
+Migration `d75ecbc15bae` drops eight tables on the next start. **Whatever rows
+they hold are deleted and cannot be brought back by a downgrade**, so take the
+database backup described in
+[Before every upgrade](#before-every-upgrade-back-up-and-do-not-downgrade-to-fix-a-fork)
+first if you might want them.
+
+- **Five old compliance tables:** `compliance_policies`,
+  `policy_acknowledgments`, `compliance_checklists`, `checklist_submissions`
+  and `compliance_incidents`. No screen or report ever read or wrote them, so
+  rows exist only if something outside The Logbook put them there. The
+  facilities checklists are separate tables and are not touched.
+- **Three folder-backfill records:** `document_unfiled_backfill`,
+  `facility_folder_tier_backfill` and `facility_document_refile_backfill`.
+  They existed only so a downgrade past `dcb8a46ac50c` or `65128d5ccd50`
+  (2026-10-11) could move documents back to where they were. Those downgrades
+  now leave documents filed where they are.
+
+The application behaves exactly as before. A query or report of your own that
+reads one of these tables will fail.
 
 ### Adopting minutes now approves their meeting, and existing meetings catch up (2026-11-03)
 

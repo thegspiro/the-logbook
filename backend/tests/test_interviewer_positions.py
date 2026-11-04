@@ -213,6 +213,13 @@ def attention():
         yield sender
 
 
+@pytest.fixture
+def interview_request():
+    sender = AsyncMock(return_value=True)
+    with patch.object(EmailService, "send_interview_requested_email", sender):
+        yield sender
+
+
 async def _to_interview_stage(db: AsyncSession, w) -> None:
     await MembershipPipelineService(db).complete_step(
         w.applicant_id, w.org_id, w.steps["Application"], w.coordinator.id
@@ -567,6 +574,71 @@ class TestCaseManagerNotices:
             "Riley Bishop withdrew their application from their application "
             "status page."
         )
+
+
+class TestInterviewerRequests:
+    async def test_reaching_an_interview_stage_asks_each_interviewer(
+        self, db_session, board, attention, interview_request
+    ):
+        await _to_interview_stage(db_session, board)
+
+        assert sorted(
+            c.kwargs["to_email"] for c in interview_request.await_args_list
+        ) == (sorted([board.chief.email, board.director.email, board.newcomer.email]))
+        kwargs = interview_request.await_args.kwargs
+        assert kwargs["applicant_name"] == "Riley Bishop"
+        assert kwargs["stage_name"] == "Board Interview"
+        assert kwargs["interview_url"].endswith(
+            f"/prospective-members/{board.applicant_id}/interview"
+        )
+
+    async def test_an_interviewer_who_already_interviewed_is_not_asked_again(
+        self, db_session, board, attention, interview_request
+    ):
+        await _to_interview_stage(db_session, board)
+        await _interview(db_session, board, board.chief)
+        await MembershipPipelineService(db_session).regress_prospect(
+            board.applicant_id, board.org_id, board.coordinator.id
+        )
+        interview_request.reset_mock()
+
+        await _to_interview_stage(db_session, board)
+
+        assert sorted(
+            c.kwargs["to_email"] for c in interview_request.await_args_list
+        ) == (sorted([board.director.email, board.newcomer.email]))
+
+    async def test_a_case_manager_who_also_interviews_gets_only_the_request(
+        self, db_session, board, attention, interview_request
+    ):
+        db_session.add(
+            ProspectAssignment(
+                organization_id=board.org_id,
+                prospect_id=board.applicant_id,
+                user_id=board.case_manager.id,
+                role="interviewer",
+                assigned_by=board.coordinator.id,
+            )
+        )
+        await db_session.commit()
+
+        await _to_interview_stage(db_session, board)
+
+        asked = {c.kwargs["to_email"] for c in interview_request.await_args_list}
+        assert board.case_manager.email in asked
+        attention.assert_not_awaited()
+
+    async def test_a_checkbox_stage_asks_nobody(
+        self, db_session, board, attention, interview_request
+    ):
+        await _to_interview_stage(db_session, board)
+        await _interview(db_session, board, board.chief)
+        await _interview(db_session, board, board.director)
+        interview_request.reset_mock()
+
+        await _complete_interview_stage(db_session, board)
+
+        interview_request.assert_not_awaited()
 
 
 class TestAssignedToMe:
