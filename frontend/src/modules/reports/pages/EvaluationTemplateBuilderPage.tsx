@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Info, Save, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { EVALUATION_SETUP_LABEL } from '../../../components/layout/evaluationsNavigation';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
@@ -280,7 +281,7 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
           className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Evaluations
+          {EVALUATION_SETUP_LABEL}
         </Link>
         <div className="page-header mb-4 gap-3 sm:items-start">
           <div className="page-header-title">

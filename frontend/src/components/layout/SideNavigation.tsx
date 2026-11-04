@@ -36,7 +36,6 @@ import {
   ShieldCheck,
   ShieldAlert,
   ClipboardCheck,
-  ClipboardList,
   Activity,
   CreditCard,
   ScanLine,
@@ -68,6 +67,7 @@ import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
 import { trainingNavItems } from './trainingNavigation';
+import { EVALUATIONS_AREA_PREFIX, EVALUATIONS_HOME_PATH } from './evaluationsNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
@@ -97,6 +97,25 @@ interface NavItem {
   subItems?: SubNavItem[];
   /** If true, this item is a visual section divider label */
   isSectionLabel?: boolean;
+  /**
+   * The URL prefix the entry stands for, when it is broader than the page the
+   * entry opens: Evaluations opens My evaluations but is current on every
+   * evaluation page.
+   */
+  activePrefix?: string;
+  /**
+   * Prefixes under this entry's URL that belong to another entry, so the two
+   * are never marked current together: `/reports/evaluations` is Evaluations,
+   * not Reports.
+   */
+  excludePrefixes?: string[];
+}
+
+/** What deciding whether an entry is current reads from it. */
+interface ActiveMatch {
+  path: string;
+  activePrefix?: string | undefined;
+  excludePrefixes?: string[] | undefined;
 }
 
 /**
@@ -334,15 +353,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           } as NavItem,
         ]
       : []),
+    // One entry for the whole area, ungated because a member's own
+    // evaluations need no grant. Conducting and setup are reached from the
+    // strip at the top of the evaluation pages, gated there like their routes.
     ...(isModuleOn('reports')
       ? [
-          { label: 'My Evaluations', path: '/reports/evaluations/mine', icon: ClipboardCheck } as NavItem,
-          // Gated like its route: the evaluations a member conducts, or all.
           {
             label: 'Evaluations',
-            path: '/reports/evaluations/conduct',
-            icon: ClipboardList,
-            anyPermission: ['evaluations.conduct', 'evaluations.view_all', 'evaluations.manage'],
+            path: EVALUATIONS_HOME_PATH,
+            icon: ClipboardCheck,
+            activePrefix: EVALUATIONS_AREA_PREFIX,
           } as NavItem,
         ]
       : []),
@@ -563,14 +583,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   path: '/reports',
                   icon: BarChart3,
                   permission: 'reports.view',
-                } as NavItem,
-                // Its own entry, gated like its route: evaluation setup is
-                // delegated without reports.view, which the Reports entry needs.
-                {
-                  label: 'Member Evaluations',
-                  path: '/reports/evaluations',
-                  icon: ClipboardCheck,
-                  anyPermission: ['evaluations.configure', 'evaluations.manage'],
+                  excludePrefixes: [EVALUATIONS_AREA_PREFIX],
                 } as NavItem,
               ]
             : []),
@@ -662,11 +675,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     );
   };
 
+  const matchedPath = (item: ActiveMatch) => item.activePrefix ?? item.path;
+  const isItemActive = (item: ActiveMatch) =>
+    isActive(matchedPath(item)) && !(item.excludePrefixes ?? []).some((prefix) => isActive(prefix));
+
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
       return item.subItems.some((sub) => isActive(sub.path));
     }
-    return isActive(item.path);
+    return isItemActive(item);
   };
 
   const toggleMenu = (label: string) => {
@@ -706,8 +723,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
 
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
-    .filter((item) => isActive(item.path))
-    .sort((a, b) => b.path.length - a.path.length)[0];
+    .filter(isItemActive)
+    .sort((a, b) => matchedPath(b).length - matchedPath(a).length)[0];
 
   return (
     <>

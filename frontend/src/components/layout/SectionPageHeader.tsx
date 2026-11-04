@@ -4,23 +4,9 @@ import { Breadcrumbs } from '../ux/Breadcrumbs';
 import type { BreadcrumbItem } from '../ux/Breadcrumbs';
 import { ScrollCueRow } from '../ux/ScrollCueRow';
 import { BREADCRUMB_ROUTES, canLinkCrumb } from '../ux/breadcrumbRoutes';
-import { useAuthStore } from '../../stores/authStore';
+import { useSectionPermission } from './useSectionPermission';
 import type { SectionNavItem } from './sectionNavigation';
 import { activeSection, isSectionPage, visibleSectionNavItems } from './sectionNavigation';
-
-const DENY_ALL = (): boolean => false;
-
-/**
- * The viewer's permission predicate, denying everything when the store hands
- * back no function — as `Breadcrumbs` does and for the same reason: page suites
- * stub `useAuthStore` with only the slice the page reads, some ignoring the
- * selector and returning the whole stub, and a navigation strip must never be
- * what stops a page rendering.
- */
-function useSectionPermission(): (permission: string) => boolean {
-  const storePredicate: unknown = useAuthStore((state) => state.checkPermission);
-  return typeof storePredicate === 'function' ? (storePredicate as (permission: string) => boolean) : DENY_ALL;
-}
 
 /**
  * The strip's accent. Red is the house colour; Scheduling keeps the violet it
