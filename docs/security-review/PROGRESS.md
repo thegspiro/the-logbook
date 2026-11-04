@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3998](https://github.com/thegspiro/the-logbook/pull/3998)** (branch
+`claude/security-review-security-audit-ip-p12`) — Feature 28 (Security,
+audit & IP), pass 12, a watchdog pickup. True zero-delta: all nine backend
+scope files byte-identical to pass 11; the one frontend diff is the
+repo-wide page-header layout sweep, cosmetic only. 0 fixed, 0 new findings.
+SEC2-28-6 (IP-exception duplicate-request TOCTOU) and the dead
+detector-code note re-verified unchanged. See
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 12** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 12, PR #3996, merged), preserved for history</summary>
+
 **PR [#3996](https://github.com/thegspiro/the-logbook/pull/3996)** (branch
 `claude/security-review-integrations-p12`) — Feature 27 (Integrations),
 pass 12, a watchdog pickup. Real but narrow delta: the department ICS feed
@@ -24554,7 +24566,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                          | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ⬜     |
