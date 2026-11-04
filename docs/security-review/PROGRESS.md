@@ -16,11 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4000](https://github.com/thegspiro/the-logbook/pull/4000)** (branch
+`claude/security-review-security-audit-ip-p12`) — Feature 28 (Security,
+audit & IP), pass 12, a watchdog pickup. All nine backend files in scope
+are byte-identical since pass 11; the only delta is a cosmetic frontend
+class swap. 0 fixed, 0 new findings. Both open findings (SEC2-28-6, dead
+detector code) re-verified unchanged. See
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 12** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 12, PR #3996, merged), preserved for history</summary>
+
 **None.** PR #3996 (Feature 27, Integrations, pass 12) merged
 (`3bd09ed02`); confirmed via a fresh `is:pr is:open head:claude/security-review`
 search returning zero results. Row 27 is already ✅ in the table below (the
 table update rode along in #3996's own commit), so nothing further to record
 for that merge.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 12, PR #3996, merged), preserved for history</summary>
