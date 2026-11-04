@@ -145,6 +145,7 @@ from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reporting import persist_task_error_log
+from app.core.utils import safe_error_detail
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -4382,7 +4383,12 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             logger.error("Failed to send scheduled email {}: {}", item.id, e)
             try:
                 item.status = ScheduledEmailStatus.FAILED
-                item.error_message = str(e)[:500]
+                # error_message is returned to the client verbatim by
+                # ScheduledEmailResponse (GET /scheduled, settings.manage-
+                # gated but not a reason to leak SQL/driver internals to it)
+                # — sanitize the same way safe_error_detail() does elsewhere
+                # for this exact class of leak (see SEC13-1/SEC14-1).
+                item.error_message = safe_error_detail(e)[:500]
                 failed += 1
                 await db.commit()
             except Exception:
