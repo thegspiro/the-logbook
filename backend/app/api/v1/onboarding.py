@@ -56,7 +56,7 @@ from app.models.onboarding import (
 from app.models.user import User, UserStatus
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.schemas.system_notices import KeyCustodyConfirm, KeyCustodyStatus
-from app.services import key_custody_service
+from app.services import key_custody_service, s3_storage
 from app.services.auth_service import AuthService
 from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
@@ -2046,6 +2046,20 @@ async def save_file_storage_config(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}",
+        )
+
+    # A self-hosted S3 endpoint is the installation operator's choice
+    # (S3_ALLOWED_ENDPOINTS), not something setup may type in; refused here so
+    # the wizard says so, rather than the bucket failing later in Settings.
+    endpoint = data.config.get("s3EndpointUrl")
+    if (
+        isinstance(endpoint, str)
+        and endpoint.strip()
+        and not s3_storage.endpoint_allowed(endpoint)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=s3_storage.ENDPOINT_NOT_ALLOWED,
         )
 
     # Encrypt sensitive config data (contains API keys, AWS credentials, etc.)

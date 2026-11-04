@@ -383,6 +383,11 @@ STEPUP_HANDLERS = {
     ("users.py", "assign_user_roles"),
     ("users.py", "add_role_to_user"),
     ("users.py", "remove_role_from_user"),
+    # Rank CRUD (owner decision 2026-11-01, PERM-11): a rank carries its own
+    # permissions, the same as a role.
+    ("operational_ranks.py", "create_rank"),
+    ("operational_ranks.py", "update_rank"),
+    ("operational_ranks.py", "delete_rank"),
     ("ip_security.py", "approve_exception"),
     ("ip_security.py", "revoke_exception"),
     ("ip_security.py", "add_blocked_country"),
@@ -397,6 +402,10 @@ STEPUP_HANDLERS = {
     # Destructive member actions
     ("users.py", "delete_user"),
     ("users.py", "anonymize_member"),
+    # Suspending, dropping or archiving a member (owner decision 2026-11-01,
+    # USR-11): as destructive as deleting one, behind the same ceiling.
+    ("member_status.py", "change_member_status"),
+    ("member_status.py", "archive_member"),
     # Signatures (owner decision 2026-11-02): an evaluation's approver or
     # member re-verifies before their typed name is recorded as a signature.
     ("evaluations.py", "sign_evaluation"),

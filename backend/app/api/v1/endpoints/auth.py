@@ -65,6 +65,7 @@ from app.core.security import (
 )
 from app.core.security_middleware import (
     get_client_ip,
+    login_account_key,
     rate_limit_login,
     rate_limit_passkey,
     rate_limit_password_change,
@@ -73,6 +74,7 @@ from app.core.security_middleware import (
     rate_limit_register,
     rate_limit_token_refresh,
 )
+from app.core.stepup_throttle import clear_stepup_failures, reserve_stepup_attempt
 from app.core.suspicious_ip import (
     clear_auth_failures,
     enforce_suspicious_ip,
@@ -871,9 +873,61 @@ async def _audit_refused_sign_in(
     await db.commit()
 
 
+async def _json_field(request: Request, name: str) -> str | None:
+    """A string field of the JSON body, or None. FastAPI has already read and
+    cached the body by the time a dependency runs; a malformed one is left for
+    the route's own validation to answer with a 422."""
+    try:
+        body = await request.json()
+    except ValueError:
+        return None
+    value = body.get(name) if isinstance(body, dict) else None
+    return value if isinstance(value, str) and value.strip() else None
+
+
+async def _login_attempt_account(request: Request) -> str | None:
+    """``/login``: the account is the username or email typed in.
+
+    Counted whether or not it names a real member — a limit that only applied
+    to real accounts would tell an attacker which names exist.
+    """
+    username = await _json_field(request, "username")
+    return login_account_key(username[:254]) if username else None
+
+
+async def _mfa_attempt_account(request: Request) -> str | None:
+    """``/mfa/login``: the member the pending-MFA token was issued to.
+
+    Read from the token's claims alone (it is signed), without the database.
+    A token that does not decode has no account, so forged ones share the
+    address's unattributed allowance rather than each getting their own.
+    """
+    token = await _json_field(request, "temp_token")
+    if token is None:
+        return None
+    try:
+        payload = decode_token(token)
+    except Exception:
+        return None
+    if payload.get("type") != "mfa_pending" or not payload.get("sub"):
+        return None
+    return f"user:{payload['sub']}"
+
+
+async def _session_account(
+    current_user: User = Depends(get_current_active_user),
+) -> str:
+    """Signed-in routes (step-up, MFA setup/disable, recovery codes, passkey
+    registration): the session's own member."""
+    return f"user:{current_user.id}"
+
+
 @router.post(
     "/login",
-    dependencies=[rate_limit_login(), Depends(enforce_suspicious_ip)],
+    dependencies=[
+        rate_limit_login(_login_attempt_account),
+        Depends(enforce_suspicious_ip),
+    ],
 )
 async def login(
     credentials: UserLogin,
@@ -885,7 +939,9 @@ async def login(
 
     Accepts username/email and password, returns access and refresh tokens.
 
-    Rate limited to 5 requests per minute per IP address to prevent brute force attacks.
+    Rate limited to 5 attempts a minute per account at an address, and 30 a
+    minute per address (see rate_limit_login), to slow brute force without
+    turning a shared station address away.
     """
     auth_service = AuthService(db)
 
@@ -1212,7 +1268,10 @@ async def mfa_challenge(
 
 @router.post(
     "/mfa/login",
-    dependencies=[rate_limit_login(), Depends(enforce_suspicious_ip)],
+    dependencies=[
+        rate_limit_login(_mfa_attempt_account),
+        Depends(enforce_suspicious_ip),
+    ],
 )
 async def mfa_login(
     data: MFALogin,
@@ -1442,7 +1501,7 @@ def _replay_is_current(user: User, replayed: dict) -> bool:
     return live <= {mfa_service.hash_recovery_code(str(c)) for c in codes}
 
 
-@router.post("/mfa/verify-setup", dependencies=[rate_limit_login()])
+@router.post("/mfa/verify-setup", dependencies=[rate_limit_login(_session_account)])
 async def mfa_verify_setup(
     data: MFAVerify,
     background_tasks: BackgroundTasks,
@@ -1515,7 +1574,7 @@ async def mfa_verify_setup(
     return response
 
 
-@router.post("/mfa/disable", dependencies=[rate_limit_login()])
+@router.post("/mfa/disable", dependencies=[rate_limit_login(_session_account)])
 async def mfa_disable(
     data: MFAVerify,
     background_tasks: BackgroundTasks,
@@ -1567,7 +1626,7 @@ async def mfa_disable(
     return {"mfa_enabled": False}
 
 
-@router.post("/step-up", dependencies=[rate_limit_login()])
+@router.post("/step-up", dependencies=[rate_limit_login(_session_account)])
 async def step_up(
     data: StepUpRequest,
     request: Request,
@@ -1597,6 +1656,38 @@ async def step_up(
     has_passkey = await passkey_service.has_passkey(db, str(current_user.id), rp)
     if data.passkey_credential is not None and has_passkey and rp is not None:
         method = "passkey"
+    elif current_user.mfa_enabled:
+        method = "totp"
+    elif has_passkey:
+        # A password alone is weaker than the factor this member enrolled, so
+        # it does not open the window for them.
+        method = "passkey_required"
+    elif current_user.password_hash:
+        method = "password"
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This account signs in through a provider and has no password. "
+                "Set up two-factor authentication under Profile > Security to "
+                "confirm sensitive actions."
+            ),
+        )
+
+    # AUTH-23: a per-account limit, reserved before the secret is checked so
+    # parallel guesses cannot race past it. It never touches
+    # failed_login_attempts / locked_until — see app/core/stepup_throttle.py
+    # for why a session thief must not be able to lock the owner out.
+    retry_after = await reserve_stepup_attempt(str(current_user.id))
+    if retry_after:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed verification attempts. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # The conditions repeat what chose ``method`` so the types narrow here too.
+    if method == "passkey" and rp is not None and data.passkey_credential is not None:
         proven = (
             await passkey_service.verify_authentication(
                 db,
@@ -1607,31 +1698,18 @@ async def step_up(
             )
             is not None
         )
-    elif current_user.mfa_enabled:
-        method = "totp"
+    elif method == "totp":
         proven = bool(data.code) and await _verify_and_consume_totp(
             db, current_user, data.code or ""
         )
-    elif has_passkey:
-        # A password alone is weaker than the factor this member enrolled, so
-        # it does not open the window for them.
-        method = "passkey"
-        proven = False
-    elif current_user.password_hash:
-        method = "password"
+    elif method == "password" and current_user.password_hash:
         proven = (
             bool(data.password)
             and verify_password(data.password or "", current_user.password_hash)[0]
         )
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "This account signs in through a provider and has no password. "
-                "Set up two-factor authentication under Profile > Security to "
-                "confirm sensitive actions."
-            ),
-        )
+        method = "passkey"
+        proven = False
 
     if not proven:
         await log_audit_event(
@@ -1652,6 +1730,7 @@ async def step_up(
         )
 
     session.stepup_verified_at = datetime.now(timezone.utc)
+    await clear_stepup_failures(str(current_user.id))
     await log_audit_event(
         db=db,
         event_type="stepup_verified",
@@ -1685,7 +1764,7 @@ async def mfa_status(
     }
 
 
-@router.post("/mfa/recovery-codes", dependencies=[rate_limit_login()])
+@router.post("/mfa/recovery-codes", dependencies=[rate_limit_login(_session_account)])
 async def mfa_regenerate_recovery_codes(
     data: MFAVerify,
     background_tasks: BackgroundTasks,
@@ -1867,7 +1946,7 @@ async def passkey_register_options(
 @router.post(
     "/passkeys/register",
     response_model=PasskeyRegisterResponse,
-    dependencies=[rate_limit_login()],
+    dependencies=[rate_limit_login(_session_account)],
 )
 async def passkey_register(
     data: PasskeyRegisterRequest,

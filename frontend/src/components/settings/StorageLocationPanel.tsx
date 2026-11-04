@@ -12,6 +12,8 @@ import { getErrorMessage } from '../../utils/errorHandling';
 interface StorageLocationPanelProps {
   /** The section's save is in flight; the status is re-read once it lands. */
   savingStorage: boolean;
+  /** Told each time the server's answer changes, so the form can offer what it allows. */
+  onStatus?: ((status: FileStorageStatus) => void) | undefined;
 }
 
 /**
@@ -22,7 +24,7 @@ interface StorageLocationPanelProps {
  * it shows for the platform comes from the server, so a new platform needs no
  * change here.
  */
-const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStorage }) => {
+const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStorage, onStatus }) => {
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const [status, setStatus] = useState<FileStorageStatus | null>(null);
@@ -42,6 +44,10 @@ const StorageLocationPanel: React.FC<StorageLocationPanelProps> = ({ savingStora
   useEffect(() => {
     if (!savingStorage) void load();
   }, [savingStorage, load]);
+
+  useEffect(() => {
+    if (status) onStatus?.(status);
+  }, [status, onStatus]);
 
   const short = status?.platform_short_label ?? 'remote storage';
   const noun = status?.container_noun ?? 'store';
