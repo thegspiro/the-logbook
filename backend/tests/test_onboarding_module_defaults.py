@@ -50,6 +50,14 @@ class TestTheRule:
         assert stored["inventory"] is False
         assert stored["scheduling"] is False
 
+    def test_a_module_named_in_the_answers_stays_on_even_if_not_offered(self):
+        # An older setup session, or the legacy onboarding record, can name a
+        # module today's wizard does not offer; that choice is not dropped.
+        stored = modules_from_setup_answers(["members", "communications"])
+
+        assert stored["communications"] is True
+        assert "communications" in ONBOARDING_SETTINGS_ONLY_MODULES
+
     def test_hyphenated_ids_from_older_sessions_are_read(self):
         stored = modules_from_setup_answers(["prospective-members"])
 

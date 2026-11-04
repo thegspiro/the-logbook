@@ -253,8 +253,14 @@ class OrganizationService:
                 if field:
                     enabled_fields.add(field)
 
-            kwargs = {f: f in enabled_fields for f in field_names}
-            migrated = ModuleSettings(**kwargs)
+            # The setup rule, not "everything unnamed is off": that stored
+            # Public Information off on every installation old enough to come
+            # through here, and the 289504a34d3c backfill runs once, before
+            # this does. Imported here because services.onboarding imports
+            # this module.
+            from app.services.onboarding import modules_from_setup_answers
+
+            migrated = ModuleSettings(**modules_from_setup_answers(enabled_fields))
 
             # Persist to org.settings.modules so we never need the
             # fallback again — single source of truth going forward.
