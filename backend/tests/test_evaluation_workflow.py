@@ -2575,3 +2575,118 @@ class TestCalibrationFlags:
         assert calibrated.json()["calibration_flags"] == []
         (notice,) = outbox.to(dept.evaluator, WAITING)
         assert "flagged" not in notice["summary"]
+
+
+async def _supervise(
+    dept: _Dept,
+    member: User,
+    supervisor: User,
+    *,
+    starts_on: Optional[date] = None,
+    ends_on: Optional[date] = None,
+    organization_id: Optional[str] = None,
+) -> None:
+    """Record that ``supervisor`` supervises ``member`` over the given dates
+    (default: from today, open-ended)."""
+    from app.models.member_supervisor import MemberSupervisorAssignment
+
+    dept.db.add(
+        MemberSupervisorAssignment(
+            organization_id=organization_id or dept.org,
+            member_id=member.id,
+            supervisor_id=supervisor.id,
+            starts_on=starts_on or datetime.now(timezone.utc).date(),
+            ends_on=ends_on,
+        )
+    )
+    await dept.db.flush()
+
+
+class TestCrewSupervisor:
+    """A member's supervisor today reads their evaluations, by relationship
+    rather than by grant (owner decision 2026-11-01, crew views): every one
+    listed, the content once it is finalized, and never a write."""
+
+    async def test_the_supervisor_lists_and_reads_a_finalized_evaluation(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        captain = await _user(dept.db, dept.org, [])
+        await _supervise(dept, dept.member, captain)
+        url = await _finalized(dept, make_client)
+        client = await make_client(captain)
+
+        listed = (await client.get("/evaluations/crew")).json()
+        assert [e["id"] for e in listed] == [url.rsplit("/", 1)[-1]]
+
+        seen = (await client.get(url)).json()
+        assert sorted(p["kind"] for p in seen["parts"]) == [
+            "evaluator",
+            "self_evaluation",
+        ]
+        assert seen["data"] is not None
+        assert seen["document_available"] is True
+        assert seen["viewer"]["can_sign"] is None
+        assert seen["viewer"]["can_edit_evaluation"] is False
+
+    async def test_content_opens_when_it_is_released_to_the_member(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        captain = await _user(dept.db, dept.org, [])
+        await _supervise(dept, dept.member, captain)
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        member = await make_client(dept.member)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        await (await make_client(dept.evaluator)).put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        client = await make_client(captain)
+
+        listed = (await client.get("/evaluations/crew")).json()
+        assert [e["status"] for e in listed] == ["in_progress"]
+        seen = (await client.get(url)).json()
+        assert seen["parts"] == []
+        assert seen["data"] is None
+        # Writes never consult the relationship: to them the supervisor is
+        # nobody, so the evaluation does not exist.
+        assert (
+            await client.put(
+                f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+            )
+        ).status_code == 404
+
+        await _lock_evaluator(dept, make_client, url)
+        seen = (await client.get(url)).json()
+        assert seen["status"] == "in_progress"
+        assert sorted(p["kind"] for p in seen["parts"]) == [
+            "evaluator",
+            "self_evaluation",
+        ]
+        assert seen["viewer"]["can_sign"] is None
+
+    async def test_anyone_else_is_told_it_does_not_exist(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        today = datetime.now(timezone.utc).date()
+        former = await _user(dept.db, dept.org, [])
+        stranger = await _user(dept.db, dept.org, [])
+        elsewhere = await _user(dept.db, dept.org, [])
+        await _supervise(
+            dept,
+            dept.member,
+            former,
+            starts_on=today - timedelta(days=90),
+            ends_on=today - timedelta(days=1),
+        )
+        # A row filed under another department grants nothing here.
+        await _supervise(
+            dept, dept.member, elsewhere, organization_id=await _org(dept.db)
+        )
+        url = await _finalized(dept, make_client)
+
+        for user in (former, stranger, elsewhere):
+            client = await make_client(user)
+            assert (await client.get(url)).status_code == 404
+            assert (await client.get(f"{url}/document")).status_code == 404
+            assert (await client.get("/evaluations/crew")).json() == []

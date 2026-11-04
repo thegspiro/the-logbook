@@ -71,6 +71,7 @@ import { EVALUATIONS_AREA_PREFIX, EVALUATIONS_HOME_PATH } from './evaluationsNav
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
+import { useHasCrew } from '../../hooks/useHasCrew';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -160,6 +161,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     currentUser?.id,
     !modulesLoading && isModuleOn('prospective_members')
   );
+  const hasCrew = useHasCrew(currentUser?.id);
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -235,6 +237,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     ...(hasAssignedApplicants
       ? [{ label: 'My Applicants', path: '/prospective-members/my-applicants', icon: UserCheck } as NavItem]
       : []),
+    // Offered only to a member who supervises someone today: the Reports To
+    // assignment, not a permission, opens the page (pages/MyCrewPage).
+    ...(hasCrew ? [{ label: 'My Crew', path: '/members/my-crew', icon: Users } as NavItem] : []),
     // The route requires `storefront.view` (modules/storefront/routes.tsx), so
     // the module toggle alone is not the gate: a member whose department was
     // seeded before the storefront module shipped holds no storefront grant

@@ -166,6 +166,12 @@ export const evaluationsService = {
     return asArray(response.data);
   },
 
+  /** Evaluations of the members the caller supervises today; empty for anyone with no crew. */
+  async crew(): Promise<EvaluationSummary[]> {
+    const response = await api.get<EvaluationSummary[]>('/evaluations/crew');
+    return asArray(response.data);
+  },
+
   async liveData(): Promise<LiveData> {
     const response = await api.get<Partial<LiveData>>('/evaluations/mine/live-data');
     const body = response.data;

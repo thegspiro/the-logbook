@@ -32,6 +32,7 @@ const mockCheckContactInfoEnabled = vi.fn();
 const mockReactivateMember = vi.fn();
 const mockGetServiceHistory = vi.fn();
 const mockGetTierConfig = vi.fn();
+const mockGetTierNames = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
@@ -47,6 +48,7 @@ vi.mock('../services/api', () => ({
     getServiceHistory: (...args: unknown[]) => mockGetServiceHistory(...args) as unknown,
     // The class/status filters offer the department's tiers; none here.
     getTierConfig: (...args: unknown[]) => mockGetTierConfig(...args) as unknown,
+    getTierNames: (...args: unknown[]) => mockGetTierNames(...args) as unknown,
   },
 }));
 
@@ -179,6 +181,8 @@ function installDefaults(held: string[]): void {
   });
   mockGetTierConfig.mockReset();
   mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
+  mockGetTierNames.mockReset();
+  mockGetTierNames.mockResolvedValue([]);
   mockRoster.mockResolvedValue(ROSTER);
   mockCheckContactInfoEnabled.mockResolvedValue({
     enabled: true,
@@ -425,10 +429,13 @@ describe('Members roster — membership coordinator (members.manage)', () => {
     expect(mockGetDirectory).not.toHaveBeenCalled();
   });
 
-  it('asks for the tier config, to label the membership-status filter', async () => {
+  // The filter's labels come from the members-visible tier names, the same
+  // source a member's directory uses, so officer and member read one label.
+  it('asks for the tier names, to label the membership-status filter', async () => {
     renderWithRouter(<Members />);
 
-    await waitFor(() => expect(mockGetTierConfig).toHaveBeenCalled());
+    await waitFor(() => expect(mockGetTierNames).toHaveBeenCalled());
+    expect(mockGetTierConfig).not.toHaveBeenCalled();
   });
 
   it('opens on All Current, which leaves archived members out', async () => {
@@ -681,6 +688,8 @@ describe('Members roster — class and membership-status filters', () => {
     vi.clearAllMocks();
     mockCheckPermission.mockReturnValue(false);
     mockCheckContactInfoEnabled.mockResolvedValue({ enabled: false, fields: [] });
+    mockGetTierNames.mockReset();
+    mockGetTierNames.mockResolvedValue([]);
     mockRoster.mockResolvedValue([
       makeMember({
         id: 'u1',
@@ -737,6 +746,22 @@ describe('Members roster — class and membership-status filters', () => {
 
     await user.selectOptions(filter, 'senior');
     expect(within(table()).getByText('Sam Senior')).toBeInTheDocument();
+  });
+
+  // MR-3 (owner decision 2026-11-01): a member without members.manage sees the
+  // department's own tier names, not the built-in labels.
+  it("labels the filter with the department's tier names for a member", async () => {
+    mockGetTierNames.mockResolvedValue([
+      { id: 'active', name: 'Active Member' },
+      { id: 'senior', name: 'Senior Member' },
+      { id: 'life', name: 'Life Member' },
+    ]);
+    await renderRoster();
+
+    const filter = screen.getByLabelText('Filter by membership status');
+    await waitFor(() => expect(within(filter).getByRole('option', { name: 'Senior Member' })).toHaveValue('senior'));
+    expect(within(filter).getByRole('option', { name: 'Life Member' })).toHaveValue('life');
+    expect(within(filter).getByRole('option', { name: 'Active Member' })).toHaveValue('regular');
   });
 });
 

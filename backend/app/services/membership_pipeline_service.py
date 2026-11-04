@@ -81,7 +81,11 @@ from app.services.prospect_assignment_service import ProspectAssignmentService
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEACTIVATED_EMAIL_MESSAGE,
+    MemberStatus,
+    canonical_member_status,
+    configured_tiers,
     is_administrative,
+    tier_for_status,
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -92,6 +96,13 @@ from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# The starting statuses a pipeline's conversion rule may name
+# (``ConversionStatus``); any other starting status must be one of the
+# department's own tiers.
+CONVERSION_STARTING_STATUSES = frozenset(
+    {MemberStatus.PROBATIONARY, MemberStatus.REGULAR}
+)
 
 
 def prospect_document_path(file_path: Any, organization_id: Any) -> Optional[str]:
@@ -4371,6 +4382,35 @@ class MembershipPipelineService:
             )
         return relinked
 
+    async def _starting_status_or_none(
+        self, organization_id: str, member_status: str
+    ) -> Optional[str]:
+        """A converted applicant's chosen starting status, canonically spelled,
+        or None when this department does not offer it.
+
+        The two built-in starting statuses (the pipeline outcomes' own
+        vocabulary), or a tier on the organization's ladder -- the Convert
+        dialog lists the department's tiers (owner decision 2026-11-01). The
+        Organization row is locked first, as ``_accepted_member_status_or_400``
+        does for the profile, so the tier editor cannot remove the rung
+        between this check and the commit (Pitfall #27).
+        """
+        canonical = canonical_member_status(member_status)
+        if canonical is None:
+            return None
+        if canonical in CONVERSION_STARTING_STATUSES:
+            return canonical
+        org = (
+            await self.db.execute(
+                select(Organization)
+                .where(Organization.id == organization_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        tiers = configured_tiers(org.settings if org else None)
+        return canonical if tier_for_status(tiers, canonical) else None
+
     async def _do_transfer(
         self,
         prospect: ProspectiveMember,
@@ -4469,7 +4509,19 @@ class MembershipPipelineService:
 
         outcome: Optional[Tuple[str, str]]
         if member_class and member_status:
-            outcome = (member_class, member_status)
+            starting_status = await self._starting_status_or_none(
+                str(prospect.organization_id), member_status
+            )
+            if starting_status is None:
+                return {
+                    "success": False,
+                    "message": (
+                        f"'{member_status}' is not a starting status this "
+                        "department offers. Choose Probationary, Regular or "
+                        "one of the department's membership tiers."
+                    ),
+                }
+            outcome = (member_class, starting_status)
         elif membership_type:
             outcome = None
         else:

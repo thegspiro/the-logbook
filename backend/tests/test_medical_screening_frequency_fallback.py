@@ -7,10 +7,13 @@ lapsed, and "Every 12 months" on the requirement card described nothing.
 
 Owner decision: such a record falls due ``frequency_months`` after its
 completed date, using the frequency of the requirement the record is linked
-to, or, when it is linked to none, of the requirement it is graded against. A
-record's own expiration date still wins, and a record whose requirement has no
-frequency stays compliant indefinitely. The expiring list applies the same rule
-so the summary's count and the list agree.
+to. A record's own expiration date still wins, and a record whose requirement
+has no frequency stays compliant indefinitely. The expiring list applies the
+same rule so the summary's count and the list agree.
+
+Since 2026-11-04 a record counts only toward the requirement it is linked to
+(owner decision 2026-11-01), so the "graded requirement" fallback for an
+unlinked record is gone: an unlinked record counts toward nothing.
 """
 
 import uuid
@@ -60,8 +63,10 @@ async def scene(db_session, setup_org_and_admin):
 
 
 async def _requirement(
-    db, org_id, months, active=True, kind=ScreeningType.PHYSICAL_EXAM
+    db, org_id, months, active=True, kind=ScreeningType.PHYSICAL_EXAM, grace=0
 ):
+    # No grace by default: these tests pin the frequency-derived due date
+    # itself. The model's default of 30 days became live on 2026-11-04 (MS-16).
     req = ScreeningRequirement(
         id=_uid(),
         organization_id=org_id,
@@ -69,6 +74,7 @@ async def _requirement(
         screening_type=kind,
         frequency_months=months,
         is_active=active,
+        grace_period_days=grace,
     )
     db.add(req)
     await db.flush()
@@ -117,34 +123,8 @@ class TestGrading:
         assert item.expiration_date == completed + relativedelta(months=12)
         assert item.expiration_from_frequency is True
 
-    async def test_an_unlinked_record_uses_the_graded_requirement(
-        self, db_session, scene
-    ):
-        await _requirement(db_session, scene.org_id, 12)
-        completed = date.today() - relativedelta(months=12) + timedelta(days=10)
-        await _record(db_session, scene, completed)
-
-        summary = await _summary(db_session, scene)
-
-        assert summary.items[0].is_compliant is True
-        assert summary.expiring_soon_count == 1
-
-    async def test_the_linked_requirement_wins_even_when_it_is_inactive(
-        self, db_session, scene
-    ):
-        await _requirement(db_session, scene.org_id, 24)
-        linked = await _requirement(db_session, scene.org_id, 6, active=False)
-        completed = date.today() - relativedelta(months=8)
-        await _record(db_session, scene, completed, requirement_id=linked.id)
-
-        summary = await _summary(db_session, scene)
-
-        assert summary.items[0].is_compliant is False
-        assert summary.items[0].expiration_date == completed + relativedelta(months=6)
-
     async def test_a_linked_one_time_requirement_never_lapses(self, db_session, scene):
-        await _requirement(db_session, scene.org_id, 12)
-        one_time = await _requirement(db_session, scene.org_id, None, active=False)
+        one_time = await _requirement(db_session, scene.org_id, None)
         await _record(
             db_session,
             scene,
@@ -158,8 +138,13 @@ class TestGrading:
         assert summary.items[0].expiration_date is None
 
     async def test_no_frequency_anywhere_stays_compliant(self, db_session, scene):
-        await _requirement(db_session, scene.org_id, None)
-        await _record(db_session, scene, date.today() - relativedelta(years=5))
+        req = await _requirement(db_session, scene.org_id, None)
+        await _record(
+            db_session,
+            scene,
+            date.today() - relativedelta(years=5),
+            requirement_id=req.id,
+        )
 
         summary = await _summary(db_session, scene)
 
@@ -234,23 +219,20 @@ class TestExpiringList:
 def test_months_are_calendar_months_clamped_to_the_month_end(
     completed, months, expected
 ):
-    record = SimpleNamespace(
-        expiration_date=None, completed_date=completed, requirement_id=None
-    )
-    graded = SimpleNamespace(frequency_months=months)
+    record = SimpleNamespace(expiration_date=None, completed_date=completed)
+    linked = SimpleNamespace(frequency_months=months)
 
-    assert _effective_expiration(record, graded, {}) == (expected, True)
+    assert _effective_expiration(record, linked) == (expected, True)
 
 
 @pytest.mark.parametrize("months", [0, -3, None])
 def test_a_frequency_that_is_not_positive_derives_nothing(months):
-    record = SimpleNamespace(
-        expiration_date=None, completed_date=date(2026, 1, 1), requirement_id=None
-    )
+    record = SimpleNamespace(expiration_date=None, completed_date=date(2026, 1, 1))
 
-    assert _effective_expiration(
-        record, SimpleNamespace(frequency_months=months), {}
-    ) == (None, False)
+    assert _effective_expiration(record, SimpleNamespace(frequency_months=months)) == (
+        None,
+        False,
+    )
 
 
 class TestSupersededRecords:
@@ -262,9 +244,18 @@ class TestSupersededRecords:
     """
 
     async def _pair(self, db, org_id, **subject):
+        # Both filed against the org's one physical requirement: supersession
+        # is per requirement (owner decision 2026-11-01).
+        requirement_id = (
+            await db.execute(
+                text("SELECT id FROM screening_requirements WHERE organization_id=:o"),
+                {"o": org_id},
+            )
+        ).scalar_one()
         old = ScreeningRecord(
             id=_uid(),
             organization_id=org_id,
+            requirement_id=requirement_id,
             screening_type=ScreeningType.PHYSICAL_EXAM,
             status=ScreeningStatus.PASSED,
             completed_date=date.today() - relativedelta(months=12),
@@ -274,6 +265,7 @@ class TestSupersededRecords:
         renewed = ScreeningRecord(
             id=_uid(),
             organization_id=org_id,
+            requirement_id=requirement_id,
             screening_type=ScreeningType.PHYSICAL_EXAM,
             status=ScreeningStatus.PASSED,
             completed_date=date.today() - timedelta(days=5),
@@ -308,6 +300,7 @@ class TestSupersededRecords:
             ),
             {"id": prospect_id, "org": scene.org_id, "em": f"{prospect_id}@t.com"},
         )
+        await _requirement(db_session, scene.org_id, 12)
         await self._pair(db_session, scene.org_id, prospect_id=prospect_id)
 
         listed = await MedicalScreeningService(db_session).get_expiring_soon(
@@ -333,6 +326,7 @@ class TestSupersededRecords:
                 "em": f"{other}@t.com",
             },
         )
+        await _requirement(db_session, scene.org_id, 12)
         old = await self._pair(db_session, scene.org_id, user_id=scene.member_id)
         # Only the renewal is moved to the other member.
         await db_session.execute(

@@ -96,6 +96,16 @@ content on `manage` alone; reading needs `view_all`, being the evaluator, or
 being an approver at an open approval step. Approval steps are signed by
 holders of the step's position.
 
+The member's supervisor today, by the dated Reports To assignments, also
+reads their evaluations, by relationship rather than by grant (owner decision
+2026-11-01, built 2026-11-04). `GET /crew` lists every evaluation of the
+members the caller supervises, and `GET /{id}` shows a supervisor what the
+member may read: the status and steps at once, the parts, figures and
+signatures once the evaluation is released to the member. The check is made
+on each read, so an assignment that has ended grants nothing. No write path
+reads it: a supervisor cannot draft, write, sign, calibrate, amend or delete
+on the relationship alone.
+
 Signing and deleting require a recently re-verified session (step-up), as
 listed in `wiki/Security-Authentication.md`.
 
@@ -255,6 +265,7 @@ All under `/api/v1/evaluations`.
 | `GET /bulk-preview`, `POST /bulk`                                                                                             | `manage`                                                                                      |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |
+| `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
 | `GET /{id}` and its actions                                                                                                   | anyone with a part in it; the service decides who may do what, and answers 404 to anyone else |
 | `POST /{id}/sign`                                                                                                             | the signer the open step waits on, with step-up                                               |
 | `POST /{id}/calibration/complete`                                                                                             | `view_all`                                                                                    |
