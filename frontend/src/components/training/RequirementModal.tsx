@@ -655,9 +655,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     aria-describedby="req-attendance-pct-help"
                   />
                   <p id="req-attendance-pct-help" className="text-theme-text-muted mt-1 text-xs">
-                    Of the training sessions linked to this requirement and held in the period. Link a session from its
-                    event page; sessions not linked are optional. A waiver or leave covering a session&apos;s day
-                    excuses the member from it.
+                    Of the training sessions linked to this requirement and held in the period. Link sessions when you
+                    create them or from their event pages; sessions not linked are optional. A waiver or leave covering
+                    a session&apos;s day excuses the member from it.
                   </p>
                 </div>
               )}
