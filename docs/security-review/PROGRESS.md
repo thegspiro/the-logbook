@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4022](https://github.com/thegspiro/the-logbook/pull/4022)** (branch
+`claude/security-review-permissions-roles-p15`) —
+Feature 02 (Permissions & roles), pass 15, a watchdog pickup. 0 fixed, 0 new
+findings. PERM-10 and PERM-11 — open since pass 12 — are now closed by an
+owner-decision commit (`1fd977dd0`) that landed outside this rotation;
+verified the step-up wiring directly (`create_member`/`update_user_profile`'s
+conditional `ensure_stepup` call, `operational_ranks.py`'s rank CRUD now in
+`STEPUP_HANDLERS`) rather than trusting `KNOWN_LIMITATIONS.md`'s own note.
+28 routes re-enumerated by AST, unchanged. See
+`docs/security-review/PERM-02-permissions-roles.md`'s **Pass 15** section.
+Next in the rotation: Feature 03 (Public surface & webhooks).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 16, PR #4020, merged), preserved for history</summary>
+
 **PR [#4020](https://github.com/thegspiro/the-logbook/pull/4020)** (branch
 `claude/security-review-cross-cutting-pass15`) —
 Feature 00 (Cross-cutting baseline). **This is a second, concurrent
@@ -51,6 +66,8 @@ modules with no rotation row (`evaluations.py`, `history.py`,
 `member_supervisors.py`) were reviewed directly this pass and found sound;
 see the Rotation section's note for the follow-up to fold them into an
 existing row.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 15, PR #4021, merged), preserved for history</summary>
@@ -24724,7 +24741,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | --- | ------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                               | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                 | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                 | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                                                  | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                          | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                                                 | ⬜     |
@@ -46674,3 +46691,57 @@ trusting this note. A follow-up for whoever picks up Feature 07 or Feature
 17: fold `history.py`/`member_supervisors.py` and `evaluations.py` into that
 row's scope so they stop being invisible to the rotation table (see the
 Rotation section's note above).
+
+### 2026-11-04 — Feature 02 (Permissions & roles, pass 15) — watchdog pickup, 0 fixed, 0 new findings; PERM-10 and PERM-11 closed by the owner-decision batch, verified rather than trusted
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. Step 0 re-checked fresh against
+GitHub (`list_pull_requests`, state `open`): 0 results for a
+`claude/security-review-*` head, immediately after PR #4020 (Feature 00,
+Cross-cutting baseline, pass 16) merged. Row 00 was already `✅` (from PR
+#4019) and row 01 (Auth & session lifecycle) was already `✅` (PR #4021);
+row 02 (Permissions & roles) is the next `⬜` row, read directly off a
+freshly-pulled `main`.
+
+Baseline `e1c9ec0d0` (PR #3871's merge, pass 14) to head `3087fdaf5` (PR
+#4020's merge): four of this feature's eleven tracked files/pairs changed
+(`dependencies.py`, `operational_ranks.py`, `users.py`,
+`core/permissions.py`); the other seven are byte-identical. Routes
+re-enumerated by AST across all four endpoint files: 28, unchanged from
+pass 14.
+
+PERM-10 and PERM-11 — both re-verified OPEN/FLAGGED at every pass since 12 —
+are now closed. The commit landed outside this rotation
+(`1fd977dd0`, "security: build batch 1 of the owner's 2026-11-01
+decisions (Security & Auth)"), already recorded as resolved in
+`docs/KNOWN_LIMITATIONS.md`'s "Owner Decisions of 2026-11-01" section, but
+this pass verified the implementation directly rather than trusting that
+note: `create_member` and `update_user_profile`'s rank-change branch now
+call `ensure_stepup` conditionally (only when the request actually grants a
+rank or roles), placed after their existing `_enforce_rank_grant_ceiling`/
+`_enforce_role_grant_ceiling` calls and before anything is written;
+`operational_ranks.py`'s `create_rank`/`update_rank`/`delete_rank` now carry
+`require_stepup` as a route dependency and are in `STEPUP_HANDLERS`'s
+pinned, AST-checked set alongside `roles.py`'s four mutating routes. Guard
+tests already exist for both (`tests/test_stepup_on_rank_and_role_grants.py`,
+`tests/test_mfa_policy.py`'s `_handlers_with_stepup() == STEPUP_HANDLERS`).
+Also reviewed: three new permission groups registered in
+`core/permissions.py` for other modules' features (`evaluations.*`,
+`history.*`, `prospective_members.view_all`) — none seeded to `member` or
+`firefighter`'s baseline, confirmed by parsing both blocks directly rather
+than reading the seeding comments. **0 fixed, 0 new findings.** Full
+write-up: `docs/security-review/PERM-02-permissions-roles.md`'s **Pass 15**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 712
+revisions, single head `b5e906ebdd7d`; `check_route_permissions.py --strict`
+— 298 routes, 0 errors/warnings; scoped backend suite (`-k "permission or
+role or rank or officer or org_chart or passkey or stepup"`) — 1792 passed, 1
+pre-existing skip (environment-only: `py_vapid`/`pywebpush`).
+No frontend files touched this pass.
+
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
+webhooks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
