@@ -92,11 +92,15 @@ test.describe('A touch screen keeps its 44px targets', () => {
 // 1366x768. Long names, usernames and membership labels are what force it,
 // so the fixture carries them.
 // A tablet keeps the side navigation open, so the page body there is narrower
-// than seven columns need however they wrap; below 1024px the roster reflows
-// into one card per member instead.
+// than seven columns need however they wrap. The roster reflows into one card
+// per member when its own card is under 64rem, which a viewport breakpoint
+// cannot see: a 1024px iPad Pro leaves it ~690px. A 1280px laptop lands just
+// under the line too.
 const ROSTER_TABLETS = [
   { name: 'iPad portrait 820x1180', width: 820, height: 1180 },
   { name: 'tablet 1000x800', width: 1000, height: 800 },
+  { name: 'iPad Pro portrait 1024x1366', width: 1024, height: 1366 },
+  { name: 'laptop 1280x800', width: 1280, height: 800 },
 ];
 
 test.describe('The member roster fits its card on a laptop or tablet', () => {
