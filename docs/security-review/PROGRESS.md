@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)** (branch `claude/security-review-storefront-payments-p15`) —
+**PR [#4040](https://github.com/thegspiro/the-logbook/pull/4040)** (branch
+`claude/security-review-storefront-payments-p15`) —
 Feature 04 (Storefront & payments), pass 15, a watchdog pickup. True zero
 delta against pass 14's own reviewed state — every tracked file
 byte-identical, 48 routes re-enumerated by AST and unchanged. 0 fixed, 0 new
