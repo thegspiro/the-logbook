@@ -24600,7 +24600,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                          | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                              | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                         | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                | ⬜     |
@@ -46355,3 +46355,53 @@ skipped (all pre-existing environment skips), 0 failed.
 
 Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
 & IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-04 — Feature 30 (Onboarding, pass 12) merged; Feature 31 (Scheduled tasks, pass 12) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) has been unreachable across many
+consecutive cycles per `ListAgents` ("No reachable agents" each time). PR
+#4003 (Feature 30, Onboarding, pass 12) had already merged; a GitHub search
+for `is:pr is:open head:claude/security-review` returned zero results,
+confirming row 31 (Scheduled tasks) as the next `⬜` row on a freshly-pulled
+`main`.
+
+Baseline `e67f8521e` (pass 11's merge, PR #3857) to head: three non-merge
+commits touching either of this feature's two files, the full 300-line diff
+against `scheduled_tasks.py` read in full (`scheduled.py` itself is
+byte-identical, confirmed by `git diff` returning zero lines — still 82 L, 2
+routes). Two new scheduled tasks registered (`SCHEDULE`/`TASK_RUNNERS`
+re-verified by AST at 72/72, up from 70) — `zeffy_payment_sync` (delegates to
+`ZeffySyncService`, already Feature 22/27's own reviewed scope; reviewed here
+only for the scheduler-wiring angle: ids-not-loaded-rows, per-target
+commit/rollback isolation, org-scoped re-fetch) and `evaluation_due_notices`
+(delegates to `EvaluationNoticeService.send_due_notices`, already Feature
+17/29's own scope; reviewed here only for its locking/idempotency claims,
+confirmed via `.with_for_update()` plus per-notice-kind timestamp stamps).
+Also re-verified an already-merged fix to the existing
+`inventory_overdue_alerts` task (CRON-41): it previously had no sent-log, so
+an in-process-scheduler restart (which loses all in-memory last-run times)
+re-sent the day's overdue-equipment email to every holder; the fix adds a
+`NotificationLog`-backed, org- and calendar-day-scoped sent-log, recorded
+after a successful send (correct "send, then stamp" ordering for a reminder
+per CLAUDE.md Pitfall #36).
+
+**0 fixed, 0 new findings.** CRON4-31-2, app-review CRON-4, CRON-31-7/8, and
+the Redis-down-fails-open note all re-confirmed unchanged — none touched by
+this window's diff. The pre-existing `TASK_INTERVALS_SECONDS` gap for
+`scheduled_emails` (deliberate, covered by
+`tests/test_scheduled_task_coverage.py`) re-confirmed unchanged. Full
+write-up: `docs/security-review/CRON12-31-scheduled-tasks.md`.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 711
+revisions, single head; `check_route_permissions.py --strict` — 298 routes, 0
+errors/warnings; `test_scheduled_task_coverage.py` — 5 passed; targeted
+backend suite (`-k "scheduled_task or cron or scheduler or zeffy_sync or
+evaluation_notice or evaluation_due or inventory_overdue or
+inventory_low_stock or officer_alert_copies"`) — 170 passed, 1 pre-existing
+skip, 0 failed. No frontend files touched this pass.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check for an open security-review PR fresh rather than trusting
+this note.
