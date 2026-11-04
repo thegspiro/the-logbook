@@ -64,6 +64,7 @@ import EmergencyContactsSection from '../components/member-profile/EmergencyCont
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useDialog } from '../hooks/useDialog';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
+import { MyHoursSummary } from './scheduling/MyHoursSummary';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { GoogleAccountPanel } from '../modules/membership/components/GoogleAccountPanel';
 import { DIRECTORY_INTEGRATIONS } from '../modules/membership/constants/googleAccount';
@@ -191,6 +192,7 @@ export const MemberProfilePage: React.FC = () => {
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
+  const schedulingEnabled = isModuleEnabled('scheduling');
 
   const fetchInventoryItems = React.useCallback(async (uid: string) => {
     try {
@@ -290,6 +292,9 @@ export const MemberProfilePage: React.FC = () => {
   const isSelf = currentUser?.id === userId;
   const canViewTargetTraining = isSelf || checkPermission('training.manage');
   const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
+  // Officers: `scheduling.report` already shows them every member's hours in
+  // the department's member-hours report, which is what the backend checks.
+  const canViewTargetShifts = isSelf || checkPermission('scheduling.report');
   // Which gear a colleague signed for is quartermaster business, not part of
   // the contact card every member may look up. inventory.view is baseline for
   // every member (it opens the catalog and their own kit), so it cannot be the
@@ -744,9 +749,11 @@ export const MemberProfilePage: React.FC = () => {
   const showAdminHours = Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0) || adminHoursLoading;
   const showIdCards = Boolean(canManageIdCards && userId && idCardsEnabled);
   const showGoogleAccount = Boolean(googleAccount.account && userId);
+  const showShiftHistory = Boolean(schedulingEnabled && canViewTargetShifts && userId);
   const hasLeftColumn =
     (trainingEnabled && canViewTargetTraining) ||
     showAdminHours ||
+    showShiftHistory ||
     showIdCards ||
     showGoogleAccount ||
     (inventoryModuleEnabled && canViewTargetInventory);
@@ -995,6 +1002,16 @@ export const MemberProfilePage: React.FC = () => {
                   complianceSummary={complianceSummary}
                   tz={tz}
                 />
+              )}
+
+              {/* Shift & call history: the same figures My Hours shows the
+                member, read for this member. Always the profile's view, even
+                on one's own profile, so the outside-shift editor that belongs
+                on My Hours is not repeated here. */}
+              {showShiftHistory && userId && (
+                <div className="card p-6">
+                  <MyHoursSummary memberId={userId} />
+                </div>
               )}
 
               {/* Admin Hours Summary */}

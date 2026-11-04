@@ -39,6 +39,7 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
+    ShiftDutyType,
     ShiftPattern,
     ShiftPatternOccurrence,
     ShiftPosition,
@@ -9285,6 +9286,9 @@ class SchedulingService:
             "pending_hours": 0.0,
             "external_shifts": 0,
             "external_hours": 0.0,
+            "external_calls": 0,
+            "on_call_shifts": 0,
+            "on_call_hours": 0.0,
         }
 
     async def get_member_month_totals(
@@ -9320,6 +9324,11 @@ class SchedulingService:
         than folded into ``hours`` so the department's own shift record stays
         what it says it is.
 
+        **On-call hours are a part of the credited hours, never added to
+        them.** ``on_call_*`` reports how much of ``hours`` / ``shifts`` was on
+        recall shifts (``Shift.duty_type == on_call``), so a screen can say "of
+        which 40 on call" without a second definition of what counts.
+
         Scoped through ``Shift.organization_id``: ``shift_attendance`` carries
         no org column of its own, and the shift is the row that has one.
         """
@@ -9331,6 +9340,7 @@ class SchedulingService:
                 year_col.label("year"),
                 month_col.label("month"),
                 Shift.is_finalized.label("finalized"),
+                Shift.duty_type.label("duty_type"),
                 func.count(ShiftAttendance.id).label("shift_count"),
                 func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label(
                     "minutes"
@@ -9347,7 +9357,7 @@ class SchedulingService:
             query = query.where(Shift.shift_date <= end_date)
 
         result = await self.db.execute(
-            query.group_by(year_col, month_col, Shift.is_finalized)
+            query.group_by(year_col, month_col, Shift.is_finalized, Shift.duty_type)
         )
 
         # Approved pre-shift work adds minutes to the month of its shift, on
@@ -9363,43 +9373,69 @@ class SchedulingService:
             prep_filters.append(Shift.shift_date >= start_date)
         if end_date is not None:
             prep_filters.append(Shift.shift_date <= end_date)
-        prep_minutes: Dict[Tuple[int, int, bool], int] = {
-            (int(row.year), int(row.month), bool(row.finalized)): int(row.minutes or 0)
-            for row in await approved_pre_work_minutes(
-                self.db,
-                *prep_filters,
-                group_by=[
-                    year_col.label("year"),
-                    month_col.label("month"),
-                    Shift.is_finalized.label("finalized"),
-                ],
+        # Raw minutes are summed per month first and turned into hours once,
+        # so splitting the query by duty type cannot change a month's hours
+        # by a rounding increment.
+        raw: Dict[Tuple[int, int], Dict[str, int]] = {}
+
+        def _raw(key: Tuple[int, int]) -> Dict[str, int]:
+            return raw.setdefault(
+                key,
+                {
+                    "shifts": 0,
+                    "minutes": 0,
+                    "calls": 0,
+                    "pending_shifts": 0,
+                    "pending_minutes": 0,
+                    "on_call_shifts": 0,
+                    "on_call_minutes": 0,
+                },
             )
-        }
+
+        for row in result.all():
+            totals = _raw((int(row.year), int(row.month)))
+            minutes = int(row.minutes or 0)
+            if row.finalized:
+                totals["shifts"] += int(row.shift_count or 0)
+                totals["minutes"] += minutes
+                totals["calls"] += int(row.calls or 0)
+                if row.duty_type == ShiftDutyType.ON_CALL.value:
+                    totals["on_call_shifts"] += int(row.shift_count or 0)
+                    totals["on_call_minutes"] += minutes
+            else:
+                totals["pending_shifts"] += int(row.shift_count or 0)
+                totals["pending_minutes"] += minutes
+        # Includes prep on a shift the member has no attendance row for yet
+        # (they prepped, then an officer has still to record the shift).
+        for row in await approved_pre_work_minutes(
+            self.db,
+            *prep_filters,
+            group_by=[
+                year_col.label("year"),
+                month_col.label("month"),
+                Shift.is_finalized.label("finalized"),
+                Shift.duty_type.label("duty_type"),
+            ],
+        ):
+            totals = _raw((int(row.year), int(row.month)))
+            minutes = int(row.minutes or 0)
+            if row.finalized:
+                totals["minutes"] += minutes
+                if row.duty_type == ShiftDutyType.ON_CALL.value:
+                    totals["on_call_minutes"] += minutes
+            else:
+                totals["pending_minutes"] += minutes
 
         buckets: Dict[Tuple[int, int], Dict[str, Any]] = {}
-        for row in result.all():
-            key = (int(row.year), int(row.month))
+        for key, totals in raw.items():
             entry = buckets.setdefault(key, self._empty_month_totals(*key))
-            minutes = int(row.minutes or 0) + prep_minutes.pop(
-                (key[0], key[1], bool(row.finalized)), 0
-            )
-            if row.finalized:
-                entry["shifts"] = int(row.shift_count or 0)
-                entry["hours"] = hours_from_minutes(minutes)
-                entry["calls"] = int(row.calls or 0)
-            else:
-                entry["pending_shifts"] = int(row.shift_count or 0)
-                entry["pending_hours"] = hours_from_minutes(minutes)
-        # Prep on a shift the member has no attendance row for yet (they
-        # prepped, then an officer has still to record the shift itself).
-        for (year, month, finalized), minutes in prep_minutes.items():
-            entry = buckets.setdefault(
-                (year, month), self._empty_month_totals(year, month)
-            )
-            if finalized:
-                entry["hours"] = hours_from_minutes(minutes)
-            else:
-                entry["pending_hours"] = hours_from_minutes(minutes)
+            entry["shifts"] = totals["shifts"]
+            entry["hours"] = hours_from_minutes(totals["minutes"])
+            entry["calls"] = totals["calls"]
+            entry["pending_shifts"] = totals["pending_shifts"]
+            entry["pending_hours"] = hours_from_minutes(totals["pending_minutes"])
+            entry["on_call_shifts"] = totals["on_call_shifts"]
+            entry["on_call_hours"] = hours_from_minutes(totals["on_call_minutes"])
 
         external = await ExternalShiftHoursService(self.db).counted_totals_by_month(
             str(organization_id), str(user_id), start_date, end_date
@@ -9408,6 +9444,7 @@ class SchedulingService:
             entry = buckets.setdefault(key, self._empty_month_totals(*key))
             entry["external_shifts"] = totals["shift_count"]
             entry["external_hours"] = hours_from_minutes(totals["minutes"])
+            entry["external_calls"] = totals.get("calls", 0)
         return buckets
 
     async def get_my_hours_history(
@@ -9473,6 +9510,11 @@ class SchedulingService:
                 "external_shifts": sum(b["external_shifts"] for b in buckets),
                 "external_hours": sum_hours_to_quarter(
                     [b["external_hours"] for b in buckets]
+                ),
+                "external_calls": sum(b["external_calls"] for b in buckets),
+                "on_call_shifts": sum(b["on_call_shifts"] for b in buckets),
+                "on_call_hours": sum_hours_to_quarter(
+                    [b["on_call_hours"] for b in buckets]
                 ),
             }
 

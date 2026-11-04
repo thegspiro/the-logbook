@@ -3355,6 +3355,45 @@ async def get_my_hours_history(
     )
 
 
+@router.get(
+    "/members/{user_id}/hours-history", response_model=MemberHoursHistoryResponse
+)
+async def get_member_hours_history(
+    user_id: UUID,
+    year: int | None = Query(None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One member's shift hours and call credit, month by month — the figures
+    ``/my-hours-history`` gives a member about themself, for their profile.
+
+    The member may read their own; anyone else needs ``scheduling.report``,
+    which already shows them every member's hours in the department's
+    member-hours report, so this discloses nothing that report does not.
+    The member must belong to the caller's organization: an id from another
+    one reads as not found, never as forbidden, so the response is no oracle
+    for which ids exist elsewhere (pitfall #14).
+    """
+    if str(user_id) != str(current_user.id) and not user_has_permission(
+        current_user, "scheduling.report"
+    ):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    member = (
+        await db.execute(
+            select(User.id).where(
+                User.id == str(user_id),
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    service = SchedulingService(db)
+    return await service.get_my_hours_history(
+        str(user_id), current_user.organization_id, year
+    )
+
+
 # ============================================
 # Report Endpoints
 # ============================================

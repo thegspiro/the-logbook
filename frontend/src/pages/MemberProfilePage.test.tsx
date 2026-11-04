@@ -41,6 +41,12 @@ vi.mock('../stores/authStore', () => ({
   }),
 }));
 
+// The shift history has its own suite (MyHoursSummary.test.tsx); here it only
+// needs to show whose history the profile asked for.
+vi.mock('./scheduling/MyHoursSummary', () => ({
+  MyHoursSummary: ({ memberId }: { memberId?: string }) => <div data-testid="shift-history">{memberId}</div>,
+}));
+
 vi.mock('../modules/membership/components/MemberIdCardsPanel', () => ({
   MemberIdCardsPanel: () => null,
 }));
@@ -1141,5 +1147,39 @@ describe('MemberProfilePage removing a profile photo', () => {
 
     expect(deletePhoto).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Remove photo' })).toBeInTheDocument();
+  });
+});
+
+describe('MemberProfilePage shift & call history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue(targetUser);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+  });
+
+  it('is hidden from a colleague without scheduling.report', async () => {
+    renderWithRouter(<MemberProfilePage />);
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+
+    expect(screen.queryByTestId('shift-history')).not.toBeInTheDocument();
+  });
+
+  it('is shown to an officer, for the member being viewed', async () => {
+    grantedPermissions = ['scheduling.report'];
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByTestId('shift-history')).toHaveTextContent(TARGET_ID);
+  });
+
+  it('is shown to the member on their own profile', async () => {
+    routeUserId = VIEWER_ID;
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByTestId('shift-history')).toHaveTextContent(VIEWER_ID);
   });
 });
