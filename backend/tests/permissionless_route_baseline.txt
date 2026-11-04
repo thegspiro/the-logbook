@@ -101,6 +101,11 @@ app/api/v1/endpoints/elections.py::submit_member_ballot
 # and the signer's own name typed.
 app/api/v1/endpoints/evaluations.py::download_evaluation_document
 app/api/v1/endpoints/evaluations.py::get_evaluation
+# /attention returns two counts scoped to the caller: their own evaluations
+# waiting on them, and — only for a holder of evaluations.conduct, view_all or
+# manage — the overdue rows of the same list the conduct page shows them
+# (2026-11-04).
+app/api/v1/endpoints/evaluations.py::get_attention_counts
 app/api/v1/endpoints/evaluations.py::get_my_live_data
 # /mine/removed lists the deletion records of the caller's own evaluations,
 # filtered on current_user.id within its organization (2026-11-02).

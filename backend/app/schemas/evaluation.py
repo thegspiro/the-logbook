@@ -848,6 +848,15 @@ class ExcludedRangeResponse(BaseModel):
     reason: Literal["leave", "separation"]
 
 
+class AttentionCounts(BaseModel):
+    """Badges for the evaluation pages' section strip, decided by the server.
+    ``mine``: the caller's own evaluations waiting on them. ``overdue``: those
+    they may list on the conduct page with a step past due."""
+
+    mine: int
+    overdue: int
+
+
 class EvaluationSummary(BaseModel):
     id: str
     member: PersonRef

@@ -47,6 +47,7 @@ from app.core.utils import ensure_found, handle_service_errors
 from app.models.evaluation import EvaluationTemplateKind
 from app.models.user import User
 from app.schemas.evaluation import (
+    AttentionCounts,
     BuilderOptions,
     BulkDraftPreview,
     BulkDraftRequest,
@@ -637,6 +638,20 @@ async def list_my_deletion_records(
     reason given: the member is told an evaluation was removed, and why."""
     return await EvaluationService(db).deletion_records(
         current_user.organization_id, current_user.id
+    )
+
+
+@router.get("/attention", response_model=AttentionCounts)
+async def get_attention_counts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """How many of the caller's own evaluations wait on them, and how many
+    they may list on the conduct page are overdue — the badges on the
+    evaluation pages' section strip. Counts only, scoped to the caller: a
+    member with no evaluation grant gets 0 for the second."""
+    return await EvaluationService(db).attention_counts(
+        current_user.organization_id, current_user
     )
 
 

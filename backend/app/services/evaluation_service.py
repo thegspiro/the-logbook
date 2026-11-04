@@ -32,7 +32,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -893,6 +893,61 @@ class EvaluationService:
             approver=False,
         )
         return await self._summaries(organization_id, evaluations, roles)
+
+    async def attention_counts(
+        self, organization_id: str, viewer: User
+    ) -> Dict[str, int]:
+        """The numbers the evaluation pages' section strip badges.
+
+        ``mine`` is the caller's own evaluations with a step open for them to
+        act on — their self-evaluation or their acknowledgement. ``overdue``
+        is the evaluations the caller may list on the conduct page (the ones
+        they conduct, or every one for ``view_all`` and ``manage``) whose open
+        step is past its due date; it is 0 for a caller who may not list any.
+        """
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(tz)
+        mine = await self.db.scalar(
+            select(func.count(func.distinct(Evaluation.id)))
+            .join(
+                EvaluationStep,
+                (EvaluationStep.evaluation_id == Evaluation.id)
+                & (EvaluationStep.revision == Evaluation.revision),
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.member_id == viewer.id,
+                Evaluation.status == EvaluationStatus.IN_PROGRESS.value,
+                EvaluationStep.organization_id == organization_id,
+                EvaluationStep.status == EvaluationStepStatus.OPEN.value,
+                EvaluationStep.step_type.in_(
+                    (_SELF, EvaluationStepType.MEMBER_ACKNOWLEDGEMENT.value)
+                ),
+            )
+        )
+        overdue = 0
+        if any(
+            user_has_permission(viewer, grant)
+            for grant in (
+                "evaluations.conduct",
+                "evaluations.view_all",
+                "evaluations.manage",
+            )
+        ):
+            # The same list the conduct page shows, so the badge counts rows
+            # the viewer will find there (CLAUDE.md pitfall #29).
+            listed = await self.list_evaluations(
+                organization_id,
+                viewer,
+                status=EvaluationStatus.IN_PROGRESS.value,
+            )
+            overdue = sum(
+                1
+                for row in listed
+                if row["current_step_due"] is not None
+                and row["current_step_due"] < today
+            )
+        return {"mine": int(mine or 0), "overdue": overdue}
 
     async def _summaries(
         self,

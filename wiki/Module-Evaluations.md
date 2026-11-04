@@ -20,7 +20,10 @@ evaluation is changed or removed, the member is told and the reason is kept.
 Every member has one **Evaluations** entry in the navigation, which opens
 **My evaluations**. The other sections appear as a strip across the top of the
 evaluation pages, and only for a member whose permissions open them. A member
-with neither grant sees no strip at all.
+with neither grant sees no strip at all. The strip's links carry counts: on
+**My evaluations**, how many of your own evaluations are waiting on you (your
+self-evaluation or acknowledgement), and on the conduct list, how many of the
+evaluations you can see there are past a due date.
 
 | Section                                         | Path                           | Who sees it                                                                                                                     |
 | ----------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |

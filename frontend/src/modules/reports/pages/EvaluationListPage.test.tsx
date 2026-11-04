@@ -27,9 +27,11 @@ const create = vi.fn();
 const removed = vi.fn();
 const bulkPreview = vi.fn();
 const bulkDraft = vi.fn();
+const attention = vi.fn();
 vi.mock('../services/evaluationsApi', () => ({
   evaluationsService: {
     list: (...a: unknown[]) => list(...a) as unknown,
+    attention: (...a: unknown[]) => attention(...a) as unknown,
     draftOptions: (...a: unknown[]) => draftOptions(...a) as unknown,
     create: (...a: unknown[]) => create(...a) as unknown,
     removed: (...a: unknown[]) => removed(...a) as unknown,
@@ -91,7 +93,8 @@ const PREVIEW: BulkDraftPreview = {
 
 describe('EvaluationListPage', () => {
   beforeEach(() => {
-    for (const m of [list, draftOptions, create, navigate, removed, bulkPreview, bulkDraft]) m.mockReset();
+    for (const m of [list, draftOptions, create, navigate, removed, bulkPreview, bulkDraft, attention]) m.mockReset();
+    attention.mockResolvedValue({ mine: 0, overdue: 0 });
     list.mockResolvedValue([SUMMARY]);
     draftOptions.mockResolvedValue(OPTIONS);
     create.mockResolvedValue({ ...SUMMARY, id: 'new-ev' });

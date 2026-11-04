@@ -5,6 +5,7 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray } from '../../../utils/asArray';
 import type {
+  AttentionCounts,
   BuilderOptions,
   BulkDraftItem,
   BulkDraftPreview,
@@ -159,6 +160,11 @@ export const evaluationsService = {
 
   async create(data: EvaluationCreate): Promise<EvaluationDetail> {
     const response = await api.post<EvaluationDetail>('/evaluations', data);
+    return response.data;
+  },
+
+  async attention(): Promise<AttentionCounts> {
+    const response = await api.get<AttentionCounts>('/evaluations/attention');
     return response.data;
   },
 

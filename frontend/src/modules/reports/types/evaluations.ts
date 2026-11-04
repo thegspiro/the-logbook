@@ -362,6 +362,14 @@ export interface DataEntry {
   [extra: string]: unknown;
 }
 
+/** Badges for the evaluation pages' section strip, from `GET /evaluations/attention`. */
+export interface AttentionCounts {
+  /** The caller's own evaluations waiting on them. */
+  mine: number;
+  /** Evaluations the caller may list on the conduct page with a step past due. */
+  overdue: number;
+}
+
 export interface EvaluationSummary {
   id: string;
   member: PersonRef;
