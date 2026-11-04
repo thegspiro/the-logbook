@@ -134,6 +134,51 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A self-hosted S3 / MinIO endpoint must be listed in `S3_ALLOWED_ENDPOINTS` (2026-11-03)
+
+**Do this before upgrading if any department stores files in MinIO or another
+S3-compatible store.** The backend still starts without it; what stops is that
+department's file storage, which is why it is listed here. A custom S3 endpoint is now chosen by whoever runs the
+installation, not typed by a department administrator (owner decision
+2026-11-01; `docs/KNOWN_LIMITATIONS.md`, SCH-10). List every endpoint a
+department uses, comma-separated, in the new `S3_ALLOWED_ENDPOINTS` setting —
+for the bundled MinIO:
+
+```bash
+S3_ALLOWED_ENDPOINTS=http://minio:9000
+S3_ALLOW_PRIVATE_ENDPOINT=true   # still needed for a private or plain-HTTP one
+```
+
+The variable is in all three compose files' `environment:` blocks (Docker
+Compose, both Unraid files), so setting it in `.env` is enough. Find what your
+departments use under **Organization Settings → File Storage**, or in the
+`file_storage.s3_endpoint_url` key of `organizations.settings`.
+
+What happens if you do not:
+
+- **A department whose endpoint is not listed stops using its bucket at
+  once.** Nothing is migrated or deleted, but uploads to it and downloads of
+  files already in it are refused with a 503 (`LB-UPLD-006`) — the same as a
+  bucket that cannot be reached — rather than going somewhere else. The
+  backend log names the organization (by id) and says the endpoint is not
+  allowed; the endpoint's URL is not logged. The File Storage screen shows the
+  same reason. Adding the endpoint to the setting and restarting puts
+  everything back with no further step: the saved connection test still
+  matches.
+- **Saving a new unlisted endpoint is refused with a 400** naming
+  `S3_ALLOWED_ENDPOINTS`, on the settings screen and in onboarding. The screen
+  now offers the listed endpoints as a choice instead of a free-text box. An
+  endpoint already saved does not block other changes, so a department can
+  still switch to local storage while it is unlisted.
+- **Amazon S3 is unaffected.** A department with no custom endpoint connects to
+  AWS's own regional endpoint, and needs nothing listed.
+
+Matching is exact on scheme, host, port and path; `HTTP://MinIO:9000/` and
+`http://minio:9000` are the same endpoint, `https://minio:9000` is not. **A
+malformed entry stops the backend from starting** (`python -m app.preflight`
+reports it): each entry must be an `http://` or `https://` URL with a host and
+no user name, password, query or fragment.
+
 ### Leave and training-waiver reasons are encrypted at rest (2026-10-28)
 
 A migration (`b74bcce55c11`) runs on the next start and **encrypts every existing
@@ -624,6 +669,99 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Files stored before malware scanning are scanned now (2026-11-03)
+
+Upload scanning only ever covered new uploads, so files and images stored
+before it was turned on — or while `CLAMAV_ENABLED=false` — had never been
+scanned. After this upgrade the backend scans them by itself: the
+`stored_file_malware_scan` task runs hourly, up to 500 objects a run, until
+every stored file and database-held image (logos, member photos, store and
+equipment-check photos) has been scanned once. Migration `b5e906ebdd7d`
+creates the `stored_file_scans` table it keeps its progress in.
+
+- **Expect extra clamd load for a while.** A department with many stored files
+  sees one batch an hour until the backlog is gone, then almost nothing.
+- **Nothing happens while scanning is off.** With `CLAMAV_ENABLED=false` the
+  task does nothing, and starts the first hour after scanning is turned on.
+  With clamd down it records nothing and tries again the next hour.
+- **An infected file is removed, as an upload would have been refused.** The
+  file is deleted (an image is cleared from its row) and the detection is
+  audited as `upload_malware_detected`, with `upload: stored_file_rescan` and
+  the row's id. The record that held it remains, and its download then reports
+  the file as not found. If you want to keep a copy of anything before it is
+  judged, take the backup this document already asks for before upgrading.
+
+### Sign-in limits are counted per member, and step-up has its own limit (2026-11-03)
+
+A station's members share one public address, and the sign-in limit used to
+be counted per address: the sixth member signing in within a minute was
+turned away, and with Redis down the whole address was locked out for half an
+hour. The backend now counts **5 attempts a minute per account at an
+address**, with a looser **30 a minute per address** backstop. Account lockout
+and the suspicious-IP throttle are unchanged.
+
+- **The bundled nginx configs change to match.** `infrastructure/nginx/nginx.conf`
+  and `infrastructure/nginx/docker.conf` raise the `login_limit` zone from
+  `5r/m` (burst 3) to `30r/m` (burst 30). **A host install that copied
+  `nginx.conf` into `/etc/nginx` keeps the old 5 a minute until you copy it
+  again**, and the backend change does not help until you do. A proxy of your
+  own in front (SWAG, Nginx Proxy Manager, a load balancer) that limits
+  sign-in per address needs raising the same way.
+- **"Confirm it's you" (step-up) is limited per account.** After 5 failed
+  re-verifications in 15 minutes the member is refused with a 429 for the rest
+  of the window. It never locks the account or affects signing in. Tunable with
+  `STEPUP_MAX_FAILED_ATTEMPTS` and `STEPUP_FAILURE_WINDOW_MINUTES`.
+
+### Public Information turns on where setup left it off (2026-11-03)
+
+Setup used to store the **Public Information** module as off on every new
+installation, although the wizard never asked about it and Settings → Modules
+lists it as on by default. Migration `289504a34d3c` turns it **on** for each
+department whose stored setting is off **unless an administrator set it
+themselves** under Settings → Modules, as recorded in the audit log (switching
+it off is how a department retires its public portal, so that choice is kept).
+
+- The **public portal itself has its own switch** (`config.enabled`) and does
+  not start publishing on its own: it serves data only when both the portal and
+  the module are on. A department that never set the portal up sees only the
+  module in its menus and Settings.
+- If the audit log table does not exist, the migration changes nothing.
+- A department changed by this carries `settings.modules._public_info_backfilled`
+  (a timestamp). The downgrade turns it back off for those departments unless
+  an administrator has set Public Information since.
+
+### Adopting minutes now approves their meeting, and existing meetings catch up (2026-11-03)
+
+**Adopt Minutes** now also approves the meeting the minutes record. Migration
+`6b81e95d4157` brings existing data in line: every meeting whose minutes were
+already adopted becomes **approved**, stamped with the earliest adoption's
+approver and date. Those meetings stop reading _Draft_ and can no longer be
+deleted from the meeting list. A meeting already approved keeps its own stamp,
+and minutes adopted before adoptions were stamped give their meeting no
+approver or date. See
+[Events & Meetings](training/04-events-meetings.md#submitting-and-approving-minutes).
+
+### A month partly on leave now excuses the whole month by default (2026-11-02)
+
+Training compliance has a new department rule, **Months on leave** (Training
+Admin → Compliance Reporting → Configure → **Thresholds**), for a month that a
+leave of absence or training waiver only partly covers. Migration
+`5438939506b9` sets every department to **Full month (default)**: any day of
+leave excuses the whole month. Before, a month was excused only when leave
+covered 15 or more of its days. **Members' standing can change the moment you
+upgrade:**
+
+- A member with a short leave now owes less, and may turn compliant.
+- Shift and call targets reduced for leave are now rounded down (1.6 shifts
+  owed is 1, not 2), and a target that rounds to 0 is met.
+- The two other options are **15-day rule: proportional** and **15-day rule:
+  half**. Neither is the old rule exactly, so a department that wants close to
+  the old behaviour picks the half rule. See
+  [Training](training/02-training.md#months-on-leave--the-department-rule-2026-11-02).
+
+The downgrade drops the column and returns every department to the old 15-day
+rule.
 
 ### A member's tier is found by their membership status, whatever their class (2026-11-01)
 
@@ -2239,7 +2377,9 @@ Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
 - **Scanning now covers every upload**, not just self-reported certificates:
   documents, all attachments, applicant files, email-template attachments,
   suggestion screenshots, member photos, logos, storefront and equipment-check
-  photos, and every CSV import. Files already stored are not rescanned.
+  photos, and every CSV import. Files already stored are not rescanned
+  (until the 2026-11-03 release, which scans them once — see "Files stored
+  before malware scanning are scanned now" above).
 - **New uploads use a new folder layout**:
   `/app/uploads/<organization_id>/<area>/<record_id>/<uuid><ext>`. Existing
   files keep working where they are. To move them, run (dry run first — it

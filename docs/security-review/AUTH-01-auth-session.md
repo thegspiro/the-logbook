@@ -472,6 +472,17 @@ update_positions`, `audit.export/manage`, `medical_screening.view/manage`)
 
 ### AUTH-23 — MED — `POST /auth/step-up` has no account-tied lockout; a stolen live session lets an attacker brute-force the password or TOTP code that gates the most sensitive actions in the app — FLAGGED (not fixed)
 
+**Resolved 2026-11-03 (owner decision 2026-11-01: per-account rate limit, no
+account lock).** `app/core/stepup_throttle.py` counts step-up attempts per user
+id — 5 per 15 minutes by default (`STEPUP_MAX_FAILED_ATTEMPTS`,
+`STEPUP_FAILURE_WINDOW_MINUTES`) — reserving each before the secret is
+checked, clearing on success, and refusing with 429 while over. It never writes
+`failed_login_attempts` / `locked_until`, so a session thief cannot use it to
+lock the owner out of signing in. Separately, the `rate_limit_login()` that
+step-up shares is now keyed on the session's member at an address rather than
+the address alone. Pinned by `tests/test_stepup_throttle.py`. The finding as
+originally written follows.
+
 **What:** `step_up` (`backend/app/api/v1/endpoints/auth.py:1486-1549`) checks
 a submitted password with `verify_password()` or a submitted TOTP code with
 `_verify_and_consume_totp()` and, on a mismatch, only audits the failure

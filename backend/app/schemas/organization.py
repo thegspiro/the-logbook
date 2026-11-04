@@ -625,6 +625,14 @@ class FileStorageStatusResponse(BaseModel):
         False,
         description="The operator allows a private or plain-HTTP S3 endpoint",
     )
+    allowed_s3_endpoints: List[str] = Field(
+        default_factory=list,
+        description=(
+            "The self-hosted S3/MinIO endpoints the installation operator "
+            "listed (S3_ALLOWED_ENDPOINTS), the only custom endpoints a "
+            "department may choose; empty means Amazon S3 only"
+        ),
+    )
 
 
 class SchedulingNotificationSettings(BaseModel):

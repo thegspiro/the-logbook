@@ -5,6 +5,42 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 2 – 3, 2026
+
+Merged to `main` since `8700f3cf` (2026-11-02 15:07 UTC) through `12f1430d`
+(2026-11-03 16:55 UTC), 36 merges. Security-review passes (compliance,
+admin-hours, grants-fundraising, medical-supplies, meetings-minutes with MM5-4
+resolved, messaging-notifications) are in `docs/security-review/PROGRESS.md`;
+app-review pass 6 (A1 storefront, A2 auth and session, A3 scheduled tasks, A4
+email templates) is in `docs/app-review/PROGRESS.md`. Three documentation
+merges (#3941, #3942, #3943) and the screenshot capture (#3959) landed in this
+window. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                                                                     | Guide  | Disposition                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **History** module: past members, the **Honor Roll**, titles, and a clearance review before a record goes public; three History permissions held by the seeded Historian (#3966, #3967)                                                                                                                                                    | 01     | Added a History section; `HISTORY_MODULE.md` and `KNOWN_LIMITATIONS` written with the change. Corrected 01's anonymizing paragraph: a History record is not anonymized with the account |
+| Leave shown beside training hours; a department **Months on leave** rule, **Full month (default)** on upgrade; shift and call targets round down (#3958)                                                                                                                                                                                   | 02, 03 | Added; the 15-day sentences in 02 and 03's 6-shift example corrected. `UPGRADING` entry added (standing can change on upgrade)                                                          |
+| Shift evaluations on an outside agency's units, switched on per agency (#3956)                                                                                                                                                                                                                                                             | 02, 03 | Added; 02's "Submit locks the evaluation" corrected (a submitted evaluation can still be edited)                                                                                        |
+| **Adopt Minutes** also approves the meeting; existing meetings with adopted minutes are approved on upgrade (#3972)                                                                                                                                                                                                                        | 04     | Added. `UPGRADING` entry added                                                                                                                                                          |
+| Labels: **Printer resolution** per label size; the overdue gear email goes at most once a day (#3971, #3961)                                                                                                                                                                                                                               | 05     | Added                                                                                                                                                                                   |
+| Queued equipment checks and skills scoring send by Background Sync where the browser supports it; the offline lesson updated (#3952, #3969)                                                                                                                                                                                                | 10, 09 | Added; guide 10's claims that shift reports send only from their own tab, and the shift-report toast text, corrected                                                                    |
+| A member off the frozen voter roll is told the rule they still fail (#3949)                                                                                                                                                                                                                                                                | 14     | Added                                                                                                                                                                                   |
+| Medical screening: failed results count, a prospect's screenings carry into membership (#3945)                                                                                                                                                                                                                                             | 13     | Written with the change                                                                                                                                                                 |
+| File types named ("PDF", "Word") (#3954); shift notice dates printed as "Sep 30, 2026" (#3951); my-attendance answers null for a member not checked in (#3950); a password-reset link used twice at once works once (#3953); grids sized by their own width (#3957); a check that fails on any query comparing an encrypted column (#3970) | none   | No guide text describes these                                                                                                                                                           |
+| Housekeeping: Alembic heads rejoined (#3960, #3963, #3965, #3967), dependency bumps (#3944, #3946, #3947, #3948), lockfile metadata (#3977)                                                                                                                                                                                                | none   | No guide change                                                                                                                                                                         |
+
+**Raised with the owner, not fixed here:** the **Send as me** confirmation
+(`HeldOfflineItemsNotice.tsx`) still says equipment checks and shift reports
+send "the next time you open their page", which #3952 made untrue.
+
+**Screenshots to create:** the History overview, a past-member page, the Honor
+Roll, Titles and clearance, and a clearance review; **Months on leave** on the
+Thresholds tab and the member Training History **Requirements** section; the
+per-agency **Evaluate shifts on _agency_'s units** box and an evaluation badge;
+**Printer resolution** on the label page. **Replace:**
+`02-108-monthly-hours-leave` (an excused month now keeps its hours). See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: November 1 – 2, 2026
 
 A top-up pass for the merges after `f57fd5a` (2026-11-01 12:47 UTC) through

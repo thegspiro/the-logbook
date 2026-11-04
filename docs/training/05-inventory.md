@@ -833,6 +833,10 @@ create one with **Temporary loan** in [Item Distribution](#item-distribution).
   the day you choose, in your department's time zone.
 - A loan is overdue once its current due date has passed. Changing a loan
   keeps its due date.
+- _(2026-11-02)_ A member holding overdue gear gets an "Overdue Equipment
+  Reminder" email listing each item and its due date, at most once per calendar
+  day in your department's time zone, for as long as it stays overdue. Restarting or
+  updating The Logbook no longer sends it again the same day.
 
 ![Equipment checkout page with the item, member, and expected return date](./images/05-08-checkouts.png)
 
@@ -2069,6 +2073,26 @@ phone or tablet, where printing always downloads the PDF.
 The same checklist runs on the shared label page used for apparatus, facility,
 member and storage-area labels. _(2026-10-28)_
 
+**Printer resolution.** _(2026-11-03)_ A browser print of a **Code 128** barcode
+is drawn for the printer's resolution, so each bar lands on whole printer dots
+and prints at an exact width. The browser cannot ask the printer, so the page
+guesses from the label size. That guess is wrong for some printers (a 300 dpi
+Zebra, say), and their bars then print at uneven widths that may not scan. With
+**Code 128** chosen, the settings panel has a **Printer resolution** box:
+
+- **Auto** (the default) shows the resolution it is using for the label size,
+  for example _Auto (203 dpi for this label size)_.
+- **203 dpi**, **300 dpi** or **600 dpi** names the printer's own resolution.
+  Rollo and most Zebra desktop printers are 203, Dymo LabelWriters 300; it is on
+  the printer's spec sheet.
+
+The choice is remembered for that label size on this computer only, because it
+belongs to the printer plugged in there: one station can feed a Rollo for 2" x 1"
+rolls and a Dymo for address labels. It changes only the browser print, not the
+**PDF** or a **Print to _printer name_** job, and the box is not shown for QR
+codes. The same box is on the shared label page for apparatus, facility, member
+and storage-area labels.
+
 ### Choosing which items to label
 
 **Select every matching item from the list.** Filter the item list the way you
@@ -2201,6 +2225,10 @@ a barcode that scans is to avoid any scaling.
    paper size to the label size. The **Before you print** checklist names
    these for the size you chose. A Rollo finds the gap between labels on its
    own, but its driver's paper size must still match the label.
+5. _(2026-11-03)_ If you print **Code 128** labels through the browser, set
+   **Printer resolution** to your printer's resolution once for each label size
+   (see [Before you print](#before-you-print-2026-10-27)). Leave it on **Auto**
+   when barcodes printed from the browser already scan.
 
 > **Rollo and other roll-fed printers.** Two Rollo sizes are built in: **Rollo
 > 4" x 6"** (portrait shipping labels) and **Rollo / Thermal 2" x 1"** (small

@@ -207,7 +207,11 @@ const FieldRenderer = ({
   disabled = false,
   error,
 }: FieldRendererProps) => {
-  const { formatRank } = useRanks();
+  // Only a member lookup shows ranks (on each match), and only it may ask for
+  // them: these fields also render on the applicant's follow-up form, opened
+  // signed out from an emailed link, where the request answers 401 and the
+  // shared client sends the applicant to /login.
+  const { formatRank } = useRanks(true, { enabled: field.field_type === FieldType.MEMBER_LOOKUP });
   const [memberResults, setMemberResults] = useState<MemberLookupResult[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [searchingMembers, setSearchingMembers] = useState(false);
