@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-core-infra-pass13`) —
+**PR [#4017](https://github.com/thegspiro/the-logbook/pull/4017)** (branch
+`claude/security-review-core-infra-pass13`) —
 Feature 33 (Core infrastructure), pass 13, a watchdog pickup. Two real,
 already-merged deltas verified correct, 0 fixed, 0 new findings: an
 operator-only S3/MinIO endpoint allowlist in `config.py` (closes the
