@@ -6,13 +6,15 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowLeft, Plus, Users } from 'lucide-react';
+import { ClipboardList, Plus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { conductListLabel } from '../../../components/layout/evaluationsNavigation';
+import { EvaluationsPageHeader } from '../components/evaluations/EvaluationsPageHeader';
 import { BulkDraftDialog } from '../components/evaluations/BulkDraftDialog';
 import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { evaluationsService } from '../services/evaluationsApi';
@@ -38,6 +40,7 @@ const EvaluationListPage: React.FC = () => {
   const canDraft = useAuthStore(
     (state) => state.checkPermission('evaluations.conduct') || state.checkPermission('evaluations.manage')
   );
+  const title = useAuthStore((state) => conductListLabel(state.checkPermission));
   const [evaluations, setEvaluations] = useState<EvaluationSummary[]>([]);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
@@ -115,41 +118,39 @@ const EvaluationListPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link
-          to="/reports"
-          className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Reports
-        </Link>
-        <div className="page-header mb-6 gap-3 sm:items-start">
-          <div className="page-header-title">
-            <h1 className="text-theme-text-primary text-3xl font-bold">Evaluations</h1>
-            <p className="text-theme-text-secondary mt-1">Evaluations you conduct, and where each one stands.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {canManage && (
-              <button
-                type="button"
-                className="btn-secondary inline-flex items-center gap-2 text-sm"
-                onClick={() => setBulkOpen(true)}
-              >
-                <Users className="h-4 w-4" aria-hidden="true" />
-                Draft a review period
-              </button>
-            )}
-            {canDraft && (
-              <button
-                type="button"
-                className="btn-primary inline-flex items-center gap-2 text-sm"
-                onClick={() => void openDraft()}
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                New evaluation
-              </button>
-            )}
-          </div>
-        </div>
+        <EvaluationsPageHeader
+          icon={ClipboardList}
+          title={title}
+          subtitle={
+            title === 'All evaluations'
+              ? 'Every evaluation in the department, and where each one stands.'
+              : 'Evaluations you conduct, and where each one stands.'
+          }
+          actions={
+            <>
+              {canManage && (
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-2 text-sm"
+                  onClick={() => setBulkOpen(true)}
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  Draft a review period
+                </button>
+              )}
+              {canDraft && (
+                <button
+                  type="button"
+                  className="btn-primary inline-flex items-center gap-2 text-sm"
+                  onClick={() => void openDraft()}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  New evaluation
+                </button>
+              )}
+            </>
+          }
+        />
 
         <div className="mb-4 flex items-center gap-2">
           <label htmlFor="evaluation-status" className="text-theme-text-secondary text-sm">

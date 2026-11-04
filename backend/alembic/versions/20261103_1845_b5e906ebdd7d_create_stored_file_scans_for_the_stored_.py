@@ -16,7 +16,7 @@ is lost — removed infected files stay removed, and their detections stay in
 the audit log — but upgrading again starts the scan from the beginning.
 
 Revision ID: b5e906ebdd7d
-Revises: 6b81e95d4157
+Revises: 289504a34d3c
 Create Date: 2026-11-03 18:45:05.904771
 
 """
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b5e906ebdd7d"
-down_revision: Union[str, None] = "6b81e95d4157"
+down_revision: Union[str, None] = "289504a34d3c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

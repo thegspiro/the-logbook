@@ -59,10 +59,13 @@ Once it is on, the page is at **Administration → Members → Medical Screening
   type, date or result, because the dashboard is often left open on a station
   tablet.
 - **The Members Administration hub** (`/members/admin`, a `members.manage`
-  screen) adds a **Screenings current** metric (share of active members with
-  an unexpired screening) and lapsed-screening attention items only for a
-  viewer who also holds `medical_screening.view`, and only while the module is
-  on.
+  screen) adds a **Screenings current** metric and a "members not compliant
+  with medical screening" attention item, only for a viewer who also holds
+  `medical_screening.view`, and only while the module is on. Both read the
+  Compliance tab's roster, members only, so the hub and the tab always agree:
+  the tile is the share of graded members who meet every requirement that
+  applies to them (expiring soon still counts), and reads "—" until a
+  requirement exists. A separate item lists missed appointments.
 
 ## HIPAA-relevant behaviour
 

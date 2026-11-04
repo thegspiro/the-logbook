@@ -713,6 +713,24 @@ and the suspicious-IP throttle are unchanged.
   of the window. It never locks the account or affects signing in. Tunable with
   `STEPUP_MAX_FAILED_ATTEMPTS` and `STEPUP_FAILURE_WINDOW_MINUTES`.
 
+### Public Information turns on where setup left it off (2026-11-03)
+
+Setup used to store the **Public Information** module as off on every new
+installation, although the wizard never asked about it and Settings → Modules
+lists it as on by default. Migration `289504a34d3c` turns it **on** for each
+department whose stored setting is off **unless an administrator set it
+themselves** under Settings → Modules, as recorded in the audit log (switching
+it off is how a department retires its public portal, so that choice is kept).
+
+- The **public portal itself has its own switch** (`config.enabled`) and does
+  not start publishing on its own: it serves data only when both the portal and
+  the module are on. A department that never set the portal up sees only the
+  module in its menus and Settings.
+- If the audit log table does not exist, the migration changes nothing.
+- A department changed by this carries `settings.modules._public_info_backfilled`
+  (a timestamp). The downgrade turns it back off for those departments unless
+  an administrator has set Public Information since.
+
 ### Adopting minutes now approves their meeting, and existing meetings catch up (2026-11-03)
 
 **Adopt Minutes** now also approves the meeting the minutes record. Migration

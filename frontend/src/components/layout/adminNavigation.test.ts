@@ -11,10 +11,20 @@ describe('hasAdministrationAccess', () => {
     expect(hasAdministrationAccess(checkerFor('forms.view'))).toBe(false);
   });
 
-  it.each(['forms.manage', 'reports.view', 'settings.manage', 'evaluations.configure', 'evaluations.manage'])(
+  it.each(['forms.manage', 'reports.view', 'settings.manage'])(
     'recognizes %s as administrative access',
     (permission) => {
       expect(hasAdministrationAccess(checkerFor(permission))).toBe(true);
+    }
+  );
+
+  // Evaluation setup is reached from the Evaluations entry every member has,
+  // so these grants alone would open an Administration heading with nothing
+  // under it.
+  it.each(['evaluations.configure', 'evaluations.manage'])(
+    'does not treat %s alone as administrative',
+    (permission) => {
+      expect(hasAdministrationAccess(checkerFor(permission))).toBe(false);
     }
   );
 });

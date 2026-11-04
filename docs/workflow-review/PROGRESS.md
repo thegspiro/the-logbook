@@ -358,7 +358,9 @@ the full frontend suite passes, flake8 and black clean on the two backend files.
 Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
 from onboarding and Settings (the stored field is kept, retired). Owner decided
 W01-27: a failed email test now warns on the page and Continue asks before
-saving, but saving is allowed.
+saving, but saving is allowed. Owner decided W01-24 (2026-11-03): completing
+setup leaves Public Information on by default; setup now decides only the
+modules it asks about.
 
 ### Membership re-check (W08, W10–W15) — 2026-10-31
 

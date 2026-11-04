@@ -247,7 +247,7 @@ an erasure request, a public-website question or a large upload knows it.
   needed a positions migration for every department; `history.view` instead
   reads drafts and research.
 
-## Medical Screening — Gaps for the Owner (2026-11-02)
+## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
 From the medical-screening deep dive
 ([W71b](workflow-review/W71b-medical-screening-deep-dive.md)). Each was seen in
@@ -285,7 +285,13 @@ each changes saved members' standing, writes PHI rows, or adds behaviour.
   - a migration that backfills prospects already transferred, through
     `transferred_user_id`, with a test that runs against existing rows.
 - **The Members administration hub grades screenings its own way (W71b-3,
-  MED).** "Screenings current" counts anyone with one unexpired passed
+  MED).** ✅ **Resolved 2026-11-03 (owner decision: use the Compliance tab's
+  numbers).** The tile and the attention item now read
+  `get_compliance_roster`, members only; the item is "N members not compliant
+  with medical screening", links to the Compliance tab, and no longer claims
+  the lapse blocks duty assignment. Whether a lapse should block scheduling
+  remains a separate, unbuilt feature. `tests/test_admin_hub_db.py`. Original
+  finding: "Screenings current" counts anyone with one unexpired passed
   record of any type. It ignores requirements, the frequency rule, position
   scoping and waivers, and read 20% where the Compliance tab had 2 of 20
   fully compliant. The "expired screenings" attention item ignores
@@ -327,17 +333,26 @@ were chosen deliberately and are open for the owner to confirm or change:
 
 ## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
 
-**Partly resolved (Mobile App Access removed 2026-11-01); Public Information still open.** Found in the workflow review's W01 third
+**Resolved (Mobile App Access removed 2026-11-01; Public Information left on by default 2026-11-03).** Found in the workflow review's W01 third
 pass (`docs/workflow-review/W01-onboarding.md`).
 
 - **Mobile App Access (W01-23) — resolved 2026-11-01.** Owner decision: remove
   it. It is no longer offered by the setup wizard or by Settings → Modules. The
   `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
   stored settings and the modules API do not change; nothing reads it.
-- **Public Information (W01-24).** The Modules step never offers it, but
-  saving the step writes every configurable module, so a new installation
-  stores it off while Settings → Modules lists it as enabled by default.
-  Either offer it during setup or leave it at its default.
+- **Public Information (W01-24) — resolved 2026-11-03.** Owner decision: leave
+  it on by default. Completing setup now writes only the modules setup asked
+  about from the answers; every other module keeps its declared default
+  (`modules_from_setup_answers` in `services/onboarding.py`, used by both
+  writers). Existing installations were backfilled by migration `289504a34d3c`
+  (owner decision 2026-11-03): Public Information turns on where setup stored
+  it off, but not where the audit log shows an administrator set it under
+  Settings → Modules. See `docs/UPGRADING.md`.
+  **Still open, small:** an installation old enough to have no stored module
+  settings at all has them built once, on first read, from its legacy
+  onboarding record (`OrganizationService`), and that writer also stores Public
+  Information off. Such an install upgrading after this migration has run would
+  get `false` again with no backfill.
 
 Also from the same pass, resolved 2026-11-01: the email step saved settings that
 had just failed their connection test without a word (W01-27). Owner decision:

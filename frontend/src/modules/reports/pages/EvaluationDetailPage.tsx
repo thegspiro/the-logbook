@@ -12,6 +12,8 @@ import { ArrowLeft, Download, FilePenLine, PenLine, RefreshCw, Trash2 } from 'lu
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { conductListLabel } from '../../../components/layout/evaluationsNavigation';
+import { useSectionPermission } from '../../../components/layout/useSectionPermission';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -72,6 +74,7 @@ const EvaluationDetailPage: React.FC = () => {
   const [calibrating, setCalibrating] = useState(false);
   const navigate = useNavigate();
   const signerName = useAuthStore((state) => state.user?.full_name ?? '');
+  const conductLabel = conductListLabel(useSectionPermission());
   // Edits made while a save is in flight must not be replaced by the older
   // response the save returns.
   const editRevision = useRef(0);
@@ -281,7 +284,7 @@ const EvaluationDetailPage: React.FC = () => {
           className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {detail.viewer.is_member ? 'My evaluations' : 'Evaluations'}
+          {detail.viewer.is_member ? 'My evaluations' : conductLabel}
         </Link>
         <div className="page-header mb-6 gap-3 sm:items-start">
           <div className="page-header-title">

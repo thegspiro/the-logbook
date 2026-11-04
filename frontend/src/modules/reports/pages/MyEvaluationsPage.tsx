@@ -5,9 +5,11 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { ClipboardCheck } from 'lucide-react';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { EvaluationsPageHeader } from '../components/evaluations/EvaluationsPageHeader';
 import { DeletionRecordList } from '../components/evaluations/DeletionRecordList';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
 import { evaluationsService } from '../services/evaluationsApi';
@@ -39,14 +41,11 @@ const MyEvaluationsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="page-header mb-6">
-          <div className="page-header-title">
-            <h1 className="text-theme-text-primary text-3xl font-bold">My evaluations</h1>
-            <p className="text-theme-text-secondary mt-1">
-              Your performance evaluations, and how your figures stand for the current review period.
-            </p>
-          </div>
-        </div>
+        <EvaluationsPageHeader
+          icon={ClipboardCheck}
+          title="My evaluations"
+          subtitle="Your performance evaluations, and how your figures stand for the current review period."
+        />
 
         {error && (
           <div className="alert-danger mb-6">
