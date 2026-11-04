@@ -3191,8 +3191,6 @@ run, and its **Generate** button is disabled. Shifts it already made stay.
 
 ![The Templates tab with the Reserve Engine — Out of Service template marked inactive and its Reactivate button](./images/03-129-template-reactivate.png)
 
-![The Patterns tab with the Summer Reserve Rotation pattern reading Paused, its Generate button disabled and Resume beside it](./images/03-130-pattern-paused.png)
-
 On the basic apparatus list, anyone with scheduling manage rights can turn on
 **Show inactive** and select **Reactivate**; reactivating changes only the flag
 and re-adds nothing to shifts.
@@ -3385,8 +3383,9 @@ schedule for you to fill.
 - Shift dates are calendar days. They no longer shift by one day when your
   device's time zone is far from the department's.
 
-A paused pattern and its **Resume** button are pictured under
-[Templates](#templates) above.
+A paused pattern on **Shift Patterns**, opened to its **Resume** button:
+
+![Shift Patterns with the Summer Reserve Rotation pattern open: it reads Paused, its Generate buttons are disabled, and Resume sits beside them](./images/03-130-pattern-paused.png)
 
 ![Shift Patterns after Generate on the A/B/C Platoon Rotation: Generated 3 shifts, and beneath it the message that two members were not seated, each with the date and the reason](./images/03-131-pattern-generate-not-seated.png)
 
