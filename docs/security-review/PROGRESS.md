@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3996 (Feature 27, Integrations, pass 12) merged
+(`3bd09ed02`); confirmed via a fresh `is:pr is:open head:claude/security-review`
+search returning zero results. Row 27 is already ✅ in the table below (the
+table update rode along in #3996's own commit), so nothing further to record
+for that merge.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 12, PR #3996, merged), preserved for history</summary>
+
 **PR [#3996](https://github.com/thegspiro/the-logbook/pull/3996)** (branch
 `claude/security-review-integrations-p12`) — Feature 27 (Integrations),
 pass 12, a watchdog pickup. Real but narrow delta: the department ICS feed
@@ -24,6 +33,8 @@ integration catalog (the actual Zeffy service logic is Feature 22's own
 scope, reviewed there at pass 13 and confirmed byte-identical since). 0
 fixed, 0 new findings. See `docs/security-review/INT-27-integrations.md`'s
 **Pass 12** section.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 12, PR #3981, merged), preserved for history</summary>
@@ -24554,7 +24565,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                               | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                     | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                          | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ⬜     |
@@ -24568,6 +24579,56 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-11-04 — Feature 27 (Integrations, pass 12) merged; Feature 28 (Security, audit & IP, pass 12) — watchdog pickup, cosmetic frontend delta only, 0 fixed, 0 new findings
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` ("No reachable agents — no other Claude session is running on
+this machine right now"). PR #3996 (Feature 27, Integrations, pass 12) had
+already merged (`3bd09ed02`); a GitHub search for `is:pr is:open
+head:claude/security-review` returned zero results, confirming row 28
+(Security, audit & IP) as the next `⬜` row on a freshly fetched `main`.
+
+Baseline `6e5ba65f3` (pass 11's merge, PR #3854) to head `3bd09ed02`: every
+one of the nine backend files in this feature's scope
+(`security_monitoring.py` endpoint + service, `ip_security.py` endpoint +
+service, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/security_middleware.py`, `core/geoip.py`) is byte-identical since
+pass 11, confirmed by `git diff --stat` per file rather than trusted from a
+path-filtered `git log`. `AuditLogPage.tsx` and `ErrorMonitoringPage.tsx`
+are also unchanged. The one real delta is a 3-line cosmetic class swap in
+`MyIPExceptionsPage.tsx` (hand-rolled flex classes → the shared
+`page-header`/`page-header-title`/`page-header-actions` utilities already
+defined in `styles/index.css`) — no data flow, auth, or permission change.
+
+Both open findings re-verified unchanged: **SEC2-28-6** (the IP-exception
+duplicate-request check is still a plain `select()` then `INSERT`, no
+lock, no unique constraint — pass 11's locking fix covers the three
+state-transition methods, not this creation path) and the **dead
+detector code** note (still zero production callers of `analyze_request`
+/`_check_rate_limit`/`_check_injection_patterns` outside
+`security_monitoring.py`). Routes re-enumerated by AST: 37, unchanged.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 12** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 710
+revisions, single head `6b81e95d4157`; `check_route_permissions.py
+--strict` — 298 routes, 0 errors/warnings; backend scoped suite (`-k
+"audit or security_monitoring or security_middleware or ip_security or
+ip_allowlist or ip_exception or error_log or suspicious_ip or
+signing_key_cutover or security_alert or mfa_policy or geoip or
+health_detailed or w50_audit or w74 or separation_of_duties or
+weekly_report or weekly_security"`, via `python3.13`) — 851 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck`/`npm run
+lint` — 0 errors, clean; frontend scoped suite (`src/modules/ip-security`,
+`AuditLogPage`, `ErrorMonitoringPage`) — 68 passed (8 files).
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-03 — Feature 24 (Meetings & minutes, pass 12) merged; Feature 25 (Messaging & notifications, pass 12) — watchdog pickup, 0 fixed, 0 new findings
 
