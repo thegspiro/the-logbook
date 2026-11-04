@@ -24,7 +24,7 @@ the new type, their percentages and their session links are lost on the way
 down.
 
 Revision ID: 89cfef37cca8
-Revises: 8da91e9d28d6
+Revises: 06b52fa4b688
 Create Date: 2026-11-04 17:00:00
 
 """
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "89cfef37cca8"
-down_revision: Union[str, None] = "8da91e9d28d6"
+down_revision: Union[str, None] = "06b52fa4b688"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
