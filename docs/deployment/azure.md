@@ -21,10 +21,13 @@ Prices change by region and over time; use the
 [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator/)
 with the sizes below rather than a figure printed here.
 
-> **Before you start:** read [UPGRADING.md](../UPGRADING.md) if you are moving
-> an existing installation, and [BACKUP.md](../BACKUP.md) for how backups and
-> restores work. Every command below uses placeholder names
-> (`rg-logbook`, `logbook.yourdomain.com`, `eastus`); replace them with yours.
+> **Before you start:** read [BACKUP.md](../BACKUP.md) for how backups and
+> restores work, [Pitfalls](#pitfalls) for what goes wrong on Azure in
+> particular, and — if you are moving an existing installation rather than
+> starting a new one — [Moving an Existing Installation to Azure](#moving-an-existing-installation-to-azure)
+> **before** you generate any secrets. Every command below uses placeholder
+> names (`rg-logbook`, `logbook.yourdomain.com`, `eastus`); replace them with
+> yours.
 
 ---
 
@@ -40,16 +43,25 @@ with the sizes below rather than a figure printed here.
 
 ### VM sizing
 
-| VM size           | vCPUs | RAM  | Suitable for                                                   |
-| ----------------- | ----- | ---- | -------------------------------------------------------------- |
-| `Standard_B2s`    | 2     | 4 GB | Method 2 only (database and Redis are off the VM), small teams |
-| `Standard_B2ms`   | 2     | 8 GB | **Recommended** for Method 1 — the full stack including ClamAV |
-| `Standard_D2s_v5` | 2     | 8 GB | Steady, non-burstable CPU for larger departments               |
+| VM size           | vCPUs | RAM  | Suitable for                                                  |
+| ----------------- | ----- | ---- | ------------------------------------------------------------- |
+| `Standard_B2s`    | 2     | 4 GB | Method 2 only, once the images are built (see below)          |
+| `Standard_B2ms`   | 2     | 8 GB | **Recommended** for both methods — the full stack plus ClamAV |
+| `Standard_D2s_v5` | 2     | 8 GB | Steady, non-burstable CPU for larger departments              |
 
 ClamAV holds its signature database in memory and needs 1.5–3 GB on top of the
 rest of the stack, which is why Method 1 should not run on a 4 GB VM. Use a
 64 GB Premium SSD (or Standard SSD) OS disk; the database, uploads and backup
 archives all live on it in Method 1.
+
+The images are **built on the VM** — there are no pre-built images, so the
+first `up --build` runs `npm ci` and a full production frontend build there.
+Give that build 8 GB. To run Method 2 on a `Standard_B2s`, create the VM as a
+`Standard_B2ms`, build and start the stack, then resize it down (portal: VM →
+**Size**), and resize back up for each update that rebuilds. Use an x86-64
+size: the Arm sizes (`…p…` names such as `Standard_D2ps_v5`) need
+`docker-compose.arm.yml`, which swaps MySQL 8.0 for MariaDB 10.11 and is not
+the configuration this guide describes.
 
 ---
 
@@ -119,17 +131,41 @@ az vm open-port \
   --name vm-logbook \
   --port 80,443 \
   --priority 1010
+
+# Refuse the frontend's port 3000 to the rest of the virtual network
+az network nsg rule create \
+  --resource-group rg-logbook \
+  --nsg-name vm-logbookNSG \
+  --name deny-vnet-frontend-3000 \
+  --priority 1020 \
+  --direction Inbound \
+  --access Deny \
+  --protocol Tcp \
+  --source-address-prefixes VirtualNetwork \
+  --destination-port-ranges 3000
 ```
 
-| Port | Source   | Purpose                                   |
-| ---- | -------- | ----------------------------------------- |
-| 22   | Your IP  | Administration (or use Azure Bastion)     |
-| 80   | Internet | Let's Encrypt HTTP-01 challenge, redirect |
-| 443  | Internet | The application                           |
+| Port | Source          | Purpose                                   |
+| ---- | --------------- | ----------------------------------------- |
+| 22   | Your IP         | Administration (or use Azure Bastion)     |
+| 80   | Internet        | Let's Encrypt HTTP-01 challenge, redirect |
+| 443  | Internet        | The application                           |
+| 3000 | Virtual network | **Denied** — see below                    |
 
 > **Never open 3000, 3001, 3306 or 6379.** The production stack does not
 > publish the backend port at all, and the database and Redis must stay on the
 > stack's private Docker network.
+
+**Why port 3000 needs an explicit deny.** The frontend container publishes
+port 3000 on every interface of the VM (`docker-compose.yml`), and Nginx in
+Step 7 reaches it on `localhost`. Internet traffic to 3000 is already refused,
+but every NSG carries Azure's built-in `AllowVnetInBound` rule, so any other
+machine on the virtual network can reach it. The production backend trusts
+`X-Forwarded-For` from `10.0.0.0/8` (`TRUSTED_PROXY_IPS` in
+`docker-compose.prod.yml`), so such a machine could claim any client address
+and sidestep per-client rate limiting and the IPs recorded in the audit log.
+Rule 1020 outranks `AllowVnetInBound` (65000). Traffic Nginx sends over
+loopback is not subject to the NSG, so the application is unaffected.
 
 If you would rather not expose SSH at all, deploy
 [Azure Bastion](https://learn.microsoft.com/azure/bastion/bastion-overview) on
@@ -205,7 +241,23 @@ echo "COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml" >> .env
 Store a copy of `ENCRYPTION_KEY` and `ENCRYPTION_SALT` somewhere outside the VM
 — an [Azure Key Vault](https://learn.microsoft.com/azure/key-vault/general/overview)
 secret, or your department's password manager. Without them, encrypted fields
-in a restored backup cannot be read. See [KEY_ROTATION.md](../KEY_ROTATION.md).
+and uploaded files in a restored backup cannot be read. See
+[KEY_ROTATION.md](../KEY_ROTATION.md). (Moving an existing installation? Do
+**not** generate new values for these two — see
+[Moving an Existing Installation to Azure](#moving-an-existing-installation-to-azure).)
+
+Create the backup encryption keys now, before the first nightly backup runs.
+Until they exist, every archive is written **unencrypted** and cannot be sent
+off the VM (see [Backups](#backups)):
+
+```bash
+./scripts/backup-keygen.sh
+```
+
+It prints a private key once and asks you to type `SAVED`. Put that key in your
+password manager or Key Vault, apart from the VM and its backups; it is the
+only way to read an archive if the VM is lost. See
+[BACKUP.md → Encrypted backups](../BACKUP.md#encrypted-backups).
 
 Check the configuration, then start the stack:
 
@@ -399,7 +451,8 @@ Leave `require_secure_transport` **ON** (Azure's default): the app connects over
 verified TLS (Step 5).
 
 **Create the database** with the character set given explicitly, so every
-table the app creates inherits it whatever the server default is:
+table the app creates inherits it whatever the server default is. The
+database must be **The Logbook's alone** — see the warning below.
 
 ```bash
 az mysql flexible-server db create \
@@ -409,6 +462,22 @@ az mysql flexible-server db create \
   --charset utf8mb4 \
   --collation utf8mb4_unicode_ci
 ```
+
+> **The backend empties any database it takes for new.** On start, a database
+> with no `alembic_version` table is treated as a fresh install: the backend
+> **drops every table in it** and builds the schema from the models
+> (`_fast_path_init` in `backend/main.py`). It cannot tell an empty database
+> from one holding someone else's data. So:
+>
+> - point `DB_NAME` only at a database created for The Logbook, as above —
+>   never at one another application uses, and never at `mysql`, `sys` or
+>   another system schema;
+> - never hand-load a partial dump (one without `alembic_version`) into it and
+>   then start the backend; restore with `./scripts/backup.sh --restore`, as in
+>   [Moving an Existing Installation to Azure](#moving-an-existing-installation-to-azure).
+>
+> Azure's point-in-time restore is the way back if this happens, which is one
+> more reason to keep its backup retention at 7 days or more.
 
 ### Step 3: Create the Azure Managed Redis Cache
 
@@ -440,13 +509,22 @@ Redis listens with TLS on port **10000**.
 
 ### Step 4: Create the VM and Install Docker
 
-Follow Method 1, Steps 2–5. A `Standard_B2s` (4 GB) is enough here, since MySQL
-and Redis no longer run on it. Clone the repository as in Method 1, Step 6 —
-but configure `.env` as below rather than as in Method 1, and do not start the
+Follow Method 1, Steps 2–5. Create the VM as a `Standard_B2ms` even if you mean
+to run on a `Standard_B2s`: the first build needs the memory (see
+[VM sizing](#vm-sizing)). Clone the repository as in Method 1, Step 6 — but
+configure `.env` as below rather than as in Method 1, and do not start the
 stack yet.
 
-The NSG rules from Method 1, Step 3 are unchanged. The managed services are
-reached over the virtual network and need no inbound rule on the VM.
+The NSG rules from Method 1, Step 3 are unchanged, including the port 3000
+deny. The managed services are reached over the virtual network and need no
+inbound rule on the VM.
+
+Install the MySQL command-line client on the VM itself. `./scripts/backup.sh`
+uses it to dump and restore a database that is not in a container:
+
+```bash
+sudo apt install -y mysql-client
+```
 
 ### Step 5: Fetch the CA Certificates
 
@@ -539,6 +617,36 @@ EOF
 If an access key contains `|` or `&`, the `sed` lines above will mangle it;
 edit `.env` by hand for that value instead.
 
+Then create the backup encryption keys, as in Method 1, Step 6:
+
+```bash
+./scripts/backup-keygen.sh
+```
+
+**TLS for the backup script.** `./scripts/backup.sh` runs `mysqldump` and
+`mysql` on the VM against `DB_HOST`. Those clients read their TLS settings from
+an option file, not from `.env`, so give them one — as the user the backups run
+as (`azureuser`, not root):
+
+```bash
+cat > ~/.my.cnf <<'EOF'
+[client]
+ssl-mode=VERIFY_IDENTITY
+ssl-ca=/opt/the-logbook/infrastructure/certs/azure-combined-ca.pem
+
+[mysqldump]
+# Azure Database for MySQL runs with GTIDs on. A dump that carries
+# SET @@GLOBAL.GTID_PURGED cannot be loaded back into a server that has
+# executed transactions of its own, which every Flexible Server has.
+set-gtid-purged=OFF
+no-tablespaces
+EOF
+chmod 600 ~/.my.cnf
+```
+
+Without it the clients still encrypt the connection (Azure requires TLS) but do
+not check the server's certificate.
+
 `docker-compose.external-services.yml`:
 
 - points the backend at `DB_HOST`, `DB_PORT`, `REDIS_HOST` and `REDIS_PORT`
@@ -563,7 +671,20 @@ docker compose up -d --build
 
 docker compose ps
 docker compose logs -f backend   # first start creates every table on the new database
+
+# Confirm the backend actually reached Redis (see below)
+docker compose logs backend | grep -E "Redis connected|Redis unavailable|Redis connection failed"
 ```
+
+**A Redis the backend cannot reach does not stop it starting.** A wrong port,
+a CA that does not verify or a rotated access key is logged as a warning, and
+the backend runs on without Redis: caching off, and rate limiting falling back
+to per-process memory. Against the bundled Redis that covers a brief outage;
+against a managed service a configuration mistake would stay in place,
+unnoticed. Look for `✓ Redis connected` after the first start and after any
+change to the `REDIS_*` settings or the access key. `REDIS_REQUIRED=true` is
+meant to turn this into a refusal to start, but in this release the startup
+code catches the failure regardless, so it does not; check the log instead.
 
 Never run `docker compose up -d mysql` (or `redis`) against this stack: compose
 starts a service you name even when its profile is off, and nothing would use
@@ -621,25 +742,34 @@ Key Vault integration of its own.
 
 ## Backups
 
-### Method 1 (Single VM)
+Every backup holds every member's records. **Only encrypted archives leave the
+VM.** Encryption needs the keys from `./scripts/backup-keygen.sh` (Method 1,
+Step 6); until they exist, archives are written in plaintext, administrators
+see a "Backups are not encrypted" notice, and `./scripts/backup.sh` refuses to
+upload anything. Do not work around that refusal by copying the backup
+directory with a general-purpose sync tool: that is exactly the plaintext copy
+it exists to prevent. See [BACKUP.md](../BACKUP.md#encrypted-backups).
 
-The production stack's `backup` sidecar takes a nightly `mysqldump` + uploads
-archive (at `BACKUP_TIME`, default 02:00 UTC), prunes archives older than
-`BACKUP_RETENTION_DAYS`, and runs a restore-verification drill every
-`VERIFY_EVERY_N_BACKUPS` runs. Those archives live on the VM's own disk, so
-copy them off it — a backup that dies with the VM is not a backup.
+### The Storage Account (Both Methods)
 
-**Copy archives to Azure Blob Storage** using the VM's managed identity, so no
-storage key is kept on the VM:
+Create a private storage account, let only the VM's subnet reach it, and give
+the VM a managed identity that may write to it, so no storage key is kept on
+the VM:
 
 ```bash
-# Once: a storage account and private container for the archives
 az storage account create -g rg-logbook -n yourorglogbookbackups \
   --sku Standard_GRS --min-tls-version TLS1_2 --allow-blob-public-access false
 az storage container create --account-name yourorglogbookbackups \
   --name logbook-backups --auth-mode login
 
-# Once: give the VM an identity and let it write to that account
+# Reachable only from the VM's subnet
+az network vnet subnet update -g rg-logbook --vnet-name vnet-logbook \
+  -n snet-app --service-endpoints Microsoft.Storage
+az storage account network-rule add -g rg-logbook \
+  --account-name yourorglogbookbackups --vnet-name vnet-logbook --subnet snet-app
+az storage account update -g rg-logbook -n yourorglogbookbackups --default-action Deny
+
+# The VM's identity, allowed to write blobs in this account only
 az vm identity assign -g rg-logbook -n vm-logbook
 az role assignment create \
   --assignee "$(az vm show -g rg-logbook -n vm-logbook --query identity.principalId -o tsv)" \
@@ -647,20 +777,66 @@ az role assignment create \
   --scope "$(az storage account show -g rg-logbook -n yourorglogbookbackups --query id -o tsv)"
 ```
 
-On the VM, install [AzCopy](https://learn.microsoft.com/azure/storage/common/storage-use-azcopy-v10)
-and sync nightly from root's crontab (the Docker volumes live under Docker's
-data directory):
+Turn on **blob soft delete** and a lifecycle rule (portal: storage account →
+Data protection, and Lifecycle management) so a mistaken or malicious delete
+can be undone and old archives expire. With `--default-action Deny`, browsing
+the container from the portal or your own computer is refused too; to fetch an
+archive from outside the VM, add your address with
+`az storage account network-rule add --ip-address`, and remove it afterwards.
+
+Then, on the VM, install the Azure CLI and sign it in as the VM's identity, as
+the user the backups run as (`azureuser`):
 
 ```bash
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+az login --identity
+```
+
+And name the destination in `.env`, where `./scripts/backup.sh` reads it:
+
+```bash
+cat >> /opt/the-logbook/.env <<'EOF'
+AZURE_STORAGE_ACCOUNT=yourorglogbookbackups
+AZURE_STORAGE_CONTAINER=logbook-backups
+EOF
+```
+
+### Method 1 (Single VM)
+
+The production stack's `backup` sidecar takes a nightly encrypted archive of
+the database, uploads and audit archives (at `BACKUP_TIME`, default 02:00 UTC),
+prunes archives older than `BACKUP_RETENTION_DAYS`, and runs a
+restore-verification drill every `VERIFY_EVERY_N_BACKUPS` runs. Its archives
+stay on the VM's disk. For the offsite copy, run `./scripts/backup.sh` from
+`azureuser`'s crontab at a different hour; it writes its own encrypted archive
+and uploads it, together with its `.key` and `.sha256` files, under
+`backups/` in the container:
+
+```bash
+# crontab -e (as azureuser)
+30 3 * * * cd /opt/the-logbook && AZURE_STORAGE_AUTH_MODE=login ./scripts/backup.sh --destination azure >> "$HOME/logbook-offsite-backup.log" 2>&1
+```
+
+`AZURE_STORAGE_AUTH_MODE=login` makes `az storage blob upload` authenticate as
+the VM's identity rather than look for an account key.
+
+`./scripts/backup.sh`'s archive does **not** include the `audit_archives`
+volume; the sidecar's does. Once a retention purge has run, those files are
+the only copy of that audit history, so copy the sidecar's encrypted archives
+offsite too — and only those, which is what the include pattern does:
+
+```bash
+# root's crontab (the volume lives under Docker's data directory); needs AzCopy
 azcopy login --identity
 azcopy sync \
   "$(docker volume inspect the-logbook_backups -f '{{ .Mountpoint }}')" \
-  "https://yourorglogbookbackups.blob.core.windows.net/logbook-backups/archives"
+  "https://yourorglogbookbackups.blob.core.windows.net/logbook-backups/sidecar" \
+  --include-pattern "*.tar.gz.enc;*.tar.gz.enc.key;*.tar.gz.enc.sha256"
 ```
 
-Turn on **soft delete** and a lifecycle rule on the storage account so a
-mistaken or malicious delete can be undone and old archives expire. A manual
-backup at any time: `cd /opt/the-logbook && ./scripts/backup.sh`.
+([AzCopy](https://learn.microsoft.com/azure/storage/common/storage-use-azcopy-v10)
+installs as a single binary.) A plaintext archive is named `….tar.gz` and
+matches none of those patterns, so it is never copied.
 
 Also consider **Azure Backup** for the VM itself (a daily recovery point of the
 whole disk). It complements the archives; it does not replace them, because a
@@ -670,7 +846,7 @@ disk snapshot of a running MySQL is only crash-consistent.
 
 The `backup` sidecar does not run: `docker-compose.external-services.yml` turns
 it off, because it dumps and drills against the bundled MySQL. Azure Database
-for MySQL takes over the database half:
+for MySQL covers the database itself:
 
 - **Automated backups** with the retention chosen in Step 2 (up to 35 days),
   optionally geo-redundant.
@@ -678,30 +854,87 @@ for MySQL takes over the database half:
   **new** server.
 - **On-demand backups** from the portal before an upgrade.
 
-Two Docker volumes on the VM are no longer backed up by anything, and need
-their own copy:
-
-- `uploads` — documents, photos and attachments (always on local disk under
-  `/app/uploads`);
-- `audit_archives` — audit rows exported before a retention purge. They are
-  the **only** remaining copy of that history once the purge has run.
-
-Set up the storage account and managed identity as in Method 1, then sync both
-nightly from root's crontab:
+Those backups live and die with the server and the subscription. For a copy
+outside them, and for the `uploads` volume, which nothing else backs up, run
+`./scripts/backup.sh` nightly. It dumps the Azure database over verified TLS
+(the `~/.my.cnf` from Step 6), archives the uploads from the backend container,
+encrypts the result and uploads it:
 
 ```bash
+# crontab -e (as azureuser)
+30 3 * * * cd /opt/the-logbook && AZURE_STORAGE_AUTH_MODE=login ./scripts/backup.sh --destination azure >> "$HOME/logbook-offsite-backup.log" 2>&1
+```
+
+The uploaded files are themselves encrypted by the application with
+`ENCRYPTION_KEY` / `ENCRYPTION_SALT`
+(see "Secrets are NOT in the backup" in [BACKUP.md](../BACKUP.md)),
+so the archive is unreadable without both the backup keys and those secrets.
+
+**The `audit_archives` volume needs a copy of its own.** Neither
+`./scripts/backup.sh` nor Azure's backups include it, and once a retention
+purge has run it is the only copy of that audit history. Its files are gzipped
+JSON lines the application does **not** encrypt, so copy them only into the
+private, subnet-restricted account above (encrypted at rest by Azure):
+
+```bash
+# root's crontab; needs AzCopy
 azcopy login --identity
-for volume in uploads audit_archives; do
-  azcopy sync \
-    "$(docker volume inspect "the-logbook_${volume}" -f '{{ .Mountpoint }}')" \
-    "https://yourorglogbookbackups.blob.core.windows.net/logbook-backups/${volume}"
-done
+azcopy sync \
+  "$(docker volume inspect the-logbook_audit_archives -f '{{ .Mountpoint }}')" \
+  "https://yourorglogbookbackups.blob.core.windows.net/logbook-backups/audit_archives"
 ```
 
 Restore drills are yours to run in Method 2: from time to time, restore the
-MySQL server to a new server and point a test stack at it. Azure Managed Redis
+MySQL server to a new server and point a test stack at it, and restore one of
+the `./scripts/backup.sh` archives into that test stack. Azure Managed Redis
 holds no data that needs backing up — sessions and cache entries rebuild
 themselves.
+
+---
+
+## Moving an Existing Installation to Azure
+
+Bring the data across with the repository's own backup and restore, never a
+hand-made dump: the backend empties a database that has no `alembic_version`
+table (see the warning in Method 2, Step 2).
+
+1. **On the old server**, make sure backup keys exist
+   (`./scripts/backup-keygen.sh` if not), then take a fresh backup:
+   `./scripts/backup.sh`. Note the release you are running (`git describe
+--tags` or `git rev-parse HEAD`).
+2. **Copy across**, over SSH: the newest `logbook_backup_*.tar.gz.enc` with its
+   `.key` and `.sha256` files, and the `backup-keys/` directory (or have the
+   backup's private key to hand).
+3. **On the Azure VM**, check out the same release you were running, then build
+   `.env` as Method 1 or Method 2, Step 6 describes — but **copy `SECRET_KEY`,
+   `ENCRYPTION_KEY` and `ENCRYPTION_SALT` from the old `.env` instead of
+   generating new ones.** New values make every encrypted field and every
+   uploaded file in the backup unreadable, and leave every registered NFC tag
+   and ID card unmatched. Put `backup-keys/` back in place.
+4. **Start the stack** as the method describes and wait until the backend
+   reports the schema up to date. It builds empty tables in the new database.
+5. **Restore** into it — this replaces those empty tables, the uploads and the
+   `alembic_version` row:
+
+   ```bash
+   ./scripts/backup.sh --restore /path/to/logbook_backup_YYYYmmdd_HHMMSS.tar.gz.enc
+   docker compose restart backend
+   ```
+
+   Add `--private-key FILE` if you brought the backup's private key rather
+   than `backup-keys/`. In Method 2, the restore runs `mysql` on the VM against
+   Azure, which is why it needs the `mysql-client` package and `~/.my.cnf`.
+
+6. **Verify** as in BACKUP.md's
+   [restore drill](../BACKUP.md#verify-your-backups-restore-drill), then move
+   DNS to the new VM and issue its certificate (Method 1, Steps 4 and 8).
+7. **Then upgrade**, if you want a newer release, with the
+   [Updating](#updating) steps — one change at a time, so a problem is clearly
+   either the move or the upgrade. Read [UPGRADING.md](../UPGRADING.md) first.
+
+The `audit_archives` volume is not in `./scripts/backup.sh`'s archive. If the
+old server has one, copy its contents across with `tar` over SSH into the new
+VM's `the-logbook_audit_archives` volume before step 5.
 
 ---
 
@@ -714,8 +947,10 @@ repair a migration problem — several migrations do not reverse.
 ```bash
 cd /opt/the-logbook
 
-# 1. Back up first (Method 2: take an on-demand MySQL backup in the portal instead)
+# 1. Back up first (Method 2: also take an on-demand backup in the portal)
 ./scripts/backup.sh
+
+# Method 2 on a B2s: resize the VM to B2ms before the rebuild (see VM sizing)
 
 # 2. Pull and repair build contexts
 git pull
@@ -825,15 +1060,42 @@ that value in `.env` and run `docker compose up -d` again. See
 
 ---
 
+## Pitfalls
+
+Things that go wrong on Azure in particular. The first four are dealt with in
+the steps above; they are listed here so nothing depends on having read every
+step.
+
+| Pitfall                                          | What happens                                                                                                                                                                                                                                                                                        | What to do                                                                                                                                                                                                             |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A database without `alembic_version`**         | The backend drops every table in it on start, taking it for a fresh install.                                                                                                                                                                                                                        | A database for The Logbook alone; restore with `./scripts/backup.sh --restore` ([Method 2, Step 2](#step-2-create-the-azure-database-for-mysql-flexible-server), [Moving](#moving-an-existing-installation-to-azure)). |
+| **Backups never encrypted**                      | Without `./scripts/backup-keygen.sh`, every archive is plaintext and offsite upload is refused.                                                                                                                                                                                                     | Create the keys before the first backup; sync only `*.enc` files ([Backups](#backups)).                                                                                                                                |
+| **Redis misconfigured**                          | The backend starts anyway, with caching off and per-process rate limiting.                                                                                                                                                                                                                          | Check for `✓ Redis connected` after every start and change ([Method 2, Step 7](#step-7-start-the-stack)).                                                                                                              |
+| **Port 3000 reachable from the virtual network** | Another VM on the network can forge `X-Forwarded-For`.                                                                                                                                                                                                                                              | The deny rule in [Method 1, Step 3](#step-3-lock-down-the-network-security-group).                                                                                                                                     |
+| **Building on a 4 GB VM**                        | The frontend build runs on the VM and can run out of memory or exhaust a burstable size's CPU credits.                                                                                                                                                                                              | Build on 8 GB; resize down afterwards if you must ([VM sizing](#vm-sizing)).                                                                                                                                           |
+| **Application Gateway or Front Door in front**   | Either one terminating TLS and forwarding plain HTTP makes Nginx send `X-Forwarded-Proto: http`, and the production backend, which enforces HTTPS, redirects forever. Front Door's addresses are also outside `TRUSTED_PROXY_IPS`, so every member shares one rate-limit bucket and one audited IP. | Have Nginx pass on the gateway's `X-Forwarded-Proto` rather than `$scheme`, and add the gateway's address ranges to `TRUSTED_PROXY_IPS` in `.env`. This guide does not use either service.                             |
+| **Too few database connections**                 | Each backend process opens up to 30 connections (`DB_POOL_MAX` 10, plus 20 overflow, in `backend/app/core/database.py`); the optional four-worker setup in [Production Deployment](../../wiki/Deployment-Production.md) makes 120. Burstable servers allow few.                                     | Check the server's `max_connections` parameter before adding workers, or choose a larger compute size.                                                                                                                 |
+| **Arm VM sizes**                                 | They need `docker-compose.arm.yml`, which replaces MySQL 8.0 with MariaDB 10.11.                                                                                                                                                                                                                    | Choose an x86-64 size.                                                                                                                                                                                                 |
+| **A different install directory**                | Docker names volumes after the directory, so outside `/opt/the-logbook` they are not `the-logbook_*` and the backup commands find nothing.                                                                                                                                                          | Install at `/opt/the-logbook`, or adjust every `the-logbook_` name; `docker volume ls` shows the real ones.                                                                                                            |
+| **Data on `/mnt`**                               | It is the VM's temporary disk and is wiped whenever the VM is deallocated or moved.                                                                                                                                                                                                                 | Never put Docker's data directory, backups or uploads there. Swap only.                                                                                                                                                |
+| **Idle connections cut**                         | Azure closes idle inbound TCP flows through a public IP after 4 minutes by default, and Nginx's default `proxy_read_timeout` is 60 seconds; a long-idle live-update connection is dropped and has to reconnect.                                                                                     | Usually nothing. If live updates misbehave, raise the public IP's idle timeout (Standard SKU, up to 30 minutes) and `proxy_read_timeout` together.                                                                     |
+| **MySQL 8.0's lifecycle**                        | Community MySQL 8.0 reached end of life in April 2026. Azure's support terms for 8.0 on Flexible Server, including any charge for extended support, are Azure's to set and change.                                                                                                                  | Check the current terms for your server. Test any move to 8.4 on a copy first: this repository's CI and bundled stack run 8.0.                                                                                         |
+
+---
+
 ## Security Checklist
 
 - SSH restricted to your address, or replaced by Azure Bastion.
-- No inbound rule for 3000, 3001, 3306, 6379 or 10000; MySQL and Redis on
-  private access only, with public network access disabled.
+- No inbound rule for 3000, 3001, 3306, 6379 or 10000, and port 3000 denied
+  from the virtual network; MySQL and Redis on private access only, with
+  public network access disabled.
 - `require_secure_transport` ON for MySQL; `DB_SSL`, `REDIS_SSL` and
   `SECURITY_REQUIRE_TLS` set to `true` with CA files (Method 2).
-- Backup storage account with public blob access off, soft delete on, and
-  access through the VM's managed identity rather than a storage key.
+- Backup keys created, the private key stored apart from the VM, and only
+  encrypted archives sent offsite.
+- Backup storage account with public blob access off, network access limited
+  to the VM's subnet, soft delete on, and access through the VM's managed
+  identity rather than a storage key.
 - `ENCRYPTION_KEY` / `ENCRYPTION_SALT` kept off the VM as well as on it.
 - Enable **Microsoft Defender for Cloud** recommendations for the subscription,
   and keep the VM patched (`sudo apt update && sudo apt upgrade -y`, or Azure
@@ -846,16 +1108,16 @@ that value in `.env` and run `docker compose up -d` again. See
 
 ## Summary
 
-| Step | Method 1: Single VM                     | Method 2: VM + Managed Services                                      |
-| ---- | --------------------------------------- | -------------------------------------------------------------------- |
-| 1    | Resource group and virtual network      | Resource group, virtual network, MySQL and Redis subnets             |
-| 2    | Create the VM, lock down the NSG        | Azure Database for MySQL Flexible Server (private access, 8.0)       |
-| 3    | Point DNS at the VM                     | Azure Managed Redis (private endpoint, non-clustered, access keys)   |
-| 4    | Install Docker, clone, configure `.env` | Create the VM, install Docker, clone                                 |
-| 5    | `docker compose up -d --build`          | Fetch and combine the Azure CA certificates                          |
-| 6    | Nginx reverse proxy                     | Configure `.env` with the managed endpoints and TLS                  |
-| 7    | HTTPS with Let's Encrypt                | `up -d` with `docker-compose.external-services.yml`                  |
-| 8    | Copy backup archives to Blob Storage    | Nginx and HTTPS; sync `uploads` and `audit_archives` to Blob Storage |
+| Step | Method 1: Single VM                                         | Method 2: VM + Managed Services                                         |
+| ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 1    | Resource group and virtual network                          | Resource group, virtual network, MySQL and Redis subnets                |
+| 2    | Create the VM, lock down the NSG                            | Azure Database for MySQL Flexible Server (private access, 8.0)          |
+| 3    | Point DNS at the VM                                         | Azure Managed Redis (private endpoint, non-clustered, access keys)      |
+| 4    | Install Docker, clone, configure `.env`, create backup keys | Create the VM, install Docker and `mysql-client`, clone                 |
+| 5    | `docker compose up -d --build`                              | Fetch and combine the Azure CA certificates                             |
+| 6    | Nginx reverse proxy                                         | Configure `.env`, backup keys and `~/.my.cnf`                           |
+| 7    | HTTPS with Let's Encrypt                                    | `up -d` with `docker-compose.external-services.yml`; confirm Redis      |
+| 8    | Encrypted backups to Blob Storage                           | Nginx and HTTPS; encrypted backups and `audit_archives` to Blob Storage |
 
 **Need help?** See the [Troubleshooting Guide](../TROUBLESHOOTING.md) or open a
 [GitHub Issue](https://github.com/thegspiro/the-logbook/issues).

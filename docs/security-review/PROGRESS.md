@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4003](https://github.com/thegspiro/the-logbook/pull/4003)** (branch
+`claude/security-review-onboarding-pass12`) — Feature 30 (Onboarding),
+pass 12, a watchdog pickup. Real delta traces to three already-merged,
+independent engineering commits, each re-verified against its security
+properties rather than re-derived: `_lock_session_for_step` closes the
+stations/apparatus resubmission race flagged as ONB2-3 at pass 2 (now
+marked FIXED after sitting implicitly open across five passes);
+`modules_from_setup_answers` fixes Public Information being stored off on
+every fresh install, with its own backfill migration; Mobile App Access
+retirement removes a toggle that gated nothing. 0 fixed, 0 new findings.
+See `docs/security-review/ONB5-30-onboarding.md`'s **Pass 12** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 14, PR #4001, merged), preserved for history</summary>
+
 **PR [#4001](https://github.com/thegspiro/the-logbook/pull/4001)** (branch
 `claude/security-review-reports-analytics`) — Feature 29 (Reports &
 analytics), pass 14, a watchdog pickup. Real delta: `dashboard.py`'s
@@ -24584,7 +24599,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                     | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                       | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                          | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                              | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                         | ⬜     |

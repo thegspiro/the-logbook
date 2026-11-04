@@ -33,7 +33,7 @@ shift (its hours, attendance and calls are untouched), and dropping the ledger
 means a later re-import of the same file is no longer recognised as a repeat.
 
 Revision ID: c0ae312b2385
-Revises: 289504a34d3c
+Revises: b5e906ebdd7d
 Create Date: 2026-11-04 04:26:00.000000
 
 """
@@ -45,7 +45,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c0ae312b2385"
-down_revision: Union[str, None] = "289504a34d3c"
+down_revision: Union[str, None] = "b5e906ebdd7d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -6,7 +6,7 @@ Business logic for organization-related operations.
 
 import copy
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
@@ -36,6 +36,11 @@ from app.services.file_storage_service import (
     ACTIVATION_KEY as FILE_STORAGE_ACTIVATION_KEY,
 )
 from app.services.file_storage_service import forget_org_storage
+from app.services.s3_storage import (
+    ENDPOINT_NOT_ALLOWED,
+    endpoint_allowed,
+    same_endpoint,
+)
 from app.utils import membership_numbers
 from app.utils.email_providers import (
     EMAIL_SECRET_FIELDS,
@@ -94,6 +99,29 @@ def _deep_merge_settings(
         else:
             result[key] = value
     return result
+
+
+def _refuse_unlisted_s3_endpoint(merged: Any, stored: Any) -> None:
+    """Refuse to save a custom S3 endpoint the operator has not listed in
+    S3_ALLOWED_ENDPOINTS (owner decision 2026-11-01; KNOWN_LIMITATIONS SCH-10).
+
+    Judged on the merged section, so neither the dedicated file-storage PATCH
+    nor the full-settings PATCH can slip one in. An endpoint already stored is
+    let through unchanged: it is refused wherever a client is built, and
+    refusing it here would stop the department saving anything else in the
+    section — including switching to local storage — until somebody cleared
+    a field the screen no longer offers as free text.
+    """
+    if not isinstance(merged, dict):
+        return
+    value = merged.get("s3_endpoint_url")
+    endpoint = value.strip() if isinstance(value, str) else ""
+    if not endpoint or endpoint_allowed(endpoint):
+        return
+    previous = stored.get("s3_endpoint_url") if isinstance(stored, dict) else None
+    if isinstance(previous, str) and same_endpoint(endpoint, previous):
+        return
+    raise ValueError(ENDPOINT_NOT_ALLOWED)
 
 
 def _membership_id_settings_from(stored: Any) -> MembershipIdSettings:
@@ -443,6 +471,7 @@ class OrganizationService:
         organization_id: UUID | str,
         settings_update: Dict[str, Any],
         may_configure_delegated_email: bool = False,
+        confirm_delegated_email_change: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> OrganizationSettings:
         """
         Update organization settings
@@ -454,6 +483,11 @@ class OrganizationService:
                 so may set up or change Gmail sending through a domain-wide
                 delegated service account. Defaults to refusing, so a caller
                 that never thought about it fails closed.
+            confirm_delegated_email_change: Awaited when this save sets up or
+                changes that service account, before anything is written; the
+                endpoints pass the step-up check (USR-12). Required whenever
+                ``may_configure_delegated_email`` is true: without it such a
+                change is refused, again so a new caller fails closed.
 
         Returns:
             Updated OrganizationSettings
@@ -550,15 +584,23 @@ class OrganizationService:
             # email off — stays open to settings.manage, and so does switching
             # away from it, which narrows what the stored credential can do.
             fresh_key = email_submitted_secrets.get("google_service_account_key")
-            if (
-                uses_google_service_account(email_section)
-                and not may_configure_delegated_email
-                and (identity_changed or (fresh_key and fresh_key != REDACTED_SECRET))
+            if uses_google_service_account(email_section) and (
+                identity_changed or (fresh_key and fresh_key != REDACTED_SECRET)
             ):
-                raise PermissionError(
-                    "Only an organization administrator can set up or change "
-                    "Gmail sending with a service account"
-                )
+                if not may_configure_delegated_email:
+                    raise PermissionError(
+                        "Only an organization administrator can set up or change "
+                        "Gmail sending with a service account"
+                    )
+                # Owner decision 2026-11-01 (USR-12): the administrator also
+                # re-verifies, but only for this change, so an ordinary email
+                # save (a From name, turning email off) never prompts.
+                if confirm_delegated_email_change is None:
+                    raise PermissionError(
+                        "Setting up Gmail sending with a service account needs "
+                        "you to confirm your identity"
+                    )
+                await confirm_delegated_email_change()
             if identity_changed:
                 for field in EMAIL_SECRET_FIELDS:
                     fresh = email_submitted_secrets.get(field)
@@ -577,6 +619,12 @@ class OrganizationService:
             invalid = invalid_for_enabled(email_section)
             if invalid:
                 raise ValueError(invalid)
+
+        if "file_storage" in settings_update:
+            _refuse_unlisted_s3_endpoint(
+                updated_settings.get("file_storage"),
+                current_settings.get("file_storage"),
+            )
 
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)

@@ -769,8 +769,11 @@ export const SettingsPage: React.FC = () => {
       toast.success('File storage settings saved');
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
+      // A 400 says why, such as a self-hosted endpoint the installation does not allow.
       toast.error(
-        status === 403 ? 'You do not have permission to change these settings.' : 'Failed to save storage settings.'
+        status === 403
+          ? 'You do not have permission to change these settings.'
+          : getErrorMessage(err, 'Failed to save storage settings.')
       );
     } finally {
       setSavingStorage(false);

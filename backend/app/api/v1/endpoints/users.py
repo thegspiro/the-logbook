@@ -12,8 +12,10 @@ from uuid import UUID
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Cookie,
     Depends,
     File,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -30,7 +32,10 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import (
     _collect_user_permissions,
     _has_permission,
+    access_token_from,
+    ensure_stepup,
     get_current_user,
+    request_access_token,
     require_permission,
     require_stepup,
 )
@@ -329,6 +334,7 @@ async def create_member(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create")),
+    access_token: str | None = Cookie(None),
 ):
     """
     Create a new member (Secretary/Admin only)
@@ -512,6 +518,13 @@ async def create_member(
         await _enforce_role_grant_ceiling(
             current_user, list(roles), db, get_client_ip(request)
         )
+
+    # Owner decision 2026-11-01 (PERM-10): a new member given a rank or roles
+    # is a grant, so it asks for the same re-verification as assigning a role.
+    # Checked here, after both ceilings and before anything is written, and
+    # only for a grant: routine onboarding with neither does not prompt.
+    if user_data.rank or user_data.role_ids:
+        await ensure_stepup(db, request_access_token(request, access_token))
 
     # Create new user
     new_user = User(
@@ -1987,6 +2000,8 @@ async def update_user_profile(
     profile_update: UserUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
 ):
     """
     Update user profile information (name, address, emergency contacts, etc.)
@@ -2248,6 +2263,15 @@ async def update_user_profile(
     # New writes only (W04-7): a number sent back unchanged passes even if it
     # predates the rule, so a member can still save the rest of their profile.
     update_data.update(_validated_phone_changes(user, update_data))
+
+    # Owner decision 2026-11-01 (PERM-10): a rank carries its own permissions,
+    # so giving a member a different one re-verifies like granting a role.
+    # Asked last, once every other check has passed, so a save refused for
+    # another reason does not prompt first. Clearing a rank grants nothing
+    # (including the clear a move to administrative makes), and the rest of
+    # a profile save never asks.
+    if update_data.get("rank") and update_data["rank"] != user.rank:
+        await ensure_stepup(db, access_token_from(authorization, access_token))
 
     # Snapshot for the audit trail before `emergency_contacts` is popped below.
     # Taken from `update_data` rather than the raw payload because a move to the

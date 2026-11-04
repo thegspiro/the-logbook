@@ -344,7 +344,9 @@ service every compose file starts.
 
 The outage row **fails closed**: accepting unscanned files whenever the scanner
 is down is the state an attacker wants (the same reasoning as CAPTCHA). Files
-stored while scanning was disabled are not rescanned. See
+stored before scanning, or while it was disabled, are scanned once afterwards
+by the hourly `stored_file_malware_scan` task; an infected one is deleted and
+audited the same way. See
 [Security Configuration](Configuration-Security#malware-scanning-of-uploads).
 
 ### Certificate retention
