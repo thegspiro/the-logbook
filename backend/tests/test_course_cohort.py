@@ -220,6 +220,35 @@ class TestCohortDetailPrivacy:
         service.is_roster_member.assert_not_awaited()
         assert build_detail.await_args.kwargs["include_member_data"] is True
 
+    @pytest.mark.parametrize("officer", [False, True])
+    async def test_officer_notes_are_withheld_from_a_roster_member(self, officer):
+        # The wizard labels notes as the training officers' own (CC-2), so a
+        # roster member's response must not carry them; the description is
+        # for everyone on the cohort.
+        course = _course()
+        cohort = _cohort(
+            course.id,
+            description="Fall academy",
+            notes="Two recruits on probation",
+            created_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        )
+        service = MagicMock()
+        service.get_cohort_detail = AsyncMock(
+            return_value={
+                "cohort": cohort,
+                "course_name": course.name,
+                "classes": [],
+                "members": [],
+            }
+        )
+
+        detail = await cohort_endpoints._build_detail(
+            service, cohort.id, ORG, include_member_data=officer
+        )
+
+        assert detail.description == "Fall academy"
+        assert detail.notes == ("Two recruits on probation" if officer else None)
+
     async def test_member_detail_does_not_query_or_return_roster(self):
         course = _course()
         cohort = _cohort(course.id)

@@ -13,9 +13,12 @@
  *     blobs*, submitted shift reports, training submissions, and event RSVPs
  *   - offline skills testing (IndexedDB): unsent scorecards, and the copies of
  *     live tests, published sheets and recent candidates kept for scoring
- *     without signal. Logout asks before getting here when scorecards are
- *     unsent (AppLayout); sign-in as someone else and an expired session do
- *     not ask.
+ *     without signal. The one exception to purging: unsent scorecards (and
+ *     the live-test copies they score into) are kept for their examiner, and
+ *     only they can see or send them (owner decision 2026-11-01). An explicit
+ *     Sign Out, after the warning in AppLayout, deletes the examiner's own;
+ *     every automatic path — idle timeout, expired session, someone else
+ *     signing in — keeps them, for HELD_EVALUATION_RETENTION_MS.
  *   - saved department-store carts (localStorage): what a member meant to
  *     order, including any name they asked to have embroidered
  *
@@ -33,7 +36,7 @@ import { clearAllQueuedChecks } from './offlineQueue';
 import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
 import { clearAllEquipmentCheckDrafts } from './equipmentCheckDrafts';
-import { clearAllSkillsOffline } from './skillsTestOffline';
+import { purgeSkillsStores, releaseHeldSkillsEntries } from './skillsTestOfflineStore';
 import { clearAllSavedCarts } from '../modules/storefront/utils/savedCart';
 
 export interface PurgeResult {
@@ -47,6 +50,8 @@ export interface PurgeResult {
   queuedGeneric: number;
   /** Unsent skills-test scorecards discarded. */
   queuedSkillsTests: number;
+  /** Unsent skills-test scorecards kept on the device for their examiner. */
+  heldSkillsTests: number;
   /** Unsent items that were lost (i.e. never made it to the server). */
   unsyncedDiscarded: number;
 }
@@ -76,6 +81,15 @@ async function bounded<T>(promise: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+export interface PurgeOptions {
+  /**
+   * The member who chose to sign out and confirmed that their own unsent
+   * skills evaluations would be deleted. Omitted on every automatic path,
+   * which keeps every examiner's for them.
+   */
+  discardSkillsFor?: string | null | undefined;
+}
+
 /**
  * Clear every device-local store that can hold member PII.
  *
@@ -83,13 +97,14 @@ async function bounded<T>(promise: Promise<T>, fallback: T): Promise<T> {
  * or break logout — a member stuck signed in on a shared terminal is strictly
  * worse than a failed cleanup.
  */
-export async function purgeLocalMemberData(): Promise<PurgeResult> {
+export async function purgeLocalMemberData(options: PurgeOptions = {}): Promise<PurgeResult> {
   const result: PurgeResult = {
     drafts: 0,
     queuedChecks: 0,
     queuedReports: 0,
     queuedGeneric: 0,
     queuedSkillsTests: 0,
+    heldSkillsTests: 0,
     unsyncedDiscarded: 0,
   };
 
@@ -124,7 +139,9 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
   }
 
   try {
-    result.queuedSkillsTests = await bounded(clearAllSkillsOffline(), 0);
+    const skills = await bounded(purgeSkillsStores(options.discardSkillsFor ?? null), { discarded: 0, held: 0 });
+    result.queuedSkillsTests = skills.discarded;
+    result.heldSkillsTests = skills.held;
   } catch {
     // As above.
   }
@@ -145,4 +162,17 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
   result.unsyncedDiscarded =
     result.queuedChecks + result.queuedReports + result.queuedGeneric + result.queuedSkillsTests;
   return result;
+}
+
+/**
+ * A member has signed in: give them back the skills evaluations held for
+ * them, and drop any held past retention. Never throws, like the purge — a
+ * sign-in must not fail on a device store.
+ */
+export async function releaseHeldWorkFor(member: string): Promise<void> {
+  try {
+    await bounded(releaseHeldSkillsEntries(member), undefined);
+  } catch {
+    // IndexedDB may be unavailable; nothing is held there then either.
+  }
 }

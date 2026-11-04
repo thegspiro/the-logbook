@@ -117,7 +117,12 @@ instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
   `name_match_until` date. The upgrade (migration `60aaf273de27`) sets it, on
   every requirement that exists, to the day it runs; requirements created later,
   and every requirement on a fresh install, never match by name and need a linked
-  course, the training type or the registry code.
+  course, the training type or the registry code. **Since 2026-11-04** the name
+  match compares stored match keys (case, spacing and punctuation removed), so a
+  course name that only _contains_ the requirement's no longer counts; a
+  registry code must begin the certificate number; and skills-evaluation,
+  checklist and knowledge-test requirements follow the same legacy-only rule,
+  with their cut-off set to the day migration `bd8fc0c4a941` runs.
 - **Attestations record the server's figure.** The form has no Compliance % box;
   it records the department's percentage as of the period's last day
   (`compliance_as_of`), refuses a period that has not started, and has a quarter

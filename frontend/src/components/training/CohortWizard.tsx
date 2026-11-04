@@ -65,6 +65,9 @@ const STEPS = [
 /** Per-class edits keyed by syllabus class id. `location` is a room id; absent means the default. */
 type Overrides = Record<string, { start?: string; end?: string; skip?: boolean; location?: string | undefined }>;
 
+const MIN_DURATION = 1;
+const MAX_DURATION = 1440;
+
 const LOCATION_SOURCE_LABEL: Record<'class' | 'syllabus' | 'cohort', string> = {
   class: 'chosen for this class',
   syllabus: 'from the syllabus',
@@ -98,11 +101,15 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
   const [courseId, setCourseId] = useState(initialCourseId ?? '');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [description, setDescription] = useState('');
+  const [notes, setNotes] = useState('');
 
   // Step 2 — schedule
   const [startDate, setStartDate] = useState(getTodayLocalDate(tz));
   const [meetingDays, setMeetingDays] = useState<number[]>([]);
   const [defaultStartTime, setDefaultStartTime] = useState('');
+  // Kept as typed so a half-entered value is not coerced while the officer types.
+  const [defaultDuration, setDefaultDuration] = useState('');
   const [rollPolicy, setRollPolicy] = useState<DateRollPolicy>(DateRollPolicy.NONE);
   const [blackoutDates, setBlackoutDates] = useState<string[]>([]);
   const [cohortLocationId, setCohortLocationId] = useState('');
@@ -115,8 +122,19 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
   const [memberSearch, setMemberSearch] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
-  // Step 5 — pipeline
+  // Step 5 — pipeline and event behaviour. Both switches start at the
+  // schema's defaults (CourseCohortBase), so an officer who never touches them
+  // gets what the API gave before the wizard offered them.
   const [generateProgram, setGenerateProgram] = useState(true);
+  const [requiresRsvp, setRequiresRsvp] = useState(true);
+  const [autoCreateRecords, setAutoCreateRecords] = useState(true);
+
+  // Blank means "use each class's own length"; the bounds are the schema's
+  // (CohortScheduleConfig.default_duration_minutes, ge=1 le=1440).
+  const durationMinutes = defaultDuration.trim() === '' ? undefined : Number(defaultDuration);
+  const durationInvalid =
+    durationMinutes !== undefined &&
+    (!Number.isInteger(durationMinutes) || durationMinutes < MIN_DURATION || durationMinutes > MAX_DURATION);
 
   const selectedCourse = courses.find((c) => c.id === courseId);
 
@@ -169,6 +187,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
           start_date: startDate,
           meeting_days: meetingDays.length > 0 ? meetingDays : undefined,
           default_start_time: defaultStartTime || undefined,
+          default_duration_minutes: durationMinutes,
           date_roll_policy: rollPolicy,
           blackout_dates: blackoutDates.length > 0 ? blackoutDates : undefined,
           location_id: cohortLocationId || undefined,
@@ -183,7 +202,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
         setPreviewing(false);
       }
     },
-    [courseId, startDate, meetingDays, defaultStartTime, rollPolicy, blackoutDates, cohortLocationId]
+    [courseId, startDate, meetingDays, defaultStartTime, durationMinutes, rollPolicy, blackoutDates, cohortLocationId]
   );
 
   const changeClassLocation = (classId: string, locationId: string) => {
@@ -231,6 +250,10 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
         toast.error('Pick a start date');
         return;
       }
+      if (durationInvalid) {
+        toast.error(`Default class length must be a whole number between ${MIN_DURATION} and ${MAX_DURATION} minutes`);
+        return;
+      }
       await runPreview();
     }
     if (step === 2 && includedClasses.length === 0) {
@@ -250,9 +273,14 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
         course_id: courseId,
         name: name.trim(),
         code: code.trim() || undefined,
+        description: description.trim() || undefined,
+        notes: notes.trim() || undefined,
         start_date: startDate,
         meeting_days: meetingDays.length > 0 ? meetingDays : undefined,
         default_start_time: defaultStartTime || undefined,
+        default_duration_minutes: durationMinutes,
+        requires_rsvp: requiresRsvp,
+        auto_create_records: autoCreateRecords,
         date_roll_policy: rollPolicy,
         blackout_dates: blackoutDates.length > 0 ? blackoutDates : undefined,
         location_id: cohortLocationId || undefined,
@@ -350,9 +378,39 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="RS-2026-F"
+                maxLength={50}
                 className="form-input"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="form-label" htmlFor="cohort-description">
+              Description <span className="text-theme-text-muted">(optional)</span>
+            </label>
+            <textarea
+              id="cohort-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="form-input"
+            />
+          </div>
+
+          <div>
+            <label className="form-label" htmlFor="cohort-notes">
+              Notes <span className="text-theme-text-muted">(optional)</span>
+            </label>
+            <textarea
+              id="cohort-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="form-input"
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Shown to training officers only; members see the description.
+            </p>
           </div>
         </div>
       )}
@@ -427,6 +485,32 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                 className="form-input"
               />
               <p className="text-theme-text-muted mt-1 text-xs">Only used for classes with no time of their own.</p>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="cohort-duration">
+                Default class length (minutes) <span className="text-theme-text-muted">(optional)</span>
+              </label>
+              <input
+                id="cohort-duration"
+                type="number"
+                inputMode="numeric"
+                min={MIN_DURATION}
+                max={MAX_DURATION}
+                step={1}
+                value={defaultDuration}
+                onChange={(e) => setDefaultDuration(e.target.value)}
+                aria-invalid={durationInvalid}
+                aria-describedby="cohort-duration-help"
+                className="form-input md:max-w-xs"
+              />
+              <p
+                id="cohort-duration-help"
+                className={`mt-1 text-xs ${durationInvalid ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`}
+              >
+                {durationInvalid
+                  ? `Enter a whole number between ${MIN_DURATION} and ${MAX_DURATION} minutes.`
+                  : 'Only used for classes with no length of their own.'}
+              </p>
             </div>
           </div>
 
@@ -722,6 +806,38 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
               </span>
             </label>
           )}
+
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={requiresRsvp}
+              onChange={(e) => setRequiresRsvp(e.target.checked)}
+              className="form-checkbox mt-1"
+            />
+            <span>
+              <span className="text-theme-text-primary font-medium">Ask members to RSVP</span>
+              <span className="text-theme-text-muted block">
+                Each class event asks the roster to confirm attendance.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={autoCreateRecords}
+              onChange={(e) => setAutoCreateRecords(e.target.checked)}
+              className="form-checkbox mt-1"
+            />
+            <span>
+              <span className="text-theme-text-primary font-medium">
+                Start an in-progress training record when members check in
+              </span>
+              <span className="text-theme-text-muted block">
+                Records are completed when attendance is finalized either way.
+              </span>
+            </span>
+          </label>
 
           <p className="text-theme-text-muted text-sm">
             This creates {includedClasses.length} training event

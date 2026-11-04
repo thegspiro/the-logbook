@@ -970,7 +970,7 @@ docker-compose ps
 
 - **Secretary Attendance Dashboard**: `GET /api/v1/meetings/attendance/dashboard` shows per-member meeting attendance %, waiver counts, voting eligibility, and tier info
 - **Meeting Attendance Waivers**: Secretary/president/chief can excuse members from meetings — attendance % not penalized, but member can't vote in that meeting
-- **Auto-Enrollment on Conversion**: Prospective members automatically enrolled in probationary training program when converted; training officer can enroll anyone via `POST /api/v1/training/enrollments`
+- **Auto-Enrollment on Conversion**: Prospective members automatically enrolled in probationary training program when converted; training officer can enroll anyone via `POST /api/v1/training/programs/enrollments`
 - **Incident-Based Tracking**: Shift completion reports now match call types against `required_call_types` on requirements; tracks per-type running totals in `progress_notes`
 - **Scheduled Tasks/Cron**: `GET/POST /api/v1/scheduled/tasks` for listing and triggering cron tasks (daily cert alerts, weekly struggling member checks, monthly tier advance)
 - **Struggling Member Detection**: Flags members behind pace, approaching deadlines, or with stalled requirements; sends training officer notifications

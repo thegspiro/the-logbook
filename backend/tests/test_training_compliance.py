@@ -23,6 +23,7 @@ from app.services.training_waiver_service import (
     count_waived_months,
     total_months_in_period,
 )
+from app.utils.training_match_key import training_match_key
 
 # ---------------------------------------------------------------------------
 # Helpers to build lightweight mock objects
@@ -96,6 +97,10 @@ def _make_record(**kwargs):
         "created_at": None,
     }
     defaults.update(kwargs)
+    # Keyed as the model keys a saved record (app/models/training.py), since
+    # certification and fallback requirements match by the stored keys.
+    defaults["match_key"] = training_match_key(defaults["course_name"])
+    defaults["certification_key"] = training_match_key(defaults["certification_number"])
     return SimpleNamespace(**defaults)
 
 
@@ -740,7 +745,7 @@ class TestEvaluateRequirementDetailCertification:
         )
         records = [
             _make_record(
-                course_name="Test Requirement Cert",
+                course_name="Test Requirement",
                 expiration_date=date(2027, 6, 15),
                 certification_number="CERT-001",
                 completion_date=date(2025, 6, 15),
@@ -759,7 +764,7 @@ class TestEvaluateRequirementDetailCertification:
         )
         records = [
             _make_record(
-                course_name="Test Requirement Cert",
+                course_name="Test Requirement",
                 expiration_date=date(2026, 1, 1),
                 certification_number="CERT-001",
                 completion_date=date(2024, 1, 1),
@@ -905,7 +910,7 @@ class TestEvaluateRequirementDetailFallback:
         )
         records = [
             _make_record(
-                course_name="Test Requirement Checklist",
+                course_name="test requirement",
                 completion_date=date(2026, 3, 1),
             ),
         ]
@@ -1370,7 +1375,7 @@ class TestEvaluateRequirementDetailFields:
         )
         records = [
             _make_record(
-                course_name="Test Requirement Cert",
+                course_name="Test Requirement",
                 completion_date=date(2025, 1, 10),
                 expiration_date=date(2027, 1, 10),
             ),

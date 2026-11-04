@@ -4,6 +4,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import type { AxiosInstance } from 'axios';
 import type { SkillTest } from '../types/skillsTesting';
 import { OFFLINE_DRAIN_LOCK } from '../sw/backgroundSyncProtocol';
+import { purgeSkillsStores } from './skillsTestOfflineStore';
 
 let signedIn: string | null = 'examiner-1';
 vi.mock('../stores/authStore', () => ({
@@ -16,7 +17,6 @@ import {
   SKILLS_QUEUE_MAX_RETRIES,
   applyPending,
   cacheSkillTest,
-  clearAllSkillsOffline,
   discardSkillsPending,
   drainSkillsQueue,
   enqueueSkillsComplete,
@@ -262,7 +262,9 @@ describe('skillsTestOffline', () => {
     await discardSkillsPending('t1');
     expect(await skillsPendingCount()).toBe(1);
     expect(await getCachedSkillTest('t1')).toBeNull();
-    expect(await clearAllSkillsOffline()).toBe(1);
+    // The examiner's own sign-out deletes what is left (clearAllSkillsOffline,
+    // which this called, was replaced by the examiner-aware purge).
+    expect(await purgeSkillsStores('examiner-1')).toEqual({ discarded: 1, held: 0 });
     expect(await skillsPendingCount()).toBe(0);
   });
 

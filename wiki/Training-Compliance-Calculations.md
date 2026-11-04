@@ -150,12 +150,20 @@ certificate **"expiring soon" look-ahead always uses the real date**.
 | **Shifts** (not shift-credited) and **Calls**    | Records in the window (of the requirement's training type, if set)                                                                            | Count ≥ target (after waivers)               |
 | **Courses**                                      | Which of the linked courses have a record in the window                                                                                       | Every linked course done                     |
 | **Certification**                                | The latest matching record, from any date                                                                                                     | Its expiry date is not before the as-of date |
-| **Skills evaluation, checklist, knowledge test** | A record in the window of the requirement's training type, or else one whose course name contains the requirement's name                      | A matching record exists and has not expired |
+| **Skills evaluation, checklist, knowledge test** | A record in the window of the requirement's training type, or else a legacy record with the requirement's name (by match key, see below)      | A matching record exists and has not expired |
 
 A certification record matches when its course is linked on the requirement,
-its training type matches, or its certificate number contains the
+its training type matches, or its certificate number begins with the
 requirement's registry code. Matching on the course **name** applies only to
-legacy records — see [Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05).
+legacy records (on or before the requirement's `name_match_until`) — see
+[Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05)
+— for certifications and, since 2026-11-04, for skills evaluation, checklist
+and knowledge test too.
+
+Names and codes are compared by **match key**, not as text: the record stores
+its course name and certificate number with case, spacing and punctuation
+removed (`match_key`, `certification_key`), and the requirement's name or code
+is reduced the same way. "c.p.r." matches "CPR"; "CPR Refresher" does not.
 
 **Every-2-years hours and courses** have one more rule: if the newest matching
 record that carries an expiry date has expired, the requirement reads

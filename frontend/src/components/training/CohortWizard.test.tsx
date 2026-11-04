@@ -343,3 +343,95 @@ describe('CohortWizard rooms', () => {
     expect(screen.queryByLabelText('Room for Orientation')).not.toBeInTheDocument();
   });
 });
+
+describe('CohortWizard cohort details (CC-2)', () => {
+  beforeEach(() => {
+    mockCreateCohort.mockReset();
+    mockCreateCohort.mockResolvedValue({ id: 'co1', classes: [{ id: 'x' }, { id: 'y' }] });
+  });
+
+  const toConfirm = async (user: ReturnType<typeof userEvent.setup>) => {
+    // Preview -> Roster -> Confirm
+    await screen.findByText('Orientation');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+    await user.click(await screen.findByRole('button', { name: /Next/i }));
+  };
+
+  it('sends description, notes, duration, RSVP and auto-record choices to the generate call', async () => {
+    const user = userEvent.setup();
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Course')).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText('Course'), 'course-1');
+    await user.type(screen.getByLabelText(/^Description/), '  Fall academy  ');
+    await user.type(screen.getByLabelText(/^Notes/), 'Bring turnouts');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+
+    await user.type(await screen.findByLabelText(/^Default class length/), '90');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+
+    // The preview is computed with the same default the classes will get.
+    await waitFor(() => expect(mockPreviewSchedule).toHaveBeenCalledTimes(1));
+    expect(mockPreviewSchedule).toHaveBeenCalledWith(expect.objectContaining({ default_duration_minutes: 90 }));
+
+    await toConfirm(user);
+    const rsvp = screen.getByRole('checkbox', { name: /Ask members to RSVP/i });
+    const autoRecords = screen.getByRole('checkbox', { name: /Start an in-progress training record/i });
+    expect(rsvp).toBeChecked();
+    expect(autoRecords).toBeChecked();
+    await user.click(rsvp);
+    await user.click(autoRecords);
+
+    await user.click(screen.getByRole('button', { name: /Generate 2 classes/i }));
+    await waitFor(() => expect(mockCreateCohort).toHaveBeenCalledTimes(1));
+    expect(mockCreateCohort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Fall academy',
+        notes: 'Bring turnouts',
+        default_duration_minutes: 90,
+        requires_rsvp: false,
+        auto_create_records: false,
+      })
+    );
+  });
+
+  it('omits blank optional fields and sends the schema defaults for the switches', async () => {
+    const user = userEvent.setup();
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Course')).toBeInTheDocument();
+    });
+    await user.selectOptions(screen.getByLabelText('Course'), 'course-1');
+    await user.type(screen.getByLabelText(/^Description/), '   ');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+    await toConfirm(user);
+    await user.click(screen.getByRole('button', { name: /Generate 2 classes/i }));
+
+    await waitFor(() => expect(mockCreateCohort).toHaveBeenCalledTimes(1));
+    const payload = mockCreateCohort.mock.calls[0]?.[0] as Record<string, unknown>;
+    // A create omits a blank field rather than sending "" (CLAUDE.md pitfall #1).
+    expect(payload.description).toBeUndefined();
+    expect(payload.notes).toBeUndefined();
+    expect(payload.default_duration_minutes).toBeUndefined();
+    expect(payload.requires_rsvp).toBe(true);
+    expect(payload.auto_create_records).toBe(true);
+  });
+
+  it('refuses a default class length outside 1-1440 minutes before previewing', async () => {
+    const user = userEvent.setup();
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Course')).toBeInTheDocument();
+    });
+    await user.selectOptions(screen.getByLabelText('Course'), 'course-1');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+    await user.type(await screen.findByLabelText(/^Default class length/), '2000');
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+
+    expect(await screen.findByText(/between 1 and 1440 minutes/)).toBeInTheDocument();
+    expect(mockPreviewSchedule).not.toHaveBeenCalled();
+  });
+});

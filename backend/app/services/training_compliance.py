@@ -39,6 +39,8 @@ from app.services.training_waiver_service import (
 from app.utils.hours import meets_required_hours
 from app.utils.membership import MemberStatus, canonical_member_status
 from app.utils.org_timezone import resolve_org_today
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+from app.utils.training_match_key import training_match_key
 
 
 def _get_custom_annual_window(req, today: date):
@@ -385,9 +387,10 @@ def certification_record_matches(req, record) -> bool:
        the course out of the library, so a record for that course is
        unambiguously the certification in question.
     2. The requirement's ``training_type``.
-    3. The requirement name appearing in the record's course name — for
-       legacy records only (see below).
-    4. The requirement's registry code appearing in the certification number.
+    3. The requirement's name, for legacy records only
+       (:func:`record_name_matches`).
+    4. The requirement's registry code, which the record's certification
+       number begins with (:func:`registry_code_matches`).
 
     Matches 2–4 are heuristics kept for requirements created before the library
     link existed (and for imported records that carry no course id), which is
@@ -395,13 +398,9 @@ def certification_record_matches(req, record) -> bool:
     existing "CPR" requirement must keep crediting the records it already
     credited when an officer links the CPR course to it.
 
-    The name match let any course containing the requirement's name satisfy
-    it — a "CPR Refresher" event credited a "CPR" certification. The owner
-    chose to keep it for legacy records only rather than drop it (which would
-    have changed published compliance overnight): it applies to a record
-    completed on or before the requirement's ``name_match_until``, the day
-    this installation's rule changed (see :func:`_name_match_is_legacy`).
-    Requirements created since carry no cut-off and never match by name.
+    3 and 4 compare stored keys, not text (owner decision 2026-11-01, "stored
+    match key"), so :func:`graded_records_clause` can ask SQL for exactly the
+    records they can accept instead of loading every completed record.
 
     Shared by the compliance matrix, the member compliance summary, and the
     competency matrix so all three agree on what counts.
@@ -416,32 +415,56 @@ def certification_record_matches(req, record) -> bool:
     if req_training_type and record.training_type == req_training_type:
         return True
 
-    req_name = getattr(req, "name", None)
-    if (
-        record.course_name
-        and req_name
-        and req_name.lower() in record.course_name.lower()
+    return record_name_matches(req, record) or registry_code_matches(req, record)
+
+
+def record_name_matches(req, record) -> bool:
+    """Whether ``record`` satisfies ``req`` by name: the legacy rule.
+
+    The record's stored ``match_key`` must equal the key of the requirement's
+    name, and the record must predate the requirement's ``name_match_until``
+    (:func:`_name_match_is_legacy`). Used by CERTIFICATION and by every type
+    the grader's fallback branch handles (skills evaluation, checklist,
+    knowledge test, ...).
+
+    The rule used to be "the requirement's name appears anywhere in the
+    course name", so a "CPR Refresher" event credited a "CPR" certification.
+    The owner kept name matching for legacy records only — for certifications
+    on 2026-10-05, extended to the fallback types on 2026-11-01 — and on
+    2026-11-01 replaced the substring test with the key, which ignores case,
+    spacing and punctuation but not words: "c.p.r." matches "CPR", "CPR
+    Refresher" does not. A record with no stored key never matches by name.
+    """
+    if getattr(req, "name_match_until", None) is None:
+        return False
+    key = training_match_key(getattr(req, "name", None))
+    return (
+        key is not None
+        and getattr(record, "match_key", None) == key
         and _name_match_is_legacy(req, record)
-    ):
-        return True
+    )
 
-    registry_code = getattr(req, "registry_code", None)
-    if (
-        record.certification_number
-        and registry_code
-        and registry_code.lower() in record.certification_number.lower()
-    ):
-        return True
 
-    return False
+def registry_code_matches(req, record) -> bool:
+    """Whether ``record``'s certification number begins with ``req``'s registry code.
+
+    Compared by key (:func:`training_match_key`), so "NFPA 1001" matches
+    "nfpa-1001-0042". A code in the middle of the number ("TX-NFPA-1001") no
+    longer matches: a prefix is what SQL can find through the index, and it is
+    how registry-issued numbers are written. No cut-off — this match was
+    never date-limited.
+    """
+    code = training_match_key(getattr(req, "registry_code", None))
+    cert = getattr(record, "certification_key", None)
+    return bool(code and cert and cert.startswith(code))
 
 
 def _name_match_is_legacy(req, record) -> bool:
     """Whether ``record`` predates ``req``'s name-match cut-off.
 
-    Dated by its completion date. A completed record with none is dated by
-    when it was entered, so an undated record written after the cut-off
-    cannot borrow the legacy rule; one with neither date is not legacy.
+    Dated by its completion date. A record with none is dated by when it was
+    entered, so an undated record written after the cut-off cannot borrow the
+    legacy rule; one with neither date is not legacy.
     """
     until = getattr(req, "name_match_until", None)
     if until is None:
@@ -451,6 +474,21 @@ def _name_match_is_legacy(req, record) -> bool:
         created_at = getattr(record, "created_at", None)
         when = created_at.date() if created_at is not None else None
     return when is not None and when <= until
+
+
+def fallback_record_matches(req, records) -> list:
+    """The records the fallback branch credits ``req`` with.
+
+    By training type when the requirement names one and any record has it;
+    otherwise by name (:func:`record_name_matches`). One definition for every
+    grader that has a fallback branch (CLAUDE.md pitfall #29).
+    """
+    matching = []
+    if req.training_type:
+        matching = [r for r in records if r.training_type == req.training_type]
+    if not matching:
+        matching = [r for r in records if record_name_matches(req, r)]
+    return matching
 
 
 def counts_shift_attendance(req) -> bool:
@@ -613,7 +651,8 @@ def _grade_member_requirement(
                       (:func:`counts_shift_attendance`), or matching records
                       when the requirement is not shift-credited
     - CALLS:          Count matching records within date window
-    - Others:         Match by training_type or name
+    - Others:         Match by training_type, or by name for legacy records
+                      (see fallback_record_matches)
     """
     req_type = (
         req.requirement_type.value
@@ -922,15 +961,7 @@ def _grade_member_requirement(
         return _ev("not_started", None, None, **progress)
 
     # ---- Fallback (skills_evaluation, checklist, knowledge_test, etc.) ----
-    matching = []
-    if req.training_type:
-        matching = [r for r in windowed if r.training_type == req.training_type]
-    if not matching and req.name:
-        matching = [
-            r
-            for r in windowed
-            if r.course_name and req.name.lower() in r.course_name.lower()
-        ]
+    matching = fallback_record_matches(req, windowed)
 
     if matching:
         latest = max(matching, key=lambda r: r.completion_date or date.min)
@@ -947,18 +978,7 @@ def _grade_member_requirement(
         in_progress = [
             r for r in member_records if r.status == TrainingStatus.IN_PROGRESS
         ]
-        ip_matching = []
-        if req.training_type:
-            ip_matching = [
-                r for r in in_progress if r.training_type == req.training_type
-            ]
-        if not ip_matching and req.name:
-            ip_matching = [
-                r
-                for r in in_progress
-                if r.course_name and req.name.lower() in r.course_name.lower()
-            ]
-        if ip_matching:
+        if fallback_record_matches(req, in_progress):
             return _ev("in_progress", None, None)
     return _ev("not_started", None, None)
 
@@ -1023,8 +1043,8 @@ def graded_records_clause(
     it selects a superset of what :func:`_grade_member_requirement` reads,
     branch by branch, for each requirement:
 
-    - **Windowed types** (hours, courses, shifts, calls, and the fallback
-      types) read COMPLETED records with a completion date inside
+    - **Windowed types** (hours, courses, shifts and calls) read COMPLETED
+      records with a completion date inside
       :func:`completion_window`. Every frequency now has a bounded window
       except ONE_TIME, and so does every rolling requirement, so this is a
       date range — including biannual hours, whose expired-certificate
@@ -1032,23 +1052,28 @@ def graded_records_clause(
       date changes nothing here: the grader never reads one.
     - **ONE_TIME without a freshness cutoff** has no window. The grader reads
       every COMPLETED record, including one with no completion date, so all
-      of them are selected — that requirement still costs the member's full
-      completed history.
-    - **CERTIFICATION** ignores the frequency window and reads every COMPLETED
-      record :func:`certification_record_matches` accepts. With a freshness
-      cutoff that is "completed on or after the cutoff". Without one it is
-      the member's full completed history: the match is partly a
-      case-insensitive substring test (requirement name in course name,
-      registry code in certification number), and SQL's ``LIKE`` folds case
-      by the column collation, not by Python's ``str.lower``, so pushing it
-      into the query could drop a record the grader would have counted. The
-      name test applies only to records up to ``name_match_until``, but the
-      registry-code test and the course and type matches have no date bound,
-      so a certification still selects every completed record; the cut-off
-      narrows what the grader accepts, never what it needs loaded.
-    - **Fallback types** (skills evaluation, checklist, knowledge test) also
-      read IN_PROGRESS records of any date when nothing completed matches,
-      so every IN_PROGRESS record is selected while one is active.
+      of them are selected — a one-time hours, courses, shifts or calls
+      requirement still costs the member's full completed history.
+    - **CERTIFICATION** ignores the frequency window and reads the COMPLETED
+      records :func:`certification_record_matches` can accept — on or after
+      the freshness cutoff when there is one, of any date otherwise. Since
+      the name and registry-code matches compare stored keys
+      (:func:`record_name_matches`, :func:`registry_code_matches`), that is a
+      filter SQL can apply: a linked course, the training type, the name's key
+      (only while the requirement has a ``name_match_until``) or a
+      certification key beginning with the code's.
+    - **Fallback types** (skills evaluation, checklist, knowledge test) read
+      the COMPLETED records in :func:`completion_window` (any date for
+      ONE_TIME without a cutoff), and IN_PROGRESS records of any date when
+      nothing completed matches — in both cases only those of the
+      requirement's training type or, while it has a ``name_match_until``,
+      its name's key (:func:`fallback_record_matches`).
+
+    A key filter can only over-select, never miss: equal keys are equal
+    strings, which every collation compares equal, and a string beginning
+    with another matches it as a ``LIKE`` prefix. Whatever extra a collation
+    lets through is dropped by the grader, which compares the stored keys in
+    Python. A record is never loaded for text its key does not carry.
 
     SCHEDULED, CANCELLED and FAILED records are never read and never loaded.
     Grandfathering, catch-up deadlines and waivers read the member and the
@@ -1060,16 +1085,45 @@ def graded_records_clause(
     """
     spans: List[Tuple[date, Optional[date]]] = []
     all_completed = False
-    in_progress = False
+    completed = TrainingRecord.status == TrainingStatus.COMPLETED
+    # Clauses for the requirements whose records are found by what they match
+    # (certification and fallback types) rather than by date alone.
+    matched: List[ColumnElement[bool]] = []
     for req in requirements:
         as_of = requirement_as_of(req, today, org_include_current_month)
         req_type = getattr(req.requirement_type, "value", req.requirement_type)
-        if req_type not in _TYPED_BRANCH_TYPES:
-            in_progress = True
         if req_type == RequirementType.CERTIFICATION.value:
-            start, end = recency_cutoff(req, as_of), None
-        else:
-            start, end = completion_window(req, as_of)
+            match = _record_match_clause(req, certification=True)
+            if match is not None:
+                cutoff = recency_cutoff(req, as_of)
+                dated = (
+                    [] if cutoff is None else [TrainingRecord.completion_date >= cutoff]
+                )
+                matched.append(and_(completed, match, *dated))
+            continue
+        start, end = completion_window(req, as_of)
+        if req_type not in _TYPED_BRANCH_TYPES:
+            match = _record_match_clause(req, certification=False)
+            if match is None:
+                continue
+            matched.append(
+                and_(TrainingRecord.status == TrainingStatus.IN_PROGRESS, match)
+            )
+            if start is None:
+                matched.append(and_(completed, match))
+            elif end is None:
+                matched.append(
+                    and_(completed, match, TrainingRecord.completion_date >= start)
+                )
+            elif start <= end:
+                matched.append(
+                    and_(
+                        completed,
+                        match,
+                        TrainingRecord.completion_date.between(start, end),
+                    )
+                )
+            continue
         if start is None:
             all_completed = True
         elif end is None or start <= end:
@@ -1078,7 +1132,6 @@ def graded_records_clause(
             spans.append((start, end))
 
     clauses: List[ColumnElement[bool]] = []
-    completed = TrainingRecord.status == TrainingStatus.COMPLETED
     if all_completed:
         clauses.append(completed)
     elif spans:
@@ -1097,9 +1150,36 @@ def graded_records_clause(
                 ),
             )
         )
-    if in_progress:
-        clauses.append(TrainingRecord.status == TrainingStatus.IN_PROGRESS)
+    clauses.extend(matched)
     return or_(*clauses) if clauses else false()
+
+
+def _record_match_clause(req, *, certification: bool) -> Optional[ColumnElement[bool]]:
+    """SQL for the records ``req`` can match by course, type, name or code.
+
+    The query side of :func:`certification_record_matches`
+    (``certification=True``) and :func:`fallback_record_matches`. ``None`` when the
+    requirement can match nothing at all.
+    """
+    clauses: List[ColumnElement[bool]] = []
+    if certification:
+        linked = [str(c) for c in (getattr(req, "required_courses", None) or [])]
+        if linked:
+            clauses.append(TrainingRecord.course_id.in_(linked))
+    if req.training_type:
+        clauses.append(TrainingRecord.training_type == req.training_type)
+    name_key = training_match_key(req.name)
+    if name_key and getattr(req, "name_match_until", None) is not None:
+        clauses.append(TrainingRecord.match_key == name_key)
+    if certification:
+        code_key = training_match_key(getattr(req, "registry_code", None))
+        if code_key:
+            clauses.append(
+                TrainingRecord.certification_key.like(
+                    like_pattern(code_key, prefix=True), escape=LIKE_ESCAPE_CHAR
+                )
+            )
+    return or_(*clauses) if clauses else None
 
 
 def _merge_spans(

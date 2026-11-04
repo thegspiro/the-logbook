@@ -307,6 +307,15 @@ describe('MyExternalShifts', () => {
     expect(screen.queryByRole('button', { name: /Delete shift/ })).not.toBeInTheDocument();
   });
 
+  it('marks an entry awaiting approval as not yet counting, and keeps it editable', async () => {
+    mockGetMine.mockResolvedValue({ items: [entry({ status: 'pending' })], total: 1 });
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    expect(await screen.findByText('Awaiting approval')).toBeInTheDocument();
+    expect(screen.getByText(/counts once a scheduling officer approves it/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Edit shift/ })).toBeInTheDocument();
+  });
+
   it('says when a shift is waiting on its evaluation, and when it is evaluated', async () => {
     mockGetMine.mockResolvedValue({
       items: [

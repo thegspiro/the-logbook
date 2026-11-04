@@ -692,6 +692,13 @@ export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
  */
 export const EXCHANGE_NOT_QUALIFIED_CODE = 'LB-SCHED-002';
 
+/**
+ * Support code for an officer assignment to a department's own seat that no
+ * rank, certification, training program or open position grants. A
+ * scheduling manager's assign flow keys its officer-override offer off this.
+ */
+export const SEAT_NOT_GRANTED_CODE = 'LB-SCHED-004';
+
 // The qualification a course certifies its holder in. Values must match
 // QUALIFICATIONS in backend/app/services/qualification_service.py — a course
 // that names a code the backend does not know grants nothing, so a test parses

@@ -185,22 +185,26 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
         // The unit goes on the wire only when the member picked a different
         // one: an entry whose unit has left the list has nothing to re-send.
         const unitChanged = apparatusId !== CURRENT && apparatusId !== entry.external_apparatus_id;
-        await schedulingService.updateExternalShift(entry.id, {
+        const saved = await schedulingService.updateExternalShift(entry.id, {
           ...(mode === 'times' ? { start_at: startUtc, end_at: endUtc } : { shift_date: shiftDate, hours: hoursValue }),
           ...(unitChanged ? { external_apparatus_id: apparatusId } : {}),
           role: blankToNull(role),
           notes: blankToNull(notes),
         });
-        toast.success('Shift updated');
+        toast.success(
+          saved.status === 'pending' ? 'Shift updated; it counts once an officer approves it' : 'Shift updated'
+        );
       } else {
-        await schedulingService.logExternalShift({
+        const saved = await schedulingService.logExternalShift({
           start_at: startUtc,
           end_at: endUtc,
           external_apparatus_id: apparatusId,
           role: role.trim() || undefined,
           notes: notes.trim() || undefined,
         });
-        toast.success('Shift logged');
+        toast.success(
+          saved.status === 'pending' ? 'Shift logged; it counts once an officer approves it' : 'Shift logged'
+        );
       }
       onSaved();
       onClose();

@@ -338,6 +338,11 @@ async def _build_detail(
         member_count=detail.get("member_count", 0),
         end_date=detail.get("end_date"),
     )
+    if not include_member_data:
+        # Notes are the training officers' own (the wizard says so); a roster
+        # member gets the description and the schedule, not the officers'
+        # remarks about the class.
+        base.notes = None
     return CourseCohortDetailResponse(
         **base.model_dump(),
         classes=[

@@ -22,6 +22,7 @@ import pytest
 
 from app.services.training_compliance import certification_record_matches
 from app.services.training_program_service import TrainingProgramService
+from app.utils.training_match_key import training_match_key
 
 
 def _requirement(**overrides):
@@ -45,6 +46,9 @@ def _record(**overrides):
         "completion_date": date(2026, 1, 1),
     }
     base.update(overrides)
+    # Keyed as the model keys a saved record (app/models/training.py).
+    base["match_key"] = training_match_key(base["course_name"])
+    base["certification_key"] = training_match_key(base["certification_number"])
     return SimpleNamespace(**base)
 
 
@@ -69,9 +73,7 @@ class TestCertificationRecordMatches:
         """Linking widens the match — it must not narrow it, or an existing
         requirement would stop crediting records it already credited."""
         req = _requirement(name="CPR", required_courses=["course-cpr"])
-        assert certification_record_matches(
-            req, _record(course_name="CPR Recertification")
-        )
+        assert certification_record_matches(req, _record(course_name="cpr"))
 
     def test_training_type_still_matches_without_link(self):
         req = _requirement(training_type="certification")

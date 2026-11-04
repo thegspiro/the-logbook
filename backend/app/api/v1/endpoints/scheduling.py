@@ -136,6 +136,9 @@ from app.services.event_request_service import (
     outreach_role_label,
     resolve_outreach_signup_role,
 )
+from app.services.external_shift_hours_service import (
+    external_shifts_require_approval,
+)
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
@@ -2617,6 +2620,54 @@ def _curated_refusal(exc: CodedValueError) -> CodedHTTPException:
     )
 
 
+def _seat_override_requested(
+    current_user: User, requested: bool, reason: str | None
+) -> bool:
+    """Whether this officer may seat somebody in an ungranted custom seat.
+
+    The answer the service is given: ``True`` waives eligibility for such a
+    seat, ``False`` makes the service refuse it with ``LB-SCHED-004`` so the
+    screen can offer the override. Only ``scheduling.manage`` may use it — a
+    delegated assigner or a shift officer can seat members in granted seats,
+    not decide that an ungranted one needs no grant — and a reason is
+    required, because the audit event is the only account of why.
+    """
+    if not requested:
+        return False
+    if not user_has_permission(current_user, "scheduling.manage"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a scheduling manager can seat a member by override.",
+        )
+    if not (reason or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Give a reason for seating this member by override.",
+        )
+    return True
+
+
+async def _audit_seat_override(
+    db: AsyncSession, current_user: User, assignment, reason: str | None
+) -> None:
+    await log_audit_event(
+        db=db,
+        event_type="shift_seat_eligibility_override",
+        event_category="scheduling",
+        severity="WARNING",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "assignment_id": str(assignment.id),
+            "shift_id": str(assignment.shift_id),
+            "member_id": str(assignment.user_id),
+            "position": str(getattr(assignment.position, "value", assignment.position)),
+            "reason": (reason or "").strip() or None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 @router.post(
     "/shifts/{shift_id}/assignments",
     response_model=ShiftAssignmentResponse,
@@ -2641,6 +2692,11 @@ async def create_assignment(
         service, current_user, shift_id, "scheduling.assign"
     )
     assignment_data = assignment.model_dump(exclude_none=True)
+    seat_override = _seat_override_requested(
+        current_user,
+        assignment_data.pop("override_seat_eligibility", False),
+        assignment_data.pop("override_reason", None),
+    )
 
     # An officer seating somebody on an outreach sheet chooses the same roles
     # the member would have. Validated the same way, so a hand-made assignment
@@ -2668,6 +2724,8 @@ async def create_assignment(
             assignment_data,
             current_user.id,
             actor=_signup_actor(shift, current_user),
+            seat_override=seat_override,
+            override_reason=assignment.override_reason,
         )
     except CodedValueError as e:
         raise _curated_refusal(e)
@@ -2675,6 +2733,8 @@ async def create_assignment(
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
         )
+    if service.last_assignment_overrode_seat:
+        await _audit_seat_override(db, current_user, result, assignment.override_reason)
     enriched = await service.enrich_assignments([result])
     response = enriched[0]
 
@@ -2706,12 +2766,19 @@ async def update_assignment(
     service = SchedulingService(db)
     await _authorize_assignment_management(service, current_user, assignment_id)
     update_data = assignment.model_dump(exclude_unset=True)
+    seat_override = _seat_override_requested(
+        current_user,
+        update_data.pop("override_seat_eligibility", False),
+        update_data.pop("override_reason", None),
+    )
     try:
         result, error = await service.update_assignment(
             assignment_id,
             current_user.organization_id,
             update_data,
             actor=_roster_actor(current_user),
+            seat_override=seat_override,
+            override_reason=assignment.override_reason,
         )
     except CodedValueError as e:
         raise _curated_refusal(e)
@@ -2719,6 +2786,8 @@ async def update_assignment(
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
+    if service.last_assignment_overrode_seat:
+        await _audit_seat_override(db, current_user, result, assignment.override_reason)
     enriched = await service.enrich_assignments([result])
     response = enriched[0]
 
@@ -4505,6 +4574,7 @@ async def _feature_settings_response(
         late_signup_grace_minutes=window["late_signup_grace_minutes"],
         open_ended_shift_cushion_hours=open_ended_cushion_hours(org.settings or {}),
         enforce_evoc=service.get_evoc_enforcement(org),
+        external_shifts_require_approval=external_shifts_require_approval(org.settings),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
         call_type_usage=await _call_type_usage_for(db, current_user),
         call_type_locked=await _call_type_locked_for(db, current_user),
@@ -4598,6 +4668,11 @@ async def update_scheduling_feature_settings(
                 else None
             ),
             enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
+            external_shifts_require_approval=(
+                data.external_shifts_require_approval
+                if "external_shifts_require_approval" in fields_set
+                else None
+            ),
             # Guarded like every sibling field: a partial save from another
             # toggle sends only its own key, and passing the schema default
             # unconditionally would reset the department's call-type list.

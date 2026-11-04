@@ -422,6 +422,7 @@ class TrainingService:
         from app.services.training_compliance import (
             certification_record_matches,
             hours_record_counts,
+            record_name_matches,
         )
 
         if req_type == RequirementType.CERTIFICATION.value:
@@ -441,15 +442,11 @@ class TrainingService:
             )
 
         # Fallback (skills_evaluation, checklist, etc.): training_type
-        # match, or the requirement name appearing in the record's course
-        # name -- the same two criteria the fallback branch itself uses.
+        # match, or the legacy name match (record_name_matches) -- the same
+        # two criteria the fallback branch itself uses.
         if requirement.training_type:
             return bool(record.training_type == requirement.training_type)
-        return bool(
-            requirement.name
-            and record.course_name
-            and requirement.name.lower() in record.course_name.lower()
-        )
+        return record_name_matches(requirement, record)
 
     async def _anchor_records(
         self,
@@ -611,6 +608,7 @@ class TrainingService:
             certification_record_matches,
             counts_shift_attendance,
             credited_shifts_in_window,
+            fallback_record_matches,
             hours_record_counts,
             monthly_hours,
             next_window_opens,
@@ -795,15 +793,7 @@ class TrainingService:
 
         # ---- Fallback ----
         else:
-            matching = []
-            if req.training_type:
-                matching = [r for r in windowed if r.training_type == req.training_type]
-            if not matching and req.name:
-                matching = [
-                    r
-                    for r in windowed
-                    if r.course_name and req.name.lower() in r.course_name.lower()
-                ]
+            matching = fallback_record_matches(req, windowed)
             base_required = 1
             adjusted_required = 1
             if matching:
@@ -1031,6 +1021,7 @@ class TrainingService:
             certification_record_matches,
             counts_shift_attendance,
             credited_shifts_in_window,
+            fallback_record_matches,
             hours_record_counts,
             load_credited_shift_dates,
             recency_cutoff,
@@ -1445,18 +1436,7 @@ class TrainingService:
         # ---- Fallback (skills_evaluation, checklist, etc.) ----
         else:
             records = await _windowed()
-            matching = []
-            if requirement.training_type:
-                matching = [
-                    r for r in records if r.training_type == requirement.training_type
-                ]
-            if not matching and requirement.name:
-                matching = [
-                    r
-                    for r in records
-                    if r.course_name
-                    and requirement.name.lower() in r.course_name.lower()
-                ]
+            matching = fallback_record_matches(requirement, records)
 
             if matching:
                 latest = max(matching, key=lambda r: r.completion_date or date.min)

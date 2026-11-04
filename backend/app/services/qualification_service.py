@@ -15,7 +15,7 @@ apparatus editor's did (#1833).
 
 from calendar import monthrange
 from datetime import date
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,8 +82,65 @@ def qualification_label(code: str) -> str:
     return entry["label"] if entry else code
 
 
-def positions_for_qualifications(codes: Sequence[str]) -> Set[str]:
+def known_qualification_codes(codes: Any) -> List[str]:
+    """``codes`` settled to the one stored shape: known codes, unique, sorted.
+
+    The canonical form of a custom seat's ``qualifications`` list in
+    ``scheduling_module_configs.custom_positions`` (CLAUDE.md Pitfall #20).
+    Used on the write (after the schema has refused an unknown code outright)
+    and on every read, where a code that has since left ``QUALIFICATIONS`` —
+    or a value that is not a list at all — is dropped rather than raised,
+    because the readers are the eligibility check and the settings screen,
+    and neither should fail on one stale entry.
+    """
+    if not isinstance(codes, (list, tuple, set, frozenset)):
+        return []
+    return sorted(
+        {
+            str(code).strip()
+            for code in codes
+            if isinstance(code, str) and str(code).strip() in QUALIFICATIONS
+        }
+    )
+
+
+def custom_qualification_seats(custom_positions: Any) -> Dict[str, Set[str]]:
+    """code -> the department's own seats that qualification confers.
+
+    Read from the department's Position Names (``custom_positions``), where
+    each custom seat lists the certifications that clear a member for it
+    (SCHED-CUSTOM-SEAT owner decision, 2026-11-01). The seat is the entry's own
+    value, so a mapping can only ever name a seat this department defined —
+    another department's seat is not in this column.
+
+    An entry saved before the field existed carries no ``qualifications`` key,
+    which means "no certification confers it" — the behaviour it had.
+    """
+    mapping: Dict[str, Set[str]] = {}
+    if not isinstance(custom_positions, list):
+        return mapping
+    for entry in custom_positions:
+        if not isinstance(entry, dict):
+            continue
+        seat = str(entry.get("value") or "").strip()
+        if not seat:
+            continue
+        for code in known_qualification_codes(entry.get("qualifications")):
+            mapping.setdefault(code, set()).add(seat)
+    return mapping
+
+
+def positions_for_qualifications(
+    codes: Sequence[str],
+    custom_seats: Optional[Mapping[str, Iterable[str]]] = None,
+) -> Set[str]:
     """Union of the shift seats these qualifications clear a member for.
+
+    ``custom_seats`` is ``custom_qualification_seats`` for the member's
+    department: the seats of its own that it mapped a certification to, on
+    top of the built-in seats ``QUALIFICATIONS`` names. Every eligibility
+    answer that reads qualifications goes through here, so a mapping reaches
+    signup, officer assignment, the bulk answer and the position roster alike.
 
     An unrecognised code clears nothing rather than raising: the column is a
     string so a department's own future qualification can live there, and one
@@ -94,6 +151,8 @@ def positions_for_qualifications(codes: Sequence[str]) -> Set[str]:
         entry = QUALIFICATIONS.get(code)
         if entry:
             granted.update(entry["positions"])
+        if custom_seats:
+            granted.update(custom_seats.get(code, ()))
     return granted
 
 

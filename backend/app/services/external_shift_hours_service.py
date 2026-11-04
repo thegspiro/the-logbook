@@ -1,10 +1,17 @@
 """
 Shift hours members worked outside the department's own schedule.
 
-A member logs the shift themselves and it counts immediately; there is no
-approval queue. An officer who finds an entry wrong rejects it, which takes
-it out of every total while keeping the member's claim on record, and can
-restore it the same way.
+A member logs the shift themselves and, by default, it counts immediately. A
+department that switches on ``external_shifts_require_approval`` (Scheduling
+Settings; owner decision 2026-11-01) has each new entry logged ``pending``
+instead: it counts toward nothing until an officer with ``scheduling.manage``
+approves it, and the officers are told one is waiting. Either way an officer
+who finds an entry wrong rejects it, which takes it out of every total while
+keeping the member's claim on record, and can restore it the same way.
+
+Every reader counts ``status == counted`` and nothing else, so "pending does
+not count" is the same rule as "rejected does not count" and needs no second
+definition (pitfall #29).
 
 The aggregate helpers here are the one definition of "counted external
 hours" that the hours report, the member's own history and the shift
@@ -12,18 +19,20 @@ compliance report all read, so the three cannot disagree about which rows
 count.
 """
 
+import html as _html
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models.external_shift_hours import (
     ExternalShiftHours,
     ExternalShiftHoursStatus,
 )
-from app.models.user import User
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.services.external_apparatus_service import ExternalApparatusService
 from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
@@ -32,8 +41,24 @@ from app.utils.org_timezone import resolve_scheduling_timezone
 if TYPE_CHECKING:
     from app.services.shift_evaluation_service import ShiftEvaluationService
 
+_PENDING = ExternalShiftHoursStatus.PENDING.value
 _COUNTED = ExternalShiftHoursStatus.COUNTED.value
 _REJECTED = ExternalShiftHoursStatus.REJECTED.value
+
+# Changing any of these changes which hours an approval vouched for, so with
+# approval required an edit to one sends a counted entry back for review.
+_COUNTED_FIELDS = (
+    "shift_date",
+    "duration_minutes",
+    "start_at",
+    "end_at",
+    "external_apparatus_id",
+)
+
+#: Where the officers' notice sends them: the member-hours report, whose
+#: outside-shifts table carries the approve and reject controls.
+REVIEW_PATH = "/scheduling/admin/reports"
+NOTICE_CATEGORY = "external_shift_approval"
 
 
 def _whole_minutes(minutes: float) -> int:
@@ -52,6 +77,21 @@ def _whole_minutes(minutes: float) -> int:
 
 def minutes_from_hours(hours: float) -> int:
     return _whole_minutes(float(hours) * 60)
+
+
+def external_shifts_require_approval(org_settings: Optional[Mapping[str, Any]]) -> bool:
+    """Whether the department asks an officer to approve each outside shift.
+
+    Owner decision 2026-11-01 ("optional approval setting"). Absent, or
+    anything but an explicit ``true``, means off: an entry counts as soon as
+    it is logged, which is what every department had before the setting
+    existed (pitfall #19). Read defensively because ``settings`` is JSON an
+    admin can hand-edit; a stray value must not hold every member's hours.
+    """
+    scheduling = (org_settings or {}).get("scheduling")
+    if not isinstance(scheduling, Mapping):
+        return False
+    return scheduling.get("external_shifts_require_approval") is True
 
 
 class ExternalShiftHoursService:
@@ -129,6 +169,8 @@ class ExternalShiftHoursService:
         snapshot = await self._apparatus_snapshot(
             organization_id, payload["external_apparatus_id"]
         )
+        org = await self._org(organization_id)
+        needs_approval = external_shifts_require_approval(org.settings if org else None)
         entry = ExternalShiftHours(
             organization_id=str(organization_id),
             user_id=str(user_id),
@@ -136,12 +178,138 @@ class ExternalShiftHoursService:
             **snapshot,
             role=payload.get("role"),
             notes=payload.get("notes"),
-            status=_COUNTED,
+            status=_PENDING if needs_approval else _COUNTED,
         )
         self.db.add(entry)
         await self.db.commit()
         await self.db.refresh(entry)
+        if needs_approval:
+            await self.notify_officers_awaiting_approval(entry)
         return entry
+
+    async def _org(self, organization_id: str) -> Optional[Organization]:
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org: Optional[Organization] = result.scalar_one_or_none()
+        return org
+
+    async def notify_officers_awaiting_approval(
+        self, entry: ExternalShiftHours
+    ) -> None:
+        """Tell every ``scheduling.manage`` holder an outside shift awaits them.
+
+        Email is the channel of record (pitfall #18), under the "Scheduling
+        officer duties" kind each officer may turn off; the bell entry goes to
+        every officer regardless, so turning the email off never hides the
+        task. The member who logged it is left out even when they are an
+        officer themselves — they know. One notice per entry put in the queue:
+        this runs from the create and from the edit that sends an entry back,
+        never from a scheduled task, so there is no rerun to guard against.
+        A notice that fails is logged and never undoes the entry.
+        """
+        try:
+            await self._send_awaiting_approval_notice(entry)
+        except Exception as e:
+            logger.warning(
+                "External shift approval notice failed for entry {}: {}",
+                entry.id,
+                e,
+            )
+            await self.db.rollback()
+
+    async def _send_awaiting_approval_notice(self, entry: ExternalShiftHours) -> None:
+        from app.api.dependencies import user_has_permission
+        from app.core.config import settings
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            member_receives_email,
+        )
+        from app.services.email_service import EmailService, wrap_email_body
+        from app.services.officer_alert_copies import add_in_app_copies
+
+        organization_id = str(entry.organization_id)
+        org = await self._org(organization_id)
+        if org is None:
+            return
+        members = (
+            await self.db.execute(
+                select(User)
+                .where(User.organization_id == organization_id)
+                .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
+                .where(User.deleted_at.is_(None))
+                .options(selectinload(User.positions))
+            )
+        ).scalars()
+        officers = [
+            m
+            for m in members
+            if str(m.id) != str(entry.user_id)
+            and user_has_permission(m, "scheduling.manage")
+        ]
+        if not officers:
+            return
+
+        logged_by = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(entry.user_id),
+                    User.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+        name = (logged_by.display_name if logged_by else None) or "A member"
+        hours = hours_from_minutes(entry.duration_minutes or 0)
+        subject = "An outside shift is waiting for approval"
+        message = (
+            f"{name} logged {hours:g} hours with {entry.agency_name} "
+            f"({entry.apparatus_name}) on {entry.shift_date.isoformat()}. "
+            "It counts toward their hours once a scheduling officer approves it."
+        )
+
+        await add_in_app_copies(
+            self.db,
+            organization_id=organization_id,
+            recipient_ids=[str(o.id) for o in officers],
+            category=NOTICE_CATEGORY,
+            subject=subject,
+            message=message,
+            action_url=REVIEW_PATH,
+            metadata={"external_shift_id": str(entry.id)},
+        )
+        await self.db.commit()
+
+        required = department_required_kinds(org)
+        emails = [
+            o.email
+            for o in officers
+            if o.email
+            and member_receives_email(
+                o.notification_preferences, EmailKind.SCHEDULING_DUTIES, required
+            )
+        ]
+        if not emails:
+            return
+        url = f"{settings.FRONTEND_URL}{REVIEW_PATH}"
+        html_body = wrap_email_body(
+            org,
+            subject,
+            f"<p>{_html.escape(message)}</p>"
+            f'<p style="text-align: center;"><a href="{_html.escape(url)}" '
+            'class="button" role="link">Review outside shifts</a></p>',
+        )
+        text_body = f"{message}\n\nReview: {url}\n"
+        email_service = EmailService(organization=org)
+        # One message per officer: a shared To line would show every
+        # officer's address to the others.
+        for address in emails:
+            await email_service.send_email(
+                to_emails=[address],
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+            )
 
     def _evaluations(self) -> "ShiftEvaluationService":
         # Imported here: the evaluation service reaches the training program
@@ -213,6 +381,7 @@ class ExternalShiftHoursService:
             if str(picked) != (entry.external_apparatus_id or ""):
                 changes.update(await self._apparatus_snapshot(organization_id, picked))
 
+        before = {field: getattr(entry, field) for field in _COUNTED_FIELDS}
         apply_updates(
             entry,
             changes,
@@ -228,8 +397,27 @@ class ExternalShiftHoursService:
                 "updated_at",
             },
         )
+        # An approval vouched for a date, a length and a unit. With approval
+        # required, changing one of those after the fact would credit hours no
+        # officer saw, so the entry goes back to the queue. A note or role
+        # correction leaves it counted.
+        sent_back = False
+        if entry.status == _COUNTED and any(
+            getattr(entry, field) != value for field, value in before.items()
+        ):
+            org = await self._org(organization_id)
+            if external_shifts_require_approval(org.settings if org else None):
+                entry.status = _PENDING
+                entry.reviewed_by = None
+                entry.reviewed_at = None
+                sent_back = True
         await self.db.commit()
         await self.db.refresh(entry)
+        if sent_back:
+            # It stopped counting, so an evaluation of it stops crediting.
+            await self._evaluations().sync_credit_for_entry(entry.id, organization_id)
+            await self.db.refresh(entry)
+            await self.notify_officers_awaiting_approval(entry)
         return entry
 
     async def delete_own(
@@ -373,6 +561,39 @@ class ExternalShiftHoursService:
         await self.db.commit()
         # A rejected shift no longer counts, so its evaluation stops crediting
         # the member's program; restoring it gives the credit back.
+        await self._evaluations().sync_credit_for_entry(entry.id, organization_id)
+        await self.db.refresh(entry)
+        return entry
+
+    async def approve(
+        self, organization_id: str, entry_id: str, reviewer_id: str
+    ) -> Optional[ExternalShiftHours]:
+        """Let a pending entry count. ``ValueError`` unless it is pending.
+
+        Locked so two officers approving at once serialize: the second finds
+        it already counted and is told so, rather than re-stamping the review.
+        """
+        result = await self.db.execute(
+            select(ExternalShiftHours)
+            .where(
+                ExternalShiftHours.id == str(entry_id),
+                ExternalShiftHours.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        entry: Optional[ExternalShiftHours] = result.scalar_one_or_none()
+        if entry is None:
+            return None
+        if entry.status != _PENDING:
+            await self.db.rollback()
+            raise ValueError("This shift is not waiting for approval")
+        entry.status = _COUNTED
+        entry.reviewed_by = str(reviewer_id)
+        entry.reviewed_at = datetime.now(timezone.utc)
+        entry.rejection_reason = None
+        await self.db.commit()
+        # It counts now, so an evaluation already submitted for it credits
+        # the member's program from here on.
         await self._evaluations().sync_credit_for_entry(entry.id, organization_id)
         await self.db.refresh(entry)
         return entry

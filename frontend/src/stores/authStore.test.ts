@@ -22,10 +22,14 @@ const mockClearTempAccessToken = vi.fn();
 // Returns a real PurgeResult shape: logout reads `unsyncedDiscarded` off it to
 // decide whether to tell the member work was discarded.
 const emptyPurge = { drafts: 0, queuedChecks: 0, queuedReports: 0, queuedGeneric: 0, unsyncedDiscarded: 0 };
-const mockPurgeLocalMemberData = vi.fn(() => Promise.resolve({ ...emptyPurge }));
+const mockPurgeLocalMemberData = vi.fn((_options?: unknown) => Promise.resolve({ ...emptyPurge }));
+const mockReleaseHeldWorkFor = vi.fn((_member: string) => Promise.resolve());
 
+// The purge now takes options (whose unsent skills evaluations go) and the
+// module exports the sign-in release as well; the mock forwards both.
 vi.mock('../utils/purgeLocalMemberData', () => ({
-  purgeLocalMemberData: () => mockPurgeLocalMemberData(),
+  purgeLocalMemberData: (options?: unknown) => mockPurgeLocalMemberData(options),
+  releaseHeldWorkFor: (member: string) => mockReleaseHeldWorkFor(member),
 }));
 
 const mockReleaseDevicePush = vi.fn(() => Promise.resolve());
@@ -364,6 +368,37 @@ describe('authStore', () => {
       expect(localStorage.getItem('has_session')).toBeNull();
       expect(getState().user).toBeNull();
       expect(getState().isAuthenticated).toBe(false);
+    });
+  });
+
+  describe('unsent skills evaluations at sign-out (owner decision 2026-11-01)', () => {
+    beforeEach(() => {
+      useAuthStore.setState({ user: fakeUser, isAuthenticated: true });
+      mockLogout.mockResolvedValue(undefined);
+    });
+
+    it('an interactive sign-out deletes the signing-out examiner’s own', async () => {
+      await act(async () => {
+        await getState().logout();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalledWith({ discardSkillsFor: 'u1' });
+    });
+
+    it('an automatic sign-out keeps them for the examiner', async () => {
+      await act(async () => {
+        await getState().logout({ automatic: true });
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalledWith({ discardSkillsFor: null });
+    });
+
+    it('a session ended without asking keeps them too', async () => {
+      await act(async () => {
+        await getState().endSessionLocally();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalledWith(undefined);
     });
   });
 
@@ -778,6 +813,17 @@ describe('authStore', () => {
 
       expect(mockPurgeLocalMemberData).toHaveBeenCalled();
       expect(localStorage.getItem('device_member_id')).toBe('u1');
+    });
+
+    it('hands the member signing in the evaluations held for them, after the purge', async () => {
+      localStorage.setItem('device_member_id', 'someone-else');
+
+      await signIn();
+
+      expect(mockReleaseHeldWorkFor).toHaveBeenCalledWith('u1');
+      const purgedAt = mockPurgeLocalMemberData.mock.invocationCallOrder[0] ?? Infinity;
+      const releasedAt = mockReleaseHeldWorkFor.mock.invocationCallOrder[0] ?? -Infinity;
+      expect(purgedAt).toBeLessThan(releasedAt);
     });
 
     it('keeps a member’s own queued work when they sign back in', async () => {

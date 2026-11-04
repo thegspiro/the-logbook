@@ -130,6 +130,7 @@ fails if this document misses a curated code).
 | LB-SCHED-001 | The member lacks the EVOC certification the shift's apparatus requires to drive it.  | Record the certification on the apparatus's Operators tab, or request a driver qualification exception (Scheduling → Qualifications → Driver exceptions).                           |
 | LB-SCHED-002 | In a two-way shift exchange, one member is not cleared for the seat they would take. | Exchange with a member the picker offers, or record the rank/qualification that grants the position. A duty officer can approve with the qualification override, which is recorded. |
 | LB-SCHED-003 | The requested seat is not one the shift names (sent as a 422).                       | Choose a seat the shift lists, or add the seat to the shift, its template or its apparatus. A department's own seats are defined under Scheduling → Position Names.                 |
+| LB-SCHED-004 | No rank, certification, training program or open position grants this custom seat.   | Grant the seat (a rank, a certification mapped under Position Names, or open positions), or have a scheduling manager assign with the officer override, which is audited.           |
 
 `LB-SCHED-001` is a safety block, not a permissions problem — it applies to
 officer assignment and member self-signup alike. Departments that want it

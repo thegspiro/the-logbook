@@ -67,7 +67,11 @@ behaviour. Field-level detail is in `backend/app/docs/TRAINING_MODULE.md`
   completed on or before the requirement's `name_match_until` date, which the
   upgrade set to the day it ran on every requirement that existed; a requirement
   created afterwards needs a linked course, the training type or the registry
-  code.
+  code. Since 2026-11-04 the legacy name match compares stored match keys (the
+  name with case, spacing and punctuation removed), so a course name that only
+  contains the requirement's no longer counts; a registry code must begin the
+  certification number; and skills-evaluation, checklist and knowledge-test
+  requirements follow the same legacy-only rule (see `docs/UPGRADING.md`).
 - **`required_roles` holds rank slugs and is matched against the member's rank.**
   It previously never matched anybody. It is not the compliance profile's
   `role_ids` (position ids).
