@@ -331,3 +331,78 @@ class TestAdminHours:
     def test_member_fields_use_the_shift_imports_keys(self):
         values = engine.member_values(_raw(), SETTINGS)
         assert shift_engine.identity_from_values(values).key == "number:6178"
+
+
+class TestTraining:
+    SETTINGS = engine.TrainingSettings(
+        subject_column="TrainingSubject",
+        instructor_column="TrainingInstructor",
+        taught_column="Instructor",
+    )
+
+    def test_the_departments_training_columns_are_detected(self):
+        detected = engine.detect_training_settings(
+            [
+                "VID",
+                "TrainingSubject",
+                "TrainingInstructor",
+                "Instructor",
+                "CompanyDrill",
+            ]
+        )
+        assert (
+            detected.subject_column,
+            detected.instructor_column,
+            detected.taught_column,
+        ) == (
+            "TrainingSubject",
+            "TrainingInstructor",
+            "Instructor",
+        )
+
+    @pytest.mark.parametrize(
+        "instructor",
+        [
+            "Target Solutions",
+            "TargetSolutions",
+            "FCVFD/Targetsolutions",
+            "Vector Online",
+            "TS",
+        ],
+    )
+    def test_provider_spellings_are_recognised(self, instructor):
+        assert engine.is_provider_row(instructor, self.SETTINGS)
+
+    @pytest.mark.parametrize("instructor", ["Schomburg", "NVCC", "Tsai", ""])
+    def test_other_instructors_are_not_providers(self, instructor):
+        assert not engine.is_provider_row(instructor, self.SETTINGS)
+
+    def test_a_member_who_taught_and_wrote_me_is_named(self):
+        raw = {"TrainingInstructor": "me", "Instructor": "1"}
+        assert engine.record_instructor(raw, self.SETTINGS, "Sam Lee") == "Sam Lee"
+
+    def test_a_named_instructor_is_kept_as_written(self):
+        raw = {"TrainingInstructor": "Schomburg", "Instructor": "1"}
+        assert engine.record_instructor(raw, self.SETTINGS, "Sam Lee") == "Schomburg"
+
+    def test_me_on_a_row_the_member_attended_is_not_rewritten(self):
+        raw = {"TrainingInstructor": "me", "Instructor": "0"}
+        assert engine.record_instructor(raw, self.SETTINGS, "Sam Lee") == "me"
+
+    def test_subject_spellings_share_one_key(self):
+        assert engine.subject_key("EMT-B ") == engine.subject_key("emt b")
+
+    def test_a_synced_record_a_day_either_side_matches(self):
+        day = date(2024, 3, 10)
+        assert engine.provider_match(day, [date(2024, 3, 11)])
+        assert not engine.provider_match(day, [date(2024, 3, 12)])
+
+    def test_stored_settings_drop_an_unknown_action(self):
+        settings = engine.TrainingSettings.from_stored(
+            {
+                "unmatched_provider_action": "maybe",
+                "subject_courses": {"cpr": "c1", "": "x"},
+            }
+        )
+        assert settings.unmatched_provider_action is None
+        assert dict(settings.subject_courses) == {"cpr": "c1"}

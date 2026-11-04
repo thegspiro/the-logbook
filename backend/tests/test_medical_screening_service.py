@@ -78,6 +78,7 @@ def make_requirement(
     frequency_months=12,
     is_active=True,
     name="Annual Physical",
+    grace_period_days=0,
 ):
     req = MagicMock(spec=ScreeningRequirement)
     req.id = str(uuid4())
@@ -86,7 +87,10 @@ def make_requirement(
     req.screening_type = screening_type
     req.frequency_months = frequency_months
     req.is_active = is_active
-    req.grace_period_days = 30
+    # No grace by default: these tests pin the due-date boundary itself. The
+    # grace period's own tests set one (MS-16 wired it on 2026-11-04; the old
+    # default of 30 was inert until then).
+    req.grace_period_days = grace_period_days
     return req
 
 
@@ -98,10 +102,14 @@ def make_record(
     expiration_date=None,
     user_id=None,
     prospect_id=None,
+    requirement=None,
 ):
     rec = MagicMock(spec=ScreeningRecord)
     rec.id = str(uuid4())
     rec.organization_id = org_id
+    # A record counts only toward the requirement it is linked to (owner
+    # decision 2026-11-01).
+    rec.requirement_id = requirement.id if requirement is not None else None
     rec.screening_type = screening_type
     rec.status = status
     rec.completed_date = completed_date or date.today()
@@ -126,11 +134,7 @@ class TestComplianceStatus:
     def _stub_names(self, service):
         # These tests exercise compliance counting/date math, not the MS-2
         # name resolution (which hits the DB and is covered in TestResolveNames).
-        # _requirement_frequencies is a DB read too (W71-1's frequency
-        # fallback); the requirements these tests build carry no frequency.
-        with patch.object(
-            service, "_resolve_names", return_value=_NO_NAMES
-        ), patch.object(service, "_requirement_frequencies", return_value={}):
+        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
             yield
 
     async def test_fully_compliant_no_requirements(self, service, org_id, user_id):
@@ -150,6 +154,7 @@ class TestComplianceStatus:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             status=ScreeningStatus.PASSED,
             expiration_date=date.today() + timedelta(days=180),
@@ -182,6 +187,7 @@ class TestComplianceStatus:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             status=ScreeningStatus.PASSED,
             expiration_date=date.today() - timedelta(days=10),
@@ -202,6 +208,7 @@ class TestComplianceStatus:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             status=ScreeningStatus.PASSED,
             expiration_date=date.today() + timedelta(days=15),
@@ -230,6 +237,7 @@ class TestComplianceStatus:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             status=ScreeningStatus.PASSED,
             expiration_date=date.today(),
@@ -257,6 +265,7 @@ class TestComplianceStatus:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             status=ScreeningStatus.PASSED,
             expiration_date=date.today() - timedelta(days=1),
@@ -276,6 +285,7 @@ class TestComplianceStatus:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             status=ScreeningStatus.COMPLETED,
             expiration_date=None,
@@ -309,6 +319,7 @@ class TestComplianceStatus:
             screening_type=ScreeningType.PHYSICAL_EXAM,
             status=ScreeningStatus.PASSED,
             expiration_date=date.today() + timedelta(days=180),
+            requirement=req1,
         )
 
         with patch.object(
@@ -326,6 +337,7 @@ class TestComplianceStatus:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             status=ScreeningStatus.WAIVED,
             expiration_date=None,
@@ -347,15 +359,18 @@ class TestComplianceStatus:
 class TestExpiringSoon:
     """Tests for get_expiring_soon."""
 
+    @pytest.fixture
+    def req(self, org_id):
+        return make_requirement(org_id)
+
     @pytest.fixture(autouse=True)
-    def _stub_names(self, service):
+    def _stub_names(self, service, req):
         # Focus these on the window/day math; name resolution is a separate
-        # DB round-trip covered in TestResolveNames.
-        # _requirement_frequencies is a DB read too (W71-1's frequency
-        # fallback); the requirements these tests build carry no frequency.
+        # DB round-trip covered in TestResolveNames. The list reads the active
+        # requirements first: only a record linked to one is listed.
         with patch.object(
             service, "_resolve_names", return_value=_NO_NAMES
-        ), patch.object(service, "_requirement_frequencies", return_value={}):
+        ), patch.object(service, "list_requirements", return_value=[req]):
             yield
 
     async def test_returns_empty_when_no_expiring_records(
@@ -369,7 +384,9 @@ class TestExpiringSoon:
         result = await service.get_expiring_soon(org_id, days=30)
         assert result == []
 
-    async def test_calculates_days_until_expiration(self, service, mock_db, org_id):
+    async def test_calculates_days_until_expiration(
+        self, service, mock_db, org_id, req
+    ):
         """Days until expiration is correctly calculated."""
         exp_date = date.today() + timedelta(days=15)
         record = make_record(
@@ -377,6 +394,7 @@ class TestExpiringSoon:
             status=ScreeningStatus.PASSED,
             expiration_date=exp_date,
             user_id=str(uuid4()),
+            requirement=req,
         )
 
         mock_result = MagicMock()
@@ -679,11 +697,7 @@ class TestMyComplianceSummary:
 
     @pytest.fixture(autouse=True)
     def _stub_names(self, service):
-        # _requirement_frequencies is a DB read too (W71-1's frequency
-        # fallback); the requirements these tests build carry no frequency.
-        with patch.object(
-            service, "_resolve_names", return_value=_NO_NAMES
-        ), patch.object(service, "_requirement_frequencies", return_value={}):
+        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
             yield
 
     async def test_no_requirements_reports_nothing_outstanding(
@@ -705,6 +719,7 @@ class TestMyComplianceSummary:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             expiration_date=date.today() - timedelta(days=3),
         )
@@ -728,12 +743,14 @@ class TestMyComplianceSummary:
                 screening_type=ScreeningType.PHYSICAL_EXAM,
                 user_id=user_id,
                 expiration_date=date.today() + timedelta(days=90),
+                requirement=reqs[0],
             ),
             make_record(
                 org_id,
                 screening_type=ScreeningType.DRUG_SCREENING,
                 user_id=user_id,
                 expiration_date=date.today() + timedelta(days=20),
+                requirement=reqs[1],
             ),
         ]
         with patch.object(
@@ -752,6 +769,7 @@ class TestMyComplianceSummary:
         req = make_requirement(org_id)
         rec = make_record(
             org_id,
+            requirement=req,
             user_id=user_id,
             expiration_date=date.today() - timedelta(days=3),
         )
@@ -778,6 +796,7 @@ class TestMyComplianceSummary:
         )
         rec = make_record(
             org_id,
+            requirement=req,
             screening_type=ScreeningType.PSYCHOLOGICAL,
             status=ScreeningStatus.FAILED,
             user_id=user_id,

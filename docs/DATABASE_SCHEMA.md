@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**354 tables · 5771 columns · 1186 foreign keys**
+**354 tables · 5772 columns · 1186 foreign keys**
 
 ---
 
@@ -334,7 +334,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`historical_import_rows`](#historical_import_rows) | `HistoricalImportRow` | 4 | One data row of the file, exactly as read. |
-| [`historical_imports`](#historical_imports) | `HistoricalImport` | 20 | One uploaded export and the decisions about how to read it. |
+| [`historical_imports`](#historical_imports) | `HistoricalImport` | 21 | One uploaded export and the decisions about how to read it. |
 | [`imported_source_records`](#imported_source_records) | `ImportedSourceRecord` | 8 | A source row that an import has turned into a record. |
 
 ### History
@@ -5380,6 +5380,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `summary` | JSON | yes |  |  |  |
 | `admin_settings` | JSON | yes |  |  |  |
 | `member_mappings` | JSON | yes |  |  |  |
+| `training_settings` | JSON | yes |  |  |  |
 | `results` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `routed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |

@@ -49,28 +49,44 @@ async def people(db_session: AsyncSession, setup_org_and_admin):
             "em": f"c-{colleague_id[:8]}@test.com",
         },
     )
-    db_session.add(
-        ScreeningRequirement(
-            id=_uid(),
-            organization_id=org_id,
-            name="Annual Physical",
-            screening_type=ScreeningType.PHYSICAL_EXAM,
-        )
+    physical = ScreeningRequirement(
+        id=_uid(),
+        organization_id=org_id,
+        name="Annual Physical",
+        screening_type=ScreeningType.PHYSICAL_EXAM,
     )
+    db_session.add(physical)
     await db_session.flush()
+    # Both write records, which is .manage; the endpoints read the caller's
+    # grants to decide whether to return the narrative (MS-14).
+    grants = [SimpleNamespace(permissions=["medical_screening.manage"])]
     return SimpleNamespace(
         org_id=org_id,
-        officer=SimpleNamespace(id=officer_id, organization_id=org_id, username="o"),
-        colleague=SimpleNamespace(
-            id=colleague_id, organization_id=org_id, username="c"
+        officer=SimpleNamespace(
+            id=officer_id,
+            organization_id=org_id,
+            username="o",
+            positions=grants,
+            rank=None,
         ),
+        colleague=SimpleNamespace(
+            id=colleague_id,
+            organization_id=org_id,
+            username="c",
+            positions=grants,
+            rank=None,
+        ),
+        requirement_id=physical.id,
     )
 
 
-def _passed_physical(user_id: str, expires: date | None = None):
+def _passed_physical(people, user_id: str, expires: date | None = None):
+    # A record counts only toward the requirement it is linked to (owner
+    # decision 2026-11-01), so the records here are filed against it.
     return ScreeningRecordCreate(
         screening_type="physical_exam",
         status="passed",
+        requirement_id=people.requirement_id,
         user_id=user_id,
         completed_date=date.today(),
         expiration_date=expires,
@@ -95,7 +111,7 @@ class TestTheFlagFollowsWhoSetTheStatus:
         self, db_session, people
     ):
         record = await _create(
-            db_session, people.officer, _passed_physical(people.officer.id)
+            db_session, people.officer, _passed_physical(people, people.officer.id)
         )
         assert record.status == "passed"
         assert record.self_recorded is True
@@ -104,7 +120,7 @@ class TestTheFlagFollowsWhoSetTheStatus:
         self, db_session, people
     ):
         record = await _create(
-            db_session, people.colleague, _passed_physical(people.officer.id)
+            db_session, people.colleague, _passed_physical(people, people.officer.id)
         )
         assert record.self_recorded is False
 
@@ -125,7 +141,7 @@ class TestTheFlagFollowsWhoSetTheStatus:
         self, db_session, people
     ):
         record = await _create(
-            db_session, people.officer, _passed_physical(people.officer.id)
+            db_session, people.officer, _passed_physical(people, people.officer.id)
         )
         updated = await _update(
             db_session, people.colleague, record.id, status="passed"
@@ -137,7 +153,7 @@ class TestTheFlagFollowsWhoSetTheStatus:
         self, db_session, people
     ):
         record = await _create(
-            db_session, people.officer, _passed_physical(people.officer.id)
+            db_session, people.officer, _passed_physical(people, people.officer.id)
         )
         updated = await _update(
             db_session, people.colleague, record.id, notes="typo fixed"
@@ -147,7 +163,9 @@ class TestTheFlagFollowsWhoSetTheStatus:
 
 class TestComplianceViewsShowIt:
     async def test_compliance_item_and_count(self, db_session, people):
-        await _create(db_session, people.officer, _passed_physical(people.officer.id))
+        await _create(
+            db_session, people.officer, _passed_physical(people, people.officer.id)
+        )
         summary = await MedicalScreeningService(db_session).get_compliance_status(
             people.org_id, user_id=people.officer.id
         )
@@ -158,7 +176,9 @@ class TestComplianceViewsShowIt:
         assert item.self_recorded is True
 
     async def test_independently_recorded_reads_clean(self, db_session, people):
-        await _create(db_session, people.colleague, _passed_physical(people.officer.id))
+        await _create(
+            db_session, people.colleague, _passed_physical(people, people.officer.id)
+        )
         summary = await MedicalScreeningService(db_session).get_compliance_status(
             people.org_id, user_id=people.officer.id
         )
@@ -168,12 +188,14 @@ class TestComplianceViewsShowIt:
     async def test_expiring_list(self, db_session, people):
         soon = date.today() + timedelta(days=5)
         own = await _create(
-            db_session, people.officer, _passed_physical(people.officer.id, soon)
+            db_session,
+            people.officer,
+            _passed_physical(people, people.officer.id, soon),
         )
         other = await _create(
             db_session,
             people.officer,
-            _passed_physical(people.colleague.id, soon),
+            _passed_physical(people, people.colleague.id, soon),
         )
         expiring = await MedicalScreeningService(db_session).get_expiring_soon(
             people.org_id, days=30

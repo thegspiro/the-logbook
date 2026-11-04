@@ -1529,6 +1529,10 @@ class ShiftTimeOffResponse(UTCResponseBase):
     approved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # True when the caller may approve or deny this pending request as the
+    # requester's supervisor today (owner decision 2026-11-01). Scheduling
+    # officers review every request regardless; this flags the extra path.
+    reviewable_as_supervisor: bool = False
 
     model_config = _response_config
 

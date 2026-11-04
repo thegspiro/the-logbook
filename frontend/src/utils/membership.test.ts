@@ -14,6 +14,7 @@ import {
   isBuiltinStatus,
   memberClassAndStatusFor,
   memberClassLabel,
+  memberStandingLabel,
   memberStatusLabel,
   statusOptionsFor,
 } from './membership';
@@ -201,5 +202,26 @@ describe('memberClassLabel', () => {
     expect(memberClassLabel('social')).toBe('Social');
     expect(memberClassLabel(undefined)).toBe('');
     expect(memberClassLabel('senior')).toBe('');
+  });
+});
+
+describe('memberStandingLabel', () => {
+  // The profile's "<status> member" line, from the members-visible tier names.
+  const names = [
+    { id: 'active', name: 'Active Member' },
+    { id: 'senior', name: 'Senior' },
+  ];
+
+  it('reads a built-in status as "<label> member"', () => {
+    expect(memberStandingLabel('life')).toBe('Life member');
+  });
+
+  it('uses the department\'s name, adding "member" only when it lacks it', () => {
+    expect(memberStandingLabel('regular', names)).toBe('Active Member');
+    expect(memberStandingLabel('senior', names)).toBe('Senior member');
+  });
+
+  it('is empty when nothing is recorded', () => {
+    expect(memberStandingLabel(null, names)).toBe('');
   });
 });

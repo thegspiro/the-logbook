@@ -52,3 +52,21 @@ class SupervisorCandidateResponse(BaseModel):
 
 class SupervisorCandidateListResponse(BaseModel):
     candidates: List[SupervisorCandidateResponse]
+
+
+class CrewMemberResponse(BaseModel):
+    """A member the caller supervises today. Roster fields only: crew access
+    opens training standing and finalized evaluations through their own
+    endpoints, never contact details or medical records."""
+
+    id: str
+    name: str
+    rank: Optional[str] = None
+    station: Optional[str] = None
+    membership_number: Optional[str] = None
+    # When the current assignment began.
+    supervised_since: date
+
+
+class CrewListResponse(BaseModel):
+    members: List[CrewMemberResponse]
