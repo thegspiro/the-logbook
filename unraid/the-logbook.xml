@@ -1,12 +1,17 @@
 <?xml version="1.0"?>
 <!--
-  DRAFT - NOT INSTALLABLE YET. Nothing builds or publishes the image named in
-  <Repository>, and the project ships separate backend and frontend images
-  rather than the single combined container this template describes (one
-  container answering on 3000 and 3001). Do not submit it to Community
-  Applications until both are settled; see docs/KNOWN_LIMITATIONS.md,
-  "Unraid Community Apps Template - Not Installable Yet". Install on Unraid
-  with the Docker Compose path (unraid/QUICK-START.md).
+  Runs the combined image (web interface and API in one container) built from
+  docker/combined/Dockerfile and published to ghcr.io by
+  .github/workflows/release-image.yml when a release tag is pushed. Until the
+  first release is published, a pull fails with "manifest unknown"; see
+  docs/KNOWN_LIMITATIONS.md, "Unraid Community Apps Template".
+
+  MySQL 8.0 and Redis are NOT inside this container. Run them as their own
+  containers and point DB_HOST / REDIS_HOST at them.
+
+  The container runs as uid 1000. The folders mapped to /app/uploads and
+  /app/logs must be writable by it (chown -R 1000:1000 <folder>); the
+  container refuses to start, naming the folder, when they are not.
 -->
 <Container version="2">
   <Name>TheLogbook</Name>
@@ -18,11 +23,11 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/thegspiro/the-logbook/issues</Support>
   <Project>https://github.com/thegspiro/the-logbook</Project>
-  <Overview>DRAFT - NOT INSTALLABLE YET: the image is not published. Install with the Docker Compose path in unraid/QUICK-START.md. The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, built with HIPAA requirements in mind, and highly customizable.</Overview>
+  <Overview>The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, built with HIPAA requirements in mind, and highly customizable. Needs a MySQL 8.0 container (and Redis, recommended) installed separately; this container holds the web interface and the API.</Overview>
   <Category>Productivity: Status:Beta</Category>
   <WebUI>http://[IP]:[PORT:7880]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/static/logo.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
@@ -31,8 +36,7 @@
     MySQL 8.0 database (can use existing Unraid MySQL instance)
     Redis (optional but recommended for caching)
   </Requires>
-  <Config Name="WebUI Port" Target="3000" Default="7880" Mode="tcp" Description="Port for accessing The Logbook web interface" Type="Port" Display="always" Required="true" Mask="false">7880</Config>
-  <Config Name="API Port" Target="3001" Default="7881" Mode="tcp" Description="Port for The Logbook backend API" Type="Port" Display="always" Required="true" Mask="false">7881</Config>
+  <Config Name="WebUI Port" Target="3000" Default="7880" Mode="tcp" Description="Port for the web interface. The API is served on the same port under /api; it has no port of its own." Type="Port" Display="always" Required="true" Mask="false">7880</Config>
   <Config Name="Uploads" Target="/app/uploads" Default="/mnt/user/appdata/the-logbook/uploads" Mode="rw" Description="User uploaded files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/the-logbook/uploads</Config>
   <Config Name="Backups" Target="/backups" Default="/mnt/user/backups/the-logbook" Mode="rw" Description="Backup files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/backups/the-logbook</Config>
   <Config Name="Logs" Target="/app/logs" Default="/mnt/user/appdata/the-logbook/logs" Mode="rw" Description="Application logs directory" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/the-logbook/logs</Config>
@@ -52,12 +56,23 @@
   <!-- Redis Configuration (Optional) -->
   <Config Name="Redis Host" Target="REDIS_HOST" Default="" Mode="" Description="Redis host (use Unraid server IP or container name)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="Redis Port" Target="REDIS_PORT" Default="6379" Mode="" Description="Redis port" Type="Variable" Display="advanced" Required="false" Mask="false">6379</Config>
-  <Config Name="Redis Password" Target="REDIS_PASSWORD" Default="" Mode="" Description="Redis password (if required)" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="Redis Password" Target="REDIS_PASSWORD" Default="" Mode="" Description="Redis password. Required in production: the app will not start without one." Type="Variable" Display="always" Required="true" Mask="true"></Config>
 
   <!-- Security Keys (AUTO-GENERATED) -->
   <Config Name="Secret Key" Target="SECRET_KEY" Default="" Mode="" Description="JWT secret key - GENERATE with: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"></Config>
   <Config Name="Encryption Key" Target="ENCRYPTION_KEY" Default="" Mode="" Description="Encryption key - GENERATE with: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"></Config>
   <Config Name="Encryption Salt" Target="ENCRYPTION_SALT" Default="" Mode="" Description="Encryption key-derivation salt, unique per installation - GENERATE with: openssl rand -hex 16. Set it once and never change it: data encrypted under one salt cannot be read under another." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+
+  <!-- Production startup gate. With ENVIRONMENT=production the API refuses to
+       start unless each of these is settled; the values below match the
+       Unraid Docker Compose stack (unraid/docker-compose-unraid.yml). -->
+  <Config Name="Served Over HTTPS" Target="SECURITY_ENFORCE_HTTPS" Default="false" Mode="" Description="Set true once an HTTPS reverse proxy (SWAG, Nginx Proxy Manager, a Cloudflare Tunnel) is in front of this container. It is your statement that members reach the site over HTTPS; in production the app will not start while it is false." Type="Variable" Display="always" Required="true" Mask="false">false</Config>
+  <Config Name="Secure Cookies" Target="COOKIE_SECURE" Default="true" Mode="" Description="Mark sign-in cookies HTTPS-only. Leave true behind HTTPS; browsers drop these cookies over plain http://, so every sign-in fails until HTTPS is in place." Type="Variable" Display="advanced" Required="true" Mask="false">true</Config>
+  <Config Name="Require Database TLS" Target="SECURITY_REQUIRE_TLS" Default="false" Mode="" Description="When true, the app refuses to start unless DB_SSL and REDIS_SSL are on. false accepts plaintext traffic to MySQL and Redis, which is reasonable only while they run on this server's own Docker network." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Database TLS" Target="DB_SSL" Default="false" Mode="" Description="Connect to MySQL over TLS" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="Redis TLS" Target="REDIS_SSL" Default="false" Mode="" Description="Connect to Redis over TLS" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="API Docs" Target="ENABLE_DOCS" Default="false" Mode="" Description="Interactive API documentation. Must stay false in production, where true stops the app from starting." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Trusted Proxy IPs" Target="TRUSTED_PROXY_IPS" Default="" Mode="" Description="IP address or range of a reverse proxy in front of this container (e.g. SWAG's container IP), comma-separated. Without it the app records the proxy's address for every member instead of theirs. Leave blank when members connect directly." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
 
   <!-- Application Settings -->
   <Config Name="Allowed Origins" Target="ALLOWED_ORIGINS" Default="http://[IP]:[PORT:7880]" Mode="" Description="CORS allowed origins (comma-separated)" Type="Variable" Display="advanced" Required="true" Mask="false">http://[IP]:[PORT:7880]</Config>
@@ -83,6 +98,4 @@
 
   <!-- Modules are enabled per organization inside the app (organization
        settings → enabled_modules); there are no MODULE_*_ENABLED variables. -->
-
-  <!-- User and Group IDs -->
 </Container>

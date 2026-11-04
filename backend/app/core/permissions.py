@@ -1067,6 +1067,11 @@ _MODULE_CHECKBOX_GRANTS: dict[str, dict[str, ModuleCheckboxTier]] = {
         ),
     },
     "mobile": {"view": _NO_TIER, "manage": _NO_TIER},
+    # Public Information is offered during setup (owner decision 2026-11-01,
+    # W01-24) but has no permissions of its own: its admin screens require
+    # settings.manage and its pages are public. A row would write grants
+    # nothing reads, so it has none.
+    "public_info": {"view": _NO_TIER, "manage": _NO_TIER},
     "integrations": {
         "view": _NO_TIER,
         "manage": ModuleCheckboxTier(("integrations.manage",), "integrations.manage"),

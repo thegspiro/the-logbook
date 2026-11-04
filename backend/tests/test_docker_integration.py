@@ -804,6 +804,154 @@ class TestFrontendContainerHealth:
 
 
 # ===========================================================================
+# Combined (Unraid) Image Tests
+# ===========================================================================
+
+
+def _bake_available() -> bool:
+    return _run(["docker", "buildx", "bake", "--help"], timeout=30).returncode == 0
+
+
+_COMBINED_TAG = f"{_TAG_PREFIX}-combined"
+_COMBINED_BUILDER = f"{_TAG_PREFIX}-combined-builder"
+
+
+@pytest.fixture(scope="module")
+def combined_image():
+    """Build the combined image once for the class below.
+
+    On a builder of the docker-container driver, the one the release
+    workflow's setup-buildx-action creates, rather than the daemon's default
+    `docker` builder, so the bake `target:` contexts are resolved the way the
+    published build resolves them. `--load` copies the result into the daemon.
+    """
+    _run(["docker", "buildx", "rm", "-f", _COMBINED_BUILDER], timeout=60)
+    created = _run(
+        [
+            "docker",
+            "buildx",
+            "create",
+            "--name",
+            _COMBINED_BUILDER,
+            "--driver",
+            "docker-container",
+        ],
+        timeout=120,
+    )
+    assert created.returncode == 0, f"Could not create builder: {created.stderr}"
+    try:
+        result = _run(
+            [
+                "docker",
+                "buildx",
+                "bake",
+                "--builder",
+                _COMBINED_BUILDER,
+                "-f",
+                str(ROOT_DIR / "docker-bake.hcl"),
+                "--load",
+                "--set",
+                f"combined.tags={_COMBINED_TAG}",
+                "combined",
+            ],
+            timeout=1500,
+            cwd=ROOT_DIR,
+        )
+        assert result.returncode == 0, (
+            f"Combined image build failed:\n{result.stdout[-2000:]}"
+            f"\n{result.stderr[-3000:]}"
+        )
+        yield _COMBINED_TAG
+    finally:
+        _docker_rm_image(_COMBINED_TAG)
+        _run(["docker", "buildx", "rm", "-f", _COMBINED_BUILDER], timeout=60)
+
+
+@requires_registry
+@pytest.mark.skipif(
+    not (_docker_ready and _bake_available()),
+    reason="docker buildx bake is not available",
+)
+class TestCombinedImage:
+    """The single image the Unraid template runs: nginx on 3000 in front of
+    the API, assembled by docker-bake.hcl from the two production stages.
+
+    Run in development mode with no database, as the backend's own
+    crash test is: the API keeps retrying MySQL, which is enough to show the
+    entrypoint started both halves and that nginx serves the bundle while it
+    does. A build failure fails here rather than skipping, because the
+    registry probe above already rules out the one cause that is not a defect.
+    """
+
+    _container = f"{_TAG_PREFIX}-combined-ctr"
+
+    @pytest.fixture(autouse=True)
+    def _cleanup(self, combined_image):
+        self._tag = combined_image
+        yield
+        _docker_stop_rm(self._container)
+
+    def test_image_runs_as_appuser_and_exposes_the_web_port(self):
+        config = _docker_inspect(self._tag).get("Config", {})
+        assert config.get("User") == "appuser"
+        assert "3000/tcp" in (config.get("ExposedPorts") or {})
+        assert config.get("Healthcheck", {}).get("Test"), "no HEALTHCHECK"
+
+    def test_serves_the_frontend_while_the_api_starts(self):
+        started = _run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                self._container,
+                "-e",
+                "ENVIRONMENT=development",
+                "-e",
+                "SECRET_KEY=test-secret-key-for-docker-integration",
+                "-e",
+                "ENCRYPTION_KEY=test-encryption-key-1234567890abcdef",
+                "-e",
+                "ENCRYPTION_SALT=test-salt-value",
+                "-e",
+                "DB_HOST=localhost",
+                "-e",
+                "DB_PASSWORD=test_pass",
+                self._tag,
+            ]
+        )
+        assert started.returncode == 0, f"Container failed to start: {started.stderr}"
+
+        probe = (
+            "import urllib.request as u; "
+            "r = u.urlopen('http://127.0.0.1:3000/', timeout=5); "
+            "print(r.status, 'id=\"root\"' in r.read().decode())"
+        )
+        deadline = time.time() + 30
+        answer = None
+        while time.time() < deadline:
+            check = _run(
+                ["docker", "exec", self._container, "python", "-c", probe],
+                timeout=15,
+            )
+            if check.returncode == 0:
+                answer = check.stdout.strip()
+                break
+            time.sleep(2)
+
+        logs = _run(["docker", "logs", "--tail", "60", self._container])
+        assert answer == "200 True", (
+            f"nginx did not serve index.html on 3000 (probe said {answer!r}).\n"
+            f"{logs.stdout[-2000:]}\n{logs.stderr[-2000:]}"
+        )
+        state = _docker_inspect(self._container).get("State", {})
+        assert state.get("Running"), (
+            "the entrypoint exited while the API was still starting:\n"
+            f"{logs.stdout[-2000:]}\n{logs.stderr[-2000:]}"
+        )
+
+
+# ===========================================================================
 # Docker Compose Config Validation Tests
 # ===========================================================================
 
