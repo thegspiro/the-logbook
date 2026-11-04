@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-frontend-shared-pass14`) —
+**PR [#4018](https://github.com/thegspiro/the-logbook/pull/4018)** (branch
+`claude/security-review-frontend-shared-pass14`) —
 Feature 34 (Frontend shared), pass 14, a watchdog pickup. **This is the last
 `⬜` row of the current rotation pass — once this PR merges, every feature is
 ✅ and the next iteration resets all 34 rows to `⬜` for a fresh pass**, per
