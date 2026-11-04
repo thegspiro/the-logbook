@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4022](https://github.com/thegspiro/the-logbook/pull/4022)** (branch
+`claude/security-review-permissions-roles-p15`) —
+Feature 02 (Permissions & roles), pass 15, a watchdog pickup. 0 fixed, 0 new
+findings. PERM-10 and PERM-11 — open since pass 12 — are now closed by an
+owner-decision commit (`1fd977dd0`) that landed outside this rotation;
+verified the step-up wiring directly (`create_member`/`update_user_profile`'s
+conditional `ensure_stepup` call, `operational_ranks.py`'s rank CRUD now in
+`STEPUP_HANDLERS`) rather than trusting `KNOWN_LIMITATIONS.md`'s own note.
+28 routes re-enumerated by AST, unchanged. See
+`docs/security-review/PERM-02-permissions-roles.md`'s **Pass 15** section.
+Next in the rotation: Feature 03 (Public surface & webhooks).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 16, PR #4020, merged), preserved for history</summary>
+
 **PR [#4020](https://github.com/thegspiro/the-logbook/pull/4020)** (branch
 `claude/security-review-cross-cutting-pass15`) —
 Feature 00 (Cross-cutting baseline). **This is a second, concurrent
@@ -51,6 +66,8 @@ modules with no rotation row (`evaluations.py`, `history.py`,
 `member_supervisors.py`) were reviewed directly this pass and found sound;
 see the Rotation section's note for the follow-up to fold them into an
 existing row.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 15, PR #4021, merged), preserved for history</summary>
