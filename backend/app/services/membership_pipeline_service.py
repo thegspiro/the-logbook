@@ -6685,14 +6685,15 @@ class MembershipPipelineService:
         exclude_prospect_ids: Optional[Iterable[str]] = None,
         search: Optional[str] = None,
         event_id: Optional[str] = None,
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get statistics for a pipeline.
 
-        ``search`` and ``event_id`` narrow the counted population exactly as
-        they narrow :meth:`list_prospects`, so the stat header and the tab
-        badges describe the same applicants the list below them is showing.
-        Both default to off, which reproduces the whole-pipeline counts this
-        returned before they existed.
+        ``search``, ``event_id`` and ``only_prospect_ids`` narrow the counted
+        population exactly as they narrow :meth:`list_prospects`, so the stat
+        header and the tab badges describe the same applicants the list below
+        them is showing. All default to off, which reproduces the
+        whole-pipeline counts this returned before they existed.
 
         Deliberately *not* filtered by status: the caller's status filter
         applies to the open-pipeline view only, and folding it in here would
@@ -6724,6 +6725,7 @@ class MembershipPipelineService:
                 func.count(ProspectiveMember.id),
             ).where(base_scope),
             exclude_prospect_ids,
+            only_prospect_ids,
         ).group_by(ProspectiveMember.status)
         status_rows = (await self.db.execute(status_query)).all()
 
@@ -6742,6 +6744,7 @@ class MembershipPipelineService:
                 and_(base_scope, ProspectiveMember.status == ProspectStatus.ACTIVE)
             ),
             exclude_prospect_ids,
+            only_prospect_ids,
         ).group_by(ProspectiveMember.current_step_id)
         step_rows = (await self.db.execute(step_query)).all()
         step_counts = {str(step_id): count or 0 for step_id, count in step_rows}
@@ -6775,6 +6778,7 @@ class MembershipPipelineService:
                     )
                 ),
                 exclude_prospect_ids,
+                only_prospect_ids,
             )
             result = await self.db.execute(avg_query)
             avg_days = result.scalar()

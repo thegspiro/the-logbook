@@ -152,7 +152,7 @@ which runs against rows: a prospect still in the pipeline, a deleted member, a
 cross-organization member, a record already naming a member, a status stored
 by name, a second run, and the downgrade.
 
-### W71b-3 — MED — The Members administration hub grades screenings its own way — FLAGGED
+### W71b-3 — MED — The Members administration hub grades screenings its own way — ✅ FIXED (owner decision 2026-11-03: use the Compliance tab's numbers)
 
 **Did:** read `GET /admin-hub/members/summary` and `/metrics` with the records
 above, beside the Compliance tab.
@@ -183,6 +183,18 @@ rather than "has any screening") and which members it counts. Probationary
 counts in both. Leave and suspended count only in the roster. Whether
 "blocks duty assignment" should become true is a product decision. Mirrored
 to KNOWN_LIMITATIONS.
+
+**Resolved 2026-11-03:** `_members_screening_current` and the members queue
+both read `MedicalScreeningService.get_compliance_roster`, members only (the
+Members hub is not the pipeline's page). The tile is compliant plus expiring
+soon over the graded members, "N of M compliant", and "—" with no
+requirement. The queue item `screenings_not_compliant` counts the roster's
+not-compliant members, links to `/medical-screening?tab=compliance`, carries
+no age (the roster has none, and a never-recorded screening has no lapse
+date) and drops "blocks duty assignment". The missed-appointment item is
+unchanged. Tests in `tests/test_admin_hub_db.py` assert the tile and the
+queue against the roster itself; the old tile read "100% · 3 of 3 cleared"
+where the tab had 1 of 3.
 
 ### W71b-4 — MED — Nothing tells anyone a screening is about to expire — FLAGGED (read from code)
 

@@ -2,7 +2,8 @@
 # THE LOGBOOK — EXTERNAL DATABASE AND REDIS
 # ============================================
 # Runs the backend against a MySQL and a Redis this stack does not start:
-# Amazon RDS and ElastiCache, a managed database elsewhere, or a MySQL/Redis
+# Amazon RDS and ElastiCache, Azure Database for MySQL and Azure Managed
+# Redis, a managed database elsewhere, or a MySQL/Redis
 # already running on the host or another machine. Layer it last, after the
 # production override (and the proxy override, if you use it):
 #
@@ -29,7 +30,7 @@
 #   dumps the bundled mysql; against a managed database, the provider's
 #   automated backups take over the database half of its job. The uploads and
 #   audit archives it also bundled need a backup of their own — see
-#   "Backups" in docs/deployment/aws.md.
+#   "Backups" in docs/deployment/aws.md or docs/deployment/azure.md.
 #
 # Never start that profile, and never name mysql or redis on the command line
 # (`docker compose up -d mysql`): compose starts a service you name even when

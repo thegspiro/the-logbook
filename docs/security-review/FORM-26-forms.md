@@ -1,6 +1,81 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 12 (2026-11-03) — true zero-delta, every scope file byte-identical to pass 11; 0 fixed, 0 new findings (watchdog pickup)
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-11) before touching code. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`, "No
+reachable agents"). A GitHub search (`is:pr is:open head:claude/security-review`)
+returned zero results; PR #3980 (Feature 25, Messaging & notifications, pass 12) had already merged (`12f1430d2`).
+
+**Baseline:** pass 11's merge (`a41ff44dc`, PR #3852). **Head:** `12f1430d2`.
+`git diff a41ff44dc..HEAD --stat` restricted to all six declared backend
+scope files (`endpoints/forms.py`, `api/public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`, `utils/embed_origins.py`) plus the
+frontend forms/embed/public-form surface (`modules/forms/`,
+`components/forms/`, `pages/PublicFormPage.tsx`) produced **no output at
+all** — every one of those files is byte-identical to pass 11's head. Of
+490 commits on `main` since pass 11's baseline, only one touches anything
+matching `forms` by path outside this feature's own files, and it is cosmetic:
+`frontend/src/pages/FormsPage.tsx` picked up a repo-wide layout sweep's
+shared `page-header`/`split-row`/`StatGrid` utility classes (3 commits:
+`06dec4a13`, `cf8fdae30`, `ab879fc7d`) — read the full diff, confirmed it is
+purely class-name/wrapper-component substitution for responsive wrapping,
+with no change to a query, a permission, a route, or any data read or sent.
+No security surface. (`ScreeningForms.touchTargets.test.tsx` and
+`FollowUpFormsSection.tsx`/`.test.tsx` also matched the path grep but belong
+to Medical screening and Membership pipeline respectively — unrelated
+"form" UI naming, not this module.)
+
+### Route inventory (re-enumerated by AST, not diffed)
+
+Re-ran the AST walk rather than trusting the empty diff alone: **22** routes
+in `endpoints/forms.py` + **3** in `api/public/forms.py` = **25 total**, same
+count as pass 11. Re-checked every dependency by grep, not by assuming
+unchanged: `forms.view` ×3 (`list_forms`, `get_forms_summary`, `get_form`),
+`forms.manage` ×17, bare `get_current_user` ×2 (`member_lookup`,
+`submit_form`) — identical to pass 11's inventory. The three public routes
+(`GET /{slug}`, `GET /{slug}/embed-policy`, `POST /{slug}/submit`) are
+unchanged bytes, so pass 10/11's review of their rate-limiting, slug lookup
+and embed-origin checks still holds without re-reading.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-4** (form-definition text stored unescaped, flagged defense-in-depth
+  by design — frontend never dumps it via `dangerouslySetInnerHTML`) —
+  re-grepped `dangerouslySetInnerHTML` under `frontend/src/components/forms/`,
+  `pages/PublicFormPage.tsx`, `modules/forms/`: zero matches, unchanged.
+- **FORM-12** (three submission endpoints ignore the `form_id` path segment)
+  — correctness-only API-shape gap, not a security boundary; unchanged.
+- BXC-1, sensitive-field sealing/row-locking, the embed `allow_embed`/
+  origin-allowlist machinery, the member-lookup contact-policy gate, LIKE
+  escaping (`FormsService.search_members`), and the admin CSV export (still a
+  frontend `Blob` download with its own `escapeCsvCell`, not a backend
+  `csv.writer` — n/a for Pitfall #15) — none of this delta's commits touch
+  any file these findings concern; nothing regressed.
+
+No new route, no permission string changed, no by-id query added without an
+org filter, no LIKE call added without `escape=LIKE_ESCAPE_CHAR`, no new
+migration.
+
+### Completion gate (pass 12)
+
+| Check                                                                       | Result                                            |
+| --------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                               | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/`                                        | ✅ clean, 2869 files unchanged                    |
+| `isort --check-only app/ tests/ alembic/`                                   | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                           | ✅ 710 revisions, single head `6b81e95d4157`      |
+| `python3 scripts/check_route_permissions.py --strict`                       | ✅ 298 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -q -k "form or applicant_field or sensitive_field or embed"` | ✅ 1116 passed, 1 pre-existing skip (`pywebpush`) |
+| `cd frontend && npm run typecheck`                                          | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                                               | ✅ exit 0, 0 warnings                             |
+| `npx vitest run` (forms/embed/sensitive test files)                         | ✅ 9 files, 45 tests passed                       |
 
 ---
 

@@ -2773,7 +2773,8 @@ class TestExportEndpointsCoverage:
     """
 
     @pytest.fixture(scope="module")
-    def schema(self) -> dict:
+    @classmethod
+    def schema(cls) -> dict:
         from main import app
 
         return app.openapi()

@@ -1833,17 +1833,32 @@ still holds the old text. Once the corrected minutes are approved, select
 **Re-publish to Documents**. The corrected text replaces the same document —
 it is not added as a second copy — and the notice disappears.
 
-**The meeting record has a lighter approval.** A meeting (the card the
-minutes hang off) has its own **Draft → Pending Approval → Approved** status.
-One officer may take it through all three, but only in that order:
+**Adopting the minutes approves the meeting they record.** _(2026-11-03)_ A
+meeting (the card the minutes hang off) has its own **Draft → Pending Approval →
+Approved** status. When a second officer selects **Adopt Minutes**, the meeting
+those minutes were taken from is approved at the same moment and in that
+officer's name, so the meeting card on the Minutes page stops reading _Draft_
+beside adopted minutes, and its delete button is no longer offered. A meeting
+that was already approved keeps its original approver and date. **Reopen for
+Correction** leaves the meeting approved: the correction is to the record of the
+meeting, and its attendance stays the settled record while you make it.
 
-- a meeting is approved only from **Pending Approval**;
+On upgrading, every meeting that already has adopted minutes is approved the
+same way, taking the approver and date of the earliest adoption.
+
+**The meeting record's own approval rules.** No screen moves a meeting through
+**Pending Approval**; adopting its minutes is how a meeting is approved from the
+app. Apart from that, the meeting record enforces:
+
+- its own approve step works only from **Pending Approval**;
 - an approved meeting is not approved again;
 - editing a meeting cannot set it to **Approved** — _"A meeting cannot be
   marked approved by editing it; submit it for approval and use Approve
   instead"_.
 
-So every approved meeting records who approved it and when. Creating,
+So every approved meeting records who approved it and when — except one
+approved on upgrade from minutes adopted before adoptions were stamped, which is
+approved with no name or date rather than left deletable. Creating,
 editing, deleting or approving a meeting — and changing its attendees or
 action items — is recorded in the audit log.
 

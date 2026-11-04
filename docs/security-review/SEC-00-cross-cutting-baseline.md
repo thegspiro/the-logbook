@@ -608,6 +608,19 @@ tests the `httpx`/`SSRFSafeAsyncTransport` path only; a test asserting
 which is not this suite's purpose. Added instead: a corrected
 `KNOWN_LIMITATIONS.md` entry (mechanical, verifiable, no behavior change).
 
+**Update 2026-11-03 — mitigated by owner decision (2026-11-01, clarified
+2026-11-03), not closed.** A department administrator can no longer choose
+the hostname: a custom endpoint must be one the installation operator listed
+in `S3_ALLOWED_ENDPOINTS` (exact match on a normalised scheme/host/port/path),
+enforced on every save path (`OrganizationService.update_organization_settings`
+for both settings PATCHes, onboarding's `/session/file-storage`) and again in
+`check_config` and `S3Backend.__init__`, so an endpoint stored before the
+change is not used. The up-front `check_endpoint` still runs for a listed
+endpoint, including the `S3_ALLOW_PRIVATE_ENDPOINT` gate. The `botocore`
+rebinding window itself is unchanged; what is gone is the scenario above's
+first step. Guarded by `backend/tests/test_s3_endpoint_allowlist.py`. See
+`docs/KNOWN_LIMITATIONS.md` SCH-10.
+
 **0 other application-security findings this pass.** All 13 classes
 re-verified clean against head and diffed against the pass-11 baseline tree.
 The standing egress-proxy TOCTOU item remains open, unchanged — not
