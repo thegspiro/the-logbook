@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4020](https://github.com/thegspiro/the-logbook/pull/4020)** (branch
+`claude/security-review-cross-cutting-pass15`) —
+Feature 00 (Cross-cutting baseline). **This is a second, concurrent
+cross-cutting sweep, recorded as pass 16** — it raced PR #4019's pass 15 (see
+the superseded note below): both found 0 open
+`claude/security-review-*` PRs within the same window after PR #4018 merged,
+both picked Feature 00 under Step 1's reset rule, and PR #4019 merged first.
+Rather than discard real findings this independent sweep caught that pass 15
+did not, it is recorded on top as pass 16 rather than silently dropped; the
+rotation's own next `⬜` row is still Feature 02 (Feature 01, Auth & session
+lifecycle, merged via PR #4021 while this PR was open — see its own
+superseded note below) — this PR does not pick a feature, it adds to the
+just-closed Feature 00 review. See
+`docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass 16** section
+for the full review and the race itself. 2 new findings, both FIXED:
+**SEC16-1** (LOW) — a fourth, pre-existing write site for the
+raw-exception-into-error-column leak class SEC13-1/SEC14-1 already fixed
+twice, found in `scheduled_tasks.py::_run_scheduled_emails_inner`
+(`ScheduledEmail.error_message`, served back verbatim by
+`GET /email-templates/scheduled`); fixed with the same `safe_error_detail()`
+pattern, guard test added, seen to fail against the unfixed code first.
+**SEC16-2** (LOW) — the brand-new member-performance-evaluation module
+(`/evaluations`, no existing rotation row) had no entry in `apiCache.ts`'s
+`UNCACHEABLE_PREFIXES`, and its response-schema field names (`evaluator_name`,
+`display_name`, …) don't match the PII-cache ratchet's fixed marker set, so
+it passed that ratchet silently — pass 15's own independent review of the
+same module missed this too; fixed by adding the prefix and pinning two of
+its routes in the ratchet's own `PINNED_EXCLUSIONS` mechanism (built for
+exactly this blind spot), each confirmed to fail first without the fix.
+SEC12-1 (S3/MinIO DNS-rebinding TOCTOU, LOW/MED) and the standing
+egress-proxy TOCTOU item both re-confirmed OPEN/FLAGGED, unchanged. Three new
+modules with no rotation row (`evaluations.py`, `history.py`,
+`member_supervisors.py`) were reviewed directly this pass and found sound;
+see the Rotation section's note for the follow-up to fold them into an
+existing row.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 15, PR #4021, merged), preserved for history</summary>
+
 **PR [#4021](https://github.com/thegspiro/the-logbook/pull/4021)** (branch
 `claude/security-review-auth-session-p15`) —
 Feature 01 (Auth & session lifecycle), pass 15, a watchdog pickup. 0 fixed,
@@ -28,8 +67,10 @@ finding) is narrowed by the step-up throttle this pass's own delta wires
 in. See `docs/security-review/AUTH-01-auth-session.md`'s **Pass 15**
 section.
 
+</details>
+
 <details>
-<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 15, PR #4019, merged), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 15, PR #4019, merged — raced by PR #4020's own pass 16, above), preserved for history</summary>
 
 **PR [#4019](https://github.com/thegspiro/the-logbook/pull/4019)** (branch
 `claude/security-review-cross-cutting-baseline-p15`) —
@@ -24671,6 +24712,14 @@ PR is recorded in the Log, not repeated here. Row 00's own pass-14 review
 (`SEC-00-cross-cutting-baseline.md`'s **Pass 14** section) rides along in
 this same reset, per the "folded into this iteration's commit" rule.
 
+**Pass 13 complete (2026-10-30 → 2026-11-04, PRs #3869–#4018):** every row
+below went ✅ again, see the Log for detail on each — row 34 (Frontend
+shared) was the last to close out this lap, with PR #4018
+(`FE14-34-frontend-shared.md`). Reset to ⬜ for pass 14 — each row's prior
+PR is recorded in the Log, not repeated here. Row 00's own pass-15 review
+(`SEC-00-cross-cutting-baseline.md`'s **Pass 15** section) rides along in
+this same reset, per the "folded into this iteration's commit" rule.
+
 | #   | Feature                   | Prefix | Principal code                                                                                                                                                              | Status |
 | --- | ------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                               | ✅     |
@@ -24711,6 +24760,17 @@ this same reset, per the "folded into this iteration's commit" rule.
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
+
+**New modules with no rotation row yet, found by SEC-00's review:** member
+performance evaluations (`evaluations.py`), department history/honor roll
+(`history.py`) and member supervisor relationships (`member_supervisors.py`)
+all landed in the pass-13→14 rotation lap with no feature row covering them.
+Each was reviewed directly in `SEC-00-cross-cutting-baseline.md`'s **Pass 16**
+section rather than left unreviewed, and all three were found sound. A future pass should fold their
+backend scope into an existing row (Feature 17, Training core, which already
+absorbed `shift_evaluations.py` the same way; or Feature 07, Users &
+organizations, for `member_supervisors.py`/`history.py`) rather than leaving
+them to be re-discovered by SEC-00 every lap.
 
 ---
 
@@ -46509,3 +46569,108 @@ skip, 0 failed. No frontend files touched this pass.
 Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
 kiosk) — re-check for an open security-review PR fresh rather than trusting
 this note.
+
+### 2026-11-04 — Full rotation lap closes (PRs #4017–#4018 merged); Feature 00 (Cross-cutting baseline) reviewed twice by a concurrent watchdog race — pass 15 (PR #4019, merged first, 0 findings) and this pass 16 (2 fixed, LOW)
+
+Watchdog pickup of the `/loop 30m /security-review` rotation; the dedicated
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) has been unreachable across many
+consecutive cycles per `ListAgents` ("No reachable agents" each time).
+`list_pull_requests` (state: open, 14 results) found no head branch starting
+`claude/security-review-`: PR #4017 (Feature 33, Core infrastructure, pass 13) and PR #4018 (Feature 34, Frontend shared, pass 14) had both already
+merged into `origin/main` — the local working tree was 3 commits behind at
+the start of this iteration and had to be re-synced to `origin/main` before
+trusting the rotation table, which is exactly the "ask GitHub, not the
+tracker" rule the skill's Step 0 states. Every row was `✅` for the seventh
+time since pass 7 opened. Per Step 1, the table is reset to `⬜` and the
+rotation wraps to Feature 00, continuing in this same iteration.
+
+**This review raced another watchdog session's identical pick.** By the time
+this PR (originally opened as "pass 15") was ready to push, another session's
+PR #4019 — which had made the same Step 0/Step 1 call independently at
+nearly the same moment — had already merged, also calling itself pass 15 and
+also carrying the full-rotation reset. PR #4019 found 0 new findings; this
+review, over nearly the identical window, found the two below. Rather than
+discard verified, guard-tested findings, this review is recorded as **pass
+16** (renumbering SEC15-1/SEC15-2 to SEC16-1/SEC16-2 throughout), merged in
+on top of PR #4019 rather than against it. See
+`docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass 16** section
+for the full account, including the race.
+
+Baseline `baf80bf7` (pass 14's head, PR #3868) to head `88fcfcd4a` (PR
+#4018's merge): 512 commits, 293 non-merge — a full rotation lap (every
+Feature 00–34's own pass-14 PR). All 13 established cross-cutting sweep
+classes re-swept (formula injection, SET-NULL nullability, proxy-IP
+attribution, Alembic chain integrity, LIKE-escaping, `BaseHTTPMiddleware`,
+unbounded trackers, `window.confirm`/`alert`/`prompt`, JSON shallow-copy,
+org-scoping/IDOR, capacity-check locking, route-auth coverage, raw-exception
+leakage) — all clean except raw-exception leakage, below. Also re-ran the
+Pitfall #32/#33 account-status and log-shape guards and four org-scoping
+test files, all pass (76 passed).
+
+**SEC16-1 (LOW, FIXED):** a fourth write site for the raw-exception-into-
+error-column leak class SEC13-1/SEC14-1 already fixed twice elsewhere, found
+by this pass's fresh AST walk in `scheduled_tasks.py::_run_scheduled_emails_inner`
+— `item.error_message = str(e)[:500]`, served back verbatim by
+`ScheduledEmailResponse` (`GET /email-templates/scheduled`, `settings.manage`-
+gated). Pre-dates baseline unchanged — a re-sweep catch. Fixed with the same
+`safe_error_detail()` pattern; new guard test
+(`tests/test_scheduled_email_error_sanitization.py`) seen to fail against the
+unfixed code first (per Pitfall #37), then green after the fix.
+
+**SEC16-2 (LOW, FIXED):** the brand-new member-performance-evaluation module
+landed this rotation lap with no rotation row and no entry in `apiCache.ts`'s
+`UNCACHEABLE_PREFIXES` — its GET routes (`/evaluations`, `/evaluations/mine`,
+`/evaluations/{id}`, …) were cacheable in the shared, identity-free 30s/90s
+frontend response cache. The existing `test_api_cache_pii_exclusions.py`
+ratchet didn't catch it because the module's field names
+(`evaluator_name`/`display_name`/`amended_by_name`/`deleted_by_name`/
+`signed_name`) don't match any name in that test's fixed `PII_FIELDS` set —
+the same documented blind spot the test's own `PINNED_EXCLUSIONS` mechanism
+exists for. Fixed by adding `/evaluations` to `UNCACHEABLE_PREFIXES` and
+pinning two of its routes in `PINNED_EXCLUSIONS`; both the TS fix and the new
+pinned-test entries were confirmed to fail first when stashed (per Pitfall
+#37).
+
+While reviewing this delta, this pass also read through — rather than
+trusted clean by the route-permission/org-scoping tooling passing — three
+genuinely new modules that landed with **no rotation row and no prior
+mention anywhere in this file**: member performance evaluations
+(`evaluations.py`, 34 routes), department history/honor roll (`history.py`,
+markdown-authored content rendered through a correctly hardened
+`markdown-it-py` + `nh3` allowlist pipeline), and member supervisor
+relationships (`member_supervisors.py`, correctly self-scoped and XC-1
+-validated). All three were found to correctly implement org-scoping (XC-3),
+in-org FK validation (XC-1), separation of duties (evaluation signing) and
+existence-non-disclosure (404 rather than 403 for a non-participant). A
+fourth new surface, the post-deploy stored-file malware rescan, was checked
+for the Pitfall #19 "switch with no reader" shape and confirmed wired: an
+`INFECTED` verdict triggers actual file deletion and row scrubbing. The Zeffy
+integration files in this window are Feature 22/27's own already-reviewed
+scope (PR #3962, pass 13), confirmed byte-identical since.
+
+SEC12-1 (S3/MinIO DNS-rebinding TOCTOU, LOW/MED) and the standing
+egress-proxy TOCTOU item both re-confirmed OPEN/FLAGGED, unchanged — neither
+file touched in this delta.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (one new test file needed `black`'s
+auto-format, re-verified clean after); `validate_migrations.py --strict` —
+712 revisions, single head `b5e906ebdd7d`; `check_route_permissions.py
+--strict` — 298 routes, 0 errors/warnings; cross-cutting guard suite (17
+files) — 262 passed; targeted backend suite (`-k "scheduled_task or
+scheduled_email or email_template or safe_error_detail or evaluations_cache
+or api_cache"`) — 778 passed, 1 pre-existing environment skip (optional
+`pywebpush` dependency); frontend `npm run typecheck`/`npm run lint` — 0
+errors, 0 warnings.
+
+Full write-up: `docs/security-review/SEC-00-cross-cutting-baseline.md`'s
+**Pass 16** section.
+
+Row 00 is already `✅` (set by PR #4019's merge) and the full-rotation reset
+already rode along with that commit; this PR adds two findings on top
+without touching the rotation table again. Next is Feature 01 (Auth &
+session lifecycle) — re-check `list_pull_requests` fresh rather than
+trusting this note. A follow-up for whoever picks up Feature 07 or Feature
+17: fold `history.py`/`member_supervisors.py` and `evaluations.py` into that
+row's scope so they stop being invisible to the rotation table (see the
+Rotation section's note above).

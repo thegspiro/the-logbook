@@ -148,6 +148,12 @@ const UNCACHEABLE_PREFIXES = [
   '/admin-hub/', // module attention queues: medical-screening lapses, applicant backlogs (PHI/PII-adjacent)
   '/equipment-checks', // reporter/member names, free-text restock notes, deployed-lot detail (PII)
   '/analytics/export', // raw analytics events: per-event user_id + free-form metadata
+  '/evaluations', // member performance evaluations: ratings, the evaluator's free-text
+  // comments, signatures and deletion/amendment records (evaluator_name,
+  // display_name, amended_by_name, deleted_by_name, signed_name — none of which
+  // match PII_FIELDS in test_api_cache_pii_exclusions.py, so that ratchet cannot
+  // see this module; pinned there too). No trailing slash so GET /evaluations
+  // (the list) is covered as well as /evaluations/mine and /evaluations/{id}.
 ] as const;
 
 /**
