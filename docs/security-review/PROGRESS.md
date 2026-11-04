@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** (branch `claude/security-review-auth-session-p15`) —
+Feature 01 (Auth & session lifecycle), pass 15, a watchdog pickup. 0 fixed,
+0 new findings: two already-merged security fixes verified correct — the
+sign-in rate limit's per-account callers in `auth.py` (the limiter itself
+was reviewed under Core infrastructure's pass 13) and a new lock-and-reread
+closing a password-reset-token double-submission race in `auth_service.py`
+(its own dedicated guard test re-run clean). AUTH-23 (the standing MED
+finding) is narrowed by the step-up throttle this pass's own delta wires
+in. See `docs/security-review/AUTH-01-auth-session.md`'s **Pass 15**
+section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 15, PR #4019, merged), preserved for history</summary>
+
 **PR [#4019](https://github.com/thegspiro/the-logbook/pull/4019)** (branch
 `claude/security-review-cross-cutting-baseline-p15`) —
 Feature 00 (Cross-cutting baseline), pass 15, a watchdog pickup. PR #4018
@@ -30,6 +44,8 @@ escaped, and the new Zeffy payments client reaches a hardcoded, non-SSRF
 endpoint through the existing hardened client factory. See
 `docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass 15**
 section.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 14, PR #4018, merged), preserved for history</summary>
@@ -24657,7 +24673,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                                              | Status |
 | --- | ------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                               | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                 | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                                                  | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                          | ⬜     |
