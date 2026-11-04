@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-finance-approvals-p15`** (PR not yet opened
-as of this commit) —
+**PR [#4043](https://github.com/thegspiro/the-logbook/pull/4043)** (branch
+`claude/security-review-finance-approvals-p15`) —
 Feature 05 (Finance & approvals), pass 15, a watchdog pickup. Real delta: a
 merged commit added send-status tracking and a re-send capability to emailed
 approval links, per the owner's 2026-11-01 decision closing
