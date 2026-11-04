@@ -354,11 +354,14 @@ during setup 2026-11-03).** Found in the workflow review's W01 third pass
   backfilled by migration `289504a34d3c` (2026-11-03): Public Information turns
   on where setup stored it off, but not where the audit log shows an
   administrator set it under Settings → Modules. See `docs/UPGRADING.md`.
-  **Still open, small:** an installation old enough to have no stored module
-  settings at all has them built once, on first read, from its legacy
-  onboarding record (`OrganizationService`), and that writer also stores Public
-  Information off. Such an install upgrading after this migration has run would
-  get `false` again with no backfill.
+  **Resolved 2026-11-04** (owner decision: keep Public Information on for
+  these installs). An installation old enough to have no stored module
+  settings builds them once, on first read, from its legacy onboarding record
+  (`OrganizationService`). That writer used to store Public Information off,
+  and the backfill runs before it. It now follows the setup rule
+  (`modules_from_setup_answers`), except that Public Information keeps its
+  declared default (on) when the record does not name it: the setup that
+  wrote such a record never asked about it, so its absence is not a "no".
 
 Also from the same pass, resolved 2026-11-01: the email step saved settings that
 had just failed their connection test without a word (W01-27). Owner decision:
@@ -377,6 +380,18 @@ therefore describe the same person differently (workflow re-check MR-3).
 **Open decision:** expose the tier _names_ to members through a read-only
 endpoint (ids and names only, without the advancement rules), or decide that
 tier naming is officer-facing and leave it as it is.
+
+**Resolved (2026-11-04), owner decision of 2026-11-01: expose names
+read-only.** `GET /users/membership-tiers/names` returns
+`{"tiers": [{"id", "name"}]}` in ladder order to any signed-in member of the
+organization — no advancement years, benefits or member counts, and the
+shipped ladder for an organization that has not saved one, as the config
+endpoint does. It sits under `/users`, which the frontend API cache never
+caches. `useMembershipTierOptions` reads it for every screen that labels a
+status — the directory's status filter, the profile's "… member" line, the
+add and edit member forms, the scheduling eligibility card and the conversion
+dialog — so officers and members read one name. The tier editor keeps the
+`members.manage` config endpoint.
 
 ## Members — No Supervisor or "Reports To" Relationship (2026-10-31)
 
@@ -421,15 +436,61 @@ Rules:
 Members-managers set, change and end it on the profile (**Reports To**), and a
 member sees their own.
 
-**Still open:**
+The evaluator default reads it: a manager who drafts an evaluation without
+naming an evaluator gets the member's current supervisor when the supervisor
+holds `evaluations.conduct`, and is the evaluator otherwise
+(`EvaluationService.create`, owner decision 2026-11-01).
 
-- Only the evaluator default reads the relationship: a manager who drafts an
-  evaluation without naming an evaluator gets the member's current supervisor
-  when the supervisor holds `evaluations.conduct`, and is the evaluator
-  otherwise (`EvaluationService.create`, owner decision 2026-11-01).
-- Line-officer views of their own crew, approvals and an org chart do not read
-  it.
-- Two members may supervise each other.
+**✅ Resolved 2026-11-04 (owner decision 2026-11-01: crew views and
+approvals).** A member who supervises others _today_ — an assignment covering
+today's date on the department's calendar, whose supervisor is still a current
+member — gets read access to them by the relationship, not by a permission,
+checked on every request inside the caller's department, so an assignment that
+has ended grants nothing the next day. Nothing it opens is a write.
+
+- **My Crew** (`/members/my-crew`, `GET /users/me/crew`) lists the crew; the
+  menu offers it only to a member who has one.
+- **Training standing and records:** `GET /training/compliance-summary/{id}`,
+  `/stats/user/{id}`, `/requirements/progress/{id}`, `/category-hours/{id}`,
+  `/reports/user/{id}`, and `GET /training/records?user_id=` for one crew
+  member — the figures a line officer needs to supervise compliance and
+  certifications.
+- **Evaluations:** `GET /evaluations/crew` lists every evaluation of the crew;
+  each opens with its status and steps, and with its content once it is
+  released to the member — what the member may read. Drafting, writing,
+  signing, calibrating, amending and deleting never read the relationship.
+- **Not opened:** medical screening (PHI), emergency contacts and other contact
+  details beyond the directory, documents, and shift attendance history (the
+  roster already shows who is on each shift; a per-member history was not
+  needed for the decision).
+
+**Approvals:** a member's **time-off request** emails its supervisor (Shift
+notices; bell entry beside it), who may approve or deny it alongside every
+holder of `scheduling.manage`, who still review every request. The supervisor
+check is repeated under the request's row lock at the moment of the decision.
+With no supervisor today nothing changes. Left with their existing approvers,
+deliberately: **training self-reports** (approval grants credit and pipeline
+progress, is bound by the training officer's separation-of-duties rules, and a
+submission can carry PHI), **shift swaps** (two members, possibly with
+different supervisors, and qualification overrides), **pre-shift work**
+(credited hours), leaves of absence (recorded by members-managers, not
+requested) and finance approvals (their own approval chains).
+
+**✅ Resolved 2026-11-04 (owner decision 2026-11-01: refuse loops).** Setting
+or changing a supervisor is refused (400, "This would create a supervision
+loop: …", naming the chain) when the member would end up above their own
+supervisor — directly or through any number of others — on at least one day
+both assignments cover. Assignments on different dates are not a loop: a
+member may supervise their former supervisor. The check takes the
+organization row lock and reads every assignment with a locking read, so two
+simultaneous requests that are each half of a loop cannot both land
+(`MemberSupervisorService._refuse_loop`). Ending an assignment is never
+refused. Loops already recorded before 2026-11-04 are not changed:
+`backend/scripts/report_supervision_loops.py` lists them (exit status 1 when
+any exist) for a members-manager to break by changing or ending one
+assignment; none existed in the development database when this was built.
+
+**Still open:** an org chart does not read the relationship.
 
 ## Members — No History of Positions Held (2026-11-01)
 
@@ -496,10 +557,29 @@ statuses, committee positions) leaves these for the owner:
   training service, events, attendance dashboard, service history) should move
   to `MembershipTierService.tier_for_status(tiers, member_status)`; not done
   here to keep the change set to one model change.
+  **Resolved (2026-11-04), owner decision of 2026-11-01: move readers to
+  status.** One lookup, `tier_for_member` in `app/utils/membership.py`
+  (status first, the legacy value only when no status is recorded), now
+  serves every reader: the election voting and office-holding checks, the
+  ballot eligibility check and the turnout denominator, the events
+  "mandatory for" list (`member_holds_tier`), and — through
+  `MembershipTierService`, which delegates to it — the training report's
+  exemption and the attendance dashboard. Service history reads no tier
+  benefit. A training requirement's `required_membership_types` and a
+  compliance profile's membership chips still match the legacy value; they
+  scope by membership type, not by a tier's benefits, and guide 02 documents
+  that. A department tier whose id is a legacy class word
+  (`administrative`) is matched as the regular standing it spells.
 - **The pipeline's conversion outcomes are built-in statuses only.** The
   applicant conversion dialog offers the seven built-in statuses, not the
   department's tiers; a converted member who should start on a custom tier is
   moved there from the edit page.
+  **Resolved (2026-11-04), owner decision of 2026-11-01: offer department
+  tiers.** The dialog's **Starting status** lists Probationary and Regular
+  plus the department's tiers by name, and the transfer accepts a tier id
+  after checking it against the organization's ladder (under the
+  Organization row lock); any other value is refused. A pipeline's stored
+  conversion rule still names only the two built-in starting statuses.
 - **The baseline Member position is no longer shown on the profile chips.**
   It is of kind `system`, held by everyone, and the profile now lists offices
   and committees; the members admin hub still shows it where it can be
@@ -1808,6 +1888,18 @@ that wants its membership committee to read these answers grants it by hand.
   unescape for display and comparison, and write plain text back when the
   applicant changes a value, but records nobody has edited keep the escaped
   text. Fixing it needs a decision on a backfill of existing records.
+  **Resolved (2026-11-04), owner decision of 2026-11-01: backfill existing
+  records.** The interest-form mapping now unescapes each answer before it
+  writes the applicant (the stored submission keeps its escaped answers), and
+  migration `67fac0bf1c09` converts `first_name`, `last_name`,
+  `interest_reason` and `referral_source` once — only values that are exactly
+  `html.escape` output, so it is idempotent; a value such as `&amp;amp;` that
+  would unescape again is left as it is and counted in the upgrade log.
+  **Still open:** the encrypted columns the mapping also filled (`email`,
+  `phone`, `mobile`, the address) are not backfilled — a migration cannot
+  decrypt them, and `email_hash` derives from the stored email — so an
+  applicant whose address held an apostrophe or ampersand keeps the escaped
+  form until it is edited.
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
@@ -2281,11 +2373,11 @@ configuration had already gone this way.
 | Archived members          | Members → **Archived** filter → **Reactivate**, or the member's profile                                                                                                                 | ✅ (2026-09-24)        |
 | Tier configuration        | Members Admin → Settings → Membership Tiers; the monthly task advances members                                                                                                          | ✅                     |
 
-| Item                                                                 | Status                             | Detail                                                                                                                                                                                                                                                                                                                                          |
-| -------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Leave of absence is created from Waiver Management**               | Accepted by the owner (2026-10-05) | The owner chose to keep leave work where leaves are already created rather than move it to a lifecycle page, and editing now sits beside creation there. It is still not where a membership coordinator might first look; the membership guide points to it.                                                                                    |
-| **`POST /users/advance-membership-tiers` has no button**             | Accepted by the owner (2026-10-05) | The scheduled task `membership_tier_advance` runs it on the first of each month when the department's auto-advance switch is on; an on-demand run is API only. Not part of the 2026-10-05 decision. **Accepted by the owner (2026-10-05), decided separately:** leave as is — the monthly task is the runner, and no on-demand button is added. |
-| **`GET /users/{id}/property-return-report` (preview) has no screen** | Open (LOW)                         | The preview of what a member would have to return, before a drop, is still API only; the drop itself generates the full report into Documents. Not part of the 2026-10-05 decision.                                                                                                                                                             |
+| Item                                                                 | Status                                                                          | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Leave of absence is created from Waiver Management**               | Accepted by the owner (2026-10-05)                                              | The owner chose to keep leave work where leaves are already created rather than move it to a lifecycle page, and editing now sits beside creation there. It is still not where a membership coordinator might first look; the membership guide points to it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **`POST /users/advance-membership-tiers` has no button**             | Accepted by the owner (2026-10-05)                                              | The scheduled task `membership_tier_advance` runs it on the first of each month when the department's auto-advance switch is on; an on-demand run is API only. Not part of the 2026-10-05 decision. **Accepted by the owner (2026-10-05), decided separately:** leave as is — the monthly task is the runner, and no on-demand button is added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **`GET /users/{id}/property-return-report` (preview) has no screen** | ✅ Resolved (owner decision 2026-11-01: add a preview button; built 2026-11-04) | **Resolved 2026-11-04.** A members-manager sees **Preview property return** under Status on a member's profile while the member is still serving (`PropertyReturnPreview`). It opens a dialog listing each item — name, serial number or asset tag, how it is held (assigned, checked out, issued), quantity and value — with the total, or "Nothing to return". The endpoint now has a typed response (`PropertyReturnPreviewResponse`, each item carrying `quantity`) and stays read-only: no document, email, clearance, status or service-history change. It builds the list with the same `PropertyReturnService.generate_report` the drop calls, so the preview lists exactly what the drop's letter lists, and takes the same `members.manage` grant with an org-scoped fetch. `tests/test_property_return_preview.py` drops a member after previewing them and compares the two. |
 
 The overdue list's response shape was also corrected on the frontend:
 `OverdueMember` had described fields the endpoint never sent (`drop_date`,
@@ -4267,6 +4359,28 @@ on real connections) and the lock-order assertions in
 
 ## Membership — Length of Service Across a Break: What Is Deliberately Left Alone (2026-09-24)
 
+**✅ Resolved 2026-11-04 (owner decision 2026-11-01: use credited service where
+relevant).** "Member since" on the member profile, the digital ID card and the
+printed ID card now shows the date credited service runs from
+(`service_since` in `member_service_history_service.py`, which is
+`summarize`'s `effective_service_start` — the figure tier advancement reads).
+It is a date, so it stays on a card that is printed once: the hire date for a
+member who never left, the rejoin date for one who restarted at zero, and the
+hire date moved forward by the time away for one whose earlier service keeps
+counting. A separated member's date is measured to their last day of service so
+it does not drift. `GET /users/{id}/with-roles` carries it as `service_since`
+(the profile's write endpoints do not, and the page keeps the value it had).
+**Left on `hire_date`, deliberately:** the hire date field itself and the
+roster's Hire Date column (both name the hire date); the Salesforce sync
+(`Hire_Date__c` is the hire date); the event-attendance cut-off, the meeting
+attendance dashboard's `hire_date` field and the training join date used for
+catch-up periods (each asks when someone joined, not how long they served — the
+gap-aware version of the cut-off is the current stint's start, not credited
+service); and tier advancement, which already reads credited service. A member
+reinstated before 2026-09-24 with no recorded gap still shows their hire date
+until an officer edits their Service History. `tests/test_credited_service_readers.py`
+pins it.
+
 Credited service now comes from recorded stints (`member_service_periods`,
 `app/services/member_service_history_service.py`): time a member spent dropped,
 retired or archived is not counted, and a returning member's earlier stints can
@@ -4279,10 +4393,12 @@ the reader. Four things are unchanged on purpose, each for the owner to revisit:
   `status_changed_at` is overwritten on archive. Their service still runs
   unbroken from `hire_date` — the pre-existing behaviour, so nobody's tier moves
   on upgrade — until an officer edits their **Service History**.
-- **Other `hire_date` readers are untouched.** The ID card's "Member since", the
+- **Other `hire_date` readers were untouched (resolved 2026-11-04 for "Member
+  since", see above).** When this shipped, the ID card's "Member since", the
   roster's Hire Date column, the Salesforce sync and event-attendance cut-offs
-  still read `hire_date`. It remains the date the member first joined; credited
+  read `hire_date`. It remains the date the member first joined; credited
   service is a separate figure.
+
 - **An archived member's inferred last day is the archive date.** When a member
   with no recorded stints is reactivated, the end of their earlier service is
   taken from `status_changed_at`, which archiving overwrites. The Reactivate
@@ -6083,6 +6199,27 @@ staleness as the rest of a catalog the caller is already authorized to read;
 
 ## MS-14 — `medical_screening.view` Grants Full Narrative PHI, With No Finer-Grained Read Tier (2026-10-06)
 
+✅ **Resolved (owner decision 2026-11-01: add a detail permission; built
+2026-11-04).** `medical_screening.view_details` reads a record's clinical
+narrative — `provider_name`, `result_summary`, `result_data`, `notes`
+(`NARRATIVE_FIELDS` in `schemas/medical_screening.py`). `GET /records` and
+`GET /records/{id}` return those four null to a caller holding `.view` alone;
+everything else on a record (type, dates, the passed/failed/waived outcome,
+the linked requirement, the reviewer) stays on `.view`, as do the compliance
+and expiring routes, which never carried the narrative. `.manage` reads it
+too, because the edit form that writes those fields has to show them; the
+form hides and stops sending them when the caller cannot read them, so a
+save cannot erase them. The read audit records `narrative_included`. The
+grant is MFA-privileged like the other two. **Upgrade:** migration
+`d6906e3dd76c` gives `view_details` to every position, system or
+department-created, that holds `medical_screening.view`, so nobody loses the
+narrative on upgrade; `docs/UPGRADING.md` tells the department to remove it
+from positions meant to see status only. No seeded position holds a medical
+screening grant, so `DEFAULT_POSITIONS` is unchanged. Covered by
+`tests/test_medical_screening_narrative_permission.py`,
+`tests/test_medical_screening_owner_decisions_migration.py` and
+`MedicalScreeningPage.narrative.test.tsx`.
+
 Five routes are gated on `medical_screening.view`:
 `GET /requirements`/`{id}` (configuration only, not PHI), `GET /records`/
 `{id}` (the full `ScreeningRecordResponse` — including the decrypted
@@ -6152,7 +6289,9 @@ MS-15).
 
 ## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15, two of three resolved)
 
-**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **✅ `frequency_months` resolved 2026-10-25** (W71-1 above): a record with no expiration date falls due that many months after completion. **`grace_period_days` is unchanged and still open**, as described below.
+**✅ `grace_period_days` resolved (owner decision 2026-11-01: enforce it; built 2026-11-04).** A satisfying screening counts until its due date — its expiration date, or the one its requirement's frequency derives — plus the requirement's grace period. While in grace the member is compliant and the screening is shown as due: it counts toward `expiring_soon` (a roster row reads **Expiring soon**; no new standing was added), the item carries `in_grace_period` and `grace_period_ends`, the member's panel reads "Past due — grace period until …", and the expiring list and the AI assistant's tool name it with a negative `days_until_expiration`. The member's own countdown reads 0 for it. One rule, `screening_deadline` in `medical_screening_service.py`, serves the summary, roster, admin hub, expiring list and both MCP tools. **Upgrade effect, accepted:** the column defaulted to 30, so every existing requirement now gives 30 days' grace unless the department lowers it; a member who lapsed within the last 30 days reads compliant again. The form's "Not enforced yet" notice is gone (`tests/test_medical_screening_grace_period.py`).
+
+**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **✅ `frequency_months` resolved 2026-10-25** (W71-1 above): a record with no expiration date falls due that many months after completion. `grace_period_days` is resolved above; the history below describes it as it was.
 
 `screening_requirements.grace_period_days` (default 30) and `.applies_to_roles`
 have labelled, editable controls on `ScreeningRequirementForm.tsx`, each with
@@ -7407,14 +7546,28 @@ Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
   both screens mark such a date "by frequency". **Upgrade effect, accepted:**
   existing records saved without an expiration can change standing on the
   first read after upgrade.
-- **Still open — records are matched to a requirement by screening _type_,
-  not by `requirement_id`,** so two requirements of the same type are
-  satisfied by one record. **Decision:** whether a record should satisfy only
-  the requirement it is linked to.
-- **Still open — the MCP `list_expiring_screenings` tool** pages in SQL on the
-  stored `expiration_date`, so it does not list a record falling due by
-  frequency that the dashboard lists. Bringing it in needs the derived date in
-  SQL, or giving up SQL paging for that tool.
+- ✅ **Resolved (owner decision 2026-11-01: match by linked requirement;
+  built 2026-11-04) — a record satisfies only the requirement it is linked
+  to.** Grading, supersession (`superseded_record_clause`) and the expiring
+  list all partition by `requirement_id`; a record linked to nothing counts
+  toward nothing and is marked "Not linked to a requirement" on the Records
+  tab, and the Edit dialog can now set or change the link. The frequency an
+  undated record falls due by is its own requirement's. **Upgrade:** migration
+  `d6906e3dd76c` links each unlinked record to its organization's one active
+  requirement of the same type (with none active, to the one requirement of
+  that type); a department with one requirement per type sees no change. A
+  record whose type matches two or more requirements is left unlinked — it
+  counted toward all of them before and counts toward none now, until an
+  officer links it — and a record whose type matches no requirement counted
+  toward nothing before either. Covered by
+  `tests/test_medical_screening_linked_requirement.py`.
+- ✅ **Resolved (owner decision 2026-11-01: compute in the tool; built
+  2026-11-04) — the MCP `list_expiring_screenings` tool** now takes its rows
+  from `get_expiring_soon(members_only=True)`, the Compliance tab's own list,
+  so it includes screenings due by frequency and ones in their grace period
+  (`due_by_frequency`, `in_grace_period`, `grace_period_ends`), and pages the
+  window in Python rather than SQL; the window is bounded by `days` ≤ 365 and
+  one current record per member and requirement.
 - **Resolved 2026-10-25 — superseded records on the expiring list.**
   `get_expiring_soon` now leaves out a record a newer one of the same type
   supersedes for the same member or prospect, using the same

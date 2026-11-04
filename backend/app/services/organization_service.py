@@ -281,8 +281,21 @@ class OrganizationService:
                 if field:
                     enabled_fields.add(field)
 
-            kwargs = {f: f in enabled_fields for f in field_names}
-            migrated = ModuleSettings(**kwargs)
+            # The setup rule, not "everything unnamed is off": that stored
+            # Public Information off on every installation old enough to come
+            # through here, and the 289504a34d3c backfill runs once, before
+            # this does. Imported here because services.onboarding imports
+            # this module.
+            from app.services.onboarding import modules_from_setup_answers
+
+            answers = modules_from_setup_answers(enabled_fields)
+            # A legacy record was written by a setup that never asked about
+            # Public Information, so its absence there is not a "no": keep the
+            # module's declared default (owner decision 2026-11-04). Today's
+            # setup asks, and its answer is stored as given.
+            if "public_info" not in enabled_fields:
+                answers["public_info"] = ModuleSettings().public_info
+            migrated = ModuleSettings(**answers)
 
             # Persist to org.settings.modules so we never need the
             # fallback again — single source of truth going forward.

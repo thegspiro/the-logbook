@@ -86,6 +86,7 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
+from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
@@ -470,16 +471,26 @@ async def get_training_dashboard_summary(
     }
 
 
-def _require_self_or_training_officer(current_user: User, user_id: UUID) -> None:
+async def _require_self_or_training_officer(
+    db: AsyncSession, current_user: User, user_id: UUID
+) -> None:
     """Authorize a per-member training-PII read.
 
     Training stats/compliance/reports can expose certifications and scores that
     are not roster-public, so a member may only read their own unless they hold
-    ``training.manage`` (mirrors the gate on GET /records).
+    ``training.manage`` (mirrors the gate on GET /records) or supervise the
+    member today (owner decision 2026-11-01, crew views: a line officer sees
+    their crew's training standing). The supervisor check is made per request
+    against the dated assignments and the caller's department, so an ended
+    assignment or another department's member grants nothing.
     """
     if str(user_id) == str(current_user.id):
         return
     if _has_permission("training.manage", _collect_user_permissions(current_user)):
+        return
+    if await MemberSupervisorService(db).is_current_supervisor(
+        str(current_user.organization_id), str(current_user.id), str(user_id)
+    ):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -725,11 +736,22 @@ async def list_records(
     is_officer = _has_permission(
         "training.manage", _collect_user_permissions(current_user)
     )
-    if not is_officer:
-        # Non-officers are confined to their own records regardless of filter.
-        query = query.where(TrainingRecord.user_id == str(current_user.id))
-    elif user_id:
+    if is_officer:
+        if user_id:
+            query = query.where(TrainingRecord.user_id == str(user_id))
+    elif (
+        user_id
+        and str(user_id) != str(current_user.id)
+        and await MemberSupervisorService(db).is_current_supervisor(
+            str(current_user.organization_id), str(current_user.id), str(user_id)
+        )
+    ):
+        # A supervisor may list one crew member's records at a time (owner
+        # decision 2026-11-01, crew views).
         query = query.where(TrainingRecord.user_id == str(user_id))
+    else:
+        # Everyone else is confined to their own records regardless of filter.
+        query = query.where(TrainingRecord.user_id == str(current_user.id))
 
     if status:
         query = query.where(TrainingRecord.status == status)
@@ -1987,7 +2009,7 @@ async def get_user_stats(
 
     **Authentication required**
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     training_service = TrainingService(db)
     stats = await training_service.get_user_training_stats(
         user_id=user_id, organization_id=current_user.organization_id
@@ -2012,7 +2034,7 @@ async def get_compliance_summary(
     Only requirements applicable to the member (via ``applies_to_all``
     or ``required_roles``) are counted.
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     org_id = current_user.organization_id
     today = await resolve_org_today(db, org_id)
     org_include_current = await get_org_include_current_month(db, str(org_id))
@@ -2152,7 +2174,7 @@ async def generate_user_report(
 
     **Authentication required**
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     training_service = TrainingService(db)
     report = await training_service.generate_training_report(
         organization_id=current_user.organization_id,
@@ -2177,7 +2199,7 @@ async def get_requirements_progress(
 
     **Authentication required**
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     training_service = TrainingService(db)
     progress = await training_service.get_all_requirements_progress(
         user_id=user_id, organization_id=current_user.organization_id, year=year
@@ -3231,7 +3253,7 @@ async def get_category_hour_breakdown(
     current biannual cycle, so training officers can verify NCCR topic
     area progress against national/state minimums.
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     from app.models.training import TrainingCategory
 
     org_id = str(current_user.organization_id)

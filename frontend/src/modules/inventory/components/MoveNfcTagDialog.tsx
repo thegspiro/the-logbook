@@ -23,6 +23,13 @@ const KIND_NOUNS: Record<InventoryNfcTagKind, string> = {
   compartment: 'compartment',
 };
 
+// The noun with its article: "an item", but "a storage area".
+const KIND_WITH_ARTICLE: Record<InventoryNfcTagKind, string> = {
+  item: 'an item',
+  storage_area: 'a storage area',
+  compartment: 'a compartment',
+};
+
 const currentTargetId = (tag: InventoryNfcRegisterTag): string | null =>
   tag.item_id ?? tag.storage_area_id ?? tag.check_compartment_id;
 
@@ -77,6 +84,7 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
 
   if (!tag) return null;
   const noun = KIND_NOUNS[tag.kind];
+  const aNoun = KIND_WITH_ARTICLE[tag.kind];
   const here = currentTargetId(tag);
 
   const submit = async () => {
@@ -130,7 +138,7 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
         >
           <div className="flex-1">
             <label className="form-label" htmlFor={`${idBase}-search`}>
-              Find a {noun}
+              Find {aNoun}
             </label>
             <input
               id={`${idBase}-search`}
@@ -140,7 +148,7 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
               maxLength={100}
             />
           </div>
-          <button type="submit" className="btn-secondary btn-auto self-end" aria-label={`Search for a ${noun}`}>
+          <button type="submit" className="btn-secondary btn-auto self-end" aria-label={`Search for ${aNoun}`}>
             <Search className="h-4 w-4" aria-hidden="true" />
           </button>
         </form>

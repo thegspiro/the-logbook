@@ -82,6 +82,12 @@ from app.services.email_theme import (
     WRAP_STYLE,
     with_subline,
 )
+from app.utils.membership import (
+    configured_tiers,
+    member_standing,
+    tier_benefits,
+    tier_for_member,
+)
 from app.utils.org_timezone import (
     ZONED_DATE_TIME_FORMAT,
     format_in_org_timezone,
@@ -585,33 +591,34 @@ def round_percentage(value: float) -> float:
     return round(float(value), 2)
 
 
+def _member_tier(user: Any, org: Any) -> Optional[Dict[str, Any]]:
+    """The rung of ``org``'s ladder ``user`` stands on, judged by their status.
+
+    Through ``tier_for_member``, the one lookup every tier-benefit reader uses
+    (owner decision 2026-11-01): keyed on the legacy ``membership_type``, an
+    administrative member on the ``senior`` tier found no tier at all and
+    voted and stood for office whatever the tier said.
+    """
+    return tier_for_member(configured_tiers(org.settings if org else None), user)
+
+
 def _tier_benefits(user: Any, org: Any) -> dict:
     """The benefits of ``user``'s membership tier in ``org``'s settings.
 
     Empty when the department stores no tiers or the member's tier is not
     among them, so each caller's own default (eligible) applies.
     """
-    tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
-    tiers = tier_config.get("tiers", []) if isinstance(tier_config, dict) else []
-    member_tier_id = getattr(user, "membership_type", None) or "active"
-    tier_def = next(
-        (t for t in tiers if isinstance(t, dict) and t.get("id") == member_tier_id),
-        None,
-    )
-    benefits = tier_def.get("benefits", {}) if tier_def else {}
-    return benefits if isinstance(benefits, dict) else {}
+    return tier_benefits(_member_tier(user, org))
 
 
 def _tier_name(user: Any, org: Any) -> str:
-    """The display name of ``user``'s membership tier, else its id."""
-    tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
-    tiers = tier_config.get("tiers", []) if isinstance(tier_config, dict) else []
-    member_tier_id = getattr(user, "membership_type", None) or "active"
-    tier_def = next(
-        (t for t in tiers if isinstance(t, dict) and t.get("id") == member_tier_id),
-        None,
-    )
-    return str((tier_def or {}).get("name") or member_tier_id)
+    """The display name of ``user``'s membership tier, else their standing."""
+    tier = _member_tier(user, org)
+    if tier and tier.get("name"):
+        return str(tier["name"])
+    if tier and tier.get("id"):
+        return str(tier["id"])
+    return member_standing(user) or "active"
 
 
 def _positive_int(value: Any) -> Optional[int]:
@@ -1785,12 +1792,9 @@ class ElectionService:
         )
         org = org_result.scalar_one_or_none()
         if org and not _has_override:
-            tier_config = (org.settings or {}).get("membership_tiers", {})
-            tiers = tier_config.get("tiers", [])
-            member_tier_id = getattr(user, "membership_type", None) or "active"
-            tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
+            tier_def = _member_tier(user, org)
             if tier_def:
-                benefits = tier_def.get("benefits", {})
+                benefits = tier_benefits(tier_def)
                 # Check basic voting eligibility for this tier
                 if not benefits.get("voting_eligible", True):
                     return VoterEligibility(
@@ -1798,7 +1802,7 @@ class ElectionService:
                         has_voted=False,
                         positions_voted=[],
                         positions_remaining=[],
-                        reason=f"Members at the '{tier_def.get('name', member_tier_id)}' tier are not eligible to vote",
+                        reason=f"Members at the '{_tier_name(user, org)}' tier are not eligible to vote",
                     )
                 # Check meeting attendance requirement
                 if benefits.get("voting_requires_meeting_attendance", False):
@@ -3413,41 +3417,34 @@ class ElectionService:
                     eligible += 1
             return eligible
 
-        tiers = (((org.settings or {}).get("membership_tiers", {}) if org else {})).get(
-            "tiers", []
-        )
-        ineligible_tier_ids = {
-            t.get("id")
-            for t in tiers
-            if not t.get("benefits", {}).get("voting_eligible", True)
-        }
-
-        counts_result = await self.db.execute(
-            select(User.membership_type, func.count(User.id))
-            .where(User.organization_id == str(organization_id))
-            .where(User.is_active)
-            .group_by(User.membership_type)
-        )
-        total = 0
-        for member_type, count in counts_result.all():
-            if (member_type or "active") not in ineligible_tier_ids:
-                total += count
-
-        # Secretary overrides restore eligibility for members of excluded tiers
+        # Each member's tier is resolved from their status, the way the ballot
+        # check resolves it (Pitfall #29): grouping on the legacy
+        # membership_type counted an administrative member on a non-voting
+        # tier as a voter, so a percentage quorum could fail with every
+        # eligible member voting.
+        tiers = configured_tiers(org.settings if org else None)
         override_ids = {
             o.get("user_id")
             for o in (election.voter_overrides or [])
             if o.get("user_id")
         }
-        if override_ids and ineligible_tier_ids:
-            override_count = await self.db.execute(
-                select(func.count(User.id))
-                .where(User.id.in_(list(override_ids)))
-                .where(User.organization_id == str(organization_id))
-                .where(User.is_active)
-                .where(User.membership_type.in_(list(ineligible_tier_ids)))
+        standings_result = await self.db.execute(
+            select(User.id, User.member_status, User.membership_type)
+            .where(User.organization_id == str(organization_id))
+            .where(User.is_active)
+        )
+        total = 0
+        for member_id, member_status, membership_type in standings_result.all():
+            standing = SimpleNamespace(
+                member_status=member_status, membership_type=membership_type
             )
-            total += override_count.scalar() or 0
+            voting = tier_benefits(tier_for_member(tiers, standing)).get(
+                "voting_eligible", True
+            )
+            # A secretary override restores eligibility to a member of an
+            # excluded tier.
+            if voting or str(member_id) in override_ids:
+                total += 1
 
         return total
 

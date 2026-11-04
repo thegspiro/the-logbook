@@ -629,6 +629,22 @@ async def list_my_evaluations(
     )
 
 
+@router.get("/crew", response_model=List[EvaluationSummary])
+async def list_crew_evaluations(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Evaluations of the members the caller supervises today.
+
+    **Authentication required.** Access comes from the dated supervisor
+    assignments, not a permission: a member who supervises nobody gets an
+    empty list. Each evaluation's content opens to the supervisor once it is
+    released to the member (``GET /evaluations/{id}``)."""
+    return await EvaluationService(db).list_crew(
+        current_user.organization_id, current_user
+    )
+
+
 @router.get("/mine/removed", response_model=List[EvaluationDeletionRecordResponse])
 async def list_my_deletion_records(
     db: AsyncSession = Depends(get_db),

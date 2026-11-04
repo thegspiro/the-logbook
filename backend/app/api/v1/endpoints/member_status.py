@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import require_permission, require_stepup
+from app.api.dependencies import get_current_user, require_permission, require_stepup
 from app.api.v1.endpoints.users import _enforce_account_reset_ceiling
 from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
@@ -51,6 +51,7 @@ from app.services.nfc_card_status_sync import sync_cards_with_member_status
 from app.utils.membership import (
     LEGACY_MEMBERSHIP_TYPES,
     canonical_member_status,
+    configured_tiers,
     is_administrative,
     split_membership_type,
 )
@@ -665,7 +666,33 @@ async def change_member_status(
     return response
 
 
-@router.get("/{user_id}/property-return-report")
+class PropertyReturnPreviewItem(BaseModel):
+    """One item the member would be asked to return, as the letter lists it."""
+
+    name: str
+    serial_number: str
+    asset_tag: str
+    condition: str
+    value: float
+    quantity: int
+    # "assigned", "checked_out" or "issued"
+    type: str
+    # Already on the department's calendar, as the letter prints it.
+    assigned_date: str
+
+
+class PropertyReturnPreviewResponse(BaseModel):
+    member_name: str
+    item_count: int
+    total_value: float
+    items: list[PropertyReturnPreviewItem]
+    html: str
+
+
+@router.get(
+    "/{user_id}/property-return-report",
+    response_model=PropertyReturnPreviewResponse,
+)
 async def get_property_return_preview(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -675,7 +702,13 @@ async def get_property_return_preview(
     Preview the property-return report for a member without changing their status.
     Useful for reviewing what items are assigned before performing a drop.
 
-    Requires `members.manage` permission.
+    Read-only: nothing is saved to Documents, no email is sent, no departure
+    clearance is opened and the member's status and service history are left
+    alone. The items come from the same `PropertyReturnService.generate_report`
+    the drop calls, so the preview lists exactly what the drop's letter would
+    (CLAUDE.md pitfall #29) -- keep both on that one builder.
+
+    Requires `members.manage` permission, the same grant as the drop.
     """
     from app.services.property_return_service import PropertyReturnService
 
@@ -696,13 +729,13 @@ async def get_property_return_preview(
         performed_by=str(current_user.id),
     )
 
-    return {
-        "member_name": report_data["member_name"],
-        "item_count": report_data["item_count"],
-        "total_value": report_data["total_value"],
-        "items": report_data["items"],
-        "html": html_content,
-    }
+    return PropertyReturnPreviewResponse(
+        member_name=report_data["member_name"],
+        item_count=report_data["item_count"],
+        total_value=float(report_data["total_value"]),
+        items=[PropertyReturnPreviewItem(**item) for item in report_data["items"]],
+        html=html_content,
+    )
 
 
 # ==================== Undo a mistaken drop (W15-3) ====================
@@ -1481,6 +1514,60 @@ async def advance_membership_tiers(
         performed_by=str(current_user.id),
     )
     return result
+
+
+class MembershipTierName(BaseModel):
+    """A rung of the department's ladder as every member may see it."""
+
+    id: str
+    name: str
+
+
+class MembershipTierNamesResponse(BaseModel):
+    tiers: list[MembershipTierName]
+
+
+@router.get(
+    "/membership-tiers/names",
+    response_model=MembershipTierNamesResponse,
+)
+async def get_membership_tier_names(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The department's membership tier names, in ladder order.
+
+    Ids and display names only, for any signed-in member (owner decision
+    2026-11-01, "Expose names read-only"): without them a member's directory
+    filter and profile used the built-in labels ("Regular member") and had no
+    entry at all for a department tier such as Senior. Advancement years,
+    benefits and occupancy stay behind `members.manage` on
+    `GET /membership-tiers/config`, which this mirrors -- including the
+    shipped ladder for an organization that has not saved one, so a member
+    and an officer read the same names.
+
+    **Requires: an authenticated member of the organization.**
+    """
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
+    settings = organization.settings or {}
+    section = (
+        settings
+        if "membership_tiers" in settings
+        else {"membership_tiers": MembershipTierSettings().model_dump()}
+    )
+    return MembershipTierNamesResponse(
+        tiers=[
+            MembershipTierName(
+                id=str(tier["id"]), name=str(tier.get("name") or tier["id"])
+            )
+            for tier in configured_tiers(section)
+            if tier.get("id")
+        ]
+    )
 
 
 @router.get("/membership-tiers/config")

@@ -1863,6 +1863,13 @@ says: _"Dropping a member creates a property return report and may send an
 email notification."_ Both happen automatically. The dialog has no other
 options for them.
 
+**Previewing what they would return.** Before dropping a member, select
+**Preview property return** under **Status** on their profile (members.manage
+only, shown while the member is still serving). It lists everything the drop's
+report would ask them to return — each item's name, serial number or asset tag,
+how it is held, quantity and value, with the total — and saves, sends and
+changes nothing.
+
 **Bringing a former member back.** When a dropped or retired member returns,
 the dialog also asks:
 

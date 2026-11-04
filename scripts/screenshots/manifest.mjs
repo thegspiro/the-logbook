@@ -1712,6 +1712,138 @@ async function openStatusFixture(page, token, fixture) {
 
 const FOLLOW_UP_FIXTURE_TOKEN = "demo-follow-up-link-fixture-only";
 
+// What Mateo Alvarez is pictured typing into his follow-up form. The demo
+// sends no email, so no applicant ever holds a link and nothing is ever
+// submitted; the screens after a submission are answered from his real record
+// and his real follow-up request with these answers laid over them. Only the
+// mobile number and street address differ from what is on file, which is what
+// raises the contact-change flag.
+const FOLLOW_UP_DEMO_ANSWERS = {
+  mobile: "(703) 555-0148",
+  address_street: "27 Birch Hollow Lane",
+  guardian: "Lucia Alvarez",
+  school: "Oakville High School",
+};
+const FOLLOW_UP_DEMO_EMAIL = "mateo.alvarez@example.org";
+
+/** Two hours ago, as the API writes a timestamp. */
+function followUpSubmittedAt() {
+  return new Date(Date.now() - 2 * 60 * 60 * 1000)
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z");
+}
+
+/**
+ * Mateo Alvarez's record and the follow-up form his stage sends. The form is
+ * the stage's own (`follow_up_form_id`), so its questions, order and pre-fill
+ * mapping are the real ones. `get` reads one admin API path; a route handler
+ * passes `page.request`, which carries the page's session.
+ */
+async function followUpRecordFor(get) {
+  const found = await get(
+    `/prospective-members/prospects?limit=5&search=${encodeURIComponent(FOLLOW_UP_DEMO_EMAIL)}`,
+  );
+  const rows = found?.items ?? found?.prospects ?? [];
+  const row = rows.find((p) => p.email === FOLLOW_UP_DEMO_EMAIL);
+  if (!row) throw new Error(`no applicant ${FOLLOW_UP_DEMO_EMAIL} to picture`);
+  const detail = await get(`/prospective-members/prospects/${row.id}`);
+  const formId = detail.current_step?.config?.follow_up_form_id;
+  if (!formId)
+    throw new Error("Mateo Alvarez is not on a Follow-up Form stage");
+  const form = await get(`/forms/${formId}`);
+  if (!form?.fields?.length) throw new Error(`form ${formId} has no fields`);
+  const fields = [...form.fields].sort((a, b) => a.sort_order - b.sort_order);
+  return {
+    row,
+    detail,
+    form,
+    fields,
+    // When he reached the stage: the link email would have gone then.
+    sentAt: row.stage_entered_at ?? detail.created_at,
+  };
+}
+
+/** `followUpRecordFor`'s reader, through a page's own API session. */
+function pageApiGet(page) {
+  return async (path) => {
+    const response = await page.request.get(
+      new URL(`/api/v1${path}`, page.url()).toString(),
+    );
+    if (!response.ok()) throw new Error(`GET ${path}: ${response.status()}`);
+    return await response.json();
+  };
+}
+
+/** The answer each question of the form gets in a submission by Mateo. */
+function followUpAnswerFor(field, detail) {
+  if (field.applicant_field && field.applicant_field in FOLLOW_UP_DEMO_ANSWERS)
+    return FOLLOW_UP_DEMO_ANSWERS[field.applicant_field];
+  if (field.applicant_field) return detail[field.applicant_field] ?? "";
+  if (/guardian/i.test(field.label)) return FOLLOW_UP_DEMO_ANSWERS.guardian;
+  if (/school/i.test(field.label)) return FOLLOW_UP_DEMO_ANSWERS.school;
+  return "";
+}
+
+/**
+ * Answer the drawer's (or the Interview page's) follow-up request list with
+ * the real list, passed through `transform`. Send, Resend and Mark reviewed
+ * are refused outright, so a slip cannot write to the demo.
+ */
+async function routeFollowUpRequests(page, transform) {
+  await page.route(
+    /\/api\/v1\/prospective-members\/prospects\/[^/]+\/follow-up-forms\/[^/]+\/(send|review-contact-change)$/,
+    (route) => route.abort(),
+  );
+  await page.route(
+    /\/api\/v1\/prospective-members\/prospects\/[^/]+\/follow-up-forms$/,
+    async (route) => {
+      if (route.request().method() !== "GET") return route.abort();
+      const response = await route.fetch();
+      const rows = await response.json();
+      const shaped = await transform(Array.isArray(rows) ? rows : [], page);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(shaped),
+      });
+    },
+  );
+}
+
+/** Mateo's real request, as it reads once he has submitted the form. */
+function submittedFollowUpRequest(request, { detail, sentAt }) {
+  const at = followUpSubmittedAt();
+  const changes = [
+    ["mobile", "Mobile", detail.mobile, FOLLOW_UP_DEMO_ANSWERS.mobile],
+    [
+      "address_street",
+      "Street address",
+      detail.address_street,
+      FOLLOW_UP_DEMO_ANSWERS.address_street,
+    ],
+  ]
+    .filter(([, , old, now]) => (old ?? "") !== now)
+    .map(([field, label, old, now]) => ({
+      field,
+      label,
+      old: old ?? null,
+      new: now,
+      applied: true,
+    }));
+  return {
+    ...request,
+    status: "submitted",
+    first_sent_at: request.first_sent_at ?? sentAt,
+    last_sent_at: request.last_sent_at ?? sentAt,
+    submitted_at: at,
+    submission_id: request.submission_id ?? "demo-submission-fixture-only",
+    changes,
+    contact_changed: changes.some((c) => c.field === "mobile"),
+    contact_change_reviewed_at: null,
+    contact_change_reviewed_by_name: null,
+  };
+}
+
 export const isNominatingElection = (election) =>
   (election.status ?? "") === "nominations";
 
@@ -7644,8 +7776,9 @@ export const SHOTS = [
     route: "/members/admin",
     expect: "Add & Import",
     // Tall enough to reach the roster's header and first row, which shows
-    // rank, membership (class and status) and positions as three columns.
-    viewport: { width: 1440, height: 1100 },
+    // rank, membership (class and status) and positions as three columns,
+    // below the Needs attention card the hub shows when something is open.
+    viewport: { width: 1440, height: 1260 },
     // The hub's "Former members still holding property" card reads "No
     // dropped member has property outstanding" -- the normal state, and not
     // this shot's subject, which is the hub's area cards.
@@ -16773,6 +16906,261 @@ export const SHOTS = [
     },
     fullPage: true,
   },
+  // ── Follow-up form screens (2026-11-04) ──
+  //
+  // The link reaches an applicant only by email, which the demo does not
+  // send, and it is stored encrypted, so none of these reads it. Each answers
+  // the one or two requests its screen makes from Mateo Alvarez's real record,
+  // his real follow-up request and the stage's real form, as 15-13, 15-28 and
+  // 15-41 do. Every write those screens can make is refused in the browser.
+  {
+    id: "15-40-follow-up-form-page",
+    doc: "15-prospective-members.md",
+    line: 1143,
+    anchor: "The applicant's follow-up form page, greeted by first name",
+    alt: "Mateo Alvarez's follow-up form, Applicant Details Confirmation: Hi Mateo above the form, his name, email and city filled in from his record, the mobile phone, street address, guardian and school questions still to answer, and Save and finish later beside Submit",
+    route: "/login",
+    auth: "anonymous",
+    expect: "Save and finish later",
+    // Mocked: GET /api/public/v1/follow-up-forms/{token}, answered with the
+    // stage's form and the values the server pre-fills from his record (a
+    // pre-filled, non-sensitive field takes the record's value). The draft
+    // and submit requests are aborted, so nothing is saved.
+    prepare: async (page, { lookupPage }) => {
+      const get = pageApiGet(await lookupPage());
+      const { detail, form, fields } = await followUpRecordFor(get);
+      const org = await get("/organization/profile");
+      const values = {};
+      for (const field of fields) {
+        if (!field.applicant_field || field.is_sensitive) continue;
+        const known = detail[field.applicant_field];
+        if (known !== null && known !== undefined && known !== "")
+          values[field.id] = String(known);
+      }
+      const fixture = {
+        form_name: form.name,
+        form_description: form.description ?? null,
+        organization_name: org.name ?? null,
+        applicant_first_name: detail.first_name,
+        fields: fields.map((f) => ({
+          id: f.id,
+          label: f.label,
+          field_type: f.field_type,
+          placeholder: f.placeholder ?? null,
+          help_text: f.help_text ?? null,
+          required: Boolean(f.required),
+          min_length: f.min_length ?? null,
+          max_length: f.max_length ?? null,
+          min_value: f.min_value ?? null,
+          max_value: f.max_value ?? null,
+          options: f.options ?? null,
+          condition_field_id: f.condition_field_id ?? null,
+          condition_operator: f.condition_operator ?? null,
+          condition_value: f.condition_value ?? null,
+          sort_order: f.sort_order,
+          width: f.width ?? "full",
+          is_sensitive: Boolean(f.is_sensitive),
+        })),
+        values,
+        draft_saved_at: null,
+      };
+      const base = `**/api/public/v1/follow-up-forms/${FOLLOW_UP_FIXTURE_TOKEN}`;
+      await page.route(`${base}/draft`, (route) => route.abort());
+      await page.route(`${base}/submit`, (route) => route.abort());
+      await page.route(base, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(fixture),
+        }),
+      );
+      await page.goto(
+        new URL(
+          `/application-form/${FOLLOW_UP_FIXTURE_TOKEN}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByText(`Hi ${detail.first_name}.`, { exact: false })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "15-43-interview-follow-up-answers",
+    doc: "15-prospective-members.md",
+    line: 1261,
+    anchor: "The Interview page's Follow-up Forms panel",
+    alt: "The Follow-up Forms panel on Mateo Alvarez's Interview page: Applicant Details Confirmation, Stage: Confirm Your Details, submitted today, then each answer in the form's order, from his name and email to his parent or guardian and school",
+    route: "/prospective-members",
+    expect: { selector: "#follow-up-answers-heading" },
+    // Mocked: his follow-up request list (the real one, marked submitted) and
+    // that request's answers, one per question of the stage's real form.
+    beforeNavigate: async (page) => {
+      let record = null;
+      const recordFor = async () =>
+        (record ??= await followUpRecordFor(pageApiGet(page)));
+      await routeFollowUpRequests(page, async (rows) => {
+        const rec = await recordFor();
+        return rows.map((r) =>
+          r.step_id === rec.detail.current_step_id
+            ? submittedFollowUpRequest(r, rec)
+            : r,
+        );
+      });
+      await page.route(
+        /\/api\/v1\/prospective-members\/prospects\/[^/]+\/follow-up-forms\/[^/]+\/answers$/,
+        async (route) => {
+          const rec = await recordFor();
+          const requestId = route.request().url().split("/").slice(-2)[0];
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              request_id: requestId,
+              step_name: rec.detail.current_step?.name ?? null,
+              form_id: rec.form.id,
+              form_name: rec.form.name,
+              submitted_at: followUpSubmittedAt(),
+              answers: rec.fields
+                .filter((f) => f.field_type !== "section_header")
+                .map((f) => ({
+                  field_id: f.id,
+                  label: f.label,
+                  answer: followUpAnswerFor(f, rec.detail),
+                  is_sensitive: Boolean(f.is_sensitive),
+                  withheld: false,
+                })),
+            }),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        `/prospective-members/prospects?limit=5&search=${encodeURIComponent(FOLLOW_UP_DEMO_EMAIL)}`,
+        (id) => `/prospective-members/${id}/interview`,
+        "items",
+        (p) => p.email === FOLLOW_UP_DEMO_EMAIL,
+      )(page);
+      await page
+        .locator("#follow-up-answers-heading")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    selector: "section[aria-labelledby='follow-up-answers-heading']",
+  },
+  {
+    id: "15-44-follow-up-drawer-resend",
+    doc: "15-prospective-members.md",
+    line: 1198,
+    anchor: "The applicant drawer's Follow-up Forms section with a form sent",
+    alt: "The Follow-up Forms section of Mateo Alvarez's drawer once his link has gone: Applicant Details Confirmation, Stage: Confirm Your Details, Sent, when it was last sent, and Resend",
+    route: "/prospective-members",
+    expect: "Resend",
+    // Mocked: his real follow-up request, read as sent when he reached the
+    // stage. In the demo it is Not sent (15-34), because no email goes out.
+    // Resend is not pressed, and its request is refused if it were.
+    beforeNavigate: async (page) => {
+      let record = null;
+      await routeFollowUpRequests(page, async (rows) => {
+        record ??= await followUpRecordFor(pageApiGet(page));
+        return rows.map((r) =>
+          r.step_id === record.detail.current_step_id
+            ? {
+                ...r,
+                status: "sent",
+                first_sent_at: r.first_sent_at ?? record.sentAt,
+                last_sent_at: r.last_sent_at ?? record.sentAt,
+              }
+            : r,
+        );
+      });
+    },
+    prepare: openReinstatementApplicantIn(
+      "Junior Firefighter Pipeline",
+      "Mateo Alvarez",
+    ),
+    selector:
+      "div[aria-label='Applicant details'] div.p-4:has(> h3:has-text('Follow-up Forms'))",
+  },
+  {
+    id: "15-45-follow-up-drawer-contact-changed",
+    doc: "15-prospective-members.md",
+    line: 1165,
+    anchor: "The applicant drawer's Follow-up Forms section after a submission",
+    alt: "The Follow-up Forms section of Mateo Alvarez's drawer after he submitted the form: Submitted, the warning Contact details changed. Check the new details before relying on them. with Mark reviewed, and Changes to the applicant record listing his new mobile number and street address, each from (blank)",
+    route: "/prospective-members",
+    expect: "Mark reviewed",
+    // Mocked: his real follow-up request, read as submitted with the two
+    // changes his answers would make. Mark reviewed is not pressed, and its
+    // request is refused if it were.
+    beforeNavigate: async (page) => {
+      let record = null;
+      await routeFollowUpRequests(page, async (rows) => {
+        record ??= await followUpRecordFor(pageApiGet(page));
+        return rows.map((r) =>
+          r.step_id === record.detail.current_step_id
+            ? submittedFollowUpRequest(r, record)
+            : r,
+        );
+      });
+    },
+    prepare: openReinstatementApplicantIn(
+      "Junior Firefighter Pipeline",
+      "Mateo Alvarez",
+    ),
+    selector:
+      "div[aria-label='Applicant details'] div.p-4:has(> h3:has-text('Follow-up Forms'))",
+  },
+  {
+    id: "15-46-card-contact-changed",
+    doc: "15-prospective-members.md",
+    line: 1163,
+    anchor: "A board card carrying the Contact details changed flag",
+    alt: "Mateo Alvarez's card on the Junior Firefighter Pipeline board, with the Contact details changed flag above his name",
+    route: "/prospective-members",
+    expect: "Contact details changed",
+    // Mocked: the board's applicant list is the real one, with only Mateo
+    // Alvarez's contact_change_pending set, as a submission that changed his
+    // mobile number sets it.
+    beforeNavigate: async (page) => {
+      await page.route(
+        /\/api\/v1\/prospective-members\/prospects(\?|$)/,
+        async (route) => {
+          if (route.request().method() !== "GET") return route.fallback();
+          const response = await route.fetch();
+          const body = await response.json();
+          const flag = (p) =>
+            p.email === FOLLOW_UP_DEMO_EMAIL
+              ? { ...p, contact_change_pending: true }
+              : p;
+          const shaped = Array.isArray(body)
+            ? body.map(flag)
+            : { ...body, items: (body.items ?? []).map(flag) };
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(shaped),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await selectBoardPipeline("Junior Firefighter Pipeline")(page);
+      // The view is remembered, and the drawer shots before this one leave
+      // it on Table.
+      await clickByName(/^kanban$/i)(page);
+      await page
+        .getByText("Contact details changed")
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div[role='button'][aria-label^='Mateo Alvarez']",
+  },
   {
     id: "15-13-application-status",
     doc: "15-prospective-members.md",
@@ -18824,6 +19212,34 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
     selector: "[data-testid='guest-qr-card']",
+  },
+  {
+    // The event's own QR page, now that GET /events/{id}/qr-check-in-data
+    // returns `allow_guest_check_in` (#3997). The open evening is slid into
+    // its check-in window on every seed, so both codes show: the member code
+    // with Print QR Code, and the guest card with Print Guest QR Code, each of
+    // which prints its own code alone. Neither print button is pressed.
+    id: "04-97-event-qr-page-guest-code",
+    doc: "04-events-meetings.md",
+    line: 713,
+    anchor: "The event's QR page while check-in is open, with the member code",
+    alt: "The Volunteer Interest Night's QR page while check-in is open: Check-in is Active and the member code with Print QR Code, then the Guest Check-In card with the guest code, its link, Reset code and Print Guest QR Code",
+    route: "/events",
+    expect: "Print Guest QR Code",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}/qr-code`,
+        "events",
+        (event) => event.title === "Volunteer Interest Night",
+      )(page);
+      await page.getByText("Check-in is Active").waitFor({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Print Guest QR Code" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
   },
   {
     id: "04-95-event-guests-card",
@@ -24948,7 +25364,7 @@ export const SHOTS = [
     line: 2769,
     anchor:
       "Training Admin → Settings & Data → Shift Evaluations: the general-form settings card",
-    alt: "Training Admin → Settings & Data → Shift Evaluations: the general shift evaluation settings above the Evaluation templates list, with the EMT Field Internship Evaluation listed against the program that uses it",
+    alt: "Training Admin → Settings & Data → Shift Evaluations: Outside shifts awaiting an evaluation reading Nothing waiting, the general shift evaluation settings, and the Evaluation templates list with the EMT Field Internship Evaluation listed against the program that uses it",
     route: "/training/admin?page=settings&tab=shift-evaluations",
     // Not the form's name: it is also an <option> of the closed General form
     // select, which is never "visible".
@@ -26248,23 +26664,33 @@ export const SHOTS = [
   {
     id: "03-130-pattern-paused",
     doc: "03-scheduling.md",
-    line: 3137,
+    line: 3388,
     anchor: "The Patterns tab with a pattern reading Paused",
-    alt: "The Patterns tab with the Summer Reserve Rotation pattern reading Paused, its Generate button disabled and Resume beside it",
-    route: "/scheduling/admin/planning/templates",
-    expect: "Summer Reserve Rotation",
+    alt: "Shift Patterns with the Summer Reserve Rotation pattern open: it reads Paused, its Generate buttons are disabled, and Resume sits beside them",
+    route: "/scheduling/admin/planning/patterns",
+    expect: { selector: "button[aria-label='Resume Summer Reserve Rotation']" },
+    // Tall enough to keep the page heading and the open card in one frame.
+    viewport: { width: 1440, height: 1420 },
     fullPage: false,
     prepare: async (page) => {
-      // The Shift Patterns page asks for active patterns only, so a paused
-      // one is listed only on the Shift Templates page's own Patterns tab.
-      await page
-        .getByRole("tab", { name: /Patterns/ })
+      // Shift Patterns lists paused patterns since #4005; before it, a
+      // paused one appeared only on the Shift Templates page's Patterns tab,
+      // where this was first taken. Resume sits in the open card.
+      const card = page
+        .locator("div.card")
+        .filter({ hasText: "Summer Reserve Rotation" })
+        .first();
+      await card
+        .locator("button[aria-expanded]")
+        .first()
         .click({ timeout: 20_000 });
       const button = page.getByRole("button", {
         name: "Resume Summer Reserve Rotation",
       });
       await button.waitFor({ timeout: 20_000 });
-      await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      // The page keeps its heading rather than scrolling the button to the
+      // middle, which cut the header off.
+      await page.evaluate(() => window.scrollTo(0, 0));
       await hideScanNotice(page);
       await page.waitForTimeout(400);
     },

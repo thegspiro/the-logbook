@@ -10,13 +10,19 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.membership_pipeline import ProspectiveMember
 from app.models.user import User
 from app.schemas.medical_screening import (
+    NARRATIVE_FIELDS,
     ComplianceRoster,
     ComplianceStanding,
     ComplianceSummary,
@@ -63,6 +69,26 @@ async def _audit_phi_read(
         username=current_user.username,
     )
     await db.commit()
+
+
+def can_view_narrative(user: User) -> bool:
+    """Whether ``user`` may read a screening record's clinical narrative (MS-14).
+
+    ``medical_screening.view_details`` is the grant for it. ``.manage`` reads
+    it too: the edit form that writes the narrative has to show it, and one
+    that could not would send the fields back blank and erase them.
+    """
+    return user_has_permission(
+        user, "medical_screening.view_details"
+    ) or user_has_permission(user, "medical_screening.manage")
+
+
+def _record_response(record, narrative: bool) -> ScreeningRecordResponse:
+    """A record as the caller may see it: narrative nulled without the grant."""
+    response = ScreeningRecordResponse.model_validate(record)
+    if narrative:
+        return response
+    return response.model_copy(update=dict.fromkeys(NARRATIVE_FIELDS))
 
 
 def _subjects_of(rows) -> dict:
@@ -238,7 +264,11 @@ async def list_records(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("medical_screening.view")),
 ):
-    """List screening records with optional filters."""
+    """List screening records with optional filters.
+
+    The clinical narrative (``NARRATIVE_FIELDS``) is null unless the caller
+    holds ``medical_screening.view_details`` or ``.manage`` (MS-14).
+    """
     service = MedicalScreeningService(db)
     records = await service.list_records(
         organization_id=current_user.organization_id,
@@ -252,6 +282,7 @@ async def list_records(
     # Resolves the name fields the response schema promises (else the UI
     # shows "Unknown" for every row).
     await service.attach_record_names(current_user.organization_id, records)
+    narrative = can_view_narrative(current_user)
     await _audit_phi_read(
         db,
         current_user,
@@ -266,10 +297,11 @@ async def list_records(
                 "limit": pagination.limit,
             },
             "record_count": len(records),
+            "narrative_included": narrative,
             **_subjects_of(records),
         },
     )
-    return records
+    return [_record_response(record, narrative) for record in records]
 
 
 @router.get(
@@ -301,7 +333,7 @@ async def get_record(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("medical_screening.view")),
 ):
-    """Get a single screening record."""
+    """Get a single screening record; narrative as on the list (MS-14)."""
     service = MedicalScreeningService(db)
     record = await service.get_record(record_id, current_user.organization_id)
     if not record:
@@ -310,6 +342,7 @@ async def get_record(
             detail="Screening record not found",
         )
     await service.attach_record_names(current_user.organization_id, [record])
+    narrative = can_view_narrative(current_user)
     await _audit_phi_read(
         db,
         current_user,
@@ -318,9 +351,10 @@ async def get_record(
             "record_id": record.id,
             "record_user_id": record.user_id,
             "record_prospect_id": record.prospect_id,
+            "narrative_included": narrative,
         },
     )
-    return record
+    return _record_response(record, narrative)
 
 
 @router.post(
@@ -365,7 +399,9 @@ async def create_record(
         record, current_user.organization_id, str(current_user.id)
     )
     await service.attach_record_names(current_user.organization_id, [record])
-    return record
+    # Gated on .manage, which reads the narrative, so this never redacts; it
+    # goes through the helper so no record response bypasses the rule.
+    return _record_response(record, can_view_narrative(current_user))
 
 
 @router.put(
@@ -411,7 +447,9 @@ async def update_record(
         record, current_user.organization_id, str(current_user.id)
     )
     await service.attach_record_names(current_user.organization_id, [record])
-    return record
+    # Gated on .manage, which reads the narrative, so this never redacts; it
+    # goes through the helper so no record response bypasses the rule.
+    return _record_response(record, can_view_narrative(current_user))
 
 
 @router.delete(

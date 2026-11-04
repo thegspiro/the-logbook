@@ -60,6 +60,7 @@ from app.services.email_policy import (
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 from app.utils.event_attachments import validate_attachments_for_org
+from app.utils.membership import member_holds_tier
 from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.org_timezone import (
     format_in_org_timezone,
@@ -915,11 +916,16 @@ class EventService:
             ):
                 return False
 
-        # An event mandatory only for certain membership types is not mandatory
-        # for anybody else. An empty or absent list means "everyone".
+        # An event mandatory only for certain membership tiers is not mandatory
+        # for anybody else. An empty or absent list means "everyone". The list
+        # holds tier ids (the event form offers the department's ladder), and
+        # the member's tier is their status: the legacy membership_type names
+        # an administrative member "administrative" whatever tier they are on,
+        # so an event for Life members never expected an administrative Life
+        # member (owner decision 2026-11-01).
         required_types = event.mandatory_membership_types
         if isinstance(required_types, list) and required_types:
-            if user.membership_type not in required_types:
+            if not member_holds_tier(user, required_types):
                 return False
 
         return True
