@@ -1377,6 +1377,36 @@ def validate_security_configuration():
             )
 
 
+async def connect_redis_at_startup() -> None:
+    """Connect the shared cache, honouring ``REDIS_REQUIRED``.
+
+    With ``REDIS_REQUIRED`` false, an unreachable Redis is logged and startup
+    continues in degraded mode: caching off, rate limiting per process. With it
+    true, the failure propagates so the backend refuses to start — a managed
+    Redis with a wrong port, CA or access key would otherwise leave that
+    degraded mode in place indefinitely, with nothing but a log line to say so.
+    """
+    try:
+        logger.info("Connecting to Redis...")
+        await cache_manager.connect()
+    except Exception as e:
+        if settings.REDIS_REQUIRED:
+            logger.error(
+                "Redis connection failed and REDIS_REQUIRED is true - "
+                "refusing to start: {}",
+                e,
+            )
+            raise
+        logger.warning("Redis connection failed: {}", e)
+        return
+    if cache_manager.is_connected:
+        logger.info("✓ Redis connected")
+    else:
+        logger.warning(
+            "Redis unavailable - running in degraded mode (caching disabled)"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -1451,20 +1481,6 @@ async def lifespan(app: FastAPI):
     )
 
     import asyncio
-
-    async def connect_redis():
-        """Connect to Redis cache"""
-        try:
-            logger.info("Connecting to Redis...")
-            await cache_manager.connect()
-            if cache_manager.is_connected:
-                logger.info("✓ Redis connected")
-            else:
-                logger.warning(
-                    "Redis unavailable - running in degraded mode (caching disabled)"
-                )
-        except Exception as e:
-            logger.warning(f"Redis connection failed: {e}")
 
     async def initialize_geoip():
         """Initialize GeoIP service"""
@@ -1545,10 +1561,19 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Could not run startup validations: {e}")
             startup_status.add_error(f"Startup validation error: {str(e)}")
 
-    # Run Redis, GeoIP, and validations in parallel
-    await asyncio.gather(
-        connect_redis(), initialize_geoip(), validate_database(), return_exceptions=True
+    # Run Redis, GeoIP, and validations in parallel. return_exceptions keeps
+    # one task's failure from cancelling the others mid-flight; the Redis
+    # result is then checked, because with REDIS_REQUIRED set its failure is
+    # meant to stop startup rather than be collected and dropped.
+    startup_results = await asyncio.gather(
+        connect_redis_at_startup(),
+        initialize_geoip(),
+        validate_database(),
+        return_exceptions=True,
     )
+    redis_result: BaseException | None = startup_results[0]
+    if isinstance(redis_result, BaseException):
+        raise redis_result
 
     logger.info(
         f"✓ Parallel service initialization complete (worker PID {_worker_pid})"
