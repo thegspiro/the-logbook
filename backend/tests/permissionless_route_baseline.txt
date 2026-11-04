@@ -326,6 +326,11 @@ app/api/v1/endpoints/scheduling.py::get_active_shift_for_apparatus
 app/api/v1/endpoints/scheduling.py::get_calendar_feed
 app/api/v1/endpoints/scheduling.py::get_eligible_positions
 app/api/v1/endpoints/scheduling.py::get_eligible_positions_bulk
+# Self or scheduling.report: the handler returns 403 unless the caller is the
+# member or holds scheduling.report, and 404 for a member of another org
+# (tests/test_member_hours_history.py::TestMemberHoursEndpoint). A dependency
+# cannot express "or is that member", hence the check in the body.
+app/api/v1/endpoints/scheduling.py::get_member_hours_history
 app/api/v1/endpoints/scheduling.py::get_my_assignments
 app/api/v1/endpoints/scheduling.py::get_my_attendance
 app/api/v1/endpoints/scheduling.py::get_my_attendance_history

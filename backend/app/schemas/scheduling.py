@@ -838,6 +838,12 @@ class MemberHoursMonth(BaseModel):
     # silently mixed with time the member reported themselves.
     external_shifts: int = 0
     external_hours: float = 0.0
+    # Calls credited on outside units (recorded only by a historical import).
+    external_calls: int = 0
+    # How much of ``shifts`` / ``hours`` was on recall shifts — a part of
+    # them, never added to them.
+    on_call_shifts: int = 0
+    on_call_hours: float = 0.0
 
 
 class MemberHoursTotals(BaseModel):
@@ -853,6 +859,12 @@ class MemberHoursTotals(BaseModel):
     # silently mixed with time the member reported themselves.
     external_shifts: int = 0
     external_hours: float = 0.0
+    # Calls credited on outside units (recorded only by a historical import).
+    external_calls: int = 0
+    # How much of ``shifts`` / ``hours`` was on recall shifts — a part of
+    # them, never added to them.
+    on_call_shifts: int = 0
+    on_call_hours: float = 0.0
 
 
 class MemberHoursHistoryResponse(BaseModel):

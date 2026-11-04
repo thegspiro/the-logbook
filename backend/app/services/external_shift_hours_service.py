@@ -438,7 +438,9 @@ class ExternalShiftHoursService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> Dict[Tuple[int, int], Dict[str, int]]:
-        """``{(year, month): {"shift_count", "minutes"}}`` for one member."""
+        """``{(year, month): {"shift_count", "minutes", "calls"}}`` for one
+        member. ``calls`` is the member's own call credit on outside units,
+        recorded only by a historical import."""
         year_col = func.year(ExternalShiftHours.shift_date)
         month_col = func.month(ExternalShiftHours.shift_date)
         query = (
@@ -448,6 +450,9 @@ class ExternalShiftHoursService:
                 func.count(ExternalShiftHours.id).label("shift_count"),
                 func.coalesce(func.sum(ExternalShiftHours.duration_minutes), 0).label(
                     "minutes"
+                ),
+                func.coalesce(func.sum(ExternalShiftHours.call_count), 0).label(
+                    "calls"
                 ),
             )
             .where(ExternalShiftHours.organization_id == str(organization_id))
@@ -463,6 +468,7 @@ class ExternalShiftHoursService:
             (int(row.year), int(row.month)): {
                 "shift_count": int(row.shift_count or 0),
                 "minutes": int(row.minutes or 0),
+                "calls": int(row.calls or 0),
             }
             for row in result.all()
         }
