@@ -2830,7 +2830,7 @@ sections of items. **Start from the example** gives a ready template. Set the
 **general form**, whether it is optional or required, and whether one combined
 evaluation may cover several programs.
 
-![Training Admin → Settings & Data → Shift Evaluations: the general shift evaluation settings above the Evaluation templates list, with the EMT Field Internship Evaluation listed against the program that uses it](./images/02-126-shift-evaluation-settings.png)
+![Training Admin → Settings & Data → Shift Evaluations: Outside shifts awaiting an evaluation reading Nothing waiting, the general shift evaluation settings, and the Evaluation templates list with the EMT Field Internship Evaluation listed against the program that uses it](./images/02-126-shift-evaluation-settings.png)
 
 ![The evaluation form editor open on the EMT Field Internship Evaluation: its name, the four-level rating scale and labels, the Not Observed option, the comment threshold and the first section's items](./images/02-127-shift-evaluation-form-editor.png)
 
