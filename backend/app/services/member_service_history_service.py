@@ -261,6 +261,36 @@ def summarize(
     )
 
 
+def service_since(
+    member: Any,
+    periods: Sequence[MemberServicePeriod],
+    today: date,
+    tz: tzinfo,
+) -> Optional[date]:
+    """The date a member's credited service runs from -- "Member since".
+
+    ``summarize``'s ``effective_service_start``: the day a single unbroken
+    stint would have had to begin to equal the credited service, so it is the
+    hire date for a member who never left, the rejoin date for one who
+    restarted at zero, and the hire date moved forward by the time away for one
+    whose earlier service keeps counting. The owner chose (2026-11-01) to show
+    this rather than ``hire_date`` where a screen presents how long somebody
+    has been a member; ``hire_date`` stays the date they first joined.
+
+    It is measured to today while the member serves, which keeps it fixed: a
+    day served adds a day of credit and a day to today. A separated member's
+    credit stopped growing on their last day, so measuring to today would move
+    the date forward daily; it is measured to that last day instead.
+    """
+    anchor = today
+    if is_separated(getattr(member, "status", None)):
+        if periods and all(p.end_date is not None for p in periods):
+            anchor = max(p.end_date for p in periods if p.end_date is not None)
+        elif not periods:
+            anchor = implicit_separation_date(member, today, tz)
+    return summarize(member, periods, anchor, tz).effective_service_start
+
+
 def resolve_rejoin_credit(settings: Optional[Mapping[str, Any]]) -> RejoinServiceCredit:
     """The department's default, read defensively from free-form settings JSON.
 
@@ -332,6 +362,24 @@ class MemberServiceHistoryService:
         for period in result.scalars().all():
             grouped.setdefault(str(period.user_id), []).append(period)
         return grouped
+
+    async def service_since_for(self, member: User) -> Optional[date]:
+        """``service_since`` for one member, on the department's calendar."""
+        periods = await self.list_periods(member.organization_id, member.id)
+        tz = await resolve_scheduling_timezone(self.db, member.organization_id)
+        return service_since(member, periods, today_in(tz), tz)
+
+    async def service_since_by_user(
+        self, organization_id: str, members: Sequence[User]
+    ) -> Dict[str, Optional[date]]:
+        """``service_since`` for every listed member, stints in one query."""
+        grouped = await self.periods_by_user(organization_id, [m.id for m in members])
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(tz)
+        return {
+            str(m.id): service_since(m, grouped.get(str(m.id), []), today, tz)
+            for m in members
+        }
 
     async def get_rejoin_default(self, organization_id: str) -> RejoinServiceCredit:
         result = await self.db.execute(

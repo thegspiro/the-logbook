@@ -78,7 +78,26 @@ second run of the same file — or a later export from the same system that
 overlaps it — leaves those rows out, and a batch that somehow still carries one
 skips it. Use the same source system name each time for this to work.
 
-## Not yet included
+## Training
 
-Training hours are sorted and counted on this page but are imported by a later
-step of this tool.
+Open _Set up training_. The subject, instructor and "taught the class" columns
+are detected and can be changed.
+
+- **Subjects.** Each distinct subject (spellings that differ only in case and
+  punctuation count as one) can be mapped to a library course, and then takes
+  that course's name, type and category, exactly as a Target Solutions record
+  mapped to the course would. _Accept all suggestions_ maps every subject whose
+  name closely matches a course. Everything else is imported as written, as
+  continuing education.
+- **Instructor.** The instructor column is kept as written. On a row the
+  member taught, an instructor written as "me" (or left blank) becomes the
+  member's name, and the record notes that they taught the class.
+- **Training provider rows.** A row whose instructor names Target Solutions or
+  Vector Solutions is checked against the records the provider sync already
+  brought in. A synced record for the same member within a day means the row is
+  left out. For rows nothing synced matches, choose once whether to import them
+  or leave them out.
+
+Company drills (the `CompanyDrill` flag) are imported as training records like
+any other row. Recording them as drill meetings, for attendance percentages, is
+a later step.

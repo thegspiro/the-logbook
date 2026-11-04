@@ -70,6 +70,7 @@ from app.services.email_policy import (
 )
 from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.member_leave_service import MemberLeaveService
+from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.notifications_service import NotificationsService
 from app.services.shift_eligibility_service import (
     DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
@@ -433,6 +434,14 @@ class OpenSeats:
     #: ``None`` legitimately means "still claimable", so an empty ``OpenSeats``
     #: cannot stand in for either.
     member_already_assigned: bool = False
+
+
+# What ``review_time_off`` answers a reviewer who neither manages scheduling
+# nor supervises the requester today; the endpoint maps it to 403.
+NOT_REQUESTERS_SUPERVISOR = (
+    "Only a scheduling officer or the member's current supervisor can review "
+    "this request"
+)
 
 
 class SchedulingService:
@@ -8300,10 +8309,91 @@ class SchedulingService:
             self.db.add(time_off)
             await self.db.commit()
             await self.db.refresh(time_off)
-            return time_off, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+        # After the commit and outside its try: the request stands whether or
+        # not the notice goes out (``_send_notification`` never raises).
+        await self._notify_supervisor_of_time_off(time_off, organization_id)
+        return time_off, None
+
+    async def _notify_supervisor_of_time_off(
+        self, time_off: ShiftTimeOff, organization_id: UUID | str
+    ) -> None:
+        """Tell the requester's supervisor a request is waiting on them.
+
+        Owner decision 2026-11-01 (approvals route to the supervisor): the
+        member's supervisor today may approve or deny it, alongside every
+        holder of ``scheduling.manage``, who review it as before. Email is the
+        channel of record (pitfall #18), with the bell entry beside it. No
+        supervisor today means no notice, exactly as before the relationship.
+        A notice that fails is logged and never undoes the request.
+        """
+        try:
+            await self._send_supervisor_time_off_notice(time_off, organization_id)
+        except Exception as e:
+            logger.warning("Time-off supervisor notice failed: {}", e)
+            await self.db.rollback()
+
+    async def _send_supervisor_time_off_notice(
+        self, time_off: ShiftTimeOff, organization_id: UUID | str
+    ) -> None:
+        if not time_off.user_id:
+            return
+        supervisor_id = await MemberSupervisorService(self.db).current_supervisor_id(
+            str(organization_id), str(time_off.user_id)
+        )
+        if supervisor_id is None:
+            return
+        name_map = await self._get_user_name_map([str(time_off.user_id)])
+        name = name_map.get(str(time_off.user_id)) or "A member you supervise"
+        start_str = _notice_date(time_off.start_date, "unknown")
+        end_str = _notice_date(time_off.end_date, "unknown")
+        message = (
+            f"{name} has asked for time off from {start_str} to {end_str}. "
+            "As their supervisor you can approve or deny it."
+        )
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        await self._send_notification(
+            recipient_ids={supervisor_id},
+            subject="Time-off request from your crew",
+            message=message,
+            category="time_off",
+            organization_id=organization_id,
+            action_url="/scheduling?tab=requests",
+            notification_metadata={"time_off_id": str(time_off.id)},
+            send_email=True,
+            email_kind=EmailKind.SHIFT_NOTICES,
+            email_subject=f"Time-off request — {name}",
+            org=org,
+        )
+        await self.db.commit()
+
+    async def time_off_ids_reviewable_as_supervisor(
+        self,
+        organization_id: UUID | str,
+        reviewer_id: UUID | str,
+        time_off_requests: Sequence[ShiftTimeOff],
+    ) -> Set[str]:
+        """The pending requests ``reviewer_id`` may decide as the requester's
+        supervisor today, so a screen can offer approve/deny on exactly those.
+        """
+        if not any(t.status == TimeOffStatus.PENDING for t in time_off_requests):
+            return set()
+        crew = set(
+            await MemberSupervisorService(self.db).current_crew_ids(
+                str(organization_id), str(reviewer_id)
+            )
+        )
+        return {
+            str(t.id)
+            for t in time_off_requests
+            if t.status == TimeOffStatus.PENDING and str(t.user_id) in crew
+        }
 
     async def get_time_off_requests(
         self,
@@ -8312,6 +8402,7 @@ class SchedulingService:
         user_id: UUID | str | None = None,
         skip: int = 0,
         limit: int = 50,
+        user_ids: Optional[Sequence[UUID | str]] = None,
     ) -> Tuple[List[ShiftTimeOff], int]:
         """Get time-off requests with optional filtering and pagination"""
         query = select(ShiftTimeOff).where(
@@ -8322,6 +8413,8 @@ class SchedulingService:
             query = query.where(ShiftTimeOff.status == status)
         if user_id:
             query = query.where(ShiftTimeOff.user_id == str(user_id))
+        if user_ids is not None:
+            query = query.where(ShiftTimeOff.user_id.in_([str(u) for u in user_ids]))
 
         # Count
         count_query = select(func.count()).select_from(query.subquery())
@@ -8357,14 +8450,21 @@ class SchedulingService:
         )
 
     async def get_time_off_by_id(
-        self, time_off_id: UUID, organization_id: UUID | str
+        self,
+        time_off_id: UUID,
+        organization_id: UUID | str,
+        *,
+        for_update: bool = False,
     ) -> Optional[ShiftTimeOff]:
         """Get a time-off request by ID"""
-        result = await self.db.execute(
+        query = (
             select(ShiftTimeOff)
             .where(ShiftTimeOff.id == str(time_off_id))
             .where(ShiftTimeOff.organization_id == str(organization_id))
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         shift_time_off: Optional[ShiftTimeOff] = result.scalar_one_or_none()
         return shift_time_off
 
@@ -8388,16 +8488,37 @@ class SchedulingService:
         reviewer_id: UUID | str,
         status: TimeOffStatus,
         reviewer_notes: Optional[str] = None,
+        *,
+        as_supervisor: bool = False,
     ) -> Tuple[Optional[ShiftTimeOff], Optional[str]]:
         """Review (approve/deny) a time-off request.
 
         When approved, automatically cancels any conflicting shift assignments
         for the member within the time-off date range.
+
+        ``as_supervisor`` is set when the reviewer does not hold
+        ``scheduling.manage``: they may decide the request only as the
+        requester's supervisor, re-checked here under the request's row lock
+        at the moment of the decision (pitfall #14b), and refused with
+        :data:`NOT_REQUESTERS_SUPERVISOR` otherwise.
         """
         try:
-            time_off = await self.get_time_off_by_id(time_off_id, organization_id)
+            # Locked: a scheduling officer and the supervisor may now both
+            # decide the same request, and the pending check below is a
+            # read-then-write (pitfall #27).
+            time_off = await self.get_time_off_by_id(
+                time_off_id, organization_id, for_update=True
+            )
             if not time_off:
                 return None, "Time-off request not found"
+
+            if as_supervisor:
+                if not time_off.user_id or not (
+                    await MemberSupervisorService(self.db).is_current_supervisor(
+                        str(organization_id), str(reviewer_id), str(time_off.user_id)
+                    )
+                ):
+                    return None, NOT_REQUESTERS_SUPERVISOR
 
             if time_off.status != TimeOffStatus.PENDING:
                 return None, "Time-off request is no longer pending"

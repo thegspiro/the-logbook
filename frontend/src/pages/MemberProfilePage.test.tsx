@@ -14,6 +14,7 @@ import { renderWithRouter } from '../test/utils';
 import type { UserWithRoles } from '../types/role';
 import type { memberStatusService } from '../services/api';
 import { UserStatus } from '../constants/enums';
+import { formatDate } from '../utils/dateFormatting';
 
 const VIEWER_ID = 'viewer-1';
 const TARGET_ID = 'target-2';
@@ -73,6 +74,8 @@ const getStatusChange = vi.fn<typeof memberStatusService.getStatusChange>(() =>
   Promise.resolve({ user_id: TARGET_ID, status: 'active', status_changed_at: null, status_change_reason: null })
 );
 const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
+// No department tiers by default, so the profile uses the built-in labels.
+const getTierNames = vi.fn<typeof memberStatusService.getTierNames>(() => Promise.resolve([]));
 const updateContactInfo = vi.fn();
 const updateUserProfile = vi.fn();
 const deletePhoto = vi.fn();
@@ -126,6 +129,7 @@ vi.mock('../services/api', () => ({
     getSupervisor: (...args: unknown[]) => getSupervisor(...args) as unknown,
     changeStatus: (...args: unknown[]) => changeStatus(...args) as unknown,
     getStatusChange: (...args: Parameters<typeof getStatusChange>) => getStatusChange(...args),
+    getTierNames: (...args: Parameters<typeof getTierNames>) => getTierNames(...args),
     updateStatusChangeReason: () => Promise.reject(new Error('not used here')),
   },
 }));
@@ -297,6 +301,9 @@ const redactedColleague: UserWithRoles = {
   station: 'Station 6',
   platoon: 'B',
   hire_date: '2019-03-02',
+  // GET /users/{id}/with-roles sends the credited-service date beside the
+  // hire date; for a member who never left they are the same day.
+  service_since: '2019-03-02',
   profile_visibility: null,
 };
 
@@ -1147,6 +1154,147 @@ describe('MemberProfilePage removing a profile photo', () => {
 
     expect(deletePhoto).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Remove photo' })).toBeInTheDocument();
+  });
+});
+
+// Owner decision 2026-11-01: "Member since" is the date credited service runs
+// from, which the profile endpoint reports as `service_since`, not hire_date.
+// And officers who can drop a member can first preview what the drop would ask
+// them to return.
+/** The Contact Information card's "Edit", first of the page's Edit buttons. */
+const firstEditButton = (): HTMLElement => {
+  const button = screen.getAllByRole('button', { name: 'Edit' })[0];
+  if (!button) throw new Error('no contact Edit button');
+  return button;
+};
+
+describe('MemberProfilePage credited service and property return preview', () => {
+  const returnedColleague: UserWithRoles = {
+    ...redactedColleague,
+    hire_date: '2012-04-01',
+    service_since: '2016-08-15',
+  };
+
+  const ownUser: UserWithRoles = {
+    ...targetUser,
+    id: VIEWER_ID,
+    email: 'jdoe@example.org',
+    phone: '555-0100',
+    mobile: '555-0199',
+    emergency_contacts: [],
+    hire_date: '2012-04-01',
+    service_since: '2016-08-15',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue(returnedColleague);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getMemberLeaves.mockReset();
+    getMemberLeaves.mockResolvedValue([]);
+    getServiceHistory.mockReset();
+    getServiceHistory.mockResolvedValue(RETURNED_HISTORY);
+    getSupervisor.mockReset();
+    getSupervisor.mockResolvedValue({ member_id: TARGET_ID, current: null, history: [] });
+    getStatusChange.mockReset();
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'active',
+      status_changed_at: null,
+      status_change_reason: null,
+    });
+    updateContactInfo.mockReset();
+    // The write endpoints answer with the plain profile, which does not carry
+    // the computed `service_since`.
+    updateContactInfo.mockResolvedValue({ ...ownUser, service_since: undefined });
+  });
+
+  it('shows a returned member as a member since their credited service start', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Member since')).toBeInTheDocument();
+    expect(screen.getByText(formatDate('2016-08-15', 'America/New_York'))).toBeInTheDocument();
+    expect(screen.queryByText(formatDate('2012-04-01', 'America/New_York'))).not.toBeInTheDocument();
+  });
+
+  it('keeps Member since after a save whose response does not carry it', async () => {
+    routeUserId = VIEWER_ID;
+    getUserWithRoles.mockResolvedValue(ownUser);
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+    await screen.findByRole('heading', { name: 'Contact Information' });
+
+    await user.click(firstEditButton());
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(updateContactInfo).toHaveBeenCalled());
+    expect(await screen.findByText(formatDate('2016-08-15', 'America/New_York'))).toBeInTheDocument();
+  });
+
+  it('offers a members-manager the property return preview', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByRole('button', { name: 'Preview property return' })).toBeInTheDocument();
+  });
+
+  it('does not offer the preview to a colleague without members.manage', async () => {
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByText('Member since');
+    expect(screen.queryByRole('button', { name: 'Preview property return' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer the preview once the member has left', async () => {
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...returnedColleague, status: UserStatus.DROPPED_VOLUNTARY });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByTitle('Change member status');
+    expect(screen.queryByRole('button', { name: 'Preview property return' })).not.toBeInTheDocument();
+  });
+});
+
+// MR-3 (owner decision 2026-11-01): a colleague's profile names the member's
+// standing by the department's own tier name, which every member may read.
+describe('MemberProfilePage department tier names', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getServiceHistory.mockReset();
+    getServiceHistory.mockResolvedValue(RETURNED_HISTORY);
+    getSupervisor.mockReset();
+    getSupervisor.mockResolvedValue({ member_id: TARGET_ID, current: null, history: [] });
+    getTierNames.mockReset();
+    getTierNames.mockResolvedValue([
+      { id: 'active', name: 'Active Member' },
+      { id: 'senior', name: 'Senior Member' },
+    ]);
+  });
+
+  it('shows a custom tier by its name to a plain member', async () => {
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, membership_type: 'senior', member_status: 'senior' });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Captain · Senior Member')).toBeInTheDocument();
+    expect(getTierNames).toHaveBeenCalled();
+  });
+
+  it('does not say "member" twice when the tier name already does', async () => {
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, membership_type: 'active', member_status: 'regular' });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Captain · Active Member')).toBeInTheDocument();
   });
 });
 

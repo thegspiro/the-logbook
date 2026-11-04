@@ -140,6 +140,7 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
+from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.pre_shift_work_service import (
     PreShiftWorkService,
     approved_pre_work_minutes,
@@ -148,6 +149,7 @@ from app.services.scheduling_module_config_service import (
     apparatus_type_defaults_for_org,
 )
 from app.services.scheduling_service import (
+    NOT_REQUESTERS_SUPERVISOR,
     SchedulingService,
     SignupActor,
     open_ended_cushion_hours,
@@ -3137,20 +3139,64 @@ async def list_time_off_requests(
         )
     else:
         # The authenticated identity, never a client-provided user_id, defines
-        # the member scope.
-        requests, total = await service.get_time_off_requests_for_user(
-            current_user.organization_id,
-            current_user.id,
-            status=time_off_status,
-            skip=pagination.skip,
-            limit=pagination.limit,
+        # the member scope: the caller's own requests, plus those of the
+        # members they supervise today, whose requests they may decide (owner
+        # decision 2026-11-01). A user_id narrows that scope and never widens
+        # it -- one outside it reads the caller's own, as it always has.
+        crew = await MemberSupervisorService(db).current_crew_ids(
+            str(current_user.organization_id), str(current_user.id)
         )
+        if user_id is not None and str(user_id) in crew:
+            scope = [str(user_id)]
+        elif user_id is None and crew:
+            scope = [str(current_user.id), *crew]
+        else:
+            scope = []
+        if scope:
+            requests, total = await service.get_time_off_requests(
+                current_user.organization_id,
+                status=time_off_status,
+                user_ids=scope,
+                skip=pagination.skip,
+                limit=pagination.limit,
+            )
+        else:
+            requests, total = await service.get_time_off_requests_for_user(
+                current_user.organization_id,
+                current_user.id,
+                status=time_off_status,
+                skip=pagination.skip,
+                limit=pagination.limit,
+            )
     return {
-        "items": await service.enrich_time_off_requests(requests),
+        "items": await _time_off_items(service, current_user, requests),
         "total": total,
         "skip": pagination.skip,
         "limit": pagination.limit,
     }
+
+
+async def _time_off_items(
+    service: SchedulingService, current_user: User, requests: list
+) -> list[dict]:
+    """Enriched time-off rows, each flagged with whether the caller may
+    decide it as the requester's supervisor.
+
+    A scheduling officer reviews every request whatever the flag says, so
+    their rows are left unflagged rather than looked up.
+    """
+    items = await service.enrich_time_off_requests(requests)
+    if user_has_permission(current_user, "scheduling.manage"):
+        return items
+    reviewable = await service.time_off_ids_reviewable_as_supervisor(
+        current_user.organization_id, current_user.id, requests
+    )
+    if reviewable:
+        # The response field defaults to False, so only the flagged rows
+        # need touching.
+        for item in items:
+            item["reviewable_as_supervisor"] = str(item.get("id")) in reviewable
+    return items
 
 
 @router.post(
@@ -3196,8 +3242,20 @@ async def get_time_off_request(
         result = await service.get_time_off_for_user_by_id(
             time_off_id, current_user.organization_id, current_user.id
         )
+        if result is None:
+            # Not the caller's own: their supervisor today may read it too.
+            # Anyone else is told it does not exist, as before.
+            crew = await MemberSupervisorService(db).current_crew_ids(
+                str(current_user.organization_id), str(current_user.id)
+            )
+            if crew:
+                candidate = await service.get_time_off_by_id(
+                    time_off_id, current_user.organization_id
+                )
+                if candidate is not None and str(candidate.user_id) in crew:
+                    result = candidate
     time_off = ensure_found(result, "Time-off request")
-    enriched = await service.enrich_time_off_requests([time_off])
+    enriched = await _time_off_items(service, current_user, [time_off])
     return enriched[0]
 
 
@@ -3206,23 +3264,33 @@ async def review_time_off_request(
     time_off_id: UUID,
     review: ShiftTimeOffReview,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.manage")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Review (approve/deny) a time-off request"""
+    """Review (approve/deny) a time-off request.
+
+    **Requires** `scheduling.manage`, or being the requester's supervisor
+    today (owner decision 2026-11-01: approvals route to the supervisor). The
+    supervisor check is made by the service under the request's row lock, at
+    the moment of the decision.
+    """
     service = SchedulingService(db)
+    as_supervisor = not user_has_permission(current_user, "scheduling.manage")
     result, error = await service.review_time_off(
         time_off_id,
         current_user.organization_id,
         current_user.id,
         TimeOffStatus(review.status.value),
         review.reviewer_notes,
+        as_supervisor=as_supervisor,
     )
+    if error == NOT_REQUESTERS_SUPERVISOR:
+        raise HTTPException(status_code=403, detail=NOT_REQUESTERS_SUPERVISOR)
     if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review time-off request.", error),
         )
-    enriched = await service.enrich_time_off_requests([result])
+    enriched = await _time_off_items(service, current_user, [result])
     return enriched[0]
 
 

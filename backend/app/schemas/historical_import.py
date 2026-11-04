@@ -6,7 +6,7 @@ creates (``schemas/shift_history_import.py`` carries no alias generator).
 """
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -243,3 +243,87 @@ class AdminPreview(BaseModel):
     can_commit: bool
     # What the last administrative commit wrote, once there has been one.
     result: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+
+
+class TrainingSettingsUpdate(BaseModel):
+    """Omitted fields are left alone. ``subject_courses`` is merged by subject
+    key; a null course removes that subject's mapping."""
+
+    subject_column: Optional[str] = Field(None, max_length=_MAX_KEY_LENGTH)
+    instructor_column: Optional[str] = Field(None, max_length=_MAX_KEY_LENGTH)
+    taught_column: Optional[str] = Field(None, max_length=_MAX_KEY_LENGTH)
+    provider_patterns: Optional[List[str]] = Field(None, max_length=20)
+    unmatched_provider_action: Optional[Literal["import", "skip"]] = None
+    subject_courses: Optional[Dict[str, Optional[str]]] = None
+
+    @field_validator("subject_courses")
+    @classmethod
+    def _check(cls, value: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if value is None:
+            return value
+        if len(value) > 20_000:
+            raise ValueError("At most 20000 entries per request.")
+        if any(len(k) > 600 for k in value):
+            raise ValueError("A key is too long.")
+        return value
+
+
+class TrainingSettingsView(BaseModel):
+    subject_column: str
+    instructor_column: str
+    taught_column: str
+    provider_patterns: List[str]
+    unmatched_provider_action: Optional[str] = None
+    subject_courses: Dict[str, str]
+
+
+class TrainingSubject(BaseModel):
+    # Normalized subject: one mapping decision per key.
+    key: str
+    # A spelling of it as the file has it.
+    subject: str
+    records: int
+    hours: float
+    course_id: Optional[str] = None
+    course_name: str = ""
+    suggested_course_id: Optional[str] = None
+
+
+class TrainingCourseOption(BaseModel):
+    id: str
+    name: str
+    training_type: str
+
+
+class TrainingPreview(BaseModel):
+    settings: TrainingSettingsView
+    headers: List[str]
+    pending_records: int
+    already_imported: int
+    # Rows whose instructor names a training provider, split by whether a
+    # synced record already covers them.
+    provider_rows: int
+    provider_matched: int
+    provider_unmatched: int
+    subject_count: int
+    subjects_mapped: int
+    records_mapped: int
+    # One page of subjects, most records first, filtered by ``search``.
+    subjects: List[TrainingSubject]
+    subject_total: int
+    courses: List[TrainingCourseOption]
+    problems: List[str]
+    problem_count: int
+    members: List[AdminMember]
+    member_options: List[AdminMemberOption]
+    can_commit: bool
+    result: Optional[Dict[str, Any]] = None
+
+
+class SuggestionsAccepted(BaseModel):
+    mapped: int

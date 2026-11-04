@@ -44,11 +44,14 @@ from app.services.member_service_history_service import (
 from app.utils.membership import (
     LEGACY_MEMBERSHIP_TYPES,
     VOTER_TYPE_LABELS,
-    MemberStatus,
     canonical_member_status,
+    configured_tiers,
     derive_membership_type,
     is_administrative,
+    member_standing,
     split_membership_type,
+    tier_for_member,
+    tier_for_status,
     voter_type_decided_by_class,
     voter_type_key,
 )
@@ -516,10 +519,7 @@ class MembershipTierService:
     @staticmethod
     def _load_tiers(organization: Organization) -> List[Dict[str, Any]]:
         """Load and sort the tier list from org settings."""
-        settings = organization.settings or {}
-        tier_config = settings.get("membership_tiers", {})
-        tiers = tier_config.get("tiers", [])
-        return sorted(tiers, key=lambda t: t.get("sort_order", 0))
+        return configured_tiers(organization.settings)
 
     @staticmethod
     def years_of_service(hire_date: Optional[date], today: date) -> int:
@@ -552,39 +552,11 @@ class MembershipTierService:
                 return tier
         return None
 
-    @staticmethod
-    def tier_for_status(
-        tiers: List[Dict[str, Any]], member_status: Optional[str]
-    ) -> Optional[Dict[str, Any]]:
-        """The rung a stored ``member_status`` stands on, if it is on this ladder.
-
-        Matched in canonical spelling, because the shipped ladder names its
-        second rung ``active`` and the column stores that standing as
-        ``regular`` (see ``canonical_member_status``).
-        """
-        wanted = canonical_member_status(member_status)
-        if wanted is None:
-            return None
-        for tier in tiers:
-            if canonical_member_status(tier.get("id")) == wanted:
-                return tier
-        return None
-
-    @classmethod
-    def tier_for_member(
-        cls, tiers: List[Dict[str, Any]], member: Any
-    ) -> Optional[Dict[str, Any]]:
-        """The rung a member stands on, judged by their membership status.
-
-        Every reader of a tier's benefits goes through here rather than
-        ``membership_type``: the legacy word collapses an administrative or
-        social member onto their class, so a lookup keyed on it never finds
-        the Life tier for an administrative Life member. A member with nothing
-        recorded stands on the regular rung, as the legacy default did.
-        """
-        return cls.tier_for_status(
-            tiers, cls._current_standing(member) or MemberStatus.REGULAR
-        )
+    # The lookups below are the canonical helpers in ``app.utils.membership``,
+    # kept here as names because the advancement code and its tests call them
+    # on the service. One definition, so a reader cannot drift (Pitfall #29).
+    tier_for_status = staticmethod(tier_for_status)
+    tier_for_member = staticmethod(tier_for_member)
 
     @staticmethod
     def ranks_as_by_tier(organization: Optional[Organization]) -> Dict[str, str]:
@@ -607,21 +579,7 @@ class MembershipTierService:
                 mapping[tier_id] = ranks_as
         return mapping
 
-    @staticmethod
-    def _current_standing(member: Any) -> Optional[str]:
-        """The ladder standing to judge a member by.
-
-        ``member_status`` is the authority; a row written before it existed
-        still carries the standing fused into ``membership_type``.
-        """
-        stored = getattr(member, "member_status", None)
-        if stored:
-            return str(stored)
-        _cls, status = split_membership_type(getattr(member, "membership_type", None))
-        if status:
-            return status
-        legacy = (getattr(member, "membership_type", None) or "").strip().lower()
-        return legacy or None
+    _current_standing = staticmethod(member_standing)
 
     @staticmethod
     def _move_to_tier(member: Any, tier_id: str) -> None:

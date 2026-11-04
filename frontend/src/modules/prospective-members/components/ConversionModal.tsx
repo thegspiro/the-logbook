@@ -25,13 +25,7 @@ import {
   Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type {
-  Applicant,
-  ConversionStatus,
-  ConvertGoogleAccountOutcome,
-  EmergencyContact,
-  PipelineConversionConfig,
-} from '../types';
+import type { Applicant, ConvertGoogleAccountOutcome, EmergencyContact, PipelineConversionConfig } from '../types';
 import { StepProgressStatus } from '../types';
 import { applicantService, pipelineService } from '../services/api';
 import { userService } from '../../../services/api';
@@ -40,10 +34,31 @@ import TargetRolePicker from './TargetRolePicker';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { ADMINISTRATIVE_RANK_HINT } from '../../../utils/membership';
+import { ADMINISTRATIVE_RANK_HINT, canonicalMemberStatus } from '../../../utils/membership';
+import { useMembershipTierOptions } from '../../../hooks/useMembershipTierOptions';
+import type { MembershipTierName } from '../../../types/user';
 import { GoogleAccountStatus, MemberClass } from '../../../constants/enums';
 
 type PasswordDelivery = 'email' | 'set' | 'later';
+
+/**
+ * What the Starting status control offers: the two built-in starting statuses
+ * a pipeline's rule may name, then the department's own tiers, each once and
+ * under the department's name (owner decision 2026-11-01). A rung that is
+ * itself one of the two (the shipped `probationary` and `active` tiers) renames
+ * that entry rather than adding a second. The server accepts exactly these.
+ */
+function conversionStatusOptions(tiers: readonly MembershipTierName[]): { value: string; label: string }[] {
+  const options = new Map<string, string>([
+    ['probationary', 'Probationary'],
+    ['regular', 'Regular'],
+  ]);
+  for (const tier of tiers) {
+    const value = canonicalMemberStatus(tier.id);
+    if (value) options.set(value, tier.name || options.get(value) || value);
+  }
+  return [...options.entries()].map(([value, label]) => ({ value, label }));
+}
 
 /**
  * What the coordinator needs to do next about the new member's password.
@@ -135,7 +150,8 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
   // and changeable here for this one applicant. Empty until the rule is known:
   // guessing a default here would be a second copy of the server's.
   const [memberClass, setMemberClass] = useState<MemberClass | ''>('');
-  const [memberStatus, setMemberStatus] = useState<ConversionStatus | ''>('');
+  const [memberStatus, setMemberStatus] = useState('');
+  const { tiers } = useMembershipTierOptions();
   const [rank, setRank] = useState('');
   const [station, setStation] = useState('');
   // Seeded from the application's own target role. The conversion is the last
@@ -513,14 +529,17 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                     <select
                       id="conv-status"
                       value={memberStatus}
-                      onChange={(e) => setMemberStatus(e.target.value as ConversionStatus | '')}
+                      onChange={(e) => setMemberStatus(e.target.value)}
                       className="form-input"
                     >
                       <option value="" disabled>
                         Choose…
                       </option>
-                      <option value="probationary">Probationary</option>
-                      <option value="regular">Regular</option>
+                      {conversionStatusOptions(tiers).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

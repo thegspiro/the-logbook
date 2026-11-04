@@ -169,6 +169,7 @@ class PropertyReturnService:
                     "asset_tag": item.asset_tag or "-",
                     "condition": item.condition.value if item.condition else "unknown",
                     "value": value,
+                    "quantity": 1,
                     "type": "assigned",
                     "assigned_date": (
                         a.assigned_date.astimezone(org_tz).strftime("%m/%d/%Y")
@@ -193,6 +194,7 @@ class PropertyReturnService:
                         else (item.condition.value if item.condition else "unknown")
                     ),
                     "value": value,
+                    "quantity": 1,
                     "type": "checked_out",
                     "assigned_date": (
                         c.checked_out_at.astimezone(org_tz).strftime("%m/%d/%Y")
@@ -214,6 +216,7 @@ class PropertyReturnService:
                     "asset_tag": item.asset_tag or "-",
                     "condition": item.condition.value if item.condition else "unknown",
                     "value": value,
+                    "quantity": qty,
                     "type": "issued",
                     "assigned_date": (
                         iss.issued_at.astimezone(org_tz).strftime("%m/%d/%Y")

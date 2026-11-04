@@ -239,6 +239,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/members', label: 'Member directory' },
       { path: '/members/:userId', label: 'Member profile' },
       { path: '/members/:userId/training', label: 'Member training history', module: 'training' },
+      { path: '/members/my-crew', label: 'My crew' },
       { path: '/members/:userId/id-card', label: 'Member ID card' },
       {
         path: '/members/print-labels',

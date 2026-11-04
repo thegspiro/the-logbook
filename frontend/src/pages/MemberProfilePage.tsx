@@ -32,6 +32,7 @@ import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
+import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
@@ -42,7 +43,7 @@ import {
   effectiveMemberClass,
   isAdministrativeMember,
   memberClassLabel,
-  memberStatusLabel,
+  memberStandingLabel,
   membershipTypeLabel,
 } from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
@@ -79,6 +80,7 @@ import { StatusChangeReason } from '../components/member-profile/StatusChangeRea
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
 import { VotingEligibilitySection } from '../components/member-profile/VotingEligibilitySection';
 import { UndoDropControl } from '../components/member-profile/UndoDropControl';
+import { PropertyReturnPreview } from '../components/member-profile/PropertyReturnPreview';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
@@ -98,6 +100,15 @@ interface InventoryItem {
 /** Check if a module is enabled by its id. */
 function statusLabel(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * The profile's write endpoints answer with the plain profile, which does not
+ * carry the computed `service_since` that GET /users/{id}/with-roles sends;
+ * keep the value already on screen rather than blanking "Member since".
+ */
+function keepServiceSince(updated: UserWithRoles, previous: UserWithRoles | null): UserWithRoles {
+  return { ...updated, service_since: updated.service_since ?? previous?.service_since };
 }
 
 function isModuleEnabled(moduleId: string): boolean {
@@ -350,6 +361,8 @@ export const MemberProfilePage: React.FC = () => {
   // Rank codes are stored on the member; the display name lives on the org's
   // operational ranks, readable by any signed-in member.
   const { formatRank } = useRanks();
+  // The department's tier names, which every member may read (MR-3).
+  const { tiers: tierNames } = useMembershipTierOptions();
 
   // The member's own choice of what colleagues see. Seeded from the profile
   // payload (present for self and for members-managers) so no second request
@@ -498,7 +511,7 @@ export const MemberProfilePage: React.FC = () => {
       };
 
       const updatedUser = await userService.updateContactInfo(userId, payload);
-      setUser(updatedUser);
+      setUser((prev) => keepServiceSince(updatedUser, prev));
       setIsEditing(false);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to update contact information. Check your entries and try again.'));
@@ -617,7 +630,7 @@ export const MemberProfilePage: React.FC = () => {
         personal_email: blankToNull(addressForm.personal_email),
       };
       const updated = await userService.updateUserProfile(userId, updateData);
-      setUser(updated);
+      setUser((prev) => keepServiceSince(updated, prev));
       setEditingAddress(false);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to update address.'));
@@ -680,7 +693,7 @@ export const MemberProfilePage: React.FC = () => {
       const updated = await userService.updateUserProfile(userId, {
         emergency_contacts: contacts,
       });
-      setUser(updated);
+      setUser((prev) => keepServiceSince(updated, prev));
       setEditingContacts(false);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to update emergency contacts.'));
@@ -771,7 +784,7 @@ export const MemberProfilePage: React.FC = () => {
   // Class and status are two facts; a row written before the pair existed
   // falls back to the fused legacy label.
   const classLabel = user ? memberClassLabel(effectiveMemberClass(user.member_class, user.membership_type)) : '';
-  const ladderLabel = user?.member_status ? `${memberStatusLabel(user.member_status)} member` : '';
+  const ladderLabel = user?.member_status ? memberStandingLabel(user.member_status, tierNames) : '';
   const memberTypeLabel = ladderLabel || (user ? membershipTypeLabel(user.membership_type) : '');
   // "Administrative · Administrative" would be the class stated twice.
   const headerSubtitle = [rankLabel, memberTypeLabel === rankLabel ? '' : memberTypeLabel].filter(Boolean).join(' · ');
@@ -1396,15 +1409,23 @@ export const MemberProfilePage: React.FC = () => {
                     <p className="text-theme-text-primary mt-1 text-sm">{user.platoon}</p>
                   </div>
                 )}
-                {user.hire_date && (
+                {/* Credited service, not the hire date (owner decision
+                    2026-11-01): the server computes it from the member's
+                    service stints, so a break in service is not counted. */}
+                {user.service_since && (
                   <div>
                     <p className="text-theme-text-muted text-xs font-medium uppercase">Member since</p>
-                    <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.hire_date, tz)}</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.service_since, tz)}</p>
                   </div>
                 )}
-                {!rankLabel && !classLabel && !memberTypeLabel && !user.station && !user.platoon && !user.hire_date && (
-                  <p className="text-theme-text-muted text-sm">No membership details on file.</p>
-                )}
+                {!rankLabel &&
+                  !classLabel &&
+                  !memberTypeLabel &&
+                  !user.station &&
+                  !user.platoon &&
+                  !user.service_since && (
+                    <p className="text-theme-text-muted text-sm">No membership details on file.</p>
+                  )}
                 {canManageMembers && (
                   <div className="border-theme-surface-border border-t pt-3">
                     <p className="text-theme-text-muted text-xs font-medium uppercase">Status</p>
@@ -1439,6 +1460,11 @@ export const MemberProfilePage: React.FC = () => {
                           onUndone={() => fetchUserData(userId)}
                         />
                       )}
+                    {/* What a drop would ask the member to return, before the
+                        officer drops them; read-only, same grant as the drop. */}
+                    {!isSelf && userId && !(SEPARATED_STATUSES as readonly string[]).includes(user.status) && (
+                      <PropertyReturnPreview userId={userId} memberName={displayNameOf(user) || user.username} />
+                    )}
                     {/* Only a departed member can be anonymized; the backend
                         refuses every other status and the caller's own record. */}
                     {!isSelf && (ANONYMIZABLE_STATUSES as readonly string[]).includes(user.status) && (
