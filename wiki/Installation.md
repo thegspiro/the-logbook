@@ -9,16 +9,16 @@ each platform's full procedure lives on its own page.
 
 ## Choose a Method
 
-| Platform                                | Install with                       | Full guide                                                              |
-| --------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
-| Linux server, VM, macOS, Windows (WSL2) | `scripts/universal-install.sh`     | [Docker Deployment](Deployment-Docker#install-with-a-script)            |
-| Ubuntu / Debian server                  | `./install.sh --docker`            | [Docker Deployment](Deployment-Docker#install-with-a-script)            |
-| Any Docker host, by hand                | `docker compose`                   | [Docker Deployment](Deployment-Docker#install-manually)                 |
-| Unraid                                  | `unraid/unraid-setup.sh`           | [Unraid Deployment](Deployment-Unraid)                                  |
-| Raspberry Pi 4/5, other ARM64           | `docker compose` with ARM override | [Docker → ARM and Raspberry Pi](Deployment-Docker#arm-and-raspberry-pi) |
-| AWS, Azure, Google Cloud, DigitalOcean  | A VM running one of the above      | [Production → Cloud Platforms](Deployment-Production#cloud-platforms)   |
-| Synology NAS, Proxmox                   | Docker Compose                     | [Production → Cloud Platforms](Deployment-Production#cloud-platforms)   |
-| Local development                       | `npm run dev`                      | [Development Setup](#development-setup)                                 |
+| Platform                                | Install with                       | Full guide                                                                                                                                                                                                                                                        |
+| --------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux server, VM, macOS, Windows (WSL2) | `scripts/universal-install.sh`     | [Docker Deployment](Deployment-Docker#install-with-a-script)                                                                                                                                                                                                      |
+| Ubuntu / Debian server                  | `./install.sh --docker`            | [Docker Deployment](Deployment-Docker#install-with-a-script)                                                                                                                                                                                                      |
+| Any Docker host, by hand                | `docker compose`                   | [Docker Deployment](Deployment-Docker#install-manually)                                                                                                                                                                                                           |
+| Unraid                                  | `unraid/unraid-setup.sh`           | [Unraid Deployment](Deployment-Unraid)                                                                                                                                                                                                                            |
+| Raspberry Pi 4/5, other ARM64           | `docker compose` with ARM override | [Docker → ARM and Raspberry Pi](Deployment-Docker#arm-and-raspberry-pi)                                                                                                                                                                                           |
+| AWS, Azure, Google Cloud, DigitalOcean  | A VM running one of the above      | [Production → Cloud Platforms](Deployment-Production#cloud-platforms); step by step for [AWS](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md) and [Azure](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md) |
+| Synology NAS, Proxmox                   | Docker Compose                     | [Production → Cloud Platforms](Deployment-Production#cloud-platforms)                                                                                                                                                                                             |
+| Local development                       | `npm run dev`                      | [Development Setup](#development-setup)                                                                                                                                                                                                                           |
 
 Whatever the platform, a deployment that members will use also needs the steps
 in [Production Deployment](Deployment-Production): HTTPS in front of the app,

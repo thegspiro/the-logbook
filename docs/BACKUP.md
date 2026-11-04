@@ -126,6 +126,8 @@ Plaintext archives restore as before.
 `./scripts/backup.sh --destination s3|azure|gcs` uploads the `.enc`, `.enc.key`
 and `.sha256` files and **refuses to upload an unencrypted archive**. If you
 sync the backups directory with your own tooling, sync all three files.
+The [Azure guide](deployment/azure.md#backups) shows both for Azure Blob
+Storage, with a managed identity in place of a storage key.
 
 ## Files in a department's own bucket or Shared Drive
 

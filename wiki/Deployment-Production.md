@@ -122,7 +122,9 @@ sudo certbot renew --dry-run
 
 The AWS guide's version of this config also keeps anonymous suggestion-box
 submissions out of the access log:
-[aws.md → Step 4](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#step-4-set-up-nginx-reverse-proxy).
+[aws.md → Step 4](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#step-4-set-up-nginx-reverse-proxy)
+(the same configuration is in
+[azure.md → Step 7](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#step-7-set-up-the-nginx-reverse-proxy)).
 
 If you add `limit_conn` or `limit_req`, size them for a station whose members
 share one public address: one dashboard load is about 20 API calls, and HTTP/2
