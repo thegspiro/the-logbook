@@ -134,6 +134,31 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### `REDIS_REQUIRED=true` now refuses to start without Redis (2026-11-04)
+
+`REDIS_REQUIRED` was documented — here, in `.env.example.full` and in the
+deployment guides — as making the backend refuse to start when it cannot reach
+Redis. It never did: the startup code caught the connection failure, logged a
+warning and carried on in degraded mode (caching off, rate limiting per
+process). It now does what it says. After its connection retries
+(`REDIS_CONNECT_RETRIES`, default 3) the backend logs
+`Redis connection failed and REDIS_REQUIRED is true - refusing to start` and
+exits, and Docker restarts it until Redis answers.
+
+**Only a deployment that sets `REDIS_REQUIRED=true` is affected**; the default
+is `false`, and nothing shipped in this repository sets it. If yours does,
+check that the backend actually reaches Redis on the version you are leaving:
+
+```bash
+docker compose logs backend | grep -E "Redis connected|Redis connection failed|degraded mode"
+```
+
+`✓ Redis connected` means nothing changes. `Redis connection failed` or
+`degraded mode` means the backend has been running without Redis and will
+**not start** after this upgrade until the Redis settings are fixed — the host,
+port, `REDIS_PASSWORD`, or `REDIS_SSL` / `REDIS_SSL_CA`. To keep the old
+behaviour while you fix them, set `REDIS_REQUIRED=false`.
+
 ### Leave and training-waiver reasons are encrypted at rest (2026-10-28)
 
 A migration (`b74bcce55c11`) runs on the next start and **encrypts every existing
