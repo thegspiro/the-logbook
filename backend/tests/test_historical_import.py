@@ -322,7 +322,8 @@ class TestShiftBatches:
 
         assert lines[0][5] == "outcome"
         assert by_id["9001"][5] == "imported"
-        assert by_id["9006"][5] == "waiting"
+        # Training rows are imported by their own commit, not yet run.
+        assert by_id["9006"][5] == "not_sent"
         # Administrative rows are imported by their own commit, not yet run.
         assert by_id["9007"][5] == "not_sent"
         assert any(line[5] == "skipped" for line in lines[1:])
@@ -704,3 +705,204 @@ class TestAdminHours:
         assert preview["uncategorized"] == 4
         with pytest.raises(HistoricalImportNotReady, match="no category"):
             await service.commit_admin(org, record.id, admin)
+
+
+TRAINING_HEADER = (
+    "VID,Date,Start,End,Training,UniqueID,TrainingSubject,TrainingInstructor,Instructor"
+)
+TRAINING_CSV = "\n".join(
+    [
+        TRAINING_HEADER,
+        "101,2016-02-01,1900,2100,2.0,8001,EMT-B,NVCC,0",
+        "102,2016-02-01,1900,2100,2.0,8002,emt b,NVCC,0",
+        # Bob taught this one and wrote "me" for the instructor.
+        "102,2016-02-08,1900,2200,3.0,8003,Ladders,me,1",
+        # Target Solutions, already synced for Alice.
+        "101,2016-03-10,1200,1300,1.0,8004,HIPAA,Target Solutions,0",
+        # Target Solutions, nothing synced.
+        "101,2016-04-10,1200,1300,1.0,8005,Bloodborne,Vector Solutions,0",
+    ]
+)
+
+
+async def _training_world(db_session):
+    from app.models.training import (
+        ExternalProviderType,
+        ExternalTrainingProvider,
+        TrainingCategory,
+        TrainingCourse,
+        TrainingRecord,
+        TrainingStatus,
+        TrainingType,
+    )
+    from app.models.user import User
+
+    org, admin = await _world(db_session)
+    category = TrainingCategory(id=_uid(), organization_id=org, name="EMS", active=True)
+    db_session.add(category)
+    course = TrainingCourse(
+        id=_uid(),
+        organization_id=org,
+        name="EMT-B",
+        code="EMTB",
+        training_type=TrainingType.CERTIFICATION,
+        category_ids=[category.id],
+        active=True,
+    )
+    db_session.add(course)
+    provider = ExternalTrainingProvider(
+        id=_uid(),
+        organization_id=org,
+        name="Target Solutions",
+        provider_type=ExternalProviderType.TARGET_SOLUTIONS,
+    )
+    db_session.add(provider)
+    await db_session.flush()
+    alice = (
+        await db_session.execute(
+            select(User.id).where(
+                User.organization_id == org, User.membership_number == "101"
+            )
+        )
+    ).scalar_one()
+    from datetime import date
+
+    db_session.add(
+        TrainingRecord(
+            id=_uid(),
+            organization_id=org,
+            user_id=alice,
+            course_name="HIPAA Awareness",
+            training_type=TrainingType.CONTINUING_EDUCATION,
+            completion_date=date(2016, 3, 11),
+            hours_completed=1,
+            status=TrainingStatus.COMPLETED,
+            external_provider_id=provider.id,
+            external_record_id="ts-1",
+        )
+    )
+    await db_session.commit()
+    record = await HistoricalImportService(db_session).create(
+        org, admin, "training.csv", TRAINING_CSV, "FCVFD Hours DB", None
+    )
+    return org, admin, course, category, record
+
+
+class TestTraining:
+    async def test_the_preview_finds_synced_rows_and_asks_about_the_rest(
+        self, db_session
+    ):
+        org, _, course, _, record = await _training_world(db_session)
+        service = HistoricalImportService(db_session)
+        preview = await service.training_preview(await service.get(org, record.id))
+
+        assert preview["provider_rows"] == 2
+        assert preview["provider_matched"] == 1
+        assert preview["provider_unmatched"] == 1
+        # Four would be written: the synced HIPAA row never is.
+        assert preview["pending_records"] == 4
+        assert preview["can_commit"] is False
+        emt = next(s for s in preview["subjects"] if s["key"] == "emt b")
+        assert emt["records"] == 2
+        assert emt["suggested_course_id"] == course.id
+        with pytest.raises(HistoricalImportNotReady, match="import or skip"):
+            await service.commit_training(org, record.id, _uid())
+
+    async def test_a_commit_writes_records_the_way_a_mapped_sync_would(
+        self, db_session
+    ):
+        from app.models.training import TrainingRecord, TrainingType
+
+        org, admin, course, category, record = await _training_world(db_session)
+        service = HistoricalImportService(db_session)
+        assert (
+            await service.accept_suggested_courses(await service.get(org, record.id))
+            == 1
+        )
+        await service.update_training_settings(
+            await service.get(org, record.id), {"unmatched_provider_action": "import"}
+        )
+        counts = await service.commit_training(org, record.id, admin)
+        assert counts["records_created"] == 4
+        assert counts["provider_duplicates_skipped"] == 1
+
+        records = (
+            (
+                await db_session.execute(
+                    select(TrainingRecord).where(
+                        TrainingRecord.organization_id == org,
+                        TrainingRecord.external_provider_id.is_(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        mapped = [r for r in records if r.course_id == course.id]
+        assert len(mapped) == 2
+        assert {r.category_id for r in mapped} == {category.id}
+        assert {r.training_type for r in mapped} == {TrainingType.CERTIFICATION}
+        assert {r.course_name for r in mapped} == {"EMT-B"}
+        taught = next(r for r in records if r.course_name == "Ladders")
+        assert taught.instructor == "Bob Diaz"
+        assert taught.notes.endswith("taught this class.")
+        assert taught.training_type == TrainingType.CONTINUING_EDUCATION
+        assert taught.hours_completed == 3.0
+        assert {r.instructor for r in mapped} == {"NVCC"}
+
+    async def test_skipping_unmatched_provider_rows_leaves_them_out(self, db_session):
+        org, admin, _, _, record = await _training_world(db_session)
+        service = HistoricalImportService(db_session)
+        await service.update_training_settings(
+            await service.get(org, record.id), {"unmatched_provider_action": "skip"}
+        )
+        counts = await service.commit_training(org, record.id, admin)
+        assert counts["records_created"] == 3
+        assert counts["provider_unmatched_skipped"] == 1
+
+    async def test_committing_twice_writes_nothing_twice(self, db_session):
+        from app.models.training import TrainingRecord
+
+        org, admin, _, _, record = await _training_world(db_session)
+        service = HistoricalImportService(db_session)
+        await service.update_training_settings(
+            await service.get(org, record.id), {"unmatched_provider_action": "import"}
+        )
+        await service.commit_training(org, record.id, admin)
+        with pytest.raises(HistoricalImportNotReady, match="already"):
+            await service.commit_training(org, record.id, admin)
+        again = await service.create(
+            org, admin, "training.csv", TRAINING_CSV, "FCVFD Hours DB", None
+        )
+        preview = await service.training_preview(await service.get(org, again.id))
+        assert preview["pending_records"] == 0
+        total = (
+            await db_session.execute(
+                select(func.count(TrainingRecord.id)).where(
+                    TrainingRecord.organization_id == org
+                )
+            )
+        ).scalar()
+        # Four imported plus the one synced record that was already there.
+        assert total == 5
+
+    async def test_a_course_from_another_department_is_refused(self, db_session):
+        from app.models.training import TrainingCourse, TrainingType
+
+        org, _, _, _, record = await _training_world(db_session)
+        other = await _add_org(db_session, "Other FD")
+        foreign = TrainingCourse(
+            id=_uid(),
+            organization_id=other,
+            name="Theirs",
+            training_type=TrainingType.CERTIFICATION,
+            active=True,
+        )
+        db_session.add(foreign)
+        await db_session.commit()
+        service = HistoricalImportService(db_session)
+        with pytest.raises(ValueError, match="active courses"):
+            await service.update_training_settings(
+                await service.get(org, record.id),
+                {"subject_courses": {"emt b": foreign.id}},
+            )
