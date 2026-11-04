@@ -102,6 +102,11 @@ export interface TrainingSessionResponse {
   program_id?: string;
   phase_id?: string;
   requirement_id?: string;
+  /**
+   * Session-attendance requirements this session counts toward. Absent from a
+   * backend that predates them; treat that as none.
+   */
+  attendance_requirement_ids?: string[];
   course_name: string;
   course_code?: string;
   training_type: string;

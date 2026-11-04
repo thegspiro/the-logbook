@@ -100,6 +100,7 @@ from app.services.training_compliance import (
     get_requirement_date_window,
     load_credited_shift_dates,
     load_graded_records,
+    load_held_sessions,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -220,6 +221,7 @@ async def get_training_dashboard_summary(
         today,
         grading.include_current_month,
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
     waivers = await fetch_org_waivers(db, str(org_id))
 
     compliant = 0
@@ -241,6 +243,7 @@ async def get_training_dashboard_summary(
                 org_include_current_month=grading.include_current_month,
                 join_date=join_date,
                 shift_dates=shifts_by_user.get(str(member.id), []),
+                held_sessions=held_sessions,
             )
             statuses.append(req_status)
             # Inside an existing member's catch-up period the requirement is
@@ -2105,6 +2108,7 @@ async def get_compliance_summary(
             db, str(org_id), [str(user_id)], requirements, today, org_include_current
         )
     ).get(str(user_id), [])
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     # Fetch waivers
     waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
@@ -2121,6 +2125,7 @@ async def get_compliance_summary(
             org_include_current_month=org_include_current,
             join_date=join_date,
             shift_dates=shift_dates,
+            held_sessions=held_sessions,
         )[0]
         for req in requirements
     )
@@ -3211,6 +3216,11 @@ _TARGET_BY_TYPE = {
     RequirementType.EVALUATED_SHIFTS.value: ("required_shifts", "evaluated shifts"),
     RequirementType.TRANSPORTS.value: ("required_transports", "transports"),
     RequirementType.REFUSALS.value: ("required_refusals", "refusals"),
+    # A share, not a count: the screen renders it "60% of sessions".
+    RequirementType.SESSION_ATTENDANCE.value: (
+        "required_attendance_pct",
+        "percent_of_sessions",
+    ),
 }
 
 
@@ -3434,6 +3444,7 @@ async def get_compliance_matrix(
         today,
         grading.include_current_month,
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     # Batch-fetch all active waivers / leaves for the org
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
@@ -3465,6 +3476,7 @@ async def get_compliance_matrix(
                 org_include_current_month=grading.include_current_month,
                 join_date=join_date,
                 shift_dates=shifts_by_user.get(str(member.id), []),
+                held_sessions=held_sessions,
             )
 
             if ev.as_of and (as_of is None or ev.as_of < as_of):
@@ -3649,6 +3661,7 @@ async def get_member_period_status(
         today,
         org_include_current,
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
@@ -3710,6 +3723,7 @@ async def get_member_period_status(
                 org_include_current_month=org_include_current,
                 join_date=join_date,
                 shift_dates=shifts_by_user.get(str(member.id), []),
+                held_sessions=held_sessions,
             )[0]
             for req in applicable
         )

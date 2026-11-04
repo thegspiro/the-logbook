@@ -69,6 +69,7 @@ from app.services.training_compliance import (
     get_org_include_current_month,
     load_credited_shift_dates,
     load_graded_records,
+    load_held_sessions,
     member_join_date,
     recency_cutoff,
 )
@@ -3451,6 +3452,9 @@ class TrainingProgramService:
                 today,
                 include_current,
             )
+            held_sessions = await load_held_sessions(
+                self.db, str(org_id), list(requirements.values())
+            )
             waivers_by_user = await fetch_org_waivers(self.db, org_id)
 
             for row in org_rows:
@@ -3467,6 +3471,7 @@ class TrainingProgramService:
                     org_include_current_month=include_current,
                     join_date=member_join_date(member),
                     shift_dates=shifts_by_user.get(str(member.id), []),
+                    held_sessions=held_sessions,
                 )
                 status, value, pct = compliance_projection(ev)
                 if (

@@ -54,6 +54,7 @@ from app.services.training_compliance import (
     CATCH_UP_STATUS,
     get_org_include_current_month,
     load_credited_shift_dates,
+    load_held_sessions,
     member_join_date,
     requirement_applies_to_member,
     tally_standing,
@@ -303,6 +304,7 @@ async def _evaluate_member_requirements(
             full_history=True,
         )
     ).get(user_id, [])
+    held_sessions = await load_held_sessions(db, str(org_id), applicable)
 
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
@@ -320,6 +322,7 @@ async def _evaluate_member_requirements(
             org_include_current_month=org_include_current,
             join_date=join_date,
             shift_dates=shift_dates,
+            held_sessions=held_sessions,
         )
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the
