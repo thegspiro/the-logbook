@@ -2614,7 +2614,17 @@ class FormsService:
                 "address_state",
                 "address_zip",
             }
-            metadata = {k: v for k, v in mapped_data.items() if k not in _PII_COLUMNS}
+            # The answers were HTML-escaped when the submission was stored
+            # (stored-XSS defence for the submission itself), but the applicant
+            # record is plain text that every screen escapes as it renders --
+            # copying the escaped text made "O'Brien" read O&#x27;Brien on every
+            # pipeline screen and in emails. Each answer was escaped exactly
+            # once, so unescaping once restores what the applicant typed.
+            plain = {
+                k: html_lib.unescape(v) if isinstance(v, str) else v
+                for k, v in mapped_data.items()
+            }
+            metadata = {k: v for k, v in plain.items() if k not in _PII_COLUMNS}
 
             # Guard against excessively large metadata (max 64 KB).
             import json as _json
@@ -2630,18 +2640,18 @@ class FormsService:
                 metadata = {k: "(truncated)" for k in metadata}
 
             prospect_data = {
-                "first_name": mapped_data.get("first_name", ""),
-                "last_name": mapped_data.get("last_name", ""),
-                "email": mapped_data.get("email", ""),
-                "phone": mapped_data.get("phone"),
-                "mobile": mapped_data.get("mobile"),
-                "date_of_birth": mapped_data.get("date_of_birth"),
-                "address_street": mapped_data.get("address_street"),
-                "address_city": mapped_data.get("address_city"),
-                "address_state": mapped_data.get("address_state"),
-                "address_zip": mapped_data.get("address_zip"),
-                "interest_reason": mapped_data.get("interest_reason"),
-                "referral_source": mapped_data.get("referral_source"),
+                "first_name": plain.get("first_name", ""),
+                "last_name": plain.get("last_name", ""),
+                "email": plain.get("email", ""),
+                "phone": plain.get("phone"),
+                "mobile": plain.get("mobile"),
+                "date_of_birth": plain.get("date_of_birth"),
+                "address_street": plain.get("address_street"),
+                "address_city": plain.get("address_city"),
+                "address_state": plain.get("address_state"),
+                "address_zip": plain.get("address_zip"),
+                "interest_reason": plain.get("interest_reason"),
+                "referral_source": plain.get("referral_source"),
                 "form_submission_id": str(submission.id),
                 "metadata_": metadata,
             }

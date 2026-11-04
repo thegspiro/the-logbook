@@ -64,6 +64,7 @@ class ImportedRecordKind(str, Enum):
     SHIFT_ATTENDANCE = "shift_attendance"
     EXTERNAL_SHIFT_HOURS = "external_shift_hours"
     ADMIN_HOURS_ENTRY = "admin_hours_entry"
+    TRAINING_RECORD = "training_record"
 
 
 class HistoricalImport(Base):
@@ -118,6 +119,13 @@ class HistoricalImport(Base):
     # Who a member the file names is, for rows outside the shift review:
     # keyed and shaped like ``ShiftHistoryImport.member_mappings``.
     member_mappings: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    # How training rows become training records: the subject, instructor and
+    # taught-flag columns, each subject's course, and what to do with rows a
+    # training provider may already have synced. See
+    # ``historical_import_engine.TrainingSettings``.
+    training_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )
     # What each step committed, by step: ``{"admin": {...counts...}}``.

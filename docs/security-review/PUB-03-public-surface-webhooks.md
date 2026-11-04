@@ -1,6 +1,204 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 14 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (this PR)
+
+---
+
+## Pass 15 (2026-11-04, watchdog pickup) — a new Zeffy inbound webhook, a shift-inclusive department iCal feed, and an expanded finance-approval detail payload, all reviewed fresh; route count corrected to 49; 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed via
+`ListAgents` ("No reachable agents"). Step 0: `list_pull_requests` (state
+`open`) against the repo found 0 results with a `claude/security-review-*`
+head — PRs #4019 (Feature 00, pass 15), #4021 (Feature 01, pass 15) and #4022
+(Feature 02, pass 15) had all merged within the last two hours. Row 03
+confirmed the next `⬜` row by reading `PROGRESS.md`'s table directly on a
+freshly-fetched `main`, not from a rotation note.
+
+**Baseline:** `2376e25d0` (pass 14's merge). **Head:** `bc34d7782`
+(PR #4022's merge). `git diff 2376e25d0 HEAD --stat -- backend/app/api/public/
+backend/app/core/public_portal_security.py
+backend/app/services/integration_services/webhook_service.py
+backend/app/utils/webhook_replay.py` touches **five** files: a brand-new
+`zeffy_webhook.py` (181 lines), `calendar.py` (+63/-4), `finance_approvals.py`
+(+35/-1 — a new `GET` field this pass checks under dimension 5, not a new
+route), and `display.py` (+20/-18) / `event_guest.py` (+22/-20). The other
+eleven route-bearing files under `app/api/public/` are byte-identical to
+pass 14's reviewed state (same diff command, no hunks). The three
+pre-existing webhook receivers (`paypal_webhook.py`, `integrations_webhook.py`,
+`salesforce_webhook.py`), `public_portal_security.py`, `webhook_service.py`
+and `webhook_replay.py` are among those unchanged files.
+
+**Route re-enumeration (per Step 3's instruction that a repeat pass
+re-derives the count rather than trust it forward):** an AST walk of every
+`@router.<verb>` decorator across all 16 route-bearing files under
+`app/api/public/` (`responses.py` and `__init__.py` excluded), cross-checked
+against a plain `grep -c '^@router\.\(get\|post\|put\|patch\|delete\)'` (both
+agreeing), finds **49 routes**: pass 14's 48 plus `zeffy_webhook.py`'s one new
+route. `calendar.py`, `display.py`, `event_guest.py` and `finance_approvals.py`
+each gained logic inside existing handlers, not new routes. Every router
+import was cross-checked against `backend/main.py`'s `app.include_router(...)`
+calls by its actual import alias (`zeffy_webhook_router`) — all 16 are
+mounted, none orphaned.
+
+**The new surface, read in full against all seven checklist dimensions:**
+
+- **`app/api/public/zeffy_webhook.py` (new, 1 route, `POST
+/public/v1/webhooks/zeffy/{integration_id}`) and its collaborators
+  `app/services/integration_services/zeffy_service.py` and
+  `app/services/zeffy_sync_service.py`** — Zeffy POSTs payment events to a
+  per-integration URL the department pastes into Zeffy's own webhook dialog.
+  **Auth (dimension 1):** intentionally public; `_rate_limit_webhook` (60/min
+  per IP) is a route dependency, so it resolves before the handler body's
+  `Integration` lookup, matching this feature's established webhook shape.
+  The `Integration` lookup by client-supplied `integration_id` happens before
+  signature verification (404 vs 401 as distinct outcomes) — identical to the
+  already-reviewed PayPal/Documenso/Cal.com/Salesforce handlers in this same
+  file set (pass 12's write-up), not a new pattern to re-litigate; the ids are
+  UUID primary keys, infeasible to enumerate. **Signature verification
+  (`zeffy_service.verify_signature`):** HMAC-SHA256 over `"{t}.{raw body}"`
+  under the integration's own `whsec_` secret (read through
+  `integration.get_secret("webhook_secret")`, the encrypted-at-rest secret
+  store, never a plaintext column); every `v1` value in a multi-signature
+  header is tried; compared with `hmac.compare_digest` (constant-time); the
+  `t` timestamp is required and rejected outside a 5-minute tolerance, so a
+  captured, valid delivery cannot be replayed later — read directly, not
+  assumed from the module's docstring. No secret configured → `verify_signature`
+  returns `False` unconditionally (fails closed), matching the module
+  docstring's claim that this endpoint moves money and so trusts nothing
+  unverifiable. **Injection (dimension 4):** the untrusted `payment_id` from
+  the webhook body is never applied directly — the handler re-reads the
+  payment from Zeffy's own API with the department's key
+  (`ZeffyClient.get_payment`), and that id is `urllib.parse.quote`d into the
+  outbound request path before use, so it cannot be used to redirect the
+  outbound call. **Idempotency (Pitfall #36):**
+  `ZeffySyncService.record_payment` is the textbook shape: a
+  `with_for_update()` lookup by `(organization_id, zeffy_payment_id)`, and
+  that pair carries a real `UniqueConstraint`
+  (`uq_zeffy_payments_org_payment`, `app/models/zeffy.py`) — a race on a
+  brand-new payment's first delivery still can't double-insert, because
+  `_insert_row` catches the loser's `IntegrityError`, rolls back the nested
+  transaction, and re-reads the winning row under the same lock
+  (`zeffy_sync_service.py:250-264`), read directly rather than taken from the
+  docstring's claim. The module's own comment explaining why it deliberately
+  carries **no** replay-fingerprint cache (unlike the other three webhooks) is
+  correct on its own terms: a cache would mark a 503'd delivery "seen" before
+  it was actually applied, and Zeffy's retry would then be dropped as a
+  duplicate instead of being given a second chance — the DB constraint is the
+  durable guard here, the replay cache would be a liability. A deleted
+  payment and an unknown-to-us payment both resolve to the same `None` path
+  (no row created, no error) rather than distinguishing them to a caller who
+  cannot act on the difference. **Data exposure (dimension 5):**
+  `payer_email` is `EncryptedText` (encrypted at rest); the plaintext JSON
+  snapshot kept for support (`ZeffyPayment.raw_payload`) is built by
+  `redact_payment`, which `copy.deepcopy()`s the payload first (Pitfall #12 —
+  it mutates a nested `buyer` dict and a list of `items`) before stripping
+  `buyer.email`, `buyer.address` and every item's `questions` — verified by
+  reading the function, not assumed from its docstring. The audit event
+  (`zeffy_payment_received`) carries only the integration/org/payment ids,
+  the amount and the resulting state — no payer name/email, matching
+  checklist §5's "no PII/PHI in audit payloads". **Abuse resistance
+  (dimension 6):** the one DB-heavy branch (the Zeffy API round-trip) is
+  reached only after the rate limiter and the signature check, so an
+  unsigned flood is rejected before any outbound call; a `ZeffyError`
+  (Zeffy unreachable/rate-limited) answers 503 so Zeffy's own retry-for-3-days
+  policy, not this endpoint, absorbs the backlog.
+- **`app/api/public/calendar.py`'s department iCal feed, now optionally
+  including shifts (no new route — logic added inside
+  `get_department_events_feed`)** — when the `ical` integration's
+  `include_shifts` flag is on, the feed adds the org's scheduled shifts
+  alongside events. **Tenant isolation:** the shift query filters
+  `Shift.organization_id == organization_id` directly, where
+  `organization_id` is still taken only from the token-resolved integration
+  (unchanged from pass 10's review), never from client input. **Data
+  exposure:** `_org_feed_shift` returns exactly `id` (prefixed `shift-` so it
+  can never collide with an event UID in the same feed), `title` (the static
+  `_shift_title` helper — `"Duty Shift"` plus platoon only, no roster, no
+  notes, no assignee), `start_time`, `end_time` and a static `categories`
+  label — read directly against the function body, not the docstring's
+  claim. **Injection:** shift dicts flow through the same
+  `generate_ical_feed` → `_event_to_vevent` → `_escape_ics` pipeline as event
+  dicts (both are plain dicts with the same keys), so the already-reviewed
+  ICS-escaping guard applies uniformly; no shift-specific code path bypasses
+  it. **Abuse resistance:** the shift query is independently capped at
+  `ORG_FEED_MAX_EVENTS` (2000) and windowed to the same 30-days-past/
+  365-days-future range as the event query and the existing personal shift
+  feed — a department running both lists at the cap roughly doubles the feed
+  size versus pass 10's single-list bound, which is a generation-cost
+  observation rather than a security finding (still a fixed, attacker-
+  uncontrolled ceiling, not unbounded).
+- **`app/api/public/finance_approvals.py`'s `get_approval_detail`, now
+  returning `title`/`amount`/`requester_name` (no new route — response
+  fields added; owner decision 2026-11-01)** — previously this response
+  carried no fields about the underlying request at all beyond a late-line
+  _count_. `FinanceService.approval_subject` is the new read: it selects only
+  `title`, `amount`, and the four name columns needed to format
+  `requester_name`, filtered by `model.id == entity_id, model.organization_id
+== org_id` where `org_id` is `str(record.chain.organization_id)` —
+  server-resolved from the token's own approval chain, never client-supplied
+  — and returns `None` for a request no longer in that org (fails closed,
+  matching the function's own docstring). No vendor, description or line
+  item is selected by the query at all, so none can leak through this path
+  regardless of what the frontend renders — checked by reading the `select()`
+  column list directly, not inferred from the docstring's "and nothing more"
+  claim. The three new fields are populated only when `actionable` (status
+  `PENDING` and not expired), matching the existing `late_line_count`
+  field's own exposure window — a used or expired link describes nothing new
+  about the request it once pointed at. `record.chain` is now eager-loaded
+  (`selectinload(ApprovalStepRecord.chain)`, added this diff) rather than
+  lazy-accessed, which this async session requires for correctness and also
+  avoids a surprise synchronous-IO exception on this public path.
+- **`app/api/public/display.py`'s `guest_check_in` and
+  `app/api/public/event_guest.py`'s `link_guest_check_in` (no new route —
+  both now unpack a 4th tuple element, `already_checked_in`, and discard it)**
+  — this is `GuestCheckInService.check_in_guest`'s new return value from
+  commit `2408b571e`, already reviewed and fixed under Feature 32 (Locations
+  & kiosk)'s own pass 12 as LOC12-1 (a lock-ordering race on the
+  already-checked-in flag, verified red-then-green there). Confirmed by
+  reading that commit's diff directly rather than re-deriving: it touches
+  only these two files, and the underlying write-path idempotency (the
+  find-then-insert under `_lock_event`) is unchanged by whether either
+  caller reads the new flag. Both public handlers silently drop it, so a
+  returning guest's second scan still succeeds without being told they were
+  already signed in — a UX gap, not a security finding: no additional write,
+  no additional disclosure, and the row-level idempotency this feature's own
+  prior passes verified does not depend on the caller consuming this value.
+  Not re-flagged here since it was fixed at its root (Feature 32) and nothing
+  about this feature's own scope is affected.
+
+**RFC 8414/9728 metadata endpoints, the three pre-existing webhook handlers
+(PayPal, Documenso/Cal.com, Salesforce), `follow_up_forms.py`, `minutes.py`,
+`event_guest.py`'s own route bodies, and `mcp_oauth.py`'s rate-limited OAuth
+routes:** unchanged, byte-identical to pass 14's already-fully-reviewed
+state (same diff command, no hunks) — not re-read line by line this pass, per
+Step 3's instruction to spend a repeat pass's reading on what changed.
+
+**Nothing to fix, nothing to flag.** PUB-1 through PUB-14 remain fixed
+(unaffected by this diff); PUB-3 (INFO, `ApprovalChain`'s tables remain
+`create_all`-only, by design) is unchanged and still accurate — no new
+migration touches those tables this pass. The new `zeffy_payments` table's
+own schema (unique constraint, `EncryptedText` email, `ondelete="SET NULL"`
+columns all `nullable=True`) was added under Feature 22's own migration and
+is noted here only because this pass's webhook handler is the thing that
+writes through it; it is not re-litigated as this feature's finding. No
+`KNOWN_LIMITATIONS.md` entry needed — nothing is flagged.
+
+### Completion gate (pass 15)
+
+| Check                                                                                                                                                                                                                                                                                                                                                  | Result                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                          | ✅ 0 violations                                       |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                   | ✅ 2882 files unchanged                               |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                              | ✅ clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                      | ✅ single head `b5e906ebdd7d`, 712 revisions          |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                                                                  | ✅ 298 routes, 0 errors, 0 warnings                   |
+| scoped pytest (`-k "public or webhook or zeffy or paypal or salesforce or integrations or minutes or mcp_oauth or calendar or finance_approval or branding or kiosk or guest or event_guest or embed or legal or display or security_txt or portal or next_meeting or follow_up or error_reporting" -m "not integration and not slow and not docker"`) | ✅ 1708 passed, 1 skipped (`pywebpush`, pre-existing) |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, logging escaping, log-call-shape sweep)                                                                                                                                                                  | ✅ 174 passed                                         |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                     | ✅ 0 errors                                           |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                          | ✅ 0 errors, 0 warnings                               |
+
+Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments).
 
 ---
 

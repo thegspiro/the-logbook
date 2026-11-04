@@ -219,15 +219,9 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
             </p>
           </div>
 
-          {/* Grace Period: same gap as compliance_configs.grace_period_days
-              (ComplianceRequirementsConfigPage.tsx) — stored, shown, and never
-              read. get_compliance_status marks non-compliant the instant
-              expiration_date passes, with no leeway for this value. Labelled
-              rather than silently wired, since this column defaults to 30 for
-              every requirement, so wiring it would relax the non-compliance cutoff
-              on every existing installation, not just ones that opted in. Delete
-              this notice in the change that makes compliance evaluation read it;
-              see tests/test_medical_screening_requirement_fields_are_unwired.py. */}
+          {/* Grace Period: read by grading since 2026-11-04 (MS-16, owner
+              decision 2026-11-01) — a member stays compliant this many days
+              after a screening falls due, shown as past due meanwhile. */}
           <div>
             <label htmlFor="req-grace" className={labelClass}>
               Grace Period (days past expiration) *
@@ -241,9 +235,9 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               className={inputClass + ' w-32'}
             />
             {errors.gracePeriod && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.gracePeriod}</p>}
-            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
-              Not enforced yet — a screening is marked non-compliant the day after its expiration date; this value is
-              saved but does not extend that deadline.
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Members stay compliant this many days after a screening falls due, shown as past due. Enter 0 to mark them
+              non-compliant the day after.
             </p>
           </div>
 

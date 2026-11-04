@@ -1,6 +1,90 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 15 (2026-11-04) — watchdog pickup: true zero delta, 0 fixed, 0 new findings
+
+Watchdog pickup. The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed via
+`ListAgents` ("No reachable agents"). PR #4023 (Feature 03, Public surface
+& webhooks, pass 15) had just merged (`e24e32640`); `list_pull_requests`
+(state `open`) returned 0 results for a `claude/security-review-*` head.
+Row 04 (Storefront & payments) was the next `⬜` row, confirmed on a
+freshly-fetched `main`.
+
+**Baseline** `b7f72c67a` (pass 14's merge, PR #3879) → **head** `e24e32640`
+(PR #4023's merge): 535 non-merge-inclusive commits in the window. Diffed
+every file pass 14 tracked — `storefront.py`, `storefront_service.py`,
+`storefront_notification_service.py`, `storefront_preview_service.py`,
+`email_templates_storefront.py`, `storefront_payments.py`,
+`paypal_webhook.py`, `models/storefront.py`, `schemas/storefront.py`,
+`utils/size_order.py`, `utils/embroidery.py`, and the entire
+`frontend/src/modules/storefront/` tree — against the new head:
+`git diff --stat` returns **nothing** for any of them. Every file in this
+feature's established scope is byte-identical to pass 14's reviewed state.
+
+**Migrations:** 37 new migration files landed in the window. A content
+grep for `store_`/`storefront`/`thread_color`/`embroidery`/`StoreOrder`/
+`StoreProduct` matches 8 of them; each match read directly rather than
+trusted from the grep hit. All 8 are the same false-positive shape pass 14
+(and 3/4/7 before it) already classified: either the repo-wide
+`REQUIRED_EMAIL_KINDS` enum literal list (which happens to include the ten
+`storefront_*` template-kind strings) repeated verbatim in unrelated
+evaluation/interview email-template seed migrations, or a code comment in
+two Chief-rank permission-grant migrations
+(`b65eaef983b9`/`1476abf56dd3`) that merely _references_
+`tests/test_storefront_grant_backfill.py` by name as a precedent for its
+own grant-dict shape — neither migration touches a `positions` row's
+storefront permissions or any `store_*` table. No migration in this window
+creates, alters, or seeds a storefront/embroidery/personalization table or
+column.
+
+**Route inventory re-enumerated by AST, independently of the (empty) file
+diff.** `ast.walk` over every `@router.{get,post,put,patch,delete}`
+decorator in `storefront.py` finds **48** routes — unchanged from
+pass 11 through 14. No route added or removed means no new auth/permission
+surface to classify; the 47 `require_permission(...)`-gated routes plus the
+one self-introspection `GET /permissions` route
+(`tests/permissionless_route_baseline.txt`) carry forward unchanged from
+pass 14's own enumeration.
+
+**Re-verified unchanged, by direct read of an empty diff (not inferred from
+"file not listed"):** the price/amount integrity guard (`StoreOrderItemInput`
+carries no price field; `_price_lines` recomputes every line from the
+org-scoped catalog), capacity locking (organisation → window → product →
+tally lock order), all five self-settlement separation-of-duties guards
+(`assert_different_person` in `record_payment`, `mark_order_paid`,
+`waive_order_payment`, `refund_order`, `update_order_status`'s settlement
+branch), the PayPal webhook signature verification and replay/idempotency
+guard (`UniqueConstraint(organization_id, provider, external_id)`),
+SF8-04-2/SF8-04-3's locking fixes, and SF14-04-1's account-status filter
+on `get_admin_recipients` all carry forward unchanged — the file that holds
+every one of them (`storefront_service.py` /
+`storefront_notification_service.py`) is confirmed byte-identical to pass
+14's state above.
+
+**0 fixed, 0 new findings. 0 findings remain OPEN or FLAGGED for this
+feature going into pass 16** — SF-1 through SF-11, SF8-04-1/2/3 and
+SF14-04-1 all re-verified FIXED and unchanged.
+
+## Completion gate (pass 15)
+
+| Check                                                                                          | Result                                                   |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (via `/usr/bin/python3`, CI's interpreter/pin)                   | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/`                                                           | ✅ 2901 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/`                                                      | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                              | ✅ 717 revisions, single head (`8da91e9d28d6`)           |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                              | ✅ 300 routes, 0 errors, 0 warnings                      |
+| backend tests (scoped: `-k "storefront or stripe or payment or refund or checkout or paypal"`) | ✅ 999 passed, 1 skipped (environment-only: `pywebpush`) |
+| `cd frontend && npm run typecheck`                                                             | ✅ 0 errors                                              |
+| `npm run lint` (`eslint --max-warnings 10`)                                                    | ✅ 0 errors, 0 warnings                                  |
+
+No frontend or backend application file in this feature's scope was
+touched this pass — the gate above is a re-confirmation, not a reaction to
+a change. Next in the rotation: Feature 05 (Finance & approvals).
 
 ---
 

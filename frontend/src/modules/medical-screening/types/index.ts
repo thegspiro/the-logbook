@@ -136,6 +136,8 @@ export interface ScreeningRecordCreate {
 }
 
 export interface ScreeningRecordUpdate {
+  /** The requirement the record satisfies, and the only one; null unlinks it. */
+  requirement_id?: string | null | undefined;
   screening_type?: ScreeningType | undefined;
   status?: ScreeningStatus | undefined;
   // Nullable columns: an edit form sends an explicit null to clear these
@@ -177,6 +179,10 @@ export interface ComplianceItem {
   self_recorded: boolean;
   /** No expiration on the record: the date is its completed date plus the requirement's frequency (W71-1). */
   expiration_from_frequency?: boolean | undefined;
+  /** Past its due date and still compliant, inside the requirement's grace period (MS-16). */
+  in_grace_period?: boolean | undefined;
+  /** The last day it still counts, when in grace. */
+  grace_period_ends?: string | null | undefined;
 }
 
 export interface ComplianceSummary {
@@ -222,6 +228,7 @@ export interface ComplianceRoster {
 export interface ExpiringScreening {
   record_id: string;
   screening_type: ScreeningType;
+  requirement_id?: string | undefined;
   requirement_name?: string | undefined;
   user_id?: string | undefined;
   user_name?: string | undefined;
@@ -233,4 +240,14 @@ export interface ExpiringScreening {
   status?: ScreeningStatus | undefined;
   /** No expiration on the record: due by its requirement's frequency (W71-1). */
   expiration_from_frequency?: boolean | undefined;
+  /** Past due, still counting until `grace_period_ends`; `days_until_expiration` is negative (MS-16). */
+  in_grace_period?: boolean | undefined;
+  grace_period_ends?: string | null | undefined;
 }
+
+/**
+ * Fields of a record that are its clinical narrative (MS-14). The API returns
+ * them null to a caller without `medical_screening.view_details` (or
+ * `.manage`), so the screens hide them rather than show empty boxes.
+ */
+export const NARRATIVE_PERMISSIONS = ['medical_screening.view_details', 'medical_screening.manage'] as const;

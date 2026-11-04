@@ -1,7 +1,7 @@
 import React from 'react';
 import { MEMBER_CLASS_LABELS, MemberClass } from '../../constants/enums';
 import { statusOptionsFor } from '../../utils/membership';
-import type { MembershipTier } from '../../types/user';
+import type { MembershipTierName } from '../../types/user';
 
 interface MemberClassificationFieldsProps {
   memberClass: string;
@@ -9,7 +9,7 @@ interface MemberClassificationFieldsProps {
   onClassChange: (value: MemberClass) => void;
   onStatusChange: (value: string) => void;
   /** The department's ladder, so its tiers are offered as statuses by name. */
-  tiers?: readonly MembershipTier[] | undefined;
+  tiers?: readonly MembershipTierName[] | undefined;
   /** A value already stored that neither list names, so the control can show it. */
   currentStatus?: string | null | undefined;
   disabled?: boolean | undefined;

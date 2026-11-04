@@ -301,6 +301,14 @@ class Roles:
     view_all: bool
     manage: bool
     approver: bool
+    # The member's supervisor today, by the dated assignments (owner decision
+    # 2026-11-01, crew views). Granted by the relationship, not a permission,
+    # and read-only: no write path consults it.
+    supervisor: bool = False
+    # A supervisor reads the record once it is released to the member --
+    # what the member themselves may read. Drafts, scores still in review and
+    # the evaluator's working copy stay with the people writing them.
+    supervisor_reads: bool = False
 
     @property
     def any(self) -> bool:
@@ -310,13 +318,21 @@ class Roles:
             or self.view_all
             or self.manage
             or self.approver
+            or self.supervisor
         )
 
     @property
     def reads_content(self) -> bool:
         """Everyone with access except a manager, who runs the process but
-        does not read personnel content on that grant alone."""
-        return self.is_member or self.is_evaluator or self.view_all or self.approver
+        does not read personnel content on that grant alone, and a supervisor
+        before the evaluation is released to the member."""
+        return (
+            self.is_member
+            or self.is_evaluator
+            or self.view_all
+            or self.approver
+            or self.supervisor_reads
+        )
 
 
 def _name(user: Optional[User]) -> Optional[Dict[str, str]]:
@@ -433,8 +449,16 @@ class EvaluationService:
             await notices.finalized(organization_id, evaluation_id)
 
     def _roles(
-        self, evaluation: Evaluation, viewer: User, steps: Sequence[EvaluationStep]
+        self,
+        evaluation: Evaluation,
+        viewer: User,
+        steps: Sequence[EvaluationStep],
+        *,
+        crew_supervisor: bool = False,
     ) -> Roles:
+        """``crew_supervisor`` is passed only by the reads; the write paths
+        leave it False, so supervising a member never lets anyone change, sign
+        or calibrate their evaluation."""
         workflow = self._workflow(evaluation)
         position_ids = {p.id for p in viewer.positions}
         live = {
@@ -456,6 +480,10 @@ class EvaluationService:
             and user_has_permission(viewer, "evaluations.view_all"),
             manage=not is_member and user_has_permission(viewer, "evaluations.manage"),
             approver=approver and not is_member,
+            supervisor=crew_supervisor and not is_member,
+            supervisor_reads=crew_supervisor
+            and not is_member
+            and self._released_to_member(evaluation, steps),
         )
 
     # --------------------------------------------------------------- reads
@@ -470,7 +498,14 @@ class EvaluationService:
         if evaluation is None:
             return None
         steps = await self._steps(evaluation)
-        roles = self._roles(evaluation, viewer, steps)
+        # Re-checked on every read, so an assignment that ended yesterday
+        # stops granting access today (pitfall #14b).
+        crew_supervisor = evaluation.member_id != viewer.id and (
+            await MemberSupervisorService(self.db).is_current_supervisor(
+                organization_id, viewer.id, evaluation.member_id
+            )
+        )
+        roles = self._roles(evaluation, viewer, steps, crew_supervisor=crew_supervisor)
         if not roles.any:
             return None
         parts = await self._parts(evaluation)
@@ -613,6 +648,7 @@ class EvaluationService:
                 show = (
                     roles.is_evaluator
                     or roles.view_all
+                    or roles.supervisor_reads
                     or (
                         roles.approver
                         and part.status == EvaluationPartStatus.SUBMITTED.value
@@ -891,6 +927,47 @@ class EvaluationService:
             view_all=False,
             manage=False,
             approver=False,
+        )
+        return await self._summaries(organization_id, evaluations, roles)
+
+    async def list_crew(
+        self, organization_id: str, viewer: User
+    ) -> List[Dict[str, Any]]:
+        """Evaluations of the members ``viewer`` supervises today.
+
+        Every evaluation on their record, in progress or finalized, as a
+        summary; :meth:`detail` decides what each one shows. Empty for a
+        member who supervises nobody, which is how a member with no crew
+        reaches this without any grant. Content opens once an evaluation is
+        released to the member.
+        """
+        crew_ids = await MemberSupervisorService(self.db).current_crew_ids(
+            organization_id, viewer.id
+        )
+        if not crew_ids:
+            return []
+        query = (
+            select(Evaluation)
+            .options(
+                selectinload(Evaluation.template_version).selectinload(
+                    EvaluationTemplateVersion.template
+                ),
+                selectinload(Evaluation.period),
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.member_id.in_(crew_ids),
+            )
+            .order_by(Evaluation.period_end.desc(), Evaluation.created_at.desc())
+        )
+        evaluations = list((await self.db.execute(query)).scalars().all())
+        roles = Roles(
+            is_member=False,
+            is_evaluator=False,
+            view_all=False,
+            manage=False,
+            approver=False,
+            supervisor=True,
         )
         return await self._summaries(organization_id, evaluations, roles)
 

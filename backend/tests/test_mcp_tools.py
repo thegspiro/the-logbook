@@ -1175,7 +1175,10 @@ class TestEighthRoundFindings:
             "screening_type",
             "requirement_name",
             "expiration_date",
+            "due_by_frequency",
             "days_until_expiration",
+            "in_grace_period",
+            "grace_period_ends",
         }
         rest = await _call(
             server, principal, "list_expiring_screenings", days=30, limit=1, offset=1
@@ -3473,6 +3476,9 @@ class TestTwentySixthRoundFindings:
                 "last_screening_date": "2026-01-01",
                 "expiration_date": "2027-01-01",
                 "days_until_expiration": 120,
+                "due_by_frequency": False,
+                "in_grace_period": False,
+                "grace_period_ends": None,
                 # Who recorded it (MS-7), not what it found.
                 "self_recorded": False,
             }
@@ -4438,7 +4444,12 @@ class TestThirtiethRoundFindings:
             name="Fitness",
             screening_type=ScreeningType.FITNESS_ASSESSMENT,
         )
-        db_session.add_all([physical, fitness])
+        drug = ScreeningRequirement(
+            organization_id=org_id,
+            name="Drug screen",
+            screening_type=ScreeningType.DRUG_SCREENING,
+        )
+        db_session.add_all([physical, fitness, drug])
         await db_session.flush()
         current_waiver = ScreeningRecord(
             organization_id=org_id,
@@ -4458,12 +4469,13 @@ class TestThirtiethRoundFindings:
             completed_date=date.today() - timedelta(days=300),
             expiration_date=date.today() + timedelta(days=5),
         )
-        # The later pass names no requirement: the summary correlates by
-        # screening type, so it still supersedes the waiver.
+        # The later pass is filed against the same requirement, so it
+        # supersedes the waiver (a record counts only toward the requirement
+        # it is linked to, owner decision 2026-11-01).
         later_pass = ScreeningRecord(
             organization_id=org_id,
             user_id=member_id,
-            requirement_id=None,
+            requirement_id=fitness.id,
             screening_type=ScreeningType.FITNESS_ASSESSMENT,
             status=ScreeningStatus.PASSED,
             completed_date=date.today() - timedelta(days=20),
@@ -4477,6 +4489,7 @@ class TestThirtiethRoundFindings:
             id=drug_ids[1],
             organization_id=org_id,
             user_id=member_id,
+            requirement_id=drug.id,
             screening_type=ScreeningType.DRUG_SCREENING,
             status=ScreeningStatus.WAIVED,
             completed_date=same_day,
@@ -4487,6 +4500,7 @@ class TestThirtiethRoundFindings:
             id=drug_ids[0],
             organization_id=org_id,
             user_id=member_id,
+            requirement_id=drug.id,
             screening_type=ScreeningType.DRUG_SCREENING,
             status=ScreeningStatus.PASSED,
             completed_date=same_day,
@@ -5029,3 +5043,72 @@ class TestMedicalSupplies:
         principal = _principal(org_id, admin_id, expose_medical_supplies=True)
         listed = await _call(server, principal, "list_inventory_items")
         assert [i["name"] for i in listed["items"]] == ["Class A coat"]
+
+
+class TestExpiringScreeningsComputeDueDates:
+    """Owner decision 2026-11-01, "Compute in the tool": the expiring
+    screenings tool lists a screening due by its requirement's frequency and
+    one inside its grace period, as the Compliance tab does, by the same rule
+    (``get_expiring_soon``)."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_frequency_and_grace_are_listed(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        physical = ScreeningRequirement(
+            organization_id=org_id,
+            name="Annual physical",
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            frequency_months=12,
+            grace_period_days=30,
+        )
+        drug = ScreeningRequirement(
+            organization_id=org_id,
+            name="Drug screen",
+            screening_type=ScreeningType.DRUG_SCREENING,
+            grace_period_days=30,
+        )
+        db_session.add_all([physical, drug])
+        await db_session.flush()
+        today = date.today()
+        # No expiration date: falls due 12 months after completion, in about
+        # ten days.
+        by_frequency = ScreeningRecord(
+            organization_id=org_id,
+            user_id=member_id,
+            requirement_id=physical.id,
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            status=ScreeningStatus.PASSED,
+            completed_date=today - timedelta(days=355),
+        )
+        # Fell due 5 days ago; inside the 30-day grace period.
+        in_grace = ScreeningRecord(
+            organization_id=org_id,
+            user_id=admin_id,
+            requirement_id=drug.id,
+            screening_type=ScreeningType.DRUG_SCREENING,
+            status=ScreeningStatus.PASSED,
+            completed_date=today - timedelta(days=360),
+            expiration_date=today - timedelta(days=5),
+        )
+        db_session.add_all([by_frequency, in_grace])
+        await db_session.flush()
+
+        body = await _call(
+            server,
+            _principal(org_id, admin_id, expose_medical_screening=True),
+            "list_expiring_screenings",
+            days=30,
+        )
+
+        assert body["total"] == 2
+        first, second = body["items"]
+        assert first["record_id"] == in_grace.id
+        assert first["days_until_expiration"] == -5
+        assert first["in_grace_period"] is True
+        assert first["grace_period_ends"] == (today + timedelta(days=25)).isoformat()
+        assert second["record_id"] == by_frequency.id
+        assert second["due_by_frequency"] is True
+        assert second["in_grace_period"] is False
+        assert second["member_name"] == "Sam Rivera"

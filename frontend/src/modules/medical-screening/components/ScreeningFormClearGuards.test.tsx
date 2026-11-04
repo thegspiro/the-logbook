@@ -151,13 +151,15 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
 });
 
 describe('ScreeningRequirementForm — position scoping', () => {
-  it('explains that listed positions are enforced, and only the grace period still says it is not', () => {
+  it('explains that listed positions and the grace period are both enforced', () => {
     render(<ScreeningRequirementForm requirement={baseRequirement} onSave={vi.fn()} onClose={vi.fn()} />);
 
     expect(screen.getByLabelText('Applies to Positions (comma-separated)')).toHaveAccessibleDescription(
       /Leave blank to apply to every member\. Otherwise only members who hold one of these positions/
     );
-    // The grace period is still stored and read by nothing, and says so.
-    expect(screen.getAllByText(/Not enforced yet/)).toHaveLength(1);
+    // The grace period is read by grading since 2026-11-04 (MS-16), so no
+    // field says it is not enforced any more.
+    expect(screen.queryByText(/Not enforced yet/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Members stay compliant this many days after a screening falls due/)).toBeInTheDocument();
   });
 });

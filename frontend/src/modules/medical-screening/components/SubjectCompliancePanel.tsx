@@ -37,6 +37,15 @@ const itemState = (item: ComplianceItem): { label: string; tone: 'met' | 'soon' 
     if (item.status === ScreeningStatus.FAILED) return { label: 'Failed — not cleared', tone: 'unmet' };
     return { label: item.last_screening_date ? 'Expired' : 'No qualifying record', tone: 'unmet' };
   }
+  // MS-16: past due but inside the requirement's grace period still counts.
+  if (item.in_grace_period) {
+    return {
+      label: item.grace_period_ends
+        ? `Past due — grace period until ${formatCalendarDate(item.grace_period_ends)}`
+        : 'Past due — in grace period',
+      tone: 'soon',
+    };
+  }
   const days = item.days_until_expiration;
   if (days != null && days <= EXPIRING_SOON_DAYS) {
     return { label: days === 0 ? 'Expires today' : `Expires in ${days} day${days === 1 ? '' : 's'}`, tone: 'soon' };

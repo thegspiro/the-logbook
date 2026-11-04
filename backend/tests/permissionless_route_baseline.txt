@@ -536,3 +536,18 @@ app/api/v1/endpoints/history.py::list_people
 app/api/v1/endpoints/history.py::list_revisions
 app/api/v1/endpoints/history.py::list_titles
 app/api/v1/endpoints/history.py::review_clearance_request
+
+# Added 2026-11-04 (owner decisions of 2026-11-01). Each is meant for every
+# member and scoped inside the handler:
+# The caller's own current crew (MemberSupervisorService.current_crew), in the
+# caller's organization; returns nobody to a member who supervises no one.
+app/api/v1/endpoints/member_supervisors.py::list_my_crew
+# Evaluations of the caller's current crew only, released parts only, in the
+# caller's organization; empty for a member who supervises no one.
+app/api/v1/endpoints/evaluations.py::list_crew_evaluations
+# Tier ids and display names for the caller's own organization; no advancement
+# rules, years or benefits. Any member may read their department's labels.
+app/api/v1/endpoints/member_status.py::get_membership_tier_names
+# scheduling.manage OR the requester's current supervisor, re-checked in
+# SchedulingService under a row lock on the request; anyone else gets 403.
+app/api/v1/endpoints/scheduling.py::review_time_off_request

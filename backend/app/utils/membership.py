@@ -21,7 +21,7 @@ direction on purpose — the legacy vocabulary cannot express an administrative
 probationer — and the two new columns are the authority whenever they disagree.
 """
 
-from typing import FrozenSet, Iterable, Mapping, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
 
 class MemberClass:
@@ -370,3 +370,119 @@ def voter_type_decided_by_class(type_key: str) -> bool:
     """Whether ``type_key`` is a class (so its wait counts from when the
     member's class changed) rather than a status."""
     return type_key in (MemberClass.ADMINISTRATIVE, MemberClass.SOCIAL)
+
+
+# ---------------------------------------------------------------------------
+# A member's membership tier, and what it grants
+# ---------------------------------------------------------------------------
+#
+# The one place a member is matched to a rung of the department's ladder
+# (``organization.settings["membership_tiers"]["tiers"]``). Every reader of a
+# tier's benefits -- voting, office-holding, training exemption, the events a
+# tier is required at -- goes through ``tier_for_member``. Keying the lookup on
+# the legacy ``membership_type`` instead is the bug this replaced (owner
+# decision 2026-11-01, "Move readers to status"): that word collapses an
+# administrative or social member onto their class, so an administrative Life
+# member never found the Life tier, and an administrative member on a
+# department tier (``senior``) found no tier at all.
+
+
+def configured_tiers(settings: Any) -> List[Dict[str, Any]]:
+    """The tiers stored in an organization's ``settings``, in ladder order.
+
+    Read defensively: ``settings`` is free-form JSON (Pitfall #19), so a
+    missing or malformed section is an empty ladder rather than an error, and
+    an entry that is not an object is skipped. Only the stored section counts:
+    an organization that never saved a ladder has none in effect, whatever the
+    editor proposes.
+    """
+    if not isinstance(settings, Mapping):
+        return []
+    section = settings.get("membership_tiers")
+    if not isinstance(section, Mapping):
+        return []
+    tiers = section.get("tiers")
+    if not isinstance(tiers, list):
+        return []
+    rungs = [t for t in tiers if isinstance(t, dict)]
+    return sorted(rungs, key=lambda t: t.get("sort_order", 0) or 0)
+
+
+def standing_from(
+    member_status: Optional[str], membership_type: Optional[str]
+) -> Optional[str]:
+    """The ladder standing two stored values describe.
+
+    ``member_status`` is the authority; a row written before it existed still
+    carries the standing fused into ``membership_type``, which is read only
+    when the status is absent.
+    """
+    # Only a string is a recorded status; anything else (None, or an
+    # attribute a caller's stand-in object never set) means "not recorded".
+    if isinstance(member_status, str) and member_status.strip():
+        return member_status
+    _cls, status = split_membership_type(membership_type)
+    if status:
+        return status
+    legacy = membership_type.strip().lower() if isinstance(membership_type, str) else ""
+    return legacy or None
+
+
+def member_standing(member: Any) -> Optional[str]:
+    """``standing_from`` read off a member (or anything shaped like one)."""
+    return standing_from(
+        getattr(member, "member_status", None),
+        getattr(member, "membership_type", None),
+    )
+
+
+def tier_for_status(
+    tiers: Iterable[Dict[str, Any]], member_status: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """The rung a stored ``member_status`` stands on, if it is on this ladder.
+
+    Matched in canonical spelling, because the shipped ladder names its second
+    rung ``active`` and the column stores that standing as ``regular`` (see
+    ``canonical_member_status``).
+    """
+    wanted = canonical_member_status(member_status)
+    if wanted is None:
+        return None
+    for tier in tiers:
+        if canonical_member_status(tier.get("id")) == wanted:
+            return tier
+    return None
+
+
+def tier_for_member(
+    tiers: Iterable[Dict[str, Any]], member: Any
+) -> Optional[Dict[str, Any]]:
+    """The rung a member stands on, judged by their membership status.
+
+    A member with nothing recorded stands on the regular rung, as the legacy
+    column's ``active`` default did. ``None`` when that standing is not a rung
+    of this ladder (an empty ladder, or a status such as ``retired`` the
+    department has no tier for).
+    """
+    return tier_for_status(tiers, member_standing(member) or MemberStatus.REGULAR)
+
+
+def tier_benefits(tier: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """A tier's ``benefits`` object; empty for no tier or a malformed one, so
+    each caller's own default applies."""
+    benefits = tier.get("benefits") if tier else None
+    return dict(benefits) if isinstance(benefits, Mapping) else {}
+
+
+def member_holds_tier(member: Any, tier_ids: Iterable[Any]) -> bool:
+    """Whether a member stands on one of ``tier_ids`` (an event's
+    "mandatory for" list, say).
+
+    The same standing and the same canonical spelling ``tier_for_member``
+    matches by, so the two can never disagree about which rung a member is on.
+    """
+    wanted = {canonical_member_status(str(t)) for t in tier_ids if t}
+    wanted.discard(None)
+    return canonical_member_status(member_standing(member) or MemberStatus.REGULAR) in (
+        wanted
+    )

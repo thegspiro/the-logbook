@@ -321,6 +321,36 @@ describe('RequestsTab', () => {
     expect(screen.queryByText('Private leave')).not.toBeInTheDocument();
   });
 
+  it("lets a supervisor decide their crew's time off, and nobody else's", async () => {
+    mockReviewTimeOff.mockResolvedValue({});
+    mockGetTimeOffRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'crew-leave',
+          user_id: 'user-2',
+          user_name: 'Crew Member',
+          status: 'pending',
+          reason: 'Crew leave',
+          reviewable_as_supervisor: true,
+        },
+        { id: 'other-leave', user_id: 'user-3', status: 'pending', reason: 'Private leave' },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 20,
+    });
+
+    renderWithRouter(<RequestsTab />);
+    await userEvent.click(screen.getByText(/Time Off/));
+
+    expect(await screen.findByText('Crew leave')).toBeInTheDocument();
+    expect(screen.queryByText('Private leave')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Approve time off for Crew Member' }));
+    await waitFor(() => {
+      expect(mockReviewTimeOff).toHaveBeenCalledWith('crew-leave', { status: 'approved' });
+    });
+  });
+
   it('should switch to time off view', async () => {
     renderWithRouter(<RequestsTab />);
     const user = userEvent.setup();
