@@ -146,6 +146,8 @@ def _per_address_limits(path: Path) -> dict[str, str]:
             text,
             re.S,
         ),
+        "login rate": re.search(r"zone=login_limit:\S+ rate=(\d+)r/m;", text),
+        "login burst": re.search(r"limit_req zone=login_limit burst=(\d+)", text),
     }
     missing = [name for name, match in found.items() if match is None]
     assert not missing, f"{path.relative_to(REPO_ROOT)} lacks {missing}"
@@ -168,3 +170,26 @@ def test_per_address_limits_fit_a_shared_station_address(config):
     ), "a burst over the limit should queue, not be refused"
     burst = int(re.search(r"burst=(\d+)", limits["api burst"]).group(1))
     assert burst >= 100
+
+
+@pytest.mark.parametrize("config", _PROXIES.values(), ids=_PROXIES.keys())
+def test_sign_in_limit_admits_what_the_backend_backstop_admits(config):
+    """Sign-in from a shared station address (owner decision, 2026-11-01).
+
+    The backend counts its tight sign-in limit per account at an address and
+    keeps a looser per-address backstop. nginx keys only on the address, so its
+    ``login_limit`` zone must be the backstop: left at the old 5 a minute it
+    would still turn away the sixth member at shift change and the backend
+    change would deliver nothing. Pinned to equality, not a floor, so the
+    proxy is not quietly loosened past the backend either.
+    """
+    from app.core.security_middleware import (
+        LOGIN_ADDRESS_MAX_ATTEMPTS,
+        LOGIN_ADDRESS_WINDOW_SECONDS,
+    )
+
+    limits = _per_address_limits(config)
+    assert LOGIN_ADDRESS_WINDOW_SECONDS == 60, "nginx's rate is per minute"
+    assert int(limits["login rate"]) == LOGIN_ADDRESS_MAX_ATTEMPTS
+    # nginx admits burst + 1 at once; the backend's window admits the whole cap.
+    assert int(limits["login burst"]) + 1 >= LOGIN_ADDRESS_MAX_ATTEMPTS

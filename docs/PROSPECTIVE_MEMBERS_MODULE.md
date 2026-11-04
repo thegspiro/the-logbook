@@ -800,9 +800,12 @@ best-effort.
 
 **My applicants.** A `view_all` holder can narrow the pipeline board and table
 to the applicants they are assigned to with the **My applicants** toggle
-(`assigned_to_me` on the list and kanban endpoints). The header counts stay
-pipeline-wide. Without `view_all` the server already shows only assigned
-applicants, so the toggle is not offered.
+(`assigned_to_me` on the list, kanban and stats endpoints). The header counts,
+the archive tab badges and the archive tab lists follow it too _(2026-11-03)_,
+so every number on the page describes the applicants on screen; they counted
+the whole pipeline until then. The archive tab lists also follow a source-event
+filter now, which their badges already counted through. Without `view_all` the
+server already shows only assigned applicants, so the toggle is not offered.
 
 **Sign-offs need no module permission** _(2026-09-28)_. `GET /prospective-members/my-sign-offs` and `POST /prospective-members/prospects/{prospect_id}/approve-step` are reachable by any signed-in member with the module on: the officers a Multi-Signer Approval stage names rarely hold `prospective_members.*`. The service lists and accepts only stages asking for a role the caller holds, and returns the applicant's name and stage only — never the record. The last required signature completes the stage and advances the applicant.
 
@@ -992,16 +995,16 @@ Withdrawn / Converted figures the same response feeds.
 
 ### Query Parameters (Prospect List)
 
-| Parameter        | Type      | Description                                                                              |
-| ---------------- | --------- | ---------------------------------------------------------------------------------------- |
-| `pipeline_id`    | `UUID`    | Filter by pipeline                                                                       |
-| `status`         | `string`  | Filter by one status (backend values — `transferred`, not `converted`)                   |
-| `search`         | `string`  | Search by name or email                                                                  |
-| `event_id`       | `UUID`    | Only prospects produced by or linked to this event                                       |
-| `open_only`      | `boolean` | Drop closed applications (rejected, withdrawn, inactive, transferred); default `false`   |
-| `assigned_to_me` | `boolean` | Only applicants the caller is assigned to; default `false` (also on the kanban endpoint) |
-| `limit`          | `number`  | Page size (default 50, max 200)                                                          |
-| `offset`         | `number`  | Rows to skip (default 0)                                                                 |
+| Parameter        | Type      | Description                                                                                         |
+| ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `pipeline_id`    | `UUID`    | Filter by pipeline                                                                                  |
+| `status`         | `string`  | Filter by one status (backend values — `transferred`, not `converted`)                              |
+| `search`         | `string`  | Search by name or email                                                                             |
+| `event_id`       | `UUID`    | Only prospects produced by or linked to this event                                                  |
+| `open_only`      | `boolean` | Drop closed applications (rejected, withdrawn, inactive, transferred); default `false`              |
+| `assigned_to_me` | `boolean` | Only applicants the caller is assigned to; default `false` (also on the kanban and stats endpoints) |
+| `limit`          | `number`  | Page size (default 50, max 200)                                                                     |
+| `offset`         | `number`  | Rows to skip (default 0)                                                                            |
 
 The response is `{items, total, limit, offset}`. The caller's own prospect
 record, if any, is omitted from both `items` and `total`.

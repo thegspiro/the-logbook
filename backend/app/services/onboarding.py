@@ -7,7 +7,7 @@ This module guides users through initial setup and can be disabled once complete
 
 import copy
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from uuid import UUID
 
 from loguru import logger
@@ -49,6 +49,16 @@ from app.utils.positions import normalize_stored_positions
 # now named here and compared by tests/test_onboarding_module_parity.py.
 
 ONBOARDING_CORE_MODULES = ["members", "events", "documents", "forms"]
+
+# The core modules the server keeps on whatever is stored: the list
+# ModuleSettings.get_enabled_modules adds, and the cards the Modules step shows
+# as "Always on" (ALWAYS_ON_MODULE_IDS in the frontend registry). Custom Forms
+# is core (shown with the others) but not always on: the step offers Skip, it
+# is a stored ModuleSettings field, and Settings → Modules can turn it off.
+# configure_modules used to force the whole core list on, so it stored Forms on
+# where the completion step honoured the skip.
+# tests/test_onboarding_module_defaults.py holds it to both of those.
+ONBOARDING_ALWAYS_ON_MODULES = ["members", "events", "documents"]
 
 ONBOARDING_OFFERED_MODULES = [
     # Operations
@@ -140,6 +150,31 @@ def _with_hyphenated(ids: set[str]) -> set[str]:
 # final Continue and then fail validation with "Invalid modules". A single set
 # is the only thing that keeps a newly offered module working end to end;
 # tests/test_onboarding_module_parity.py holds it to the offered list.
+def modules_from_setup_answers(enabled: Iterable[str]) -> dict[str, bool]:
+    """The ``Organization.settings.modules`` dict a finished module step means.
+
+    Setup decides only the modules it put in front of somebody: those follow
+    the answer. Every other module keeps its declared ``ModuleSettings``
+    default. Writing False for a module the wizard never showed turns "nobody
+    was asked" into "the department said no", which is how Public Information
+    came to be stored off on every fresh install despite defaulting on (owner
+    decision 2026-11-01, workflow review W01-24: leave it on by default).
+
+    The one rule for both writers: ``OnboardingService.configure_modules`` and
+    the completion step's copy of the session into the organization.
+    """
+    from app.schemas.organization import ModuleSettings
+
+    # Hyphenated ids ("hr-payroll") come from older saved sessions.
+    normalized = {module_id.replace("-", "_") for module_id in enabled}
+    asked_about = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
+    defaults = ModuleSettings()
+    return {
+        key: (key in normalized) if key in asked_about else getattr(defaults, key)
+        for key in ModuleSettings.model_fields
+    }
+
+
 ONBOARDING_ACCEPTED_MODULE_IDS: frozenset[str] = frozenset(
     _with_hyphenated(
         {
@@ -1513,8 +1548,9 @@ class OnboardingService:
         Returns:
             Dictionary of module name to enabled status
         """
-        # Core modules are always enabled — they power cross-module features
-        core_modules = list(ONBOARDING_CORE_MODULES)
+        # Only the modules the server keeps on regardless are forced; a
+        # skipped Custom Forms stays skipped, as it does on completion.
+        always_on_modules = list(ONBOARDING_ALWAYS_ON_MODULES)
         available_modules = sorted(ONBOARDING_ACCEPTED_MODULE_IDS)
 
         # Validate modules
@@ -1524,8 +1560,7 @@ class OnboardingService:
                 list_within_detail_limit("Invalid modules: ", invalid_modules)
             )
 
-        # Ensure core modules are always included
-        final_modules = list(set(enabled_modules) | set(core_modules))
+        final_modules = list(set(enabled_modules) | set(always_on_modules))
 
         # Update onboarding status
         status = await self.get_onboarding_status()
@@ -1534,23 +1569,7 @@ class OnboardingService:
             await self._mark_step_completed(status, "modules")
 
         # ── Also persist to Organization.settings.modules (canonical store) ──
-        from app.schemas.organization import ModuleSettings
-
-        configurable_keys = list(ModuleSettings.model_fields.keys())
-        # Normalize hyphenated IDs (e.g. "hr-payroll") to snake_case
-        normalized = {mid.replace("-", "_") for mid in final_modules}
-        # Setup only decides the modules it actually put in front of somebody.
-        # Writing False for the rest turns "the wizard never asked" into "the
-        # department said no" — which is how public_info came to be stored off
-        # on every fresh install despite defaulting on, and would do the same
-        # to Finance and Medical Screening. Settings-only modules keep their
-        # declared default and are changed from Settings → Modules.
-        asked_about = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
-        defaults = ModuleSettings()
-        modules_dict = {
-            key: (key in normalized) if key in asked_about else getattr(defaults, key)
-            for key in configurable_keys
-        }
+        modules_dict = modules_from_setup_answers(final_modules)
 
         result = await self.db.execute(
             select(Organization).order_by(Organization.created_at.asc()).limit(1)

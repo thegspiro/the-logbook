@@ -229,6 +229,16 @@ instead of the bundled containers, layer `docker-compose.external-services.yml`
 after the production override; see Method 2 of the
 [AWS Deployment Guide](deployment/aws.md#method-2-ec2--rds--elasticache-production).
 
+#### Azure Deployment
+
+Follow the [Azure Deployment Guide](deployment/azure.md). It covers a single
+Azure VM running the whole stack, and a VM backed by Azure Database for MySQL
+and Azure Managed Redis through `docker-compose.external-services.yml`, with
+private networking, verified TLS, encrypted backups to Blob Storage, moving an
+existing installation, and the Azure-specific pitfalls. Read its
+[Pitfalls](deployment/azure.md#pitfalls) before you start: among them, the
+backend empties any database that has no `alembic_version` table.
+
 #### Digital Ocean Deployment
 
 1. **Create Droplet**

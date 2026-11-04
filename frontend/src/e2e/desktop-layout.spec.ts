@@ -11,6 +11,7 @@
 
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { json, signIn, TEST_USER } from './helpers';
 import { ROUTES, signInForRoute } from './mobile-routes';
 
 const DESKTOPS = [
@@ -81,4 +82,79 @@ test.describe('A touch screen keeps its 44px targets', () => {
     await open(page, '/prospective-members', { width: 1180, height: 820 });
     expect(await heightOf(page, 'button:has-text("Filter")')).toBeGreaterThanOrEqual(44);
   });
+});
+
+// The roster's Actions column sat past the right edge of its card on a laptop,
+// and the only way to reach it was a horizontal scrollbar at the foot of the
+// table, a full page of members below the first row's missing buttons. Every
+// identity cell refused to wrap and each of seven columns carried 48px of
+// padding, so three ordinary members were 58px wider than the card at
+// 1366x768. Long names, usernames and membership labels are what force it,
+// so the fixture carries them.
+// A tablet keeps the side navigation open, so the page body there is narrower
+// than seven columns need however they wrap; below 1024px the roster reflows
+// into one card per member instead.
+const ROSTER_TABLETS = [
+  { name: 'iPad portrait 820x1180', width: 820, height: 1180 },
+  { name: 'tablet 1000x800', width: 1000, height: 800 },
+];
+
+test.describe('The member roster fits its card on a laptop or tablet', () => {
+  const position = (id: string, name: string) => ({
+    id,
+    name,
+    slug: id,
+    is_system: true,
+    permissions: [],
+  });
+  const member = (
+    n: number,
+    first: string,
+    last: string,
+    status: string,
+    membershipType: string,
+    memberStatus: string,
+    roles: unknown[]
+  ) => ({
+    id: `roster-${n}`,
+    organization_id: 'org-1',
+    username: `${first}${last}`.toLowerCase(),
+    first_name: first,
+    last_name: last,
+    membership_number: `64${n}0`,
+    rank: 'emt',
+    status,
+    membership_type: membershipType,
+    member_class: 'operational',
+    member_status: memberStatus,
+    roles,
+    mfa_enabled: true,
+    has_passkey: false,
+    locked_until: null,
+  });
+  const ROSTER = [
+    member(1, 'Alexandra', 'Ayala-Montgomery', 'probationary', 'probationary', 'probationary', [
+      position('probationary', 'Probationary Member'),
+      position('member', 'Member'),
+    ]),
+    member(2, 'Jonathan', 'Babbitt', 'active', 'active', 'regular', [position('member', 'Member')]),
+    member(3, 'Elizabeth', 'Zach', 'active', 'life', 'life', [
+      position('life', 'Life Member'),
+      position('member', 'Member'),
+    ]),
+  ];
+
+  for (const viewport of [...DESKTOPS, ...ROSTER_TABLETS]) {
+    test(`/members/admin — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, { permissions: [...TEST_USER.permissions, 'members.manage'] });
+      await page.route('**/api/v1/users/with-roles**', (route) => void route.fulfill(json(ROSTER)));
+      await page.goto('/members/admin');
+      const region = page.getByRole('region', { name: 'Members and their positions' });
+      await expect(region.getByRole('button', { name: 'Delete Elizabeth Zach' })).toBeAttached({ timeout: 15_000 });
+
+      const overflow = await region.evaluate((el) => el.scrollWidth - el.clientWidth);
+      expect(overflow, `the roster is ${overflow}px wider than its card`).toBeLessThanOrEqual(0);
+    });
+  }
 });
