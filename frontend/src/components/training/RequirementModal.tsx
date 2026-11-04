@@ -478,58 +478,65 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="req-training-type"
-                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                  >
-                    Training Type
-                  </label>
-                  <select
-                    id="req-training-type"
-                    value={formData.training_type}
-                    onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
-                    className="form-input"
-                  >
-                    <option value="">Any Type</option>
-                    <option value="certification">Certification</option>
-                    <option value="continuing_education">Continuing Education</option>
-                    <option value="skills_practice">Skills Practice</option>
-                    <option value="orientation">Orientation</option>
-                    <option value="refresher">Refresher</option>
-                    <option value="specialty">Specialty</option>
-                    <option value="policy_acknowledgment">Policy Acknowledgment</option>
-                  </select>
-                </div>
+              {/* Neither applies to session attendance, which counts linked
+                  sessions attended and reads no record's type or hours. */}
+              {formData.requirement_type !== 'session_attendance' && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="req-training-type"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Training Type
+                    </label>
+                    <select
+                      id="req-training-type"
+                      value={formData.training_type}
+                      onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
+                      className="form-input"
+                    >
+                      <option value="">Any Type</option>
+                      <option value="certification">Certification</option>
+                      <option value="continuing_education">Continuing Education</option>
+                      <option value="skills_practice">Skills Practice</option>
+                      <option value="orientation">Orientation</option>
+                      <option value="refresher">Refresher</option>
+                      <option value="specialty">Specialty</option>
+                      <option value="policy_acknowledgment">Policy Acknowledgment</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label
-                    htmlFor="req-required-hours"
-                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                  >
-                    Required Hours
-                    {formData.requirement_type === 'hours' && (
-                      <span aria-hidden="true" className="text-red-700 dark:text-red-400">
-                        {' '}
-                        *
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    id="req-required-hours"
-                    type="number"
-                    value={formData.required_hours || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })
-                    }
-                    className="form-input placeholder-theme-text-muted"
-                    placeholder="e.g., 36"
-                    min="0"
-                    step="0.5"
-                  />
+                  <div>
+                    <label
+                      htmlFor="req-required-hours"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Required Hours
+                      {formData.requirement_type === 'hours' && (
+                        <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                          {' '}
+                          *
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      id="req-required-hours"
+                      type="number"
+                      value={formData.required_hours || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          required_hours: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
+                      className="form-input placeholder-theme-text-muted"
+                      placeholder="e.g., 36"
+                      min="0"
+                      step="0.5"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Per-type quantity fields */}
               {/* Courses are picked from the library, never typed: compliance
