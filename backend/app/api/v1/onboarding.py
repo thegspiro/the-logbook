@@ -62,6 +62,7 @@ from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     ONBOARDING_POSITION_EDITOR_MODULE_IDS,
     OnboardingService,
+    modules_from_setup_answers,
 )
 from app.services.upload_scanning import scan_and_validate_logo
 from app.utils.email_providers import (
@@ -1164,16 +1165,11 @@ async def _persist_session_data_to_org(
     # Persist module selections
     modules_data = session_data.get("modules")
     if modules_data and modules_data.get("enabled"):
-        from app.schemas.organization import ModuleSettings
-
-        enabled_list = modules_data["enabled"]
-        # Normalize hyphenated IDs to snake_case so they match the
-        # ModuleSettings field names (e.g. "hr-payroll" -> "hr_payroll").
-        normalized = {mid.replace("-", "_") for mid in enabled_list}
-        # Map the enabled list to every configurable module key defined in
-        # ModuleSettings so the Settings page always has the full picture.
-        configurable_keys = list(ModuleSettings.model_fields.keys())
-        org_settings["modules"] = {k: k in normalized for k in configurable_keys}
+        # Every module key, so Settings has the full picture, but only the
+        # modules setup asked about follow the answer; the rest keep their
+        # declared default. This used to write False for everything not
+        # enabled, which stored Public Information off on every fresh install.
+        org_settings["modules"] = modules_from_setup_answers(modules_data["enabled"])
 
     organization.settings = org_settings
     await db.flush()
