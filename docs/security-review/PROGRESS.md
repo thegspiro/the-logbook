@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-auth-session-p15`) —
+**PR [#4021](https://github.com/thegspiro/the-logbook/pull/4021)** (branch
+`claude/security-review-auth-session-p15`) —
 Feature 01 (Auth & session lifecycle), pass 15, a watchdog pickup. 0 fixed,
 0 new findings: two already-merged security fixes verified correct — the
 sign-in rate limit's per-account callers in `auth.py` (the limiter itself
