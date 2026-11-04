@@ -103,6 +103,7 @@ const MemberIdCardsAdminPage = lazyWithRetry(() => import('./pages/MemberIdCards
 const WaiverManagementPage = lazyWithRetry(() => import('../../pages/WaiverManagementPage'));
 const MemberLabelPrintPage = lazyWithRetry(() => import('../../pages/MemberLabelPrintPage'));
 const MemberIdCardPrintPage = lazyWithRetry(() => import('../../pages/MemberIdCardPrintPage'));
+const MyCrewPage = lazyWithRetry(() => import('../../pages/MyCrewPage'));
 
 export const getMembershipRoutes = () => {
   return (
@@ -163,6 +164,18 @@ export const getMembershipRoutes = () => {
             <ProtectedRoute requiredPermission="members.check_in">
               <CheckInStationPage />
             </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      {/* No permission: a dated Reports To assignment is the grant, and the
+          server lists only the members the caller supervises today (owner
+          decision 2026-11-01, crew views). Someone with no crew sees an
+          empty state. */}
+      <Route
+        path="/members/my-crew"
+        element={
+          <Suspense fallback={null}>
+            <MyCrewPage />
           </Suspense>
         }
       />

@@ -38,6 +38,7 @@ import { EVALUATIONS_AREA_PREFIX, EVALUATIONS_HOME_PATH } from './evaluationsNav
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
+import { useHasCrew } from '../../hooks/useHasCrew';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -105,6 +106,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     currentUser?.id,
     !modulesLoading && isModuleOn('prospective_members')
   );
+  const hasCrew = useHasCrew(currentUser?.id);
   const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second
@@ -184,6 +186,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     ...(hasAssignedApplicants
       ? [{ label: 'My Applicants', path: '/prospective-members/my-applicants' } as NavItem]
       : []),
+    // Gate mirrors SideNavigation's My Crew — see there.
+    ...(hasCrew ? [{ label: 'My Crew', path: '/members/my-crew' } as NavItem] : []),
     // Every member's inbox for department announcements, and the suggestion
     // box. SideNavigation has always listed both; without them here a
     // department on this layout had no way to reach either screen.

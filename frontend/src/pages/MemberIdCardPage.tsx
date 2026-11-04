@@ -30,7 +30,7 @@ import { memberBadgeService } from '../services/memberBadgeService';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import type { UserWithRoles } from '../types/role';
@@ -266,7 +266,7 @@ export const MemberIdCardPage: React.FC = () => {
 
             {/* Operational members show their rank; administrative members have
                 no operational rank, so identify their member class instead. */}
-            {(member.rank || isAdministrative || member.hire_date) && (
+            {(member.rank || isAdministrative || member.service_since) && (
               <div className="mb-4 grid grid-cols-2 gap-3">
                 {(member.rank || isAdministrative) && (
                   <div className="bg-theme-surface-hover rounded-lg px-3 py-2 text-center print:border print:border-gray-200 print:bg-gray-50">
@@ -278,13 +278,16 @@ export const MemberIdCardPage: React.FC = () => {
                     </p>
                   </div>
                 )}
-                {member.hire_date && (
+                {/* Credited service, not the hire date (owner decision
+                    2026-11-01) — the same year the printed card carries.
+                    A calendar date, so formatted without a zone shift. */}
+                {member.service_since && (
                   <div className="bg-theme-surface-hover rounded-lg px-3 py-2 text-center print:border print:border-gray-200 print:bg-gray-50">
                     <p className="text-theme-text-muted text-xs tracking-wider uppercase print:text-gray-500">
                       Member Since
                     </p>
                     <p className="text-theme-text-primary text-sm font-semibold print:text-black">
-                      {new Date(member.hire_date).getFullYear()}
+                      {formatDateCustom(member.service_since, { year: 'numeric' }, tz)}
                     </p>
                   </div>
                 )}

@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4040](https://github.com/thegspiro/the-logbook/pull/4040)** (branch
+`claude/security-review-storefront-payments-p15`) —
+Feature 04 (Storefront & payments), pass 15, a watchdog pickup. True zero
+delta against pass 14's own reviewed state — every tracked file
+byte-identical, 48 routes re-enumerated by AST and unchanged. 0 fixed, 0 new
+findings; 0 findings remain OPEN/FLAGGED for this feature. See
+`docs/security-review/SF-04-storefront-payments.md`'s **Pass 15** section.
+Next in the rotation: Feature 05 (Finance & approvals).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 15, PR #4022, merged), preserved for history</summary>
+
 **PR [#4022](https://github.com/thegspiro/the-logbook/pull/4022)** (branch
 `claude/security-review-permissions-roles-p15`) —
 Feature 02 (Permissions & roles), pass 15, a watchdog pickup. 0 fixed, 0 new
@@ -27,6 +39,8 @@ conditional `ensure_stepup` call, `operational_ranks.py`'s rank CRUD now in
 28 routes re-enumerated by AST, unchanged. See
 `docs/security-review/PERM-02-permissions-roles.md`'s **Pass 15** section.
 Next in the rotation: Feature 03 (Public surface & webhooks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 16, PR #4020, merged), preserved for history</summary>
@@ -24742,8 +24756,8 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                               | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                 | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (40 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                                                  | ⬜     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                          | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (49 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py` (added pass 15)                              | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                          | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                                                 | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                              | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                                                      | ⬜     |
@@ -24792,6 +24806,47 @@ them to be re-discovered by SEC-00 every lap.
 ---
 
 ## Log
+
+### 2026-11-04 — Feature 03 (Public surface & webhooks, pass 15) merged; Feature 04 (Storefront & payments, pass 15) — watchdog pickup, true zero delta, 0 fixed, 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. PR #4023 (Feature 03, Public
+surface & webhooks, pass 15) had already merged (`e24e32640`); a fresh
+`list_pull_requests` (state `open`) returned zero results for a
+`claude/security-review-*` head, confirming row 04 (Storefront & payments)
+as the next `⬜` row on a freshly-pulled `main`.
+
+Baseline `b7f72c67a` (PR #3879's merge, pass 14) to head `e24e32640`
+(PR #4023's merge): every file this feature tracks — `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `email_templates_storefront.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, and
+the entire `frontend/src/modules/storefront/` tree — is byte-identical to
+pass 14's reviewed state (`git diff --stat` empty on all of them). 37 new
+migrations in the window matched a `store_`/`storefront`/`embroidery`
+content grep on 8 files; each read directly and confirmed the same
+false-positive shape pass 14 already classified (the repo-wide
+`REQUIRED_EMAIL_KINDS` literal list, or a code comment merely naming
+`test_storefront_grant_backfill.py` as a precedent) — none touches a
+`store_*` table or a position's storefront grants. Route count
+re-enumerated by AST: 48, unchanged since pass 11. **0 fixed, 0 new
+findings; 0 findings remain OPEN/FLAGGED for this feature.** Full
+write-up: `docs/security-review/SF-04-storefront-payments.md`'s
+**Pass 15** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 717
+revisions, single head `8da91e9d28d6`; `check_route_permissions.py
+--strict` — 300 routes, 0 errors/warnings; scoped backend suite
+(`-k "storefront or stripe or payment or refund or checkout or paypal"`)
+— 999 passed, 1 pre-existing environment skip (`pywebpush`); frontend
+`npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-03 — Feature 24 (Meetings & minutes, pass 12) merged; Feature 25 (Messaging & notifications, pass 12) — watchdog pickup, 0 fixed, 0 new findings
 
@@ -46744,4 +46799,82 @@ No frontend files touched this pass.
 
 Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
 webhooks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-04 — Feature 02 (Permissions & roles, pass 15) merged; Feature 03 (Public surface & webhooks, pass 15) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. Step 0 re-checked fresh against
+GitHub (`list_pull_requests`, state `open`): 0 results for a
+`claude/security-review-*` head, immediately after PR #4022 (Feature 02,
+Permissions & roles, pass 15) merged. Row 03 (Public surface & webhooks) is
+the next `⬜` row, read directly off a freshly-fetched `main`.
+
+Baseline `2376e25d0` (pass 14's merge) to head `bc34d7782` (PR #4022's
+merge): five files with a real diff against this feature's declared scope —
+a brand-new `app/api/public/zeffy_webhook.py` (181 lines, 1 route),
+`calendar.py` (+63/-4), `finance_approvals.py` (+35/-1), and `display.py`
+(+20/-18) / `event_guest.py` (+22/-20). The other eleven route-bearing files
+under `app/api/public/`, both pre-existing webhook-adjacent modules
+(`public_portal_security.py`, `webhook_service.py`, `webhook_replay.py`) and
+all three pre-existing webhook receivers (PayPal, Documenso/Cal.com,
+Salesforce) are byte-identical to pass 14.
+
+The new Zeffy inbound webhook (`POST
+/public/v1/webhooks/zeffy/{integration_id}`) was read in full against all
+seven checklist dimensions, matching this feature's established webhook
+shape: 60/min per-IP rate limit before any DB work, `Integration` lookup by
+client-supplied id before signature check (same ordering pass 12 already
+reviewed and accepted for the other three webhooks), HMAC-SHA256 signature
+over `"{t}.{raw body}"` with a required, constant-time-compared 5-minute
+timestamp tolerance (no replay cache needed — see below), and idempotency
+backed by a real `UniqueConstraint` on `(organization_id,
+zeffy_payment_id)` with an `IntegrityError`-recovery re-read under
+`with_for_update()` (Pitfall #36's textbook shape, read directly in
+`zeffy_sync_service.py`, not assumed from its docstring). The untrusted
+payment id is never applied from the webhook body directly — it is
+`urllib.parse.quote`d and used only to re-fetch the payment from Zeffy's own
+API with the department's key. `payer_email` is `EncryptedText`; the
+plaintext JSON kept for support deep-copies the payload before stripping
+buyer email/address and checkout answers (Pitfall #12). The audit log
+carries ids, amount and state only — no payer PII.
+
+Also reviewed: `calendar.py`'s department iCal feed now optionally includes
+shifts (org-scoped, capped, an explicit 5-field allowlist with no roster or
+notes, flowing through the same ICS-escaping pipeline as events) behind a
+per-integration `include_shifts` flag;
+`finance_approvals.py`'s `get_approval_detail` now returns
+`title`/`amount`/`requester_name` to the token-holding approver (owner
+decision 2026-11-01) via a new `FinanceService.approval_subject` that
+selects only those three things, org-scoped to the token's own resolved
+chain, filled only while the link is still actionable; and a 4th
+`already_checked_in` tuple element two public guest-check-in handlers now
+discard, which is Feature 32's own LOC12-1 fix (already reviewed and fixed
+there) and not a new finding here. Route count re-enumerated by AST across
+all 16 route-bearing files: **49** (48 + the new webhook route),
+cross-checked by `grep` and against every `app.include_router(...)` call in
+`backend/main.py` — none orphaned.
+
+**0 fixed, 0 new findings.** PUB-1 through PUB-14 remain fixed and
+unaffected by this diff. Full write-up:
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 15**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 712
+revisions, single head `b5e906ebdd7d`; `check_route_permissions.py --strict`
+— 298 routes, 0 errors/warnings; scoped backend suite (`-k "public or
+webhook or zeffy or paypal or salesforce or integrations or minutes or
+mcp_oauth or calendar or finance_approval or branding or kiosk or guest or
+event_guest or embed or legal or display or security_txt or portal or
+next_meeting or follow_up or error_reporting"`) — 1708 passed, 1
+pre-existing skip (`pywebpush`); standing guard suites (org-scoping
+ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table
+tolerance, baseline member grants, logging escaping, log-call-shape sweep)
+— 174 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings.
+
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments) — re-check `list_pull_requests` fresh rather than trusting this
 note.

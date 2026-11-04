@@ -11,6 +11,35 @@ Nothing was captured by this pass.
 | 02 | Evaluations strip and the Getting started checklist with the template preview | Create |
 | 01 | Members roster at tablet width (cards below 1024px); `01-22-member-lifecycle`; profile ID Cards empty state | Replace |
 
+## Captured 2026-11-04 — screens unblocked by #3988, #3997 and #4005
+
+Taken on the demo department seeded from `main` at `e850590f`, with malware
+scanning on. No seed step was added: the Volunteer Interest Night is already
+slid into its check-in window on every seed. Nothing was written to the demo.
+
+The follow-up form link reaches an applicant only by email, which the demo does
+not send, and is stored encrypted, so none of the guide 15 shots reads it. As
+`15-13`, `15-28` and `15-41` do, each answers only the requests its screen
+makes, from Mateo Alvarez's real record, his real follow-up request and the
+stage's real form; the answers he is pictured giving are written in the
+manifest. Every send, resend, review, draft and submit request is refused in
+the browser.
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `15-40-follow-up-form-page` | New | Mocked: the public form lookup, answered with the stage's form and the values the server pre-fills from his record. Fills the placeholder guide 15 carried since Oct 29 |
+| `15-43-interview-follow-up-answers` | New | Mocked: his request list (marked submitted) and its answers |
+| `15-44-follow-up-drawer-resend` | New | Mocked: his request read as sent; in the demo it is Not sent (`15-34`) |
+| `15-45-follow-up-drawer-contact-changed` | New | Mocked: his request read as submitted, with the mobile and street address changes. Resend and Mark reviewed never share one request (Resend is for an unsubmitted form, the flag is raised by a submission), so they are two images |
+| `15-46-card-contact-changed` | New | Mocked: the board's real applicant list with his `contact_change_pending` set. The card's selection checkbox sits over the flag's warning icon, as it sits over the avatar on every card; see the list below |
+| `04-97-event-qr-page-guest-code` | New | The QR page of the Volunteer Interest Night while check-in is open: the member code with **Print QR Code** and the guest card with **Print Guest QR Code**. Nothing mocked |
+| `03-130-pattern-paused` | Re-shot | Now on Shift Patterns, card open; alt text corrected and the image moved to the guide's Shift Patterns section, replacing the sentence that pointed to the Templates section |
+| `01-22-member-lifecycle` | Re-shot | The roster's Actions column is no longer clipped. Taller frame, since a Needs attention card now sits above the area cards |
+| `02-126-shift-evaluation-settings` | Re-shot | The "Not in use on shifts yet" notice is gone; an **Outside shifts awaiting an evaluation** card now leads the tab. Alt text updated |
+
+Left for later: `05-141`, `06-36` and `04-92`, whose wording fixes are in PR
+#4035, not yet merged.
+
 ## Queued by the November 2 – 3 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).
@@ -136,9 +165,9 @@ are what the demo cannot reach without a real external account or a real send:
 
 | Queue | Screen | Why |
 | --- | --- | --- |
-| Oct 29, Oct 29 – 30 | Applicant follow-up form page with **Save and finish later**; Interview page **Follow-up Forms** panel; drawer **Resend** / **Mark reviewed**; **Contact details changed** | Blocked until 2026-11-03 by an app defect, since fixed: signed out, `/application-form/:token` redirected to sign-in, because `FieldRenderer` requested `/operational-ranks` for every field and the 401 ended the session. It now asks only for a member lookup. The form page and the three screens after a submission can now be produced; the placeholder stays in guide 15 until they are captured |
-| Oct 25 – 26 | Event QR page with the guest code and print-one-code choice | Blocked until 2026-11-03 by an app defect, since fixed: `get_qr_check_in_data` did not return `allow_guest_check_in`, so the QR page said guest check-in was off. It now shows the Guest Check-In card; the shot, with the code showing while check-in is open, is still to capture. `04-93` and `04-94` show the code on the event page |
-| Oct 24 – 25 | Shift Patterns listing a paused pattern with **Resume** | Blocked until 2026-11-04 by an app defect, since fixed: `PatternsTab.tsx` listed active patterns only, so a paused one vanished. It now lists paused patterns with **Resume**. `03-130` was taken from the Shift Templates page's Patterns tab and can be re-shot on Shift Patterns |
+| Oct 29, Oct 29 – 30 | Applicant follow-up form page with **Save and finish later**; Interview page **Follow-up Forms** panel; drawer **Resend** / **Mark reviewed**; **Contact details changed** | **Resolved**, [captured 2026-11-04](#captured-2026-11-04--screens-unblocked-by-3988-3997-and-4005): `15-40`, `15-43` to `15-46`. Was blocked until 2026-11-03 by `FieldRenderer` requesting `/operational-ranks` signed out (fixed in #3988) |
+| Oct 25 – 26 | Event QR page with the guest code and print-one-code choice | **Resolved**, [captured 2026-11-04](#captured-2026-11-04--screens-unblocked-by-3988-3997-and-4005): `04-97`. Was blocked until 2026-11-03 by `get_qr_check_in_data` omitting `allow_guest_check_in` (fixed in #3997) |
+| Oct 24 – 25 | Shift Patterns listing a paused pattern with **Resume** | **Resolved**, [captured 2026-11-04](#captured-2026-11-04--screens-unblocked-by-3988-3997-and-4005): `03-130` re-shot on Shift Patterns. Was blocked until 2026-11-04 by `PatternsTab.tsx` listing active patterns only (fixed in #4005) |
 | Oct 24 afternoon | NFC Tag Register, compartment-only view | Needs an account with `check_manage` and not `inventory.manage`. The demo has none |
 | Oct 21 – 22, Oct 16 – 18 | Import Queue; training Sync History | Both fill only from a live vendor sync, the reason `02-68` is held back |
 | Oct 21 – 22 | Requirement delete toast | A toast, and it needs a real delete |
@@ -153,12 +182,18 @@ are what the demo cannot reach without a real external account or a real send:
 code:
 
 - Guide 02: the Shift Evaluations notice still says evaluations are not in use
-  on shifts.
-- Guide 05: the Move tag dialog says "Find a item".
-- Card Readers says "1 taps" and repeats a room's station in its name.
+  on shifts. **Removed on main**; `02-126` re-shot 2026-11-04.
+- Guide 05: the Move tag dialog says "Find a item". Open: fixed in PR #4035, not yet merged.
+- Card Readers says "1 taps" and repeats a room's station in its name. Open: the wording is fixed in PR #4035, not yet merged.
 - The Members roster's Actions column is clipped at 1440px, and the explainer
-  above it still describes one "membership type".
-- An unchanged draft purchase request reads "Saving soon…" as soon as it opens.
+  above it still describes one "membership type". The Actions column is
+  **fixed on main** (#03f21141 and follow-ups; `01-22` re-shot 2026-11-04).
+  The explainer still says "membership type".
+- An unchanged draft purchase request reads "Saving soon…" as soon as it opens. Open: fixed in PR #4037, not yet merged.
+- On the prospective-members board, each card's selection checkbox
+  (`PipelineKanban.tsx`, `absolute top-2 left-2`) sits over the card's top-left
+  corner: the avatar, or the warning icon of a **Contact details changed** or
+  inactivity banner (seen 2026-11-04 in `15-46`).
 - A case manager without manage rights sees **Send now**, which guide 15 says
   needs `prospective_members.manage`.
 

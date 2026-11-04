@@ -30,7 +30,12 @@ vi.mock('../services/api', () => ({
     setComplianceExemption: (...args: unknown[]) => mockSetComplianceExemption(...args) as unknown,
   },
   memberStatusService: {
-    getTierConfig: (...args: unknown[]) => mockGetTierConfig(...args) as unknown,
+    // The status control reads the members-visible tier names; the fixtures
+    // below state a ladder, of which the names endpoint serves ids and names.
+    getTierNames: async (...args: unknown[]) => {
+      const config = (await mockGetTierConfig(...args)) as { tiers?: { id: string; name: string }[] } | undefined;
+      return (config?.tiers ?? []).map(({ id, name }) => ({ id, name }));
+    },
   },
   locationsService: {
     getLocations: (...args: unknown[]) => mockGetLocations(...args) as unknown,

@@ -11,6 +11,7 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
 from app.models.medical_screening import (
@@ -132,10 +133,27 @@ async def _screening(
     completed: date | None = None,
     expires: date | None = None,
 ) -> ScreeningRecord:
+    # Filed against the department's requirement of this type when it has
+    # exactly one, as the record form does: a record counts only toward the
+    # requirement it is linked to (owner decision 2026-11-01). Create the
+    # requirement before the record for the link to be made.
+    matching = (
+        (
+            await db_session.execute(
+                select(ScreeningRequirement.id).where(
+                    ScreeningRequirement.organization_id == org.id,
+                    ScreeningRequirement.screening_type == screening_type,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     record = ScreeningRecord(
         id=str(uuid.uuid4()),
         organization_id=org.id,
         user_id=user.id,
+        requirement_id=matching[0] if len(matching) == 1 else None,
         screening_type=screening_type,
         status=status,
         scheduled_date=scheduled,

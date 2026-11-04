@@ -1,35 +1,32 @@
 import { useEffect, useState } from 'react';
 import { memberStatusService } from '../services/api';
-import type { MembershipTier } from '../types/user';
+import type { MembershipTierName } from '../types/user';
 
 /**
- * The department's membership ladder, for a control that offers tier ids as
- * statuses or labels a stored one.
+ * The department's membership ladder — ids and names — for a control that
+ * offers tier ids as statuses or labels a stored one.
  *
- * The config endpoint needs `members.manage`. A caller without it gets an
- * empty ladder rather than an error: every screen that uses this still works
- * from the built-in statuses, and a 403 on a dropdown's option list is not
- * something to toast about.
+ * Read from `GET /users/membership-tiers/names`, which every signed-in member
+ * may call (owner decision 2026-11-01), so a member's directory filter and a
+ * colleague's profile use the department's own names ("Senior Member") rather
+ * than the built-in labels, and the officers' screens read the same names.
+ * The tier editor, which needs the advancement rules and benefits, keeps the
+ * `members.manage` config endpoint (`useTierEditor`).
  *
- * Pass `enabled: false` where the caller already knows it lacks the grant —
- * the member directory, which every member opens — so the request that can
- * only be refused is never sent. The result is the same empty ladder.
+ * A failed request gives an empty ladder rather than an error: every screen
+ * that uses this still works from the built-in statuses, and a dropdown's
+ * option list is not something to toast about.
  */
-export function useMembershipTierOptions(enabled = true): { tiers: MembershipTier[]; loaded: boolean } {
-  const [tiers, setTiers] = useState<MembershipTier[]>([]);
+export function useMembershipTierOptions(): { tiers: MembershipTierName[]; loaded: boolean } {
+  const [tiers, setTiers] = useState<MembershipTierName[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!enabled) {
-      setTiers([]);
-      setLoaded(true);
-      return undefined;
-    }
     let cancelled = false;
     memberStatusService
-      .getTierConfig()
-      .then((config) => {
-        if (!cancelled) setTiers(Array.isArray(config?.tiers) ? config.tiers : []);
+      .getTierNames()
+      .then((names) => {
+        if (!cancelled) setTiers(Array.isArray(names) ? names : []);
       })
       .catch(() => {
         if (!cancelled) setTiers([]);
@@ -40,7 +37,7 @@ export function useMembershipTierOptions(enabled = true): { tiers: MembershipTie
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, []);
 
   return { tiers, loaded };
 }

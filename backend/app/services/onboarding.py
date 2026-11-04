@@ -145,27 +145,26 @@ def _with_hyphenated(ids: set[str]) -> set[str]:
     return ids | {module_id.replace("_", "-") for module_id in ids}
 
 
-# Every module ID the onboarding endpoints will accept, from any step.
-#
-# There were three of these lists — the wizard's, the session endpoint's, and
-# the Settings screen's — and they disagreed. Storefront was added to one of
-# them, which is how enabling the Department Store could get as far as the
-# final Continue and then fail validation with "Invalid modules". A single set
-# is the only thing that keeps a newly offered module working end to end;
-# tests/test_onboarding_module_parity.py holds it to the offered list.
 def modules_from_setup_answers(enabled: Iterable[str]) -> dict[str, bool]:
-    """The ``Organization.settings.modules`` dict a finished module step means.
+    """The ``Organization.settings.modules`` dict a set of setup answers means.
 
-    Setup decides only the modules it put in front of somebody: those follow
-    the answer. Every other module keeps its declared ``ModuleSettings``
-    default. Writing False for a module the wizard never showed turns "nobody
-    was asked" into "the department said no", which is how Public Information
-    came to be stored off on every fresh install despite defaulting on. Setup
-    now asks about Public Information itself (owner decision 2026-11-01,
-    confirmed 2026-11-04, workflow review W01-24), so its answer decides.
+    - A module named in the answers is on.
+    - A module setup asked about and the answers do not name is off: a real
+      "no".
+    - Every other module keeps its declared ``ModuleSettings`` default.
 
-    The one rule for both writers: ``OnboardingService.configure_modules`` and
-    the completion step's copy of the session into the organization.
+    Writing False for a module the wizard never showed turns "nobody was asked"
+    into "the department said no", which is how Public Information came to be
+    stored off on every fresh install despite defaulting on. Setup now asks
+    about Public Information itself (owner decision 2026-11-01, confirmed
+    2026-11-04, workflow review W01-24), so its answer decides. A module the
+    answers do name stays on even if today's wizard no longer offers it, so a
+    choice recorded by an older setup is not dropped.
+
+    The one rule for every writer of setup answers:
+    ``OnboardingService.configure_modules``, the completion step's copy of the
+    session into the organization, and ``OrganizationService``'s one-time build
+    from the legacy onboarding record.
     """
     from app.schemas.organization import ModuleSettings
 
@@ -174,11 +173,23 @@ def modules_from_setup_answers(enabled: Iterable[str]) -> dict[str, bool]:
     asked_about = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
     defaults = ModuleSettings()
     return {
-        key: (key in normalized) if key in asked_about else getattr(defaults, key)
+        key: (
+            True
+            if key in normalized
+            else False if key in asked_about else getattr(defaults, key)
+        )
         for key in ModuleSettings.model_fields
     }
 
 
+# Every module ID the onboarding endpoints will accept, from any step.
+#
+# There were three of these lists — the wizard's, the session endpoint's, and
+# the Settings screen's — and they disagreed. Storefront was added to one of
+# them, which is how enabling the Department Store could get as far as the
+# final Continue and then fail validation with "Invalid modules". A single set
+# is the only thing that keeps a newly offered module working end to end;
+# tests/test_onboarding_module_parity.py holds it to the offered list.
 ONBOARDING_ACCEPTED_MODULE_IDS: frozenset[str] = frozenset(
     _with_hyphenated(
         {

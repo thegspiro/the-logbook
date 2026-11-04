@@ -27,6 +27,12 @@ interface ScreeningRecordFormProps {
   requirements: ScreeningRequirement[];
   onSave: (data: ScreeningRecordCreate | ScreeningRecordUpdate) => Promise<void>;
   onClose: () => void;
+  /**
+   * Whether to show and send the clinical narrative fields (MS-14). Without
+   * `medical_screening.view_details` the API returns them null, so an edit
+   * form showing them would send the blanks back and erase what is stored.
+   */
+  showNarrative?: boolean | undefined;
 }
 
 const inputClass = 'form-input';
@@ -42,7 +48,13 @@ const labelClass = 'form-label mb-2';
 // reads to the next officer as a clearance it never was.
 const RESULTS_WITHOUT_EXPIRATION: readonly string[] = [ScreeningStatus.FAILED, ScreeningStatus.EXPIRED];
 
-export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record, requirements, onSave, onClose }) => {
+export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({
+  record,
+  requirements,
+  onSave,
+  onClose,
+  showNarrative = true,
+}) => {
   const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
   const [screeningType, setScreeningType] = useState<string>(record?.screening_type ?? ScreeningType.PHYSICAL_EXAM);
@@ -116,14 +128,21 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
       // silently survive behind the "Record updated" toast (CLAUDE.md
       // pitfall #1, and these three are PHI).
       const data: ScreeningRecordUpdate = {
+        requirement_id: requirementId || null,
         screening_type: screeningType as ScreeningRecordUpdate['screening_type'],
         status: recordStatus as ScreeningRecordUpdate['status'],
         scheduled_date: scheduledDate || null,
         completed_date: completedDate || null,
         expiration_date: expirationDate || null,
-        provider_name: blankToNull(providerName),
-        result_summary: blankToNull(resultSummary),
-        notes: blankToNull(notes),
+        // Left out entirely when the narrative is not shown: an omitted key
+        // leaves the stored value alone (exclude_unset on the backend).
+        ...(showNarrative
+          ? {
+              provider_name: blankToNull(providerName),
+              result_summary: blankToNull(resultSummary),
+              notes: blankToNull(notes),
+            }
+          : {}),
       };
       await onSave(data);
     } else {
@@ -136,9 +155,9 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
         scheduled_date: scheduledDate || undefined,
         completed_date: completedDate || undefined,
         expiration_date: expirationDate || undefined,
-        provider_name: providerName.trim() || undefined,
-        result_summary: resultSummary.trim() || undefined,
-        notes: notes.trim() || undefined,
+        provider_name: showNarrative ? providerName.trim() || undefined : undefined,
+        result_summary: showNarrative ? resultSummary.trim() || undefined : undefined,
+        notes: showNarrative ? notes.trim() || undefined : undefined,
       };
       await onSave(data);
     }
@@ -217,31 +236,37 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
               )}
             </fieldset>
           )}
-          {!record && (
-            <div>
-              <label htmlFor="rec-requirement" className={labelClass}>
-                Linked Requirement (optional)
-              </label>
-              <select
-                id="rec-requirement"
-                value={requirementId}
-                onChange={(e) => {
-                  setRequirementId(e.target.value);
-                  const req = requirements.find((r) => r.id === e.target.value);
-                  if (req) setScreeningType(req.screening_type);
-                  suggestExpiration(e.target.value, completedDate);
-                }}
-                className={inputClass}
-              >
-                <option value="">None</option>
-                {requirements.map((req) => (
-                  <option key={req.id} value={req.id}>
-                    {req.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Editable on an existing record too: the link decides which
+              requirement the record satisfies, and the only one (owner
+              decision 2026-11-01), so a record the upgrade could not link is
+              filed here. */}
+          <div>
+            <label htmlFor="rec-requirement" className={labelClass}>
+              Linked Requirement (optional)
+            </label>
+            <select
+              id="rec-requirement"
+              aria-describedby="rec-requirement-hint"
+              value={requirementId}
+              onChange={(e) => {
+                setRequirementId(e.target.value);
+                const req = requirements.find((r) => r.id === e.target.value);
+                if (req) setScreeningType(req.screening_type);
+                suggestExpiration(e.target.value, completedDate);
+              }}
+              className={inputClass}
+            >
+              <option value="">None</option>
+              {requirements.map((req) => (
+                <option key={req.id} value={req.id}>
+                  {req.name}
+                </option>
+              ))}
+            </select>
+            <p id="rec-requirement-hint" className="text-theme-text-muted mt-1 text-xs">
+              A record counts only toward the requirement it is linked to. With none, it counts toward no requirement.
+            </p>
+          </div>
 
           <div>
             <label htmlFor="rec-type" className={labelClass}>
@@ -334,47 +359,51 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
             ) : null}
           </div>
 
-          <div>
-            <label htmlFor="rec-provider" className={labelClass}>
-              Provider / Facility
-            </label>
-            <input
-              id="rec-provider"
-              type="text"
-              value={providerName}
-              onChange={(e) => setProviderName(e.target.value)}
-              placeholder="e.g., Dr. Smith, Valley Medical Center"
-              className={inputClass}
-            />
-          </div>
+          {showNarrative && (
+            <>
+              <div>
+                <label htmlFor="rec-provider" className={labelClass}>
+                  Provider / Facility
+                </label>
+                <input
+                  id="rec-provider"
+                  type="text"
+                  value={providerName}
+                  onChange={(e) => setProviderName(e.target.value)}
+                  placeholder="e.g., Dr. Smith, Valley Medical Center"
+                  className={inputClass}
+                />
+              </div>
 
-          <div>
-            <label htmlFor="rec-result" className={labelClass}>
-              Result Summary
-            </label>
-            <textarea
-              id="rec-result"
-              value={resultSummary}
-              onChange={(e) => setResultSummary(e.target.value)}
-              placeholder="Brief summary of results..."
-              rows={2}
-              className={inputClass + ' resize-none'}
-            />
-          </div>
+              <div>
+                <label htmlFor="rec-result" className={labelClass}>
+                  Result Summary
+                </label>
+                <textarea
+                  id="rec-result"
+                  value={resultSummary}
+                  onChange={(e) => setResultSummary(e.target.value)}
+                  placeholder="Brief summary of results..."
+                  rows={2}
+                  className={inputClass + ' resize-none'}
+                />
+              </div>
 
-          <div>
-            <label htmlFor="rec-notes" className={labelClass}>
-              Notes
-            </label>
-            <textarea
-              id="rec-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Additional notes..."
-              rows={2}
-              className={inputClass + ' resize-none'}
-            />
-          </div>
+              <div>
+                <label htmlFor="rec-notes" className={labelClass}>
+                  Notes
+                </label>
+                <textarea
+                  id="rec-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Additional notes..."
+                  rows={2}
+                  className={inputClass + ' resize-none'}
+                />
+              </div>
+            </>
+          )}
 
           <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button

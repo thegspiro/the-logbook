@@ -70,6 +70,7 @@ from app.schemas.user import (
     MemberDirectoryEntry,
     MemberEmailChoice,
     MemberEmailChoicesResponse,
+    MemberProfileResponse,
     ProfileVisibility,
     UserListResponse,
     UserProfileResponse,
@@ -1754,7 +1755,7 @@ async def remove_role_from_user(
     }
 
 
-@router.get("/{user_id}/with-roles", response_model=UserProfileResponse)
+@router.get("/{user_id}/with-roles", response_model=MemberProfileResponse)
 async def get_user_with_roles(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1840,8 +1841,13 @@ async def get_user_with_roles(
     # request to this URL away. The subject is exempt: UserSettingsPage loads
     # its own profile through here and writes the fields back, so redacting for
     # self would blank a member's own address and phone on their next save.
-    payload = UserProfileResponse.model_validate(user)
+    payload = MemberProfileResponse.model_validate(user)
     await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
+    # "Member since" on the profile and the digital ID card is credited
+    # service (owner decision 2026-11-01), not hire_date.
+    payload.service_since = await MemberServiceHistoryService(db).service_since_for(
+        user
+    )
 
     return payload
 
