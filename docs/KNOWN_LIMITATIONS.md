@@ -354,11 +354,14 @@ during setup 2026-11-03).** Found in the workflow review's W01 third pass
   backfilled by migration `289504a34d3c` (2026-11-03): Public Information turns
   on where setup stored it off, but not where the audit log shows an
   administrator set it under Settings → Modules. See `docs/UPGRADING.md`.
-  **Still open, small:** an installation old enough to have no stored module
-  settings at all has them built once, on first read, from its legacy
-  onboarding record (`OrganizationService`), and that writer also stores Public
-  Information off. Such an install upgrading after this migration has run would
-  get `false` again with no backfill.
+  **Resolved 2026-11-04** (owner decision: keep Public Information on for
+  these installs). An installation old enough to have no stored module
+  settings builds them once, on first read, from its legacy onboarding record
+  (`OrganizationService`). That writer used to store Public Information off,
+  and the backfill runs before it. It now follows the setup rule
+  (`modules_from_setup_answers`), except that Public Information keeps its
+  declared default (on) when the record does not name it: the setup that
+  wrote such a record never asked about it, so its absence is not a "no".
 
 Also from the same pass, resolved 2026-11-01: the email step saved settings that
 had just failed their connection test without a word (W01-27). Owner decision:

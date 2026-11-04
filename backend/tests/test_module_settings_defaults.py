@@ -263,6 +263,60 @@ async def test_the_failed_dual_write_signature_is_not_reported_as_configured():
 _ESSENTIAL = {"members", "events", "documents", "roles", "settings"}
 
 
+def _legacy_service(enabled_modules: list[str]) -> OrganizationService:
+    """A service whose only module record is the legacy onboarding row."""
+    status = SimpleNamespace(
+        enabled_modules=enabled_modules, organization_name="Old FD"
+    )
+    service = _service()
+    service.db.execute = AsyncMock(
+        return_value=SimpleNamespace(
+            scalars=lambda: SimpleNamespace(first=lambda: status)
+        )
+    )
+    return service
+
+
+async def test_the_legacy_record_leaves_unasked_modules_at_their_default():
+    """Owner request 2026-11-03 (W01-24 follow-up): the legacy path follows the
+    setup rule too.
+
+    An installation old enough to have no stored module settings builds them
+    once from its onboarding record. That wrote False for every module the
+    record did not name, so Public Information — never asked about by setup,
+    on by default — came out off, and after the 289504a34d3c backfill had
+    already run there was nothing left to turn it back on.
+    """
+    org = SimpleNamespace(settings={}, name="Old FD")
+
+    resolved = await _legacy_service(
+        ["members", "events", "training"]
+    )._resolve_module_settings({}, org)
+
+    assert resolved.public_info is True
+    assert resolved.training is True
+    # Asked about by setup and not chosen: still a real "no".
+    assert resolved.inventory is False
+    # Not asked about, and off by its own default.
+    assert resolved.finance is False
+    assert org.settings["modules"]["public_info"] is True
+    assert org.settings["modules"]["_user_configured"] is True
+
+
+async def test_the_legacy_record_keeps_a_module_it_named_that_setup_no_longer_offers():
+    # An older wizard offered modules today's does not. A department that
+    # enabled one then keeps it, and the legacy "documents" id still means
+    # Custom Forms.
+    org = SimpleNamespace(settings={}, name="Old FD")
+
+    resolved = await _legacy_service(
+        ["members", "communications", "documents"]
+    )._resolve_module_settings({}, org)
+
+    assert resolved.communications is True
+    assert resolved.forms is True
+
+
 async def _configure(enabled):
     org = SimpleNamespace(settings={}, name="Test FD")
     service = OnboardingService(MagicMock())
