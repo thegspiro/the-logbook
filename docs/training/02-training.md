@@ -4458,6 +4458,20 @@ per member for a review period, and each person completes their part in turn.
 | Drafting and conducting   | **Reports → Evaluations → Conduct** (`evaluations.conduct`)          |
 | A member reading your own | **My Evaluations** (every member), with your figures for this period |
 
+The navigation carries one **Evaluations** entry for everyone. It opens **My
+evaluations**, and a strip across the top offers **Evaluations I conduct** (or
+**All evaluations**) and **Templates & periods** to those who hold the matching
+permission. A member with no evaluation permission sees no strip. **Reports**
+no longer lights up while you are on an evaluation page.
+
+**First-time setup.** A chief opening an empty evaluations area gets a **Getting
+started** checklist, a **preview** of how the form will look to the member, the
+evaluator and the officer, and two starter templates, an **Annual Member
+Evaluation** (weighted to 100, with suggested ratings from training hours,
+required training and meeting attendance) and a **Probationary Check-in**.
+Choosing a starter fills the first draft; both publish as they stand, and
+neither includes an officer-only section, since that needs your own ranks.
+
 ### How an evaluation moves
 
 1. **Draft.** A manager (`evaluations.manage`) or conductor drafts it. If a
