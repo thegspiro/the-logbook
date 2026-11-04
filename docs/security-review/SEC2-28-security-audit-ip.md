@@ -4,7 +4,7 @@
 #1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4, and a
 pass-4 addendum, PR #2515), 2026-10-04 (pass 5), 2026-10-07 (pass 6),
 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27
-(pass 10), 2026-10-30 (pass 11) · **PR:** #1911 (pass 1)
+(pass 10), 2026-10-30 (pass 11), 2026-11-04 (pass 12) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -2087,6 +2087,91 @@ already match current code.
 | frontend `npm run typecheck`                                                                                                                                                                                                                                                                                                      | 0 errors                                           |
 | frontend `npm run lint`                                                                                                                                                                                                                                                                                                           | clean, exit 0                                      |
 | frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`)                                                                                                                                                                                                                                          | 63 passed (5 files)                                |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+## Pass 12 (2026-11-04) — watchdog pickup, true zero-delta, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`
+showing no reachable agents). Before starting: `gh api -X GET search/issues -f
+q='repo:thegspiro/the-logbook is:pr is:open head:claude/security-review'`
+returned zero results — PR #3996 (Feature 27, Integrations, pass 12) had
+already merged. Row 28 was confirmed as the next `⬜` row on a freshly fetched
+`main`.
+
+### Baseline and diff method
+
+Pass 11 merged as `6e5ba65f3` (PR #3854). Diffed each of this doc's nine
+backend files, plus the three frontend surfaces, directly against that commit
+by content (`git diff --stat 6e5ba65f3..HEAD -- <file>`), per the
+history-quirk workaround passes 7/9/10/11 already document.
+
+**All nine backend scope files are byte-identical to pass 11**:
+`security_monitoring.py` (endpoint + service), `ip_security.py` (endpoint),
+`ip_security_service.py`, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/security_middleware.py`, `core/geoip.py` — every `git diff --stat`
+empty. `ErrorMonitoringPage.tsx` and the `ip-security` module's components
+and store are also byte-identical. One frontend file carries a diff:
+
+- **`frontend/src/modules/ip-security/pages/MyIPExceptionsPage.tsx`** — the
+  same repo-wide `page-header`/`page-header-title`/`page-header-actions`
+  layout-utility sweep (`cf8fdae30`) seen on other features' pass 12 (e.g.
+  Forms). Read the full diff: pure class-name/wrapper substitution for
+  responsive header wrapping, no change to a query, permission, route, or any
+  data read/sent.
+
+Of 518 commits on `main` since the baseline, a path grep for this feature's
+keywords (`security_monitoring`, `ip_security`, `audit_log`, `error_log`,
+`audit.py`, `security_middleware`, `geoip`, `ip-security`, `AuditLogPage`,
+`ErrorMonitoringPage`) surfaces only the one layout commit above.
+
+### Route inventory — re-enumerated by AST, 37 routes, unchanged from pass 11
+
+Counted every `@router.<method>` decorator directly in the four endpoint
+files: 16 (`security_monitoring.py`) + 12 (`ip_security.py`) + 3
+(`audit_logs.py`) + 6 (`error_logs.py`) = **37**, identical to pass 11 —
+consistent with all four files being byte-identical.
+
+### Re-verified — every open finding re-checked against current code
+
+- **SEC2-28-6** (LOW, flagged — TOCTOU race in the IP-exception
+  duplicate-request check) — still open, unchanged. Re-read
+  `request_ip_exception` at `ip_security_service.py:103-119`: the "does a
+  pending/approved exception already exist for this user+IP" check is still a
+  plain `select()` with no `.with_for_update()` and no DB-level unique
+  constraint, immediately followed by an `INSERT`. Pass 11's locking fix
+  covers the three state-_transition_ methods (approve/reject/revoke), a
+  different code path from this creation-time check, so it does not narrow
+  this finding. Still not a security bypass — approval is still required —
+  and still proportionate to leave as an admin-UX nicety rather than fix.
+- **Dead detector code** (pass 3, flagged) — re-grepped `analyze_request`,
+  `_check_rate_limit`, `_check_injection_patterns` across all of
+  `backend/app` outside `services/security_monitoring.py`: zero production
+  callers, unchanged.
+- **All previously-FIXED/RESOLVED items** (SEC-1 through SEC-9, SEC2-28-1
+  through SEC2-28-11, and pass 11's IP-exception approval locking): no
+  commit since pass 11 touches their mechanisms.
+
+### No new findings this pass
+
+**0 fixes applied, 0 new findings.** SEC2-28-6 and the dead-detector-code note
+remain open, unchanged, still awaiting their respective owner/product
+decision. No `KNOWN_LIMITATIONS.md` change needed.
+
+### Completion gate (Pass 12)
+
+| Check                                                             | Result                                             |
+| ----------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                   | clean                                              |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)           | clean, 2869 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)        | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                 | PASSED — 710 revisions, single head `6b81e95d4157` |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | 298 routes, 0 errors/warnings                      |
+| backend tests, scope (same `-k` filter as pass 11)                | 851 passed, 1 pre-existing skip (`pywebpush`)      |
+| frontend `npm run typecheck`                                      | 0 errors                                           |
+| frontend `npx eslint` on the one changed file                     | 0 errors/warnings                                  |
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
