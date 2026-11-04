@@ -2830,7 +2830,7 @@ sections of items. **Start from the example** gives a ready template. Set the
 **general form**, whether it is optional or required, and whether one combined
 evaluation may cover several programs.
 
-![Training Admin → Settings & Data → Shift Evaluations: the general shift evaluation settings above the Evaluation templates list, with the EMT Field Internship Evaluation listed against the program that uses it](./images/02-126-shift-evaluation-settings.png)
+![Training Admin → Settings & Data → Shift Evaluations: Outside shifts awaiting an evaluation reading Nothing waiting, the general shift evaluation settings, and the Evaluation templates list with the EMT Field Internship Evaluation listed against the program that uses it](./images/02-126-shift-evaluation-settings.png)
 
 ![The evaluation form editor open on the EMT Field Internship Evaluation: its name, the four-level rating scale and labels, the Not Observed option, the comment threshold and the first section's items](./images/02-127-shift-evaluation-form-editor.png)
 
@@ -4457,6 +4457,20 @@ per member for a review period, and each person completes their part in turn.
 | Setting up forms, periods | **Reports → Evaluations** (setup; `evaluations.configure`)           |
 | Drafting and conducting   | **Reports → Evaluations → Conduct** (`evaluations.conduct`)          |
 | A member reading your own | **My Evaluations** (every member), with your figures for this period |
+
+The navigation carries one **Evaluations** entry for everyone. It opens **My
+evaluations**, and a strip across the top offers **Evaluations I conduct** (or
+**All evaluations**) and **Templates & periods** to those who hold the matching
+permission. A member with no evaluation permission sees no strip. **Reports**
+no longer lights up while you are on an evaluation page.
+
+**First-time setup.** A chief opening an empty evaluations area gets a **Getting
+started** checklist, a **preview** of how the form will look to the member, the
+evaluator and the officer, and two starter templates, an **Annual Member
+Evaluation** (weighted to 100, with suggested ratings from training hours,
+required training and meeting attendance) and a **Probationary Check-in**.
+Choosing a starter fills the first draft; both publish as they stand, and
+neither includes an officer-only section, since that needs your own ranks.
 
 ### How an evaluation moves
 

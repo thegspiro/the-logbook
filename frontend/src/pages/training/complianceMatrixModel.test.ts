@@ -663,8 +663,33 @@ describe('requirementMeta', () => {
     );
   });
 
+  it('states an attendance share as a percentage of sessions', () => {
+    expect(
+      requirementMeta(
+        requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' })
+      )
+    ).toBe('annual · 60% of sessions');
+  });
+
   it('is empty for an unknown requirement', () => {
     expect(requirementMeta(undefined)).toBe('');
+  });
+});
+
+describe('attendance progress', () => {
+  it('counts sessions, singular for one', () => {
+    const one = evaluateCell(
+      cell({ status: 'completed', progress_current: 1, progress_required: 1, progress_unit: 'sessions' }),
+      requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' }),
+      AS_OF
+    );
+    const several = evaluateCell(
+      cell({ status: 'in_progress', progress_current: 2, progress_required: 3, progress_unit: 'sessions' }),
+      requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' }),
+      AS_OF
+    );
+    expect(one.progressLabel).toBe('1 of 1 session');
+    expect(several.progressLabel).toBe('2 of 3 sessions');
   });
 });
 

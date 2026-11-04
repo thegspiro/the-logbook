@@ -265,6 +265,9 @@ const PurchaseRequestFormPage: React.FC = () => {
     if (autosave.status === 'saving') return 'Saving draft…';
     if (autosave.status === 'error') return 'Could not save the draft. It will try again when you change something.';
     if (autosave.savedAt && !autosave.hasUnsaved) return `Draft saved at ${formatTime(autosave.savedAt, tz)}`;
+    // A draft opened again is already on the server and nothing is pending,
+    // so there is no save coming; "Saving soon…" here waited for ever.
+    if (autosave.draftId && !autosave.hasUnsaved) return 'Draft saved';
     if (!canSaveDraft(formValues)) return 'Add a title and an amount to start saving a draft.';
     return 'Saving soon…';
   })();

@@ -874,14 +874,21 @@ class TestMembership:
         from app.services.medical_screening_service import MedicalScreeningService
 
         db = MagicMock()
-        # The third read is the requirements' frequencies (W71-1). With none,
-        # no record falls due by frequency and nothing more is queried.
-        no_frequencies = MagicMock(all=MagicMock(return_value=[]))
-        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([]), no_frequencies])
+        # The organization's date, then its active requirements, then the
+        # records query that carries the window. A record counts only for its
+        # linked requirement (owner decision 2026-11-01), so with no active
+        # requirement nothing is queried; one with no grace period and no
+        # frequency keeps the window exactly today..today+30.
+        requirement = SimpleNamespace(
+            id="req-1", grace_period_days=0, frequency_months=None
+        )
+        db.execute = AsyncMock(
+            side_effect=[_one(_org()), _scalars([requirement]), _scalars([])]
+        )
 
         await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
 
-        bound = _bound(db.execute.await_args_list[1].args[0])
+        bound = _bound(db.execute.await_args_list[2].args[0])
         assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
         assert FROZEN_UTC.date() not in bound
 

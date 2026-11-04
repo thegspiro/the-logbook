@@ -111,6 +111,8 @@ export interface TrainingSessionCreate {
   program_id?: string | undefined; // Training program (Recruit School, Driver Training, etc.)
   phase_id?: string | undefined; // Program phase
   requirement_id?: string | undefined; // Specific requirement this satisfies
+  // Session-attendance requirements whose members are charged with attending
+  attendance_requirement_ids?: string[] | undefined;
 
   // Training details (for new course)
   course_name?: string | undefined;
@@ -763,6 +765,8 @@ export interface TrainingRequirement {
   required_calls?: number;
   required_transports?: number | null;
   required_refusals?: number | null;
+  /** Session attendance: the share (1-100) of linked sessions to attend. */
+  required_attendance_pct?: number | null;
   /** Evaluated shifts: count only evaluations with no item at the form's lowest rating. */
   evaluation_excludes_lowest_rating?: boolean;
   required_call_types?: string[];
@@ -829,6 +833,7 @@ export interface TrainingRequirementCreate {
   required_calls?: number | null | undefined;
   required_transports?: number | null | undefined;
   required_refusals?: number | null | undefined;
+  required_attendance_pct?: number | null | undefined;
   evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
@@ -883,6 +888,7 @@ export interface TrainingRequirementUpdate {
   required_calls?: number | null | undefined;
   required_transports?: number | null | undefined;
   required_refusals?: number | null | undefined;
+  required_attendance_pct?: number | null | undefined;
   evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
@@ -970,7 +976,9 @@ export type RequirementType =
   // Credited by submitted shift evaluations.
   | 'evaluated_shifts'
   | 'transports'
-  | 'refusals';
+  | 'refusals'
+  // Attend a share of the sessions linked to the requirement.
+  | 'session_attendance';
 
 export type RequirementSource = 'department' | 'state' | 'national';
 

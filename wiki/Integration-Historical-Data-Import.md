@@ -63,6 +63,14 @@ position on purpose.
   the 24-hour cap or overlap check a member's own entry gets — those are for
   hours typed today, not for settled history.
 
+## Where the imported hours show up
+
+A member's **profile** has a _Shift & Call History_ section with the same
+figures as their own **My Hours** screen: hours by month and year, how many of
+them were on call, calls, and hours and calls with other departments. The
+member sees their own; officers holding `scheduling.report` (the chiefs,
+captains, lieutenants and scheduling officer by default) see anyone's.
+
 ## Running it twice is safe
 
 Every row a batch writes is recorded against the source system's row ID. A
@@ -70,7 +78,26 @@ second run of the same file — or a later export from the same system that
 overlaps it — leaves those rows out, and a batch that somehow still carries one
 skips it. Use the same source system name each time for this to work.
 
-## Not yet included
+## Training
 
-Training hours are sorted and counted on this page but are imported by a later
-step of this tool.
+Open _Set up training_. The subject, instructor and "taught the class" columns
+are detected and can be changed.
+
+- **Subjects.** Each distinct subject (spellings that differ only in case and
+  punctuation count as one) can be mapped to a library course, and then takes
+  that course's name, type and category, exactly as a Target Solutions record
+  mapped to the course would. _Accept all suggestions_ maps every subject whose
+  name closely matches a course. Everything else is imported as written, as
+  continuing education.
+- **Instructor.** The instructor column is kept as written. On a row the
+  member taught, an instructor written as "me" (or left blank) becomes the
+  member's name, and the record notes that they taught the class.
+- **Training provider rows.** A row whose instructor names Target Solutions or
+  Vector Solutions is checked against the records the provider sync already
+  brought in. A synced record for the same member within a day means the row is
+  left out. For rows nothing synced matches, choose once whether to import them
+  or leave them out.
+
+Company drills (the `CompanyDrill` flag) are imported as training records like
+any other row. Recording them as drill meetings, for attendance percentages, is
+a later step.

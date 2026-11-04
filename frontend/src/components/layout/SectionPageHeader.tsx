@@ -72,6 +72,22 @@ const SectionNav: React.FC<SectionNavProps> = ({ items, active, label, accent })
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {item.label}
+                {item.count ? (
+                  <>
+                    {/* The visual number is hidden from screen readers, which
+                        hear the phrase instead: run together, the label and the
+                        badge read as "My evaluations2". */}
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-800 px-1.5 py-0.5 text-xs leading-none font-semibold text-white"
+                    >
+                      {item.count}
+                    </span>
+                    <span className="sr-only">
+                      , {item.count} {item.countLabel ?? 'need attention'}
+                    </span>
+                  </>
+                ) : null}
               </Link>
             );
           })}
@@ -111,6 +127,16 @@ export interface PageHeaderProps {
    * cannot open that section.
    */
   section?: string | undefined;
+  /**
+   * Draw the heading for screen readers only while the strip shows, on a
+   * section's own page, from the sm breakpoint up: the strip's selected link
+   * already names the page, and the same words again in large type above the
+   * content said it twice. On a phone the strip scrolls and its selected link
+   * can sit half behind the scroll arrow, so the heading stays visible there.
+   * Where the strip is hidden — a viewer with one section — or on a page
+   * below a section, the heading shows as usual.
+   */
+  titleInStrip?: boolean | undefined;
 }
 
 interface SectionPageHeaderProps extends PageHeaderProps {
@@ -146,6 +172,7 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   parentCrumbs,
   underHub,
   section,
+  titleInStrip = false,
 }) => {
   const { pathname } = useLocation();
   const checkPermission = useSectionPermission();
@@ -165,6 +192,7 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   const leading = hubInsideSection ? [...sectionCrumbs, ...hubCrumbs] : [...hubCrumbs, ...sectionCrumbs];
   const trail: BreadcrumbItem[] =
     leading.length > 0 ? [...leading, ...(parentCrumbs ?? []), ...(pageLabel ? [{ label: pageLabel }] : [])] : [];
+  const hideTitle = titleInStrip && items.length >= 2 && active !== undefined && isSectionPage(active, pathname);
 
   return (
     <div>
@@ -172,11 +200,15 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
       {trail.length > 0 && <Breadcrumbs items={trail} />}
       <div className="page-header mb-8 gap-4 sm:items-center">
         <div className="page-header-title">
-          <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+          <h1
+            className={`text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl ${
+              hideTitle ? 'sm:sr-only' : ''
+            }`}
+          >
             <Icon className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
             <span className="min-w-0">{title}</span>
           </h1>
-          {subtitle && <div className="text-theme-text-muted mt-2">{subtitle}</div>}
+          {subtitle && <div className={`text-theme-text-muted mt-2 ${hideTitle ? 'sm:mt-0' : ''}`}>{subtitle}</div>}
         </div>
         {actions && (
           <div className="page-header-actions flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>

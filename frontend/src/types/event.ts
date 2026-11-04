@@ -26,6 +26,8 @@ export interface Event {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory: boolean;
+  /** A session-attendance requirement counts this event; absent from an older backend. */
+  counts_toward_attendance?: boolean;
   mandatory_membership_types?: string[];
 
   allow_guests: boolean;
@@ -265,6 +267,8 @@ export interface EventListItem {
   location_name?: string;
   requires_rsvp: boolean;
   is_mandatory: boolean;
+  /** A session-attendance requirement counts this event; absent from an older backend. */
+  counts_toward_attendance?: boolean;
   is_draft?: boolean;
   is_cancelled: boolean;
   is_recurring?: boolean;

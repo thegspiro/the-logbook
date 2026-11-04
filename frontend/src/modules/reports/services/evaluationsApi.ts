@@ -5,6 +5,7 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray } from '../../../utils/asArray';
 import type {
+  AttentionCounts,
   BuilderOptions,
   BulkDraftItem,
   BulkDraftPreview,
@@ -16,6 +17,7 @@ import type {
   EvaluationPartKind,
   EvaluationSummary,
   EvaluationTemplateKind,
+  Grades,
   LiveData,
   PartContent,
   SignatureWrite,
@@ -161,8 +163,29 @@ export const evaluationsService = {
     return response.data;
   },
 
+  async attention(): Promise<AttentionCounts> {
+    const response = await api.get<AttentionCounts>('/evaluations/attention');
+    return response.data;
+  },
+
   async mine(): Promise<EvaluationSummary[]> {
     const response = await api.get<EvaluationSummary[]>('/evaluations/mine');
+    return asArray(response.data);
+  },
+
+  /**
+   * Section and overall grades for a form and a set of ratings, from the
+   * server's calculation, so a screen never works grades out for itself.
+   * Null for a form that is not graded by section.
+   */
+  async grades(definition: TemplateDefinition, content: PartContent): Promise<Grades | null> {
+    const response = await api.post<Grades | null>('/evaluations/grades', { definition, content });
+    return response.data ?? null;
+  },
+
+  /** Evaluations of the members the caller supervises today; empty for anyone with no crew. */
+  async crew(): Promise<EvaluationSummary[]> {
+    const response = await api.get<EvaluationSummary[]>('/evaluations/crew');
     return asArray(response.data);
   },
 

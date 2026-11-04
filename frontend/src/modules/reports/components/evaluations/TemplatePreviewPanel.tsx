@@ -12,7 +12,7 @@
  * `evaluations.view_all` (owner decision 2026-11-03); the server enforces it
  * and audits each such preview. Everyone else previews with sample figures.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { formatCalendarDate } from '../../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../../utils/errorHandling';
@@ -24,6 +24,7 @@ import {
   type TemplateDefinition,
   type TemplatePreview,
 } from '../../types/evaluations';
+import { useLiveGrades } from '../../hooks/useLiveGrades';
 import { emptyContent } from '../../utils/evaluationRecord';
 import { EvaluationForm } from './EvaluationForm';
 
@@ -83,10 +84,19 @@ export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ defi
     void run(memberId, periodId);
   }, [options, memberId, periodId, run]);
 
-  const shown: TemplateDefinition = preview?.includes_officer_sections
-    ? definition
-    : { ...definition, sections: definition.sections.filter((section) => !section.officer_only) };
+  const includesOfficerSections = preview?.includes_officer_sections ?? false;
+  // Memoized because the live grades refetch whenever the definition they are
+  // handed changes identity; a fresh object each render would refetch forever.
+  const shown: TemplateDefinition = useMemo(
+    () =>
+      includesOfficerSections
+        ? definition
+        : { ...definition, sections: definition.sections.filter((section) => !section.officer_only) },
+    [definition, includesOfficerSections]
+  );
   const hiddenOfficerSections = definition.sections.length - shown.sections.length;
+  // Graded by the server, as a real evaluation is, from the ratings tried here.
+  const live = useLiveGrades(part === EvaluationPartKind.EVALUATOR ? shown : null, content);
 
   return (
     <div className="space-y-6">
@@ -223,6 +233,8 @@ export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ defi
           sources={preview.sources}
           suggested={preview.suggested_scores}
           overallLevels={preview.overall_levels}
+          grades={live.grades}
+          gradesError={live.error}
         />
       )}
     </div>

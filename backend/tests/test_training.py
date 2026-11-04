@@ -99,7 +99,8 @@ class TestTrainingEnums:
         assert RequirementType.EVALUATED_SHIFTS.value == "evaluated_shifts"
         assert RequirementType.TRANSPORTS.value == "transports"
         assert RequirementType.REFUSALS.value == "refusals"
-        assert len(RequirementType) == 11
+        assert RequirementType.SESSION_ATTENDANCE.value == "session_attendance"
+        assert len(RequirementType) == 12
 
     def test_requirement_source_values(self):
         """Verify RequirementSource values"""

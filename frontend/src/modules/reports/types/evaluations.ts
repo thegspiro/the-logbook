@@ -116,13 +116,28 @@ export interface TemplateSection {
   title: string;
   description: string | null;
   officer_only: boolean;
+  /**
+   * The section's share of the overall when the form is graded by section;
+   * its items' weights are then shares of the section. The server defaults
+   * it to 0, so a definition built here may leave it out.
+   */
+  weight?: number | undefined;
   items: TemplateItem[];
+}
+
+/** The lowest score, on the 1–5 grade scale, that earns `level`. */
+export interface GradeBand {
+  level: number;
+  min: number;
 }
 
 export interface TemplateDefinition {
   sections: TemplateSection[];
-  overall_mode: 'weighted' | 'evaluator' | 'none';
+  /** `sectioned` grades each section and the overall; `weighted` is the older single percentage. */
+  overall_mode: 'weighted' | 'sectioned' | 'evaluator' | 'none';
   officer_ranks: string[];
+  /** One range per grade, lowest first; the server fills the defaults when it is left out. */
+  grade_bands?: GradeBand[] | undefined;
 }
 
 export interface WorkflowStep {
@@ -270,10 +285,43 @@ export interface ItemAnswer {
   justification?: string | null | undefined;
 }
 
+/** An evaluator's grade for a section in place of the calculated one. */
+export interface GradeOverride {
+  level: number;
+  reason?: string | null | undefined;
+}
+
 export interface PartContent {
   answers: Record<string, ItemAnswer>;
+  /** The chosen overall (`evaluator` mode), or the evaluator's grade in place of the calculated one (`sectioned`). */
   overall_rating?: number | null | undefined;
+  overall_override_reason?: string | null | undefined;
   overall_comment?: string | null | undefined;
+  section_grades?: Record<string, GradeOverride> | undefined;
+}
+
+/** A calculated grade and, where the evaluator changed it, theirs and why. `level` is the grade that stands. */
+export interface GradeResult {
+  score: number | null;
+  calculated_level: number | null;
+  calculated_label: string | null;
+  override_level: number | null;
+  override_label: string | null;
+  reason: string | null;
+  level: number | null;
+  label: string | null;
+}
+
+export interface SectionGradeResult extends GradeResult {
+  key: string;
+  title: string;
+  weight: number;
+}
+
+/** Section and overall grades, calculated by the server (scores on the 1–5 grade scale, one decimal). */
+export interface Grades {
+  sections: SectionGradeResult[];
+  overall: GradeResult;
 }
 
 export interface PersonRef {
@@ -312,6 +360,14 @@ export interface DataEntry {
   value: number | { label: string; expires_on?: string | null }[] | null;
   note?: string;
   [extra: string]: unknown;
+}
+
+/** Badges for the evaluation pages' section strip, from `GET /evaluations/attention`. */
+export interface AttentionCounts {
+  /** The caller's own evaluations waiting on them. */
+  mine: number;
+  /** Evaluations the caller may list on the conduct page with a step past due. */
+  overdue: number;
 }
 
 export interface EvaluationSummary {
@@ -399,6 +455,8 @@ export interface EvaluationDetail extends EvaluationSummary {
   data_taken_at: string | null;
   parts: EvaluationPart[];
   weighted_overall: number | null;
+  /** Present for a form graded by section, wherever the evaluator's ratings are visible. */
+  grades?: Grades | null | undefined;
   signatures: EvaluationSignature[];
   document_available: boolean;
   revision?: number | undefined;

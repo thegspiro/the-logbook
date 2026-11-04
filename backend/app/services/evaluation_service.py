@@ -32,7 +32,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -76,6 +76,11 @@ from app.services.evaluation_data_service import (
     sources_used,
 )
 from app.services.evaluation_data_sources import DATA_SOURCES, DATA_SOURCES_BY_KEY
+from app.services.evaluation_grading import (
+    grade_content,
+    grade_errors,
+    override_reason_errors,
+)
 from app.services.evaluation_notice_service import EvaluationNoticeService
 from app.services.member_supervisor_service import MemberSupervisorService
 from app.utils.membership import canonical_member_status, effective_member_class
@@ -296,6 +301,14 @@ class Roles:
     view_all: bool
     manage: bool
     approver: bool
+    # The member's supervisor today, by the dated assignments (owner decision
+    # 2026-11-01, crew views). Granted by the relationship, not a permission,
+    # and read-only: no write path consults it.
+    supervisor: bool = False
+    # A supervisor reads the record once it is released to the member --
+    # what the member themselves may read. Drafts, scores still in review and
+    # the evaluator's working copy stay with the people writing them.
+    supervisor_reads: bool = False
 
     @property
     def any(self) -> bool:
@@ -305,13 +318,21 @@ class Roles:
             or self.view_all
             or self.manage
             or self.approver
+            or self.supervisor
         )
 
     @property
     def reads_content(self) -> bool:
         """Everyone with access except a manager, who runs the process but
-        does not read personnel content on that grant alone."""
-        return self.is_member or self.is_evaluator or self.view_all or self.approver
+        does not read personnel content on that grant alone, and a supervisor
+        before the evaluation is released to the member."""
+        return (
+            self.is_member
+            or self.is_evaluator
+            or self.view_all
+            or self.approver
+            or self.supervisor_reads
+        )
 
 
 def _name(user: Optional[User]) -> Optional[Dict[str, str]]:
@@ -428,8 +449,16 @@ class EvaluationService:
             await notices.finalized(organization_id, evaluation_id)
 
     def _roles(
-        self, evaluation: Evaluation, viewer: User, steps: Sequence[EvaluationStep]
+        self,
+        evaluation: Evaluation,
+        viewer: User,
+        steps: Sequence[EvaluationStep],
+        *,
+        crew_supervisor: bool = False,
     ) -> Roles:
+        """``crew_supervisor`` is passed only by the reads; the write paths
+        leave it False, so supervising a member never lets anyone change, sign
+        or calibrate their evaluation."""
         workflow = self._workflow(evaluation)
         position_ids = {p.id for p in viewer.positions}
         live = {
@@ -451,6 +480,10 @@ class EvaluationService:
             and user_has_permission(viewer, "evaluations.view_all"),
             manage=not is_member and user_has_permission(viewer, "evaluations.manage"),
             approver=approver and not is_member,
+            supervisor=crew_supervisor and not is_member,
+            supervisor_reads=crew_supervisor
+            and not is_member
+            and self._released_to_member(evaluation, steps),
         )
 
     # --------------------------------------------------------------- reads
@@ -465,7 +498,14 @@ class EvaluationService:
         if evaluation is None:
             return None
         steps = await self._steps(evaluation)
-        roles = self._roles(evaluation, viewer, steps)
+        # Re-checked on every read, so an assignment that ended yesterday
+        # stops granting access today (pitfall #14b).
+        crew_supervisor = evaluation.member_id != viewer.id and (
+            await MemberSupervisorService(self.db).is_current_supervisor(
+                organization_id, viewer.id, evaluation.member_id
+            )
+        )
+        roles = self._roles(evaluation, viewer, steps, crew_supervisor=crew_supervisor)
         if not roles.any:
             return None
         parts = await self._parts(evaluation)
@@ -608,6 +648,7 @@ class EvaluationService:
                 show = (
                     roles.is_evaluator
                     or roles.view_all
+                    or roles.supervisor_reads
                     or (
                         roles.approver
                         and part.status == EvaluationPartStatus.SUBMITTED.value
@@ -723,6 +764,15 @@ class EvaluationService:
                     if evaluator_part is not None
                     and evaluator_visible
                     and definition.overall_mode == "weighted"
+                    else None
+                ),
+                # Visible exactly where the evaluator's ratings are, since
+                # the grades are read from them.
+                "grades": (
+                    grade_content(
+                        definition, PartContent.model_validate(evaluator_part.content)
+                    )
+                    if evaluator_part is not None and evaluator_visible
                     else None
                 ),
                 "viewer": {
@@ -877,6 +927,102 @@ class EvaluationService:
             view_all=False,
             manage=False,
             approver=False,
+        )
+        return await self._summaries(organization_id, evaluations, roles)
+
+    async def attention_counts(
+        self, organization_id: str, viewer: User
+    ) -> Dict[str, int]:
+        """The numbers the evaluation pages' section strip badges.
+
+        ``mine`` is the caller's own evaluations with a step open for them to
+        act on — their self-evaluation or their acknowledgement. ``overdue``
+        is the evaluations the caller may list on the conduct page (the ones
+        they conduct, or every one for ``view_all`` and ``manage``) whose open
+        step is past its due date; it is 0 for a caller who may not list any.
+        """
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(tz)
+        mine = await self.db.scalar(
+            select(func.count(func.distinct(Evaluation.id)))
+            .join(
+                EvaluationStep,
+                (EvaluationStep.evaluation_id == Evaluation.id)
+                & (EvaluationStep.revision == Evaluation.revision),
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.member_id == viewer.id,
+                Evaluation.status == EvaluationStatus.IN_PROGRESS.value,
+                EvaluationStep.organization_id == organization_id,
+                EvaluationStep.status == EvaluationStepStatus.OPEN.value,
+                EvaluationStep.step_type.in_(
+                    (_SELF, EvaluationStepType.MEMBER_ACKNOWLEDGEMENT.value)
+                ),
+            )
+        )
+        overdue = 0
+        if any(
+            user_has_permission(viewer, grant)
+            for grant in (
+                "evaluations.conduct",
+                "evaluations.view_all",
+                "evaluations.manage",
+            )
+        ):
+            # The same list the conduct page shows, so the badge counts rows
+            # the viewer will find there (CLAUDE.md pitfall #29).
+            listed = await self.list_evaluations(
+                organization_id,
+                viewer,
+                status=EvaluationStatus.IN_PROGRESS.value,
+            )
+            overdue = sum(
+                1
+                for row in listed
+                if row["current_step_due"] is not None
+                and row["current_step_due"] < today
+            )
+        return {"mine": int(mine or 0), "overdue": overdue}
+
+    async def list_crew(
+        self, organization_id: str, viewer: User
+    ) -> List[Dict[str, Any]]:
+        """Evaluations of the members ``viewer`` supervises today.
+
+        Every evaluation on their record, in progress or finalized, as a
+        summary; :meth:`detail` decides what each one shows. Empty for a
+        member who supervises nobody, which is how a member with no crew
+        reaches this without any grant. Content opens once an evaluation is
+        released to the member.
+        """
+        crew_ids = await MemberSupervisorService(self.db).current_crew_ids(
+            organization_id, viewer.id
+        )
+        if not crew_ids:
+            return []
+        query = (
+            select(Evaluation)
+            .options(
+                selectinload(Evaluation.template_version).selectinload(
+                    EvaluationTemplateVersion.template
+                ),
+                selectinload(Evaluation.period),
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.member_id.in_(crew_ids),
+            )
+            .order_by(Evaluation.period_end.desc(), Evaluation.created_at.desc())
+        )
+        evaluations = list((await self.db.execute(query)).scalars().all())
+        roles = Roles(
+            is_member=False,
+            is_evaluator=False,
+            view_all=False,
+            manage=False,
+            approver=False,
+            supervisor=True,
         )
         return await self._summaries(organization_id, evaluations, roles)
 
@@ -1606,8 +1752,14 @@ class EvaluationService:
         if loaded is None:
             return None
         evaluation, _steps, parts, _step = loaded
-        items = form_items(self._definition(evaluation), kind)
+        definition = self._definition(evaluation)
+        items = form_items(definition, kind)
         _raise_if(shape_errors(content, items, kind))
+        _raise_if(
+            grade_errors(
+                definition, content, kind == EvaluationPartKind.EVALUATOR.value
+            )
+        )
         part = parts.get(kind)
         stored = content.model_dump(mode="json")
         if part is None:
@@ -1645,10 +1797,13 @@ class EvaluationService:
         content = PartContent.model_validate(part.content)
         suggested = (evaluation.data_snapshot or {}).get("suggested_scores") or {}
         _raise_if(shape_errors(content, items, kind))
+        evaluator = kind == EvaluationPartKind.EVALUATOR.value
+        _raise_if(grade_errors(definition, content, evaluator))
         _raise_if(
             completeness_errors(
                 content, items, kind, definition.overall_mode, suggested
             )
+            + (override_reason_errors(definition, content) if evaluator else [])
         )
         now = datetime.now(timezone.utc)
 

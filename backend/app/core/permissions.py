@@ -296,6 +296,16 @@ MEDICAL_SCREENING_MANAGE = Permission(
     "Manage member medical screenings",
     PermissionCategory.COMPLIANCE,
 )
+# MS-14 (owner decision 2026-11-01): ``.view`` shows compliance status — who is
+# due, dates, requirement names, results as passed/failed/waived — and this
+# reads the clinical narrative a record carries (provider, result summary,
+# structured results, notes). ``.manage`` reads it too, because the edit form
+# that writes those fields has to show them.
+MEDICAL_SCREENING_VIEW_DETAILS = Permission(
+    "medical_screening.view_details",
+    "View the clinical detail of medical screenings (provider, results, notes)",
+    PermissionCategory.COMPLIANCE,
+)
 
 # Scheduling
 SCHEDULING_VIEW = Permission(
@@ -885,6 +895,7 @@ ALL_PERMISSIONS: list[Permission] = [
     COMPLIANCE_VIEW,
     COMPLIANCE_MANAGE,
     MEDICAL_SCREENING_VIEW,
+    MEDICAL_SCREENING_VIEW_DETAILS,
     MEDICAL_SCREENING_MANAGE,
     SCHEDULING_VIEW,
     SCHEDULING_MANAGE,

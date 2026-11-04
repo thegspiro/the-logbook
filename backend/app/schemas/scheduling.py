@@ -838,6 +838,12 @@ class MemberHoursMonth(BaseModel):
     # silently mixed with time the member reported themselves.
     external_shifts: int = 0
     external_hours: float = 0.0
+    # Calls credited on outside units (recorded only by a historical import).
+    external_calls: int = 0
+    # How much of ``shifts`` / ``hours`` was on recall shifts — a part of
+    # them, never added to them.
+    on_call_shifts: int = 0
+    on_call_hours: float = 0.0
 
 
 class MemberHoursTotals(BaseModel):
@@ -853,6 +859,12 @@ class MemberHoursTotals(BaseModel):
     # silently mixed with time the member reported themselves.
     external_shifts: int = 0
     external_hours: float = 0.0
+    # Calls credited on outside units (recorded only by a historical import).
+    external_calls: int = 0
+    # How much of ``shifts`` / ``hours`` was on recall shifts — a part of
+    # them, never added to them.
+    on_call_shifts: int = 0
+    on_call_hours: float = 0.0
 
 
 class MemberHoursHistoryResponse(BaseModel):
@@ -1529,6 +1541,10 @@ class ShiftTimeOffResponse(UTCResponseBase):
     approved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # True when the caller may approve or deny this pending request as the
+    # requester's supervisor today (owner decision 2026-11-01). Scheduling
+    # officers review every request regardless; this flags the extra path.
+    reviewable_as_supervisor: bool = False
 
     model_config = _response_config
 

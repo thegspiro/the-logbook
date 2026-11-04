@@ -7,6 +7,7 @@ GET  /users/{user_id}/supervisor             - current supervisor and history
 PUT  /users/{user_id}/supervisor             - set or change the supervisor
 POST /users/{user_id}/supervisor/end         - end the current assignment
 GET  /users/{user_id}/supervisor/candidates  - who may be named as supervisor
+GET  /users/me/crew                          - the members the caller supervises
 
 Dates are inclusive and assignments never overlap; see
 ``MemberSupervisorService`` for how a change closes the previous assignment.
@@ -27,6 +28,8 @@ from app.core.utils import ensure_found, handle_service_errors
 from app.models.member_supervisor import MemberSupervisorAssignment
 from app.models.user import User
 from app.schemas.member_supervisor import (
+    CrewListResponse,
+    CrewMemberResponse,
     MemberSupervisorResponse,
     SupervisorAssignmentEnd,
     SupervisorAssignmentResponse,
@@ -78,6 +81,36 @@ async def _supervisor_response(
     )
     return MemberSupervisorResponse(
         member_id=str(member.id), current=current, history=history
+    )
+
+
+@router.get("/me/crew", response_model=CrewListResponse)
+async def list_my_crew(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The current members the caller supervises today, by the dated
+    assignments (owner decision 2026-11-01, crew views).
+
+    **Authentication required.** No permission: the relationship is the
+    grant, and a member who supervises nobody gets an empty list.
+    """
+    rows = await MemberSupervisorService(db).current_crew(
+        current_user.organization_id, current_user.id
+    )
+    return CrewListResponse(
+        members=[
+            CrewMemberResponse(
+                id=str(member.id),
+                name=member.display_name,
+                rank=member.rank,
+                station=member.station,
+                membership_number=member.membership_number,
+                supervised_since=assignment.starts_on,
+            )
+            for member, assignment in rows
+        ]
     )
 
 

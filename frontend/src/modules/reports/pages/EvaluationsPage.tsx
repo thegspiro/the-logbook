@@ -13,7 +13,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { CalendarRange, ClipboardCheck, Info, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
+import { CalendarRange, ClipboardCheck, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -21,7 +21,7 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { EVALUATION_SETUP_LABEL, conductListLabel } from '../../../components/layout/evaluationsNavigation';
+import { EVALUATION_SETUP_LABEL } from '../../../components/layout/evaluationsNavigation';
 import { EvaluationSetupChecklist } from '../components/evaluations/EvaluationSetupChecklist';
 import { EvaluationsPageHeader } from '../components/evaluations/EvaluationsPageHeader';
 import { evaluationPeriodsService, evaluationTemplatesService } from '../services/evaluationsApi';
@@ -92,7 +92,6 @@ const EvaluationsPage: React.FC = () => {
   const { confirm } = useConfirm();
   const canConfigure = useAuthStore((state) => state.checkPermission('evaluations.configure'));
   const canManage = useAuthStore((state) => state.checkPermission('evaluations.manage'));
-  const conductLabel = useAuthStore((state) => conductListLabel(state.checkPermission));
   // Matches the conduct list's route gate: a setup-only grant is refused there.
   const canOpenConductList = useAuthStore(
     (state) =>
@@ -234,29 +233,43 @@ const EvaluationsPage: React.FC = () => {
         <EvaluationsPageHeader
           icon={Settings2}
           title={EVALUATION_SETUP_LABEL}
-          subtitle="Build the evaluation forms for each kind of member and open the review periods they are completed for."
-        />
-
-        <div className="alert-info mb-6 flex gap-3">
-          <Info className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-          <p className="text-theme-alert-info-text text-sm">
-            <span className="text-theme-alert-info-title font-medium">Where evaluations happen.</span> Evaluations are
-            drafted, completed and signed from the{' '}
-            {canOpenConductList ? (
-              <Link to="/reports/evaluations/conduct" className="underline">
-                {conductLabel}
+          subtitle={
+            <>
+              Build the evaluation forms for each kind of member and open the review periods they are completed for. The
+              emails people receive about their evaluations are worded in{' '}
+              <Link to="/communications/email-templates" className="underline">
+                Email Templates
               </Link>
-            ) : (
-              conductLabel
-            )}{' '}
-            list, and each finalized evaluation keeps its signed PDF. People are emailed when a step is waiting on them,
-            before it is due and once it is overdue. The wording of those emails is edited in{' '}
-            <Link to="/communications/email-templates" className="underline">
-              Email Templates
-            </Link>
-            .
-          </p>
-        </div>
+              .
+            </>
+          }
+          actions={
+            canConfigure || canManage ? (
+              <>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="btn-secondary inline-flex items-center gap-2 text-sm"
+                    onClick={() => setPeriodForm(EMPTY_PERIOD)}
+                  >
+                    <CalendarRange className="h-4 w-4" aria-hidden="true" />
+                    New review period
+                  </button>
+                )}
+                {canConfigure && (
+                  <button
+                    type="button"
+                    className="btn-primary inline-flex items-center gap-2 text-sm"
+                    onClick={() => setTemplateForm(EMPTY_TEMPLATE)}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    New template
+                  </button>
+                )}
+              </>
+            ) : undefined
+          }
+        />
 
         {!loading && !loadError && (canConfigure || canManage) && (
           <EvaluationSetupChecklist
@@ -288,16 +301,6 @@ const EvaluationsPage: React.FC = () => {
               <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
               Templates
             </h2>
-            {canConfigure && (
-              <button
-                type="button"
-                className="btn-primary inline-flex items-center gap-2 text-sm"
-                onClick={() => setTemplateForm(EMPTY_TEMPLATE)}
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                New template
-              </button>
-            )}
           </div>
           {loading && templates.length === 0 ? (
             <p className="text-theme-text-secondary text-sm">Loading templates…</p>
@@ -387,16 +390,6 @@ const EvaluationsPage: React.FC = () => {
               <CalendarRange className="h-5 w-5" aria-hidden="true" />
               Review periods
             </h2>
-            {canManage && (
-              <button
-                type="button"
-                className="btn-primary inline-flex items-center gap-2 text-sm"
-                onClick={() => setPeriodForm(EMPTY_PERIOD)}
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                New review period
-              </button>
-            )}
           </div>
           {loading && periods.length === 0 ? (
             <p className="text-theme-text-secondary text-sm">Loading review periods…</p>

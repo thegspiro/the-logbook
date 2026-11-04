@@ -26,7 +26,12 @@ vi.mock('../services/api', () => ({
     getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
   },
   memberStatusService: {
-    getTierConfig: (...args: unknown[]) => mockGetTierConfig(...args) as unknown,
+    // The status control reads the members-visible tier names; the fixtures
+    // below state a ladder, of which the names endpoint serves ids and names.
+    getTierNames: async (...args: unknown[]) => {
+      const config = (await mockGetTierConfig(...args)) as { tiers?: { id: string; name: string }[] } | undefined;
+      return (config?.tiers ?? []).map(({ id, name }) => ({ id, name }));
+    },
   },
   organizationService: {
     previewNextMembershipId: (...args: unknown[]) => mockPreviewNextMembershipId(...args) as unknown,

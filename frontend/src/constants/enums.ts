@@ -1018,6 +1018,7 @@ export const REQUIREMENT_TYPE_LABELS: Record<string, string> = {
   evaluated_shifts: 'Evaluated shifts',
   transports: 'Transports',
   refusals: 'Refusals',
+  session_attendance: 'Session attendance',
 };
 
 /** Order the requirement-type picker offers, commonest first. */

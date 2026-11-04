@@ -47,6 +47,7 @@ from app.core.utils import ensure_found, handle_service_errors
 from app.models.evaluation import EvaluationTemplateKind
 from app.models.user import User
 from app.schemas.evaluation import (
+    AttentionCounts,
     BuilderOptions,
     BulkDraftPreview,
     BulkDraftRequest,
@@ -68,6 +69,8 @@ from app.schemas.evaluation import (
     EvaluationTemplateDetail,
     EvaluationTemplateSummary,
     EvaluationTemplateUpdate,
+    GradeRequest,
+    GradesResponse,
     LiveDataResponse,
     PartWrite,
     PreviewOptions,
@@ -82,6 +85,7 @@ from app.schemas.evaluation import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.evaluation_document_service import EvaluationDocumentService
+from app.services.evaluation_grading import grade_content
 from app.services.evaluation_service import EvaluationService
 from app.services.evaluation_template_service import EvaluationTemplateService
 
@@ -341,6 +345,27 @@ async def publish_template(
         {"template_id": template_id, "version": detail["published_version"]},
     )
     return PublishResult(published=True, template=detail)
+
+
+@router.post("/grades", response_model=Optional[GradesResponse])
+async def calculate_grades(
+    data: GradeRequest,
+    current_user: User = Depends(
+        require_permission(
+            "evaluations.conduct", "evaluations.manage", "evaluations.configure"
+        )
+    ),
+):
+    """Section and overall grades for a form and a set of ratings, so the
+    evaluation screen and the builder's preview can show them as ratings
+    change, from the same calculation the record and the PDF use.
+
+    Requires ``evaluations.conduct``, ``evaluations.manage`` or
+    ``evaluations.configure``: whoever grades an evaluation or builds a form.
+    It reads nothing from the database and returns only arithmetic on what
+    was sent. ``null`` for a form that is not graded by section.
+    """
+    return grade_content(data.definition, data.content)
 
 
 @router.get("/data-sources", response_model=List[DataSourceResponse])
@@ -604,6 +629,22 @@ async def list_my_evaluations(
     )
 
 
+@router.get("/crew", response_model=List[EvaluationSummary])
+async def list_crew_evaluations(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Evaluations of the members the caller supervises today.
+
+    **Authentication required.** Access comes from the dated supervisor
+    assignments, not a permission: a member who supervises nobody gets an
+    empty list. Each evaluation's content opens to the supervisor once it is
+    released to the member (``GET /evaluations/{id}``)."""
+    return await EvaluationService(db).list_crew(
+        current_user.organization_id, current_user
+    )
+
+
 @router.get("/mine/removed", response_model=List[EvaluationDeletionRecordResponse])
 async def list_my_deletion_records(
     db: AsyncSession = Depends(get_db),
@@ -613,6 +654,20 @@ async def list_my_deletion_records(
     reason given: the member is told an evaluation was removed, and why."""
     return await EvaluationService(db).deletion_records(
         current_user.organization_id, current_user.id
+    )
+
+
+@router.get("/attention", response_model=AttentionCounts)
+async def get_attention_counts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """How many of the caller's own evaluations wait on them, and how many
+    they may list on the conduct page are overdue — the badges on the
+    evaluation pages' section strip. Counts only, scoped to the caller: a
+    member with no evaluation grant gets 0 for the second."""
+    return await EvaluationService(db).attention_counts(
+        current_user.organization_id, current_user
     )
 
 

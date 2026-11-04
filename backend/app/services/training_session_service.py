@@ -8,11 +8,11 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -33,6 +33,7 @@ from app.models.training import (
     ProgramEnrollment,
     ProgramPhase,
     RequirementProgress,
+    RequirementType,
     TrainingApproval,
     TrainingCategory,
     TrainingCourse,
@@ -40,6 +41,7 @@ from app.models.training import (
     TrainingRecord,
     TrainingRequirement,
     TrainingSession,
+    TrainingSessionRequirement,
     TrainingStatus,
     TrainingType,
 )
@@ -163,6 +165,14 @@ class TrainingSessionService:
             if phase_result.scalar_one_or_none() is None:
                 return "Invalid program phase"
 
+        # getattr: only the create schemas carry attendance requirements; an
+        # existing session's are set through set_attendance_requirements.
+        attendance_ids = getattr(session_data, "attendance_requirement_ids", None)
+        if attendance_ids and not await self._attendance_requirements_valid(
+            attendance_ids, organization_id
+        ):
+            return "Invalid attendance requirement"
+
         # getattr: the linkage-update schema carries no instructor_id
         instructor_id = getattr(session_data, "instructor_id", None)
         if instructor_id and not await is_in_org(
@@ -179,6 +189,120 @@ class TrainingSessionService:
             return "Invalid location"
 
         return None
+
+    async def _attendance_requirements_valid(
+        self, requirement_ids: Sequence[UUID | str], organization_id: UUID | str
+    ) -> bool:
+        """Whether every id names a SESSION_ATTENDANCE requirement in the org.
+
+        A session linked to another kind of requirement would never be read
+        by anything, so it is refused rather than stored inert (pitfall 19).
+        """
+        wanted = {str(r) for r in requirement_ids}
+        if not wanted:
+            return True
+        result = await self.db.execute(
+            select(TrainingRequirement.id).where(
+                TrainingRequirement.id.in_(wanted),
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.requirement_type
+                == RequirementType.SESSION_ATTENDANCE,
+            )
+        )
+        return {str(r) for r in result.scalars().all()} == wanted
+
+    def _link_attendance_requirements(
+        self,
+        session: TrainingSession,
+        requirement_ids: Sequence[UUID | str],
+    ) -> None:
+        for requirement_id in dict.fromkeys(str(r) for r in requirement_ids):
+            self.db.add(
+                TrainingSessionRequirement(
+                    organization_id=str(session.organization_id),
+                    session_id=str(session.id),
+                    requirement_id=requirement_id,
+                )
+            )
+
+    async def attendance_requirement_ids(
+        self, session_ids: Sequence[str]
+    ) -> Dict[str, List[str]]:
+        """The attendance requirements each session counts toward, by session id."""
+        by_session: Dict[str, List[str]] = {str(sid): [] for sid in session_ids}
+        if not by_session:
+            return by_session
+        result = await self.db.execute(
+            select(
+                TrainingSessionRequirement.session_id,
+                TrainingSessionRequirement.requirement_id,
+            )
+            .where(TrainingSessionRequirement.session_id.in_(list(by_session)))
+            .order_by(TrainingSessionRequirement.created_at)
+        )
+        for session_id, requirement_id in result.all():
+            by_session[str(session_id)].append(str(requirement_id))
+        return by_session
+
+    async def events_counting_toward_attendance(
+        self, event_ids: Sequence[UUID | str], organization_id: UUID | str
+    ) -> Set[str]:
+        """Which of ``event_ids`` have a session linked to an attendance requirement.
+
+        For the "Counts toward attendance" flag on event lists and pages: one
+        query for a whole page of events rather than one per card.
+        """
+        ids = {str(e) for e in event_ids}
+        if not ids:
+            return set()
+        result = await self.db.execute(
+            select(TrainingSession.event_id)
+            .join(
+                TrainingSessionRequirement,
+                TrainingSessionRequirement.session_id == TrainingSession.id,
+            )
+            .where(
+                TrainingSession.event_id.in_(ids),
+                TrainingSession.organization_id == str(organization_id),
+            )
+            .distinct()
+        )
+        return {str(e) for e in result.scalars().all()}
+
+    async def set_attendance_requirements(
+        self,
+        training_session_id: UUID | str,
+        requirement_ids: Sequence[UUID | str],
+        organization_id: UUID | str,
+    ) -> Tuple[Optional[TrainingSession], Optional[str]]:
+        """Replace the attendance requirements a session counts toward.
+
+        Allowed whether or not attendance is finalized: the link changes
+        what the session is graded as, not any record it wrote, so linking
+        past drills to a requirement created after them takes effect at once.
+        """
+        result = await self.db.execute(
+            select(TrainingSession).where(
+                TrainingSession.id == str(training_session_id),
+                TrainingSession.organization_id == str(organization_id),
+            )
+        )
+        session = result.scalar_one_or_none()
+        if session is None:
+            return None, "Training session not found"
+        if not await self._attendance_requirements_valid(
+            requirement_ids, organization_id
+        ):
+            return None, "Invalid attendance requirement"
+        await self.db.execute(
+            delete(TrainingSessionRequirement).where(
+                TrainingSessionRequirement.session_id == str(session.id)
+            )
+        )
+        self._link_attendance_requirements(session, requirement_ids)
+        await self.db.commit()
+        await self.db.refresh(session)
+        return session, None
 
     async def get_session_by_event(
         self,
@@ -573,6 +697,10 @@ class TrainingSessionService:
         )
 
         self.db.add(training_session)
+        await self.db.flush()
+        self._link_attendance_requirements(
+            training_session, session_data.attendance_requirement_ids or []
+        )
         if not commit:
             await self.db.flush()
             return training_session, None
@@ -736,6 +864,11 @@ class TrainingSessionService:
             self.db.add(training_session)
             training_sessions.append(training_session)
 
+        await self.db.flush()
+        for ts in training_sessions:
+            self._link_attendance_requirements(
+                ts, session_data.attendance_requirement_ids or []
+            )
         await self.db.commit()
 
         for ts in training_sessions:
@@ -2516,11 +2649,7 @@ class TrainingSessionService:
         misread e.g. 3.5 hours as 3.5 courses. Non-hours requirements must be
         satisfied by an explicit requirement link on the session, a skills test,
         or officer sign-off — never by a category-matched hours feed."""
-        from app.models.training import (
-            ProgramRequirement,
-            RequirementType,
-            TrainingRequirement,
-        )
+        from app.models.training import ProgramRequirement
 
         result = await self.db.execute(
             select(ProgramRequirement.requirement_id)

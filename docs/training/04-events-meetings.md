@@ -710,6 +710,8 @@ leaked before the event.
 
 ![The Guest Check-In card on the page of an event three days away: the code hidden until check-in opens, the times guests can sign in, the note that the code appears when check-in opens, Show full size and Reset code](./images/04-94-event-qr-guest-code-hidden.png)
 
+![The Volunteer Interest Night's QR page while check-in is open: Check-in is Active and the member code with Print QR Code, then the Guest Check-In card with the guest code, its link, Reset code and Print Guest QR Code](./images/04-97-event-qr-page-guest-code.png)
+
 ### Signing in a walk-in yourself _(2026-10-25)_
 
 On the event page, the **Guests** card has **Add guest** (first and last name

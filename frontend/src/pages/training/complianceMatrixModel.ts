@@ -149,6 +149,7 @@ const num = (value: number): string => (Number.isInteger(value) ? String(value) 
 const unitLabel = (unit: string | null | undefined, count: number): string => {
   if (!unit) return '';
   if (unit === 'hours') return count === 1 ? 'hour' : 'hours';
+  if (unit === 'sessions') return count === 1 ? 'session' : 'sessions';
   return unit;
 };
 
@@ -418,7 +419,9 @@ export const requirementMeta = (requirement: ComplianceMatrixRequirement | undef
   if (requirement.frequency) {
     parts.push(requirement.frequency.replace(/_/g, ' '));
   }
-  if (requirement.target && requirement.target_unit) {
+  if (requirement.target && requirement.target_unit === 'percent_of_sessions') {
+    parts.push(`${num(requirement.target)}% of sessions`);
+  } else if (requirement.target && requirement.target_unit) {
     parts.push(`${num(requirement.target)} ${unitLabel(requirement.target_unit, requirement.target)}`);
   } else if (requirement.requirement_type) {
     parts.push(requirement.requirement_type.replace(/_/g, ' '));

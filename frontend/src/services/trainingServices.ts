@@ -1265,6 +1265,18 @@ export const trainingSessionService = {
     return response.data;
   },
 
+  /**
+   * Replace the attendance requirements a session counts toward; an empty
+   * list makes it optional. Allowed after attendance is finalized, since it
+   * changes only how the session is graded.
+   */
+  async setAttendanceRequirements(sessionId: string, requirementIds: string[]): Promise<TrainingSessionResponse> {
+    const response = await api.put<TrainingSessionResponse>(`/training/sessions/${sessionId}/attendance-requirements`, {
+      requirement_ids: requirementIds,
+    });
+    return response.data;
+  },
+
   async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
     const response = await api.post<{ message: string; approval_id: string }>(
       `/training/sessions/${sessionId}/finalize`

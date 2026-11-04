@@ -102,6 +102,11 @@ export interface TrainingSessionResponse {
   program_id?: string;
   phase_id?: string;
   requirement_id?: string;
+  /**
+   * Session-attendance requirements this session counts toward. Absent from a
+   * backend that predates them; treat that as none.
+   */
+  attendance_requirement_ids?: string[];
   course_name: string;
   course_code?: string;
   training_type: string;
@@ -887,6 +892,12 @@ export const memberStatusService = {
     return { ...response.data, history: asArray(response.data?.history) };
   },
 
+  /** The current members the caller supervises today (owner decision 2026-11-01, crew views). */
+  async getMyCrew(): Promise<import('../types/user').CrewMember[]> {
+    const response = await api.get<{ members?: import('../types/user').CrewMember[] }>('/users/me/crew');
+    return asArray(response.data?.members ?? []);
+  },
+
   /** Current members who may be named as this member's supervisor. */
   async getSupervisorCandidates(userId: string): Promise<import('../types/user').SupervisorCandidate[]> {
     const response = await api.get<{ candidates: import('../types/user').SupervisorCandidate[] }>(
@@ -937,7 +948,15 @@ export const memberStatusService = {
     const response = await api.get<import('../types/user').PropertyReturnReport>(
       `/users/${userId}/property-return-report`
     );
-    return response.data;
+    return { ...response.data, items: asArray(response.data?.items) };
+  },
+
+  /** The department's tier names, for any signed-in member (no rules or benefits). */
+  async getTierNames(): Promise<import('../types/user').MembershipTierName[]> {
+    const response = await api.get<{ tiers: import('../types/user').MembershipTierName[] }>(
+      '/users/membership-tiers/names'
+    );
+    return asArray(response.data?.tiers ?? []);
   },
 
   async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {

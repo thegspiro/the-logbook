@@ -238,7 +238,8 @@ const CardReadersPage: React.FC = () => {
                   <div className="min-w-0">
                     <h2 className="text-theme-text-primary font-semibold">{roomLabel(room)}</h2>
                     <p className="text-theme-text-secondary text-sm">
-                      {formatNumber(room.taps)} taps · {formatNumber(room.refusals)} refused
+                      {formatNumber(room.taps)} {room.taps === 1 ? 'tap' : 'taps'} · {formatNumber(room.refusals)}{' '}
+                      refused
                       {' · '}
                       {room.lastTapAt ? `last tap ${formatDateTime(room.lastTapAt, tz)}` : 'never tapped'}
                     </p>

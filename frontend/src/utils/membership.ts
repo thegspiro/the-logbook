@@ -15,7 +15,7 @@ import {
   MemberStatus,
   MembershipType,
 } from '../constants/enums';
-import type { MembershipTier } from '../types/user';
+import type { MembershipTierName } from '../types/user';
 
 /** The legacy words that name a *status* rather than a class, in the status spelling. */
 const STATUS_BY_LEGACY_WORD: Record<string, MemberStatus> = {
@@ -60,7 +60,7 @@ export function memberClassLabel(memberClass?: string | null): string {
  * label; a department tier id takes the tier's own name when the ladder is at
  * hand, and is humanised otherwise.
  */
-export function memberStatusLabel(memberStatus?: string | null, tiers?: readonly MembershipTier[]): string {
+export function memberStatusLabel(memberStatus?: string | null, tiers?: readonly MembershipTierName[]): string {
   const key = canonicalMemberStatus(memberStatus);
   if (!key) return '';
   const tier = tiers?.find((t) => canonicalMemberStatus(t.id) === key);
@@ -68,6 +68,17 @@ export function memberStatusLabel(memberStatus?: string | null, tiers?: readonly
   if (isBuiltinStatus(key)) return MEMBER_STATUS_LABELS[key];
   const humanised = key.replace(/_/g, ' ');
   return `${humanised.charAt(0).toUpperCase()}${humanised.slice(1)}`;
+}
+
+/**
+ * A member's standing as the profile states it: "Life member", or the
+ * department's own tier name ("Active Member", "Senior member"). A name that
+ * already ends in "member" is not given a second one.
+ */
+export function memberStandingLabel(memberStatus?: string | null, tiers?: readonly MembershipTierName[]): string {
+  const label = memberStatusLabel(memberStatus, tiers);
+  if (!label) return '';
+  return /\bmember$/i.test(label.trim()) ? label : `${label} member`;
 }
 
 export interface MemberStatusOption {
@@ -83,7 +94,10 @@ export interface MemberStatusOption {
  * department calls it that. `extra` carries values already stored on the roster
  * that neither list names, so a filter can still select them.
  */
-export function statusOptionsFor(tiers?: readonly MembershipTier[], extra?: readonly string[]): MemberStatusOption[] {
+export function statusOptionsFor(
+  tiers?: readonly MembershipTierName[],
+  extra?: readonly string[]
+): MemberStatusOption[] {
   const seen = new Map<string, string>();
   for (const status of Object.values(MemberStatus)) {
     seen.set(status, MEMBER_STATUS_LABELS[status]);

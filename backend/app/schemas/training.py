@@ -60,6 +60,7 @@ class RequirementType(str, Enum):
     EVALUATED_SHIFTS = "evaluated_shifts"
     TRANSPORTS = "transports"
     REFUSALS = "refusals"
+    SESSION_ATTENDANCE = "session_attendance"
 
 
 # Training Category Schemas
@@ -433,6 +434,9 @@ class TrainingRequirementBase(BaseModel):
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    # SESSION_ATTENDANCE: the share of the linked sessions to attend. Zero
+    # would be met by attending nothing, so the floor is above it.
+    required_attendance_pct: Optional[float] = Field(None, gt=0, le=100)
     evaluation_excludes_lowest_rating: bool = False
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
@@ -505,6 +509,10 @@ _REQUIREMENT_QUANTITY_FIELDS = {
     ),
     RequirementType.TRANSPORTS: ("required_transports", "no transport count is set"),
     RequirementType.REFUSALS: ("required_refusals", "no refusal count is set"),
+    RequirementType.SESSION_ATTENDANCE: (
+        "required_attendance_pct",
+        "no attendance percentage is set",
+    ),
 }
 
 
@@ -647,6 +655,9 @@ class TrainingRequirementUpdate(RefusesNull):
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    # SESSION_ATTENDANCE: the share of the linked sessions to attend. Zero
+    # would be met by attending nothing, so the floor is above it.
+    required_attendance_pct: Optional[float] = Field(None, gt=0, le=100)
     evaluation_excludes_lowest_rating: Optional[bool] = None
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None

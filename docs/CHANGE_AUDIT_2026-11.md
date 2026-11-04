@@ -5,6 +5,34 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 3 – 4, 2026
+
+Merged to `main` after `12f1430d` (2026-11-03 16:55 UTC) through `9df03d0d`
+(2026-11-04 12:53 UTC). Security-review passes (scheduled-tasks, locations-kiosk,
+core-infra, frontend-shared, cross-cutting baseline and pass 15, auth-session,
+permissions-roles; 0–2 fixes each) are in `docs/security-review/PROGRESS.md`.
+`CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                        | Guide      | Disposition                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Historical Data Import**: shift, on-call and administrative hours from one export, reviewed in monthly batches (#4013, #4015)                                                                               | 16         | Section added to 16; wiki page `Integration-Historical-Data-Import` written with the change                              |
+| Interviewers are emailed when an applicant reaches an Interview Requirement stage (#4012 range); **My applicants** narrows counts and archive tabs                                                            | 15         | Added; `PROSPECTIVE_MEMBERS_MODULE.md` written with the change                                                           |
+| One **Evaluations** navigation entry; first-time setup checklist, preview and two starter templates                                                                                                           | 02         | Added (02's "Where things are" table extended)                                                                           |
+| Setup asks about **Public Information**; a lapsed setup session shows a banner; Public Information stays on by default                                                                                        | 00         | Wiki `Onboarding` and `ONBOARDING_FLOW` written with the change; guide 00 does not describe the Modules step, so no edit |
+| **Send as me** confirmation now names what happens to equipment checks                                                                                                                                        | 10         | Resolves the item raised on Nov 2 – 3; guide 10 already matched                                                          |
+| Paused shift patterns listed on Shift Patterns so they can be resumed                                                                                                                                         | 03         | Guide already described Paused and Resume; the behaviour now matches it                                                  |
+| Members hub reads screening standing from the Compliance tab ("N of M compliant")                                                                                                                             | 13         | Hub tile and queue wording changed; guide 13 does not quote the old tile                                                 |
+| Event QR page reports guest check-in correctly; roster reflows to cards below 1024px; compact empty state in profile ID Cards; applicant follow-up form no longer redirects a signed-out applicant to sign in | 01, 04, 15 | No guide text describes these                                                                                            |
+| Operator-facing: `REDIS_REQUIRED=true` refuses to start without Redis; images on tested runtimes and a combined Unraid image; eight unused tables dropped; Azure deployment guide                             | none       | `UPGRADING`, `DOCKER-BUILD-PUBLISH`, `DATABASE_SCHEMA_DRIFT`, `deployment/azure` written with the changes                |
+
+**Screenshots to create:** Historical Data Import (upload, column mapping, sorted
+rows, batch list); the **Evaluations** strip and Getting started checklist with
+preview. **Replace:** `01-22-member-lifecycle` and any Members roster capture
+at tablet width (cards below 1024px); profile ID Cards empty state. See
+`docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts. None describes these screens.
+
 ## Change audit: November 2 – 3, 2026
 
 Merged to `main` since `8700f3cf` (2026-11-02 15:07 UTC) through `12f1430d`

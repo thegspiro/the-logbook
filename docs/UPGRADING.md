@@ -696,6 +696,72 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Tier names for every member, tier benefits by status, and plain applicant names (2026-11-04)
+
+Four owner decisions of 2026-11-01. Migration `67fac0bf1c09` carries the
+data side.
+
+- **Applicant names are unescaped once.** Applicants created from a
+  membership interest form were stored with HTML entities (`O&#x27;Brien`,
+  `Smith &amp; Sons`). The migration converts `first_name`, `last_name`,
+  `interest_reason` and `referral_source` on `prospective_members` back to the
+  text the applicant typed, and new interest-form applicants are stored plain.
+  It changes only values that are exactly what HTML escaping produces, so it
+  is safe to run twice; the upgrade log reports how many it changed and how
+  many ambiguous values (such as `&amp;amp;`) it left as they were. **It
+  cannot be undone by a downgrade**, which leaves the plain text — restore the
+  pre-upgrade backup if the escaped form is needed. Encrypted columns (email,
+  phone, address) are not converted.
+- **Tier benefits follow Membership status everywhere.** The remaining
+  readers — who may vote and stand for office, the ballot check, the turnout
+  denominator, and which members a tier-scoped mandatory event expects —
+  now find a member's tier from their status, as the training report and
+  attendance dashboard already did. Nothing in the database changes, but
+  **an administrative or social member on a tier now gets that tier's rules
+  the moment you upgrade**: a tier that cannot vote or hold office refuses
+  them, a percentage quorum's denominator can shrink, and events mandatory for
+  their tier start listing them as expected.
+- **Members see the department's tier names.** The member directory's status
+  filter and profiles show the department's own names ("Senior Member")
+  instead of "Regular member" / "Life member", from the new
+  `GET /users/membership-tiers/names`, open to every signed-in member (ids and
+  names only).
+- **The Convert dialog offers the department's tiers** as starting statuses,
+  and the conversion accepts a tier on the organization's ladder.
+
+### Medical screening: a detail permission, grace periods, and linked requirements (2026-11-04)
+
+Three owner decisions of 2026-11-01 change who reads what and who counts as
+compliant. Migration `d6906e3dd76c` carries the data side.
+
+- **Clinical narrative needs `medical_screening.view_details`.** The provider,
+  result summary, structured results and notes on a screening record are now
+  returned only to holders of the new permission (or of
+  `medical_screening.manage`, which edits them). `medical_screening.view`
+  alone shows compliance status: who is due, dates, requirements and the
+  passed/failed/waived outcome. **So nobody loses access on upgrade, the
+  migration gives `view_details` to every position that holds
+  `medical_screening.view`.** If a position should see status only — a
+  scheduler, say — remove `medical_screening.view_details` from it on the
+  Positions screen after upgrading. Removing it from a position that also
+  holds `medical_screening.manage` changes nothing; take away `manage` too.
+  Holders of the new permission must use MFA, like the other two.
+- **Grace periods are enforced.** A requirement's _Grace Period_ (default 30
+  days on every existing requirement) now keeps a member compliant that many
+  days after a screening falls due; meanwhile it shows as past due and counts
+  as expiring soon. Members who lapsed within the grace period read compliant
+  again after the upgrade. Set a requirement's grace period to 0 to keep the
+  old behaviour.
+- **A screening record counts only toward the requirement it is linked to.**
+  It used to count toward every requirement of its screening type. The
+  migration links each unlinked record to its department's one requirement of
+  that type. Where two or more requirements share the type, it cannot choose,
+  and leaves the record unlinked: such a record **stops counting**, which can
+  make a member read not compliant. Open the Records tab, look for records
+  marked _Not linked to a requirement_, and link each from its Edit dialog.
+  The link is not removed by a downgrade, and is harmless to the previous
+  build.
+
 ### Files stored before malware scanning are scanned now (2026-11-03)
 
 Upload scanning only ever covered new uploads, so files and images stored

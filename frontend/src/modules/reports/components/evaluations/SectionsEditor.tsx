@@ -2,7 +2,7 @@
  * The "Sections & items" tab of the template builder.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Star, Trash2 } from 'lucide-react';
 import { useConfirm } from '../../../../contexts/ConfirmContext';
 import type {
@@ -12,8 +12,60 @@ import type {
   TemplateItem,
   TemplateSection,
 } from '../../types/evaluations';
-import { allItemKeys, moveItem, newItem, newSection, replaceAt, weightTotal } from '../../utils/evaluationTemplate';
+import {
+  DEFAULT_GRADE_BANDS,
+  allItemKeys,
+  moveItem,
+  newItem,
+  newSection,
+  replaceAt,
+  sectionItemWeightTotal,
+  sectionWeightTotal,
+  weightTotal,
+} from '../../utils/evaluationTemplate';
 import { ItemEditor } from './ItemEditor';
+
+/** The five grades' names, as the server's `OVERALL_LEVELS` gives them. */
+const GRADE_NAMES: Record<number, string> = {
+  1: 'Unsatisfactory',
+  2: 'Needs improvement',
+  3: 'Meets expectations',
+  4: 'Exceeds expectations',
+  5: 'Outstanding',
+};
+
+/**
+ * A grade range's lowest score. Kept as text while typed, so clearing the box
+ * to retype it does not snap the value to something and then append to it;
+ * only a number that parses is handed on, and the server checks the ranges
+ * are in order when the draft is saved.
+ */
+const BandInput: React.FC<{ id: string; value: number; onCommit: (value: number) => void }> = ({
+  id,
+  value,
+  onCommit,
+}) => {
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    setText((current) => (Number(current) === value ? current : String(value)));
+  }, [value]);
+  return (
+    <input
+      id={id}
+      type="number"
+      min={1}
+      max={5}
+      step={0.1}
+      className="form-input w-24"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const parsed = Number(e.target.value);
+        if (e.target.value !== '' && Number.isFinite(parsed)) onCommit(parsed);
+      }}
+    />
+  );
+};
 
 interface SectionsEditorProps {
   definition: TemplateDefinition;
@@ -29,6 +81,14 @@ export const SectionsEditor: React.FC<SectionsEditorProps> = ({ definition, data
   const current = sections[Math.min(selected, sections.length - 1)];
   const currentIndex = current ? sections.indexOf(current) : -1;
   const total = weightTotal(definition);
+  const sectioned = definition.overall_mode === 'sectioned';
+  const sectionTotal = sectionWeightTotal(definition);
+  const bands = definition.grade_bands ?? DEFAULT_GRADE_BANDS;
+  const setBandMin = (level: number, min: number) =>
+    onChange({
+      ...definition,
+      grade_bands: bands.map((band) => (band.level === level ? { ...band, min } : band)),
+    });
 
   const setSections = (next: TemplateSection[]) => onChange({ ...definition, sections: next });
 
@@ -182,6 +242,36 @@ export const SectionsEditor: React.FC<SectionsEditorProps> = ({ definition, data
                 />
                 <span className="text-theme-text-secondary">Officers only — added for the ranks chosen below</span>
               </label>
+              {sectioned && (
+                <div>
+                  <label htmlFor="section-weight" className="form-label">
+                    Section weight in overall (%)
+                  </label>
+                  <input
+                    id="section-weight"
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="form-input w-32"
+                    value={current.weight ?? 0}
+                    onChange={(e) =>
+                      setSection({ ...current, weight: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })
+                    }
+                  />
+                  <p
+                    className={`mt-1 text-xs ${
+                      !(current.weight ?? 0) || sectionItemWeightTotal(current) === 100
+                        ? 'text-theme-text-muted'
+                        : 'text-amber-800 dark:text-amber-300'
+                    }`}
+                    role="status"
+                  >
+                    {current.weight
+                      ? `Item weights in this section add up to ${sectionItemWeightTotal(current)}% — they must total 100% to publish.`
+                      : 'Weight 0 leaves this section ungraded, as for a section of written goals.'}
+                  </p>
+                </div>
+              )}
             </div>
 
             {current.items.map((item, index) => (
@@ -194,6 +284,7 @@ export const SectionsEditor: React.FC<SectionsEditorProps> = ({ definition, data
                 onChange={(next) => setItems(replaceAt(current.items, index, next))}
                 onRemove={() => setItems(current.items.filter((_, i) => i !== index))}
                 onMove={(to) => setItems(moveItem(current.items, index, to))}
+                weightLabel={sectioned ? 'Weight in section (%)' : 'Weight in overall (%)'}
               />
             ))}
             <button type="button" className="btn-secondary inline-flex items-center gap-2 text-sm" onClick={addItem}>
@@ -222,7 +313,8 @@ export const SectionsEditor: React.FC<SectionsEditorProps> = ({ definition, data
               onChange({ ...definition, overall_mode: e.target.value as TemplateDefinition['overall_mode'] })
             }
           >
-            <option value="weighted">Calculated from item weights</option>
+            <option value="sectioned">Graded by section</option>
+            <option value="weighted">Calculated from item weights (percentage)</option>
             <option value="evaluator">Chosen by the evaluator</option>
             <option value="none">No overall rating</option>
           </select>
@@ -233,6 +325,41 @@ export const SectionsEditor: React.FC<SectionsEditorProps> = ({ definition, data
             >
               Weights add up to {total}% — they must total 100% to publish.
             </p>
+          )}
+          {sectioned && (
+            <>
+              <p
+                className={`mt-1 text-xs ${sectionTotal === 100 ? 'text-theme-text-muted' : 'text-amber-800 dark:text-amber-300'}`}
+                role="status"
+              >
+                Section weights add up to {sectionTotal}% — they must total 100% to publish.
+              </p>
+              <fieldset className="mt-4">
+                <legend className="form-label">Grades</legend>
+                <p className="text-theme-text-muted mb-2 text-xs">
+                  Each section and the overall are scored from 1 to 5 and graded by these ranges. The evaluator may give
+                  a different grade, with a reason.
+                </p>
+                <div className="space-y-2">
+                  {[...bands]
+                    .filter((band) => band.level > 1)
+                    .reverse()
+                    .map((band) => (
+                      <div key={band.level} className="flex items-center gap-2 text-sm">
+                        <label htmlFor={`grade-band-${band.level}`} className="text-theme-text-secondary w-44">
+                          {GRADE_NAMES[band.level]} from
+                        </label>
+                        <BandInput
+                          id={`grade-band-${band.level}`}
+                          value={band.min}
+                          onCommit={(min) => setBandMin(band.level, min)}
+                        />
+                      </div>
+                    ))}
+                  <p className="text-theme-text-secondary text-sm">{GRADE_NAMES[1]} below that</p>
+                </div>
+              </fieldset>
+            </>
           )}
         </div>
         <fieldset>

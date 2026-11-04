@@ -569,6 +569,15 @@ section. Files are stored securely.
 
 Select **Interview** in the applicant's drawer to open their interview page.
 
+**Interviewers are asked to interview.** When an applicant reaches an
+**Interview Requirement** stage, each interviewer assigned to them is emailed
+a link to the applicant's Interview page (the **Interview Requested**
+template). It goes out each time the applicant lands on the stage: advanced,
+moved back, placed from no stage, or moved to a deleted stage's fallback. An
+interviewer who has already logged an interview for that stage is not asked
+again, and a member who is both interviewer and case manager gets this email
+only, not the case managers' notice as well.
+
 ### Recording an Interview
 
 1. Select **New Interview** to open the form.
@@ -1140,7 +1149,7 @@ applicant only corrects what has changed.
 - Once submitted, the link shows a thank-you page. It cannot be submitted
   twice.
 
-<!-- Screenshot needed: The applicant's follow-up form page, greeted by first name, with what is on file filled in and Save and finish later beside Submit -->
+![Mateo Alvarez's follow-up form, Applicant Details Confirmation: Hi Mateo above the form, his name, email and city filled in from his record, the mobile phone, street address, guardian and school questions still to answer, and Save and finish later beside Submit](./images/15-40-follow-up-form-page.png)
 
 ### What a submission changes
 
@@ -1159,6 +1168,10 @@ flag on the applicant's card. In the drawer the form reads "Contact details
 changed. Check the new details before relying on them." Check the new details,
 then select **Mark reviewed**. The drawer then records who reviewed it, and
 when.
+
+![Mateo Alvarez's card on the Junior Firefighter Pipeline board, with the Contact details changed flag above his name](./images/15-46-card-contact-changed.png)
+
+![The Follow-up Forms section of Mateo Alvarez's drawer after he submitted the form: Submitted, the warning Contact details changed. Check the new details before relying on them. with Mark reviewed, and Changes to the applicant record listing his new mobile number and street address, each from (blank)](./images/15-45-follow-up-drawer-contact-changed.png)
 
 **A changed email takes effect straight away.** Later pipeline emails go to
 the new address. The **old** address is sent the **Application Contact Details
@@ -1190,6 +1203,8 @@ submitted.
   told why. Publish the form, or pick another on the stage.
 
 ![The Follow-up Forms section of Mateo Alvarez's drawer: Confirm Your Details, Applicant Details Confirmation, Not sent, with Send now](./images/15-34-follow-up-drawer-send-now.png)
+
+![The Follow-up Forms section of Mateo Alvarez's drawer once his link has gone: Applicant Details Confirmation, Stage: Confirm Your Details, Sent, when it was last sent, and Resend](./images/15-44-follow-up-drawer-resend.png)
 
 ### How the stage completes
 
@@ -1252,6 +1267,8 @@ was submitted, then every answer in the form's order. Choices show their
 labels, and a signature reads "Signed". A blank answer reads "(no answer)".
 The panel does not appear until a form has been submitted.
 
+![The Follow-up Forms panel on Mateo Alvarez's Interview page: Applicant Details Confirmation, Stage: Confirm Your Details, submitted today, then each answer in the form's order, from his name and email to his parent or guardian and school](./images/15-43-interview-follow-up-answers.png)
+
 **Sensitive answers.** A question marked sensitive in the Forms module carries
 a **Sensitive** badge. Its answer is shown only to members who hold
 **sensitive_answers.view**, and each time it is shown the audit log records it,
@@ -1307,6 +1324,10 @@ one) and from that applicant's **Interview** page.
 only the applicants assigned to them. An upgrade gave `view_all` to every
 position that already held `view` or `manage`, so nobody's list narrowed;
 check **Positions** if you want a position to see only its own applicants.
+
+**My applicants narrows the counts too.** With **My applicants** on, the
+pipeline's totals and the Inactive, Rejected, Withdrawn and Converted tabs
+count and list only the applicants assigned to you, not the whole pipeline.
 
 **Withdrawing as a case manager.** The status dialog offers a case manager only
 **Withdraw** (no Reject, Hold or Resume).

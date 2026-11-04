@@ -19,6 +19,8 @@ import type {
   HistoricalImportSettingsUpdate,
   HistoricalImportSummary,
   ShiftBatch,
+  TrainingPreview,
+  TrainingSettingsUpdate,
 } from '../types/historicalImport';
 
 const api = createApiClient();
@@ -88,6 +90,36 @@ export const historicalImportService = {
 
   async commitAdmin(importId: string): Promise<AdminPreview> {
     const response = await api.post<AdminPreview>(`${BASE}/${importId}/admin/commit`, null, { timeout: 0 });
+    return response.data;
+  },
+
+  async getTrainingPreview(
+    importId: string,
+    params: { search?: string | undefined; offset?: number; limit?: number } = {}
+  ): Promise<TrainingPreview> {
+    const response = await api.get<TrainingPreview>(`${BASE}/${importId}/training`, {
+      params: { search: params.search || undefined, offset: params.offset ?? 0, limit: params.limit ?? 50 },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  async updateTrainingSettings(importId: string, payload: TrainingSettingsUpdate): Promise<TrainingPreview> {
+    const response = await api.patch<TrainingPreview>(`${BASE}/${importId}/training-settings`, payload, {
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  async acceptSuggestedCourses(importId: string): Promise<number> {
+    const response = await api.post<{ mapped: number }>(`${BASE}/${importId}/training/accept-suggestions`, null, {
+      timeout: 0,
+    });
+    return response.data?.mapped ?? 0;
+  },
+
+  async commitTraining(importId: string): Promise<TrainingPreview> {
+    const response = await api.post<TrainingPreview>(`${BASE}/${importId}/training/commit`, null, { timeout: 0 });
     return response.data;
   },
 

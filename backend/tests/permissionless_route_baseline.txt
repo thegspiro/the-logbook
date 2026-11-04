@@ -101,6 +101,11 @@ app/api/v1/endpoints/elections.py::submit_member_ballot
 # and the signer's own name typed.
 app/api/v1/endpoints/evaluations.py::download_evaluation_document
 app/api/v1/endpoints/evaluations.py::get_evaluation
+# /attention returns two counts scoped to the caller: their own evaluations
+# waiting on them, and — only for a holder of evaluations.conduct, view_all or
+# manage — the overdue rows of the same list the conduct page shows them
+# (2026-11-04).
+app/api/v1/endpoints/evaluations.py::get_attention_counts
 app/api/v1/endpoints/evaluations.py::get_my_live_data
 # /mine/removed lists the deletion records of the caller's own evaluations,
 # filtered on current_user.id within its organization (2026-11-02).
@@ -326,6 +331,11 @@ app/api/v1/endpoints/scheduling.py::get_active_shift_for_apparatus
 app/api/v1/endpoints/scheduling.py::get_calendar_feed
 app/api/v1/endpoints/scheduling.py::get_eligible_positions
 app/api/v1/endpoints/scheduling.py::get_eligible_positions_bulk
+# Self or scheduling.report: the handler returns 403 unless the caller is the
+# member or holds scheduling.report, and 404 for a member of another org
+# (tests/test_member_hours_history.py::TestMemberHoursEndpoint). A dependency
+# cannot express "or is that member", hence the check in the body.
+app/api/v1/endpoints/scheduling.py::get_member_hours_history
 app/api/v1/endpoints/scheduling.py::get_my_assignments
 app/api/v1/endpoints/scheduling.py::get_my_attendance
 app/api/v1/endpoints/scheduling.py::get_my_attendance_history
@@ -536,3 +546,18 @@ app/api/v1/endpoints/history.py::list_people
 app/api/v1/endpoints/history.py::list_revisions
 app/api/v1/endpoints/history.py::list_titles
 app/api/v1/endpoints/history.py::review_clearance_request
+
+# Added 2026-11-04 (owner decisions of 2026-11-01). Each is meant for every
+# member and scoped inside the handler:
+# The caller's own current crew (MemberSupervisorService.current_crew), in the
+# caller's organization; returns nobody to a member who supervises no one.
+app/api/v1/endpoints/member_supervisors.py::list_my_crew
+# Evaluations of the caller's current crew only, released parts only, in the
+# caller's organization; empty for a member who supervises no one.
+app/api/v1/endpoints/evaluations.py::list_crew_evaluations
+# Tier ids and display names for the caller's own organization; no advancement
+# rules, years or benefits. Any member may read their department's labels.
+app/api/v1/endpoints/member_status.py::get_membership_tier_names
+# scheduling.manage OR the requester's current supervisor, re-checked in
+# SchedulingService under a row lock on the request; anyone else gets 403.
+app/api/v1/endpoints/scheduling.py::review_time_off_request

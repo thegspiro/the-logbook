@@ -76,9 +76,16 @@ export const ComplianceDashboard: React.FC = () => {
                           : 'text-theme-text-secondary'
                     }`}
                   >
-                    {screening.days_until_expiration} day{screening.days_until_expiration === 1 ? '' : 's'}
+                    {/* MS-16: a screening past due but inside its grace period
+                        still counts; say so rather than "-5 days". */}
+                    {screening.in_grace_period
+                      ? `Past due ${-screening.days_until_expiration} day${screening.days_until_expiration === -1 ? '' : 's'}`
+                      : `${screening.days_until_expiration} day${screening.days_until_expiration === 1 ? '' : 's'}`}
                   </p>
                   <p className="text-theme-text-muted text-xs">
+                    {screening.in_grace_period && screening.grace_period_ends
+                      ? `Grace period until ${formatCalendarDate(screening.grace_period_ends)} · `
+                      : ''}
                     {screening.expiration_from_frequency
                       ? `Due ${formatCalendarDate(screening.expiration_date)} (by frequency)`
                       : `Expires ${formatCalendarDate(screening.expiration_date)}`}

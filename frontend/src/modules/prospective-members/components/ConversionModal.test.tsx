@@ -16,6 +16,7 @@ const mockConvertToMember = vi.fn();
 const mockGetWelcomeEmailAvailability = vi.fn();
 const mockRefreshPipelineView = vi.fn();
 const mockGetPipeline = vi.fn();
+const mockGetTierNames = vi.fn();
 
 vi.mock('../services/api', () => ({
   applicantService: {
@@ -28,6 +29,10 @@ vi.mock('../services/api', () => ({
 vi.mock('../../../services/api', () => ({
   userService: {
     getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
+  },
+  // The Starting status control lists the department's own tiers.
+  memberStatusService: {
+    getTierNames: (...args: unknown[]) => mockGetTierNames(...args) as unknown,
   },
 }));
 // The pipeline on screen, whose conversion rule pre-fills class and status.
@@ -78,6 +83,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetWelcomeEmailAvailability.mockReset();
   mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+  mockGetTierNames.mockReset();
+  mockGetTierNames.mockResolvedValue([]);
   mockConvertToMember.mockReset();
   mockConvertToMember.mockResolvedValue({
     applicant_id: 'p1',
@@ -268,6 +275,30 @@ describe('what the applicant becomes', () => {
 
   beforeEach(() => {
     mockGetPipeline.mockReset();
+    mockGetTierNames.mockReset();
+    mockGetTierNames.mockResolvedValue([]);
+  });
+
+  // Owner decision 2026-11-01: the department's own tiers are offered, by the
+  // department's names, beside the two built-in starting statuses.
+  it("offers the department's own tiers and sends the one chosen", async () => {
+    mockGetTierNames.mockResolvedValue([
+      { id: 'probationary', name: 'Probationary' },
+      { id: 'active', name: 'Active Member' },
+      { id: 'cadet', name: 'Cadet' },
+    ]);
+    const user = userEvent.setup();
+    await openFor(user, { target_membership_type: 'regular' });
+
+    expect(await screen.findByRole('option', { name: 'Cadet' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Active Member' })).toHaveValue('regular');
+
+    await user.selectOptions(statusSelect(), 'cadet');
+    await user.click(convert());
+
+    await waitFor(() => expect(mockConvertToMember).toHaveBeenCalled());
+    const payload = mockConvertToMember.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toMatchObject({ member_class: 'operational', member_status: 'cadet' });
   });
 
   it("starts from the pipeline's rule for an administrative applicant", async () => {

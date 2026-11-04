@@ -881,8 +881,18 @@ class TransferProspectRequest(BaseModel):
             "pipeline's conversion outcome for this applicant"
         ),
     )
-    member_status: Optional[ConversionStatus] = Field(
-        None, description="Starting status for the new member"
+    # A plain string rather than ``ConversionStatus``: besides the two built-in
+    # starting statuses the Convert dialog offers the department's own tiers
+    # (owner decision 2026-11-01), and only the organization knows those, so
+    # the service checks the value against its ladder before storing it.
+    member_status: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=50,
+        description=(
+            "Starting status for the new member: probationary, regular, or "
+            "one of the organization's membership tier ids"
+        ),
     )
     notes: Optional[str] = Field(
         None,

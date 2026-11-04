@@ -875,7 +875,11 @@ export interface ConvertApplicantRequest {
   target_membership_type: TargetMembershipType;
   /** The new member's class and starting status, pre-filled from the pipeline. */
   member_class: MemberClass;
-  member_status: ConversionStatus;
+  /**
+   * A built-in starting status (`ConversionStatus`) or one of the department's
+   * own tier ids; the server checks a tier id against the ladder.
+   */
+  member_status: string;
   target_role_id?: string | undefined;
   send_welcome_email: boolean;
   /** An initial password the coordinator chose; omitted for a generated one. */

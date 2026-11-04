@@ -118,6 +118,7 @@ const mockMember = {
   status: 'active',
   photo_url: null,
   hire_date: '2018-06-15',
+  service_since: '2018-06-15',
   roles: [{ id: 'r1', name: 'Firefighter', is_system: false }],
 };
 
@@ -269,13 +270,31 @@ describe('MemberIdCardPage', () => {
       });
     });
 
-    it('should display member since year from hire date', async () => {
+    it('should display member since year from credited service', async () => {
       renderWithRouter(<MemberIdCardPage />);
 
       await waitFor(() => {
         expect(screen.getByText('Member Since')).toBeInTheDocument();
         expect(screen.getByText('2018')).toBeInTheDocument();
       });
+    });
+
+    // Owner decision 2026-11-01: a member who left and came back is a member
+    // since the date their credited service runs from, not their hire date.
+    it('shows a returned member the year their credited service runs from', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({
+        ...mockMember,
+        hire_date: '2009-03-01',
+        service_since: '2014-01-01',
+      } as never);
+      renderWithRouter(<MemberIdCardPage />);
+
+      expect(await screen.findByText('Member Since')).toBeInTheDocument();
+      // A calendar date, not an instant: 1 January stays in its own year for a
+      // department west of UTC.
+      expect(screen.getByText('2014')).toBeInTheDocument();
+      expect(screen.queryByText('2009')).not.toBeInTheDocument();
+      expect(screen.queryByText('2013')).not.toBeInTheDocument();
     });
 
     // The badge printed the stored value, so a card read "active" and a member
@@ -463,7 +482,7 @@ describe('MemberIdCardPage', () => {
     });
 
     it('should handle member without hire date', async () => {
-      const memberNoHireDate = { ...mockMember, hire_date: undefined };
+      const memberNoHireDate = { ...mockMember, hire_date: undefined, service_since: null };
       vi.mocked(userService.getUserWithRoles).mockResolvedValue(memberNoHireDate as never);
       vi.mocked(organizationService.getProfile).mockResolvedValue(mockOrg);
 

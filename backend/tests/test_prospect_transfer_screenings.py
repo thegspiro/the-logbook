@@ -63,11 +63,14 @@ async def _prospect(svc: MembershipPipelineService, org_id: str, pipeline_id: st
     )
 
 
-def _screening(org_id, prospect_id, kind, completed, expiration=None):
+def _screening(
+    org_id, prospect_id, kind, completed, expiration=None, requirement_id=None
+):
     return ScreeningRecord(
         id=_uid(),
         organization_id=org_id,
         prospect_id=prospect_id,
+        requirement_id=requirement_id,
         screening_type=kind,
         status=ScreeningStatus.PASSED,
         completed_date=completed,
@@ -97,35 +100,41 @@ class TestTransferCarriesScreenings:
         svc = MembershipPipelineService(db_session)
         pipeline = await svc.create_pipeline(organization_id=org_id, name="P")
         prospect = await _prospect(svc, org_id, str(pipeline.id))
+        physical = ScreeningRequirement(
+            id=_uid(),
+            organization_id=org_id,
+            name="Annual Physical",
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            frequency_months=12,
+            is_active=True,
+        )
+        drug = ScreeningRequirement(
+            id=_uid(),
+            organization_id=org_id,
+            name="Drug Screen",
+            screening_type=ScreeningType.DRUG_SCREENING,
+            is_active=True,
+        )
+        db_session.add_all([physical, drug])
+        await db_session.flush()
+        # Each linked to its requirement: a record counts only toward the
+        # requirement it is linked to (owner decision 2026-11-01).
         db_session.add_all(
             [
-                ScreeningRequirement(
-                    id=_uid(),
-                    organization_id=org_id,
-                    name="Annual Physical",
-                    screening_type=ScreeningType.PHYSICAL_EXAM,
-                    frequency_months=12,
-                    is_active=True,
-                ),
-                ScreeningRequirement(
-                    id=_uid(),
-                    organization_id=org_id,
-                    name="Drug Screen",
-                    screening_type=ScreeningType.DRUG_SCREENING,
-                    is_active=True,
-                ),
                 _screening(
                     org_id,
                     str(prospect.id),
                     ScreeningType.PHYSICAL_EXAM,
                     date.today() - timedelta(days=12),
                     date.today() + relativedelta(months=12),
+                    requirement_id=physical.id,
                 ),
                 _screening(
                     org_id,
                     str(prospect.id),
                     ScreeningType.DRUG_SCREENING,
                     date.today() - timedelta(days=10),
+                    requirement_id=drug.id,
                 ),
             ]
         )
