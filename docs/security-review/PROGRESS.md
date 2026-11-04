@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4006](https://github.com/thegspiro/the-logbook/pull/4006)** (branch
+`claude/security-review-scheduled-tasks-pass12`) — Feature 31 (Scheduled
+tasks), pass 12, a watchdog pickup. Real delta: two new scheduled tasks
+(`zeffy_payment_sync`, `evaluation_due_notices`), both thin delegates into
+other features' own already-reviewed services, reviewed here only for the
+scheduler-wiring angle; plus an already-merged fix (CRON-41) to
+`inventory_overdue_alerts` adding a sent-log so an in-process-scheduler
+restart no longer re-sends the day's overdue-equipment email to every
+holder. 0 fixed, 0 new findings. See
+`docs/security-review/CRON12-31-scheduled-tasks.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 12, PR #4003, merged), preserved for history</summary>
+
 **PR [#4003](https://github.com/thegspiro/the-logbook/pull/4003)** (branch
 `claude/security-review-onboarding-pass12`) — Feature 30 (Onboarding),
 pass 12, a watchdog pickup. Real delta traces to three already-merged,
