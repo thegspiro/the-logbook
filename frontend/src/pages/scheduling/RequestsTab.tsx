@@ -62,9 +62,13 @@ export const RequestsTab: React.FC = () => {
     : swapRequests.filter(
         (request) => request.requesting_user_id === currentUser?.id || request.target_user_id === currentUser?.id
       );
+  // A supervisor also sees the pending requests the server flags as theirs to
+  // decide (owner decision 2026-11-01: approvals route to the supervisor).
   const visibleTimeOffRequests = canManage
     ? timeOffRequests
-    : timeOffRequests.filter((request) => request.user_id === currentUser?.id);
+    : timeOffRequests.filter(
+        (request) => request.user_id === currentUser?.id || request.reviewable_as_supervisor === true
+      );
 
   // Review modal
   const [reviewing, setReviewing] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
@@ -540,7 +544,7 @@ export const RequestsTab: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-1">
-                    {canManage && req.status === RequestStatus.PENDING && (
+                    {(canManage || req.reviewable_as_supervisor === true) && req.status === RequestStatus.PENDING && (
                       <>
                         <button
                           onClick={() => {

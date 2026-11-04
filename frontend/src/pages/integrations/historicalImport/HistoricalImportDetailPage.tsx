@@ -30,6 +30,15 @@ import { formatCalendarDate, formatDateTime, formatNumber } from '../../../utils
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { timezoneOptions, zoneLabel } from '../../scheduling/admin/historyImport/historyImportTimezones';
 import AdminHoursSection from './AdminHoursSection';
+import TrainingSection from './TrainingSection';
+
+/** Where each kind of record is reviewed and committed, on this page. */
+const IMPORTED_BY: Record<string, string> = {
+  shift: 'Shift review, below',
+  on_call: 'Shift review, below',
+  admin: 'Admin Hours, below',
+  training: 'Training, below',
+};
 
 const HOURS_PREFIX = 'hours:';
 const CALLS_PREFIX = 'calls:';
@@ -261,7 +270,6 @@ const SettingsForm: React.FC<{
 
 const RoutingPanel: React.FC<{ detail: HistoricalImportDetail }> = ({ detail }) => {
   const { routing } = detail;
-  const importable = new Set<string>(detail.importable_types);
   return (
     <section className="card space-y-4 p-4 sm:p-6" aria-labelledby="historical-routing-heading">
       <div>
@@ -312,11 +320,7 @@ const RoutingPanel: React.FC<{ detail: HistoricalImportDetail }> = ({ detail }) 
                     : '—'}
                 </td>
                 <td data-label="Imported by" className="text-theme-text-secondary py-2">
-                  {type === HistoricalRecordType.ADMIN
-                    ? 'Admin Hours, below'
-                    : importable.has(type)
-                      ? 'Shift review, below'
-                      : 'A later step'}
+                  {IMPORTED_BY[type] ?? '—'}
                 </td>
               </tr>
             ))}
@@ -590,6 +594,8 @@ const HistoricalImportDetailPage: React.FC = () => {
           </section>
 
           <AdminHoursSection detail={detail} />
+
+          <TrainingSection detail={detail} />
         </div>
       )}
     </div>

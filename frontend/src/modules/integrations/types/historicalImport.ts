@@ -173,3 +173,67 @@ export interface AdminPreview {
 export type AdminMemberMapping =
   | { action: 'map'; user_id: string }
   | { action: 'create'; first_name?: string | undefined; last_name?: string | undefined };
+
+// ---------------------------------------------------------------------------
+// Training
+// ---------------------------------------------------------------------------
+
+export type UnmatchedProviderAction = 'import' | 'skip';
+
+export interface TrainingSettings {
+  subject_column: string;
+  instructor_column: string;
+  /** A yes/no column: set when the member taught the class. */
+  taught_column: string;
+  provider_patterns: string[];
+  unmatched_provider_action?: UnmatchedProviderAction | null;
+  /** Subject key -> course id; a subject with no entry is imported as written. */
+  subject_courses: Record<string, string>;
+}
+
+export interface TrainingSettingsUpdate {
+  subject_column?: string;
+  instructor_column?: string;
+  taught_column?: string;
+  provider_patterns?: string[];
+  unmatched_provider_action?: UnmatchedProviderAction | null;
+  /** Merged by key; null removes a subject's mapping. */
+  subject_courses?: Record<string, string | null>;
+}
+
+export interface TrainingSubject {
+  key: string;
+  subject: string;
+  records: number;
+  hours: number;
+  course_id?: string | null;
+  course_name: string;
+  suggested_course_id?: string | null;
+}
+
+export interface TrainingPreview {
+  settings: TrainingSettings;
+  headers: string[];
+  pending_records: number;
+  already_imported: number;
+  provider_rows: number;
+  provider_matched: number;
+  provider_unmatched: number;
+  subject_count: number;
+  subjects_mapped: number;
+  records_mapped: number;
+  subjects: TrainingSubject[];
+  subject_total: number;
+  courses: { id: string; name: string; training_type: string }[];
+  problems: string[];
+  problem_count: number;
+  members: AdminMember[];
+  member_options: { id: string; name: string; membership_number: string; status: string }[];
+  can_commit: boolean;
+  result?: {
+    records_created?: number;
+    provider_duplicates_skipped?: number;
+    provider_unmatched_skipped?: number;
+    members_created?: number;
+  } | null;
+}

@@ -73,6 +73,13 @@ export interface UserWithRoles {
   member_class?: string | null | undefined;
   member_status?: string | null | undefined;
   hire_date?: string | undefined;
+  /**
+   * "Member since": the date credited service runs from — the hire date for a
+   * member who never left, later for one who came back after a break. Sent by
+   * GET /users/{id}/with-roles only; the profile's write endpoints omit it, so
+   * a page replacing its record with their response keeps the value it had.
+   */
+  service_since?: string | null | undefined;
   date_of_birth?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;
