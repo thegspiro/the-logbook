@@ -457,6 +457,10 @@ class EvaluationTemplateCreate(_Matching):
     name: str = Field(min_length=1, max_length=150)
     description: Optional[str] = Field(default=None, max_length=2000)
     kind: EvaluationTemplateKind = EvaluationTemplateKind.ANNUAL
+    # A key from ``GET /evaluations/templates/starters``: the first draft is
+    # filled from it instead of left empty. Checked by the service, which
+    # owns the catalog.
+    starter: Optional[str] = Field(default=None, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -484,6 +488,18 @@ class EvaluationTemplateUpdate(_Matching):
         if not v:
             raise ValueError("A template needs a name")
         return v
+
+
+class EvaluationStarterResponse(BaseModel):
+    """A starter a new template can be created from, with what it covers."""
+
+    key: str
+    name: str
+    description: str
+    kind: EvaluationTemplateKind
+    member_class: Optional[str] = None
+    member_status: Optional[str] = None
+    section_titles: List[str]
 
 
 class TemplateDraftWrite(BaseModel):
@@ -888,6 +904,47 @@ class DraftOptions(BaseModel):
     members: List[PersonRef]
     evaluators: List[PersonRef]
     periods: List[DraftPeriodOption]
+
+
+class TemplatePreviewRequest(BaseModel):
+    """The builder's form as it stands, unsaved edits included, and whose
+    figures to show in it. No ``member_id`` previews with sample figures."""
+
+    definition: TemplateDefinition
+    member_id: Optional[str] = Field(default=None, max_length=36)
+    period_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class TemplatePreviewResponse(BaseModel):
+    """What an evaluation drafted from this form would show, computed now and
+    stored nowhere."""
+
+    sample: bool
+    member_name: Optional[str] = None
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    coverage_start: Optional[date] = None
+    coverage_end: Optional[date] = None
+    includes_officer_sections: bool
+    sources: List[DataSourceResponse]
+    data: dict
+    suggested_scores: dict
+    overall_levels: List[ScaleLevel]
+    note: Optional[str] = None
+
+
+class PreviewPeriodOption(DraftPeriodOption):
+    is_closed: bool
+
+
+class PreviewOptions(BaseModel):
+    """Who and when a preview can be measured for. ``members`` is empty for a
+    builder who may not read members' figures (``evaluations.view_all``)."""
+
+    can_use_member_data: bool
+    members: List[PersonRef]
+    periods: List[PreviewPeriodOption]
 
 
 # ------------------------------------------------------------- bulk drafting

@@ -20,6 +20,8 @@ const discardDraft = vi.fn();
 const update = vi.fn();
 const dataSources = vi.fn();
 const builderOptions = vi.fn();
+const previewOptions = vi.fn();
+const preview = vi.fn();
 vi.mock('../services/evaluationsApi', () => ({
   evaluationTemplatesService: {
     get: (...a: unknown[]) => get(...a) as unknown,
@@ -30,6 +32,8 @@ vi.mock('../services/evaluationsApi', () => ({
     remove: vi.fn(),
     dataSources: (...a: unknown[]) => dataSources(...a) as unknown,
     builderOptions: (...a: unknown[]) => builderOptions(...a) as unknown,
+    previewOptions: (...a: unknown[]) => previewOptions(...a) as unknown,
+    preview: (...a: unknown[]) => preview(...a) as unknown,
   },
 }));
 
@@ -141,7 +145,20 @@ function renderBuilder() {
 
 describe('EvaluationTemplateBuilderPage', () => {
   beforeEach(() => {
-    for (const m of [get, saveDraft, publish, discardDraft, update, dataSources, builderOptions]) m.mockReset();
+    for (const m of [
+      get,
+      saveDraft,
+      publish,
+      discardDraft,
+      update,
+      dataSources,
+      builderOptions,
+      previewOptions,
+      preview,
+    ]) {
+      m.mockReset();
+    }
+    previewOptions.mockResolvedValue({ can_use_member_data: false, members: [], periods: [] });
     get.mockResolvedValue(detail());
     dataSources.mockResolvedValue([
       {
@@ -176,6 +193,40 @@ describe('EvaluationTemplateBuilderPage', () => {
     expect(definition.sections[0]?.key).toBe('training');
     expect(definition.sections[0]?.title).toBe('Training and drills');
     expect(definition.officer_ranks).toEqual(['lieutenant']);
+  });
+
+  it('previews the form with the edits not yet saved', async () => {
+    preview.mockImplementation((definition: TemplateVersion['definition']) =>
+      Promise.resolve({
+        sample: true,
+        member_name: null,
+        period_name: null,
+        period_start: '2026-01-01',
+        period_end: '2026-11-03',
+        coverage_start: null,
+        coverage_end: null,
+        includes_officer_sections: true,
+        sources: [],
+        data: {},
+        suggested_scores: {},
+        overall_levels: [],
+        note: null,
+        echoed: definition,
+      })
+    );
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const title = await screen.findByLabelText('Section title');
+    await user.clear(title);
+    await user.type(title, 'Drills');
+    await user.click(screen.getByRole('tab', { name: 'Preview' }));
+
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    const [sent] = preview.mock.calls[0] as [TemplateVersion['definition']];
+    expect(sent.sections[0]?.title).toBe('Drills');
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { name: 'Drills' })).toBeInTheDocument();
   });
 
   it('adds a scoring rule to a data block', async () => {

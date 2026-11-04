@@ -27,10 +27,18 @@ const listPeriods = vi.fn();
 const createPeriod = vi.fn();
 const updatePeriod = vi.fn();
 const removePeriod = vi.fn();
+const listStarters = vi.fn();
+const draftOptions = vi.fn();
+const bulkPreview = vi.fn();
 vi.mock('../services/evaluationsApi', () => ({
   evaluationTemplatesService: {
     list: (...a: unknown[]) => listTemplates(...a) as unknown,
     create: (...a: unknown[]) => createTemplate(...a) as unknown,
+    starters: (...a: unknown[]) => listStarters(...a) as unknown,
+  },
+  evaluationsService: {
+    draftOptions: (...a: unknown[]) => draftOptions(...a) as unknown,
+    bulkPreview: (...a: unknown[]) => bulkPreview(...a) as unknown,
   },
   evaluationPeriodsService: {
     list: (...a: unknown[]) => listPeriods(...a) as unknown,
@@ -76,11 +84,25 @@ function period(overrides: Partial<EvaluationPeriod> = {}): EvaluationPeriod {
 describe('EvaluationsPage', () => {
   beforeEach(() => {
     granted = new Set(['evaluations.configure', 'evaluations.manage']);
-    for (const m of [listTemplates, createTemplate, listPeriods, createPeriod, updatePeriod, removePeriod, navigate]) {
+    for (const m of [
+      listTemplates,
+      createTemplate,
+      listPeriods,
+      createPeriod,
+      updatePeriod,
+      removePeriod,
+      navigate,
+      listStarters,
+      draftOptions,
+      bulkPreview,
+    ]) {
       m.mockReset();
     }
     listTemplates.mockResolvedValue([template()]);
     listPeriods.mockResolvedValue([period()]);
+    listStarters.mockResolvedValue([]);
+    draftOptions.mockResolvedValue({ members: [], evaluators: [], periods: [] });
+    bulkPreview.mockResolvedValue({ period: period(), kind: 'annual', rows: [], evaluators: [] });
   });
 
   it('points to where evaluations are drafted and where their emails are worded', async () => {
@@ -101,7 +123,8 @@ describe('EvaluationsPage', () => {
     renderWithRouter(<EvaluationsPage />);
 
     await screen.findByRole('heading', { name: 'Operational Annual' });
-    const scope = within(screen.getByRole('listitem'));
+    const templatesSection = screen.getByRole('region', { name: 'Templates' });
+    const scope = within(within(templatesSection).getByRole('listitem'));
     expect(scope.getByText('Published v3')).toBeInTheDocument();
     expect(scope.getByText(/Operational members/)).toBeInTheDocument();
     expect(scope.getByText(/Unpublished changes · 31 evaluations/)).toBeInTheDocument();
@@ -237,5 +260,142 @@ describe('EvaluationsPage', () => {
     expect(await screen.findByText('Network down')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /try again/i }));
     expect(await screen.findByRole('heading', { name: 'Operational Annual' })).toBeInTheDocument();
+  });
+
+  describe('starting from a ready-made form', () => {
+    const annualStarter = {
+      key: 'annual_member',
+      name: 'Annual Member Evaluation',
+      description: 'A yearly evaluation.',
+      kind: 'annual',
+      member_class: null,
+      member_status: null,
+      section_titles: ['Training and readiness', 'Development'],
+    };
+    const checkInStarter = {
+      key: 'probationary_check_in',
+      name: 'Probationary Check-in',
+      description: 'A short check-in.',
+      kind: 'interim',
+      member_class: null,
+      member_status: 'probationary',
+      section_titles: ['Progress'],
+    };
+
+    beforeEach(() => {
+      listTemplates.mockResolvedValue([]);
+      listStarters.mockResolvedValue([annualStarter, checkInStarter]);
+      createTemplate.mockResolvedValue({ id: 'new-1' });
+    });
+
+    it('offers each starter when there are no templates, and creates from the one chosen', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Start from Probationary Check-in' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByLabelText('Start from')).toHaveValue('probationary_check_in');
+      expect(within(dialog).getByLabelText('Name')).toHaveValue('Probationary Check-in');
+      await user.click(within(dialog).getByRole('button', { name: /create and open builder/i }));
+
+      await waitFor(() =>
+        expect(createTemplate).toHaveBeenCalledWith({
+          name: 'Probationary Check-in',
+          description: 'A short check-in.',
+          kind: 'interim',
+          member_class: undefined,
+          member_status: 'probationary',
+          starter: 'probationary_check_in',
+        })
+      );
+      expect(navigate).toHaveBeenCalledWith('/reports/evaluations/templates/new-1');
+    });
+
+    it('drops a starter written for another kind when the kind changes', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationsPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Start from Annual Member Evaluation' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.selectOptions(within(dialog).getByLabelText('Kind'), 'interim');
+      expect(within(dialog).getByLabelText('Start from')).toHaveValue('');
+      await user.click(within(dialog).getByRole('button', { name: /create and open builder/i }));
+
+      await waitFor(() => expect(createTemplate).toHaveBeenCalled());
+      expect(createTemplate.mock.calls[0]?.[0]).toMatchObject({ kind: 'interim', starter: undefined });
+    });
+
+    it('still offers a blank form when the starters cannot be loaded', async () => {
+      listStarters.mockRejectedValue(new Error('offline'));
+      renderWithRouter(<EvaluationsPage />);
+
+      const templatesSection = await screen.findByRole('region', { name: 'Templates' });
+      expect(await within(templatesSection).findByText('No templates yet')).toBeInTheDocument();
+      expect(within(templatesSection).getByRole('button', { name: /new template/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('the getting-started checklist', () => {
+    const checklist = () => screen.findByRole('region', { name: 'Getting started' });
+
+    it('starts at none done, with the first two steps one click away', async () => {
+      listTemplates.mockResolvedValue([]);
+      listPeriods.mockResolvedValue([]);
+      renderWithRouter(<EvaluationsPage />);
+
+      const section = await checklist();
+      expect(
+        within(section).getByText('0 of 4 done. This goes away once evaluations are under way.')
+      ).toBeInTheDocument();
+      expect(within(section).getByRole('button', { name: 'New template' })).toBeInTheDocument();
+      expect(within(section).getByRole('button', { name: 'New review period' })).toBeInTheDocument();
+      // Nothing to check against yet, so no draft preview is asked for.
+      expect(bulkPreview).not.toHaveBeenCalled();
+    });
+
+    it('marks the published form and the open period done, and lists who drafting would leave out', async () => {
+      bulkPreview.mockResolvedValue({
+        period: period(),
+        kind: 'annual',
+        evaluators: [],
+        rows: [
+          { member: { id: 'm1', name: 'Ann Able' }, skip_reason: 'No active, published template fits this member.' },
+          { member: { id: 'm2', name: 'Bo Baker' }, skip_reason: 'No active, published template fits this member.' },
+          { member: { id: 'm3', name: 'Cy Cole' }, skip_reason: 'Already has an evaluation for this period.' },
+          {
+            member: { id: 'm4', name: 'Di Dunn' },
+            template: { id: 't1', name: 'Operational Annual' },
+            evaluator: null,
+          },
+        ],
+      });
+      renderWithRouter(<EvaluationsPage />);
+
+      const section = await checklist();
+      const stepTitle = (text: string) =>
+        within(section).getByText((_, element) => element?.tagName === 'P' && element.textContent === text);
+      expect(stepTitle('Publish an evaluation form (done)')).toBeInTheDocument();
+      expect(stepTitle('Open a review period (done)')).toBeInTheDocument();
+      expect(stepTitle('Draft the evaluations (to do)')).toBeInTheDocument();
+      expect(
+        within(section).getByText('2 of 4 done. This goes away once evaluations are under way.')
+      ).toBeInTheDocument();
+      expect(
+        await within(section).findByText('2 members would be left out: No active, published template fits this member.')
+      ).toBeInTheDocument();
+      expect(within(section).queryByText(/Already has an evaluation/)).not.toBeInTheDocument();
+      expect(within(section).getByText(/1 member has no supervisor who can conduct evaluations/)).toBeInTheDocument();
+      expect(bulkPreview).toHaveBeenCalledWith('p1', 'annual');
+    });
+
+    it('goes away once evaluations are under way', async () => {
+      listPeriods.mockResolvedValue([period({ evaluations_count: 4 })]);
+      draftOptions.mockResolvedValue({ members: [], evaluators: [{ id: 'capt-1', name: 'Captain' }], periods: [] });
+      renderWithRouter(<EvaluationsPage />);
+
+      await screen.findByRole('heading', { name: 'Operational Annual' });
+      await waitFor(() => expect(draftOptions).toHaveBeenCalled());
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Getting started' })).not.toBeInTheDocument());
+    });
   });
 });

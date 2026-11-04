@@ -41,6 +41,7 @@ from app.schemas.evaluation import (
     workflow_publish_errors,
 )
 from app.services.evaluation_data_sources import DATA_SOURCES
+from app.services.evaluation_starters import STARTERS, STARTERS_BY_KEY
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import EVALUATION_TEMPLATE_MATCHING, lock_organization_scope
 
@@ -111,6 +112,15 @@ class EvaluationTemplateService:
     async def create_template(
         self, organization_id: str, data: EvaluationTemplateCreate, actor_id: str
     ) -> str:
+        starter = None
+        if data.starter is not None:
+            starter = STARTERS_BY_KEY.get(data.starter)
+            if starter is None:
+                raise ValueError("That starting point does not exist.")
+            if starter.kind != data.kind:
+                raise ValueError(
+                    "That starting point is for a different kind of evaluation."
+                )
         await self._assert_name_free(organization_id, data.name, exclude_id=None)
         await lock_organization_scope(
             self.db, organization_id, EVALUATION_TEMPLATE_MATCHING
@@ -138,13 +148,34 @@ class EvaluationTemplateService:
                 organization_id=str(organization_id),
                 template_id=template.id,
                 version_number=1,
-                definition=default_definition().model_dump(mode="json"),
-                workflow=default_workflow(data.kind).model_dump(mode="json"),
+                definition=(
+                    starter.definition() if starter else default_definition()
+                ).model_dump(mode="json"),
+                workflow=(
+                    starter.workflow() if starter else default_workflow(data.kind)
+                ).model_dump(mode="json"),
                 created_by=str(actor_id),
             )
         )
         await self.db.commit()
         return template.id
+
+    @staticmethod
+    def starters() -> List[Dict[str, Any]]:
+        return [
+            {
+                "key": s.key,
+                "name": s.name,
+                "description": s.description,
+                "kind": s.kind,
+                "member_class": s.member_class,
+                "member_status": s.member_status,
+                "section_titles": [
+                    section.title for section in s.definition().sections
+                ],
+            }
+            for s in STARTERS
+        ]
 
     async def update_template(
         self, organization_id: str, template_id: str, updates: Dict[str, Any]
