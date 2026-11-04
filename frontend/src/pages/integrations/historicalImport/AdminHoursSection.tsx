@@ -352,8 +352,8 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ detail }) => {
                 </div>
               </div>
             </fieldset>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="split-row gap-3 sm:items-end">
+              <div className="split-row-main flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div>
                   <label htmlFor="admin-new-category" className="form-label">
                     New Admin Hours category
@@ -376,7 +376,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ detail }) => {
                   Create category
                 </button>
               </div>
-              <button type="submit" className="btn-primary" disabled={busy || !dirty}>
+              <button type="submit" className="btn-primary split-row-aside" disabled={busy || !dirty}>
                 Save rules
               </button>
             </div>
