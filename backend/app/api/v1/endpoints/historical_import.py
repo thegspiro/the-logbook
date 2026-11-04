@@ -26,16 +26,20 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.historical_import import (
+    AdminPreview,
+    AdminSettingsUpdate,
     HistoricalImportDetail,
     HistoricalImportListResponse,
     HistoricalImportSettingsUpdate,
     HistoricalImportSummary,
+    MemberMappingsUpdate,
     OpenBatchesDiscarded,
     ShiftBatchesCreated,
 )
 from app.services.historical_import_service import (
     HistoricalImportLocked,
     HistoricalImportNotFound,
+    HistoricalImportNotReady,
     HistoricalImportService,
     batch_view,
     summary_view,
@@ -55,7 +59,7 @@ MAX_HISTORICAL_CSV_BYTES = 40 * 1024 * 1024
 def _http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, HistoricalImportNotFound):
         return HTTPException(status_code=404, detail=str(exc))
-    if isinstance(exc, HistoricalImportLocked):
+    if isinstance(exc, (HistoricalImportLocked, HistoricalImportNotReady)):
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=safe_error_detail(exc))
@@ -315,3 +319,87 @@ async def discard_import(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+
+@router.get("/{import_id}/admin", response_model=AdminPreview)
+async def get_admin_preview(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """What committing the administrative rows would write, and what stops it."""
+    service = HistoricalImportService(db)
+    try:
+        record = await service.get(str(current_user.organization_id), str(import_id))
+        return await service.admin_preview(record)
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.put("/{import_id}/admin-settings", response_model=AdminPreview)
+async def update_admin_settings(
+    import_id: UUID,
+    payload: AdminSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Set which columns describe an entry and which category each row takes."""
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    try:
+        record = await service.get(org, str(import_id), for_update=True)
+        await service.update_admin_settings(record, payload.model_dump())
+        return await service.admin_preview(await service.get(org, str(import_id)))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.put("/{import_id}/members", response_model=AdminPreview)
+async def update_member_mappings(
+    import_id: UUID,
+    payload: MemberMappingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Decide who a member is, or create them as an archived former member."""
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    members = {
+        key: (value.model_dump(exclude_none=True) if value is not None else None)
+        for key, value in payload.members.items()
+    }
+    try:
+        record = await service.get(org, str(import_id), for_update=True)
+        await service.update_member_mappings(record, members)
+        return await service.admin_preview(await service.get(org, str(import_id)))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post("/{import_id}/admin/commit", response_model=AdminPreview)
+async def commit_admin_hours(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Write the administrative rows as approved Admin Hours entries. Rows
+    already imported are skipped; there is no batch undo."""
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    try:
+        counts = await service.commit_admin(org, str(import_id), str(current_user.id))
+    except Exception as exc:
+        raise _http_error(exc)
+    await log_audit_event(
+        db=db,
+        event_type="historical_import_admin_hours_committed",
+        event_category="integrations",
+        severity="INFO",
+        event_data={"organization_id": org, "import_id": str(import_id), **counts},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    try:
+        return await service.admin_preview(await service.get(org, str(import_id)))
+    except Exception as exc:
+        raise _http_error(exc)

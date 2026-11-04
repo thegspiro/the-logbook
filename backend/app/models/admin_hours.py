@@ -35,6 +35,10 @@ class AdminHoursEntryMethod(str, Enum):
     NFC_STATION = "nfc_station"
     MANUAL = "manual"
     EVENT_ATTENDANCE = "event_attendance"
+    # Brought in from a previous system by a historical data import. Kept
+    # apart so an export or audit never presents years of imported history as
+    # entries members typed.
+    IMPORT = "import"
 
 
 class AdminHoursEntryStatus(str, Enum):

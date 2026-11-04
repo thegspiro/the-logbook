@@ -123,3 +123,53 @@ export const ROUTING_NOTE_LABELS: Record<string, string> = {
   next_day: 'Ends the next day',
   past_midnight: 'Time written past 2400, read as the next day',
 };
+
+// ---------------------------------------------------------------------------
+// Administrative hours
+// ---------------------------------------------------------------------------
+
+export interface FlagCategoryRule {
+  column: string;
+  category_id: string;
+}
+
+export interface AdminSettings {
+  description_columns: string[];
+  /** Applied in order; the first rule whose column is set wins. */
+  flag_categories: FlagCategoryRule[];
+  /** Administrative hours column -> the category its rows take otherwise. */
+  default_categories: Record<string, string>;
+}
+
+export interface AdminMember {
+  key: string;
+  display_name: string;
+  membership_number: string;
+  /** unmatched | conflict | ambiguous | create */
+  status: string;
+  reason: string;
+  candidate_ids: string[];
+  new_first_name: string;
+  new_last_name: string;
+  row_count: number;
+}
+
+export interface AdminPreview {
+  settings: AdminSettings;
+  categories: { id: string; name: string; is_active: boolean }[];
+  pending_records: number;
+  already_imported: number;
+  by_category: { category_id?: string | null; name: string; records: number; hours: number }[];
+  uncategorized: number;
+  flag_conflicts: number;
+  problems: string[];
+  problem_count: number;
+  members: AdminMember[];
+  member_options: { id: string; name: string; membership_number: string; status: string }[];
+  can_commit: boolean;
+  result?: { entries_created?: number; members_created?: number; committed_at?: string } | null;
+}
+
+export type AdminMemberMapping =
+  | { action: 'map'; user_id: string }
+  | { action: 'create'; first_name?: string | undefined; last_name?: string | undefined };

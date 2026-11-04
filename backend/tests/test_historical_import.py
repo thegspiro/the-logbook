@@ -33,6 +33,7 @@ from app.models.training import BasicApparatus, Shift, ShiftAttendance
 from app.services.historical_import_service import (
     HistoricalImportLocked,
     HistoricalImportNotFound,
+    HistoricalImportNotReady,
     HistoricalImportService,
 )
 from app.services.shift_history_import_service import (
@@ -322,7 +323,8 @@ class TestShiftBatches:
         assert lines[0][5] == "outcome"
         assert by_id["9001"][5] == "imported"
         assert by_id["9006"][5] == "waiting"
-        assert by_id["9007"][5] == "waiting"
+        # Administrative rows are imported by their own commit, not yet run.
+        assert by_id["9007"][5] == "not_sent"
         assert any(line[5] == "skipped" for line in lines[1:])
 
 
@@ -538,3 +540,167 @@ class TestProbableMatchesInBulk:
             await shifts.decide_probable_matches(
                 await shifts.get_draft(org, batch.id), "maybe"
             )
+
+
+ADMIN_HEADER = (
+    "VID,Date,Start,End,Admin,PubEd,UniqueID,AdminActivity,OperationSanta,BDParty"
+)
+ADMIN_CSV = "\n".join(
+    [
+        ADMIN_HEADER,
+        "101,2015-11-09 00:00:00.000,2000,2045,0.75,,7001,Bus meeting,0,0",
+        "101,2015-12-10 00:00:00.000,1800,2100,3.0,,7002,Santamobile,1,0",
+        "102,2015-12-11 00:00:00.000,1400,1700,,3.0,7003,,0,1",
+        # Known to the file only by number: a former member.
+        "6178,2015-12-12 00:00:00.000,1900,2100,2.0,,7004,Treasurer's work,0,0",
+    ]
+)
+
+
+async def _admin_world(db_session):
+    from app.models.admin_hours import AdminHoursCategory
+
+    org, admin = await _world(db_session)
+    categories = {}
+    for name in ("Administrative Work", "SantaMobile", "Community Outreach"):
+        category = AdminHoursCategory(id=_uid(), organization_id=org, name=name)
+        db_session.add(category)
+        categories[name] = category.id
+    await db_session.commit()
+    service = HistoricalImportService(db_session)
+    record = await service.create(
+        org, admin, "admin.csv", ADMIN_CSV, "FCVFD Hours DB", None
+    )
+    await service.update_admin_settings(
+        record,
+        {
+            "description_columns": ["AdminActivity"],
+            "flag_categories": [
+                {"column": "OperationSanta", "category_id": categories["SantaMobile"]},
+                {"column": "BDParty", "category_id": categories["Community Outreach"]},
+            ],
+            "default_categories": {
+                "Admin": categories["Administrative Work"],
+                "PubEd": categories["Community Outreach"],
+            },
+        },
+    )
+    return org, admin, categories, record
+
+
+class TestAdminHours:
+    async def test_the_preview_names_what_still_needs_deciding(self, db_session):
+        org, _, _, record = await _admin_world(db_session)
+        service = HistoricalImportService(db_session)
+        preview = await service.admin_preview(await service.get(org, record.id))
+
+        assert preview["pending_records"] == 4
+        assert [m["key"] for m in preview["members"]] == ["number:6178"]
+        assert preview["can_commit"] is False
+        with pytest.raises(HistoricalImportNotReady, match="need a decision"):
+            await service.commit_admin(org, record.id, _uid())
+
+    async def test_a_commit_writes_approved_imported_entries(self, db_session):
+        from app.models.admin_hours import (
+            AdminHoursEntry,
+            AdminHoursEntryMethod,
+            AdminHoursEntryStatus,
+        )
+        from app.models.user import User, UserStatus
+
+        org, admin, categories, record = await _admin_world(db_session)
+        service = HistoricalImportService(db_session)
+        await service.update_member_mappings(
+            await service.get(org, record.id), {"number:6178": {"action": "create"}}
+        )
+        counts = await service.commit_admin(org, record.id, admin)
+        assert counts == {"entries_created": 4, "members_created": 1}
+
+        entries = (
+            (
+                await db_session.execute(
+                    select(AdminHoursEntry).where(
+                        AdminHoursEntry.organization_id == org
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert {e.entry_method for e in entries} == {AdminHoursEntryMethod.IMPORT}
+        assert {e.status for e in entries} == {AdminHoursEntryStatus.APPROVED}
+        by_minutes = {e.duration_minutes: e for e in entries}
+        assert by_minutes[45].category_id == categories["Administrative Work"]
+        assert by_minutes[45].description == "Bus meeting"
+        assert sorted(
+            e.category_id for e in entries if e.duration_minutes == 180
+        ) == sorted([categories["SantaMobile"], categories["Community Outreach"]])
+
+        former = (
+            await db_session.execute(
+                select(User).where(
+                    User.organization_id == org, User.membership_number == "6178"
+                )
+            )
+        ).scalar_one()
+        assert former.status == UserStatus.ARCHIVED
+        assert (former.first_name, former.last_name) == ("Former member", "6178")
+        assert former.password_hash is None
+
+    async def test_committing_twice_writes_nothing_twice(self, db_session):
+        from app.models.admin_hours import AdminHoursEntry
+
+        org, admin, _, record = await _admin_world(db_session)
+        service = HistoricalImportService(db_session)
+        await service.update_member_mappings(
+            await service.get(org, record.id), {"number:6178": {"action": "create"}}
+        )
+        await service.commit_admin(org, record.id, admin)
+        with pytest.raises(HistoricalImportNotReady, match="already been imported"):
+            await service.commit_admin(org, record.id, admin)
+
+        # The same export uploaded again finds every row in the ledger, and
+        # the member created the first time is remembered rather than created
+        # a second time.
+        again = await service.create(
+            org, admin, "admin.csv", ADMIN_CSV, "FCVFD Hours DB", None
+        )
+        preview = await service.admin_preview(await service.get(org, again.id))
+        assert preview["pending_records"] == 0
+        assert preview["already_imported"] == 4
+        assert preview["members"] == []
+        total = (
+            await db_session.execute(
+                select(func.count(AdminHoursEntry.id)).where(
+                    AdminHoursEntry.organization_id == org
+                )
+            )
+        ).scalar()
+        assert total == 4
+
+    async def test_a_category_from_another_department_is_refused(self, db_session):
+        from app.models.admin_hours import AdminHoursCategory
+
+        org, _, _, record = await _admin_world(db_session)
+        other = await _add_org(db_session, "Other FD")
+        foreign = AdminHoursCategory(id=_uid(), organization_id=other, name="Theirs")
+        db_session.add(foreign)
+        await db_session.commit()
+        service = HistoricalImportService(db_session)
+        with pytest.raises(ValueError, match="Admin Hours categories"):
+            await service.update_admin_settings(
+                await service.get(org, record.id),
+                {"default_categories": {"Admin": foreign.id}},
+            )
+
+    async def test_a_row_without_a_category_blocks_the_commit(self, db_session):
+        org, admin, _, record = await _admin_world(db_session)
+        service = HistoricalImportService(db_session)
+        await service.update_admin_settings(await service.get(org, record.id), {})
+        await service.update_member_mappings(
+            await service.get(org, record.id), {"number:6178": {"action": "create"}}
+        )
+        preview = await service.admin_preview(await service.get(org, record.id))
+        assert preview["uncategorized"] == 4
+        with pytest.raises(HistoricalImportNotReady, match="no category"):
+            await service.commit_admin(org, record.id, admin)

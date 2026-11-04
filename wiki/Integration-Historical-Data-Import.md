@@ -35,7 +35,15 @@ position on purpose.
    apparatus or another agency's), the position a crew takes on each unit, and
    which members were one crew. "All the same shift" answers every probable
    crew match at once.
-5. **Download the log** at any time: one line per row with what became of it —
+5. **Import administrative hours.** Open _Set up administrative hours_ and
+   choose each row's Admin Hours category: by a yes/no flag column first (a
+   birthday party, an open house, a meeting — the first set flag in the list
+   wins, and the list can be reordered), otherwise by the hours column it is in.
+   Create a category here if the department does not have one yet. Pick the
+   columns that describe an entry, settle any member nothing matched, check the
+   counts per category, and import. Entries arrive **approved** and marked
+   _Imported_, credited with their recorded hours.
+6. **Download the log** at any time: one line per row with what became of it —
    imported, in review, skipped, or waiting for a later step.
 
 ## What a committed batch writes
@@ -50,6 +58,10 @@ position on purpose.
   were the same call.
 - **Outside-agency hours** for time on another department's unit, with the
   member's call count.
+- **Admin Hours entries**, approved and marked _Imported_, in the category the
+  rules chose, with the description from the file. They are not run through
+  the 24-hour cap or overlap check a member's own entry gets — those are for
+  hours typed today, not for settled history.
 
 ## Running it twice is safe
 
@@ -60,5 +72,5 @@ skips it. Use the same source system name each time for this to work.
 
 ## Not yet included
 
-Training and administrative hours are sorted and counted on this page but are
-imported by later steps of this tool.
+Training hours are sorted and counted on this page but are imported by a later
+step of this tool.
