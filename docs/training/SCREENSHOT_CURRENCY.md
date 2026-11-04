@@ -1,5 +1,16 @@
 # Screenshot currency
 
+## Queued by the November 3 – 4 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-3--4-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 16 | Historical Data Import: upload, column mapping, sorted rows, batch list | Create |
+| 02 | Evaluations strip and the Getting started checklist with the template preview | Create |
+| 01 | Members roster at tablet width (cards below 1024px); `01-22-member-lifecycle`; profile ID Cards empty state | Replace |
+
 ## Queued by the November 2 – 3 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).

@@ -871,6 +871,28 @@ delivery and whether it worked.
 
 ---
 
+## Historical Data Import
+
+**Integrations → Historical Data Import** brings in the hours members logged in
+the system the department used before The Logbook: shifts on a unit, on-call
+(recall) time, training and administrative hours, from one CSV export (up to
+200,000 rows or 40 MB). Only the **IT Manager** can open it by default
+(`integrations.historical_import`).
+
+1. **Upload** the export and name the source system. Use the same name every
+   time; rows already brought in are then recognised and skipped.
+2. **Say how to read it**: confirm the detected columns, then mark each hours
+   column as shift, on-call, training or administrative.
+3. **Check how the rows sorted.** Recorded hours win over the clock; times such
+   as `2445` roll to the next day.
+4. **Send shifts to review.** Shift and on-call rows become monthly review
+   batches in the shift history import, where you match members, units and
+   crews and commit. Administrative hours import as administrative hours.
+5. **Download the log**: one line per row saying what became of it.
+
+Running the same file twice is safe. Full detail is in the wiki page
+[Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
+
 ## Weather Alerts
 
 The **NWS Weather Alerts** integration talks to the National Weather Service
