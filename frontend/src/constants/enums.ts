@@ -1313,6 +1313,8 @@ export const AdminHoursEntryMethod = {
   NFC_STATION: 'nfc_station',
   MANUAL: 'manual',
   EVENT_ATTENDANCE: 'event_attendance',
+  // Brought in from a previous system by Historical Data Import.
+  IMPORT: 'import',
 } as const;
 export type AdminHoursEntryMethod = (typeof AdminHoursEntryMethod)[keyof typeof AdminHoursEntryMethod];
 
@@ -1321,6 +1323,7 @@ export const ADMIN_HOURS_ENTRY_METHOD_LABELS: Record<string, string> = {
   nfc_station: 'ID Card Station',
   manual: 'Manual',
   event_attendance: 'Event Attendance',
+  import: 'Imported',
 };
 
 // ============================================

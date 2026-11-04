@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.shift_history_import import MemberMapping
+
 # One key per column of the file; no real export has more.
 _MAX_KEYS = 500
 _MAX_KEY_LENGTH = 255
@@ -139,3 +141,105 @@ class ShiftBatchesCreated(BaseModel):
 
 class OpenBatchesDiscarded(BaseModel):
     discarded: int
+
+
+# ---------------------------------------------------------------------------
+# Administrative hours
+# ---------------------------------------------------------------------------
+
+
+class FlagCategoryRule(BaseModel):
+    column: str = Field(..., min_length=1, max_length=_MAX_KEY_LENGTH)
+    category_id: str = Field(..., min_length=1, max_length=36)
+
+
+class AdminSettingsUpdate(BaseModel):
+    """The whole administrative setup, replacing what was stored."""
+
+    description_columns: List[str] = Field(default_factory=list, max_length=_MAX_KEYS)
+    # Applied in this order; the first rule whose column is set wins.
+    flag_categories: List[FlagCategoryRule] = Field(
+        default_factory=list, max_length=_MAX_KEYS
+    )
+    default_categories: Dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("default_categories")
+    @classmethod
+    def _check(cls, value: Dict[str, str]) -> Dict[str, str]:
+        checked = _bounded(value)
+        return checked if checked is not None else {}
+
+
+class MemberMappingsUpdate(BaseModel):
+    """Who each member is, by member key; ``null`` removes a decision."""
+
+    members: Dict[str, Optional[MemberMapping]]
+
+    @field_validator("members")
+    @classmethod
+    def _check(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if len(value) > 10_000:
+            raise ValueError("At most 10000 entries per request.")
+        if any(len(k) > 600 for k in value):
+            raise ValueError("A key is too long.")
+        return value
+
+
+class AdminCategoryOption(BaseModel):
+    id: str
+    name: str
+    is_active: bool
+
+
+class AdminCategoryTotals(BaseModel):
+    category_id: Optional[str] = None
+    name: str
+    records: int
+    hours: float
+
+
+class AdminMember(BaseModel):
+    key: str
+    display_name: str
+    membership_number: str
+    # unmatched | conflict | ambiguous | create
+    status: str
+    reason: str
+    candidate_ids: List[str]
+    new_first_name: str = ""
+    new_last_name: str = ""
+    row_count: int
+
+
+class AdminMemberOption(BaseModel):
+    id: str
+    name: str
+    membership_number: str
+    status: str
+
+
+class AdminSettingsView(BaseModel):
+    description_columns: List[str]
+    flag_categories: List[FlagCategoryRule]
+    default_categories: Dict[str, str]
+
+
+class AdminPreview(BaseModel):
+    settings: AdminSettingsView
+    categories: List[AdminCategoryOption]
+    # Administrative records not yet imported, and those already in the ledger.
+    pending_records: int
+    already_imported: int
+    by_category: List[AdminCategoryTotals]
+    # Records no rule or default places in a category; block the commit.
+    uncategorized: int
+    # Records with more than one flag rule set, settled by the rule order.
+    flag_conflicts: int
+    problems: List[str]
+    problem_count: int
+    # Members still to decide, and members the commit will create.
+    members: List[AdminMember]
+    member_options: List[AdminMemberOption]
+    can_commit: bool
+    # What the last administrative commit wrote, once there has been one.
+    result: Optional[Dict[str, Any]] = None

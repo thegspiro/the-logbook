@@ -94,7 +94,8 @@ describe('HistoricalImportDetailPage', () => {
     expect(screen.getByRole('cell', { name: 'On-call hours (recall)' })).toBeInTheDocument();
     expect(screen.getByText('10,088')).toBeInTheDocument();
     expect(screen.getByText(/Time written past 2400, read as the next day: 979/)).toBeInTheDocument();
-    expect(screen.getAllByText('A later step')).toHaveLength(2);
+    expect(screen.getAllByText('A later step')).toHaveLength(1);
+    expect(screen.getByText('Admin Hours, below')).toBeInTheDocument();
   });
 
   it('saves a column as hours or calls by what it holds', async () => {

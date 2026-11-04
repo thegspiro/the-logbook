@@ -63,6 +63,7 @@ class ImportedRecordKind(str, Enum):
 
     SHIFT_ATTENDANCE = "shift_attendance"
     EXTERNAL_SHIFT_HOURS = "external_shift_hours"
+    ADMIN_HOURS_ENTRY = "admin_hours_entry"
 
 
 class HistoricalImport(Base):
@@ -106,6 +107,21 @@ class HistoricalImport(Base):
     # problem and clean-up). Recomputed whenever the settings change, so the
     # screen does not re-read every row of a large file on each visit.
     summary: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # How administrative rows become Admin Hours entries:
+    # ``{"description_columns": [header...],
+    #   "flag_categories": [{"column": header, "category_id": id}, ...],
+    #   "default_categories": {hours header: category id}}``.
+    # Flag rules apply in list order; the first whose column is set wins.
+    admin_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    # Who a member the file names is, for rows outside the shift review:
+    # keyed and shaped like ``ShiftHistoryImport.member_mappings``.
+    member_mappings: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    # What each step committed, by step: ``{"admin": {...counts...}}``.
+    results: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

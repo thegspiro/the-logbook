@@ -629,3 +629,154 @@ def _month_range(first: Tuple[int, int], last: Tuple[int, int]) -> str:
     start = f"{first[0]}-{first[1]:02d}"
     end = f"{last[0]}-{last[1]:02d}"
     return start if start == end else f"{start} to {end}"
+
+
+# ---------------------------------------------------------------------------
+# Administrative hours
+# ---------------------------------------------------------------------------
+
+ADMIN_TYPES: Tuple[str, ...] = (ADMIN,)
+
+# A flag column is "set" when its cell reads as yes. Exports write booleans as
+# 1/0, Yes/No, True/False or an X in the box.
+_TRUTHY = frozenset({"1", "true", "yes", "y", "x", "t"})
+
+
+def is_flag_set(value: Any) -> bool:
+    return str(value or "").strip().casefold() in _TRUTHY
+
+
+@dataclass
+class AdminSettings:
+    """How administrative rows become Admin Hours entries."""
+
+    description_columns: Sequence[str] = ()
+    # ``(column, category_id)`` in priority order: the first set flag wins.
+    flag_categories: Sequence[Tuple[str, str]] = ()
+    # Hours column -> the category its rows take when no flag is set.
+    default_categories: Mapping[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_stored(cls, value: Any) -> "AdminSettings":
+        """Read the stored JSON defensively: it is unvalidated once stored,
+        and a malformed entry should drop that one rule, not the import."""
+        if not isinstance(value, Mapping):
+            return cls()
+        columns = [
+            str(c) for c in value.get("description_columns") or [] if str(c or "")
+        ]
+        flags: List[Tuple[str, str]] = []
+        for rule in value.get("flag_categories") or []:
+            if (
+                isinstance(rule, Mapping)
+                and rule.get("column")
+                and rule.get("category_id")
+            ):
+                flags.append((str(rule["column"]), str(rule["category_id"])))
+        defaults_raw = value.get("default_categories")
+        defaults = (
+            {str(k): str(v) for k, v in defaults_raw.items() if k and v}
+            if isinstance(defaults_raw, Mapping)
+            else {}
+        )
+        return cls(
+            description_columns=columns,
+            flag_categories=flags,
+            default_categories=defaults,
+        )
+
+    def to_stored(self) -> Dict[str, Any]:
+        return {
+            "description_columns": list(self.description_columns),
+            "flag_categories": [
+                {"column": column, "category_id": category}
+                for column, category in self.flag_categories
+            ],
+            "default_categories": dict(self.default_categories),
+        }
+
+
+def admin_category(
+    raw: Mapping[str, Any], item: RoutedItem, settings: AdminSettings
+) -> Optional[str]:
+    """The category an administrative row goes to: the first flag rule whose
+    column is set, else the default for the column its hours are in."""
+    for column, category in settings.flag_categories:
+        if is_flag_set(raw.get(column)):
+            return category
+    return settings.default_categories.get(item.hours_column)
+
+
+def admin_description(raw: Mapping[str, Any], settings: AdminSettings) -> str:
+    """The first non-empty description column, trimmed."""
+    for column in settings.description_columns:
+        text = _cell(raw, column)
+        if text:
+            return text
+    return ""
+
+
+def flag_conflicts(
+    rows: Sequence[RowInput],
+    routings: Sequence[RowRouting],
+    settings: AdminSettings,
+) -> int:
+    """Administrative rows with more than one flag rule set, where the rule
+    order decides the category."""
+    raw_by_id = {r.id: r.raw for r in rows}
+    count = 0
+    for routing in routings:
+        raw = raw_by_id.get(routing.row_id, {})
+        for item in routing.items:
+            if item.record_type not in ADMIN_TYPES:
+                continue
+            hits = sum(
+                1
+                for column, _ in settings.flag_categories
+                if is_flag_set(raw.get(column))
+            )
+            if hits > 1:
+                count += 1
+    return count
+
+
+def member_values(raw: Mapping[str, Any], settings: Settings) -> Dict[str, str]:
+    """The member fields of a row, under the shift import's field names, so a
+    member is keyed exactly as the shift review keys them and the decisions
+    made there apply here."""
+    values = {f: "" for f in shift_engine.FIELDS}
+    for field_name in (
+        "membership_number",
+        "member_name",
+        "first_name",
+        "last_name",
+        "email",
+    ):
+        values[field_name] = _cell(raw, settings.column_mapping.get(field_name))
+    return values
+
+
+def entry_span(item: RoutedItem, tz: Any) -> Optional[Tuple[datetime, datetime]]:
+    """UTC start and end for an entry, read in ``tz``.
+
+    The clock times when the row has both; otherwise the start of the day plus
+    the recorded hours. ``None`` when the row has no date. The end is what the
+    clock says even when the recorded hours differ: the hours are the credit,
+    the times are when it happened.
+    """
+    if item.local_date is None:
+        return None
+    start_clock = shift_engine.parse_clock(item.start_cell)
+    end_clock = shift_engine.parse_clock(item.end_cell)
+    if start_clock is None or end_clock is None:
+        begin = datetime.combine(item.local_date, time(0, 0))
+        finish = begin + timedelta(minutes=item.minutes)
+    else:
+        begin = datetime.combine(item.local_date, start_clock)
+        finish = datetime.combine(item.local_date, end_clock)
+        if finish <= begin:
+            finish += timedelta(days=1)
+    return (
+        shift_engine.localize(begin.date(), begin.time(), tz),
+        shift_engine.localize(finish.date(), finish.time(), tz),
+    )

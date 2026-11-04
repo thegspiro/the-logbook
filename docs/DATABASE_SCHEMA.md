@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**352 tables · 5751 columns · 1182 foreign keys**
+**352 tables · 5754 columns · 1182 foreign keys**
 
 ---
 
@@ -334,7 +334,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`historical_import_rows`](#historical_import_rows) | `HistoricalImportRow` | 4 | One data row of the file, exactly as read. |
-| [`historical_imports`](#historical_imports) | `HistoricalImport` | 17 | One uploaded export and the decisions about how to read it. |
+| [`historical_imports`](#historical_imports) | `HistoricalImport` | 20 | One uploaded export and the decisions about how to read it. |
 | [`imported_source_records`](#imported_source_records) | `ImportedSourceRecord` | 8 | A source row that an import has turned into a record. |
 
 ### History
@@ -878,7 +878,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `clock_out_at` | DATETIME | yes |  |  |  |
 | `duration_minutes` | INTEGER | yes |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `entry_method` | ENUM(`qr_scan`, `nfc_station`, `manual`, `event_attendance`) | no |  | `'manual'` |  |
+| `entry_method` | ENUM(`qr_scan`, `nfc_station`, `manual`, `event_attendance`, `import`) | no |  | `'manual'` |  |
 | `source_event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `source_rsvp_id` | VARCHAR(36) | yes | FK, IDX |  | → `event_rsvps.id` ON DELETE SET NULL |
 | `status` | ENUM(`active`, `pending`, `approved`, `rejected`, `withdrawn`) | no |  | `active` |  |
@@ -5369,6 +5369,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `call_columns` | JSON | no |  |  |  |
 | `row_count` | INTEGER | no |  | `0` |  |
 | `summary` | JSON | yes |  |  |  |
+| `admin_settings` | JSON | yes |  |  |  |
+| `member_mappings` | JSON | yes |  |  |  |
+| `results` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `routed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `routed_at` | DATETIME | yes |  |  |  |

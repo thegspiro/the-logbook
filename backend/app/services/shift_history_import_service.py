@@ -465,6 +465,23 @@ class ShiftHistoryImportService:
             draft.existing_shift_decisions = stored
         await self.db.commit()
 
+    # Shared with the historical import, which resolves members for rows
+    # that never pass through a shift review (administrative hours).
+    async def validated_member_mapping(
+        self, organization_id: str, mapping: Mapping[str, Any]
+    ) -> Dict[str, Any]:
+        return await self._validated_member_mapping(organization_id, mapping)
+
+    async def member_directory(
+        self, organization_id: str, *, include_removed: bool = False
+    ) -> List[engine.MemberRecord]:
+        return await self._members(organization_id, include_removed=include_removed)
+
+    async def saved_member_mappings(self, organization_id: str) -> Dict[str, Any]:
+        return (await self._saved_mappings(organization_id))[
+            ShiftHistoryImportMappingKind.MEMBER.value
+        ]
+
     async def _validated_member_mapping(
         self, organization_id: str, mapping: Mapping[str, Any]
     ) -> Dict[str, Any]:
@@ -1102,24 +1119,7 @@ class ShiftHistoryImportService:
         and outside units this commit created are remembered as the records
         created, so a later file maps to them instead of creating them again.
         """
-        entries: List[Tuple[str, str, Dict[str, Any]]] = []
-        for member in analysis.members:
-            if member.status == engine.MEMBER_MAPPED and member.user_id:
-                entries.append(
-                    (
-                        ShiftHistoryImportMappingKind.MEMBER.value,
-                        member.key,
-                        {"action": "map", "user_id": member.user_id},
-                    )
-                )
-            elif member.status == engine.MEMBER_CREATE and member.ref in new_members:
-                entries.append(
-                    (
-                        ShiftHistoryImportMappingKind.MEMBER.value,
-                        member.key,
-                        {"action": "map", "user_id": new_members[member.ref]},
-                    )
-                )
+        entries = member_mapping_entries(analysis.members, new_members)
         for unit in analysis.units:
             if unit.status != engine.UNIT_MAPPED:
                 continue
@@ -1143,6 +1143,16 @@ class ShiftHistoryImportService:
                         {"seat": position.seat},
                     )
                 )
+        await self.upsert_mappings(organization_id, entries, updated_by, now)
+
+    async def upsert_mappings(
+        self,
+        organization_id: str,
+        entries: List[Tuple[str, str, Dict[str, Any]]],
+        updated_by: str,
+        now: datetime,
+    ) -> None:
+        """Store remembered decisions ``(kind, source key, mapping)``."""
         for kind, key, mapping in entries:
             # An upsert, so two imports committed at once that both settle the
             # same name cannot fail on the unique key and roll a commit back.
@@ -1170,6 +1180,22 @@ class ShiftHistoryImportService:
         now: datetime,
         counts: Dict[str, int],
     ) -> Dict[str, str]:
+        return await self.create_former_members(
+            organization_id,
+            analysis.members,
+            f"shift history import of {draft.source_filename}",
+            now,
+            counts,
+        )
+
+    async def create_former_members(
+        self,
+        organization_id: str,
+        resolutions: List[engine.MemberResolution],
+        source_label: str,
+        now: datetime,
+        counts: Dict[str, int],
+    ) -> Dict[str, str]:
         """Archived member records for the people the reviewer chose to create.
 
         No password and no invitation: these are records of people who served,
@@ -1189,7 +1215,7 @@ class ShiftHistoryImportService:
                 )
             ).all()
         }
-        for resolution in analysis.members:
+        for resolution in resolutions:
             if resolution.status != engine.MEMBER_CREATE:
                 continue
             identity = resolution.identity
@@ -1217,13 +1243,11 @@ class ShiftHistoryImportService:
                 status=UserStatus.ARCHIVED,
                 status_changed_at=now,
                 archived_at=now,
-                status_change_reason=(
-                    f"Created by shift history import of {draft.source_filename}"
-                )[:1000],
+                status_change_reason=f"Created by {source_label}"[:1000],
             )
             self.db.add(user)
             created[resolution.ref or ""] = user.id
-            counts["members_created"] += 1
+            counts["members_created"] = counts.get("members_created", 0) + 1
         await self.db.flush()
         return created
 
@@ -1388,6 +1412,29 @@ def _aware(value: datetime) -> datetime:
 
 def _as_mapping(value: Any) -> Dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
+
+
+def member_mapping_entries(
+    resolutions: List[engine.MemberResolution], new_members: Mapping[str, str]
+) -> List[Tuple[str, str, Dict[str, Any]]]:
+    """Member decisions worth remembering for the department's next file: a
+    reviewer's mapping, and a created member as a mapping to its record."""
+    entries: List[Tuple[str, str, Dict[str, Any]]] = []
+    for member in resolutions:
+        if member.status == engine.MEMBER_MAPPED and member.user_id:
+            user_id: Optional[str] = member.user_id
+        elif member.status == engine.MEMBER_CREATE and member.ref in new_members:
+            user_id = new_members[member.ref or ""]
+        else:
+            continue
+        entries.append(
+            (
+                ShiftHistoryImportMappingKind.MEMBER.value,
+                member.key,
+                {"action": "map", "user_id": user_id},
+            )
+        )
+    return entries
 
 
 def _source_system(draft: ShiftHistoryImport) -> str:

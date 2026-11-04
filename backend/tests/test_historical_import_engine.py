@@ -16,6 +16,10 @@ from app.services import shift_history_import_engine as shift_engine
 pytestmark = pytest.mark.unit
 
 HEADERS = [
+    "AdminActivity",
+    "PubEdDescription",
+    "OperationSanta",
+    "FCVFDCoMeeting",
     "VID",
     "Date",
     "Start",
@@ -255,3 +259,75 @@ class TestShiftBatches:
             "calls:fire": "",
         }
         assert set(engine.shift_column_mapping(SETTINGS)) == set(values)
+
+
+class TestAdminHours:
+    ADMIN = engine.AdminSettings(
+        description_columns=["AdminActivity", "PubEdDescription"],
+        flag_categories=[
+            ("OperationSanta", "cat-santa"),
+            ("FCVFDCoMeeting", "cat-meet"),
+        ],
+        default_categories={"Admin": "cat-admin", "PubEd": "cat-outreach"},
+    )
+
+    def _item(self, **cells: str) -> tuple:
+        raw = _raw(**cells)
+        routing = engine.route_row(
+            engine.RowInput(id="r", line_number=2, raw=raw), SETTINGS
+        )
+        return raw, routing.items[0]
+
+    def test_the_first_set_flag_decides_the_category(self):
+        raw, item = self._item(Admin="2", OperationSanta="1", FCVFDCoMeeting="1")
+        assert engine.admin_category(raw, item, self.ADMIN) == "cat-santa"
+
+    def test_without_a_flag_the_hours_column_decides(self):
+        raw, item = self._item(PubEd="3")
+        assert engine.admin_category(raw, item, self.ADMIN) == "cat-outreach"
+
+    @pytest.mark.parametrize("cell", ["1", "Yes", "TRUE", "x"])
+    def test_flag_spellings(self, cell):
+        assert engine.is_flag_set(cell)
+
+    @pytest.mark.parametrize("cell", ["0", "", "no", "False"])
+    def test_unset_flag_spellings(self, cell):
+        assert not engine.is_flag_set(cell)
+
+    def test_the_first_non_empty_description_is_used(self):
+        raw, _ = self._item(
+            Admin="2", AdminActivity="", PubEdDescription="Birthday party"
+        )
+        assert engine.admin_description(raw, self.ADMIN) == "Birthday party"
+
+    def test_stored_settings_survive_a_malformed_rule(self):
+        stored = {
+            "description_columns": ["AdminActivity"],
+            "flag_categories": [
+                {"column": "BDParty"},
+                {"column": "OpenHouse", "category_id": "c"},
+            ],
+            "default_categories": "nonsense",
+        }
+        settings = engine.AdminSettings.from_stored(stored)
+        assert list(settings.flag_categories) == [("OpenHouse", "c")]
+        assert dict(settings.default_categories) == {}
+
+    def test_an_entry_spans_its_clock_times_in_the_import_zone(self):
+        from zoneinfo import ZoneInfo
+
+        _, item = self._item(Admin="2", Start="2100", End="2445")
+        start, end = engine.entry_span(item, ZoneInfo("America/New_York"))
+        assert start.isoformat() == "2015-11-09T02:00:00+00:00"
+        assert end.isoformat() == "2015-11-09T05:45:00+00:00"
+
+    def test_an_entry_without_times_runs_its_hours_from_midnight(self):
+        from zoneinfo import ZoneInfo
+
+        _, item = self._item(Admin="1.5", Start="", End="")
+        start, end = engine.entry_span(item, ZoneInfo("UTC"))
+        assert (end - start).total_seconds() == 90 * 60
+
+    def test_member_fields_use_the_shift_imports_keys(self):
+        values = engine.member_values(_raw(), SETTINGS)
+        assert shift_engine.identity_from_values(values).key == "number:6178"

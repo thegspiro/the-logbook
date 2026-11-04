@@ -29,6 +29,7 @@ import {
 import { formatCalendarDate, formatDateTime, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { timezoneOptions, zoneLabel } from '../../scheduling/admin/historyImport/historyImportTimezones';
+import AdminHoursSection from './AdminHoursSection';
 
 const HOURS_PREFIX = 'hours:';
 const CALLS_PREFIX = 'calls:';
@@ -311,7 +312,11 @@ const RoutingPanel: React.FC<{ detail: HistoricalImportDetail }> = ({ detail }) 
                     : '—'}
                 </td>
                 <td data-label="Imported by" className="text-theme-text-secondary py-2">
-                  {importable.has(type) ? 'Shift review, below' : 'A later step'}
+                  {type === HistoricalRecordType.ADMIN
+                    ? 'Admin Hours, below'
+                    : importable.has(type)
+                      ? 'Shift review, below'
+                      : 'A later step'}
                 </td>
               </tr>
             ))}
@@ -583,6 +588,8 @@ const HistoricalImportDetailPage: React.FC = () => {
               </ul>
             )}
           </section>
+
+          <AdminHoursSection detail={detail} />
         </div>
       )}
     </div>

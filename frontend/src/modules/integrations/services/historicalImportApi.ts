@@ -12,6 +12,9 @@
 
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
+  AdminMemberMapping,
+  AdminPreview,
+  AdminSettings,
   HistoricalImportDetail,
   HistoricalImportSettingsUpdate,
   HistoricalImportSummary,
@@ -66,6 +69,26 @@ export const historicalImportService = {
   async downloadLog(importId: string): Promise<Blob> {
     const response = await api.get(`${BASE}/${importId}/log`, { responseType: 'blob', timeout: 0 });
     return response.data as Blob;
+  },
+
+  async getAdminPreview(importId: string): Promise<AdminPreview> {
+    const response = await api.get<AdminPreview>(`${BASE}/${importId}/admin`, { timeout: 0 });
+    return response.data;
+  },
+
+  async updateAdminSettings(importId: string, settings: AdminSettings): Promise<AdminPreview> {
+    const response = await api.put<AdminPreview>(`${BASE}/${importId}/admin-settings`, settings, { timeout: 0 });
+    return response.data;
+  },
+
+  async updateMembers(importId: string, members: Record<string, AdminMemberMapping | null>): Promise<AdminPreview> {
+    const response = await api.put<AdminPreview>(`${BASE}/${importId}/members`, { members }, { timeout: 0 });
+    return response.data;
+  },
+
+  async commitAdmin(importId: string): Promise<AdminPreview> {
+    const response = await api.post<AdminPreview>(`${BASE}/${importId}/admin/commit`, null, { timeout: 0 });
+    return response.data;
   },
 
   async discard(importId: string): Promise<void> {

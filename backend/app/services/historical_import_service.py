@@ -9,6 +9,7 @@ enters every row it writes in the ``imported_source_records`` ledger, which is
 what this service reads back to report a row as imported.
 """
 
+import copy
 import csv
 import io
 from datetime import datetime, timezone
@@ -17,13 +18,21 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
+from app.models.admin_hours import (
+    AdminHoursCategory,
+    AdminHoursEntry,
+    AdminHoursEntryMethod,
+    AdminHoursEntryStatus,
+)
 from app.models.historical_import import (
     HistoricalImport,
     HistoricalImportRow,
     HistoricalImportStatus,
+    ImportedRecordKind,
     ImportedSourceRecord,
 )
 from app.models.shift_history_import import (
@@ -33,7 +42,11 @@ from app.models.shift_history_import import (
 )
 from app.models.user import Organization
 from app.services import historical_import_engine as engine
-from app.services.shift_history_import_service import ShiftHistoryImportService
+from app.services import shift_history_import_engine as shift_engine
+from app.services.shift_history_import_service import (
+    ShiftHistoryImportService,
+    member_mapping_entries,
+)
 from app.utils.org_timezone import scheduling_timezone
 
 _DRAFT_BATCH = ShiftHistoryImportStatus.DRAFT.value
@@ -49,6 +62,10 @@ class HistoricalImportNotFound(LookupError):
 
 class HistoricalImportLocked(ValueError):
     """A change refused because review batches built from it are open."""
+
+
+class HistoricalImportNotReady(ValueError):
+    """A commit refused: decisions remain, or there is nothing to write."""
 
 
 def read_csv(text: str) -> Tuple[List[str], List[Dict[str, str]]]:
@@ -426,7 +443,7 @@ class HistoricalImportService:
             "call_columns": _as_str_mapping(record.call_columns),
             "fields": list(engine.FIELDS),
             "record_types": list(engine.RECORD_TYPES),
-            "importable_types": list(engine.SHIFT_TYPES),
+            "importable_types": list(engine.SHIFT_TYPES + engine.ADMIN_TYPES),
             "call_types": await self.shift_imports.call_type_options(
                 record.organization_id
             ),
@@ -553,9 +570,13 @@ class HistoricalImportService:
                 if found.outcome:
                     return found.outcome, found.outcome_detail or ""
             if item.source_id in imported:
+                if item.record_type in engine.ADMIN_TYPES:
+                    return "imported", "Imported as an Admin Hours entry."
                 return "imported", "Imported by an earlier import."
             if item.record_type in engine.SHIFT_TYPES:
                 return "not_sent", "Not yet sent to shift review."
+            if item.record_type in engine.ADMIN_TYPES:
+                return "not_sent", "Not yet committed as Admin Hours."
             return (
                 "waiting",
                 f"{item.record_type.replace('_', ' ').capitalize()} hours are "
@@ -626,12 +647,349 @@ class HistoricalImportService:
                 found[source_id] = row
         return found
 
+    # ------------------------------------------------------------------
+    # Administrative hours
+    # ------------------------------------------------------------------
+
+    async def admin_categories(self, organization_id: str) -> List[AdminHoursCategory]:
+        result = await self.db.execute(
+            select(AdminHoursCategory)
+            .where(AdminHoursCategory.organization_id == str(organization_id))
+            .order_by(AdminHoursCategory.sort_order, AdminHoursCategory.name)
+        )
+        return list(result.scalars().all())
+
+    async def update_admin_settings(
+        self, record: HistoricalImport, payload: Mapping[str, Any]
+    ) -> None:
+        """Store how administrative rows become entries, checked against the
+        file's columns and the department's categories."""
+        headers = set(record.headers or [])
+        category_ids = {
+            c.id for c in await self.admin_categories(record.organization_id)
+        }
+        settings = engine.AdminSettings.from_stored(payload)
+        admin_columns = {
+            h
+            for h, t in self.settings(record).hour_columns.items()
+            if t in engine.ADMIN_TYPES
+        }
+        for column in settings.description_columns:
+            if column not in headers:
+                raise ValueError(f"'{column}' is not a column in the file.")
+        seen: set = set()
+        for column, category in settings.flag_categories:
+            if column not in headers:
+                raise ValueError(f"'{column}' is not a column in the file.")
+            if column in seen:
+                raise ValueError(f"'{column}' has two category rules.")
+            seen.add(column)
+            if category not in category_ids:
+                raise ValueError(
+                    "Choose one of the department's Admin Hours categories."
+                )
+        for column, category in settings.default_categories.items():
+            if column not in admin_columns:
+                raise ValueError(
+                    f"'{column}' is not a column marked as administrative hours."
+                )
+            if category not in category_ids:
+                raise ValueError(
+                    "Choose one of the department's Admin Hours categories."
+                )
+        record.admin_settings = settings.to_stored()
+        await self.db.commit()
+
+    async def update_member_mappings(
+        self,
+        record: HistoricalImport,
+        members: Mapping[str, Optional[Mapping[str, Any]]],
+    ) -> None:
+        """Decide who a member is, for rows outside a shift review. A decision
+        is merged in by key; ``None`` removes one."""
+        stored = copy.deepcopy(record.member_mappings or {})
+        for key, mapping in members.items():
+            if mapping is None:
+                stored.pop(key, None)
+                continue
+            stored[key] = await self.shift_imports.validated_member_mapping(
+                record.organization_id, mapping
+            )
+        record.member_mappings = stored
+        await self.db.commit()
+
+    async def _admin_plan(self, record: HistoricalImport) -> "_AdminPlan":
+        rows, routings = await self.route(record)
+        imported = await self.imported_source_ids(record, routings)
+        settings = self.settings(record)
+        admin = engine.AdminSettings.from_stored(record.admin_settings)
+        directory = await self.shift_imports.member_directory(record.organization_id)
+        saved = await self.shift_imports.saved_member_mappings(record.organization_id)
+        decisions = (
+            record.member_mappings if isinstance(record.member_mappings, dict) else {}
+        )
+        raw_by_id = {r.id: r.raw for r in rows}
+        plan = _AdminPlan()
+        resolutions: Dict[str, shift_engine.MemberResolution] = {}
+        for routing in routings:
+            for item in routing.items:
+                if item.record_type not in engine.ADMIN_TYPES:
+                    continue
+                if item.source_id in imported:
+                    plan.already_imported += 1
+                    continue
+                raw = raw_by_id.get(item.row_id, {})
+                identity = shift_engine.identity_from_values(
+                    engine.member_values(raw, settings)
+                )
+                if not identity.has_any:
+                    plan.problems.append(
+                        f"Line {item.line_number}: the row names no member."
+                    )
+                    continue
+                resolution = resolutions.get(identity.key)
+                if resolution is None:
+                    mapping = decisions.get(identity.key, saved.get(identity.key))
+                    resolution = shift_engine.resolve_member(
+                        identity, directory, mapping
+                    )
+                    resolutions[identity.key] = resolution
+                resolution.row_ids.append(item.row_id)
+                category = engine.admin_category(raw, item, admin)
+                if category is None:
+                    plan.uncategorized += 1
+                if item.local_date is None:
+                    plan.problems.append(
+                        f"Line {item.line_number}: the row has no date."
+                    )
+                plan.items.append(
+                    (item, identity.key, category, engine.admin_description(raw, admin))
+                )
+        plan.resolutions = resolutions
+        plan.conflicts = engine.flag_conflicts(rows, routings, admin)
+        return plan
+
+    async def admin_preview(self, record: HistoricalImport) -> Dict[str, Any]:
+        plan = await self._admin_plan(record)
+        categories = await self.admin_categories(record.organization_id)
+        names = {c.id: c.name for c in categories}
+        by_category: Dict[str, Dict[str, Any]] = {}
+        for item, _, category, _ in plan.items:
+            key = category or ""
+            bucket = by_category.setdefault(
+                key,
+                {
+                    "category_id": category,
+                    "name": names.get(key, ""),
+                    "records": 0,
+                    "minutes": 0,
+                },
+            )
+            bucket["records"] += 1
+            bucket["minutes"] += item.minutes
+        unresolved = [r for r in plan.resolutions.values() if r.ref is None]
+        to_create = [
+            r
+            for r in plan.resolutions.values()
+            if r.status == shift_engine.MEMBER_CREATE
+        ]
+        directory = await self.shift_imports.member_directory(record.organization_id)
+        results = record.results if isinstance(record.results, dict) else {}
+        return {
+            "settings": engine.AdminSettings.from_stored(
+                record.admin_settings
+            ).to_stored(),
+            "categories": [
+                {"id": c.id, "name": c.name, "is_active": bool(c.is_active)}
+                for c in categories
+            ],
+            "pending_records": len(plan.items),
+            "already_imported": plan.already_imported,
+            "by_category": [
+                {
+                    "category_id": b["category_id"],
+                    "name": b["name"],
+                    "records": b["records"],
+                    "hours": round(b["minutes"] / 60, 2),
+                }
+                for b in sorted(by_category.values(), key=lambda b: -b["records"])
+            ],
+            "uncategorized": plan.uncategorized,
+            "flag_conflicts": plan.conflicts,
+            "problems": plan.problems[:50],
+            "problem_count": len(plan.problems),
+            "members": [
+                {
+                    "key": r.key,
+                    "display_name": r.identity.display_name,
+                    "membership_number": r.identity.membership_number,
+                    "status": r.status,
+                    "reason": r.reason,
+                    "candidate_ids": r.candidate_ids,
+                    "new_first_name": r.new_first,
+                    "new_last_name": r.new_last,
+                    "row_count": len(r.row_ids),
+                }
+                for r in sorted(unresolved + to_create, key=lambda r: r.key)
+            ],
+            "member_options": sorted(
+                (
+                    {
+                        "id": m.id,
+                        "name": m.display_name or m.username,
+                        "membership_number": m.membership_number,
+                        "status": m.status,
+                    }
+                    for m in directory
+                ),
+                key=lambda m: m["name"].casefold(),
+            ),
+            "can_commit": bool(plan.items)
+            and not unresolved
+            and not plan.uncategorized
+            and not plan.problems,
+            "result": results.get("admin"),
+        }
+
+    async def commit_admin(
+        self, organization_id: str, import_id: str, committed_by: str
+    ) -> Dict[str, int]:
+        """Write the administrative rows as approved Admin Hours entries.
+
+        Approved, not pending: the previous system had already credited these
+        hours, and the department decided they come across as they stand. The
+        manual-entry path is deliberately not used — it marks every entry
+        pending, caps an entry at 24 hours and locks the member for an overlap
+        check, each right for a member typing today's hours and wrong for
+        years of settled history.
+        """
+        record = await self.get(organization_id, import_id, for_update=True)
+        plan = await self._admin_plan(record)
+        unresolved = [r for r in plan.resolutions.values() if r.ref is None]
+        if unresolved:
+            raise HistoricalImportNotReady(
+                f"{len(unresolved)} member(s) in the administrative rows still "
+                "need a decision."
+            )
+        if plan.uncategorized:
+            raise HistoricalImportNotReady(
+                f"{plan.uncategorized} administrative row(s) have no category. "
+                "Set a category for every administrative hours column."
+            )
+        if plan.problems:
+            raise HistoricalImportNotReady(plan.problems[0])
+        if not plan.items:
+            raise HistoricalImportNotReady(
+                "Every administrative row in this file has already been imported."
+            )
+
+        org_id = record.organization_id
+        now = datetime.now(timezone.utc)
+        tz = ZoneInfo(record.timezone)
+        counts: Dict[str, int] = {"entries_created": 0, "members_created": 0}
+        resolutions = list(plan.resolutions.values())
+        created = await self.shift_imports.create_former_members(
+            org_id,
+            resolutions,
+            f"historical import of {record.source_filename}",
+            now,
+            counts,
+        )
+        user_by_key: Dict[str, str] = {}
+        for resolution in resolutions:
+            ref = resolution.ref or ""
+            user_by_key[resolution.key] = created.get(ref, ref)
+
+        note = f"Imported from {record.source_filename}"
+        pending = 0
+        for item, member_key, category, description in plan.items:
+            span = engine.entry_span(item, tz)
+            if span is None or category is None:
+                # Both are refused above; kept so a type checker agrees.
+                continue
+            entry = AdminHoursEntry(
+                id=generate_uuid(),
+                organization_id=org_id,
+                user_id=user_by_key[member_key],
+                category_id=category,
+                clock_in_at=span[0],
+                clock_out_at=span[1],
+                duration_minutes=item.minutes,
+                description=(description or note)[:5000],
+                entry_method=AdminHoursEntryMethod.IMPORT,
+                status=AdminHoursEntryStatus.APPROVED,
+                approved_by=str(committed_by),
+                approved_at=now,
+            )
+            self.db.add(entry)
+            self.db.add(
+                ImportedSourceRecord(
+                    id=generate_uuid(),
+                    organization_id=org_id,
+                    source_system=record.source_system,
+                    source_id=item.source_id,
+                    record_kind=ImportedRecordKind.ADMIN_HOURS_ENTRY.value,
+                    record_id=entry.id,
+                    historical_import_id=record.id,
+                )
+            )
+            counts["entries_created"] += 1
+            pending += 1
+            if pending >= _INSERT_CHUNK:
+                await self._flush_ledgered()
+                pending = 0
+        await self._flush_ledgered()
+
+        await self.shift_imports.upsert_mappings(
+            org_id, member_mapping_entries(resolutions, created), str(committed_by), now
+        )
+        results = (
+            copy.deepcopy(record.results) if isinstance(record.results, dict) else {}
+        )
+        results["admin"] = {
+            **counts,
+            "committed_at": now.isoformat(),
+            "committed_by": str(committed_by),
+        }
+        record.results = results
+        await self.db.commit()
+        logger.info(
+            "Historical import {} committed {} admin hours entries for org {}",
+            record.id,
+            counts["entries_created"],
+            org_id,
+        )
+        return counts
+
+    async def _flush_ledgered(self) -> None:
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            # Another commit entered one of these rows first. Nothing here is
+            # kept: the caller's session rolls back.
+            raise HistoricalImportNotReady(
+                "Another import recorded some of these rows at the same time. "
+                "Reload and commit again."
+            )
+
     async def _organization(self, organization_id: str) -> Optional[Organization]:
         result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
         org: Optional[Organization] = result.scalar_one_or_none()
         return org
+
+
+class _AdminPlan:
+    """What an administrative commit would write, and what stops it."""
+
+    def __init__(self) -> None:
+        self.items: List[Tuple[engine.RoutedItem, str, Optional[str], str]] = []
+        self.resolutions: Dict[str, shift_engine.MemberResolution] = {}
+        self.already_imported = 0
+        self.uncategorized = 0
+        self.conflicts = 0
+        self.problems: List[str] = []
 
 
 def _as_str_mapping(value: Any) -> Dict[str, str]:
