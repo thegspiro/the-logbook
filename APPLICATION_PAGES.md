@@ -1310,12 +1310,14 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Integrations
 
-| URL                            | Page                                                             | Permission        |
-| ------------------------------ | ---------------------------------------------------------------- | ----------------- |
-| `/integrations`                | Integrations                                                     | `settings.manage` |
-| `/integrations/:integrationId` | Integration detail — health, last error, run history, Retry Sync | `settings.manage` |
-| `/claude/authorize`            | Connect Claude (consent)                                         | Authenticated     |
-| `/claude/connections`          | My Claude connections                                            | Authenticated     |
+| URL                                         | Page                                                             | Permission                       |
+| ------------------------------------------- | ---------------------------------------------------------------- | -------------------------------- |
+| `/integrations`                             | Integrations                                                     | `settings.manage`                |
+| `/integrations/:integrationId`              | Integration detail — health, last error, run history, Retry Sync | `settings.manage`                |
+| `/integrations/historical-import`           | Historical Data Import — upload a previous system's export       | `integrations.historical_import` |
+| `/integrations/historical-import/:importId` | Historical Data Import — columns, sorting, shift batches, log    | `integrations.historical_import` |
+| `/claude/authorize`                         | Connect Claude (consent)                                         | Authenticated                    |
+| `/claude/connections`                       | My Claude connections                                            | Authenticated                    |
 
 > _(2026-10-06)_ **Claude (MCP) member sign-in.** `/claude/authorize` is the OAuth consent screen the backend's `/api/oauth/authorize` sends a member to (with `?request=`); `/claude/connections` lists and ends the member's own connections. Both need only a session and the Integrations module: what a connection can reach is bounded server-side by the member's own permissions. See `wiki/Integration-Claude-MCP.md`.
 

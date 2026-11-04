@@ -88,6 +88,20 @@ class ShiftHistoryImport(Base):
         JSON, nullable=True
     )
 
+    # Set when this draft is a review batch of a historical data import, which
+    # routed the rows here. SET NULL, so discarding the historical import
+    # leaves a committed batch's record in place.
+    historical_import_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("historical_imports.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # The system the rows came from, naming the ledger the commit enters each
+    # row's ``source_id`` in. NULL for a file uploaded here directly, whose
+    # rows carry no source ids unless that column is mapped.
+    source_system: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Counts of what the commit wrote; NULL while a draft.
     summary: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
@@ -160,6 +174,12 @@ class ShiftHistoryImportRow(Base):
     keep_separate: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    # What the commit did with this row, set for every row when the import is
+    # committed: imported, duplicate, skipped or excluded. A committed import
+    # keeps no analysis, so this is the only per-row record of the outcome
+    # once the draft is gone.
+    outcome: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    outcome_detail: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

@@ -12,7 +12,7 @@ import type {
   HistoryImportDetail,
   HistoryImportSettingsUpdate,
 } from '../../../../modules/scheduling/types/historyImport';
-import { HISTORY_IMPORT_FIELD_LABELS } from '../../../../modules/scheduling/types/historyImport';
+import { callTypeField, HISTORY_IMPORT_FIELD_LABELS } from '../../../../modules/scheduling/types/historyImport';
 import { useTimezone } from '../../../../hooks/useTimezone';
 import { timezoneOptions } from './historyImportTimezones';
 
@@ -32,6 +32,16 @@ const ReviewColumns: React.FC<ReviewColumnsProps> = ({ detail, busy, onSettings 
 
   const dirty = JSON.stringify(mapping) !== JSON.stringify(detail.column_mapping);
   const used = new Set(Object.values(mapping));
+  // Calls counted by type, one column per department call type. They replace
+  // the single Calls column rather than adding to it.
+  const callFields = (detail.call_types ?? []).map((t) => ({
+    field: callTypeField(t.slug),
+    label: `${t.label} calls`,
+  }));
+  const fields = [
+    ...detail.fields.map((field) => ({ field, label: HISTORY_IMPORT_FIELD_LABELS[field] ?? field })),
+    ...callFields,
+  ];
 
   return (
     <section aria-labelledby="review-columns-heading" className="space-y-4">
@@ -69,7 +79,7 @@ const ReviewColumns: React.FC<ReviewColumnsProps> = ({ detail, busy, onSettings 
         onSubmit={(e) => {
           e.preventDefault();
           const payload: Record<string, string | null> = {};
-          for (const field of detail.fields) payload[field] = mapping[field] || null;
+          for (const { field } of fields) payload[field] = mapping[field] || null;
           onSettings({ column_mapping: payload });
         }}
       >
@@ -78,16 +88,16 @@ const ReviewColumns: React.FC<ReviewColumnsProps> = ({ detail, busy, onSettings 
         </h2>
         <p className="text-theme-text-secondary mb-4 text-sm">
           A member needs a name, ID, email or username; every row needs a unit, a start time and an end time, and a date
-          unless the start time column carries one.
+          unless the start time column carries one. Map calls either as one total or by type, not both.
         </p>
         <div className="field-grid gap-4">
-          {detail.fields.map((field) => {
-            const id = `column-${field}`;
+          {fields.map(({ field, label }) => {
+            const id = `column-${field.replace(':', '-')}`;
             const current = mapping[field] ?? '';
             return (
               <div key={field}>
                 <label htmlFor={id} className="form-label">
-                  {HISTORY_IMPORT_FIELD_LABELS[field] ?? field}
+                  {label}
                 </label>
                 <select
                   id={id}

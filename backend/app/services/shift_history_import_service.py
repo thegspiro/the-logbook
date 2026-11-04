@@ -32,16 +32,19 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
 from app.models.apparatus import Apparatus
+from app.models.call_tracking import CallSource
 from app.models.external_shift_hours import (
     ExternalAgency,
     ExternalApparatus,
     ExternalShiftHours,
     ExternalShiftHoursStatus,
 )
+from app.models.historical_import import ImportedRecordKind, ImportedSourceRecord
 from app.models.shift_history_import import (
     ShiftHistoryImport,
     ShiftHistoryImportMapping,
@@ -59,6 +62,7 @@ from app.models.training import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.services import shift_history_import_engine as engine
+from app.services.call_tracking_service import CallTrackingService
 from app.services.pre_shift_work_service import PreShiftWorkService
 from app.services.scheduling_service import SchedulingService
 from app.utils.org_timezone import scheduling_timezone
@@ -78,6 +82,15 @@ _COMMITTED = ShiftHistoryImportStatus.COMMITTED.value
 _PLACEHOLDER_EMAIL_DOMAIN = "import.invalid"
 
 _MATCH_DECISIONS = ("accept", "separate")
+
+# The ledger namespace for source ids on a file uploaded here directly, which
+# names no source system. A historical data import names its own.
+DIRECT_UPLOAD_SOURCE_SYSTEM = "shift_history_import"
+
+ROW_IMPORTED = "imported"
+ROW_DUPLICATE = "duplicate"
+ROW_SKIPPED = "skipped"
+ROW_EXCLUDED = "excluded"
 
 
 class ImportNotFound(LookupError):
@@ -272,20 +285,59 @@ class ShiftHistoryImportService:
         if timezone_name is not None:
             draft.timezone = _validate_timezone(timezone_name)
         if column_mapping is not None:
-            headers = set(draft.headers or [])
-            cleaned: Dict[str, str] = {}
-            for field_name, header in column_mapping.items():
-                if field_name not in engine.FIELDS:
-                    raise ValueError(f"'{field_name}' is not an import field.")
-                if header is None or header == "":
-                    continue
-                if header not in headers:
-                    raise ValueError(f"'{header}' is not a column in the file.")
-                if header in cleaned.values():
-                    raise ValueError(f"'{header}' is mapped to two fields.")
-                cleaned[field_name] = header
-            draft.column_mapping = cleaned
+            draft.column_mapping = await self.validated_column_mapping(
+                draft.organization_id, draft.headers or [], column_mapping
+            )
         await self.db.commit()
+
+    async def validated_column_mapping(
+        self,
+        organization_id: str,
+        headers: List[str],
+        column_mapping: Mapping[str, Optional[str]],
+    ) -> Dict[str, str]:
+        """``{field: header}`` checked against the file and the department.
+
+        A ``calls:<slug>`` field must name one of the department's call types,
+        and typed call columns replace the single call-count column rather
+        than adding to it — a file mapping both would count every call twice.
+        """
+        known = set(headers)
+        slugs = await self.call_type_slugs(organization_id)
+        cleaned: Dict[str, str] = {}
+        for field_name, header in column_mapping.items():
+            slug = engine.call_type_slug(field_name)
+            if field_name not in engine.FIELDS and slug is None:
+                raise ValueError(f"'{field_name}' is not an import field.")
+            if slug is not None and slug not in slugs:
+                raise ValueError(
+                    f"'{slug}' is not one of this department's call types."
+                )
+            if header is None or header == "":
+                continue
+            if header not in known:
+                raise ValueError(f"'{header}' is not a column in the file.")
+            if header in cleaned.values():
+                raise ValueError(f"'{header}' is mapped to two fields.")
+            cleaned[field_name] = header
+        if "call_count" in cleaned and any(engine.call_type_slug(f) for f in cleaned):
+            raise ValueError(
+                "Map calls either as one total or by type, not both: together "
+                "they would count every call twice."
+            )
+        return cleaned
+
+    async def call_type_slugs(self, organization_id: str) -> set:
+        settings = await CallTrackingService(self.db).get_settings(str(organization_id))
+        return {t["slug"] for t in settings.get("call_types", []) if t.get("slug")}
+
+    async def call_type_options(self, organization_id: str) -> List[Dict[str, str]]:
+        settings = await CallTrackingService(self.db).get_settings(str(organization_id))
+        return [
+            {"slug": str(t["slug"]), "label": str(t.get("label") or t["slug"])}
+            for t in settings.get("call_types", [])
+            if t.get("slug")
+        ]
 
     async def update_row(
         self,
@@ -310,8 +362,14 @@ class ShiftHistoryImportService:
             raise ImportNotFound("Row not found")
         if edits is not None:
             merged = copy.deepcopy(row.edits or {})
+            mapped_call_fields = {
+                f for f in (draft.column_mapping or {}) if engine.call_type_slug(f)
+            }
             for field_name, value in edits.items():
-                if field_name not in engine.FIELDS:
+                if (
+                    field_name not in engine.FIELDS
+                    and field_name not in mapped_call_fields
+                ):
                     raise ValueError(f"'{field_name}' is not an import field.")
                 if value is None:
                     merged.pop(field_name, None)
@@ -330,6 +388,31 @@ class ShiftHistoryImportService:
             row.keep_separate = keep_separate
         await self.db.commit()
         return row
+
+    async def decide_probable_matches(
+        self, draft: ShiftHistoryImport, decision: str
+    ) -> int:
+        """Answer every probable crew match in the draft at once.
+
+        A department's years of history raise hundreds of these — a crew whose
+        members signed in up to two hours apart — and each is the same
+        question. Only rows waiting on a decision are touched; one already
+        answered keeps its answer. Returns how many were decided.
+        """
+        if decision not in _MATCH_DECISIONS:
+            raise ValueError("Decision must be 'accept' or 'separate'.")
+        analysis, stored_rows = await self.analyze(draft)
+        waiting = {
+            att.seed.id
+            for shift in analysis.shifts
+            for att in shift.attendances
+            if att.needs_confirmation
+        }
+        for row in stored_rows:
+            if row.id in waiting:
+                row.match_decision = decision
+        await self.db.commit()
+        return len(waiting)
 
     async def update_mappings(
         self,
@@ -387,7 +470,14 @@ class ShiftHistoryImportService:
     ) -> Dict[str, Any]:
         action = mapping.get("action")
         if action == "create":
-            return {"action": "create"}
+            created: Dict[str, Any] = {"action": "create"}
+            for key in ("first_name", "last_name"):
+                value = " ".join(str(mapping.get(key) or "").split())
+                if len(value) > 100:
+                    raise ValueError("A name is longer than 100 characters.")
+                if value:
+                    created[key] = value
+            return created
         if action == "map":
             user_id = str(mapping.get("user_id") or "")
             found = (
@@ -414,7 +504,16 @@ class ShiftHistoryImportService:
             own = await self._own_units(org)
             if not any(u.id == unit_id for u in own):
                 raise ValueError("Invalid apparatus")
-            return {"action": engine.OWN, "id": unit_id}
+            validated: Dict[str, Any] = {"action": engine.OWN, "id": unit_id}
+            if mapping.get("default_seat"):
+                seats = await SchedulingService(self.db).department_seat_names(org)
+                try:
+                    validated["default_seat"] = resolve_department_seat(
+                        mapping.get("default_seat"), seats
+                    )
+                except UnknownSeatError as exc:
+                    raise ValueError(str(exc))
+            return validated
         if action == engine.EXTERNAL:
             unit_id = str(mapping.get("id") or "")
             found = (
@@ -483,17 +582,28 @@ class ShiftHistoryImportService:
         # ``apparatus_id`` may name either (see ``resolve_apparatus_ref``).
         # Retired units are included — years of history ran on them.
         full = await self.db.execute(
-            select(Apparatus.id, Apparatus.unit_number, Apparatus.name).where(
-                Apparatus.organization_id == str(organization_id)
-            )
+            select(
+                Apparatus.id,
+                Apparatus.unit_number,
+                Apparatus.name,
+                Apparatus.crew_positions.label("positions"),
+            ).where(Apparatus.organization_id == str(organization_id))
         )
         basic = await self.db.execute(
             select(
-                BasicApparatus.id, BasicApparatus.unit_number, BasicApparatus.name
+                BasicApparatus.id,
+                BasicApparatus.unit_number,
+                BasicApparatus.name,
+                BasicApparatus.positions,
             ).where(BasicApparatus.organization_id == str(organization_id))
         )
         return [
-            engine.OwnUnit(id=r.id, unit_number=r.unit_number or "", name=r.name or "")
+            engine.OwnUnit(
+                id=r.id,
+                unit_number=r.unit_number or "",
+                name=r.name or "",
+                seats=_seat_names(r.positions),
+            )
             for r in list(full.all()) + list(basic.all())
         ]
 
@@ -553,6 +663,7 @@ class ShiftHistoryImportService:
                 start=_aware(s.start_time),
                 end=_aware(s.end_time) if s.end_time else None,
                 attendee_ids=frozenset(attendees[s.id]),
+                duty_type=s.duty_type or engine.DUTY_IN_STATION,
             )
             for s in shifts
         ]
@@ -633,6 +744,9 @@ class ShiftHistoryImportService:
             saved_unit_mappings=saved["unit"],
             saved_position_mappings=saved["position"],
         )
+        context.imported_source_ids = await self._imported_source_ids(
+            org_id, _source_system(draft), engine.source_ids(parsed)
+        )
         span = engine.date_span(parsed)
         if span is not None:
             context.existing_shifts = await self._existing_shifts(
@@ -641,12 +755,33 @@ class ShiftHistoryImportService:
             context.existing_external = await self._existing_external(org_id, span)
         return engine.analyze(parsed, context), stored_rows
 
+    async def _imported_source_ids(
+        self, organization_id: str, source_system: str, ids: List[str]
+    ) -> frozenset:
+        if not ids:
+            return frozenset()
+        found: set = set()
+        # Chunked: a draft can carry thousands of ids, and one IN list that long
+        # is a statement MySQL has to parse whole.
+        for start in range(0, len(ids), 1000):
+            chunk = ids[start : start + 1000]
+            result = await self.db.execute(
+                select(ImportedSourceRecord.source_id).where(
+                    ImportedSourceRecord.organization_id == str(organization_id),
+                    ImportedSourceRecord.source_system == source_system,
+                    ImportedSourceRecord.source_id.in_(chunk),
+                )
+            )
+            found.update(r[0] for r in result.all())
+        return frozenset(found)
+
     async def detail(self, draft: ShiftHistoryImport) -> Dict[str, Any]:
         detail: Dict[str, Any] = {
             "import": summary_view(draft),
             "headers": list(draft.headers or []),
             "column_mapping": dict(draft.column_mapping or {}),
             "fields": list(engine.FIELDS),
+            "call_types": await self.call_type_options(draft.organization_id),
             "member_mappings": _as_mapping(draft.member_mappings),
             "unit_mappings": _as_mapping(draft.unit_mappings),
             "position_mappings": _as_mapping(draft.position_mappings),
@@ -668,6 +803,7 @@ class ShiftHistoryImportService:
                 "kind": engine.OWN,
                 "id": u.id,
                 "name": " - ".join(p for p in (u.unit_number, u.name) if p),
+                "seats": list(u.seats),
             }
             for u in await self._own_units(organization_id)
         ]
@@ -714,7 +850,7 @@ class ShiftHistoryImportService:
         # same draft cannot both write it: the second waits, then finds it no
         # longer a draft.
         draft = await self.get_draft(organization_id, import_id, for_update=True)
-        analysis, _ = await self.analyze(draft)
+        analysis, stored_rows = await self.analyze(draft)
         if analysis.blocking_issue_count:
             raise ImportNotReady(
                 f"{analysis.blocking_issue_count} issue(s) still need a decision "
@@ -729,6 +865,33 @@ class ShiftHistoryImportService:
         org_id = str(organization_id)
         now = datetime.now(timezone.utc)
         note = f"Imported from {draft.source_filename}"
+        source_system = _source_system(draft)
+        outcomes: Dict[str, Tuple[str, str]] = {}
+        ledger: List[ImportedSourceRecord] = []
+        calls = CallTrackingService(self.db)
+
+        def record(
+            att: engine.Attendance, kind: str, record_id: str, where: str
+        ) -> None:
+            for row in att.rows:
+                outcomes[row.id] = (ROW_IMPORTED, where)
+                if row.source_id:
+                    ledger.append(
+                        ImportedSourceRecord(
+                            id=generate_uuid(),
+                            organization_id=org_id,
+                            source_system=source_system,
+                            source_id=row.source_id,
+                            record_kind=kind,
+                            record_id=record_id,
+                            historical_import_id=draft.historical_import_id,
+                        )
+                    )
+
+        def duplicate(att: engine.Attendance, where: str) -> None:
+            for row in att.rows:
+                outcomes[row.id] = (ROW_DUPLICATE, where)
+
         counts = {
             "shifts_created": 0,
             "shifts_updated": 0,
@@ -751,6 +914,9 @@ class ShiftHistoryImportService:
         for proposed in analysis.shifts:
             work = [a for a in proposed.attendances if not a.duplicate_existing]
             counts["duplicates_skipped"] += len(proposed.attendances) - len(work)
+            for att in proposed.attendances:
+                if att.duplicate_existing:
+                    duplicate(att, "Already on the schedule.")
             if not work:
                 continue
             shift: Optional[Shift] = None
@@ -760,6 +926,7 @@ class ShiftHistoryImportService:
                 shift = await self._lock_existing_shift(
                     org_id, proposed.existing_shift_id
                 )
+            created_shift = shift is None
             if shift is not None:
                 counts["shifts_updated"] += 1
                 existing_attendees, existing_assignees = await self._shift_people(
@@ -774,6 +941,7 @@ class ShiftHistoryImportService:
                     end_time=max(a.end for a in work),
                     apparatus_id=proposed.apparatus_id,
                     status=ShiftStatus.SCHEDULED,
+                    duty_type=proposed.duty_type,
                     notes=note,
                     is_finalized=True,
                     finalized_at=now,
@@ -789,6 +957,7 @@ class ShiftHistoryImportService:
                 user_id = member_id(att.member_ref)
                 if user_id in existing_attendees:
                     counts["duplicates_skipped"] += 1
+                    duplicate(att, "Already on the schedule.")
                     continue
                 if user_id not in existing_assignees:
                     self.db.add(
@@ -805,52 +974,86 @@ class ShiftHistoryImportService:
                         )
                     )
                     existing_assignees.add(user_id)
-                self.db.add(
-                    ShiftAttendance(
-                        id=generate_uuid(),
-                        shift_id=shift.id,
-                        user_id=user_id,
-                        checked_in_at=att.start,
-                        checked_out_at=att.end,
-                        duration_minutes=att.minutes,
-                        call_count=att.call_count,
-                    )
+                attendance = ShiftAttendance(
+                    id=generate_uuid(),
+                    shift_id=shift.id,
+                    user_id=user_id,
+                    checked_in_at=att.start,
+                    checked_out_at=att.end,
+                    duration_minutes=att.minutes,
+                    call_count=att.call_count,
+                )
+                self.db.add(attendance)
+                record(
+                    att,
+                    ImportedRecordKind.SHIFT_ATTENDANCE.value,
+                    attendance.id,
+                    f"Shift on {proposed.shift_date.isoformat()}.",
                 )
                 existing_attendees.add(user_id)
                 counts["attendance_created"] += 1
             await self.db.flush()
             await self._snapshot_totals(shift, work)
+            await self._record_typed_calls(
+                calls, shift, org_id, work, str(committed_by), created_shift, counts
+            )
 
         units_by_id = {u.id: u for u in await self._external_units(org_id)}
         for att in analysis.external:
             if att.duplicate_existing:
                 counts["duplicates_skipped"] += 1
+                duplicate(att, "Already logged as outside-agency hours.")
                 continue
             kind, ref = att.unit_ref
             unit_id = new_units[ref] if kind == engine.NEW_EXTERNAL else ref
             unit = units_by_id[unit_id]
-            self.db.add(
-                ExternalShiftHours(
-                    id=generate_uuid(),
-                    organization_id=org_id,
-                    user_id=member_id(att.member_ref),
-                    shift_date=att.local_date,
-                    duration_minutes=att.minutes,
-                    start_at=att.start,
-                    end_at=att.end,
-                    external_apparatus_id=unit.id,
-                    agency_name=unit.agency_name,
-                    apparatus_name=unit.name,
-                    role=att.role[:100] or None,
-                    notes=note,
-                    status=ExternalShiftHoursStatus.COUNTED.value,
-                )
+            role = att.role
+            if not role and att.duty_type == engine.DUTY_ON_CALL:
+                # Outside-agency hours have no duty type of their own; the role
+                # is where the entry screen shows what the time was.
+                role = "On call"
+            entry = ExternalShiftHours(
+                id=generate_uuid(),
+                organization_id=org_id,
+                user_id=member_id(att.member_ref),
+                shift_date=att.local_date,
+                duration_minutes=att.minutes,
+                start_at=att.start,
+                end_at=att.end,
+                external_apparatus_id=unit.id,
+                agency_name=unit.agency_name,
+                apparatus_name=unit.name,
+                role=role[:100] or None,
+                call_count=att.call_count,
+                notes=note,
+                status=ExternalShiftHoursStatus.COUNTED.value,
+            )
+            self.db.add(entry)
+            record(
+                att,
+                ImportedRecordKind.EXTERNAL_SHIFT_HOURS.value,
+                entry.id,
+                f"Outside-agency hours on {unit.name}.",
             )
             counts["external_hours_created"] += 1
 
         await self._remember(
             org_id, analysis, new_members, new_units, str(committed_by), now
         )
+
+        self.db.add_all(ledger)
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            # Another import entered one of these source rows between this
+            # commit's ledger read and its write. Nothing here is kept: the
+            # caller's session rolls back, and a reload shows the row skipped.
+            raise ImportNotReady(
+                "Another import recorded some of these rows while this one was "
+                "being committed. Reload the review and commit again."
+            )
+        counts["source_rows_recorded"] = len(ledger)
+        _set_row_outcomes(analysis, stored_rows, outcomes)
 
         draft.status = _COMMITTED
         draft.committed_by = str(committed_by)
@@ -925,12 +1128,11 @@ class ShiftHistoryImportService:
             else:
                 kind, unit_id = unit.target_kind or "", unit.target_id
             if kind and unit_id:
+                remembered: Dict[str, Any] = {"action": kind, "id": unit_id}
+                if kind == engine.OWN and unit.default_seat:
+                    remembered["default_seat"] = unit.default_seat
                 entries.append(
-                    (
-                        ShiftHistoryImportMappingKind.UNIT.value,
-                        unit.key,
-                        {"action": kind, "id": unit_id},
-                    )
+                    (ShiftHistoryImportMappingKind.UNIT.value, unit.key, remembered)
                 )
         for position in analysis.positions:
             if position.status == engine.POSITION_MAPPED and position.seat:
@@ -991,9 +1193,12 @@ class ShiftHistoryImportService:
             if resolution.status != engine.MEMBER_CREATE:
                 continue
             identity = resolution.identity
+            # Never None here: a member with nothing to be called by is a
+            # blocking issue, and a commit with issues is refused.
+            first, last = engine.new_member_name(resolution) or ("", "")
             username = identity.username
             if not username:
-                base = _slug(f"{identity.first} {identity.last}") or "former.member"
+                base = _slug(f"{first} {last}") or "former.member"
                 username = f"{base[:80]}.{secrets.token_hex(3)}"
                 while username.casefold() in taken_usernames:
                     username = f"{base[:80]}.{secrets.token_hex(3)}"
@@ -1004,8 +1209,8 @@ class ShiftHistoryImportService:
                 username=username,
                 email=identity.email
                 or f"former-member-{secrets.token_hex(6)}@{_PLACEHOLDER_EMAIL_DOMAIN}",
-                first_name=identity.first or None,
-                last_name=identity.last or None,
+                first_name=first or None,
+                last_name=last or None,
                 membership_number=identity.membership_number or None,
                 password_hash=None,
                 email_verified=False,
@@ -1078,6 +1283,49 @@ class ShiftHistoryImportService:
             created[unit.key] = apparatus.id
         return created
 
+    async def _record_typed_calls(
+        self,
+        calls: CallTrackingService,
+        shift: Shift,
+        organization_id: str,
+        imported: List[engine.Attendance],
+        recorded_by: str,
+        created_shift: bool,
+        counts: Dict[str, int],
+    ) -> None:
+        """File a shift's typed calls the way a close-out does.
+
+        Each type's count is the most any one member logged on this shift —
+        four members on one EMS call is one EMS call. A shift already on the
+        schedule that has calls recorded keeps them: the people who closed it
+        out knew better than a per-member export does.
+        """
+        type_counts: Dict[str, int] = {}
+        for att in imported:
+            for slug, value in att.call_counts.items():
+                type_counts[slug] = max(type_counts.get(slug, 0), value)
+        total = sum(type_counts.values())
+        if not total:
+            return
+        if not created_shift and await calls.shift_response_count(str(shift.id)):
+            return
+        _, error = await calls.record_shift_calls(
+            shift,
+            organization_id,
+            total,
+            type_counts,
+            recorded_by=recorded_by,
+            source=CallSource.IMPORT,
+        )
+        if error:
+            raise ImportNotReady(
+                f"The shift on {shift.shift_date.isoformat()} could not record "
+                f"its calls: {error}"
+            )
+        counts["calls_recorded"] = counts.get("calls_recorded", 0) + total
+        if shift.call_count is None or created_shift:
+            shift.call_count = total
+
     async def _lock_existing_shift(
         self, organization_id: str, shift_id: str
     ) -> Optional[Shift]:
@@ -1142,6 +1390,41 @@ def _as_mapping(value: Any) -> Dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _source_system(draft: ShiftHistoryImport) -> str:
+    return draft.source_system or DIRECT_UPLOAD_SOURCE_SYSTEM
+
+
+def _seat_names(positions: Any) -> Tuple[str, ...]:
+    """The seat names an apparatus record lists, in its own order."""
+    names: List[str] = []
+    for slot in SchedulingService.normalize_positions(positions):
+        name = str(slot.get("position") or "").strip()
+        if name and name not in names:
+            names.append(name)
+    return tuple(names)
+
+
+def _set_row_outcomes(
+    analysis: engine.Analysis,
+    stored_rows: List[ShiftHistoryImportRow],
+    written: Mapping[str, Tuple[str, str]],
+) -> None:
+    """Record on every row what the commit did with it."""
+    parsed = {r.id: r for r in analysis.rows}
+    for row in stored_rows:
+        result = parsed.get(row.id)
+        if row.id in written:
+            outcome, detail = written[row.id]
+        elif result is not None and result.excluded:
+            outcome, detail = ROW_EXCLUDED, "Excluded during review."
+        elif result is not None and result.skipped_reason:
+            outcome, detail = ROW_SKIPPED, result.skipped_reason
+        else:
+            outcome, detail = ROW_SKIPPED, "Not imported."
+        row.outcome = outcome
+        row.outcome_detail = detail[:255]
+
+
 # ----------------------------------------------------------------------
 # Presentation
 # ----------------------------------------------------------------------
@@ -1159,6 +1442,8 @@ def summary_view(draft: ShiftHistoryImport) -> Dict[str, Any]:
         "created_at": draft.created_at,
         "committed_at": draft.committed_at,
         "summary": draft.summary,
+        "source_system": draft.source_system,
+        "historical_import_id": draft.historical_import_id,
     }
 
 
@@ -1177,6 +1462,8 @@ def _attendance_view(att: engine.Attendance) -> Dict[str, Any]:
         "local_date": att.local_date,
         "minutes": att.minutes,
         "call_count": att.call_count,
+        "call_counts": dict(att.call_counts),
+        "duty_type": att.duty_type,
         "joined": att.joined,
         "confidence": att.confidence,
         "needs_confirmation": att.needs_confirmation,
@@ -1218,6 +1505,9 @@ def analysis_view(
                 "end": row.end,
                 "local_date": row.local_date,
                 "minutes": row.minutes,
+                "stated_minutes": row.stated_minutes,
+                "duty_type": row.duty_type,
+                "source_id": row.source_id or None,
                 "member_key": row.identity.key if row.identity.has_any else None,
                 "unit_key": row.unit_key if row.values["unit"] else None,
                 "position_key": row.position_key,
@@ -1261,6 +1551,8 @@ def analysis_view(
                 "username": m.identity.username,
                 "status": m.status,
                 "user_id": m.user_id,
+                "new_first_name": m.new_first,
+                "new_last_name": m.new_last,
                 "candidate_ids": m.candidate_ids,
                 "reason": m.reason,
                 "row_count": len(m.row_ids),
@@ -1279,6 +1571,7 @@ def analysis_view(
                 "candidates": [{"kind": k, "id": i} for k, i in u.candidates],
                 "new_agency_name": u.new_agency_name,
                 "new_unit_name": u.new_unit_name,
+                "default_seat": u.default_seat,
                 "row_count": len(u.row_ids),
                 "remembered": u.remembered,
             }
@@ -1305,6 +1598,7 @@ def analysis_view(
                 "existing_shift_id": s.existing_shift_id,
                 "existing_confidence": s.existing_confidence,
                 "existing_status": s.existing_status,
+                "duty_type": s.duty_type,
                 "attendances": [_attendance_view(a) for a in s.attendances],
             }
             for s in analysis.shifts

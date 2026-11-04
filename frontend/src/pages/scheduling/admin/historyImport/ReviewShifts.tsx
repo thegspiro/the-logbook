@@ -18,6 +18,7 @@ import type {
   HistoryImportShift,
   MatchDecision,
 } from '../../../../modules/scheduling/types/historyImport';
+import { ShiftDutyType } from '../../../../constants/enums';
 import { ExistingShiftStatus } from '../../../../modules/scheduling/types/historyImport';
 import { positionLabel } from '../../../../modules/scheduling/utils/positionLabels';
 import { formatShortDateTime, formatTime, toLocalISODate } from '../../../../utils/dateFormatting';
@@ -31,6 +32,8 @@ interface ReviewShiftsProps {
   onRowDecision: (rowId: string, decision: MatchDecision | null) => void;
   /** Keep these rows apart from the entries before them. */
   onSplit: (rowIds: string[]) => void;
+  /** Answer every probable crew match still waiting, at once. */
+  onDecideAll: (decision: MatchDecision) => void;
 }
 
 const PAGE_SIZE = 20;
@@ -136,11 +139,16 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
   onMappings,
   onRowDecision,
   onSplit,
+  onDecideAll,
 }) => {
   const [onlyReview, setOnlyReview] = useState(true);
   const [page, setPage] = useState(1);
 
   const pending = analysis.shifts.filter(needsReview).length;
+  const probable = analysis.shifts.reduce(
+    (total, shift) => total + shift.attendances.filter((a) => a.needs_confirmation).length,
+    0
+  );
   const shifts = useMemo(
     () => (onlyReview && pending > 0 ? analysis.shifts.filter(needsReview) : analysis.shifts),
     [analysis.shifts, onlyReview, pending]
@@ -180,6 +188,23 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
         )}
       </div>
 
+      {probable > 0 && (
+        <div className="card split-row gap-3 p-4 sm:items-center">
+          <p className="split-row-main text-theme-text-secondary text-sm">
+            {probable} {probable === 1 ? 'member signed' : 'members signed'} in up to two hours away from the rest of a
+            crew. Answer each below, or all of them at once.
+          </p>
+          <div className="split-row-aside flex flex-wrap gap-2">
+            <button type="button" className="btn-primary" disabled={busy} onClick={() => onDecideAll('accept')}>
+              All the same shift
+            </button>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => onDecideAll('separate')}>
+              Keep all separate
+            </button>
+          </div>
+        </div>
+      )}
+
       {shown.length === 0 ? (
         <p className="card text-theme-text-secondary p-4 text-sm">
           No shifts yet. Shifts appear once members and units are settled.
@@ -196,6 +221,11 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
                       ? formatTime(shift.end, timezone)
                       : formatShortDateTime(shift.end, timezone)}
                   </h3>
+                  {shift.duty_type === ShiftDutyType.ON_CALL && (
+                    <span className="badge mt-1 border border-sky-500/20 bg-sky-500/10 text-sky-800 dark:text-sky-300">
+                      On call (recall)
+                    </span>
+                  )}
                   <p className="text-theme-text-secondary text-sm">
                     {shift.attendances.length} {shift.attendances.length === 1 ? 'member' : 'members'} ·{' '}
                     {shift.existing_status === ExistingShiftStatus.AUTO ||

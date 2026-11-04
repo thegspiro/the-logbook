@@ -11,6 +11,7 @@ const mockMappings = vi.fn();
 const mockRow = vi.fn();
 const mockSettings = vi.fn();
 const mockCommit = vi.fn();
+const mockDecideAll = vi.fn();
 
 vi.mock('../../../../modules/scheduling/services/historyImportApi', () => ({
   historyImportService: {
@@ -19,6 +20,7 @@ vi.mock('../../../../modules/scheduling/services/historyImportApi', () => ({
     updateRow: (...a: unknown[]) => mockRow(...a) as unknown,
     updateSettings: (...a: unknown[]) => mockSettings(...a) as unknown,
     commit: (...a: unknown[]) => mockCommit(...a) as unknown,
+    decideProbableMatches: (...a: unknown[]) => mockDecideAll(...a) as unknown,
     discard: vi.fn(),
   },
 }));
@@ -163,10 +165,11 @@ const renderPage = () =>
 
 describe('ShiftHistoryImportReviewPage', () => {
   beforeEach(() => {
-    for (const mock of [mockGet, mockMappings, mockRow, mockSettings, mockCommit]) mock.mockReset();
+    for (const mock of [mockGet, mockMappings, mockRow, mockSettings, mockCommit, mockDecideAll]) mock.mockReset();
     mockGet.mockResolvedValue(draft());
     mockMappings.mockResolvedValue(draft());
     mockRow.mockResolvedValue(draft());
+    mockDecideAll.mockResolvedValue(draft());
   });
 
   it('loads the draft named in the URL and lists what blocks it', async () => {
@@ -389,5 +392,100 @@ describe('ShiftHistoryImportReviewPage', () => {
     expect(
       within(await screen.findByRole('dialog')).getByText(/creating 1 archived former-member record\./)
     ).toBeInTheDocument();
+  });
+
+  it('answers every probable match at once', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+    expect(screen.getByText(/1 member signed in up to two hours away/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'All the same shift' }));
+
+    expect(mockDecideAll).toHaveBeenCalledWith('imp-1', 'accept');
+  });
+
+  it('labels an on-call shift', async () => {
+    const [shift] = draft().analysis?.shifts ?? [];
+    mockGet.mockResolvedValue(draft({ shifts: shift ? [{ ...shift, duty_type: 'on_call' }] : [] }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Shifts/ }));
+
+    expect(screen.getByText('On call (recall)')).toBeInTheDocument();
+  });
+
+  it('sets the position an ambulance crew takes when the file names none', async () => {
+    mockGet.mockResolvedValue(
+      draft({
+        units: [
+          {
+            key: '|a102',
+            unit: 'A102',
+            agency: '',
+            status: 'matched',
+            target_kind: 'own',
+            target_id: 'app-a102',
+            candidates: [],
+            new_agency_name: '',
+            new_unit_name: '',
+            row_count: 4,
+            remembered: false,
+          },
+        ],
+        options: {
+          members: [],
+          units: [{ kind: 'own', id: 'app-a102', name: 'A102', seats: ['driver', 'emt'] }],
+          seats: ['driver', 'emt', 'firefighter'],
+        },
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Units/ }));
+    await user.selectOptions(
+      screen.getByLabelText('Position for members on this unit when the file names none'),
+      'emt'
+    );
+
+    expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+      units: { '|a102': { action: 'own', id: 'app-a102', default_seat: 'emt' } },
+    });
+  });
+
+  it('names a former member the file knows only by number', async () => {
+    mockGet.mockResolvedValue(
+      draft({
+        members: [
+          {
+            key: 'number:6178',
+            display_name: '',
+            first_name: '',
+            last_name: '',
+            membership_number: '6178',
+            email: '',
+            username: '',
+            status: 'create',
+            candidate_ids: [],
+            reason: '',
+            row_count: 12,
+            remembered: false,
+          },
+        ],
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('tab', { name: /Members/ }));
+    await user.click(screen.getByLabelText('Show settled'));
+
+    expect(screen.getByText(/named "Former member 6178"/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('First name'), 'Pat');
+    await user.type(screen.getByLabelText('Last name'), 'Lee');
+    await user.click(screen.getByRole('button', { name: 'Save name' }));
+
+    expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+      members: { 'number:6178': { action: 'create', first_name: 'Pat', last_name: 'Lee' } },
+    });
   });
 });

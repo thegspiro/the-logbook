@@ -40,6 +40,7 @@ from app.api.v1.endpoints import (
     google_calendar_oauth,
     google_workspace,
     grants,
+    historical_import,
     history,
     integrations,
     inventory,
@@ -481,6 +482,14 @@ api_router.include_router(
     prefix="/testing-checklist",
     tags=["testing-checklist"],
     dependencies=module_gate("testing", "Testing Checklist"),
+)
+# Before ``integrations.router``: its ``/{integration_id}`` would otherwise
+# capture ``/integrations/historical-imports``.
+api_router.include_router(
+    historical_import.router,
+    prefix="/integrations/historical-imports",
+    tags=["integrations"],
+    dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(
     integrations.router,

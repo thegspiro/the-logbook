@@ -97,6 +97,11 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/history': {},
   '/history/people': {},
   '/integrations': { permissions: ['settings.manage'] },
+  // Registered for its label: the segment is "historical-import".
+  '/integrations/historical-import': {
+    label: 'Historical Data Import',
+    permissions: ['integrations.historical_import'],
+  },
   '/inventory': { permissions: ['inventory.manage'] },
   '/ip-security': { permissions: ['security.manage', 'settings.manage'] },
   '/learning': {},

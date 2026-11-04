@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**350 tables · 5727 columns · 1176 foreign keys**
+**353 tables · 5762 columns · 1183 foreign keys**
 
 ---
 
@@ -242,7 +242,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`external_agencies`](#external_agencies) | `ExternalAgency` | 7 | A department members may staff apparatus for. |
 | [`external_apparatus`](#external_apparatus) | `ExternalApparatus` | 8 | One unit belonging to an :class:`ExternalAgency`. |
-| [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 18 |  |
+| [`external_shift_hours`](#external_shift_hours) | `ExternalShiftHours` | 19 |  |
 
 ### Facilities
 
@@ -326,6 +326,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`grant_notes`](#grant_notes) | `GrantNote` | 7 | Activity log / note for a grant application. |
 | [`grant_opportunities`](#grant_opportunities) | `GrantOpportunity` | 26 | Library of available grant programs. |
 | [`pledges`](#pledges) | `Pledge` | 16 | Pledge model mapping to the existing pledges table. |
+
+### Historical_Import
+
+<sub>`app/models/historical_import.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`historical_import_rows`](#historical_import_rows) | `HistoricalImportRow` | 4 | One data row of the file, exactly as read. |
+| [`historical_imports`](#historical_imports) | `HistoricalImport` | 17 | One uploaded export and the decisions about how to read it. |
+| [`imported_source_records`](#imported_source_records) | `ImportedSourceRecord` | 8 | A source row that an import has turned into a record. |
 
 ### History
 
@@ -649,8 +659,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`shift_history_import_mappings`](#shift_history_import_mappings) | `ShiftHistoryImportMapping` | 8 | A review decision the department has committed, remembered for later |
-| [`shift_history_import_rows`](#shift_history_import_rows) | `ShiftHistoryImportRow` | 10 | One data row of the file, kept as read plus the reviewer's edits. |
-| [`shift_history_imports`](#shift_history_imports) | `ShiftHistoryImport` | 18 | One uploaded file and the review state around it. |
+| [`shift_history_import_rows`](#shift_history_import_rows) | `ShiftHistoryImportRow` | 12 | One data row of the file, kept as read plus the reviewer's edits. |
+| [`shift_history_imports`](#shift_history_imports) | `ShiftHistoryImport` | 20 | One uploaded file and the review state around it. |
 
 ### Skills Testing
 
@@ -757,7 +767,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_template_equipment_checks`](#shift_template_equipment_checks) | `ShiftTemplateEquipmentCheck` | 7 | One equipment checklist a shift template puts on the shifts it creates. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
 | [`shift_time_off`](#shift_time_off) | `ShiftTimeOff` | 12 | Member request for time off / unavailability. |
-| [`shifts`](#shifts) | `Shift` | 32 | Shift model (Framework) |
+| [`shifts`](#shifts) | `Shift` | 33 | Shift model (Framework) |
 | [`skill_checkoffs`](#skill_checkoffs) | `SkillCheckoff` | 14 | Skill Checkoff model |
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
 | [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
@@ -3479,6 +3489,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `agency_name` | VARCHAR(255) | no |  |  |  |
 | `apparatus_name` | VARCHAR(100) | no |  |  |  |
 | `role` | VARCHAR(100) | yes |  |  |  |
+| `call_count` | INTEGER | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `status` | VARCHAR(20) | no |  | `counted` |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -5326,6 +5337,84 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_pledges_donor` (`donor_id`)
 - `idx_pledges_due_date` (`due_date`)
 - `idx_pledges_status` (`organization_id`, `status`)
+
+## Historical_Import
+
+### `historical_import_rows`
+
+**HistoricalImportRow** · `app/models/historical_import.py`
+
+> One data row of the file, exactly as read. Tenant-scoped only through its import (no tenant column of its own), so a lookup must constrain ``import_id`` to an import already resolved in the caller's organization (pitfall #14, the parent-resolution shape).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `import_id` | VARCHAR(36) | no | FK, IDX |  | → `historical_imports.id` ON DELETE CASCADE |
+| `line_number` | INTEGER | no |  |  |  |
+| `raw` | JSON | no |  |  |  |
+
+**Indexes**
+
+- `ix_historical_import_rows_import_line` (`import_id`, `line_number`)
+
+### `historical_imports`
+
+**HistoricalImport** · `app/models/historical_import.py`
+
+> One uploaded export and the decisions about how to read it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `draft` |  |
+| `source_filename` | VARCHAR(255) | no |  |  |  |
+| `source_system` | VARCHAR(100) | no |  |  |  |
+| `timezone` | VARCHAR(64) | no |  |  |  |
+| `headers` | JSON | no |  |  |  |
+| `column_mapping` | JSON | no |  |  |  |
+| `hour_columns` | JSON | no |  |  |  |
+| `call_columns` | JSON | no |  |  |  |
+| `row_count` | INTEGER | no |  | `0` |  |
+| `summary` | JSON | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `routed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `routed_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_historical_imports_org_status` (`organization_id`, `status`)
+
+**Constraints**
+
+- CHECK `ck_historical_imports_ck_historical_imports_status`: `status IN ('draft', 'routed')`
+
+### `imported_source_records`
+
+**ImportedSourceRecord** · `app/models/historical_import.py`
+
+> A source row that an import has turned into a record. The unique key is what makes a re-run a no-op: the row is looked up before it is written, and two commits racing past that lookup collide here rather than both writing. Several source rows may name one record — a member's back-to-back entries joined into one attendance — so ``record_id`` is not unique.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `source_system` | VARCHAR(100) | no |  |  |  |
+| `source_id` | VARCHAR(100) | no |  |  |  |
+| `record_kind` | VARCHAR(40) | no | IDX |  |  |
+| `record_id` | VARCHAR(36) | no |  |  |  |
+| `historical_import_id` | VARCHAR(36) | yes | FK |  | → `historical_imports.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_imported_source_records_record` (`record_kind`, `record_id`)
+
+**Constraints**
+
+- UNIQUE `uq_imported_source_records_org_system_id` (`organization_id`, `source_system`, `source_id`)
 
 ## History
 
@@ -8980,6 +9069,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `excluded` | BOOL | no |  | `0` |  |
 | `match_decision` | VARCHAR(20) | yes |  |  |  |
 | `keep_separate` | BOOL | no |  | `0` |  |
+| `outcome` | VARCHAR(20) | yes |  |  |  |
+| `outcome_detail` | VARCHAR(255) | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -9010,6 +9101,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `unit_mappings` | JSON | yes |  |  |  |
 | `position_mappings` | JSON | yes |  |  |  |
 | `existing_shift_decisions` | JSON | yes |  |  |  |
+| `historical_import_id` | VARCHAR(36) | yes | FK, IDX |  | → `historical_imports.id` ON DELETE SET NULL |
+| `source_system` | VARCHAR(100) | yes |  |  |  |
 | `row_count` | INTEGER | no |  | `0` |  |
 | `summary` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -9020,6 +9113,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_shift_history_imports_historical_import_id` (`historical_import_id`)
 - `ix_shift_history_imports_org_status` (`organization_id`, `status`)
 
 **Constraints**
@@ -11100,6 +11194,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `pass_down_notes` | TEXT | yes |  |  |  |
 | `open_to_all_members` | BOOL | no |  | `0` |  |
 | `is_outreach` | BOOL | no |  | `0` |  |
+| `duty_type` | VARCHAR(20) | no |  | `in_station` |  |
 | `call_count` | INTEGER | yes |  |  |  |
 | `total_hours` | FLOAT | yes |  |  |  |
 | `closeout_step` | INTEGER | yes |  |  |  |
@@ -12154,7 +12249,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (432 references)
+### → `users` (434 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12338,6 +12433,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `grant_expenditures` | `created_by` | RESTRICT | yes |
 | `grant_notes` | `created_by` | RESTRICT | yes |
 | `grant_opportunities` | `created_by` | RESTRICT | yes |
+| `historical_imports` | `created_by` | SET NULL | yes |
+| `historical_imports` | `routed_by` | SET NULL | yes |
 | `historical_member_relations` | `created_by` | SET NULL | yes |
 | `historical_members` | `created_by` | SET NULL | yes |
 | `historical_members` | `published_by` | SET NULL | yes |
@@ -12591,7 +12688,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (289 references)
+### → `organizations` (291 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12717,12 +12814,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `fundraising_events` | `organization_id` | CASCADE | no |
 | `grant_applications` | `organization_id` | CASCADE | no |
 | `grant_opportunities` | `organization_id` | CASCADE | no |
+| `historical_imports` | `organization_id` | CASCADE | no |
 | `historical_member_relations` | `organization_id` | CASCADE | no |
 | `historical_members` | `organization_id` | CASCADE | no |
 | `history_clearance_requests` | `organization_id` | CASCADE | no |
 | `history_clearance_steps` | `organization_id` | CASCADE | no |
 | `history_revisions` | `organization_id` | CASCADE | no |
 | `history_titles` | `organization_id` | CASCADE | no |
+| `imported_source_records` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
 | `integration_sync_logs` | `organization_id` | CASCADE | no |
 | `inventory_categories` | `organization_id` | CASCADE | no |
@@ -13417,6 +13516,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_form_requests` | `submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
 
+### → `historical_imports` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_import_rows` | `import_id` | CASCADE | no |
+| `imported_source_records` | `historical_import_id` | SET NULL | yes |
+| `shift_history_imports` | `historical_import_id` | SET NULL | yes |
+
 ### → `historical_members` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -14046,6 +14153,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `grant_compliance_tasks` | `grant_applications`, `users` |
 | `grant_expenditures` | `grant_applications`, `grant_budget_items`, `users` |
 | `grant_notes` | `grant_applications`, `users` |
+| `historical_import_rows` | `historical_imports` |
 | `historical_member_period_titles` | `historical_member_service_periods`, `history_titles` |
 | `historical_member_service_periods` | `historical_members` |
 | `history_clearance_decisions` | `history_clearance_requests`, `users` |

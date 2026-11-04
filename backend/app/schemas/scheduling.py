@@ -239,6 +239,9 @@ class ShiftResponse(UTCResponseBase):
     # Open Shifts is offered "Tour Guide" instead of "Firefighter".
     is_outreach: bool = False
     outreach_roles: List[OutreachRoleSlot] = Field(default_factory=list)
+    # ``in_station`` or ``on_call`` (a recall shift, the crew at home). Every
+    # shift but an imported recall shift is ``in_station``.
+    duty_type: str = "in_station"
     attendee_count: Optional[int] = 0
     roster: List[ShiftRosterSeat] = Field(default_factory=list)
     call_count: int = 0

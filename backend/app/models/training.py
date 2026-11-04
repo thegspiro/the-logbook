@@ -3718,6 +3718,14 @@ class ExternalTrainingImport(Base):
 # ============================================
 
 
+class ShiftDutyType(str, enum.Enum):
+    """Where a shift's crew is while on duty (``Shift.duty_type``)."""
+
+    IN_STATION = "in_station"
+    # A recall shift: at home, responding if paged.
+    ON_CALL = "on_call"
+
+
 class ShiftStatus(str, enum.Enum):
     """Lifecycle status of a shift.
 
@@ -3823,6 +3831,16 @@ class Shift(Base):
     # spend one of the sheet's limited seats doing it.
     is_outreach: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
+    )
+
+    # Where the crew spent the shift. ``in_station`` is every shift the
+    # schedule has ever had; ``on_call`` is a recall shift, the crew at home
+    # and responding if paged. Both count toward shift hours — the department
+    # credits a recall shift like any other — but they are told apart wherever
+    # hours are broken down, because an hour at home is not an hour on the
+    # floor. See ``ShiftDutyType``.
+    duty_type: Mapped[str] = mapped_column(
+        String(20), default="in_station", nullable=False, server_default="in_station"
     )
 
     # Summary totals — computed on finalization, also served live via API
