@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4001](https://github.com/thegspiro/the-logbook/pull/4001)** (branch
+`claude/security-review-reports-analytics`) — Feature 29 (Reports &
+analytics), pass 14, a watchdog pickup. Real delta: `dashboard.py`'s
+overdue-count predicates extracted into two shared helpers (DASH-37), reused
+by a new `overdue`/`source` filter on the unified action-items feed, no
+permission or org-scope change; a `prospective_members.view` →
+`.view_all` tightening on prospect labels and the `pipeline_overview`
+report, carried over from Membership pipeline's own commit and re-verified
+enforced; and a large new Evaluations frontend surface under
+`modules/reports` (backend already reviewed under Feature 17), reviewed for
+client-side risk with no findings. 0 fixed, 0 new findings. See
+`docs/security-review/RPT6-29-reports-analytics.md`'s **Pass 14** section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 12, PR #3998, merged), preserved for history</summary>
+
 **PR [#3998](https://github.com/thegspiro/the-logbook/pull/3998)** (branch
 `claude/security-review-security-audit-ip-p12`) — Feature 28 (Security,
 audit & IP), pass 12, a watchdog pickup. True zero-delta: all nine backend
