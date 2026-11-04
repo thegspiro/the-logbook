@@ -111,6 +111,8 @@ export interface TrainingSessionCreate {
   program_id?: string | undefined; // Training program (Recruit School, Driver Training, etc.)
   phase_id?: string | undefined; // Program phase
   requirement_id?: string | undefined; // Specific requirement this satisfies
+  // Session-attendance requirements whose members are charged with attending
+  attendance_requirement_ids?: string[] | undefined;
 
   // Training details (for new course)
   course_name?: string | undefined;

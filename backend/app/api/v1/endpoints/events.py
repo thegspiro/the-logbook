@@ -132,6 +132,7 @@ from app.services.qr_check_in_analytics import (
     record_check_in_outcome,
     record_qr_scan,
 )
+from app.services.training_session_service import TrainingSessionService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
@@ -587,7 +588,16 @@ def _build_rsvp_response(rsvp, user=None, event=None) -> RSVPResponse:
 # ============================================
 
 
-def _to_list_item(row: dict) -> EventListItem:
+async def _list_items(
+    db: AsyncSession, organization_id: str, rows: list[dict]
+) -> list[EventListItem]:
+    counted = await TrainingSessionService(db).events_counting_toward_attendance(
+        [str(row["event"].id) for row in rows], organization_id
+    )
+    return [_to_list_item(row, str(row["event"].id) in counted) for row in rows]
+
+
+def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventListItem:
     """Project one ``EventService.list_events`` row onto the list schema."""
     event = row["event"]
     return EventListItem(
@@ -631,6 +641,7 @@ def _to_list_item(row: dict) -> EventListItem:
         user_attended=row["user_attended"],
         credited_hours=row["credited_hours"],
         hour_category_label=row["hour_category_label"],
+        counts_toward_attendance=counts_toward_attendance,
     )
 
 
@@ -689,7 +700,7 @@ async def list_events(
         limit=limit,
     )
 
-    return [_to_list_item(row) for row in rows]
+    return await _list_items(db, str(current_user.organization_id), rows)
 
 
 @router.get("/missed-mandatory", response_model=list[EventListItem])
@@ -719,7 +730,7 @@ async def list_missed_mandatory_events(
         since=now - timedelta(days=since_days),
         until=now,
     )
-    return [_to_list_item(row) for row in rows]
+    return await _list_items(db, str(current_user.organization_id), rows)
 
 
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
@@ -1439,8 +1450,15 @@ async def get_event(
     organization = org_result.scalar_one_or_none()
     access = attendance_access(event, current_user)
 
+    counts_toward_attendance = str(event.id) in (
+        await TrainingSessionService(db).events_counting_toward_attendance(
+            [str(event.id)], current_user.organization_id
+        )
+    )
+
     return _build_event_response(
         event,
+        counts_toward_attendance=counts_toward_attendance,
         rsvp_count=rsvp_count,
         going_count=going_count,
         not_going_count=not_going_count,

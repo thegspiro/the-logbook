@@ -244,6 +244,31 @@ class TrainingSessionService:
             by_session[str(session_id)].append(str(requirement_id))
         return by_session
 
+    async def events_counting_toward_attendance(
+        self, event_ids: Sequence[UUID | str], organization_id: UUID | str
+    ) -> Set[str]:
+        """Which of ``event_ids`` have a session linked to an attendance requirement.
+
+        For the "Counts toward attendance" flag on event lists and pages: one
+        query for a whole page of events rather than one per card.
+        """
+        ids = {str(e) for e in event_ids}
+        if not ids:
+            return set()
+        result = await self.db.execute(
+            select(TrainingSession.event_id)
+            .join(
+                TrainingSessionRequirement,
+                TrainingSessionRequirement.session_id == TrainingSession.id,
+            )
+            .where(
+                TrainingSession.event_id.in_(ids),
+                TrainingSession.organization_id == str(organization_id),
+            )
+            .distinct()
+        )
+        return {str(e) for e in result.scalars().all()}
+
     async def set_attendance_requirements(
         self,
         training_session_id: UUID | str,

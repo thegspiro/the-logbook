@@ -85,6 +85,11 @@ CALLER_SUPPLIED = {
     # org's roster setting and their permission). Computed on the detail
     # endpoint only; the defaults (False / None) are the honest answer on
     # create and update responses, which no member reads to check in.
+    # Whether a session-attendance requirement counts this event: a lookup in
+    # training_session_requirements, not an Event column. Resolved on the
+    # detail endpoint (and per page on the lists); create and update responses
+    # are acknowledgements the screens refetch the detail after.
+    "counts_toward_attendance",
     "user_attended",
     "credited_hours",
     "hour_category_label",
