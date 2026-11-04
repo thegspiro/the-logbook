@@ -413,6 +413,7 @@ from app.models.shift_history_import import (
     ShiftHistoryImportStatus,
 )
 from app.models.skills_testing import SkillTemplate, SkillTest
+from app.models.stored_file_scan import ScanVerdict, StoredFileScan
 from app.models.storefront import (
     StoreFulfillmentMethod,
     StoreOrder,
@@ -740,6 +741,9 @@ __all__ = [
     "ShiftEquipmentCheckSeal",
     # Scheduling module config
     "SchedulingModuleConfig",
+    # Malware scan of files stored before upload scanning
+    "StoredFileScan",
+    "ScanVerdict",
     # Security alert models
     "SecurityAlertRecord",
     "AlertType",
