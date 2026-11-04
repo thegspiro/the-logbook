@@ -610,6 +610,7 @@ DB_SSL_CA=/etc/ssl/logbook/azure-combined-ca.pem
 REDIS_SSL=true
 REDIS_SSL_CA=/etc/ssl/logbook/azure-combined-ca.pem
 SECURITY_REQUIRE_TLS=true
+REDIS_REQUIRED=true
 COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.external-services.yml
 EOF
 ```
@@ -672,19 +673,22 @@ docker compose up -d --build
 docker compose ps
 docker compose logs -f backend   # first start creates every table on the new database
 
-# Confirm the backend actually reached Redis (see below)
-docker compose logs backend | grep -E "Redis connected|Redis unavailable|Redis connection failed"
+# Confirm the backend reached Redis
+docker compose logs backend | grep -E "Redis connected|REDIS_REQUIRED|Redis connection failed"
 ```
 
-**A Redis the backend cannot reach does not stop it starting.** A wrong port,
-a CA that does not verify or a rotated access key is logged as a warning, and
-the backend runs on without Redis: caching off, and rate limiting falling back
-to per-process memory. Against the bundled Redis that covers a brief outage;
-against a managed service a configuration mistake would stay in place,
-unnoticed. Look for `✓ Redis connected` after the first start and after any
-change to the `REDIS_*` settings or the access key. `REDIS_REQUIRED=true` is
-meant to turn this into a refusal to start, but in this release the startup
-code catches the failure regardless, so it does not; check the log instead.
+**Why `REDIS_REQUIRED=true` (set in Step 6).** By default a Redis the backend
+cannot reach does not stop it starting: a wrong port, a CA that does not verify
+or a rotated access key is logged as a warning, and the backend runs on without
+Redis — caching off, and rate limiting falling back to per-process memory.
+Against the bundled Redis that covers a brief outage; against a managed service
+a configuration mistake would stay in place, unnoticed. With
+`REDIS_REQUIRED=true` the backend instead logs `Redis connection failed and
+REDIS_REQUIRED is true - refusing to start` and exits, and Docker restarts it
+until Redis answers, so the mistake shows as a backend that is not up rather
+than one that is quietly degraded. This needs a release from 2026-11-04 or
+later; before that the setting had no effect (see
+[UPGRADING.md](../UPGRADING.md#redis_requiredtrue-now-refuses-to-start-without-redis-2026-11-04)).
 
 Never run `docker compose up -d mysql` (or `redis`) against this stack: compose
 starts a service you name even when its profile is off, and nothing would use
@@ -1070,7 +1074,7 @@ step.
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A database without `alembic_version`**         | The backend drops every table in it on start, taking it for a fresh install.                                                                                                                                                                                                                        | A database for The Logbook alone; restore with `./scripts/backup.sh --restore` ([Method 2, Step 2](#step-2-create-the-azure-database-for-mysql-flexible-server), [Moving](#moving-an-existing-installation-to-azure)). |
 | **Backups never encrypted**                      | Without `./scripts/backup-keygen.sh`, every archive is plaintext and offsite upload is refused.                                                                                                                                                                                                     | Create the keys before the first backup; sync only `*.enc` files ([Backups](#backups)).                                                                                                                                |
-| **Redis misconfigured**                          | The backend starts anyway, with caching off and per-process rate limiting.                                                                                                                                                                                                                          | Check for `✓ Redis connected` after every start and change ([Method 2, Step 7](#step-7-start-the-stack)).                                                                                                              |
+| **Redis misconfigured**                          | By default the backend starts anyway, with caching off and per-process rate limiting.                                                                                                                                                                                                               | `REDIS_REQUIRED=true`, so it refuses to start instead ([Method 2, Step 7](#step-7-start-the-stack)).                                                                                                                   |
 | **Port 3000 reachable from the virtual network** | Another VM on the network can forge `X-Forwarded-For`.                                                                                                                                                                                                                                              | The deny rule in [Method 1, Step 3](#step-3-lock-down-the-network-security-group).                                                                                                                                     |
 | **Building on a 4 GB VM**                        | The frontend build runs on the VM and can run out of memory or exhaust a burstable size's CPU credits.                                                                                                                                                                                              | Build on 8 GB; resize down afterwards if you must ([VM sizing](#vm-sizing)).                                                                                                                                           |
 | **Application Gateway or Front Door in front**   | Either one terminating TLS and forwarding plain HTTP makes Nginx send `X-Forwarded-Proto: http`, and the production backend, which enforces HTTPS, redirects forever. Front Door's addresses are also outside `TRUSTED_PROXY_IPS`, so every member shares one rate-limit bucket and one audited IP. | Have Nginx pass on the gateway's `X-Forwarded-Proto` rather than `$scheme`, and add the gateway's address ranges to `TRUSTED_PROXY_IPS` in `.env`. This guide does not use either service.                             |

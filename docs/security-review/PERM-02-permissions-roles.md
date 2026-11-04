@@ -1,9 +1,186 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), #3803 (pass 13, same stale-placeholder correction applied here), pass 14 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), #3803 (pass 13, same stale-placeholder correction applied here), #3871 (pass 14), pass 15 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 15 (2026-11-04, watchdog pickup) — 0 fixed, 0 new findings; PERM-10 and PERM-11 closed by an owner decision landed outside this rotation
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. Step 0 re-checked fresh against
+GitHub (`list_pull_requests`, state `open`): 0 results for a
+`claude/security-review-*` head. PR #4020 (Feature 00, Cross-cutting
+baseline, pass 16) had just merged with no rotation row of its own to flip
+(Feature 00 was already `✅` from PR #4019). Row 01 (Auth & session
+lifecycle) is `✅`; row 02 (Permissions & roles) is the next `⬜` row, read
+directly off a freshly-pulled `main`.
+
+**Baseline:** `e1c9ec0d0` (PR #3871's merge, pass 14). **Head:** current
+`main` (`3087fdaf5`, PR #4020's merge). `git diff --stat` against every one
+of the eleven files/pairs this feature tracks (`dependencies.py`,
+`core/permissions.py`, `roles.py` + `role_service.py`,
+`operational_ranks.py` + `operational_rank_service.py`, `officers.py` +
+`officer_service.py`, `org_chart.py` + `org_chart_service.py`,
+`admin_continuity_service.py`, and the rank/role-assignment surface in
+`users.py`) is non-empty in four: `dependencies.py` (+25/-5),
+`operational_ranks.py` (+4), `users.py` (+52), `core/permissions.py` (+99).
+`roles.py`, `role_service.py`, `operational_rank_service.py`,
+`officers.py`, `officer_service.py`, `org_chart.py`, `org_chart_service.py`,
+and `admin_continuity_service.py` are byte-identical to pass 14.
+
+### Route inventory — re-enumerated by AST, not diffed
+
+**28 routes, unchanged from pass 14** — re-walked with the same AST method
+over all four endpoint files: `roles.py` (13), `operational_ranks.py` (7),
+`officers.py` (3), `org_chart.py` (5). `operational_ranks.py` changed but
+only by adding a dependency to three existing routes (below), not a new
+route decorator; the other three files are byte-identical to pass 14.
+
+### PERM-10 and PERM-11 — ✅ CLOSED (owner decision 2026-11-01, implemented by `1fd977dd0`)
+
+Both were FLAGGED, not fixed, at pass 12 and re-verified open through pass
+14 (`docs/KNOWN_LIMITATIONS.md`'s "Owner Decisions of 2026-11-01" already
+recorded both as resolved; this pass verifies the implementation rather than
+trusting that note). The commit landed outside this rotation
+(`1fd977dd0`, "security: build batch 1 of the owner's 2026-11-01
+decisions (Security & Auth)") but touches exactly this feature's files, so
+it gets the same scrutiny a rotation PR would.
+
+**PERM-10** (`create_member` and `update_user_profile`'s rank-assignment
+branch had no step-up, unlike the structurally identical `assign_user_roles`/
+`add_role_to_user`/`remove_role_from_user`): fixed per the narrower of the
+two options the pass-12 write-up itself offered — gate only the sensitive
+branch, not the whole handler.
+
+- `create_member` (`users.py:522-527`) calls `ensure_stepup` when
+  `user_data.rank or user_data.role_ids` is truthy, placed **after** both
+  `_enforce_rank_grant_ceiling` (`:470`) and `_enforce_role_grant_ceiling`
+  (`:518`) and **before** the `User` row is constructed — so a refused
+  step-up creates nobody, confirmed by reading the function body in order
+  (no early `db.add`/`flush` between the ceilings and the new check) and by
+  `test_a_refused_check_creates_nobody` in `tests/
+test_stepup_on_rank_and_role_grants.py`, which asserts the row is absent
+  after a `403`.
+- `update_user_profile` (`users.py:2267-2274`) calls `ensure_stepup` only
+  when `update_data.get("rank") and update_data["rank"] != user.rank` —
+  after the existing `_enforce_rank_grant_ceiling` call (`:2217`) and after
+  every other validation, so a save refused for an unrelated reason (e.g. an
+  invalid `member_status`) never prompts first. Read the three edge cases
+  the comment at `:2267` calls out directly against the code: the same rank
+  sent back is not a change (`update_data["rank"] != user.rank` false);
+  clearing a rank (`update_data["rank"] = None` at `:2250`, the branch that
+  runs when a save moves a member to the administrative class) is falsy and
+  does not prompt; a change to a genuinely different rank does. All three
+  are exercised by `tests/test_stepup_on_rank_and_role_grants.py`
+  (`test_the_same_rank_sent_back_does_not_ask`,
+  `test_clearing_a_rank_does_not_ask`,
+  `test_a_rank_change_asks_on_the_callers_session`).
+- Both call sites read the access token through the same
+  `access_token_from`/`request_access_token` helpers `dependencies.py`
+  extracted from `require_stepup`'s own body this pass (cookie first, bearer
+  header second) — confirmed by reading `require_stepup` itself: it now
+  calls `access_token_from(authorization, access_token)`, the identical
+  logic, so the two handler-level call sites and the existing dependency
+  agree on what "the caller's token" means. Neither handler is in
+  `STEPUP_HANDLERS` (`tests/test_mfa_policy.py`) — correct, since
+  `_handlers_with_stepup()` finds a whole-route dependency, and these two
+  calls are conditional, inside the handler body, exactly as the pass-12
+  write-up anticipated ("gate only the sensitive part" was the explicit
+  alternative to adding the handler to that set).
+
+**PERM-11** (rank CRUD had no step-up, unlike the structurally parallel role
+CRUD): fixed by adding `_stepup: User = Depends(require_stepup)` as the last
+parameter to `create_rank`, `update_rank`, and `delete_rank`
+(`operational_ranks.py:125,221,293`) — confirmed it follows (not precedes)
+the existing `require_permission` dependency in every case, and all three
+are now present in `STEPUP_HANDLERS`'s pinned set alongside `roles.py`'s
+four mutating routes (`("operational_ranks.py", "create_rank")`, `"update_
+rank"`, `"delete_rank")`, machine-checked by that file's own
+`_handlers_with_stepup() == STEPUP_HANDLERS` assertion rather than merely
+read as present. `reorder_ranks` correctly stays out of both the gate and
+the pinned set — it never touches the ceiling and grants nothing, same
+reasoning the pass-12 write-up gave for excluding it.
+
+**Why this is a closure, not a new finding:** the ceiling checks
+(`_enforce_rank_grant_ceiling`, `_enforce_role_grant_ceiling`) that already
+bounded both gaps are unchanged; what changed is that the identity behind a
+stolen live session is now re-verified before each of the four paths PERM-10/
+PERM-11 named, matching the five sibling paths (`assign_user_roles`, `roles.py`'s
+four mutating routes) that already carried the gate. No new permission string,
+no new OR-gate alternative, no change to `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS`
+seeding in this diff beyond what's covered under "Also reviewed" below.
+
+### Also reviewed this pass (no finding)
+
+- **`core/permissions.py` — three new modules' permissions registered
+  (`evaluations.*`, `history.*`, `prospective_members.view_all`).** None of
+  the three is this feature's own module, but seeding a new permission into
+  `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS` is exactly this feature's
+  cross-cutting concern (CLAUDE.md Pitfall #23's "a rank/position grant
+  reaching the database by way of a shared mutable object" class), so the
+  registrations were checked directly rather than trusted to the modules'
+  own feature rows: `EVALUATIONS_CONFIGURE`/`_MANAGE`/`_CONDUCT`/`_VIEW_ALL`/
+  `_DELETE` are seeded only to the `fire_chief` rank's `default_permissions`
+  (`core/permissions.py:1620-1624`); `HISTORY_VIEW`/`_MANAGE`/`_PUBLISH` only
+  to the dedicated `historian` position (`:2454-2456`);
+  `PROSPECTIVE_MEMBERS_VIEW_ALL` only to the same five officer-tier positions
+  that already carried `PROSPECTIVE_MEMBERS_MANAGE`. Confirmed by script
+  (parsing the `member` and `firefighter`/`_LINE_MEMBER_PERMISSIONS` blocks
+  directly) that none of the nine new permission strings appears in either
+  baseline. Evaluations and History modules' own endpoint-level review
+  (auth coverage, org-scoping, XSS-hardened markdown) is PR #4020's
+  (Feature 00 pass 16) territory, not re-derived here.
+- **`dependencies.py`'s `access_token_from`/`request_access_token` extraction**
+  — a pure refactor of `require_stepup`'s pre-existing cookie-then-bearer
+  token resolution into two reusable functions; read the full before/after
+  and confirmed the resolution order and the `scheme.lower() == "bearer" and
+bearer` truthiness check are byte-identical to the inlined version it
+  replaces, so `require_stepup`'s own behavior for every existing caller is
+  unchanged. `request_access_token` is a thin `Request`-object wrapper the
+  two new `create_member`/`update_user_profile` call sites use, since
+  neither has a `require_stepup` dependency parameter to read the header
+  from for them.
+- **`users.py`'s new `is_self` permission check ahead of
+  `_accepted_member_status_or_400`** (`users.py:2056-2090`-ish region,
+  landed in the same commit) — this is Feature 07's own finding (**USR-14**,
+  `docs/security-review/USR-07-users-organizations.md`), not a PERM concern;
+  confirmed it does not touch the rank/role grant-ceiling surface this
+  feature tracks and is not re-reported here.
+
+### Re-verified, not re-derived
+
+- **PERM-1 through PERM-9, PERM-12** — unaffected; `roles.py`, `role_service.py`,
+  `operational_rank_service.py`, `officers.py`, `officer_service.py`,
+  `org_chart.py`, `org_chart_service.py`, and `admin_continuity_service.py`
+  are all byte-identical to pass 14 (confirmed by the empty diffs above).
+  All remain fixed/closed.
+- **OR-gate alternatives** — `positions.*`/`roles.*`/`members.manage`/
+  `organization.update_settings`/`orgchart.manage` re-confirmed not seeded to
+  `member` or `firefighter`; unchanged since pass 14 (no grant to those four
+  gates changed this pass; the new permissions reviewed above are unrelated
+  strings).
+
+### Completion gate (pass 15)
+
+| Check                                                                                                 | Result                                                                         |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                       | ✅ 0 violations                                                                |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                              | ✅ clean, 2882 files unchanged                                                 |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                           | ✅ clean                                                                       |
+| `python3 scripts/validate_migrations.py --strict`                                                     | ✅ single head `b5e906ebdd7d`, 712 revisions                                   |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                     | ✅ 298 routes, 0 errors, 0 warnings                                            |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart or passkey or stepup"`) | ✅ 1792 passed, 1 pre-existing skip (environment-only: `py_vapid`/`pywebpush`) |
+| `cd frontend && npm run typecheck`                                                                    | n/a — no frontend files touched this pass                                      |
+| `npm run lint` (frontend)                                                                             | n/a — no frontend files touched this pass                                      |
+
+0 findings fixed this pass (none needed one), 0 new findings. PERM-10 and
+PERM-11 — both re-verified open through pass 14 — are now closed, by code
+that landed as an owner-decision batch rather than through this rotation's
+own branch.
 
 ---
 

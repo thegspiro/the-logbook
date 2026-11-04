@@ -6,6 +6,8 @@ const getStatus = vi.fn();
 vi.mock('../services/api-client', () => ({
   apiClient: {
     getStatus: () => getStatus() as unknown,
+    // The gate also renders the expired-session banner, which asks this.
+    hasSession: () => true,
   },
 }));
 

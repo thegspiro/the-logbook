@@ -6,12 +6,37 @@ Complete guide for submitting The Logbook to Unraid Community Applications.
 
 Before submitting, ensure you have:
 
-- [x] Docker image published to public registry (Docker Hub, GitHub Container Registry, etc.)
-- [x] XML template tested and working
-- [x] Icon/logo image (256x256 PNG, publicly accessible URL)
-- [x] Screenshots for Community Apps page
+- [ ] Docker image published to a public registry — see "Publishing the
+      image" below; nothing is published until a release tag is pushed
+- [ ] XML template tested on Unraid against the published image
+- [x] Icon/logo image (`static/logo.png`, publicly accessible URL)
+- [ ] Screenshots for Community Apps page
 - [x] Documentation complete
 - [x] GitHub repository public (or accessible)
+
+## Publishing the image
+
+The template runs `ghcr.io/thegspiro/the-logbook`, a single image holding the
+web interface (nginx, port 3000) and the API (uvicorn on 127.0.0.1:3001),
+built from `docker/combined/Dockerfile` via `docker-bake.hcl`.
+`.github/workflows/release-image.yml` builds it for amd64 and arm64 and pushes
+it to GHCR:
+
+1. **Push a release tag** — `git tag v1.2.3 && git push origin v1.2.3`. The
+   workflow publishes `:1.2.3`, `:1.2`, `:v1.2.3` and moves `:latest`, which
+   is what the template pulls. (A manual run from the Actions tab against a
+   branch publishes only `:sha-<commit>`, for trying an image without moving
+   `:latest`.)
+2. **After the first publish, make the package public**: the repository's
+   **Packages → the-logbook → Package settings → Change visibility**. GHCR
+   creates packages private, and Unraid pulls anonymously.
+3. **Install it on an Unraid server from the template** before submitting.
+
+Releases need an owner: somebody who tags them, checks the workflow went
+green, and answers when an update breaks an install.
+
+To build the same image locally: `docker buildx bake -f docker-bake.hcl
+combined --load`.
 
 ---
 
@@ -54,7 +79,7 @@ cp the-logbook.xml /boot/config/plugins/dockerMan/templates-user/
 **Recommended hosting:**
 
 ```
-https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png
+https://raw.githubusercontent.com/thegspiro/the-logbook/main/static/logo.png
 ```
 
 **Tips:**
@@ -132,7 +157,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 3. **Update XML URLs:**
    ```xml
    <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
-   <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png</Icon>
+   <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/static/logo.png</Icon>
    <Repository>ghcr.io/thegspiro/the-logbook:latest</Repository>
    <Support>https://github.com/thegspiro/the-logbook/issues</Support>
    <Project>https://github.com/thegspiro/the-logbook</Project>
@@ -299,7 +324,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 
 - [ ] Docker image published and publicly accessible
 - [ ] XML template tested on Unraid
-- [ ] All ports conflict-free (default: 7880, 7881)
+- [ ] All ports conflict-free (default: 7880; the API shares it under `/api`)
 - [ ] Volume paths use `/mnt/user/appdata/` convention
 - [ ] Environment variables documented
 - [ ] Icon uploaded and publicly accessible (256x256 PNG)

@@ -5,7 +5,11 @@
 # ============================================
 # Stage 1: Base
 # ============================================
-FROM python:3.14-slim as base
+# Pinned to the Python the test suites run on (actions/setup-python in
+# .github/workflows/ci.yml), owner decision 2026-11-01: an image must not run
+# an interpreter no test ever ran on. Move both together;
+# tests/test_image_runtime_versions.py fails when they differ.
+FROM python:3.13-slim as base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
