@@ -358,15 +358,15 @@ state through Redis. Raise the backend's 768 MB memory limit to match. MySQL's
 Every cloud option runs the Docker Compose stack on a VM; there is no Helm
 chart or Kubernetes manifest. Size the VM at 4 GB RAM or more.
 
-| Platform     | Typical VM                         | Guide                                                                                                                 |
-| ------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| AWS EC2      | `t3.medium` (4 GB), Ubuntu 22.04   | [aws.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md) — single VM, or RDS + ElastiCache |
-| Azure        | 4 GB VM, Ubuntu 22.04              | Universal installer on the VM                                                                                         |
-| Google Cloud | 4 GB Compute Engine VM             | Universal installer on the VM                                                                                         |
-| DigitalOcean | 4 GB Droplet                       | Universal installer on the Droplet                                                                                    |
-| Synology NAS | DSM 7.2+, Container Manager or SSH | [synology.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/synology.md)                         |
-| Proxmox      | LXC container with Docker          | [proxmox.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/proxmox.md)                           |
-| Unraid       | —                                  | [Unraid Deployment](Deployment-Unraid)                                                                                |
+| Platform     | Typical VM                           | Guide                                                                                                                                                  |
+| ------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| AWS EC2      | `t3.medium` (4 GB), Ubuntu 22.04     | [aws.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md) — single VM, or RDS + ElastiCache                                  |
+| Azure        | `Standard_B2ms` (8 GB), Ubuntu 22.04 | [azure.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md) — single VM, or Azure Database for MySQL + Azure Managed Redis |
+| Google Cloud | 4 GB Compute Engine VM               | Universal installer on the VM                                                                                                                          |
+| DigitalOcean | 4 GB Droplet                         | Universal installer on the Droplet                                                                                                                     |
+| Synology NAS | DSM 7.2+, Container Manager or SSH   | [synology.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/synology.md)                                                          |
+| Proxmox      | LXC container with Docker            | [proxmox.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/proxmox.md)                                                            |
+| Unraid       | —                                    | [Unraid Deployment](Deployment-Unraid)                                                                                                                 |
 
 On any VM: open only 22, 80 and 443 in the provider's firewall, install with
 the [universal installer](Deployment-Docker#universal-installer) or
@@ -374,7 +374,7 @@ the [universal installer](Deployment-Docker#universal-installer) or
 [HTTPS](#https-and-reverse-proxy).
 
 Managed MySQL and Redis (RDS and ElastiCache, Azure Database for MySQL and
-Azure Cache for Redis, and similar) go through
+Azure Managed Redis, and similar) go through
 [Docker → External Database and Redis](Deployment-Docker#external-database-and-redis).
 Use MySQL 8.0 with `utf8mb4` / `utf8mb4_unicode_ci`, Redis 7 with a password,
 and TLS to both.
