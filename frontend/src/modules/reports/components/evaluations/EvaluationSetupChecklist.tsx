@@ -196,14 +196,19 @@ export const EvaluationSetupChecklist: React.FC<EvaluationSetupChecklistProps> =
             ) : (
               <Circle className="text-theme-text-muted mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             )}
-            <div className="min-w-0 flex-1">
-              <p className="text-theme-text-primary font-medium">
-                {step.title}
-                <span className="sr-only">{step.done ? ' (done)' : ' (to do)'}</span>
-              </p>
-              <p className="text-theme-text-secondary text-sm">{step.detail}</p>
+            {/* The button sits under the text on a phone and beside it from
+                sm up: beside it at 320px, it left the text a column too narrow
+                for "evaluations" and the words spilled out (WCAG 1.4.10). */}
+            <div className="min-w-0 flex-1 sm:flex sm:items-start sm:justify-between sm:gap-3">
+              <div className="min-w-0">
+                <p className="text-theme-text-primary font-medium">
+                  {step.title}
+                  <span className="sr-only">{step.done ? ' (done)' : ' (to do)'}</span>
+                </p>
+                <p className="text-theme-text-secondary text-sm">{step.detail}</p>
+              </div>
+              {step.action && <div className="mt-2 shrink-0 sm:mt-0">{step.action}</div>}
             </div>
-            {step.action && <div className="shrink-0">{step.action}</div>}
           </li>
         ))}
       </ol>
