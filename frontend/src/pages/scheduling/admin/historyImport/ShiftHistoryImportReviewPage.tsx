@@ -158,6 +158,8 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
     apply(() => historyImportService.updateRow(importId, rowId, payload));
   const onRowDecision = (rowId: string, decision: MatchDecision | null) =>
     void onRowUpdate(rowId, { match_decision: decision });
+  const onDecideAll = (decision: MatchDecision) =>
+    void apply(() => historyImportService.decideProbableMatches(importId, decision));
   /** One request per row; the last response is the draft with all of them applied. */
   const onSplit = (rowIds: string[]) =>
     void apply(async () => {
@@ -370,6 +372,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
             onMappings={onMappings}
             onRowDecision={onRowDecision}
             onSplit={onSplit}
+            onDecideAll={onDecideAll}
           />
         )}
         {tab === 'rows' && (

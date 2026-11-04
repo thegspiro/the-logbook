@@ -17,6 +17,7 @@ import type {
   UnitMapping,
 } from '../../../../modules/scheduling/types/historyImport';
 import { UnitTargetKind } from '../../../../modules/scheduling/types/historyImport';
+import { positionLabel } from '../../../../modules/scheduling/utils/positionLabels';
 import { isSettled, RESOLUTION_LABELS, unitLabel } from './historyImportLabels';
 import RememberedBadge from './RememberedBadge';
 
@@ -73,6 +74,15 @@ const UnitRow: React.FC<{
 
   const ownUnits = analysis.options.units.filter((u) => u.kind === 'own');
   const outsideUnits = analysis.options.units.filter((u) => u.kind === 'external');
+  // An own unit whose apparatus record lists its seats: the reviewer can say
+  // which seat a member takes when the file names no position, so a crew on an
+  // ambulance is not seated as firefighters.
+  const ownTarget =
+    unit.target_kind === UnitTargetKind.OWN && unit.target_id
+      ? ownUnits.find((o) => o.id === unit.target_id)
+      : undefined;
+  const seats = ownTarget?.seats ?? [];
+  const seatId = `${selectId}-seat`;
 
   return (
     <li className="space-y-3 p-4">
@@ -125,6 +135,32 @@ const UnitRow: React.FC<{
           </select>
         </div>
       </div>
+
+      {ownTarget && seats.length > 0 && (
+        <div className="split-row gap-3 sm:items-center">
+          <label htmlFor={seatId} className="split-row-main text-theme-text-secondary text-sm">
+            Position for members on this unit when the file names none
+          </label>
+          <div className="split-row-aside sm:w-80">
+            <select
+              id={seatId}
+              className="form-input"
+              value={unit.default_seat ?? ''}
+              disabled={busy}
+              onChange={(e) => send({ action: 'own', id: ownTarget.id, default_seat: e.target.value || undefined })}
+            >
+              <option value="">
+                {seats.some((s) => s.toLowerCase() === 'firefighter') ? 'Firefighter' : 'Choose…'}
+              </option>
+              {seats.map((seat) => (
+                <option key={seat} value={seat}>
+                  {positionLabel(seat)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       {current === NEW_OUTSIDE && (
         <form

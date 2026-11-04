@@ -333,21 +333,27 @@ were chosen deliberately and are open for the owner to confirm or change:
 
 ## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
 
-**Resolved (Mobile App Access removed 2026-11-01; Public Information left on by default 2026-11-03).** Found in the workflow review's W01 third
-pass (`docs/workflow-review/W01-onboarding.md`).
+**✅ Resolved (Mobile App Access removed 2026-11-01; Public Information offered
+during setup 2026-11-03).** Found in the workflow review's W01 third pass
+(`docs/workflow-review/W01-onboarding.md`).
 
 - **Mobile App Access (W01-23) — resolved 2026-11-01.** Owner decision: remove
   it. It is no longer offered by the setup wizard or by Settings → Modules. The
   `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
   stored settings and the modules API do not change; nothing reads it.
-- **Public Information (W01-24) — resolved 2026-11-03.** Owner decision: leave
-  it on by default. Completing setup now writes only the modules setup asked
-  about from the answers; every other module keeps its declared default
-  (`modules_from_setup_answers` in `services/onboarding.py`, used by both
-  writers). Existing installations were backfilled by migration `289504a34d3c`
-  (owner decision 2026-11-03): Public Information turns on where setup stored
-  it off, but not where the audit log shows an administrator set it under
-  Settings → Modules. See `docs/UPGRADING.md`.
+- **Public Information (W01-24) — resolved 2026-11-03.** Owner decision
+  (2026-11-01, confirmed 2026-11-04 over a later "leave it on by default"
+  record): offer it during setup. It is in the Modules step under
+  Communication (`ONBOARDING_OFFERED_MODULES` and the wizard's module
+  registry), so what the department answers is what is stored. It has no
+  permissions of its own (its admin screens need `settings.manage`), so the
+  Positions step shows no row for it. Tested in
+  `tests/test_module_settings_defaults.py`. Every module setup does not ask
+  about keeps its declared default (`modules_from_setup_answers` in
+  `services/onboarding.py`, used by both writers). Existing installations were
+  backfilled by migration `289504a34d3c` (2026-11-03): Public Information turns
+  on where setup stored it off, but not where the audit log shows an
+  administrator set it under Settings → Modules. See `docs/UPGRADING.md`.
   **Still open, small:** an installation old enough to have no stored module
   settings at all has them built once, on first read, from its legacy
   onboarding record (`OrganizationService`), and that writer also stores Public
@@ -591,12 +597,12 @@ entry stays only while code, tests or `CLAUDE.md` still cite it by name.
 
 ## Dependencies
 
-| Item                                        | Status                             | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **PyMySQL held at 1.2.0**                   | Accepted by the owner (2026-10-05) | PyMySQL 1.2.1 (GHSA-x4f8-9hx9-hpp9) now sends `bytes` parameters as hex literals and replaced `pymysql.converters.escape_bytes_prefixed` with a string sentinel (1.2.3 only restored the _name_). aiomysql 0.3.2 — its latest release — imports that name and calls it for every `bytes` parameter, so with PyMySQL ≥ 1.2.1 every BLOB write fails with `TypeError: 'str' object is not callable` (caught by `tests/test_storefront_service.py::TestProductImages`). The advisory is an injection through the big5, gbk, sjis, cp932 and gb18030 connection charsets; this application connects with `DB_CHARSET=utf8mb4`, which is not affected. `requirements.txt` therefore pins 1.2.0 and `.github/dependabot.yml` ignores `pymysql >= 1.2.1`. **Owner decision pending when either changes:** lift both once aiomysql ships a compatible release; if pip-audit starts flagging 1.2.0 first, the alternative is to take PyMySQL ≥ 1.2.1 and replace aiomysql's `escape_bytes_prefixed` with the hex-literal encoding at startup. **Accepted by the owner (2026-10-05):** keep holding at 1.2.0 until aiomysql ships a compatible release, rather than shim `escape_bytes_prefixed`; the unaffected `utf8mb4` connection charset is why the hold is safe. |
-| **jsdom held at 30.0.1**                    | ⚠️ Open (2026-09-22)               | vitest replaces jsdom's `URL.createObjectURL` with a shim that copies each jsdom `Blob` into a Node `Blob`, and it locates jsdom's private implementation object by taking the _first_ own symbol of `new window.Blob()`. jsdom 30.1 changed that, so `blob[implSymbol]` is `undefined` and the shim throws `Cannot read properties of undefined (reading '_buffer')` from inside `URL.createObjectURL` — under vitest 4.1.11 and 5.0.1 alike, and with jsdom 30.1.0 and 30.1.1 alike. The four photo tests in `EquipmentCheckFormCounts.test.tsx` fail on it. It is test-environment only: jsdom is a devDependency and the shipped app never loads it. `frontend/package.json` and the root `package.json` therefore keep `jsdom` at 30.0.1, and `.github/dependabot.yml` ignores `jsdom >= 30.1.0`. Lift both once a vitest release handles jsdom ≥ 30.1.                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Images run newer runtimes than CI tests** | ⚠️ Open (2026-10-14)               | `backend/Dockerfile` builds on `python:3.14-slim` and `frontend/Dockerfile` on `node:26-alpine`, while the unit, integration, contract and frontend test jobs in `.github/workflows/ci.yml` run on Python 3.13 and Node 22, and `CLAUDE.md` names Python 3.13 and Node >= 22 as the toolchain. The Docker job (`tests/test_docker_integration.py`) does build both images and smoke-tests them — the backend container starts and listens, nginx serves the index — so a dependency that will not install or an app that will not boot on the newer runtime is caught. What no job catches is behaviour that differs at runtime once the app is up (a removed or changed stdlib API on a path the smoke test does not reach, a changed default): the test suites never run on the interpreter production uses. **Owner decision pending:** pin the images to what the suites test (`python:3.13-slim`, `node:22-alpine`), or move the test jobs to the versions the images ship (or test both).                                                                                                                                                                                                                                                              |
-| **No nested `frontend/package-lock.json`**  | ✅ Resolved (2026-08-05)           | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Item                                        | Status                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **PyMySQL held at 1.2.0**                   | Accepted by the owner (2026-10-05)                                                       | PyMySQL 1.2.1 (GHSA-x4f8-9hx9-hpp9) now sends `bytes` parameters as hex literals and replaced `pymysql.converters.escape_bytes_prefixed` with a string sentinel (1.2.3 only restored the _name_). aiomysql 0.3.2 — its latest release — imports that name and calls it for every `bytes` parameter, so with PyMySQL ≥ 1.2.1 every BLOB write fails with `TypeError: 'str' object is not callable` (caught by `tests/test_storefront_service.py::TestProductImages`). The advisory is an injection through the big5, gbk, sjis, cp932 and gb18030 connection charsets; this application connects with `DB_CHARSET=utf8mb4`, which is not affected. `requirements.txt` therefore pins 1.2.0 and `.github/dependabot.yml` ignores `pymysql >= 1.2.1`. **Owner decision pending when either changes:** lift both once aiomysql ships a compatible release; if pip-audit starts flagging 1.2.0 first, the alternative is to take PyMySQL ≥ 1.2.1 and replace aiomysql's `escape_bytes_prefixed` with the hex-literal encoding at startup. **Accepted by the owner (2026-10-05):** keep holding at 1.2.0 until aiomysql ships a compatible release, rather than shim `escape_bytes_prefixed`; the unaffected `utf8mb4` connection charset is why the hold is safe. |
+| **jsdom held at 30.0.1**                    | ⚠️ Open (2026-09-22)                                                                     | vitest replaces jsdom's `URL.createObjectURL` with a shim that copies each jsdom `Blob` into a Node `Blob`, and it locates jsdom's private implementation object by taking the _first_ own symbol of `new window.Blob()`. jsdom 30.1 changed that, so `blob[implSymbol]` is `undefined` and the shim throws `Cannot read properties of undefined (reading '_buffer')` from inside `URL.createObjectURL` — under vitest 4.1.11 and 5.0.1 alike, and with jsdom 30.1.0 and 30.1.1 alike. The four photo tests in `EquipmentCheckFormCounts.test.tsx` fail on it. It is test-environment only: jsdom is a devDependency and the shipped app never loads it. `frontend/package.json` and the root `package.json` therefore keep `jsdom` at 30.0.1, and `.github/dependabot.yml` ignores `jsdom >= 30.1.0`. Lift both once a vitest release handles jsdom ≥ 30.1.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Images run newer runtimes than CI tests** | ✅ Resolved (owner decision 2026-11-01: pin images to tested versions; built 2026-11-03) | `backend/Dockerfile` built on `python:3.14-slim` and `frontend/Dockerfile` on `node:26-alpine`, while every test job in `.github/workflows/ci.yml` runs on Python 3.13 and Node 22, so the suites never ran on the interpreter production used. **Resolved 2026-11-03:** the backend now builds on `python:3.13-slim` and both Node stages of the frontend on `node:22-alpine` (variants unchanged; tags, not digests, as before). The combined Unraid image (`docker/combined/Dockerfile`) is built on top of those two images rather than naming a runtime of its own, so it inherits the same versions. `tests/test_image_runtime_versions.py` reads the `setup-python` / `setup-node` versions out of every workflow and the `FROM` lines out of every Dockerfile and fails when they disagree, and also checks the `engines.node` floor in both `package.json` files names the same major — so the next bump has to move CI and the images together. `nginx:alpine` is not pinned: it runs no code the suites test. Tags float within a minor (`3.13-slim` takes each 3.13.x patch), which is the precision CI itself uses.                                                                                                                             |
+| **No nested `frontend/package-lock.json`**  | ✅ Resolved (2026-08-05)                                                                 | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Training Module
 
@@ -1935,36 +1941,70 @@ To run a batch now instead of waiting for the hour, the System Owner
 
 ## Unraid Community Apps Template — Not Installable Yet (2026-10-13)
 
-**Open decision.** `unraid/the-logbook.xml` is a Community Applications
-template for a single container, `ghcr.io/thegspiro/the-logbook:latest`,
-answering on 3000 (web) and 3001 (API). Two things stand between it and a
-working install:
+**Resolved (owner decision 2026-11-01: combined image; built 2026-11-03).**
+`unraid/the-logbook.xml` is a Community Applications template for a single
+container, `ghcr.io/thegspiro/the-logbook:latest`. Nothing built or published
+that image, and the project had no combined image to publish: it ships
+`backend/Dockerfile` (uvicorn on 3001) and `frontend/Dockerfile` (nginx on 80,
+forwarding `/api` to a host named `backend`) as two containers.
 
-- **Nothing builds or publishes that image.** No workflow pushes to ghcr.io,
-  and there is no root `Dockerfile`; `UNRAID-INSTALLATION.md` already warns
-  that a pull fails with "manifest unknown".
-- **The project has no combined image to publish.** It ships two:
-  `backend/Dockerfile` (uvicorn on 3001, fixed uid 1000) and
-  `frontend/Dockerfile` (nginx on port 80, forwarding `/api` to a host named
-  `backend`). Publishing either one under the template's name would not
-  give it a container that answers on both ports.
+**What was built:**
 
-The template is marked as a draft in its own header, its overview and its
-`Status:Beta` category, so nobody submits it as it stands. The settings no
-image reads were removed: `/app/data`, `PUID`/`PGID` (the backend runs as uid
-1000 whatever they say) and a placeholder donate link. The Docker Compose path
-(`unraid/QUICK-START.md`) remains the supported Unraid install.
+- **`docker/combined/Dockerfile`**, assembled by **`docker-bake.hcl`** from the
+  finished production stages of the two existing Dockerfiles (bake `target:`
+  contexts) rather than from a copy of their build steps. It starts from the
+  backend image — same Python, dependencies, `appuser` (uid 1000) and code —
+  adds Debian's nginx, and copies in the frontend image's bundle and its own
+  `frontend/nginx.conf`, rewritten at build time in exactly two places: it
+  listens on **3000** and proxies to **127.0.0.1:3001**. The build fails if
+  either rewrite matches nothing, then runs `nginx -t` as `appuser`.
+- **`docker/combined/entrypoint.sh`**, POSIX `sh`, starts uvicorn (same
+  `main:app`, same four workers, `WEB_CONCURRENCY` to change it) bound to
+  loopback and nginx in the foreground, and exits non-zero as soon as either
+  dies, stopping the other, so the restart policy brings both back. `docker
+stop` is forwarded to both. Migrations still run in the app's own startup,
+  as in the backend image. It refuses to start, naming the folder, if
+  `/app/uploads` or `/app/logs` is not writable by uid 1000.
+- **`.github/workflows/release-image.yml`** publishes it for `linux/amd64` and
+  `linux/arm64` on a pushed `v*.*.*` tag (`:1.2.3`, `:1.2`, `:v1.2.3`,
+  `:latest`) or a manual run (`:sha-…` only, so a trial run never moves
+  `:latest`), logging in with `GITHUB_TOKEN` under `packages: write` on that
+  job alone. Third-party actions are pinned to commit SHAs.
+- **The template** drops its draft markers and the API port mapping (the API
+  is reached through `/api` on the web port), and gains the settings the
+  production startup gate refuses to boot without — `SECURITY_ENFORCE_HTTPS`,
+  `COOKIE_SECURE`, `SECURITY_REQUIRE_TLS`, `DB_SSL`, `REDIS_SSL`,
+  `ENABLE_DOCS` — with the Unraid compose stack's defaults, plus
+  `TRUSTED_PROXY_IPS` for a reverse proxy in front of the container. Redis's
+  password is now required, as production already demanded.
 
-**To make it installable, choose one:**
+`tests/test_combined_image.py` holds the template, workflow, bake file,
+Dockerfile and entrypoint to one image name and one port, and
+`tests/test_docker_integration.py` builds the image and checks it serves the
+bundle. The separate images and every compose stack are unchanged.
 
-1. **A combined image**: nginx and the backend under one process supervisor,
-   plus a workflow that publishes it to ghcr.io on each release. That needs
-   package-write permission on the repository and someone owning releases.
-   MySQL, Redis and ClamAV stay separate containers the user installs (the
-   template already asks for their hosts).
-2. **Two templates**: publish the existing backend and frontend images and
-   split the template in two. The frontend's nginx would need the backend
-   address made configurable instead of the fixed `backend` hostname.
+**Still true, and not a code question:**
+
+- **It is installable only once a release is published.** Until somebody
+  pushes the first `v*.*.*` tag (or runs the workflow by hand from a tag),
+  `ghcr.io/thegspiro/the-logbook` does not exist and a pull fails with
+  "manifest unknown". After the first publish the GHCR package must be made
+  **public** in the repository's package settings, or Unraid cannot pull it
+  anonymously. **Someone has to own releases** — tagging, checking the
+  workflow went green, and the package visibility — and has not been named.
+- **The template has not been submitted to Community Applications.** That is
+  a manual step for a maintainer (`unraid/COMMUNITY-APP-SUBMISSION.md`), best
+  taken after an install from the published image has been tried on Unraid.
+- **Behind a reverse proxy, the client address and scheme the API sees come
+  from this container's nginx**, as with the separate frontend container:
+  without `TRUSTED_PROXY_IPS` every member is recorded under the proxy's
+  address, and `X-Forwarded-Proto` is always `http`.
+- **The container runs as uid 1000**, not Unraid's usual `nobody:users`
+  (99:100); the appdata folders must be writable by it. `PUID`/`PGID` are
+  still not supported.
+
+The Docker Compose path (`unraid/QUICK-START.md`) remains the fuller install,
+since it also runs MySQL, Redis, ClamAV and the nightly backup.
 
 Related and not changed here: `unraid/docker-compose-unraid.yml` also passes
 `PUID`/`PGID` to the backend and frontend, where nothing reads them either.
@@ -2719,9 +2759,8 @@ not, and remains unwired.
 ## Upgraded and Fresh Databases Still Differ (2026-10-20)
 
 A fresh install is built from the models (`main.py`'s fast path:
-`create_all`, then `MIGRATION_ONLY_FILES` and the seed files, then a stamp at
-head). An existing installation is built by the Alembic chain plus the startup
-column repair. A comparison of the two on 2026-10-20 found defects that are
+`create_all`, then the seed files, then a stamp at head). An existing
+installation is built by the Alembic chain plus the startup column repair. A comparison of the two on 2026-10-20 found defects that are
 now fixed:
 
 - duplicate RESTRICT foreign keys on 18 apparatus columns;
@@ -2730,26 +2769,34 @@ now fixed:
   (`f938324f8081` relaxed `training_waivers.end_date`; `6dce1364ff7e` made the
   other 99 NOT NULL everywhere).
 
-The differences below are **accepted** for now.
+The differences below are **accepted** for now, except the first two, which
+were resolved on 2026-11-03.
 `backend/tests/test_live_schema_drift.py` guards the fixed directions on CI's
 migrated database, nullability included. It deliberately does not assert
 these.
 
-**Tables only an upgraded database has: by design.** Three bookkeeping tables,
+**Tables only an upgraded database has.** ✅ **Resolved (owner decision
+2026-11-01: drop them; built 2026-11-03).** Three bookkeeping tables,
 `document_unfiled_backfill`, `facility_document_refile_backfill` and
-`facility_folder_tier_backfill`, are written by the 2026-10-11 folder backfills
-so their downgrades can move each document back. A fresh install never ran
-those backfills and has nothing to undo. Drop them only after deciding those
-downgrades are no longer needed.
+`facility_folder_tier_backfill`, were written by the 2026-10-11 folder
+backfills so their downgrades could move each document back. A fresh install
+never ran those backfills and had nothing to undo. Migration `d75ecbc15bae`
+drops them, so those backfills can no longer be undone: a downgrade past
+`dcb8a46ac50c` or `65128d5ccd50` now finds no record and leaves documents and
+folder permissions as they are.
 
-**Five tables that no code reads.** `compliance_policies`,
+**Five tables that no code read.** ✅ **Resolved (owner decision 2026-11-01:
+retire them; built 2026-11-03).** `compliance_policies`,
 `policy_acknowledgments`, `compliance_checklists`, `checklist_submissions` and
-`compliance_incidents` come from `20260201_0016`. Every installation has them,
-fresh ones included, because `MIGRATION_ONLY_FILES` replays that migration, but
-nothing under `backend/app/` references them. The facilities module's checklist
-tables are the separately named `facility_compliance_checklists` family.
-**Open decision:** retire them (this drops whatever rows a department has in
-them), or leave them as harmless empty tables.
+`compliance_incidents` came from `20260201_0016`. Every installation had them,
+fresh ones included, because `main.py` replayed that migration on a fresh
+install and on schema repair, but nothing under `backend/app/` referenced them.
+The facilities module's checklist tables are the separately named
+`facility_compliance_checklists` family and are untouched. `d75ecbc15bae` drops
+the five, losing any rows in them, and `main.py` no longer replays
+`20260201_0016`, so nothing rebuilds them. `20260201_0016`'s own downgrade can
+no longer run. `tests/test_drop_unused_compliance_and_backfill_tables.py`; the
+operator note is in `docs/UPGRADING.md`.
 
 **Server defaults only upgraded databases carry.** 133 columns have a server
 default (`0`, `1`, a sort order, `'pending'`) on an upgraded database and none
@@ -4683,7 +4730,15 @@ on 2026-10-06 once the owner had answered the plan's questions:
 
 ## Onboarding Cannot Be Resumed Across a Browser Restart (2026-08-15)
 
-**Status: accepted trade-off**, recorded because it is visible to installers and
+**✅ Resolved 2026-11-03 (owner decision 2026-11-01: show a banner).** When a
+setup step opens with typed answers and no session in this tab,
+`ExpiredSessionBanner` (rendered by `OnboardingGate` on every step) says the
+session has ended, that the answers shown are a draft kept on this device, and
+that the first step starts a new session (asking the System Owner to sign in
+once that account exists). The session identifier still does not survive a
+restart, by design. The history below is kept for context.
+
+**Status before 2026-11-03: accepted trade-off**, recorded because it is visible to installers and
 because the wizard's own behavior makes it look like a bug.
 
 The onboarding session identifier moved from `localStorage` to `sessionStorage`

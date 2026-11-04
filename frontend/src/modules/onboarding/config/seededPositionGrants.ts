@@ -50,7 +50,7 @@ export const MODULE_CHECKBOX_TIERS: Readonly<Record<string, ModuleCheckboxTiers>
   minutes: { view: true, manage: true },
   reports: { view: true, manage: true },
   notifications: { view: true, manage: true },
-  mobile: { view: false, manage: false },
+  public_info: { view: false, manage: false },
   integrations: { view: false, manage: true },
   prospective_members: { view: true, manage: true },
   positions: { view: true, manage: true },

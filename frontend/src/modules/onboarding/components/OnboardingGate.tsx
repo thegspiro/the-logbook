@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import { apiClient } from '../services/api-client';
+import { ExpiredSessionBanner } from './ExpiredSessionBanner';
 import {
   getOnboardingGateAnswer,
   setOnboardingGateAnswer,
@@ -70,7 +71,12 @@ export const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <ExpiredSessionBanner />
+      {children}
+    </>
+  );
 };
 
 export default OnboardingGate;

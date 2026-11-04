@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.models.membership_pipeline import (
     AssignmentRole,
     ProspectAssignment,
+    ProspectInterview,
     ProspectiveMember,
 )
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
@@ -281,6 +282,85 @@ class ProspectAssignmentService:
             logger.error(
                 "Failed to send assignment email for prospect {}: {}", prospect.id, e
             )
+
+    async def notify_interviewers(
+        self, prospect: ProspectiveMember, step_id: str, stage_name: str
+    ) -> List[str]:
+        """Ask the applicant's interviewers to interview them at this stage.
+
+        Every assigned interviewer except one who has already logged an
+        interview for this stage: an applicant moved back onto a stage they
+        already passed has those interviews still standing. Membership-admin
+        email, as the case managers' notice is. Best-effort: the move stands
+        whether or not this goes out. Returns the ids of the members it was
+        sent to, so the case managers' notice for the same arrival can skip
+        them.
+        """
+        from app.services.email_policy import (
+            EmailKind,
+            department_required_kinds,
+            recipients_for,
+        )
+
+        try:
+            interviewed = select(ProspectInterview.interviewer_id).where(
+                ProspectInterview.prospect_id == str(prospect.id),
+                ProspectInterview.step_id == str(step_id),
+                ProspectInterview.interviewer_id.isnot(None),
+            )
+            result = await self.db.execute(
+                select(User)
+                .join(ProspectAssignment, ProspectAssignment.user_id == User.id)
+                .where(
+                    ProspectAssignment.prospect_id == str(prospect.id),
+                    ProspectAssignment.organization_id == str(prospect.organization_id),
+                    ProspectAssignment.role == AssignmentRole.INTERVIEWER.value,
+                    User.organization_id == str(prospect.organization_id),
+                    User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    User.deleted_at.is_(None),
+                    User.email.isnot(None),
+                    User.id.notin_(interviewed),
+                )
+            )
+            interviewers = list(result.scalars().unique().all())
+            if not interviewers:
+                return []
+            org = await self.db.get(Organization, prospect.organization_id)
+            if org is None:
+                return []
+            recipients = recipients_for(
+                interviewers,
+                EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
+            )
+
+            from app.services.email_service import EmailService
+
+            email_service = EmailService(org)
+            frontend_url = getattr(settings, "FRONTEND_URL", "") or ""
+            interview_url = (
+                f"{frontend_url}/prospective-members/{prospect.id}/interview"
+            )
+            told: List[str] = []
+            for member in recipients:
+                if await email_service.send_interview_requested_email(
+                    to_email=member.email,
+                    recipient_name=member.full_name,
+                    applicant_name=prospect.full_name,
+                    stage_name=stage_name,
+                    interview_url=interview_url,
+                    db=self.db,
+                    organization_id=str(org.id),
+                ):
+                    told.append(str(member.id))
+            return told
+        except Exception as e:
+            logger.error(
+                "Failed to ask interviewers of prospect {} to interview: {}",
+                prospect.id,
+                e,
+            )
+            return []
 
     async def notify_case_managers(
         self,

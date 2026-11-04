@@ -2979,6 +2979,51 @@ class EmailService:
         )
         return success_count > 0
 
+    async def send_interview_requested_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        stage_name: str,
+        interview_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Ask an assigned interviewer to interview their applicant."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML,
+            DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT,
+            DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_INTERVIEW_REQUESTED,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "stage_name": stage_name,
+                "interview_url": interview_url,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML,
+            default_text=DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_INTERVIEW_REQUESTED.value,
+        )
+        return success_count > 0
+
     async def send_applicant_needs_attention_email(
         self,
         to_email: str,

@@ -366,13 +366,13 @@ the folder be left out, and a move could set it to null, so a document taken
 _out_ of a gated folder (Finance, Member Separations, a personal folder)
 became readable by the whole organization.
 
-| Finding                                                                                                    | Fix                                                                                                                                       |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /documents/upload` with no `folder_id` stored an unfiled document                                    | Files it into General Documents (created with the system roots if missing), behind the same write check as any folder                     |
-| `PATCH /documents/{id}` with `folder_id: null` moved a document out of its folder's rights, unchecked      | `null` means General Documents and goes through the destination write check                                                               |
-| Unfiled documents already stored                                                                           | Migration `dcb8a46ac50c` files them into their organization's General root; reversible, recorded in `document_unfiled_backfill`           |
-| Linking an unfiled document to an apparatus moved it behind apparatus rights with only read access checked | Re-filing it takes `documents.manage`                                                                                                     |
-| The facility Files tab relied on uploading unfiled and re-filing on link                                   | The link also files the caller's _own_ upload out of General into the facility folder; someone else's library document is never pulled in |
+| Finding                                                                                                    | Fix                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /documents/upload` with no `folder_id` stored an unfiled document                                    | Files it into General Documents (created with the system roots if missing), behind the same write check as any folder                                 |
+| `PATCH /documents/{id}` with `folder_id: null` moved a document out of its folder's rights, unchecked      | `null` means General Documents and goes through the destination write check                                                                           |
+| Unfiled documents already stored                                                                           | Migration `dcb8a46ac50c` files them into their organization's General root; no longer reversible since `d75ecbc15bae` dropped its record (2026-11-03) |
+| Linking an unfiled document to an apparatus moved it behind apparatus rights with only read access checked | Re-filing it takes `documents.manage`                                                                                                                 |
+| The facility Files tab relied on uploading unfiled and re-filing on link                                   | The link also files the caller's _own_ upload out of General into the facility folder; someone else's library document is never pulled in             |
 
 Who can read a moved document is unchanged — General Documents is the shared
 library, open to `documents.view` — but its folder now decides it. The upload

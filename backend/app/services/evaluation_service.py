@@ -994,6 +994,211 @@ class EvaluationService:
             "data": values,
         }
 
+    async def preview_options(
+        self, organization_id: str, can_use_member_data: bool
+    ) -> Dict[str, Any]:
+        """Periods a template preview can be measured over, and — only for a
+        builder who may read members' figures — the members to measure."""
+        periods = (
+            (
+                await self.db.execute(
+                    select(EvaluationPeriod)
+                    .where(EvaluationPeriod.organization_id == organization_id)
+                    .order_by(EvaluationPeriod.start_date.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        members: List[Dict[str, str]] = []
+        if can_use_member_data:
+            people = (
+                (
+                    await self.db.execute(
+                        select(User).where(
+                            User.organization_id == organization_id,
+                            User.deleted_at.is_(None),
+                            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            members = [
+                {"id": u.id, "name": u.full_name}
+                for u in sorted(
+                    people, key=lambda u: (u.last_name or "", u.first_name or "")
+                )
+            ]
+        return {
+            "can_use_member_data": can_use_member_data,
+            "members": members,
+            "periods": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "start_date": p.start_date,
+                    "end_date": p.end_date,
+                    "is_closed": p.is_closed,
+                }
+                for p in periods
+            ],
+        }
+
+    async def preview_template(
+        self,
+        organization_id: str,
+        definition: TemplateDefinition,
+        member_id: Optional[str],
+        period_id: Optional[str],
+    ) -> Dict[str, Any]:
+        """A form filled with figures, as an evaluation drafted from it would
+        show them, computed now and stored nowhere.
+
+        With a member, their real figures over the period, measured to today
+        as ``live_data`` measures them. Without one, fixed sample figures, and
+        officer-only sections are shown so the builder sees the whole form.
+        The caller is responsible for deciding who may pass a member.
+        """
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = today_in(tz)
+        period: Optional[EvaluationPeriod] = None
+        if period_id:
+            period = (
+                await self.db.execute(
+                    select(EvaluationPeriod).where(
+                        EvaluationPeriod.id == period_id,
+                        EvaluationPeriod.organization_id == organization_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if period is None:
+                raise ValueError("Review period not found.")
+        else:
+            period = (
+                await self.db.execute(
+                    select(EvaluationPeriod)
+                    .where(EvaluationPeriod.organization_id == organization_id)
+                    .order_by(EvaluationPeriod.start_date.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        if period is not None:
+            start, end = period.start_date, period.end_date
+        else:
+            # No period yet: the first-time builder still gets a preview,
+            # over the year so far.
+            start, end = date(today.year, 1, 1), today
+        base: Dict[str, Any] = {
+            "period_name": period.name if period else None,
+            "period_start": start,
+            "period_end": end,
+            "overall_levels": OVERALL_LEVELS,
+        }
+
+        if member_id is None:
+            keys = sources_used(definition, True)
+            values = {key: self._sample_entry(key, end) for key in keys}
+            snapshot = build_snapshot(
+                Coverage(start, end, ()), values, definition, True
+            )
+            return {
+                **base,
+                "sample": True,
+                "includes_officer_sections": True,
+                "sources": [self._source_view(k) for k in keys],
+                "data": values,
+                "suggested_scores": snapshot["suggested_scores"],
+                "note": "Sample figures. Choose a member to see real ones.",
+            }
+
+        member = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == member_id,
+                    User.organization_id == organization_id,
+                    User.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if member is None:
+            raise ValueError("Member not found.")
+        officer = bool(member.rank) and member.rank in definition.officer_ranks
+        keys = sources_used(definition, officer)
+        base.update(
+            {
+                "sample": False,
+                "member_name": member.full_name,
+                "includes_officer_sections": officer,
+                "sources": [self._source_view(k) for k in keys],
+            }
+        )
+        if start > today:
+            return {
+                **base,
+                "data": {},
+                "suggested_scores": {},
+                "note": "This review period has not started yet.",
+            }
+        data_service = EvaluationDataService(self.db)
+        # Measured to today, not the period's end, as live_data is: a figure
+        # for days that have not happened yet would read as a shortfall.
+        coverage = await data_service.coverage_for(
+            organization_id, member, start, min(end, today), tz
+        )
+        if coverage is None:
+            return {
+                **base,
+                "data": {},
+                "suggested_scores": {},
+                "note": f"{member.full_name} has no full month of service in "
+                "this period.",
+            }
+        values = await data_service.compute(organization_id, member, coverage, keys, tz)
+        snapshot = build_snapshot(coverage, values, definition, officer)
+        return {
+            **base,
+            "coverage_start": coverage.start,
+            "coverage_end": coverage.end,
+            "data": values,
+            "suggested_scores": snapshot["suggested_scores"],
+            "note": None,
+        }
+
+    @staticmethod
+    def _sample_entry(key: str, period_end: date) -> Dict[str, Any]:
+        """A plausible figure for a source, in the shape the real one has, so
+        a builder can see how an item will read before any member is chosen."""
+        unit = DATA_SOURCES_BY_KEY[key].unit
+        if key == "certifications.current":
+            return {
+                "available": True,
+                "value": [
+                    {"label": "Firefighter I", "expires_on": None},
+                    {
+                        "label": "EMT",
+                        "expires_on": date(
+                            period_end.year + 1, period_end.month, 1
+                        ).isoformat(),
+                    },
+                ],
+            }
+        if key == "positions.held":
+            return {"available": True, "value": [{"label": "Engine Company"}]}
+        sample: Dict[str, Any] = {
+            "hours": 36.0,
+            "percent": 88.0,
+            "count": 14,
+            "rating": 4.1,
+        }
+        entry: Dict[str, Any] = {"available": True, "value": sample[unit]}
+        if key == "shifts.hours":
+            entry["external_hours"] = 0.0
+        elif key == "shifts.count":
+            entry["external_shifts"] = 0
+        return entry
+
     @staticmethod
     def _source_view(key: str) -> Dict[str, Any]:
         source = DATA_SOURCES_BY_KEY[key]

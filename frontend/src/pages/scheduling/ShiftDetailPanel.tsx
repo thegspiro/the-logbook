@@ -77,7 +77,7 @@ import { blankToNull } from '../../utils/formValues';
 import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
-import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus, ShiftDutyType } from '../../constants/enums';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
 import { PrintDocumentButton } from '../../components/PrintDocumentButton';
@@ -1397,6 +1397,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   {platoonsEnabled && shift.platoon && (
                     <span className="mt-1.5 inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
                       Platoon {shift.platoon}
+                    </span>
+                  )}
+                  {shift.duty_type === ShiftDutyType.ON_CALL && (
+                    <span className="mt-1.5 ml-1 inline-block rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-800 dark:text-sky-300">
+                      On call (recall)
                     </span>
                   )}
                 </div>

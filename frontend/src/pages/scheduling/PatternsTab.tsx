@@ -178,7 +178,10 @@ export const PatternsTab: React.FC = () => {
     setLoading(true);
     try {
       const [patternsData, templatesData] = await Promise.all([
-        schedulingService.getPatterns(),
+        // Paused patterns too: pausing is what sets one inactive, and the list
+        // is where it is resumed. Deleting removes the row, so nothing deleted
+        // comes back with them.
+        schedulingService.getPatterns({ active_only: false }),
         // Deactivated templates too: a pattern that names one still shows its
         // name. The pickers below offer only `activeTemplates`.
         schedulingService.getTemplates({ active_only: false }),

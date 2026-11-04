@@ -787,7 +787,10 @@ jobs:
   docker-build:
     name: Docker Image Build & Container Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45, not 30: TestCombinedImage builds the backend and frontend a second
+    # time on a fresh docker-container builder (the driver the release
+    # workflow uses), which shares no layer cache with the daemon's builds.
+    timeout-minutes: 45
     # No `needs:` — see the note on backend-test-integration. This was behind
     # `needs: [backend-lint, frontend-lint]` for the same fail-fast reason and
     # paid the same re-queue penalty.

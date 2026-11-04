@@ -1311,6 +1311,19 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'integrations',
       },
       {
+        path: '/integrations/historical-import',
+        label: 'Historical data import',
+        permission: 'integrations.historical_import',
+        module: 'integrations',
+        note: 'IT Manager only by default',
+      },
+      {
+        path: '/integrations/historical-import/:importId',
+        label: 'Historical data import — one export',
+        permission: 'integrations.historical_import',
+        module: 'integrations',
+      },
+      {
         path: '/claude/authorize',
         label: 'Connect Claude (consent)',
         module: 'integrations',

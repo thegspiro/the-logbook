@@ -25,12 +25,15 @@ import type {
   EvaluationPeriod,
   EvaluationPeriodCreate,
   EvaluationPeriodUpdate,
+  EvaluationStarter,
   EvaluationTemplateCreate,
   EvaluationTemplateDetail,
   EvaluationTemplateSummary,
   EvaluationTemplateUpdate,
+  PreviewOptions,
   PublishResult,
   TemplateDefinition,
+  TemplatePreview,
   TemplateWorkflow,
 } from '../types/evaluations';
 
@@ -90,6 +93,26 @@ export const evaluationTemplatesService = {
 
   async builderOptions(): Promise<BuilderOptions> {
     const response = await api.get<BuilderOptions>('/evaluations/builder-options');
+    return response.data;
+  },
+
+  async starters(): Promise<EvaluationStarter[]> {
+    const response = await api.get<EvaluationStarter[]>('/evaluations/templates/starters');
+    return asArray(response.data);
+  },
+
+  async previewOptions(): Promise<PreviewOptions> {
+    const response = await api.get<PreviewOptions>('/evaluations/templates/preview-options');
+    return response.data;
+  },
+
+  /** The form as it stands in the builder, unsaved edits included. No member previews with sample figures. */
+  async preview(definition: TemplateDefinition, memberId?: string, periodId?: string): Promise<TemplatePreview> {
+    const response = await api.post<TemplatePreview>('/evaluations/templates/preview', {
+      definition,
+      member_id: memberId || undefined,
+      period_id: periodId || undefined,
+    });
     return response.data;
   },
 };
