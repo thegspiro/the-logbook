@@ -66,6 +66,7 @@ from app.services.training_compliance import (
     evaluate_member_requirement_detail,
     load_credited_shift_dates,
     load_graded_records,
+    load_held_sessions,
     member_join_date,
     tally_standing,
 )
@@ -423,6 +424,7 @@ class EvaluationDataService:
             as_of,
             grading.include_current_month,
         )
+        held_sessions = await load_held_sessions(self.db, str(org_id), requirements)
         waivers = await fetch_user_waivers(self.db, org_id, loaded.id)
         member_grading = grading.for_member(loaded, requirements)
         statuses = [
@@ -434,6 +436,7 @@ class EvaluationDataService:
                 org_include_current_month=grading.include_current_month,
                 join_date=member_join_date(loaded),
                 shift_dates=shift_dates.get(str(loaded.id), []),
+                held_sessions=held_sessions,
             ).status
             for req in member_grading.requirements
         ]

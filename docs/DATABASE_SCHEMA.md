@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**353 tables · 5765 columns · 1183 foreign keys**
+**354 tables · 5771 columns · 1186 foreign keys**
 
 ---
 
@@ -778,7 +778,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 49 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 50 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 51 | Training Requirement model |
+| [`training_session_requirements`](#training_session_requirements) | `TrainingSessionRequirement` | 5 | A session that counts toward a SESSION_ATTENDANCE requirement. |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 29 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
@@ -11617,7 +11618,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`, `evaluated_shifts`, `transports`, `refusals`) | no | IDX |  |  |
+| `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`, `evaluated_shifts`, `transports`, `refusals`, `session_attendance`) | no | IDX |  |  |
 | `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`, `policy_acknowledgment`) | yes |  |  |  |
 | `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
@@ -11638,6 +11639,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `checklist_items` | JSON | yes |  |  |  |
 | `passing_score` | FLOAT | yes |  |  |  |
 | `max_attempts` | INTEGER | yes |  |  |  |
+| `required_attendance_pct` | FLOAT | yes |  |  |  |
 | `frequency` | ENUM(`annual`, `biannual`, `quarterly`, `monthly`, `one_time`) | no |  |  |  |
 | `year` | INTEGER | yes |  |  |  |
 | `due_date_type` | ENUM(`calendar_period`, `rolling`, `certification_period`, `fixed_date`) | yes |  | `'calendar_period'` |  |
@@ -11671,6 +11673,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_requirement_type` (`requirement_type`)
 - `idx_requirement_year` (`organization_id`, `year`)
 - `ix_training_requirements_active` (`active`)
+
+### `training_session_requirements`
+
+**TrainingSessionRequirement** · `app/models/training.py`
+
+> A session that counts toward a SESSION_ATTENDANCE requirement. A link table rather than ``TrainingSession.requirement_id``: that column credits one requirement with the session's training, while one drill usually belongs to several attendance requirements at once (the same drills graded at 60% for active members and 30% for senior members). A session linked to none is optional and counts against nobody.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `session_id` | VARCHAR(36) | no | FK |  | → `training_sessions.id` ON DELETE CASCADE |
+| `requirement_id` | VARCHAR(36) | no | FK, IDX |  | → `training_requirements.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_training_session_requirement_org` (`organization_id`)
+- `ix_training_session_requirements_requirement_id` (`requirement_id`)
+
+**Constraints**
+
+- UNIQUE `uq_training_session_requirement` (`session_id`, `requirement_id`)
 
 ### `training_sessions`
 
@@ -12691,7 +12716,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (291 references)
+### → `organizations` (292 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12975,6 +13000,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_programs` | `organization_id` | CASCADE | no |
 | `training_records` | `organization_id` | CASCADE | no |
 | `training_requirements` | `organization_id` | CASCADE | no |
+| `training_session_requirements` | `organization_id` | CASCADE | no |
 | `training_sessions` | `organization_id` | CASCADE | no |
 | `training_submissions` | `organization_id` | CASCADE | no |
 | `training_waivers` | `organization_id` | CASCADE | no |
@@ -13150,6 +13176,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_signatures` | `minutes_id` | CASCADE | no |
 | `minutes_suggestions` | `minutes_id` | CASCADE | no |
 
+### → `training_requirements` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `requirement_id` | SET NULL | yes |
+| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
+| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
+| `knowledge_tests` | `requirement_id` | SET NULL | yes |
+| `program_requirements` | `requirement_id` | CASCADE | no |
+| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
+| `requirement_progress` | `requirement_id` | CASCADE | no |
+| `skill_templates` | `requirement_id` | SET NULL | yes |
+| `skill_tests` | `requirement_id` | SET NULL | yes |
+| `training_session_requirements` | `requirement_id` | CASCADE | no |
+| `training_sessions` | `requirement_id` | SET NULL | yes |
+
 ### → `prospective_members` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -13179,21 +13221,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
 | `training_records` | `course_id` | SET NULL | yes |
 | `training_sessions` | `course_id` | SET NULL | yes |
-
-### → `training_requirements` (10 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `requirement_id` | SET NULL | yes |
-| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
-| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
-| `knowledge_tests` | `requirement_id` | SET NULL | yes |
-| `program_requirements` | `requirement_id` | CASCADE | no |
-| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
-| `requirement_progress` | `requirement_id` | CASCADE | no |
-| `skill_templates` | `requirement_id` | SET NULL | yes |
-| `skill_tests` | `requirement_id` | SET NULL | yes |
-| `training_sessions` | `requirement_id` | SET NULL | yes |
 
 ### → `elections` (9 references)
 
@@ -13354,6 +13381,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `program_requirements` | `phase_id` | CASCADE | yes |
 | `training_sessions` | `phase_id` | SET NULL | yes |
 
+### → `training_sessions` (6 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_classes` | `training_session_id` | SET NULL | yes |
+| `multi_agency_trainings` | `training_session_id` | CASCADE | yes |
+| `skill_checkoffs` | `session_id` | SET NULL | yes |
+| `training_approvals` | `training_session_id` | CASCADE | no |
+| `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
+| `training_session_requirements` | `session_id` | CASCADE | no |
+
 ### → `budget_categories` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -13403,16 +13441,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_messages` | `suggestion_id` | CASCADE | no |
 | `suggestion_status_events` | `suggestion_id` | CASCADE | no |
 | `suggestion_votes` | `suggestion_id` | CASCADE | no |
-
-### → `training_sessions` (5 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_cohort_classes` | `training_session_id` | SET NULL | yes |
-| `multi_agency_trainings` | `training_session_id` | CASCADE | yes |
-| `skill_checkoffs` | `session_id` | SET NULL | yes |
-| `training_approvals` | `training_session_id` | CASCADE | no |
-| `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
 
 ### → `department_messages` (4 references)
 

@@ -9,7 +9,7 @@ report exports, and xAPI ingestion.
 import io
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Mapping, Optional, Sequence
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +39,9 @@ from app.models.training import (
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, Position, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    HeldSession,
     load_credited_shift_dates,
+    load_held_sessions,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -93,7 +95,12 @@ def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
 
 
 def _requirement_cells(
-    requirements, user, records, today: date, shift_dates: List[date]
+    requirements,
+    user,
+    records,
+    today: date,
+    shift_dates: List[date],
+    held_sessions: Mapping[str, Sequence[HeldSession]],
 ) -> List[str]:
     """One export cell per requirement column for ``user``.
 
@@ -111,7 +118,12 @@ def _requirement_cells(
             cells.append("N/A")
             continue
         detail = TrainingService.evaluate_requirement_detail(
-            req, records, today, join_date=join_date, shift_dates=shift_dates
+            req,
+            records,
+            today,
+            join_date=join_date,
+            shift_dates=shift_dates,
+            held_sessions=held_sessions,
         )
         if detail.get("catch_up_deadline"):
             cells.append(f"Due {detail['catch_up_deadline']}")
@@ -1175,6 +1187,9 @@ class ReportExportService:
         shifts_by_user = await load_credited_shift_dates(
             self.db, organization_id, [u.id for u in users], requirements, today, True
         )
+        held_sessions = await load_held_sessions(
+            self.db, str(organization_id), requirements
+        )
 
         # Written and sent one member at a time (AH-16).
         async def chunks() -> AsyncIterator[str]:
@@ -1212,6 +1227,7 @@ class ReportExportService:
                         records,
                         today,
                         shifts_by_user.get(str(user.id), []),
+                        held_sessions,
                     )
                 )
 
@@ -1359,6 +1375,9 @@ class ReportExportService:
             True,
             full_history=True,
         )
+        held_sessions = await load_held_sessions(
+            self.db, str(organization_id), all_requirements
+        )
 
         for user in users:
             # Only what grades this member — by type, role, and grandfathering.
@@ -1391,6 +1410,7 @@ class ReportExportService:
                     today,
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(user.id), []),
+                    held_sessions=held_sessions,
                 )
                 statuses.append(_detail_status(detail))
                 if (
@@ -1484,6 +1504,9 @@ class ReportExportService:
             generated_on,
             True,
         )
+        held_sessions = await load_held_sessions(
+            self.db, str(organization_id), requirements
+        )
 
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=letter)
@@ -1549,6 +1572,7 @@ class ReportExportService:
                 records,
                 generated_on,
                 shifts_by_user.get(str(user.id), []),
+                held_sessions,
             )
             for i, status_text in enumerate(cells):
                 x = req_col_start + i * 70

@@ -81,6 +81,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_calls: seed?.required_calls || undefined,
     required_transports: seed?.required_transports || undefined,
     required_refusals: seed?.required_refusals || undefined,
+    required_attendance_pct: seed?.required_attendance_pct || undefined,
     evaluation_excludes_lowest_rating: seed?.evaluation_excludes_lowest_rating ?? false,
     required_call_types: seed?.required_call_types ?? ([] as string[]),
     checklist_items: seed?.checklist_items ?? [],
@@ -195,6 +196,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       toast.error('Required refusals must be set for a refusals requirement');
       return;
     }
+    if (formData.requirement_type === 'session_attendance' && !formData.required_attendance_pct) {
+      toast.error('Attendance percentage must be set for a session attendance requirement');
+      return;
+    }
     if (formData.requirement_type === 'knowledge_test' && !formData.passing_score) {
       toast.error('Passing score must be set for a knowledge test requirement');
       return;
@@ -252,6 +257,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
       required_transports: formData.requirement_type === 'transports' ? (formData.required_transports ?? null) : null,
       required_refusals: formData.requirement_type === 'refusals' ? (formData.required_refusals ?? null) : null,
+      required_attendance_pct:
+        formData.requirement_type === 'session_attendance' ? (formData.required_attendance_pct ?? null) : null,
       // A boolean on every save: the column refuses null.
       evaluation_excludes_lowest_rating:
         formData.requirement_type === 'evaluated_shifts' && formData.evaluation_excludes_lowest_rating,
@@ -467,6 +474,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <option value="evaluated_shifts">Evaluated Shifts</option>
                   <option value="transports">Transports</option>
                   <option value="refusals">Refusals</option>
+                  <option value="session_attendance">Session Attendance</option>
                 </select>
               </div>
 
@@ -611,6 +619,41 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                 onRefusalsChange={(v) => setFormData({ ...formData, required_refusals: v ? Number(v) : undefined })}
                 onExcludesLowestChange={(v) => setFormData({ ...formData, evaluation_excludes_lowest_rating: v })}
               />
+
+              {formData.requirement_type === 'session_attendance' && (
+                <div>
+                  <label
+                    htmlFor="req-attendance-pct"
+                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                  >
+                    Sessions to Attend (%){' '}
+                    <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                      *
+                    </span>
+                  </label>
+                  <input
+                    id="req-attendance-pct"
+                    type="number"
+                    value={formData.required_attendance_pct || ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        required_attendance_pct: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="e.g., 60"
+                    min="1"
+                    max="100"
+                    aria-describedby="req-attendance-pct-help"
+                  />
+                  <p id="req-attendance-pct-help" className="text-theme-text-muted mt-1 text-xs">
+                    Of the training sessions linked to this requirement and held in the period. Link a session from its
+                    event page; sessions not linked are optional. A waiver or leave covering a session&apos;s day
+                    excuses the member from it.
+                  </p>
+                </div>
+              )}
 
               {formData.requirement_type === 'checklist' && (
                 <ChecklistItemsEditor

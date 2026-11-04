@@ -86,6 +86,7 @@ const REQUIREMENT_ACTION: Record<RequirementType, string> = {
   evaluated_shifts: 'Complete shifts with a shift evaluation from your officer',
   transports: 'Transports count from your shift evaluations',
   refusals: 'Refusals count from your shift evaluations',
+  session_attendance: 'Attend the required training sessions',
 };
 
 /** Imperative "how to complete this" hint for a requirement, or null if unknown. */
