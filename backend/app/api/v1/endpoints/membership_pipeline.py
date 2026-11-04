@@ -843,6 +843,10 @@ async def get_pipeline_stats(
     event_id: UUID | None = Query(
         None, description="Count only prospects linked to this event"
     ),
+    assigned_to_me: bool = Query(
+        False,
+        description="Count only the applicants the caller is assigned to",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_view_all()),
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
@@ -855,9 +859,11 @@ async def get_pipeline_stats(
 
     ``search`` and ``event_id`` narrow the counted population the same way they
     narrow ``GET /prospects``, so a filtered board's header describes the
-    applicants on screen rather than the whole pipeline. Both are optional and
-    omitting them returns the whole-pipeline counts, which is what every client
-    written before they existed sends.
+    applicants on screen rather than the whole pipeline. ``assigned_to_me``
+    narrows them to the applicants the caller is assigned to, as it narrows the
+    list and the board when My applicants is on. All are optional and omitting
+    them returns the whole-pipeline counts, which is what every client written
+    before they existed sends.
 
     The caller's status filter is deliberately not accepted here: it applies to
     the open-pipeline view alone, and counting through it would zero the
@@ -878,6 +884,9 @@ async def get_pipeline_stats(
         exclude_prospect_ids=hidden_prospect_ids,
         search=search,
         event_id=str(event_id) if event_id else None,
+        only_prospect_ids=(
+            await assigned_prospect_ids(db, current_user) if assigned_to_me else None
+        ),
     )
     if not stats:
         raise HTTPException(

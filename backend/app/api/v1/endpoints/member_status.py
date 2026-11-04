@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, require_stepup
 from app.api.v1.endpoints.users import _enforce_account_reset_ceiling
 from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
@@ -340,6 +340,7 @@ async def change_member_status(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Change a member's status.
@@ -975,6 +976,7 @@ async def archive_member(
     request: ArchiveMemberRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Manually archive a dropped member.

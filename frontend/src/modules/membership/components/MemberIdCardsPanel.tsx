@@ -126,7 +126,7 @@ export const MemberIdCardsPanel: React.FC<MemberIdCardsPanelProps> = ({ userId, 
   if (integrationsLoading || !cardsEnabled) return null;
 
   return (
-    <div className="card">
+    <div className="card p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <CreditCard className="text-theme-text-secondary h-5 w-5" aria-hidden="true" />

@@ -21,6 +21,15 @@ vi.mock('../services/api', () => ({
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
+// The applicant opens this page from an emailed link, signed out. A request to
+// an endpoint that needs a session answers 401, the refresh fails too, and the
+// shared client sends the browser to /login — so the page must make none.
+const { mockGetRankLadder } = vi.hoisted(() => ({ mockGetRankLadder: vi.fn() }));
+vi.mock('../../../services/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../services/api')>();
+  return { ...actual, ranksService: { getRankLadder: mockGetRankLadder } };
+});
+
 import FollowUpFormPage from './FollowUpFormPage';
 
 const TOKEN = 'a'.repeat(43);
@@ -79,6 +88,8 @@ describe('FollowUpFormPage', () => {
     mockGetForm.mockReset();
     mockSaveDraft.mockReset();
     mockSubmit.mockReset();
+    mockGetRankLadder.mockReset();
+    mockGetRankLadder.mockResolvedValue([]);
     mockGetForm.mockResolvedValue(structuredClone(form));
     mockSaveDraft.mockResolvedValue({ draft_saved_at: '2026-10-29T12:00:00Z' });
     mockSubmit.mockResolvedValue({ submitted_at: '2026-10-29T12:05:00Z', message: 'Thank you.' });
@@ -96,6 +107,17 @@ describe('FollowUpFormPage', () => {
     expect(
       screen.getAllByText('This answer is stored encrypted and is visible only to authorized staff.')
     ).toHaveLength(1);
+  });
+
+  it('asks for nothing that needs a session, so a signed-out applicant is not sent to sign in', async () => {
+    renderPage();
+    await screen.findByLabelText('Street Address');
+    // The fields' effects run after they first paint; let them.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mockGetRankLadder).not.toHaveBeenCalled();
   });
 
   it('hides a follow-up question until its answer calls for it', async () => {

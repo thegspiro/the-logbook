@@ -48,9 +48,10 @@ _member class_, _membership status_, _position_, _rank_ and _waiver_.
 16. [Member Lifecycle Management](#member-lifecycle-management)
 17. [EVOC Certification](#evoc-certification)
 18. [Member ID Cards and the Check-In Station](#member-id-cards-and-the-check-in-station)
-19. [Troubleshooting](#troubleshooting)
-20. [Realistic Example: New Member Onboarding](#realistic-example-new-member-onboarding-end-to-end)
-21. [If You Learned an Older Version](#if-you-learned-an-older-version)
+19. [History](#history-2026-11-03)
+20. [Troubleshooting](#troubleshooting)
+21. [Realistic Example: New Member Onboarding](#realistic-example-new-member-onboarding-end-to-end)
+22. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -1123,8 +1124,14 @@ department keeps its record of what they did.
 What is kept stays linked to a placeholder named "Former Member".
 
 > **Warning.** Anonymizing cannot be undone. The member also leaves the
-> roster. Like a deactivated member, they no longer appear anywhere in the app
-> and cannot be reactivated.
+> roster. Like a deactivated member, their account no longer appears anywhere
+> in the app and cannot be reactivated.
+
+**A History record is not anonymized.** If your department keeps a
+[History](#history-2026-11-03) record for the member, it keeps its own copy of
+their name and details, and anonymizing leaves it as it is. If the request
+should reach that record too, ask your historian to edit or delete it. A
+published record must be returned to draft before it can be deleted.
 
 ![The Anonymize Member dialog for an archived former member: the warning, what is removed, what is kept under Former Member, and the typed confirmation with Anonymize still disabled](./images/01-49-anonymize-member.png)
 
@@ -2600,6 +2607,227 @@ Inactive, Suspended, Dropped or Archived suspends their active cards, because
 those members' taps are refused anyway. If the member comes back, only the
 cards suspended this way are reactivated. A card an officer suspended, reported
 lost or revoked stays as it is.
+
+## History _(2026-11-03)_
+
+History is your department's archive. It keeps a record of the people who
+served before, honors those who died in the line of duty, and lets the
+department check a record before anyone outside sees it.
+
+A History record is separate from a member's account. It keeps its own copy
+of the person's name and details. So a record can describe someone who served
+long before The Logbook, and it stays as written when an account changes.
+
+**Who this is for:** every member can read what has been published. Your
+department's historian (or anyone given the History permissions) adds and
+edits records. Officers named on the clearance list review records before
+they go public.
+
+### Opening History
+
+History is an optional module, and it is off until an administrator turns it
+on in **Settings → Modules → Additional Modules**.
+
+Once it is on, select **History** in the menu. It has three pages:
+**Overview**, **Past Members** and **Honor Roll**. You need no permission to
+read published records. Being a signed-in member of the department is
+enough.
+
+The **Department History** page shows:
+
+- cards for **Past members** and **Honor Roll**, and **Titles and clearance**
+  if you can configure the module;
+- **Awaiting my clearance**, if a record is waiting for you to review it;
+- **Drafts**, if you can edit records; and
+- **From the archive**, the latest published records.
+
+Three permissions control the rest. The seeded **Historian** position holds
+all three.
+
+| Permission        | What it lets you do                                                           |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `history.view`    | Read draft records, the research fields and each record's change history      |
+| `history.manage`  | Add and edit records and family links, and edit titles and the clearance list |
+| `history.publish` | Publish a record to members or to the public                                  |
+
+**Titles and clearance** also opens for officers with permission to manage
+the department's settings. They can edit the clearance list there, but not
+the titles.
+
+### Past Members
+
+**Past Members** is the roster of everyone the archive records. Search by
+name, nickname or badge number. Narrow the list with **Decade served**,
+**Title** and **Memorials only**. Each row shows the person's years of
+service and titles, and **Line of duty** where it applies.
+
+**Nobody is added automatically.** Dropping, retiring or archiving a member
+does not create a History record. The historian adds each person by hand.
+
+**To add a person** (needs `history.manage`):
+
+1. Open **Past Members** and select **Add person**.
+2. To copy someone's name from their account, use **Start from the member
+   list**. Choose them under **Current or former member** and select **Start
+   record**. The name, nickname and badge number are copied once. After that
+   the record keeps its own copy.
+3. Otherwise, fill in the **Name** fields. Only **Last name (required)** must
+   be filled in.
+4. Add a **Biography** if you have one. It is written in Markdown. Select
+   **Preview** to see how it reads.
+5. Fill in the **Historian only** fields if you know them: **Born**,
+   **Addresses**, **How this was verified** and **Research notes**. These are
+   never shown to members or the public, whatever else is published.
+6. Select **Add to the archive**. The record starts as a **Draft**, which
+   only the historian can see.
+
+If the badge number or name matches another record, a **Worth a second look**
+warning appears. You can still save. Badge numbers were reissued and names
+repeat.
+
+**Periods of service.** On the person's page, under **Edit service**, select
+**Edit periods of service and titles**. Add as many periods as the person
+served, with **Add a period of service**. Each period has **Joined** and
+**Left** dates, **Still serving**, **Titles held** and **Notes**. A date can
+be an **Exact day**, **Month and year** or **Year only**, and you can tick
+**Approximate**. Select **Save service** when you are done.
+
+**Family links.** Under **Family links** on the person's page, choose the
+**Relationship** and the **Other person**, then select **Add family link**.
+You add a link once, from one side. It shows on both people's pages, under
+**Family in the department**. Members see a family link only when they can
+read both records.
+
+**Every save is recorded.** When you edit a record, choose **Minor (spelling,
+formatting)** or **Substantial (new facts, rewrites)**. You can add a **Note
+for the change history (optional)**. Each record's **Change history** lists
+every edit, who made it and when.
+
+**Publishing** (needs `history.publish`). The **Publication** panel on the
+person's page moves the record between three levels:
+
+| Level                    | Who can read it                                                              |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| **Draft**                | Only people with a History permission, and anyone reviewing it for clearance |
+| **Published to members** | Every signed-in member of the department                                     |
+| **Public**               | Meant for the public. Nothing outside the app shows it yet                   |
+
+Select **Publish to members** to share a draft with the department.
+**Members only** takes a public record back to members, and **Return to
+draft** takes a members' record back to draft. Only a draft can be deleted.
+
+**What members see.** A member reading a published record sees the name,
+service, titles, biography and family. They never see the **Historian only**
+fields. They also do not see the record's change history.
+
+### The Honor Roll
+
+The **Honor Roll** lists members who died in the line of duty, in order of
+the date they died. Each entry shows the person's name, titles, years of
+service, and the date and circumstances of death where those are shared.
+
+To put someone on the Honor Roll, edit their record. Under **Memorial**, tick
+**Died in the line of duty (listed on the Honor Roll)**. This also ticks
+**Has a memorial**. Then fill in the memorial details:
+
+- **Died**, the date of death;
+- **Circumstances**; and
+- **Resting place**.
+
+Each detail has its own **shown to** choice: **Date of death shown to**,
+**Circumstances shown to** and **Resting place shown to**. Pick **Historian
+only**, **Members** or **Public**. Each starts as **Historian only**, so
+nothing is shared until you choose to share it.
+
+Members see an Honor Roll entry only once the record is published to members.
+A detail set to **Historian only** is left off the entry.
+
+### Titles
+
+A title is a rank or role a person held, such as Chief or Lieutenant. You
+pick titles for each period of service under **Titles held**.
+
+The department keeps one list of titles. It is filled in once from your
+current ranks and positions. Every record points at an entry on that list,
+so a title is spelled the same everywhere.
+
+Manage the list on **Titles and clearance**, under **Historical titles**
+(needs `history.manage`):
+
+- **Add a title.** Type it under **New title** and select **Add title**. You
+  can also add one while editing a period: type it in **Titles held** and
+  select **Add "…" to the list**.
+- **Rename a title.** Edit its name in the list. The new name shows on every
+  record that uses it.
+- **Retire a title.** Select **Retire**. It stays on the records that carry
+  it, but it is no longer offered. **Restore** brings it back.
+- **Merge two titles.** If the same title was added twice ("Lt." and
+  "Lieutenant"), choose one under **Merge** and the one to keep under
+  **Into**, then select **Merge**. Every record using the first title moves
+  to the second, and the first is removed from the list. To back out, select
+  **Keep both**.
+
+A title cannot be deleted while records use it. Merge it into another instead.
+
+### Clearance
+
+Clearance is the department's review before a record goes public. It has
+nothing to do with departure clearance for a member leaving, or with security
+clearance.
+
+The **Clearance list** on **Titles and clearance** is a list of steps, in
+order. Each step names a position under **Cleared by**. Any one member who
+holds that position can clear the step. Select **Add a step** to add one, use
+the arrows to reorder, and select **Save clearance list**. The department's
+administrators are told every time the list changes.
+
+Publishing to members needs no clearance. Publishing to the public does,
+when your department has a clearance list. With no list, anyone who can
+publish can publish to the public directly.
+
+**Sending a record for clearance** (needs `history.manage`). In the
+**Publication** panel, select **Submit for public clearance**. To have the
+list look at a record you do not plan to make public, select **Ask for a
+review** instead.
+
+**Reviewing a record.** When a record reaches your step, you get a bell
+notice and, unless you have turned it off, an email. The record also appears under **Awaiting my clearance** on
+the History page. Open it to see the record as members would read it.
+Then select **Clear this step** or **Return for changes**. To return a
+record, you must fill in **Note (required to return)**. Returning a record
+ends that review.
+
+You may clear a record you submitted yourself. The step then says **(the
+author)** next to your name.
+
+Once every step is cleared, select **Publish to the public**. Until then the
+button stays greyed out.
+
+**Editing a public record.** A **Minor** edit reaches the public copy at
+once. A **Substantial** edit does not. The public keeps the last cleared
+version, the page shows **Changes awaiting public clearance**, and the
+record has to be cleared again. Then select **Publish changes to the
+public**.
+
+> **Tip.** A review that is already under way keeps the steps it started
+> with, even if someone edits the clearance list.
+
+If a step names a position that has since been deleted, the review stops at
+that step with a message. Choose another position for the step, save the
+list and submit the record again.
+
+### What History Does Not Do Yet
+
+- **Public records are not shown outside the app yet.** Publishing to the
+  public saves a cleared copy, but no public website reads it. The person
+  page says so beside the button.
+- **No photos, documents or other files.** History stores no files yet.
+- **Two records for one person cannot be merged.** You are warned about a
+  likely duplicate when you enter it, but combining two records is done by
+  hand.
+- **There is no bulk import.** Each person is added one at a time.
+- **Anonymizing a member does not change their History record.** See
+  [Anonymizing a Former Member](#anonymizing-a-former-member).
 
 ## Troubleshooting
 

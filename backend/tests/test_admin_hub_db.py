@@ -15,9 +15,11 @@ import pytest
 from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
 from app.models.medical_screening import (
     ScreeningRecord,
+    ScreeningRequirement,
     ScreeningStatus,
     ScreeningType,
 )
+from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
 from app.models.user import Organization, Position, User, UserStatus
 from app.schemas.admin_hub import AdminMetricSettingsUpdate
 from app.services.admin_hub_service import (
@@ -26,6 +28,7 @@ from app.services.admin_hub_service import (
     OPEN_SLOTS,
     AdminHubService,
 )
+from app.services.medical_screening_service import MedicalScreeningService
 
 pytestmark = [pytest.mark.integration]
 
@@ -144,6 +147,37 @@ async def _screening(
     return record
 
 
+async def _requirement(
+    db_session, org, screening_type: ScreeningType, months: int | None = None
+) -> ScreeningRequirement:
+    requirement = ScreeningRequirement(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        name=f"{screening_type.value} requirement",
+        screening_type=screening_type,
+        frequency_months=months,
+        is_active=True,
+    )
+    db_session.add(requirement)
+    await db_session.flush()
+    return requirement
+
+
+async def _prospect(db_session, org) -> ProspectiveMember:
+    """An open applicant with no screenings: not compliant, and not a member."""
+    prospect = ProspectiveMember(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        first_name="Pat",
+        last_name="Applicant",
+        email=f"{uuid.uuid4().hex[:10]}@adminhub.test",
+        status=ProspectStatus.ACTIVE,
+    )
+    db_session.add(prospect)
+    await db_session.flush()
+    return prospect
+
+
 async def _queue(db_session, org, user, module_key: str = "members") -> dict:
     """Run one module's attention resolver and key the result by item key.
 
@@ -185,8 +219,24 @@ def _resolvers_share_todays_date(monkeypatch):
 # ── The members queue ───────────────────────────────────────────────────────
 
 
-class TestExpiredScreenings:
-    async def test_counts_a_member_with_no_current_cover(self, db_session):
+class TestScreeningsCurrent:
+    """The Screenings current tile reads the Compliance tab's roster (W71b-3).
+
+    It used to count anyone with one unexpired passed record of any type, so
+    it ignored requirements, the frequency rule, position scoping and
+    waivers, and read 20% while the Compliance tab had 2 of 20 compliant.
+    """
+
+    async def _tile(self, db_session, viewer):
+        ctx = await AdminHubService(db_session)._context(viewer)
+        current = next(
+            m
+            for m in MODULE_REGISTRY["members"].metrics
+            if m.key == "screening_current"
+        )
+        return await current.resolve(ctx)
+
+    async def test_no_requirement_grades_nobody(self, db_session):
         org = await _org(db_session)
         member = await _member(db_session, org)
         await _screening(
@@ -194,113 +244,184 @@ class TestExpiredScreenings:
             org,
             member,
             status=ScreeningStatus.PASSED,
-            expires=TODAY - timedelta(days=40),
+            expires=TODAY + timedelta(days=200),
         )
 
-        item = (await _queue(db_session, org, member))["expired_screenings"]
-        assert item.count == 1
-        assert item.oldest_age_days == 40
-        assert item.severity == "critical"
+        assert await self._tile(db_session, member) == (
+            "—",
+            "no screening requirements",
+        )
 
-    # A screening is renewed by adding a record, never by editing the old one.
-    # Counting expired rows outright reported the member who renewed last week
-    # as lapsed, while the Screenings-current metric on the same page called
-    # them covered.
-    async def test_ignores_a_member_who_renewed(self, db_session):
+    async def test_counts_the_members_the_compliance_tab_calls_compliant(
+        self, db_session
+    ):
         org = await _org(db_session)
-        member = await _member(db_session, org)
-        await _screening(
-            db_session,
-            org,
-            member,
-            status=ScreeningStatus.PASSED,
-            expires=TODAY - timedelta(days=40),
-        )
-        await _screening(
-            db_session,
-            org,
-            member,
-            status=ScreeningStatus.PASSED,
-            completed=TODAY - timedelta(days=5),
-            expires=TODAY + timedelta(days=360),
-        )
-
-        assert "expired_screenings" not in await _queue(db_session, org, member)
-
-    async def test_a_waiver_is_cover(self, db_session):
-        org = await _org(db_session)
-        member = await _member(db_session, org)
-        await _screening(
-            db_session,
-            org,
-            member,
-            status=ScreeningStatus.PASSED,
-            expires=TODAY - timedelta(days=40),
-        )
-        await _screening(db_session, org, member, status=ScreeningStatus.WAIVED)
-
-        assert "expired_screenings" not in await _queue(db_session, org, member)
-
-    # Two lapsed physicals for one member is one person to chase, not two.
-    async def test_counts_a_member_and_type_once(self, db_session):
-        org = await _org(db_session)
-        member = await _member(db_session, org)
-        for age in (40, 400):
+        await _requirement(db_session, org, ScreeningType.PHYSICAL_EXAM, months=12)
+        await _requirement(db_session, org, ScreeningType.DRUG_SCREENING)
+        cleared = await _member(db_session, org)
+        missing_one = await _member(db_session, org)
+        failed = await _member(db_session, org)
+        for person in (cleared, missing_one, failed):
             await _screening(
                 db_session,
                 org,
-                member,
+                person,
                 status=ScreeningStatus.PASSED,
-                expires=TODAY - timedelta(days=age),
+                completed=TODAY - timedelta(days=30),
+                expires=TODAY + timedelta(days=300),
             )
-
-        item = (await _queue(db_session, org, member))["expired_screenings"]
-        assert item.count == 1
-        assert item.oldest_age_days == 400
-
-    async def test_separates_two_screening_types(self, db_session):
-        org = await _org(db_session)
-        member = await _member(db_session, org)
-        for kind in (ScreeningType.PHYSICAL_EXAM, ScreeningType.DRUG_SCREENING):
+        for person in (cleared, failed):
             await _screening(
                 db_session,
                 org,
-                member,
+                person,
                 status=ScreeningStatus.PASSED,
-                screening_type=kind,
-                expires=TODAY - timedelta(days=40),
+                screening_type=ScreeningType.DRUG_SCREENING,
+                completed=TODAY - timedelta(days=400),
             )
-
-        assert (await _queue(db_session, org, member))["expired_screenings"].count == 2
-
-    async def test_ignores_someone_off_the_roster(self, db_session):
-        org = await _org(db_session)
-        officer = await _member(db_session, org)
-        departed = await _member(db_session, org, status=UserStatus.INACTIVE)
+        # A newer failure decides (W71b-1).
         await _screening(
             db_session,
             org,
-            departed,
-            status=ScreeningStatus.PASSED,
-            expires=TODAY - timedelta(days=40),
+            failed,
+            status=ScreeningStatus.FAILED,
+            completed=TODAY - timedelta(days=2),
         )
 
-        assert "expired_screenings" not in await _queue(db_session, org, officer)
+        value, context = await self._tile(db_session, cleared)
 
-    async def test_ignores_another_departments_lapse(self, db_session):
+        assert (value, context) == ("33%", "1 of 3 compliant")
+        roster = await MedicalScreeningService(db_session).get_compliance_roster(org.id)
+        assert roster.compliant + roster.expiring_soon == 1
+
+    async def test_a_record_lapsed_by_frequency_is_not_current(self, db_session):
         org = await _org(db_session)
-        officer = await _member(db_session, org)
+        await _requirement(db_session, org, ScreeningType.PHYSICAL_EXAM, months=12)
+        member = await _member(db_session, org)
+        await _screening(
+            db_session,
+            org,
+            member,
+            status=ScreeningStatus.PASSED,
+            completed=TODAY - timedelta(days=420),
+        )
+
+        assert await self._tile(db_session, member) == ("0%", "0 of 1 compliant")
+
+    async def test_counts_members_only_never_prospects(self, db_session):
+        org = await _org(db_session)
+        await _requirement(db_session, org, ScreeningType.DRUG_SCREENING)
+        member = await _member(db_session, org)
+        await _screening(
+            db_session,
+            org,
+            member,
+            status=ScreeningStatus.PASSED,
+            screening_type=ScreeningType.DRUG_SCREENING,
+            completed=TODAY - timedelta(days=3),
+        )
+        await _prospect(db_session, org)
+
+        assert await self._tile(db_session, member) == ("100%", "1 of 1 compliant")
+
+    async def test_ignores_someone_off_the_roster_and_other_departments(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        await _requirement(db_session, org, ScreeningType.DRUG_SCREENING)
+        member = await _member(db_session, org)
+        await _screening(
+            db_session,
+            org,
+            member,
+            status=ScreeningStatus.PASSED,
+            screening_type=ScreeningType.DRUG_SCREENING,
+            completed=TODAY - timedelta(days=3),
+        )
+        await _member(db_session, org, status=UserStatus.INACTIVE)
         elsewhere = await _org(db_session)
-        theirs = await _member(db_session, elsewhere)
+        await _requirement(db_session, elsewhere, ScreeningType.DRUG_SCREENING)
+        await _member(db_session, elsewhere)
+
+        assert await self._tile(db_session, member) == ("100%", "1 of 1 compliant")
+
+
+class TestNotCompliantMembers:
+    """The queue names the members the Compliance tab calls not compliant.
+
+    It used to count expired records only, by `expiration_date`, so a record
+    lapsed by frequency, a missing screening and a failed one were all absent
+    from it, and it claimed the lapse "blocks duty assignment", which nothing
+    does (W71b-3).
+    """
+
+    async def test_counts_each_not_compliant_member_once(self, db_session):
+        org = await _org(db_session)
+        await _requirement(db_session, org, ScreeningType.PHYSICAL_EXAM, months=12)
+        await _requirement(db_session, org, ScreeningType.DRUG_SCREENING)
+        lapsed = await _member(db_session, org)
         await _screening(
             db_session,
-            elsewhere,
-            theirs,
+            org,
+            lapsed,
             status=ScreeningStatus.PASSED,
-            expires=TODAY - timedelta(days=40),
+            completed=TODAY - timedelta(days=420),
+        )
+        await _member(db_session, org)  # never screened: both missing
+
+        item = (await _queue(db_session, org, lapsed))["screenings_not_compliant"]
+
+        assert item.count == 2
+        assert item.title == "2 members not compliant with medical screening"
+        assert item.href == "/medical-screening?tab=compliance"
+        assert item.severity == "critical"
+        assert "duty" not in item.detail
+        roster = await MedicalScreeningService(db_session).get_compliance_roster(org.id)
+        assert roster.not_compliant == item.count
+
+    async def test_nothing_when_every_member_is_compliant(self, db_session):
+        org = await _org(db_session)
+        await _requirement(db_session, org, ScreeningType.DRUG_SCREENING)
+        member = await _member(db_session, org)
+        await _screening(
+            db_session,
+            org,
+            member,
+            status=ScreeningStatus.WAIVED,
+            screening_type=ScreeningType.DRUG_SCREENING,
+            completed=TODAY - timedelta(days=3),
         )
 
-        assert "expired_screenings" not in await _queue(db_session, org, officer)
+        assert "screenings_not_compliant" not in await _queue(db_session, org, member)
+
+    async def test_a_prospect_is_not_a_member_to_chase(self, db_session):
+        org = await _org(db_session)
+        await _requirement(db_session, org, ScreeningType.DRUG_SCREENING)
+        member = await _member(db_session, org)
+        await _screening(
+            db_session,
+            org,
+            member,
+            status=ScreeningStatus.PASSED,
+            screening_type=ScreeningType.DRUG_SCREENING,
+            completed=TODAY - timedelta(days=3),
+        )
+        await _prospect(db_session, org)
+
+        assert "screenings_not_compliant" not in await _queue(db_session, org, member)
+
+    async def test_nothing_without_a_requirement(self, db_session):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+
+        assert "screenings_not_compliant" not in await _queue(db_session, org, member)
+
+    async def test_nothing_when_the_module_is_off(self, db_session):
+        org = await _org(db_session, settings={"modules": {"_user_configured": True}})
+        await _requirement(db_session, org, ScreeningType.DRUG_SCREENING)
+        member = await _member(db_session, org)
+
+        assert "screenings_not_compliant" not in await _queue(db_session, org, member)
 
 
 class TestOverdueScreenings:
@@ -538,35 +659,41 @@ class TestOverdueScreenings:
 
 class TestQueueAgreesWithItsMetrics:
     # Two numbers on one page disagreeing about one person is worse than
-    # either being absent: the queue says a member is lapsed while the metric
-    # beside it calls the whole roster covered.
-    async def test_a_renewed_member_is_covered_by_both(self, db_session):
+    # either being absent. Both now come from the Compliance tab's roster,
+    # so the tile, the queue and the tab tell one story.
+    async def test_tile_queue_and_compliance_tab_agree(self, db_session):
         org = await _org(db_session)
-        member = await _member(db_session, org)
+        await _requirement(db_session, org, ScreeningType.PHYSICAL_EXAM, months=12)
+        renewed = await _member(db_session, org)
         await _screening(
             db_session,
             org,
-            member,
+            renewed,
             status=ScreeningStatus.PASSED,
             expires=TODAY - timedelta(days=40),
         )
         await _screening(
             db_session,
             org,
-            member,
+            renewed,
             status=ScreeningStatus.PASSED,
             completed=TODAY - timedelta(days=5),
             expires=TODAY + timedelta(days=360),
         )
+        await _member(db_session, org)  # never screened
 
-        service = AdminHubService(db_session)
-        ctx = await service._context(member)
-        spec = MODULE_REGISTRY["members"]
-        current = next(m for m in spec.metrics if m.key == "screening_current")
-        value, _ = await current.resolve(ctx)
+        ctx = await AdminHubService(db_session)._context(renewed)
+        current = next(
+            m
+            for m in MODULE_REGISTRY["members"].metrics
+            if m.key == "screening_current"
+        )
+        value, context = await current.resolve(ctx)
+        item = (await _queue(db_session, org, renewed))["screenings_not_compliant"]
+        roster = await MedicalScreeningService(db_session).get_compliance_roster(org.id)
 
-        assert value == "100%"
-        assert "expired_screenings" not in await _queue(db_session, org, member)
+        assert (value, context) == ("50%", "1 of 2 compliant")
+        assert item.count == roster.not_compliant == 1
 
 
 # ── Every resolver, against real tables ─────────────────────────────────────
@@ -699,10 +826,13 @@ class TestSummaryShape:
         assert summary.metrics[-1].value == str(len(summary.attention))
         assert summary.attention
 
-    # Critical rows come first, so an expired screening that blocks duty
-    # assignment is not pushed under a larger count of softer exceptions.
+    # Critical rows come first, so a member not cleared by their medical
+    # screening is not pushed under a larger count of softer exceptions.
     async def test_critical_rows_sort_above_warnings(self, db_session):
         org = await _org(db_session)
+        # The Compliance tab grades against requirements; without one nobody
+        # is not compliant and the critical row this test sorts is absent.
+        await _requirement(db_session, org, ScreeningType.PHYSICAL_EXAM, months=12)
         member = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
         await _screening(
             db_session,
