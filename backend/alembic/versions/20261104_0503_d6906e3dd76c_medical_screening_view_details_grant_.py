@@ -47,7 +47,7 @@ not recorded, so removing them would also remove links officers made.
 Safe to run twice: each step writes only what is missing.
 
 Revision ID: d6906e3dd76c
-Revises: d75ecbc15bae
+Revises: 8da91e9d28d6
 Create Date: 2026-11-04 05:03:39.081970
 """
 
@@ -59,7 +59,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d6906e3dd76c"
-down_revision: Union[str, None] = "d75ecbc15bae"
+down_revision: Union[str, None] = "8da91e9d28d6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

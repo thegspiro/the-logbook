@@ -376,7 +376,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ detail }) => {
                   Create category
                 </button>
               </div>
-              <button type="submit" className="btn-primary split-row-aside" disabled={busy || !dirty}>
+              <button type="submit" className="split-row-aside btn-primary" disabled={busy || !dirty}>
                 Save rules
               </button>
             </div>
