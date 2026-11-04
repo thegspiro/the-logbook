@@ -16,7 +16,16 @@ department grants it on purpose.
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
@@ -35,6 +44,9 @@ from app.schemas.historical_import import (
     MemberMappingsUpdate,
     OpenBatchesDiscarded,
     ShiftBatchesCreated,
+    SuggestionsAccepted,
+    TrainingPreview,
+    TrainingSettingsUpdate,
 )
 from app.services.historical_import_service import (
     HistoricalImportLocked,
@@ -401,5 +413,97 @@ async def commit_admin_hours(
     )
     try:
         return await service.admin_preview(await service.get(org, str(import_id)))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.get("/{import_id}/training", response_model=TrainingPreview)
+async def get_training_preview(
+    import_id: UUID,
+    search: str = Query("", max_length=200),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """What committing the training rows would write, with one page of the
+    file's subjects and their course mappings."""
+    service = HistoricalImportService(db)
+    try:
+        record = await service.get(str(current_user.organization_id), str(import_id))
+        return await service.training_preview(
+            record, search=search, offset=offset, limit=limit
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.patch("/{import_id}/training-settings", response_model=TrainingPreview)
+async def update_training_settings(
+    import_id: UUID,
+    payload: TrainingSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Set the training columns, map subjects to courses, or decide what to do
+    with provider rows no synced record matches."""
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    try:
+        record = await service.get(org, str(import_id), for_update=True)
+        await service.update_training_settings(
+            record, payload.model_dump(exclude_unset=True)
+        )
+        return await service.training_preview(await service.get(org, str(import_id)))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post(
+    "/{import_id}/training/accept-suggestions", response_model=SuggestionsAccepted
+)
+async def accept_suggested_courses(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Map every unmapped subject that has a course suggestion."""
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    try:
+        record = await service.get(org, str(import_id), for_update=True)
+        return {"mapped": await service.accept_suggested_courses(record)}
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post("/{import_id}/training/commit", response_model=TrainingPreview)
+async def commit_training(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Write the training rows as completed training records. Rows already
+    imported, and rows a provider sync already recorded, are skipped; there is
+    no batch undo."""
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    try:
+        counts = await service.commit_training(
+            org, str(import_id), str(current_user.id)
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+    await log_audit_event(
+        db=db,
+        event_type="historical_import_training_committed",
+        event_category="integrations",
+        severity="INFO",
+        event_data={"organization_id": org, "import_id": str(import_id), **counts},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    try:
+        return await service.training_preview(await service.get(org, str(import_id)))
     except Exception as exc:
         raise _http_error(exc)

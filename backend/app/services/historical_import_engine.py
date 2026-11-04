@@ -28,6 +28,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from app.services import shift_history_import_engine as shift_engine
+from app.services.external_course_mapping import normalize_course_title
 
 # ---------------------------------------------------------------------------
 # Tunables
@@ -315,6 +316,11 @@ def _cell(raw: Mapping[str, Any], header: Optional[str]) -> str:
         return ""
     value = raw.get(header)
     return "" if value is None else str(value).strip()
+
+
+def cell(raw: Mapping[str, Any], header: Optional[str]) -> str:
+    """A row's cell under ``header``, trimmed; empty when unmapped."""
+    return _cell(raw, header)
 
 
 _PAST_MIDNIGHT_RE = re.compile(r"^(?P<h>\d{1,2})(?P<m>\d{2})$")
@@ -780,3 +786,152 @@ def entry_span(item: RoutedItem, tz: Any) -> Optional[Tuple[datetime, datetime]]
         shift_engine.localize(begin.date(), begin.time(), tz),
         shift_engine.localize(finish.date(), finish.time(), tz),
     )
+
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+
+TRAINING_TYPES_ROUTED: Tuple[str, ...] = (TRAINING,)
+
+# Words an instructor column uses for "the member themself": a member who
+# taught their own class wrote "me", and the record should name them.
+_SELF_WORDS = frozenset({"me", "myself", "self", "i"})
+
+# Instructor text that names a training provider whose records the department
+# may already sync. Compared as substrings of the squashed text, so "Target
+# Solutions", "TargetSolutions", "FCVFD/Targetsolutions" and "Vector Online"
+# all match; "ts" alone is matched only as the whole cell.
+DEFAULT_PROVIDER_PATTERNS: Tuple[str, ...] = ("targetsolution", "vector")
+
+# What to do with a provider row no synced record matches: import it as an
+# ordinary record, or leave it out because the sync is the record of truth.
+UNMATCHED_IMPORT = "import"
+UNMATCHED_SKIP = "skip"
+UNMATCHED_ACTIONS: Tuple[str, ...] = (UNMATCHED_IMPORT, UNMATCHED_SKIP)
+
+# A synced record this many days either side of the row's date is the same
+# completion: a provider stamps the day it processed the course, which can be
+# the day after the member finished it.
+PROVIDER_MATCH_DAYS = 1
+
+
+@dataclass
+class TrainingSettings:
+    """How training rows become training records."""
+
+    subject_column: str = ""
+    instructor_column: str = ""
+    # A yes/no column: set when the member taught the class.
+    taught_column: str = ""
+    provider_patterns: Sequence[str] = DEFAULT_PROVIDER_PATTERNS
+    # Decided once the preview has counted the rows it applies to.
+    unmatched_provider_action: Optional[str] = None
+    # Subject key -> library course id. A subject with no entry is imported as
+    # written.
+    subject_courses: Mapping[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_stored(cls, value: Any) -> "TrainingSettings":
+        """Read the stored JSON defensively, dropping what is malformed."""
+        if not isinstance(value, Mapping):
+            return cls()
+        patterns = [
+            _squash_letters(str(p))
+            for p in value.get("provider_patterns") or DEFAULT_PROVIDER_PATTERNS
+            if _squash_letters(str(p or ""))
+        ]
+        courses_raw = value.get("subject_courses")
+        courses = (
+            {str(k): str(v) for k, v in courses_raw.items() if k and v}
+            if isinstance(courses_raw, Mapping)
+            else {}
+        )
+        action = value.get("unmatched_provider_action")
+        return cls(
+            subject_column=str(value.get("subject_column") or ""),
+            instructor_column=str(value.get("instructor_column") or ""),
+            taught_column=str(value.get("taught_column") or ""),
+            provider_patterns=patterns,
+            unmatched_provider_action=action if action in UNMATCHED_ACTIONS else None,
+            subject_courses=courses,
+        )
+
+    def to_stored(self) -> Dict[str, Any]:
+        return {
+            "subject_column": self.subject_column,
+            "instructor_column": self.instructor_column,
+            "taught_column": self.taught_column,
+            "provider_patterns": list(self.provider_patterns),
+            "unmatched_provider_action": self.unmatched_provider_action,
+            "subject_courses": dict(self.subject_courses),
+        }
+
+
+_SUBJECT_SPELLINGS = (
+    "training_subject",
+    "trainingsubject",
+    "subject",
+    "course",
+    "class",
+)
+_INSTRUCTOR_SPELLINGS = ("training_instructor", "traininginstructor", "taught_by")
+_TAUGHT_SPELLINGS = ("instructor", "taught", "is_instructor", "was_instructor")
+
+
+def detect_training_settings(headers: Sequence[str]) -> TrainingSettings:
+    """A first guess at the training columns, by recognised spelling."""
+    by_normalized = {normalize_header(h): h for h in headers}
+
+    def find(spellings: Sequence[str]) -> str:
+        return next((by_normalized[s] for s in spellings if s in by_normalized), "")
+
+    return TrainingSettings(
+        subject_column=find(_SUBJECT_SPELLINGS),
+        instructor_column=find(_INSTRUCTOR_SPELLINGS),
+        taught_column=find(_TAUGHT_SPELLINGS),
+    )
+
+
+def subject_key(subject: str) -> str:
+    """One key per course as the file spells it, so "EMT-B", "emt b " and
+    "EMT B" are one mapping decision. The same reduction the Target Solutions
+    course mapping uses."""
+    return normalize_course_title(subject)
+
+
+def is_provider_row(instructor: str, settings: TrainingSettings) -> bool:
+    """Whether the instructor names a provider whose records may be synced."""
+    squashed = _squash_letters(instructor)
+    if not squashed:
+        return False
+    if squashed == "ts":
+        return True
+    return any(p and p in squashed for p in settings.provider_patterns)
+
+
+def record_instructor(
+    raw: Mapping[str, Any], settings: TrainingSettings, member_name: str
+) -> str:
+    """The name the record's instructor field gets.
+
+    The instructor column as written. On a row the member taught, a column
+    that says "me" — or says nothing — means the member, so the record names
+    them.
+    """
+    cell = _cell(raw, settings.instructor_column)
+    if taught(raw, settings) and (not cell or cell.casefold() in _SELF_WORDS):
+        return member_name
+    return cell
+
+
+def taught(raw: Mapping[str, Any], settings: TrainingSettings) -> bool:
+    return bool(settings.taught_column) and is_flag_set(raw.get(settings.taught_column))
+
+
+def provider_match(day: Optional[date], synced_days: Sequence[date]) -> bool:
+    """Whether a synced record falls within the match window of ``day``."""
+    if day is None:
+        return False
+    window = timedelta(days=PROVIDER_MATCH_DAYS)
+    return any(abs(d - day) <= window for d in synced_days)
