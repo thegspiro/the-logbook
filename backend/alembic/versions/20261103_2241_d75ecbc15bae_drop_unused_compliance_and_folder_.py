@@ -36,7 +36,7 @@ The only foreign keys onto these tables are the two inside the set
 so each child goes before its parent.
 
 Revision ID: d75ecbc15bae
-Revises: 6b81e95d4157
+Revises: b5e906ebdd7d
 Create Date: 2026-11-03 22:41:20.380553
 
 """
@@ -48,7 +48,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d75ecbc15bae"
-down_revision: Union[str, None] = "6b81e95d4157"
+down_revision: Union[str, None] = "b5e906ebdd7d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
