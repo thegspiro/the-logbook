@@ -164,6 +164,10 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
       HTTPS unless the operator sets `S3_ALLOW_PRIVATE_ENDPOINT`; and
       anonymous suggestion screenshots go to the bucket too, accepting that
       the bucket records their exact upload time.
+    - 2026-11-03 (owner decision 2026-11-01): a custom endpoint must be one
+      the operator listed in `S3_ALLOWED_ENDPOINTS`; the screen offers only
+      those, and an unlisted one is refused on save and not used if stored
+      earlier (`docs/KNOWN_LIMITATIONS.md`, SCH-10).
 
 32. **Google Drive next, through one interface for every remote platform**
     (2026-10-23, owner decisions).
@@ -248,7 +252,8 @@ reported as "exceeds the 10MB limit" (an `except ValueError` caught the
 `UnicodeDecodeError` subclass before its own handler).
 
 Still not done, by design or for later phases: files stored before scanning
-was on are not rescanned; `UPLOADS_ROOT` is the fixed `/app/uploads` mount and
+was on were not rescanned (since 2026-11-03 the `stored_file_malware_scan`
+task scans them once — `docs/KNOWN_LIMITATIONS.md`); `UPLOADS_ROOT` is the fixed `/app/uploads` mount and
 the unread `UPLOAD_DIR` setting stays unread (`docs/KNOWN_LIMITATIONS.md`,
 CI3-33-4).
 
@@ -378,16 +383,16 @@ This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
 
 ### Phase 7 — a department's own bucket (2026-10-22)
 
-| Piece                 | Where                                                                                                                                                           |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Talking to a bucket   | `app/services/s3_storage.py`, the only module that imports boto3 (`tests/test_storage_operations.py`)                                                           |
-| A stored reference    | `s3://<bucket>/<org>/<area>/<record>/<uuid><ext>`; `resolve()` confines it by its leading key segments, as it confines a path by directory                      |
-| Where a new file goes | `file_storage.write_file`: the bucket when the platform is S3 **and** the saved settings' keyed fingerprint matches the last passed test; otherwise the volume  |
-| The connection test   | `POST /organization/settings/file-storage/s3/activate` (write, read back, delete a probe; re-checked under the row lock); `.../s3/deactivate` goes back to disk |
-| What the screen shows | `GET /organization/settings/file-storage/status`, rendered by `StorageLocationPanel`                                                                            |
-| Bucket down           | 503 `LB-UPLD-006` on upload, download and existence checks; a delete reports failure as on disk                                                                 |
-| Endpoint check        | `assert_outbound_url_safe` each time a department's client is built; private or plain HTTP only with `S3_ALLOW_PRIVATE_ENDPOINT`                                |
-| Settings cache        | Per worker, 30 s, 256 departments; cleared in the worker that saves. Another worker follows within 30 s                                                         |
+| Piece                 | Where                                                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Talking to a bucket   | `app/services/s3_storage.py`, the only module that imports boto3 (`tests/test_storage_operations.py`)                                                                           |
+| A stored reference    | `s3://<bucket>/<org>/<area>/<record>/<uuid><ext>`; `resolve()` confines it by its leading key segments, as it confines a path by directory                                      |
+| Where a new file goes | `file_storage.write_file`: the bucket when the platform is S3 **and** the saved settings' keyed fingerprint matches the last passed test; otherwise the volume                  |
+| The connection test   | `POST /organization/settings/file-storage/s3/activate` (write, read back, delete a probe; re-checked under the row lock); `.../s3/deactivate` goes back to disk                 |
+| What the screen shows | `GET /organization/settings/file-storage/status`, rendered by `StorageLocationPanel`                                                                                            |
+| Bucket down           | 503 `LB-UPLD-006` on upload, download and existence checks; a delete reports failure as on disk                                                                                 |
+| Endpoint check        | Must be listed in `S3_ALLOWED_ENDPOINTS` (on save and whenever a client is built), then `assert_outbound_url_safe`; private or plain HTTP only with `S3_ALLOW_PRIVATE_ENDPOINT` |
+| Settings cache        | Per worker, 30 s, 256 departments; cleared in the worker that saves. Another worker follows within 30 s                                                                         |
 
 Encrypted before upload with the same format and key as the volume, so the
 bucket's operator never holds plaintext. Step 3 (phase 8, below) covers

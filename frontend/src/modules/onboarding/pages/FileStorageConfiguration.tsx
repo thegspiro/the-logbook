@@ -123,7 +123,7 @@ const PLATFORM_FIELDS: Record<string, PlatformSpec> = {
         key: 's3EndpointUrl',
         label: 'Custom Endpoint',
         placeholder: 'https://minio.example.org',
-        help: 'For S3-compatible storage such as MinIO or Wasabi. Leave blank for AWS.',
+        help: 'Leave blank for AWS. A self-hosted S3-compatible store such as MinIO works only at an endpoint whoever runs this installation has listed in S3_ALLOWED_ENDPOINTS; anything else is refused.',
         fullWidth: true,
       },
     ],

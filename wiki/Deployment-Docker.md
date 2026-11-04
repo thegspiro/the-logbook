@@ -395,7 +395,8 @@ The override:
 - keeps `mysql`, `redis` and the production `backup` sidecar from starting.
   Never start them by name (`docker compose up -d mysql`). Back the database up
   with the provider's backups, and the `uploads` and `audit_archives` volumes
-  separately ([AWS guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-rds)).
+  separately ([AWS guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-rds),
+  [Azure guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#method-2-managed-services)).
 
 `MYSQL_ROOT_PASSWORD` still needs a value, because Compose reads the unused
 `mysql` definition. `REDIS_PASSWORD` is sent to the external Redis, so it must
@@ -408,8 +409,11 @@ external database on start with the same TLS settings.
 Check what will start with `docker compose config --services`: `backend`,
 `frontend` and `clamav`, plus `nginx` if you use the proxy override.
 
-Full AWS walkthrough:
-[AWS Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-ec2--rds--elasticache-production).
+Full walkthroughs:
+[AWS Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-ec2--rds--elasticache-production)
+(RDS and ElastiCache) and
+[Azure Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#method-2-azure-vm--azure-database-for-mysql--azure-managed-redis-production)
+(Azure Database for MySQL and Azure Managed Redis).
 
 ---
 

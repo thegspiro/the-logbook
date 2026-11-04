@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**352 tables · 5751 columns · 1182 foreign keys**
+**353 tables · 5762 columns · 1183 foreign keys**
 
 ---
 
@@ -671,6 +671,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`skill_templates`](#skill_templates) | `SkillTemplate` | 22 | Skill Template model |
 | [`skill_test_viewers`](#skill_test_viewers) | `SkillTestViewer` | 5 | A person granted sight of one specific test's result. |
 | [`skill_tests`](#skill_tests) | `SkillTest` | 34 | Skill Test model |
+
+### Stored_File_Scan
+
+<sub>`app/models/stored_file_scan.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`stored_file_scans`](#stored_file_scans) | `StoredFileScan` | 11 | One stored object the rescan has reached, and what clamd said. |
 
 ### Storefront
 
@@ -9226,6 +9234,37 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_skill_tests_candidate_id` (`candidate_id`)
 - `ix_skill_tests_requirement_id` (`requirement_id`)
 
+## Stored_File_Scan
+
+### `stored_file_scans`
+
+**StoredFileScan** · `app/models/stored_file_scan.py`
+
+> One stored object the rescan has reached, and what clamd said. ``scan_key`` is the idempotency key: SHA-256 of ``file:<reference>`` for a file on the volume or in a department's store (so a file several rows share is scanned once), and of ``db:<table.column>:<row id>:<SHA-256 of the stored value>`` for an image held in the database (so a replaced photo is a new object and is scanned again). A key that is present is never scanned again; a scan that got no verdict writes no row, so the object is picked up by the next run.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `scan_key` | VARCHAR(64) | no |  |  |  |
+| `source` | VARCHAR(64) | no |  |  |  |
+| `row_id` | VARCHAR(36) | no |  |  |  |
+| `reference` | TEXT | yes |  |  |  |
+| `fingerprint` | VARCHAR(64) | yes |  |  |  |
+| `verdict` | VARCHAR(20) | no | IDX |  |  |
+| `signature` | VARCHAR(255) | yes |  |  |  |
+| `removed_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_stored_file_scans_org` (`organization_id`)
+- `idx_stored_file_scans_pending_removal` (`verdict`, `removed_at`)
+
+**Constraints**
+
+- UNIQUE `uq_stored_file_scans_scan_key` (`scan_key`)
+
 ## Storefront
 
 ### `store_order_events`
@@ -12649,7 +12688,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (290 references)
+### → `organizations` (291 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12912,6 +12951,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_products` | `organization_id` | CASCADE | no |
 | `store_settings` | `organization_id` | CASCADE | no |
 | `store_window_products` | `organization_id` | CASCADE | no |
+| `stored_file_scans` | `organization_id` | CASCADE | no |
 | `suggestion_attachments` | `organization_id` | CASCADE | no |
 | `suggestion_box_reviewers` | `organization_id` | CASCADE | no |
 | `suggestion_box_watchers` | `organization_id` | CASCADE | no |
