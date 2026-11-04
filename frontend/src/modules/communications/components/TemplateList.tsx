@@ -53,6 +53,7 @@ import {
   Link2,
   ClipboardPen,
   BellRing,
+  MessageSquare,
 } from 'lucide-react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
@@ -133,6 +134,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   application_needs_attention: {
     icon: BellRing,
     label: 'Applicant Needs Your Attention',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_interview_requested: {
+    icon: MessageSquare,
+    label: 'Interview Requested',
     color: 'text-blue-700 dark:text-blue-400',
   },
   evaluation_step_waiting: {
@@ -226,6 +232,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'application_follow_up_submitted',
       'application_assigned',
       'application_needs_attention',
+      'application_interview_requested',
     ],
   },
   {
