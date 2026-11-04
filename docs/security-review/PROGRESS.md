@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-cross-cutting-pass15`) —
+**PR [#4020](https://github.com/thegspiro/the-logbook/pull/4020)** (branch
+`claude/security-review-cross-cutting-pass15`) —
 Feature 00 (Cross-cutting baseline), pass 15, a watchdog pickup (the
 dedicated `/loop 30m /security-review` session,
 `session_011T1ZyyLrD5HagusgK9uDw2`, has been unreachable across many
