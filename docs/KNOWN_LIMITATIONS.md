@@ -1455,8 +1455,8 @@ What the application cannot promise, and why each is left as it is:
   error handling. **A proxy the operator runs in front of these is outside the
   repository** — Unraid's SWAG or Nginx Proxy Manager, an AWS load balancer's
   access logs, Cloudflare — and records the IP and the second unless it is
-  configured the same way. `docs/deployment/aws.md` shows how for the host
-  nginx it documents.
+  configured the same way. `docs/deployment/aws.md` and
+  `docs/deployment/azure.md` show how for the host nginx they document.
 - **Someone with server access can still correlate by time.** The reviewers'
   notification email is sent — and logged to `message_history` — at
   submission time, their in-app notification rows carry an exact `sent_at`,
