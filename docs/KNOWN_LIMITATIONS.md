@@ -342,7 +342,8 @@ during setup 2026-11-03).** Found in the workflow review's W01 third pass
   `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
   stored settings and the modules API do not change; nothing reads it.
 - **Public Information (W01-24) — resolved 2026-11-03.** Owner decision
-  (2026-11-01): offer it during setup. It is in the Modules step under
+  (2026-11-01, confirmed 2026-11-04 over a later "leave it on by default"
+  record): offer it during setup. It is in the Modules step under
   Communication (`ONBOARDING_OFFERED_MODULES` and the wizard's module
   registry), so what the department answers is what is stored. It has no
   permissions of its own (its admin screens need `settings.manage`), so the

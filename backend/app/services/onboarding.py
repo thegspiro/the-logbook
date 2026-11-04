@@ -160,8 +160,9 @@ def modules_from_setup_answers(enabled: Iterable[str]) -> dict[str, bool]:
     the answer. Every other module keeps its declared ``ModuleSettings``
     default. Writing False for a module the wizard never showed turns "nobody
     was asked" into "the department said no", which is how Public Information
-    came to be stored off on every fresh install despite defaulting on (owner
-    decision 2026-11-01, workflow review W01-24: leave it on by default).
+    came to be stored off on every fresh install despite defaulting on. Setup
+    now asks about Public Information itself (owner decision 2026-11-01,
+    confirmed 2026-11-04, workflow review W01-24), so its answer decides.
 
     The one rule for both writers: ``OnboardingService.configure_modules`` and
     the completion step's copy of the session into the organization.
