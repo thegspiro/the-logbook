@@ -93,7 +93,7 @@ test.describe('A touch screen keeps its 44px targets', () => {
 // so the fixture carries them.
 // A tablet keeps the side navigation open, so the page body there is narrower
 // than seven columns need however they wrap. The roster reflows into one card
-// per member when its own card is under 60rem, which a viewport breakpoint
+// per member when its own card is under 64rem, which a viewport breakpoint
 // cannot see: a 1024px iPad Pro leaves it ~690px. A 1280px laptop lands just
 // under the line too.
 const ROSTER_TABLETS = [

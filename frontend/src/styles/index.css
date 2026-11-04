@@ -1286,10 +1286,14 @@
  * its scrollbar at the foot of the list, out of sight.
  *
  * Put `rwd-table-container` on the table's scroll wrapper and `rwd-table-wide`
- * on the table: it reflows to cards whenever the wrapper is under 60rem,
- * whatever the screen or sidebar state. 60rem sits a little above the ~57rem
- * at which the roster stops fitting with long names, so data a bit wider than
- * the e2e fixture still lands in the card layout rather than scrolling. The
+ * on the table: it reflows to cards whenever the wrapper is under 64rem,
+ * whatever the screen or sidebar state.
+ *
+ * 64rem is measured, and the measurement depends on the browser and pointer.
+ * With long names the roster stops fitting at ~57rem in Chromium with a mouse,
+ * ~60rem with touch (the 44px targets widen the Actions column) and ~62rem in
+ * WebKit with touch, whose text runs wider. 60rem was tried first and left a
+ * 1280px touch screen — card exactly 60rem — on a table 33px too wide. The
  * rules repeat the base reflow rather than changing it, so every other reflow
  * table keeps its 767px switch.
  */
@@ -1297,7 +1301,7 @@
   container: rwd-table / inline-size;
 }
 
-@container rwd-table (width < 60rem) {
+@container rwd-table (width < 64rem) {
   .rwd-table.rwd-table-wide thead {
     display: none;
   }

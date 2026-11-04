@@ -637,7 +637,7 @@ export const MembersAdminPage: React.FC = () => {
         {/* View by Member */}
         {viewMode === 'by-member' && (
           // A named, focusable scroll region. The table reflows to cards when
-          // this wrapper is under 60rem (rwd-table-container / rwd-table-wide),
+          // this wrapper is under 64rem (rwd-table-container / rwd-table-wide),
           // so it should not need to scroll; if unusually long data still makes
           // it wider, with no member rows yet nothing inside could take focus
           // and a keyboard could not reach the cut-off columns
@@ -730,7 +730,7 @@ export const MembersAdminPage: React.FC = () => {
                       {membershipSummary(user)}
                     </td>
                     <td data-label="Positions" className="px-4 py-4">
-                      <div className="flex flex-wrap justify-start gap-1 @max-[60rem]/rwd-table:justify-end">
+                      <div className="flex flex-wrap justify-start gap-1 @max-5xl/rwd-table:justify-end">
                         {withoutRankMirrors(user.roles).length === 0 ? (
                           <span className="text-theme-text-muted text-sm">No positions</span>
                         ) : (
