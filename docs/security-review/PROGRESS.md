@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** (branch `claude/security-review-core-infra-pass13`) —
+Feature 33 (Core infrastructure), pass 13, a watchdog pickup. Two real,
+already-merged deltas verified correct, 0 fixed, 0 new findings: an
+operator-only S3/MinIO endpoint allowlist in `config.py` (closes the
+S3/MinIO half of SCH-10 — exact-match comparison confirmed at its one
+caller, no SSRF bypass), and a sign-in rate limit reworked to count per
+account at an address rather than per address alone (closes the "Sign-in
+From a Shared Station Address" owner decision), plus its new reader
+`stepup_throttle.py` (AUTH-23) verified to never touch account lockout. See
+`docs/security-review/CI13-33-core-infra.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 12, PR #4016, merged), preserved for history</summary>
+
 **PR [#4016](https://github.com/thegspiro/the-logbook/pull/4016)** (branch
 `claude/security-review-locations-kiosk-pass12`) —
 Feature 32 (Locations & kiosk), pass 12, a watchdog pickup. Real delta: a
@@ -29,6 +43,8 @@ pre-merged) that points the hub's medical-screening metrics at
 compliance, closing a Pitfall #29 violation — verified correctly gated and
 org-scoped, no new finding. 1 fixed, 0 new flagged. See
 `docs/security-review/LOC12-32-locations-kiosk.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 12, PR #4006, merged), preserved for history</summary>
@@ -24635,7 +24651,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                              | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                         | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                         | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
