@@ -14,6 +14,7 @@ import { ScreeningRequirementForm } from '../components/ScreeningRequirementForm
 import { ScreeningRecordForm } from '../components/ScreeningRecordForm';
 import { ComplianceDashboard } from '../components/ComplianceDashboard';
 import { SelfRecordedBadge } from '../components/SelfRecordedBadge';
+import { useCanViewNarrative } from '../hooks/useCanViewNarrative';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
@@ -44,6 +45,9 @@ export const MedicalScreeningPage: React.FC = () => {
   const requestedTab = searchParams.get('tab');
   const activeTab: Tab = MEDICAL_SCREENING_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'requirements';
   const setActiveTab = (tab: Tab) => setSearchParams({ tab });
+  // MS-14: the provider, result summary and notes are clinical narrative,
+  // returned only with medical_screening.view_details (or .manage).
+  const canViewNarrative = useCanViewNarrative();
   const [showRequirementForm, setShowRequirementForm] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<ScreeningRequirement | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -331,12 +335,21 @@ export const MedicalScreeningPage: React.FC = () => {
                       {SCREENING_STATUS_LABELS[record.status] ?? record.status}
                     </span>
                     {record.self_recorded && <SelfRecordedBadge />}
+                    {!record.requirement_id && (
+                      <span
+                        className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                        title="A record counts only toward the requirement it is linked to. Edit it to link one."
+                      >
+                        Not linked to a requirement
+                      </span>
+                    )}
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
                     {record.user_name ??
                       record.prospect_name ??
                       (record.user_id || record.prospect_id ? 'Unknown' : 'Not linked to a member or prospect')}
-                    {record.provider_name ? ` — ${record.provider_name}` : ''}
+                    {record.requirement_name ? ` — ${record.requirement_name}` : ''}
+                    {canViewNarrative && record.provider_name ? ` — ${record.provider_name}` : ''}
                     {/* Calendar dates, spelled out (W71: these printed as "2026-11-01"). */}
                     {record.scheduled_date ? ` — Scheduled: ${formatCalendarDate(record.scheduled_date)}` : ''}
                     {record.completed_date ? ` — Completed: ${formatCalendarDate(record.completed_date)}` : ''}
@@ -395,6 +408,7 @@ export const MedicalScreeningPage: React.FC = () => {
         <ScreeningRecordForm
           record={editingRecord}
           requirements={requirements}
+          showNarrative={canViewNarrative}
           onSave={handleSaveRecord}
           onClose={() => {
             setShowRecordForm(false);

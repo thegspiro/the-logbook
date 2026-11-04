@@ -87,7 +87,15 @@ async def org_with_records(db_session: AsyncSession, setup_org_and_admin):
 
 
 def _caller(org_id: str, user_id: str) -> SimpleNamespace:
-    return SimpleNamespace(id=user_id, organization_id=org_id, username="officer")
+    # The list reads the caller's grants to decide whether the narrative
+    # comes back (MS-14).
+    return SimpleNamespace(
+        id=user_id,
+        organization_id=org_id,
+        username="officer",
+        positions=[SimpleNamespace(permissions=["medical_screening.view"])],
+        rank=None,
+    )
 
 
 class TestRecordListPagesInSql:

@@ -138,19 +138,22 @@ class TestALapsingWaiverIsCountedAndListed:
     """MS2-7."""
 
     async def test_count_and_list_agree_on_a_waiver(self, db_session, scene):
-        db_session.add(
-            ScreeningRequirement(
-                id=_uid(),
-                organization_id=scene.org_id,
-                name="Annual drug screen",
-                screening_type=ScreeningType.DRUG_SCREENING,
-                is_active=True,
-            )
+        requirement = ScreeningRequirement(
+            id=_uid(),
+            organization_id=scene.org_id,
+            name="Annual drug screen",
+            screening_type=ScreeningType.DRUG_SCREENING,
+            is_active=True,
         )
+        db_session.add(requirement)
+        await db_session.flush()
+        # Linked: a record counts only toward its own requirement (owner
+        # decision 2026-11-01).
         waiver = ScreeningRecord(
             id=_uid(),
             organization_id=scene.org_id,
             user_id=scene.member_id,
+            requirement_id=requirement.id,
             screening_type=ScreeningType.DRUG_SCREENING,
             status=ScreeningStatus.WAIVED,
             completed_date=date.today() - timedelta(days=355),

@@ -982,6 +982,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/members/my-crew',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/members/:userId/training',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',

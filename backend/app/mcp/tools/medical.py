@@ -18,10 +18,8 @@ these tools say is whether a member is current on each screening
 requirement and when it lapses.
 """
 
-from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
@@ -34,16 +32,7 @@ from app.mcp.tools._common import (
     page,
     require_member,
 )
-from app.models.medical_screening import (
-    ScreeningRecord,
-    ScreeningRequirement,
-    ScreeningStatus,
-)
-from app.services.medical_screening_service import (
-    MedicalScreeningService,
-    superseded_record_clause,
-)
-from app.utils.org_timezone import resolve_org_today
+from app.services.medical_screening_service import MedicalScreeningService
 
 
 def register(server: Any) -> None:
@@ -86,6 +75,9 @@ def register(server: Any) -> None:
                     "last_screening_date": iso(item.last_screening_date),
                     "expiration_date": iso(item.expiration_date),
                     "days_until_expiration": item.days_until_expiration,
+                    "due_by_frequency": item.expiration_from_frequency,
+                    "in_grace_period": item.in_grace_period,
+                    "grace_period_ends": iso(item.grace_period_ends),
                     "self_recorded": item.self_recorded,
                 }
                 for item in summary.items
@@ -106,81 +98,47 @@ def register(server: Any) -> None:
         limit: int = 50,
         offset: int = 0,
     ) -> dict:
-        """Members' screening records expiring within ``days`` days, soonest
-        first, with the member's name, the screening type and the expiry
-        date. Paged; ``total`` counts every matching record."""
+        """Members' screenings falling due within ``days`` days, soonest
+        first, with the member's name, the screening type and the due date —
+        whether the record carries an expiration date or falls due by its
+        requirement's frequency. A screening past due but inside its grace
+        period is included with negative days and ``in_grace_period``. Paged;
+        ``total`` counts every matching screening."""
         days = max(1, min(days, 365))
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
-        today = await resolve_org_today(db, principal.organization_id)
-        # The same filter as MedicalScreeningService.get_expiring_soon, which
-        # loads the whole window for a dashboard; here it is paged, and
-        # restricted to members in SQL: applicants' screenings belong to the
-        # prospective-members module, which this switch does not cover.
-        current_statuses = [
-            ScreeningStatus.PASSED.value,
-            ScreeningStatus.COMPLETED.value,
-            ScreeningStatus.WAIVED.value,
-        ]
-        # Only the current record for its member and screening type: one a
-        # newer record supersedes is not an impending lapse. The definition
-        # is shared with get_expiring_soon (superseded_record_clause).
-        superseded = superseded_record_clause()
-        criteria = (
-            ScreeningRecord.organization_id == principal.organization_id,
-            ScreeningRecord.user_id.isnot(None),
-            ScreeningRecord.expiration_date.isnot(None),
-            ScreeningRecord.expiration_date >= today,
-            ScreeningRecord.expiration_date <= today + timedelta(days=days),
-            # The same statuses the compliance summary treats as current: a
-            # waiver expires too, and an expiring count the listing does not
-            # name is one nobody can act on.
-            ScreeningRecord.status.in_(current_statuses),
-            ~superseded,
+        # The dashboard's own list, so the tool and the Compliance tab name the
+        # same screenings: one due-date rule (frequency, grace, the linked
+        # requirement, superseded records), computed in the service rather
+        # than re-derived here (pitfall #29; owner decision 2026-11-01:
+        # compute derived due dates in the tool). A frequency-derived date has
+        # no column to page on in SQL, so the window is loaded and paged here;
+        # it is bounded by ``days`` <= 365 and by one current record per
+        # member and requirement. Members only: applicants' screenings belong
+        # to the prospective-members module, which this switch does not cover.
+        expiring = await MedicalScreeningService(db).get_expiring_soon(
+            principal.organization_id, days=days, members_only=True
         )
-        total = (
-            await db.execute(
-                select(func.count()).select_from(ScreeningRecord).where(*criteria)
-            )
-        ).scalar_one()
-        rows = await db.execute(
-            select(ScreeningRecord)
-            .where(*criteria)
-            .order_by(ScreeningRecord.expiration_date.asc(), ScreeningRecord.id)
-            .offset(offset)
-            .limit(limit)
-        )
-        records = list(rows.scalars().all())
         names = await member_names(
-            db, principal.organization_id, (r.user_id for r in records)
+            db,
+            principal.organization_id,
+            (s.user_id for s in expiring[offset : offset + limit]),
         )
-        requirement_ids = {r.requirement_id for r in records if r.requirement_id}
-        requirements: dict[str, str] = {}
-        if requirement_ids:
-            found = await db.execute(
-                select(ScreeningRequirement.id, ScreeningRequirement.name).where(
-                    ScreeningRequirement.organization_id == principal.organization_id,
-                    ScreeningRequirement.id.in_(requirement_ids),
-                )
-            )
-            requirements = {row.id: row.name for row in found.all()}
-        items = []
-        for r in records:
-            # The criteria above already exclude a record with no member or no
-            # expiration date; this narrows the type for what follows.
-            if r.user_id is None or r.expiration_date is None:
-                continue
-            items.append(
-                {
-                    "record_id": r.id,
-                    "member_id": r.user_id,
-                    "member_name": names.get(r.user_id),
-                    "screening_type": iso(r.screening_type),
-                    "requirement_name": requirements.get(r.requirement_id or ""),
-                    "expiration_date": r.expiration_date.isoformat(),
-                    "days_until_expiration": (r.expiration_date - today).days,
-                }
-            )
-        body = page(items, total, limit, offset)
+        items = [
+            {
+                "record_id": s.record_id,
+                "member_id": s.user_id,
+                "member_name": names.get(s.user_id or ""),
+                "screening_type": iso(s.screening_type),
+                "requirement_name": s.requirement_name,
+                "expiration_date": s.expiration_date.isoformat(),
+                "due_by_frequency": s.expiration_from_frequency,
+                "days_until_expiration": s.days_until_expiration,
+                "in_grace_period": s.in_grace_period,
+                "grace_period_ends": iso(s.grace_period_ends),
+            }
+            for s in expiring[offset : offset + limit]
+        ]
+        body = page(items, len(expiring), limit, offset)
         body["days"] = days
         return body

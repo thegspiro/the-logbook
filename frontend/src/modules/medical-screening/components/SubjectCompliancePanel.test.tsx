@@ -167,4 +167,37 @@ describe('SubjectCompliancePanel', () => {
     expect(await screen.findByText('Failed — not cleared')).toBeInTheDocument();
     expect(screen.queryByText('Expired')).not.toBeInTheDocument();
   });
+
+  // MS-16 (owner decision 2026-11-01): past due inside the grace period still
+  // counts, and the panel says it is past due rather than "Expires in -5 days".
+  it('labels a requirement in its grace period as past due with the end date', async () => {
+    mockGetUserCompliance.mockResolvedValue(
+      summary({
+        compliant_count: 1,
+        non_compliant_count: 0,
+        expiring_soon_count: 1,
+        total_requirements: 1,
+        is_fully_compliant: true,
+        items: [
+          {
+            requirement_id: 'req-1',
+            requirement_name: 'Annual physical',
+            screening_type: 'physical_exam',
+            is_compliant: true,
+            last_screening_date: '2025-10-30',
+            expiration_date: '2026-10-30',
+            days_until_expiration: -5,
+            in_grace_period: true,
+            grace_period_ends: '2026-11-29',
+            status: 'passed',
+            self_recorded: false,
+          },
+        ],
+      })
+    );
+    render(<SubjectCompliancePanel subject={{ type: 'user', id: 'u-1', name: 'Jake Thompson' }} onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/^Past due — grace period until/)).toBeInTheDocument();
+    expect(screen.queryByText(/Expires in -5/)).not.toBeInTheDocument();
+  });
 });

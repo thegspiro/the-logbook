@@ -447,6 +447,17 @@ export interface MembershipTierBenefits {
   [key: string]: unknown;
 }
 
+/**
+ * A rung of the department's ladder as every member may see it: the id and the
+ * department's own name, from `GET /users/membership-tiers/names`. No
+ * advancement years, benefits or occupancy — those stay with the officers'
+ * `MembershipTierConfig`.
+ */
+export interface MembershipTierName {
+  id: string;
+  name: string;
+}
+
 export interface MembershipTier {
   id: string;
   name: string;
@@ -494,14 +505,29 @@ export interface MembershipTierConfig {
   member_counts?: Record<string, number>;
 }
 
-export interface PropertyReturnReport {
-  user_id: string;
+/** One item a member would be asked to return, as the drop's letter lists it. */
+export interface PropertyReturnItem {
   name: string;
+  serial_number: string;
+  asset_tag: string;
+  condition: string;
+  value: number;
+  quantity: number;
+  type: 'assigned' | 'checked_out' | 'issued';
+  /** Already formatted on the department's calendar by the server. */
+  assigned_date: string;
+}
+
+/**
+ * GET /users/{id}/property-return-report — what dropping the member would
+ * ask them to return, built by the same code as the drop's letter. Read-only.
+ */
+export interface PropertyReturnReport {
   member_name: string;
   item_count: number;
   total_value: number;
-  html?: string;
-  items: unknown[];
+  items: PropertyReturnItem[];
+  html: string;
 }
 
 /**
@@ -575,6 +601,17 @@ export interface MemberSupervisor {
   current: SupervisorAssignment | null;
   /** Newest first, the current assignment included. */
   history: SupervisorAssignment[];
+}
+
+/** `GET /users/me/crew`: a member the caller supervises today. Roster fields only. */
+export interface CrewMember {
+  id: string;
+  name: string;
+  rank: string | null;
+  station: string | null;
+  membership_number: string | null;
+  /** When the current assignment began. */
+  supervised_since: string;
 }
 
 /** A current member who may be named as a supervisor. */

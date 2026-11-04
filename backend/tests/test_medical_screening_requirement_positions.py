@@ -46,17 +46,6 @@ def _department_today(monkeypatch):
     )
 
 
-@pytest.fixture(autouse=True)
-def _no_frequencies(monkeypatch):
-    # Grading also reads every requirement's frequency (W71-1); these mocked
-    # requirements carry none, so the fallback has nothing to derive.
-    monkeypatch.setattr(
-        MedicalScreeningService,
-        "_requirement_frequencies",
-        AsyncMock(return_value={}),
-    )
-
-
 def _requirement(roles=None, name="Annual Physical"):
     req = MagicMock(spec=ScreeningRequirement)
     req.frequency_months = None
@@ -67,8 +56,10 @@ def _requirement(roles=None, name="Annual Physical"):
     return req
 
 
-def _passing_record(user_id):
+def _passing_record(user_id, requirement=None):
     rec = MagicMock(spec=ScreeningRecord)
+    # A record counts only toward the requirement it is linked to.
+    rec.requirement_id = requirement.id if requirement is not None else None
     rec.screening_type = ScreeningType.PHYSICAL_EXAM
     rec.status = ScreeningStatus.PASSED.value
     rec.completed_date = TODAY - timedelta(days=30)
@@ -227,7 +218,9 @@ class TestGraders:
             patch.object(service, "list_requirements", return_value=[scoped]),
             patch.object(service, "list_subjects", return_value=subjects),
             patch.object(
-                service, "list_records", return_value=[_passing_record("u-admin")]
+                service,
+                "list_records",
+                return_value=[_passing_record("u-admin", scoped)],
             ),
             patch.object(
                 service, "_position_keys", return_value={"u-admin": {"member"}}

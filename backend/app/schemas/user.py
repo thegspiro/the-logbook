@@ -786,6 +786,19 @@ class UserProfileResponse(_UserResponseFields):
     model_config = _response_config
 
 
+class MemberProfileResponse(UserProfileResponse):
+    """``GET /users/{id}/with-roles``: the profile and digital ID card's read.
+
+    Carries figures computed for display that the profile's write endpoints,
+    which return ``UserProfileResponse``, do not recompute.
+    """
+
+    # The date credited service runs from, for "Member since": the hire date
+    # for a member who never left, later for one who returned after a break.
+    # See ``member_service_history_service.service_since``.
+    service_since: Optional[date] = None
+
+
 class AdminPasswordReset(BaseModel):
     """Schema for admin resetting a user's password"""
 
