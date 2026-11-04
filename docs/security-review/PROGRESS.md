@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4018](https://github.com/thegspiro/the-logbook/pull/4018)** (branch
+`claude/security-review-frontend-shared-pass14`) —
+Feature 34 (Frontend shared), pass 14, a watchdog pickup. **This is the last
+`⬜` row of the current rotation pass — once this PR merges, every feature is
+✅ and the next iteration resets all 34 rows to `⬜` for a fresh pass**, per
+the security-review skill's Step 1. 0 fixed, 0 new findings: a new module
+client (`modules/history/services/api.ts`) and a new offline-queue layer for
+equipment checks/shift reports/skills tests were both verified to correctly
+extend this feature's existing invariants (shared `createApiClient` factory,
+FE3-34-5's ownership-stamping on every new offline queue, additive-only cache
+exclusions). See `docs/security-review/FE14-34-frontend-shared.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 13, PR #4017, merged), preserved for history</summary>
+
 **PR [#4017](https://github.com/thegspiro/the-logbook/pull/4017)** (branch
 `claude/security-review-core-infra-pass13`) —
 Feature 33 (Core infrastructure), pass 13, a watchdog pickup. Two real,
@@ -27,6 +42,8 @@ account at an address rather than per address alone (closes the "Sign-in
 From a Shared Station Address" owner decision), plus its new reader
 `stepup_throttle.py` (AUTH-23) verified to never touch account lockout. See
 `docs/security-review/CI13-33-core-infra.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 12, PR #4016, merged), preserved for history</summary>
@@ -24653,7 +24670,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                              | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                         | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
