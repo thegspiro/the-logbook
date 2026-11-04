@@ -23,8 +23,14 @@ vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: { getBasicApparatus: (...args: unknown[]) => getBasicApparatus(...args) as unknown },
 }));
 
+const linkageRequirements = vi.hoisted(() => ({ value: [] as unknown[] }));
 vi.mock('../hooks/useTrainingLinkageData', () => ({
-  useTrainingLinkageData: () => ({ categories: [], requirements: [], programs: [], phases: [] }),
+  useTrainingLinkageData: () => ({
+    categories: [],
+    requirements: linkageRequirements.value,
+    programs: [],
+    phases: [],
+  }),
 }));
 
 vi.mock('../components/training/TrainingLinkageFields', () => ({ TrainingLinkageFields: () => null }));
@@ -57,6 +63,7 @@ describe('CreateTrainingSessionPage lead instructor', () => {
     getBasicApparatus.mockResolvedValue([]);
     createSession.mockReset();
     createSession.mockResolvedValue({ id: 'session-1', event_id: 'event-1' });
+    linkageRequirements.value = [];
   });
 
   // The page kept the picked member's id locally and sent only their name,
@@ -264,5 +271,56 @@ describe('CreateTrainingSessionPage field names', () => {
     expect(await screen.findByLabelText(/^Location/, { selector: 'select' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Location Details/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Max Participants/)).toBeInTheDocument();
+  });
+});
+
+describe('CreateTrainingSessionPage attendance requirements', () => {
+  beforeEach(() => {
+    getUsers.mockReset();
+    getUsers.mockResolvedValue([]);
+    getCourses.mockReset();
+    getCourses.mockResolvedValue([]);
+    getLocations.mockReset();
+    getLocations.mockResolvedValue([]);
+    getBasicApparatus.mockReset();
+    getBasicApparatus.mockResolvedValue([]);
+    createSession.mockReset();
+    createSession.mockResolvedValue({ id: 'session-1', event_id: 'event-1' });
+    linkageRequirements.value = [
+      { id: 'req-drills', name: 'Company drills', requirement_type: 'session_attendance', required_attendance_pct: 60 },
+      { id: 'req-hours', name: 'Annual hours', requirement_type: 'hours' },
+    ];
+  });
+
+  const fillAndCreate = async (user: ReturnType<typeof userEvent.setup>, tick: boolean) => {
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Company Drill');
+    if (tick) await user.click(await screen.findByRole('checkbox', { name: /Company drills/ }));
+    expect(screen.queryByRole('checkbox', { name: /Annual hours/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
+    await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1));
+  };
+
+  it('sends the ticked attendance requirements with the new session', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await fillAndCreate(user, true);
+
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ attendance_requirement_ids: ['req-drills'] }));
+  });
+
+  it('leaves the session optional when nothing is ticked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await fillAndCreate(user, false);
+
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ attendance_requirement_ids: [] }));
   });
 });

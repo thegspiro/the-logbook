@@ -25,6 +25,8 @@ import { useRanks } from '../hooks/useRanks';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { TrainingLinkageFields } from '../components/training/TrainingLinkageFields';
 import { useTrainingLinkageData } from '../hooks/useTrainingLinkageData';
+import AttendanceRequirementChecklist from '../components/training/AttendanceRequirementChecklist';
+import { attendanceRequirements } from '../utils/attendanceRequirements';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -118,6 +120,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     program_id: undefined,
     phase_id: undefined,
     requirement_id: undefined,
+    attendance_requirement_ids: [],
     course_name: '',
     course_code: '',
     training_type: 'continuing_education',
@@ -1023,6 +1026,22 @@ const CreateTrainingSessionPage: React.FC = () => {
                   onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
                   selectedCourse={selectedCourse}
                 />
+
+                {attendanceRequirements(requirements).length > 0 && (
+                  <fieldset className="mt-6">
+                    <legend className="text-theme-text-primary text-sm font-medium">Counts toward attendance</legend>
+                    <p className="text-theme-text-muted mt-1 mb-3 text-sm">
+                      Members these requirements grade are expected to attend
+                      {isRecurring ? ' every session in the series' : ' this session'}. Leave all unticked to make it
+                      optional.
+                    </p>
+                    <AttendanceRequirementChecklist
+                      requirements={requirements}
+                      value={formData.attendance_requirement_ids ?? []}
+                      onChange={(next) => setFormData((prev) => ({ ...prev, attendance_requirement_ids: next }))}
+                    />
+                  </fieldset>
+                )}
               </div>
 
               {/* Certification Settings */}

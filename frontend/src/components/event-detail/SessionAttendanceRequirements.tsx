@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import type { TrainingSessionResponse } from '../../services/api';
 import { trainingSessionService } from '../../services/api';
 import type { TrainingRequirement } from '../../types/training';
+import AttendanceRequirementChecklist from '../training/AttendanceRequirementChecklist';
+import { attendanceRequirements } from '../../utils/attendanceRequirements';
 import { getErrorMessage } from '../../utils/errorHandling';
 
 interface SessionAttendanceRequirementsProps {
@@ -30,7 +32,7 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
   onChange,
 }) => {
   const linked = session.attendance_requirement_ids ?? [];
-  const options = requirements.filter((r) => r.requirement_type === 'session_attendance');
+  const options = attendanceRequirements(requirements);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string[]>(linked);
   const [saving, setSaving] = useState(false);
@@ -39,9 +41,6 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
   if (options.length === 0 && linked.length === 0) return null;
 
   const names = linked.map((id) => options.find((r) => r.id === id)?.name ?? 'A requirement no longer active');
-
-  const toggle = (id: string) =>
-    setDraft((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
 
   const save = async () => {
     setSaving(true);
@@ -92,22 +91,7 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
           )}
-          <div className="space-y-2">
-            {options.map((r) => (
-              <label key={r.id} className="text-theme-text-primary flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="form-checkbox"
-                  checked={draft.includes(r.id)}
-                  onChange={() => toggle(r.id)}
-                />
-                {r.name}
-                {r.required_attendance_pct ? (
-                  <span className="text-theme-text-muted">({r.required_attendance_pct}%)</span>
-                ) : null}
-              </label>
-            ))}
-          </div>
+          <AttendanceRequirementChecklist requirements={requirements} value={draft} onChange={setDraft} />
           <div className="mt-4 flex flex-wrap justify-end gap-3">
             <button
               type="button"

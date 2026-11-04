@@ -517,3 +517,31 @@ class TestLinkingSessions:
         )
 
         assert error == "Training session not found"
+
+
+@pytest.mark.integration
+class TestTheCountsTowardAttendanceFlag:
+    async def test_only_events_with_a_linked_session_are_flagged(self, db_session):
+        org = await _org(db_session)
+        req = await _requirement(db_session, org)
+        linked = await _drill(db_session, org, _utc(2026, 2, 19, 23), link=[req])
+        optional = await _drill(db_session, org, _utc(2026, 3, 19, 23))
+
+        flagged = await TrainingSessionService(
+            db_session
+        ).events_counting_toward_attendance(
+            [linked.event_id, optional.event_id], org.id
+        )
+
+        assert flagged == {linked.event_id}
+
+    async def test_another_organizations_events_are_not_flagged(self, db_session):
+        org, other = await _org(db_session), await _org(db_session)
+        req = await _requirement(db_session, other)
+        foreign = await _drill(db_session, other, _utc(2026, 2, 19, 23), link=[req])
+
+        flagged = await TrainingSessionService(
+            db_session
+        ).events_counting_toward_attendance([foreign.event_id], org.id)
+
+        assert flagged == set()

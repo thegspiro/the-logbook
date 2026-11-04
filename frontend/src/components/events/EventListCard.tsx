@@ -276,6 +276,12 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
                     Mandatory
                   </span>
                 )}
+                {event.counts_toward_attendance && (
+                  <span className="bg-theme-alert-info-bg text-theme-alert-info-title inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
+                    Counts toward attendance
+                  </span>
+                )}
                 {(event.is_recurring || event.recurrence_parent_id) && (
                   <span className="bg-theme-alert-purple-bg text-theme-alert-purple-text inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
                     <Repeat className="h-3 w-3" />
