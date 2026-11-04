@@ -7,9 +7,11 @@ import type { LiveData } from '../types/evaluations';
 const mine = vi.fn();
 const liveData = vi.fn();
 const myRemoved = vi.fn();
+const attention = vi.fn();
 vi.mock('../services/evaluationsApi', () => ({
   evaluationsService: {
     mine: (...a: unknown[]) => mine(...a) as unknown,
+    attention: (...a: unknown[]) => attention(...a) as unknown,
     liveData: (...a: unknown[]) => liveData(...a) as unknown,
     myRemoved: (...a: unknown[]) => myRemoved(...a) as unknown,
   },
@@ -54,6 +56,8 @@ describe('MyEvaluationsPage', () => {
     mine.mockReset();
     liveData.mockReset();
     myRemoved.mockReset();
+    attention.mockReset();
+    attention.mockResolvedValue({ mine: 0, overdue: 0 });
     liveData.mockResolvedValue(LIVE);
     myRemoved.mockResolvedValue([]);
   });
@@ -85,6 +89,14 @@ describe('MyEvaluationsPage', () => {
     expect(screen.getByText('75%')).toBeInTheDocument();
     expect(screen.getByText('Call tracking is off for the department.')).toBeInTheDocument();
     expect(screen.getByText(/Left out: Leave of absence/)).toBeInTheDocument();
+  });
+
+  it('keeps the heading visible for a member, who has no section strip to name the page', async () => {
+    mine.mockResolvedValue([]);
+    renderWithRouter(<MyEvaluationsPage />);
+    const heading = await screen.findByRole('heading', { level: 1, name: 'My evaluations' });
+    expect(heading).not.toHaveClass('sm:sr-only');
+    expect(screen.queryByRole('navigation', { name: 'Evaluations sections' })).not.toBeInTheDocument();
   });
 
   it('says when there are none yet', async () => {

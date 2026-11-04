@@ -106,12 +106,13 @@ def _written(
 def _annual_definition() -> TemplateDefinition:
     return TemplateDefinition.model_validate(
         {
-            "overall_mode": "weighted",
+            "overall_mode": "sectioned",
             "officer_ranks": [],
             "sections": [
                 {
                     "key": "training_readiness",
                     "title": "Training and readiness",
+                    "weight": 30,
                     "description": (
                         "Whether the member keeps their skills and "
                         "qualifications current."
@@ -132,7 +133,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "Far exceeds the expectation and helps others "
                                 "train.",
                             ),
-                            weight=15,
+                            weight=50,
                             source="training.hours",
                             bands=(
                                 (0, 12, 1),
@@ -154,7 +155,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "All required training is met well ahead of "
                                 "deadlines.",
                             ),
-                            weight=15,
+                            weight=50,
                             source="training.requirements_met_pct",
                             bands=(
                                 (0, 70, 1),
@@ -175,6 +176,7 @@ def _annual_definition() -> TemplateDefinition:
                 {
                     "key": "operational_performance",
                     "title": "Operational performance",
+                    "weight": 45,
                     "description": "How the member performs on calls and on duty.",
                     "items": [
                         _rated(
@@ -192,7 +194,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "Consistently excellent; others look to them "
                                 "on the fireground or at the patient.",
                             ),
-                            weight=20,
+                            weight=45,
                             example_for=(1, 5),
                         ),
                         _rated(
@@ -209,7 +211,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "Models safe practice and corrects unsafe acts "
                                 "in others.",
                             ),
-                            weight=15,
+                            weight=33,
                             example_for=(1, 2),
                         ),
                         _rated(
@@ -223,7 +225,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "Regularly covers more than expected.",
                                 "Among the most reliable members for duty " "coverage.",
                             ),
-                            weight=10,
+                            weight=22,
                             source="shifts.hours",
                         ),
                     ],
@@ -231,6 +233,7 @@ def _annual_definition() -> TemplateDefinition:
                 {
                     "key": "professionalism",
                     "title": "Professionalism and teamwork",
+                    "weight": 25,
                     "items": [
                         _rated(
                             "teamwork",
@@ -245,7 +248,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "Brings the crew together and is sought out for "
                                 "help.",
                             ),
-                            weight=10,
+                            weight=40,
                         ),
                         _rated(
                             "conduct",
@@ -260,7 +263,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "A positive example to others.",
                                 "Exemplary; an ambassador for the department.",
                             ),
-                            weight=10,
+                            weight=40,
                             example_for=(1,),
                         ),
                         _rated(
@@ -274,7 +277,7 @@ def _annual_definition() -> TemplateDefinition:
                                 "Attends nearly every meeting.",
                                 "Attends every meeting and takes part.",
                             ),
-                            weight=5,
+                            weight=20,
                             source="events.meeting_attendance_pct",
                             bands=(
                                 (0, 25, 1),
@@ -420,9 +423,10 @@ STARTERS: Tuple[EvaluationStarter, ...] = (
         name="Annual Member Evaluation",
         description=(
             "A yearly evaluation of training, operational performance and "
-            "professionalism, with goals for the coming year. Training hours, "
-            "required training and meeting attendance suggest a rating from "
-            "the member's figures."
+            "professionalism, with goals for the coming year. Each section is "
+            "graded from Unsatisfactory to Outstanding and the overall grade "
+            "combines them. Training hours, required training and meeting "
+            "attendance suggest a rating from the member's figures."
         ),
         kind=EvaluationTemplateKind.ANNUAL,
         member_class=None,

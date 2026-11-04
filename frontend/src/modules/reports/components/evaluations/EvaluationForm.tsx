@@ -13,6 +13,7 @@ import type {
   DataEntry,
   EvaluationDataSource,
   EvaluationPartKind,
+  Grades,
   ItemAnswer,
   PartContent,
   ScaleLevel,
@@ -20,6 +21,7 @@ import type {
   TemplateItem,
 } from '../../types/evaluations';
 import { formatFigure, needsJustification, withAnswer } from '../../utils/evaluationRecord';
+import { GradePanel } from './GradePanel';
 
 interface EvaluationFormProps {
   kind: EvaluationPartKind;
@@ -33,6 +35,10 @@ interface EvaluationFormProps {
   overallLevels: ScaleLevel[];
   /** Evaluator items the calibrator flagged to revisit. */
   flagged?: string[] | undefined;
+  /** The server's section and overall grades, for a form graded by section. */
+  grades?: Grades | null | undefined;
+  /** The last recalculation failed; the grades shown may be out of date. */
+  gradesError?: boolean | undefined;
 }
 
 const MEETS_LEVELS: ScaleLevel[] = [
@@ -63,6 +69,8 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
   suggested,
   overallLevels,
   flagged = [],
+  grades = null,
+  gradesError = false,
 }) => {
   const evaluator = kind === 'evaluator';
   const flaggedKeys = new Set(evaluator ? flagged : []);
@@ -252,6 +260,15 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
     }))
     .filter((section) => section.items.length > 0);
   const overallLabel = overallLevels.find((l) => l.value === content.overall_rating)?.label;
+  // Only the evaluator grades; a self-evaluation shows the items alone.
+  const graded = evaluator && definition.overall_mode === 'sectioned';
+  const sectionGrade = (key: string) => grades?.sections.find((g) => g.key === key);
+  const setSectionGrade = (key: string, level: number | null, reason: string) => {
+    const next = { ...(content.section_grades ?? {}) };
+    if (level === null) delete next[key];
+    else next[key] = { level, reason };
+    onChange?.({ ...content, section_grades: next });
+  };
 
   return (
     <div className="space-y-6">
@@ -262,8 +279,49 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
           </h3>
           {section.description && <p className="text-theme-text-secondary mt-1 text-sm">{section.description}</p>}
           <ul className="mt-4 space-y-4">{section.items.map(renderItem)}</ul>
+          {graded && sectionGrade(section.key) && (
+            <GradePanel
+              id={`${kind}-${section.key}`}
+              title="Section grade"
+              result={sectionGrade(section.key)}
+              levels={overallLevels}
+              overrideLevel={content.section_grades?.[section.key]?.level ?? null}
+              reason={content.section_grades?.[section.key]?.reason ?? ''}
+              readOnly={readOnly}
+              onChange={(level, reason) => setSectionGrade(section.key, level, reason)}
+            />
+          )}
         </section>
       ))}
+
+      {graded && (
+        <section aria-labelledby={`${kind}-overall-grade`} className="card p-4 sm:p-6">
+          <h3 id={`${kind}-overall-grade`} className="text-theme-text-primary text-lg font-semibold">
+            Overall grade
+          </h3>
+          <p className="text-theme-text-secondary mt-1 text-sm">
+            Each section&apos;s grade counts by its weight. Grades update as you rate and are recalculated when the
+            evaluation is saved.
+          </p>
+          {gradesError && (
+            <p className="text-theme-alert-warning-text mt-2 text-sm" role="status">
+              The grades could not be recalculated just now, so they may not reflect your latest ratings.
+            </p>
+          )}
+          <GradePanel
+            id={`${kind}-overall`}
+            title="Overall grade"
+            result={grades?.overall}
+            levels={overallLevels}
+            overrideLevel={content.overall_rating ?? null}
+            reason={content.overall_override_reason ?? ''}
+            readOnly={readOnly}
+            onChange={(level, reason) =>
+              onChange?.({ ...content, overall_rating: level, overall_override_reason: level === null ? null : reason })
+            }
+          />
+        </section>
+      )}
 
       {evaluator && definition.overall_mode === 'evaluator' && (
         <section aria-labelledby={`${kind}-overall`} className="card p-4 sm:p-6">

@@ -50,6 +50,7 @@ from app.schemas.evaluation import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.evaluation_data_sources import DATA_SOURCES
+from app.services.evaluation_grading import describe_calculated, grade_content
 from app.services.evaluation_service import (
     EvaluationService,
     content_hash,
@@ -278,6 +279,8 @@ class EvaluationDocumentService:
             form_items(definition, EvaluationPartKind.SELF_EVALUATION.value)
         )
 
+        grades = grade_content(definition, evaluator_content)
+        grade_by_key = {g["key"]: g for g in (grades or {}).get("sections", [])}
         sections = []
         for block in definition.sections:
             items = []
@@ -293,10 +296,29 @@ class EvaluationDocumentService:
                         ),
                     }
                 )
-            sections.append({"title": block.title, "items": items})
+            sections.append(
+                {
+                    "title": block.title,
+                    "items": items,
+                    "grade": _grade_lines(grade_by_key.get(block.key)),
+                }
+            )
 
         overall: Optional[str] = None
-        if definition.overall_mode == "weighted":
+        overall_override: Optional[Dict[str, str]] = None
+        grade_rows: List[Tuple[str, str, str]] = []
+        if grades is not None:
+            overall = describe_calculated(grades["overall"])
+            if grades["overall"]["override_level"] is not None:
+                overall_override = {
+                    "label": grades["overall"]["override_label"],
+                    "reason": grades["overall"]["reason"] or "",
+                }
+            grade_rows = [
+                (g["title"], f"{g['weight']}%", _standing(g))
+                for g in grades["sections"]
+            ]
+        elif definition.overall_mode == "weighted":
             pct = weighted_overall(
                 evaluator_content,
                 form_items(definition, EvaluationPartKind.EVALUATOR.value),
@@ -377,6 +399,8 @@ class EvaluationDocumentService:
             "figures": figures,
             "sections": sections,
             "overall": overall,
+            "overall_override": overall_override,
+            "grade_rows": grade_rows,
             "overall_comment": evaluator_content.overall_comment,
             "self_status": self_status,
             "self_comment": self_content.overall_comment if self_content else None,
@@ -412,6 +436,28 @@ class EvaluationDocumentService:
             ),
             "generated_at": _moment(datetime.now(timezone.utc), tz),
         }
+
+
+def _standing(grade: Dict[str, Any]) -> str:
+    """A section's grade for the summary table: the one that stands, and the
+    calculated one beside it when the evaluator changed it."""
+    if grade["override_level"] is not None:
+        return (
+            f"{grade['override_label']} (evaluator's grade; calculated "
+            f"{describe_calculated(grade)})"
+        )
+    return describe_calculated(grade)
+
+
+def _grade_lines(grade: Optional[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+    """What the PDF prints under a graded section."""
+    if grade is None:
+        return None
+    lines = {"calculated": describe_calculated(grade)}
+    if grade["override_level"] is not None:
+        lines["override"] = grade["override_label"]
+        lines["reason"] = grade["reason"] or ""
+    return lines
 
 
 def _day(value: Any) -> str:

@@ -8,6 +8,7 @@ import type {
   DataEntry,
   EvaluationDataSource,
   EvaluationPartKind,
+  GradeResult,
   ItemAnswer,
   PartContent,
   TemplateDefinition,
@@ -61,4 +62,14 @@ export function needsJustification(answer: ItemAnswer | undefined, suggested: nu
   return (
     suggested !== undefined && answer?.rating !== undefined && answer.rating !== null && answer.rating !== suggested
   );
+}
+
+/**
+ * A calculated grade in words, as the PDF prints it: "3.6 of 5 — Exceeds
+ * expectations". The score and grade are the server's; this only words them.
+ */
+export function describeCalculatedGrade(result: GradeResult | undefined | null): string {
+  if (!result || result.score === null) return 'Not graded yet';
+  const score = formatNumber(result.score, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `${score} of 5 — ${result.calculated_label ?? ''}`;
 }

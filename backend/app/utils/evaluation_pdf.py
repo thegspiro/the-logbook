@@ -46,7 +46,11 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
     text), ``figures`` (list of ``(label, value)``), ``sections`` (each
     ``{"title", "items": [{"label", "evaluator", "self"}]}`` where each
     answer is ``{"answer", "notes": [(label, text)]}`` or None),
-    ``overall``, ``overall_comment``, ``self_status``, ``self_comment``,
+    ``overall``, ``overall_override`` (``{"label", "reason"}`` when the
+    evaluator changed a calculated overall grade, else None), ``grade_rows``
+    (``(section, weight, grade)`` for a form graded by section, else empty),
+    each section's ``grade`` (``{"calculated", "override", "reason"}`` or
+    None), ``overall_comment``, ``self_status``, ``self_comment``,
     ``signatures`` (each ``{"label", "name", "disposition", "comment",
     "signed_at"}``), ``amendments`` (each ``{"revision", "by", "at",
     "reason"}``, absent or empty when never amended), ``response`` (``{"text",
@@ -142,12 +146,60 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
                             f"<i>{esc(label)}:</i> {_multiline(text)}", styles["body"]
                         )
                     )
+        grade = block.get("grade")
+        if grade:
+            body.append(
+                Paragraph(
+                    f"<b>Section grade:</b> {esc(grade.get('calculated'))}",
+                    styles["body"],
+                )
+            )
+            if grade.get("override"):
+                body.append(
+                    Paragraph(
+                        f"<b>Evaluator's grade:</b> {esc(grade.get('override'))}",
+                        styles["body"],
+                    )
+                )
+                body.append(
+                    Paragraph(
+                        f"<i>Why:</i> {_multiline(grade.get('reason'))}", styles["body"]
+                    )
+                )
         story.append(section(esc(block.get("title")), [padded(body)], styles))
 
     summary: List[Any] = []
+    # Beside the padded summary rather than inside it, as the figures table
+    # is: padding added to a full-width table pushes it past the margin.
+    grade_table: List[Any] = []
+    grade_rows = record.get("grade_rows") or []
+    if grade_rows:
+        rows = [["Section", "Weight", "Grade"]]
+        rows.extend(
+            [
+                Paragraph(esc(title), styles["cell"]),
+                Paragraph(esc(weight), styles["cell"]),
+                Paragraph(esc(grade), styles["cell"]),
+            ]
+            for title, weight, grade in grade_rows
+        )
+        grade_table.append(ruled_table(rows, [0.4, 0.15, 0.45], []))
     if record.get("overall"):
         summary.append(
             Paragraph(f"<b>Overall:</b> {esc(record.get('overall'))}", styles["body"])
+        )
+    override = record.get("overall_override")
+    if override:
+        summary.append(
+            Paragraph(
+                f"<b>Evaluator's overall grade:</b> {esc(override.get('label'))}",
+                styles["body"],
+            )
+        )
+        summary.append(
+            Paragraph(
+                f"<i>Why:</i> {_multiline(override.get('reason'))}", styles["body"]
+            )
         )
     if record.get("overall_comment"):
         summary.append(
@@ -168,7 +220,7 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
                 styles["body"],
             )
         )
-    story.append(section("Summary", [padded(summary)], styles))
+    story.append(section("Summary", [*grade_table, padded(summary)], styles))
 
     signature_rows: List[List[Any]] = [["Step", "Signed by", "Signature", "Date"]]
     for sig in record.get("signatures") or []:
