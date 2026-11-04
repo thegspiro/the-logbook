@@ -134,7 +134,7 @@ class TestGuestCheckInGating:
         event = _make_event(allow_guest_check_in=False)
         service = GuestCheckInService(_mock_db())
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -209,7 +209,7 @@ class TestGuestAttendanceRecord:
         mock_db = _mock_db()
         service = GuestCheckInService(mock_db)
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -247,7 +247,7 @@ class TestGuestAttendanceRecord:
         mock_db = _mock_db(existing_attendee=existing)
         service = GuestCheckInService(mock_db)
 
-        attendee, error, _created = await service.check_in_guest(
+        attendee, error, _created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -278,7 +278,7 @@ class TestGuestAttendanceRecord:
         mock_db = _mock_db(existing_attendee=existing)
         service = GuestCheckInService(mock_db)
 
-        attendee, error, _created = await service.check_in_guest(
+        attendee, error, _created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -305,7 +305,7 @@ class TestGuestAttendanceRecord:
         )
         service = GuestCheckInService(_mock_db(existing_attendee=existing))
 
-        attendee, _error, _created = await service.check_in_guest(
+        attendee, _error, _created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -328,7 +328,7 @@ class TestGuestProspectCreation:
         service = GuestCheckInService(_mock_db())
         fake_pipeline = _patch_pipeline(service, monkeypatch, created=prospect)
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -358,7 +358,7 @@ class TestGuestProspectCreation:
         service = GuestCheckInService(_mock_db())
         fake_pipeline = _patch_pipeline(service, monkeypatch)
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -375,7 +375,7 @@ class TestGuestProspectCreation:
         service = GuestCheckInService(_mock_db())
         fake_pipeline = _patch_pipeline(service, monkeypatch)
 
-        _attendee, _error, created = await service.check_in_guest(
+        _attendee, _error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -399,7 +399,7 @@ class TestGuestProspectCreation:
         service = GuestCheckInService(_mock_db())
         fake_pipeline = _patch_pipeline(service, monkeypatch, existing=existing)
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -418,7 +418,7 @@ class TestGuestProspectCreation:
         service = GuestCheckInService(_mock_db())
         _patch_pipeline(service, monkeypatch, raises=RuntimeError("pipeline down"))
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -581,7 +581,7 @@ class TestGuestProspectCreation:
         # Both the pre-check and the post-failure recheck find no link —
         # this was a real failure, not the duplicate-link race.
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
@@ -635,7 +635,7 @@ class TestGuestProspectCreation:
 
         mock_db.flush = AsyncMock(side_effect=flaky_flush)
 
-        attendee, error, created = await service.check_in_guest(
+        attendee, error, created, _already_checked_in = await service.check_in_guest(
             event=event,
             organization_id=event.organization_id,
             first_name="Dana",
