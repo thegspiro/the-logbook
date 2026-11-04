@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4016](https://github.com/thegspiro/the-logbook/pull/4016)** (branch
+`claude/security-review-locations-kiosk-pass12`) —
+Feature 32 (Locations & kiosk), pass 12, a watchdog pickup. Real delta: a
+locked-read fix to `GuestCheckInService.check_in_guest` (already merged
+before this pass started) closed the two-simultaneous-QR-scans race, but
+left `check_in_known_prospect` asking the same question itself via a
+separate, still-unlocked pre-check — this pass found and fixed that second
+race (LOC12-1). Also reviewed a `admin_hub_service.py` rework (also
+pre-merged) that points the hub's medical-screening metrics at
+`MedicalScreeningService.get_compliance_roster` instead of re-deriving
+compliance, closing a Pitfall #29 violation — verified correctly gated and
+org-scoped, no new finding. 1 fixed, 0 new flagged. See
+`docs/security-review/LOC12-32-locations-kiosk.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 12, PR #4006, merged), preserved for history</summary>
+
 **PR [#4006](https://github.com/thegspiro/the-logbook/pull/4006)** (branch
 `claude/security-review-scheduled-tasks-pass12`) — Feature 31 (Scheduled
 tasks), pass 12, a watchdog pickup. Real delta: two new scheduled tasks
@@ -26,6 +43,8 @@ scheduler-wiring angle; plus an already-merged fix (CRON-41) to
 restart no longer re-sends the day's overdue-equipment email to every
 holder. 0 fixed, 0 new findings. See
 `docs/security-review/CRON12-31-scheduled-tasks.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 12, PR #4003, merged), preserved for history</summary>
@@ -24615,7 +24634,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                          | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                         | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                               | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                              | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                              | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                         | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                | ⬜     |
 

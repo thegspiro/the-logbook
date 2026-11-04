@@ -546,15 +546,17 @@ async def guest_check_in(
 
     service = GuestCheckInService(db)
     try:
-        attendee, error, prospect_created = await service.check_in_guest(
-            event=event,
-            organization_id=location.organization_id,
-            first_name=payload.first_name,
-            last_name=payload.last_name,
-            email=str(payload.email) if payload.email else None,
-            phone=payload.phone,
-            organization_name=payload.organization_name,
-            interest_reason=payload.interest_reason,
+        attendee, error, prospect_created, _already_checked_in = (
+            await service.check_in_guest(
+                event=event,
+                organization_id=location.organization_id,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
+                email=str(payload.email) if payload.email else None,
+                phone=payload.phone,
+                organization_name=payload.organization_name,
+                interest_reason=payload.interest_reason,
+            )
         )
     except ValueError as exc:
         raise HTTPException(
