@@ -1007,9 +1007,14 @@
      Height comes from a transparent vertical border rather than from h-11 or
      padding, because `background-clip: padding-box` then keeps the paint off it:
      the border box is 44px for hit-testing and layout, the painted padding box
-     is the same 24px pill as before. `rounded-full` on a 44px border box leaves
-     the padding box a 12px radius — exactly half of 24 — so it stays a pill
-     rather than a rounded rectangle.
+     is the same 24px pill as before.
+     The radius is elliptical on purpose and must not go back to `rounded-full`.
+     An inner (padding-box) radius is the outer radius minus the border on each
+     axis separately. `rounded-full` on the 44x44 border box resolves to 22px on
+     both axes, so the padding box got 22px across but only 12px down — on a
+     44x24 box that is a full ellipse, which is how every switch on a phone or
+     iPad rendered as an oval. 12px across / 22px down leaves 12px / 12px inside:
+     a true 24px pill.
      Not a negative margin to claw the 20px of layout back. form-checkbox above
      carries the scar: `padding: 14px; margin: -14px` grew no hit area on a
      replaced element while the negative margin stayed in force, turning a gap-3
@@ -1023,6 +1028,7 @@
   @media (max-width: 767px), (pointer: coarse) {
     height: 44px;
     border-block: 10px solid transparent;
+    border-radius: 12px / 22px;
   }
 }
 
