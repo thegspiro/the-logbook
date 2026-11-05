@@ -5,6 +5,24 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 4 – 5, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+
+- **Scheduling** can require approval before a member from another department
+  takes a shift, and open swaps now reach members through the bell.
+- **Session Attendance** is a new training requirement: attend a share of
+  sessions rather than log hours.
+- **Compliance Settings** moved to Training Admin → Settings & Data.
+- **Historical Data Import** now brings in training records, and the member
+  profile shows imported shift and call history.
+- **Membership tiers** apply by membership status, every member shows a tier
+  name, and **My Crew** lists the members you supervise.
+- **Medical screening** grace periods now count, and a record only counts
+  toward the requirement it is linked to.
+- **Dashboard** sections say plainly when there is nothing to show.
+
 ## Recent changes: November 3 – 4, 2026
 
 The engineering audit is
