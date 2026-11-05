@@ -286,7 +286,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 onClick={() => {
                   void handleTogglePlatoons(!platoonsEnabled);
                 }}
-                className={`toggle-track-sm ${platoonsEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                className={`toggle-track-sm ${platoonsEnabled ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}
               >
                 <span className={`toggle-knob-sm ${platoonsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -362,7 +362,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     void saveFeature({ auto_generate_enabled: !feature.auto_generate_enabled });
                   }}
                   className={`toggle-track-sm ${
-                    feature.auto_generate_enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    feature.auto_generate_enabled ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
@@ -438,7 +438,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     void saveFeature({ require_end_of_shift_checks: !feature.require_end_of_shift_checks });
                   }}
                   className={`toggle-track-sm ${
-                    feature.require_end_of_shift_checks ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    feature.require_end_of_shift_checks ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
@@ -547,7 +547,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   onClick={() => {
                     void saveFeature({ enforce_evoc: !feature.enforce_evoc });
                   }}
-                  className={`toggle-track-sm ${feature.enforce_evoc ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                  className={`toggle-track-sm ${feature.enforce_evoc ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}
                 >
                   <span className={`toggle-knob-sm ${feature.enforce_evoc ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
@@ -573,7 +573,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     void saveFeature({ external_shifts_require_approval: !feature.external_shifts_require_approval });
                   }}
                   className={`toggle-track-sm ${
-                    feature.external_shifts_require_approval ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    feature.external_shifts_require_approval ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
@@ -601,7 +601,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     void saveFeature({ restrict_checkin_to_assigned: !feature.restrict_checkin_to_assigned });
                   }}
                   className={`toggle-track-sm ${
-                    feature.restrict_checkin_to_assigned ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    feature.restrict_checkin_to_assigned ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
@@ -628,7 +628,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   onClick={() => {
                     void saveFeature({ pre_shift_work_enabled: !preShiftWorkEnabled });
                   }}
-                  className={`toggle-track-sm ${preShiftWorkEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                  className={`toggle-track-sm ${preShiftWorkEnabled ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}
                 >
                   <span className={`toggle-knob-sm ${preShiftWorkEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
