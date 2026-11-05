@@ -78,6 +78,7 @@ const DrillsSection: React.FC<DrillsSectionProps> = ({ detail }) => {
         chosen.length === 1 ? 'requirement' : `${chosen.length} requirements`
       } you chose, and attaches each member's imported record of that date. Running it again creates nothing twice and re-links the sessions to the requirements chosen then.`,
       confirmLabel: 'Create drills',
+      variant: 'info',
       cancelLabel: 'Not yet',
     });
     if (!ok) return;
