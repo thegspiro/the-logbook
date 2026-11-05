@@ -10,18 +10,19 @@ const TIERS = [
   { cls: 'rwd-table-2xwide', width: '96rem' },
 ];
 
-const blockFor = (width: string): string => {
-  const open = `@container rwd-table (width < ${width}) {`;
-  const start = stylesheet.indexOf(open);
-  if (start < 0) return '';
+const bodyOf = (open: string, from = 0): { start: number; body: string } => {
+  const start = stylesheet.indexOf(open, from);
+  if (start < 0) return { start, body: '' };
   let depth = 0;
   for (let i = start + open.length - 1; i < stylesheet.length; i += 1) {
     if (stylesheet[i] === '{') depth += 1;
     if (stylesheet[i] === '}') depth -= 1;
-    if (depth === 0) return stylesheet.slice(start + open.length, i);
+    if (depth === 0) return { start, body: stylesheet.slice(start + open.length, i) };
   }
-  return '';
+  return { start, body: '' };
 };
+
+const blockFor = (width: string): string => bodyOf(`@container rwd-table (width < ${width}) {`).body;
 
 /**
  * The container-query reflow tiers are three copies of one rule set, differing
@@ -40,6 +41,33 @@ describe('rwd-table container-query tiers', () => {
     expect(body, `no @container rwd-table (width < ${width}) block`).not.toBe('');
     expect(body).toContain(`.rwd-table.${cls} thead`);
     expect(body).toMatch(/display:\s*none/);
+  });
+
+  // A container query also answers on paper, where a printed page is ~700px
+  // wide: unguarded, every opted-in table would print as stacked cards.
+  it('applies on screen only, so a printed table stays a table', () => {
+    const screenBlocks: string[] = [];
+    for (let from = 0; ;) {
+      const { start, body } = bodyOf('@media screen {', from);
+      if (start < 0) break;
+      screenBlocks.push(body);
+      from = start + 1;
+    }
+    for (const { width } of TIERS) {
+      expect(
+        screenBlocks.some((body) => body.includes(`@container rwd-table (width < ${width}) {`)),
+        `the ${width} tier is not inside @media screen`
+      ).toBe(true);
+    }
+  });
+
+  // The base reflow reaches <tbody> only. In a tier, a <tfoot> totals row kept
+  // its table layout once the body became cards and set the table's width on
+  // its own, wider than the card the tier exists to fit.
+  it.each(TIERS)('reflows $cls footer rows as well as body rows', ({ cls, width }) => {
+    const body = blockFor(width);
+    expect(body).toContain(`.rwd-table.${cls} :is(tbody, tfoot) tr`);
+    expect(body).toContain(`.rwd-table.${cls} :is(tbody td, tfoot td, tfoot th)`);
   });
 
   it('keeps every tier identical apart from its class', () => {
