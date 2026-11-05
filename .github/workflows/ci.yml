@@ -1127,7 +1127,12 @@ jobs:
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The suite itself (install + run) now lands at 30:15-30:21 on a clean
+    # runner -- confirmed by two consecutive timeout cancellations on PR
+    # #4087 (2026-11-05), each stopped a few specs from the end with zero
+    # failing assertions beforehand. 30 minutes is no longer a margin, it's
+    # the median; 40 gives real headroom without masking an actual hang.
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: frontend
