@@ -2780,26 +2780,19 @@ async def review_follow_up_contact_change(
     raise HTTPException(status_code=404, detail="Follow-up form not found")
 
 
-@router.get(
-    "/prospects/{prospect_id}/follow-up-forms/{request_id}/answers",
-    response_model=FollowUpAnswersResponse,
-)
-async def get_follow_up_form_answers(
+async def _follow_up_answers(
+    db: AsyncSession,
+    current_user: User,
+    access: ProspectAccess,
     prospect_id: UUID,
     request_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
-):
-    """
-    A submitted follow-up form's answers. Sensitive answers are included only
-    for a viewer holding ``sensitive_answers.view`` or assigned to interview
-    this applicant, and each such reveal is audit-logged with the grant it was
-    made under; anyone else, a case manager included, sees them marked as
-    withheld.
-
-    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
-    """
+    *,
+    for_interview: bool,
+) -> dict:
+    """A submitted follow-up form's answers, sensitive ones revealed only to
+    ``sensitive_answers.view`` holders and, when ``for_interview``, to the
+    applicant's assigned interviewers. Each reveal is audit-logged with the
+    grant it was made under."""
     try:
         result = await FollowUpFormService(db).submitted_answers(
             str(prospect_id), str(request_id), current_user.organization_id
@@ -2809,12 +2802,13 @@ async def get_follow_up_form_answers(
     if result is None:
         raise HTTPException(status_code=404, detail="Follow-up form not found")
 
-    # An interviewer assignment is a grant for this one applicant: the
+    # An interviewer assignment is a grant for this one applicant, and only on
+    # the Interview page, which reads through the interview route: the
     # interviewer reads the answers they are interviewing about, and nothing
     # else the permission would open. The audit row records which applied.
     if user_has_permission(current_user, SENSITIVE_ANSWERS_VIEW.name):
         via: str | None = "permission"
-    elif access.is_interviewer:
+    elif for_interview and access.is_interviewer:
         via = "interviewer_assignment"
     else:
         via = None
@@ -2840,11 +2834,61 @@ async def get_follow_up_form_answers(
                 "follow_up_request_id": str(request_id),
                 "prospect_id": str(prospect_id),
                 "via": via,
+                "screen": "interview" if for_interview else "applicant",
             },
             user_id=str(current_user.id),
             username=current_user.username,
         )
     return result
+
+
+@router.get(
+    "/prospects/{prospect_id}/follow-up-forms/{request_id}/answers",
+    response_model=FollowUpAnswersResponse,
+)
+async def get_follow_up_form_answers(
+    prospect_id: UUID,
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
+):
+    """
+    A submitted follow-up form's answers. Sensitive answers are included only
+    for a viewer holding ``sensitive_answers.view``, and each such reveal is
+    audit-logged; anyone else sees them marked as withheld. An assigned
+    interviewer reads them on the Interview page, through
+    ``/prospects/{id}/interview/follow-up-forms/{request_id}/answers``.
+
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
+    """
+    return await _follow_up_answers(
+        db, current_user, access, prospect_id, request_id, for_interview=False
+    )
+
+
+@router.get(
+    "/prospects/{prospect_id}/interview/follow-up-forms/{request_id}/answers",
+    response_model=FollowUpAnswersResponse,
+)
+async def get_interview_follow_up_form_answers(
+    prospect_id: UUID,
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    access: ProspectAccess = Depends(require_prospect_access(Level.SEE)),
+):
+    """
+    A submitted follow-up form's answers, for the applicant's Interview page.
+    As the general route, except that the applicant's assigned interviewers
+    also see the sensitive answers; a case manager still sees them withheld.
+    Each reveal is audit-logged with the grant it was made under.
+
+    **Requires permission: prospective_members.view_all, or an assignment to this applicant as case manager or interviewer**
+    """
+    return await _follow_up_answers(
+        db, current_user, access, prospect_id, request_id, for_interview=True
+    )
 
 
 @router.get(
