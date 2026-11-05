@@ -1230,8 +1230,8 @@ const MedicalSuppliesPage: React.FC = () => {
                     Select all on this page
                   </label>
                 )}
-                <div className="card overflow-x-auto p-0">
-                  <table className="rwd-table w-full text-sm">
+                <div className="card rwd-table-container overflow-x-auto p-0">
+                  <table className="rwd-table rwd-table-wide w-full text-sm">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         {canManage && (
