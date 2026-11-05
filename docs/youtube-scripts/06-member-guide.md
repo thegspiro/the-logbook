@@ -58,6 +58,20 @@ tablet, checking training status on a laptop.]**
 
 **[SCREEN: Show 2FA prompt if applicable]**
 
+**[SCREEN: The second step of sign-in: Use your passkey above the 6-digit code
+box, with the Use a recovery code link beneath]**
+
+> "Two-step sign-in can also be a **passkey** — Face ID, a fingerprint or your
+> phone's PIN instead of typing a code. After your password, tap **Use your
+> passkey** and confirm on your device. The authenticator code box is still there
+> if you use one, and so is **Use a recovery code**. You add a passkey under **My
+> Account**, then **Security**, on the **Passkeys** card — name it, say 'My phone',
+> and you can keep up to three."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds; re-time Chapter 2.
+A passkey does not replace the password, and a failed one counts toward the
+account lock like a wrong code.]**
+
 > "If you're an officer or administrator, two-factor isn't optional: you'll see a
 > banner with the days left to set it up, and for sensitive actions the app will
 > ask for a code before it goes ahead."
@@ -113,7 +127,9 @@ Administrative]**
 
 > "And if several notifications of the same kind land together — five
 > attendance prompts after a busy weekend — they fold into one row that says
-> how many. Tap it and they open out, each with its own link."
+> how many. Tap it and they open out, each with its own link. The folded row
+> now previews the **newest** message instead of just repeating the title, so you
+> can see what the latest one says before you open it."
 
 **[PRODUCTION NOTE — 2026-10-04. New line, about 8 seconds. To film it, the
 demo member needs two or more unpinned notifications of one category; a pinned
@@ -145,6 +161,22 @@ one never folds.]**
 member who lacks the qualification for one open shift (65422ea6). If the
 eligibility lookup fails the label doesn't appear and Sign Up is offered, with
 the same refusal on the tap — don't film that state.]**
+
+**[SCREEN: Point to the Take a Shift button on the dashboard, on a phone, reading
+"2 open · 2 short-staffed"; then a My Upcoming Shifts row reading "7:00 AM · 24
+hr"]**
+
+> "If you hold a seat, **Take a Shift** sits near the top, and under it a count of
+> how many shifts are open and how many are short-staffed — that count shows on a
+> phone now too, where most people grab a shift. Members who can't hold a seat,
+> an administrative member for example, don't see the button. And a shift that
+> runs exactly twenty-four hours reads '7:00 AM · 24 hr' instead of '7:00 AM to
+> 7:00 AM', which looked like a shift of no length. One that ends on a later day
+> says 'next day'."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds; label checked
+against Dashboard.tsx. Film on a phone-width viewport with an open
+short-staffed shift in the window.]**
 
 **[SCREEN: Point to the "and N more" line under Open Shifts]**
 
@@ -201,6 +233,17 @@ this narration walks. The demo seeder produces both.]**
 
 > "Each event card shows the name, date, time, location, and how many people
 > have RSVPed. Click on any event to see the full details."
+
+**[SCREEN: An event card carrying a "Counts toward attendance" badge beside
+"Mandatory"; the same badge on the calendar and the event page]**
+
+> "Some drills carry a **Counts toward attendance** badge next to **Mandatory**.
+> That means your department grades a training requirement on how many of these
+> sessions you turn up to — so being there matters here, not just the hours
+> logged. You'll see the badge on the list, the calendar and the event page."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 15 seconds. Only appears when the
+department has a Session Attendance requirement and the session is linked to it.]**
 
 ### RSVPING TO AN EVENT (5:30 – 6:30)
 
@@ -392,6 +435,21 @@ may delete approved certificate files after a department-set number of days
 (Script 05); the record stays, the attached file goes — don't promise a member
 their scan lasts forever.]**
 
+**[SCREEN: A requirement card with the blue note "Adjusted for 3 months on
+leave", then "Show monthly hours" expanded; excused months labelled Leave or
+Waived]**
+
+> "If you've been on leave, look at the requirement card. A blue note reads
+> something like **Adjusted for 3 months on leave**, with your original target
+> and the adjusted one. Open **Show monthly hours** and each excused month is
+> labelled **Leave** or **Waived**. Anything you trained while on leave still
+> counts toward your total, so the leave and the hours are both on the record.
+> How much of a partly covered month is excused is your department's **Months on
+> leave** setting."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds; needs a member with
+a recorded leave of absence.]**
+
 **[SCREEN: Scroll down the same page to the Skills Tests section.]**
 
 > "Scroll down and there's a **Skills Tests** section too. If somebody's run you
@@ -432,6 +490,18 @@ empty.]**
 > "And it works the other way too. **You** can run one. If you're the senior
 > person on a crew and you're checking somebody off, you don't need officer
 > permissions to do it — you run the sheet, and an officer signs the result."
+
+**[SCREEN: Sidebar → Evaluations, opening My evaluations; an evaluation with the
+member response box]**
+
+> "One more place that's yours: **Evaluations** in the navigation opens **My
+> evaluations**, every member's own periodic reviews — a probationary check-in, a
+> yearly review — with your figures for the current period alongside. Once an
+> evaluation is finalized, you can write a response for thirty days: **Save draft** to keep it private while you work, then
+> **Submit response** when you're done. Nobody can evaluate or sign their own."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds. The 30 days is the
+form's setting. Page title is "My evaluations".]**
 
 ### SUBMITTING EXTERNAL TRAINING (10:00 – 11:30)
 
@@ -865,6 +935,11 @@ appear.]**
 
 **[SCREEN: Show the confirmation screen with the vote receipt]**
 
+> "If you can't vote in an election you expected to, the app now tells you which
+> rule you don't meet — a waiting period, a meeting-attendance rule or your
+> membership tier — rather than only saying you're not on the voter list. Those
+> are your department's rules; ask your secretary if you think yours is wrong."
+
 > "After you submit, you'll see a vote receipt — a code that proves your vote
 > was recorded without revealing who you voted for. Save it if you ever want to
 > verify your vote was counted."
@@ -963,14 +1038,20 @@ before this window. Re-record the walkthrough and this cue.]**
 > rank on the public website roster. And sending you text-message
 > notifications."
 
-**[SCREEN: Show the three checkboxes; one displays "(not answered)"]**
+**[SCREEN: Show the Yes / No pair for Photo use and Public roster listing, both
+unanswered, and the Text message notifications switch below]**
 
-> "None of these are required to be a member. Check them, uncheck them, change
-> your mind next year — it's up to you, and every change is dated."
+> "Photo use and roster listing are a **Yes** or **No** pair, and neither is
+> chosen until you answer. Pressing **No** records that you declined; leaving it
+> blank means 'not answered'. Text message notifications stays a switch, because
+> it's also your text-message consent on record."
+
+> "None of these are required to be a member. Change your answer whenever you
+> like — it's up to you, and every change is dated."
 
 **[CALLOUT: "Not answered = no. Silence is never consent."]**
 
-> "See that one marked 'not answered'? That's not a bug. If you've never made a
+> "See one marked 'not answered'? That's not a bug. If you've never made a
 > choice, the department treats it as a no. Your silence doesn't count as
 > permission. So if you're wondering why you never get department texts —
 > that's why, and this is where you fix it."
@@ -1017,6 +1098,34 @@ before this window. Re-record the walkthrough and this cue.]**
 > have no login here to take themselves back out. So the system treats them as
 > theirs, not just yours."
 
+**[SCREEN: Your profile, scrolled to Shift & Call History: hours, calls and
+outside-department hours by month, year and all time. Then Shift Scheduling → My
+Shifts → Hours showing the same figures as My Hours]**
+
+> "Scroll down your profile and you'll find **Shift & Call History** — your hours,
+> your calls and any time with other departments, by month, year and all time. It's
+> the same set of figures as **My Hours** under Scheduling, and you and the
+> officers who read scheduling reports are the only ones who see it. The profile
+> also counts **Member since** from your credited service, so if you left and came
+> back, your earlier years carry over."
+
+**[SCREEN: The profile's Rank, Member class and Membership status fields]**
+
+> "Your profile shows a **Member class** and a **Membership status**, two separate
+> things — class is the kind of member, operational or administrative, status is
+> where you stand, such as probationary or regular. Those two are what decide
+> things like which ballot items you can vote on."
+
+**[SCREEN: Navigation → My Crew; the list of members who report to you]**
+
+> "And if you supervise anyone — you're the person a member's **Reports To** points
+> at — a **My Crew** entry appears in your navigation. It lists the members who
+> report to you with their training standing and released evaluations, never
+> medical information, and a crew member's time-off request notifies you."
+
+**[PRODUCTION NOTE — 2026-11-05. Three new beats, about 55 seconds total;
+re-time Chapter 7. My Crew appears only for a current supervisor.]**
+
 ### MOBILE ACCESS (23:00 – 23:30)
 
 > "The Logbook is a Progressive Web App — which means it works on your phone's
@@ -1047,6 +1156,11 @@ My Account > Notifications, showing the Push notifications toggle.]**
 
 **[SCREEN: The bottom tab bar on a phone.]**
 
+> "On a tablet, a wide table — the member list, inventory, dues, your training
+> history — turns into stacked cards when its own card gets narrow, so you're not
+> scrolling sideways with the side menu open. And switches are proper pills now
+> instead of ovals."
+
 > "You'll also notice there's a bar across the bottom on a phone now — four
 > destinations plus More. Everything used to live behind that menu button in the
 > top-left corner, which is the hardest place on a big phone to reach one-handed."
@@ -1073,6 +1187,14 @@ Discard]**
 need new footage (9a8af58c, b574c324). The held-items notice only appears when
 the device has untagged queue entries left from before the upgrade, so it has
 to be staged. Never film a real member's queued report.]**
+
+> "And if you saved an equipment check or a skills evaluation while you had no
+> signal: in Chrome and Edge, including on Android, your phone sends queued items
+> by itself once signal returns, even if The Logbook is closed. Safari on an
+> iPhone, and Firefox, don't do that — open the app with a connection and it
+> sends. One caution: signing out deletes anything still queued, and Sign Out
+> warns you first if skills evaluations are unsent. If your session simply expires,
+> unsent skills evaluations are kept for seven days for the same examiner."
 
 **[CALLOUT: "Add to Home Screen = full app experience on your phone"]**
 

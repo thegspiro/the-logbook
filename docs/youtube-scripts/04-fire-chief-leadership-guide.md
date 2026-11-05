@@ -1099,6 +1099,28 @@ Written by me, Review Queue, Flagged, Drafts — and the New report button]**
 Scheduling. Review Queue and Flagged appear only when report review is switched
 on.]**
 
+### DECISIONS THAT NEED A SECOND PERSON (added 2026-11-05)
+
+**[SCREEN: Finance → Budget requests, a request the viewer submitted; then a
+minutes page where the submitter is told "Waiting for another officer to
+approve."]**
+
+> "A few decisions can't be made by the person who started them. A budget
+> request can't be decided by whoever submitted it, or by the owner of the line
+> it's for — and an IP exception can't be approved by the member it's for or the
+> officer who filed it. Minutes work the same way: the officer who circulated
+> them can't adopt them. If your department has one finance manager, grant
+> **finance.manage** to a second member, because the refusal is deliberate."
+
+> "And when a second officer does select **Adopt Minutes**, the meeting those
+> minutes record is approved in the same step, in their name. The meeting card
+> stops reading Draft, and an approved meeting can't be deleted."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 40 seconds (2026-10-27, 11-03).
+Budget requests and IP exceptions have no new screen; the refusal appears as a
+message on **Record decision**. Reimbursement approvals already refuse the
+requester in the same way.]**
+
 ### USING DATA FOR DECISIONS (24:15 – 25:15)
 
 > "Here's the bigger picture on reports. The Logbook replaces the filing cabinet,
@@ -1344,3 +1366,18 @@ hold and **Sign-offs** before Convert, the Convert dialog's class, status and
 password choices, one-way swap offers, outside-apparatus hours, the
 finalized-attendance refusal, and the mandatory Event reminders switch. Adds
 ~1:30; re-time Chapters 3–8 and the clip table from the recorded take.
+
+---
+
+## EDITOR — 2026-11-05 PASS
+
+Applied the 2026-10-25 → 11-05 currency flags: the event QR page's guest code,
+**Add guest** and email sign-in at recruitment events; organizer-run check-in;
+Events Administration area cards; **Session Attendance**, **Counts toward
+attendance** and the Chief's override; **Months on leave** and **Not
+applicable**; member class and status; History and the Honor Roll; member
+performance evaluations (graded by section); Follow-up Form stages, My
+Applicants and the applicant's next meeting; Voter Eligibility; and the
+second-person rules, including Adopt Minutes approving the meeting. Adds about
+7 minutes of narration if every beat is filmed; the beats are separable. Re-time
+Chapters 3, 4, 5 and 7 from the recorded take.
