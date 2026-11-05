@@ -1190,6 +1190,24 @@ reopen this if the department moves medical purchasing to the EMS officer.
 
 ## Locations — Deleting One Clears Its Location From Nine Kinds of Records (2026-10-21, updated 2026-10-25)
 
+✅ **Resolved (owner decisions 2026-11-01: protect training history; protect
+meetings and requests only; built 2026-11-05).** Training records, course
+classes, cohorts and cohort classes, meetings and event requests now keep their
+location: deleting a location any of them names deactivates it instead, as an
+event already did. Their foreign keys changed from `ON DELETE SET NULL` to
+`ON DELETE RESTRICT` (migration `2bb7c963f351`) and the six columns joined
+`_RESTRICTING_LOCATION_REFERENCES`, so a reference that races in after the
+service's count is refused (`LocationInUseError`, "try again to deactivate")
+rather than nulled. Inventory items, storage areas and NFC tap logs keep
+clearing, unchanged. The two paths that remove locations in bulk follow
+suit: re-entering onboarding's stations step removes the earlier pass's station
+locations through `remove_location` (a referenced one is deactivated and
+kept), and the onboarding reset, which erases the whole department, first
+releases every blocking reference (`release_location_references`). Tested in `tests/test_delete_reference_guards.py`
+(`TestTrainingMeetingsAndRequestsKeepTheirLocation`) and
+`tests/test_location_restrict_references.py`, which now also names the decided
+split. The table below is kept as the record of what was decided.
+
 Found by the pass-8 security review of Locations & Kiosk
 ([`LOC8-32-locations-kiosk.md`](./security-review/LOC8-32-locations-kiosk.md),
 LOC8-2). Deleting a location that events, event templates or apparatus still
@@ -1201,10 +1219,10 @@ hard-deleted and each of them silently loses its location. (Pass 9,
 added the ninth — `nfc_card_taps`, from Apparatus & NFC's 2026-10-23
 migration — to this table; the decision itself is unchanged.)
 
-| Records                                                                           | Status        | Detail                                                                                                                                                                                                                                                                        |
-| --------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `training_records`, `course_classes`, `course_cohorts`, `course_cohort_classes`   | Open decision | Where a class or training record took place may be part of the history the record exists to keep. Adding these columns to `_RESTRICTING_LOCATION_REFERENCES` makes such a location deactivate instead; `tests/test_location_restrict_references.py` then needs the same list. |
-| `meetings`, `event_requests`, `inventory_items`, `storage_areas`, `nfc_card_taps` | Open decision | An item, storage area or NFC tap log with no location is an ordinary state, so clearing it may be the right outcome here. A meeting or request is closer to an event, which is already protected, so it is worth deciding deliberately.                                       |
+| Records                                                                           | Status                                                                  | Detail                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_records`, `course_classes`, `course_cohorts`, `course_cohort_classes`   | ✅ Kept (deactivate)                                                    | Where a class or training record took place may be part of the history the record exists to keep. Adding these columns to `_RESTRICTING_LOCATION_REFERENCES` makes such a location deactivate instead; `tests/test_location_restrict_references.py` then needs the same list. |
+| `meetings`, `event_requests`, `inventory_items`, `storage_areas`, `nfc_card_taps` | ✅ Meetings and requests kept (deactivate); the other three still clear | An item, storage area or NFC tap log with no location is an ordinary state, so clearing it may be the right outcome here. A meeting or request is closer to an event, which is already protected, so it is worth deciding deliberately.                                       |
 
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
@@ -2905,7 +2923,10 @@ backfills so their downgrades could move each document back. A fresh install
 never ran those backfills and had nothing to undo. Migration `d75ecbc15bae`
 drops them, so those backfills can no longer be undone: a downgrade past
 `dcb8a46ac50c` or `65128d5ccd50` now finds no record and leaves documents and
-folder permissions as they are.
+folder permissions as they are. _(2026-11-05)_ One new table of the same kind,
+`facility_outside_refile_backfill`, is written by `986b38c2086b` — but only on
+a database where that migration moved a file, so its downgrade can move it
+back; see FAC-13 below.
 
 **Five tables that no code read.** ✅ **Resolved (owner decision 2026-11-01:
 retire them; built 2026-11-03).** `compliance_policies`,
@@ -6426,12 +6447,36 @@ root into a restricted folder (photo-referenced files into Photos), moves a
 Documents-list file out of the three opened sub-folders, gives user-made
 folders in the tree the sensitive tier, and records everything for a real
 downgrade. Tested in `tests/test_facility_folder_tiers.py` and
-`tests/test_facility_folder_tier_migration.py`. **What remains:** the
-already-filed sub-case in item (3) — a facility-referenced document that was
-filed somewhere outside the facility tree stays where it was and is governed by
-that folder's own ACL — is unchanged; and files a sensitive-only person filed by
-hand into Photos, Maintenance Records or Inspection Reports are now readable by
-every facilities role, which is what the decision opens.
+`tests/test_facility_folder_tier_migration.py`. **What remains:** files a
+sensitive-only person filed by hand into Photos, Maintenance Records or
+Inspection Reports are now readable by every facilities role, which is what the
+decision opens.
+
+✅ **The already-filed sub-case in item (3) is resolved (owner decision
+2026-11-01: move them, refile into the facility's restricted folders; built
+2026-11-05).** Migration `986b38c2086b` moves every file a facility record
+points at that sits outside that facility's folders — another folder, another
+facility's tree, or no folder at all — into the facility's restricted
+**Facility Documents** folder, or into **Photos** when only facility photos
+point at it, creating the facility's folders the way `ensure_facility_folder`
+does when they are missing. A file two facilities point at goes to the
+facility that attached it first (every facility folder carries the same
+permission tiers, so the choice does not change who can open it), and to
+Facility Documents if either attaches it as a document. Moves and created
+folders are recorded for a real downgrade. Tested in
+`tests/test_facility_outside_refile_migration.py`; the operator note is in
+`docs/UPGRADING.md`. **Deliberately not moved, and still governed by the
+folder it is in:** a file another module also owns — an apparatus photo or
+document, a purchase-request or expense receipt, published meeting minutes, or
+one whose `source_type` names another module — because moving it behind
+facility rights would take it from that module's own audience. A facility
+reference made to such a file after the upgrade is likewise left where it is,
+as `_validate_shared_document_reference` already did. **Bookkeeping table:**
+the move record, `facility_outside_refile_backfill`, exists only on an
+upgraded database where something was moved — the same upgrade-only shape the
+owner retired on 2026-11-01 for the three earlier folder backfills
+(`d75ecbc15bae`). It was kept so the downgrade can put files back; dropping it
+in a later revision would make this one irreversible, as those three now are.
 
 `GET /{facility_id}/folders` is gated at baseline `facilities.view`/
 `.manage`, and FAC-5's design deliberately splits facility data into five
@@ -6537,8 +6582,9 @@ folder, and `delete_folder`'s subtree walk now refuses if any descendant is
 a system folder regardless of how it got there (FAC-23). None of FAC-14
 through FAC-23 are listed here because they are resolved, not open
 limitations. The already-filed sub-case in item (3) above and the
-Blueprints & Permits classification question in item (2) remain open,
-unresolved by any of these rounds.
+Blueprints & Permits classification question in item (2) were left open by
+these rounds; both are now decided and built (see the resolution notes at the
+top of this section).
 
 ## FAC-30 — A `facilities.delete`-Only Custom Role Cannot Delete a Facility Document/Folder Through the Generic Documents API (2026-08-25)
 
@@ -7949,7 +7995,42 @@ pin to match rather than reverting `requirements.txt` backward, so a
 Dependabot-style forward bump doesn't have to fight this pin again. See
 `docs/security-review/CI9-33-core-infra.md`.
 
-## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04)
+## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04, resolved 2026-11-05)
+
+> ✅ **Resolved (owner decision 2026-11-01: return to the room; built
+> 2026-11-05).** Both check-in landing pages, `/locations/:locationId/check-in`
+> and `/events/:id/check-in`, are now wrapped in their own bare
+> `<ProtectedRoute>` — authentication only, no module and no permission gate —
+> in `modules/facilities/routes.tsx` and `modules/events/routes.tsx`.
+>
+> **One correction to the analysis below.** Both routes already sat under the
+> layout route's bare `ProtectedRoute` in `App.tsx`, so a visitor with **no**
+> session was already sent to `/login` with `state.from` and came back. The
+> room was lost on the other path: a phone still carrying `has_session` from
+> a session that had lapsed. There `ProtectedRoute` waits on `loadUser()`, its
+> `GET /auth/me` 401s, the refresh fails, and `handleExpiredSession` leaves
+> with a full page load to `/login`, which can carry no router state. The
+> route-level wrap makes the sign-in each page promises its own, so moving one
+> out from under the layout cannot drop it; the fix for the lost room is the
+> second half:
+>
+> - `handleExpiredSession` (`services/apiClient.ts`) now redirects to
+>   `/login?from=<path+query+hash>` via `loginPathReturningTo`, for every page
+>   but `/` and `/login` itself — the same return `ProtectedRoute` already
+>   gave a signed-out visitor, now also given to an expired one.
+> - `postLoginRedirect(state, search)` (`utils/postLoginRedirect.ts`) reads
+>   `?from=` when the router state names no page; router state wins. Both go
+>   through one check: a path beginning with a single `/`, with no backslash
+>   (which a browser reads as `/`, so `/\host` is `//host`) and no control
+>   character; a `?from=` is also parsed against a throwaway origin and must
+>   stay on it. The backslash rule is new for router state too — before it,
+>   `{ from: { pathname: '/\evil.example' } }` passed the check.
+>
+> The OAuth sign-in buttons still leave the app for the provider and come back
+> to the dashboard, with or without `from`, exactly as for any other protected
+> page; nothing about that changed here. Covered by
+> `modules/facilities/checkInRoutes.test.tsx`, `utils/postLoginRedirect.test.ts`,
+> `services/apiClient.test.ts` and `pages/LoginPage.test.tsx`.
 
 `/locations/:locationId/check-in` is where a room's NFC sticker lands a member's
 phone. It is the **only route in the app entered cold from a physical object**
@@ -8005,6 +8086,45 @@ again after signing in is what they need to do.
   query has already applied the stricter window while the public one computes
   the permissive check, so a shared builder needs that as a parameter and the
   blast radius includes a public kiosk endpoint.
+
+  ✅ **Resolved (owner decision 2026-11-01: consolidate; built 2026-11-05).**
+  Both endpoints return `build_location_display` from
+  `app/services/location_display.py`, which builds every `QRCheckInData` row
+  and the top-level fields once. The `is_valid` difference is its keyword
+  `recheck_window`: `True` for the public kiosk (re-evaluate each event with
+  `_validate_check_in_window` now, and report that as both `is_valid` and
+  `can_check_in`), `False` for the authenticated room page (both `True`, since
+  the selection already applied the strict window). Everything else is now
+  filled the same way, so the authenticated response gained real values for
+  `allow_guest_check_in` and `badge_check_in_enabled` (the latter costs the
+  integration lookup only for a room with its badge switch on). The public
+  kiosk's response is unchanged — the same keys, and the same values for the
+  same room, compared before and after — and
+  `tests/test_location_display_builder.py` pins its exact key set, the fields
+  it carries only empty (description, training flags, a member's own check-in
+  times), that the two responses are equal for an open event, and that they
+  differ only in the window rule otherwise.
+
+- ✅ **LOC-41 — resolved (owner decision 2026-11-01: add the constraint,
+  settling duplicates; built 2026-11-05).** Migration `2bb7c963f351` adds a
+  stored generated column `building_key = COALESCE(building, '')` and the
+  unique key `uq_locations_org_name_building` over `organization_id`, `name`
+  and `building_key`. Keying on the generated column is what covers locations with
+  no building, which a key on `building` would not (NULLs repeat in a unique
+  index); no building and an empty building are now one scope, in the key and
+  in the service check alike, and names compare under the column collation
+  (case- and trailing-space-insensitive) in both. Duplicates already stored are
+  renamed first: the oldest of each group keeps its name and each later one
+  gets ` (2)`, ` (3)`, … (skipping numbers already in use), which is not undone
+  by the downgrade — see `docs/UPGRADING.md`. `LocationService` maps a lost
+  race on the key to the same "already exists" 400 its check gives, and a
+  facility room's location, which the system names itself, is numbered the
+  same way rather than refused when two rooms in one building share a name
+  (as is a station's location in onboarding); one that loses a race for its
+  name to a simultaneous save is retried once, in a savepoint, with a locking
+  re-read that sees the winner (`save_system_named_location`). Tested in
+  `tests/test_location_name_uniqueness.py` and
+  `tests/test_location_name_unique_migration.py`. The original finding:
 - **LOC-41 — (name, building) uniqueness for locations has no database
   constraint behind it.** `Location.__table_args__` declares four plain
   indexes and no `UniqueConstraint`, so the rule lives only in
@@ -8128,11 +8248,62 @@ A neutral total tile (the Inventory count) now says only **Open**.
   and pointed there, so it bounced off the catch-all; pass 3 retargeted it to
   the fleet board, which surfaces the same tallies in its summary strip. Either
   build the page or fold the figure in explicitly.
+
+  **✅ Resolved (owner decision 2026-11-01: fold into the fleet board; built
+  2026-11-05).** No maintenance page is built. The tile now links to
+  `/apparatus?maintenance=due`, where the fleet board lists the maintenance
+  items in place of the fleet (`MaintenanceDueList`), read from
+  `GET /apparatus/maintenance/due?days_ahead=30&include_overdue=true`. That is
+  `ApparatusService.get_maintenance_due` with the window `get_fleet_summary`
+  counts `maintenance_due_soon` with, so the list's length is the tile's
+  number, overdue work included. The board's **Maintenance Due** summary card
+  shows the same figure and links to the same view; it used to add
+  `maintenance_overdue` on top, counting each overdue item twice.
+  `tests/test_apparatus_maintenance_due_board.py`,
+  `ApparatusListPage.test.tsx`. Residuals: the figure counts items, not
+  apparatus, so the board shows the items rather than filtering its apparatus
+  table; and, as before, it does not exclude items on archived apparatus. The
+  summary card is shown only to `apparatus.manage`, while the tile also reaches
+  a `settings.manage` holder with `apparatus.view`, who lands on the list
+  without the card.
+
 - **DASH-39 — no genuine upcoming-facility-maintenance figure.** Pass 3 removed
   a `facilities-maintenance` tile that re-rendered its neighbour's overdue count
   (DASH-31). Restoring the concept needs a `due_date > today AND <= today + 30`
   query **and** a `due` value accepted by `MaintenanceListPage`'s
   `all | pending | completed | overdue` filter. The apparatus block is the model.
+
+  **✅ Resolved (owner decision 2026-11-01: add the tile; built 2026-11-05).**
+  A `facilities-maintenance-due` tile, **Maintenance due**, counts open work
+  due by today + 30 (`FACILITY_MAINTENANCE_DUE_DAYS`, the department's date)
+  that is not yet marked overdue, at facilities that are not archived, and
+  links to `/facilities/maintenance?status=due`. `MaintenanceListPage` accepts
+  `due` (labelled **Due soon**) and sends `due_within_days=30` to
+  `GET /facilities/maintenance/page`. The tile and the page both build their
+  query from `FacilitiesService.maintenance_due_soon_conditions`, so they
+  cannot disagree. The page now also ignores an unknown `status` instead of
+  passing it through.
+
+  **The overdue tile was fixed at the same time (found while building
+  DASH-39).** "Urgent work orders" counted `due_date <= today` at active
+  facilities, while the `?status=overdue` list it opens, the facilities
+  dashboard's **Overdue Maintenance** card and preview, and every row's badge
+  used the stored `is_overdue` flag. The flag is overdue's existing
+  definition: set on create and update when the due date is before the
+  department's today, then flipped daily by `run_mark_overdue_maintenance`. So
+  work due today was "urgent" on the tile but missing from the list. All four
+  now read `FacilitiesService.maintenance_overdue_conditions`: not completed,
+  flagged overdue, at a facility that is not archived. The facilities
+  dashboard's count therefore no longer includes archived facilities. On a
+  single facility's own page the overdue filter is still the plain flag, so an
+  archived facility lists its own overdue work. The two tiles split the open
+  work: due-soon is the flag's negation, so work due today, and past-due work
+  the daily task has not flagged yet (for up to a day), counts under
+  **Maintenance due**, never under both and never under neither.
+  `tests/test_facility_list_pages.py`
+  (`test_maintenance_tiles_partition_and_match_their_lists`),
+  `MaintenanceListPage.test.tsx`, `useMaintenanceForm.test.ts`.
+
 - **DASH-40 — `/dashboard/action-items` is unpaginated.** It returns every
   matching action item in the organization from both sources, merged and sorted
   in Python, with no `limit`/`offset` and no cap. `ActionItemSummary` carries

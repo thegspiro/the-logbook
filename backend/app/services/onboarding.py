@@ -33,6 +33,10 @@ from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.schemas.organization import MembershipTierSettings
 from app.services.auth_service import AuthService
+from app.services.location_service import (
+    LocationService,
+    save_system_named_location,
+)
 from app.services.operational_rank_service import OperationalRankService
 from app.services.organization_service import OrganizationService
 from app.services.suggestion_service import SuggestionService
@@ -1001,20 +1005,25 @@ class OnboardingService:
 
         display_code = await self._generate_unique_display_code()
 
-        location = Location(
-            id=generate_uuid(),
-            organization_id=org.id,
-            name=name,
-            address=address_line1,
-            city=city,
-            state=state,
-            zip=zip_code,
-            facility_id=facility.id,
-            is_active=True,
-            display_code=display_code,
+        # Two stations may be entered under one name; their locations (no
+        # building) may not share it (LOC-41), so the later is numbered.
+        await save_system_named_location(
+            self.db,
+            org.id,
+            name,
+            None,
+            None,
+            {
+                "id": generate_uuid(),
+                "address": address_line1,
+                "city": city,
+                "state": state,
+                "zip": zip_code,
+                "facility_id": facility.id,
+                "is_active": True,
+                "display_code": display_code,
+            },
         )
-        self.db.add(location)
-        await self.db.flush()
 
         return facility
 
@@ -1100,12 +1109,20 @@ class OnboardingService:
 
         if previous_facility_ids:
             # Locations FK to facilities without a cascade, so they go first.
-            await self.db.execute(
-                delete(Location).where(
-                    Location.organization_id == organization_id,
-                    Location.facility_id.in_(previous_facility_ids),
+            # Through the shared rule: a station location something already
+            # names (an event, a meeting, training history) is deactivated and
+            # kept rather than tripping its ON DELETE RESTRICT key.
+            previous_locations = (
+                await self.db.execute(
+                    select(Location).where(
+                        Location.organization_id == organization_id,
+                        Location.facility_id.in_(previous_facility_ids),
+                    )
                 )
-            )
+            ).scalars()
+            location_service = LocationService(self.db)
+            for location in list(previous_locations):
+                await location_service.remove_location(location)
             await self.db.execute(
                 delete(Facility).where(
                     Facility.organization_id == organization_id,

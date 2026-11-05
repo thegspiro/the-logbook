@@ -25,6 +25,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 import app.api.public.display as display
+import app.services.location_display as location_display
 import app.services.nfc_tag_service as nfc_service_module
 from app.models.nfc_tag import NfcTapSource
 from app.models.user import UserStatus
@@ -377,7 +378,9 @@ class TestDisplayReportsTheReader:
             ),
         )
         integration = AsyncMock(return_value=integration_on)
-        monkeypatch.setattr(display, "nfc_id_cards_enabled", integration)
+        # The display payload is built in one place for both display
+        # endpoints (LOC-40), so that is where the integration is consulted.
+        monkeypatch.setattr(location_display, "nfc_id_cards_enabled", integration)
         db = MagicMock()
         db.execute = AsyncMock(
             return_value=MagicMock(scalar_one_or_none=MagicMock(return_value="UTC"))

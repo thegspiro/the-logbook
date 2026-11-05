@@ -54,7 +54,6 @@ from app.schemas.event import (
     GuestConfirmRequest,
     GuestLookupRequest,
     GuestLookupResponse,
-    QRCheckInData,
 )
 from app.schemas.location import LocationDisplayInfo
 from app.schemas.nfc_tag import (
@@ -62,8 +61,8 @@ from app.schemas.nfc_tag import (
     KioskBadgeTapResponse,
     NfcCheckInStatus,
 )
-from app.services.event_service import EventService
 from app.services.guest_check_in_service import GuestCheckInService
+from app.services.location_display import build_location_display
 from app.services.location_service import LocationService
 from app.services.nfc_tag_service import NfcTagService
 from app.utils.nfc_integration import nfc_id_cards_enabled
@@ -297,71 +296,13 @@ async def get_public_location_display(
         organization_id=location.organization_id,
     )
 
-    # Build event data for display — only non-sensitive fields. Report the
-    # authoritative check-in window (the same EventService logic the check-in
-    # endpoint enforces) rather than a hardcoded 1-hour guess, so the kiosk
-    # doesn't show a STRICT event as "ready" before its window actually opens.
-    now = datetime.now(timezone.utc)
-    event_service = EventService(db)
-    current_events = []
-    for event in events:
-        check_in_start, check_in_end = EventService._get_check_in_window(event)
-        is_valid, _error, _notice = event_service._validate_check_in_window(event, now)
-
-        current_events.append(
-            QRCheckInData(
-                event_id=str(event.id),
-                event_name=event.title,
-                event_type=event.event_type.value if event.event_type else None,
-                event_description=None,  # Don't expose description publicly
-                start_datetime=event.start_datetime.isoformat(),
-                end_datetime=event.end_datetime.isoformat(),
-                actual_end_time=(
-                    event.actual_end_time.isoformat() if event.actual_end_time else None
-                ),
-                check_in_start=check_in_start.isoformat(),
-                check_in_end=check_in_end.isoformat(),
-                is_valid=is_valid,
-                # `_validate_check_in_window` is the permissive check (it
-                # admits a Flexible/Window event's early-arrival grace), so
-                # this kiosk's own `is_valid` already carries can_check_in's
-                # meaning, not the strict on-time window the field name
-                # suggests elsewhere. Same value, both fields, rather than
-                # reworking this endpoint's established (and differently-
-                # named) variable.
-                can_check_in=is_valid,
-                location=event.location,
-                location_id=str(event.location_id) if event.location_id else None,
-                location_name=location.name,
-                require_checkout=event.require_checkout or False,
-                allow_guest_check_in=event.allow_guest_check_in or False,
-            ).model_dump()
-        )
-
-    # Ship the department's timezone so the kiosk renders these UTC times in
-    # department-local time. Without it an unauthenticated tablet has no
-    # profile to read and falls back to whatever zone the device is set to —
-    # commonly UTC out of the box, which shifts every displayed time.
-    org_tz = (
-        await db.execute(
-            select(Organization.timezone).where(
-                Organization.id == location.organization_id
-            )
-        )
-    ).scalar_one_or_none()
-
-    badge_check_in_enabled = bool(
-        location.nfc_badge_check_in_enabled
-    ) and await nfc_id_cards_enabled(db, location.organization_id)
-
-    return LocationDisplayInfo(
-        location_id=UUID(location.id),
-        location_name=location.name,
-        current_events=current_events,
-        has_overlap=len(current_events) > 1,
-        timezone=org_tz,
-        badge_check_in_enabled=badge_check_in_enabled,
-    )
+    # LOC-40: built by the same function as the authenticated room page, so
+    # the two cannot drift. `recheck_window=True` keeps this endpoint's one
+    # deliberate difference: a polling kiosk reports the authoritative
+    # check-in rule (the one the check-in endpoint enforces) evaluated now,
+    # rather than trusting the selection, so a STRICT event is never shown as
+    # ready before its window opens.
+    return await build_location_display(db, location, events, recheck_window=True)
 
 
 @router.post(

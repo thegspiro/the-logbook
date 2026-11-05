@@ -64,7 +64,8 @@ async def test_facilities_does_not_report_one_count_under_two_titles():
     user = SimpleNamespace(organization_id="org-1")
     # Distinct per call so a reused figure is visible as a repeated value
     # rather than hidden behind a single constant.
-    db = SimpleNamespace(scalar=AsyncMock(side_effect=[7, 2, 5]))
+    # Four queries since DASH-39 added the upcoming-maintenance count.
+    db = SimpleNamespace(scalar=AsyncMock(side_effect=[7, 2, 3, 5]))
 
     with (
         patch(

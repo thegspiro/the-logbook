@@ -5505,6 +5505,35 @@ The Locations system serves as the universal "place picker" across all modules (
 
 ---
 
+#### Deleting a Location Deactivated It Instead
+
+**Cause**: Something still names the location — an event or event template, an
+apparatus (home station, current location or location history), training
+history (a training record, course class, cohort or cohort class), a meeting,
+or an event request. Deleting it would erase where those happened, so it is
+deactivated: it leaves every picker but stays on those records. Inventory
+items, storage areas and NFC tap logs do not hold it back; they lose the
+location instead (owner decisions of 2026-11-01).
+
+**Solution**: Nothing to fix. Re-activate it from the Locations page if it was
+removed by mistake. "This location was just put into use by another record"
+means a reference appeared mid-delete; trying again deactivates it.
+
+#### "Location with name '…' already exists" / A Location Gained a " (2)" Suffix
+
+**Cause**: A location's name is unique within its building, and locations
+with no building count as one building. Since migration `2bb7c963f351`
+(2026-11-05) the database enforces this, and the upgrade renamed duplicates it
+found: the oldest kept its name and later ones got ` (2)`, ` (3)`, …. A
+facility room whose name another room in the same facility already uses gets
+the same numbering on its linked location. Case and trailing spaces do not
+make a name different.
+
+**Solution**: Rename the location (or the room) to something that tells the
+two apart, or give one a building.
+
+---
+
 #### Kiosk Display Shows "No Active Events" When Event Is Scheduled
 
 **Causes**:
@@ -7947,7 +7976,8 @@ The `receive` lambda used to re-wrap the request body was synchronous, but ASGI 
 **Edge Cases:**
 
 - Existing rooms created before this fix won't have linked locations — they'll be created on next room update
-- Deleting a room deletes the linked location
+- Deleting a room deletes the linked location, or deactivates it when something still references it (see "Deleting a Location Deactivated It Instead")
+- Two rooms of one name in one facility get linked locations numbered ` (2)`, ` (3)`, … since location names are unique within a building
 - The FacilityRoomPicker component (`components/FacilityRoomPicker.tsx`) provides a reusable facility dropdown + room dropdown for cross-module room selection
 
 ---

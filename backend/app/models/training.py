@@ -423,9 +423,12 @@ class TrainingRecord(Base):
 
     # Instructor and Location
     instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    # RESTRICT: where training took place is part of the history the record
+    # keeps, so deleting the location deactivates it instead (owner decision
+    # 2026-11-01; LocationService._RESTRICTING_LOCATION_REFERENCES).
     location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("locations.id", ondelete="SET NULL"),
+        ForeignKey("locations.id", ondelete="RESTRICT"),
         nullable=True,
     )
     location: Mapped[Optional[str]] = mapped_column(
@@ -1121,8 +1124,9 @@ class CourseClass(Base):
     instructor: Mapped[Optional[str]] = mapped_column(
         String(255)
     )  # free-text fallback, matches TrainingSession
+    # RESTRICT, as on TrainingRecord.location_id.
     location_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
     location: Mapped[Optional[str]] = mapped_column(String(300))
 
@@ -1235,8 +1239,9 @@ class CourseCohort(Base):
     # are pre-filled from the US federal holiday helper in the wizard.
     blackout_dates: Mapped[Optional[list[str]]] = mapped_column(JSON)
 
+    # RESTRICT, as on TrainingRecord.location_id.
     location_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
     location: Mapped[Optional[str]] = mapped_column(String(300))
     requires_rsvp: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -1360,8 +1365,9 @@ class CourseCohortClass(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    # RESTRICT, as on TrainingRecord.location_id.
     location_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
     location: Mapped[Optional[str]] = mapped_column(String(300))
     category_id: Mapped[Optional[str]] = mapped_column(

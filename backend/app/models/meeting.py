@@ -100,9 +100,11 @@ class Meeting(Base):
         nullable=True,
         index=True,
     )
+    # RESTRICT, so deleting the location deactivates it instead (owner
+    # decision 2026-11-01; LocationService._RESTRICTING_LOCATION_REFERENCES).
     location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("locations.id", ondelete="SET NULL"),
+        ForeignKey("locations.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
     )

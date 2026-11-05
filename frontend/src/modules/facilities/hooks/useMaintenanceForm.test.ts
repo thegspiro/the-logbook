@@ -207,4 +207,14 @@ describe('useMaintenanceForm paging (FAC2-5)', () => {
     expect(getMaintenancePage).toHaveBeenLastCalledWith({ is_overdue: true, skip: 0, limit: 50 });
     expect(getMaintenancePage).not.toHaveBeenCalledWith({ is_overdue: true, skip: 50, limit: 50 });
   });
+
+  // DASH-39: the dashboard's "Maintenance due" tile links here as ?status=due,
+  // and the server applies the tile's own conditions to the 30-day window.
+  it('asks the server for the due-soon window the dashboard tile counts', async () => {
+    const { result } = renderHook(() => useMaintenanceForm({ initialStatusFilter: 'due' }));
+
+    await waitFor(() => expect(result.current.records).toEqual([existing]));
+    expect(getMaintenancePage).toHaveBeenLastCalledWith({ due_within_days: 30, skip: 0, limit: 50 });
+    expect(result.current.total).toBe(120);
+  });
 });

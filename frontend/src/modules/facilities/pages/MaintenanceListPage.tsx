@@ -22,7 +22,13 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import ListPager from '../components/ListPager';
-import { inputCls, labelCls } from '../constants';
+import {
+  inputCls,
+  labelCls,
+  MAINTENANCE_DUE_WINDOW_DAYS,
+  MAINTENANCE_STATUS_FILTERS,
+  type MaintenanceStatusFilter,
+} from '../constants';
 import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
 import MaintenanceDueLabel from '../components/MaintenanceDueLabel';
 import { useFacilitiesStore } from '../store/facilitiesStore';
@@ -30,6 +36,20 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
+
+const STATUS_LABELS: Record<MaintenanceStatusFilter, string> = {
+  all: 'All',
+  pending: 'Pending',
+  due: 'Due soon',
+  completed: 'Completed',
+  overdue: 'Overdue',
+};
+
+// The dashboard links here as ?status=overdue ("Urgent work orders") and
+// ?status=due ("Maintenance due"). An unknown value opens the full list.
+function parseStatus(value: string | null): MaintenanceStatusFilter {
+  return MAINTENANCE_STATUS_FILTERS.find((s) => s === value) ?? 'all';
+}
 
 export default function MaintenanceListPage() {
   // Create/edit/complete accept facilities.maintenance or facilities.edit on
@@ -44,7 +64,7 @@ export default function MaintenanceListPage() {
     void loadLookupData();
   }, [loadFacilities, loadLookupData]);
 
-  const initialStatus = (searchParams.get('status') as 'overdue') || 'all';
+  const initialStatus = parseStatus(searchParams.get('status'));
 
   const {
     records: filtered,
@@ -104,18 +124,25 @@ export default function MaintenanceListPage() {
           />
         </div>
         <div className="border-theme-surface-border flex items-center overflow-hidden rounded-lg border">
-          {(['all', 'pending', 'completed', 'overdue'] as const).map((s) => (
+          {MAINTENANCE_STATUS_FILTERS.map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
               aria-pressed={statusFilter === s}
               className={`px-3 py-2 text-xs font-medium transition-colors ${statusFilter === s ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+              {STATUS_LABELS[s]}
             </button>
           ))}
         </div>
       </div>
+
+      {statusFilter === 'due' && (
+        <p className="text-theme-text-secondary text-sm" role="status">
+          Open work due in the next {MAINTENANCE_DUE_WINDOW_DAYS} days, today included, and not yet marked overdue, at
+          facilities that are not archived. Overdue work is under Overdue.
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">

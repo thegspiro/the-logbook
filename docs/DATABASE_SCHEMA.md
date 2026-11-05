@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**356 tables · 5793 columns · 1196 foreign keys**
+**355 tables · 5782 columns · 1191 foreign keys**
 
 ---
 
@@ -450,7 +450,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
+| [`locations`](#locations) | `Location` | 23 | Location model for managing physical spaces |
 
 ### Mcp_Oauth
 
@@ -786,8 +786,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 49 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 44 | Training Record model |
-| [`training_requirement_overrides`](#training_requirement_overrides) | `TrainingRequirementOverride` | 11 | A Chief's ruling that a member meets a requirement over a period. |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 52 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 51 | Training Requirement model |
 | [`training_session_requirements`](#training_session_requirements) | `TrainingSessionRequirement` | 5 | A session that counts toward a SESSION_ATTENDANCE requirement. |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 29 | Training Submission model |
@@ -3171,7 +3170,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `decline_reason` | TEXT | yes |  |  |  |
 | `event_date` | DATETIME | yes |  |  |  |
 | `event_end_date` | DATETIME | yes |  |  |  |
-| `event_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `event_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `task_completions` | JSON | yes |  | `dict()` |  |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `staffing_shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
@@ -7233,6 +7232,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `latitude` | VARCHAR(20) | yes |  |  |  |
 | `longitude` | VARCHAR(20) | yes |  |  |  |
 | `building` | VARCHAR(100) | yes |  |  |  |
+| `building_key` | VARCHAR(100) | yes |  | server default |  |
 | `floor` | VARCHAR(20) | yes |  |  |  |
 | `room_number` | VARCHAR(50) | yes |  |  |  |
 | `capacity` | INTEGER | yes |  |  |  |
@@ -7256,6 +7256,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_locations_facility_room_id` (`facility_room_id`)
+- UNIQUE `uq_locations_org_name_building` (`organization_id`, `name`, `building_key`)
 
 ## Mcp_Oauth
 
@@ -7864,7 +7865,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `end_time` | TIME | yes |  |  |  |
 | `location` | VARCHAR(255) | yes |  |  |  |
 | `event_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` ON DELETE SET NULL |
-| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE RESTRICT |
 | `called_by` | VARCHAR(255) | yes |  |  |  |
 | `status` | ENUM(`draft`, `pending_approval`, `approved`) | no |  | `draft` |  |
 | `agenda` | TEXT | yes |  |  |  |
@@ -10036,7 +10037,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `instructor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `category_id` | VARCHAR(36) | yes | FK |  | → `training_categories.id` ON DELETE SET NULL |
 | `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
@@ -10083,7 +10084,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `instructor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `category_id` | VARCHAR(36) | yes | FK |  | → `training_categories.id` ON DELETE SET NULL |
 | `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
@@ -10186,7 +10187,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `default_duration_minutes` | INTEGER | yes |  |  |  |
 | `date_roll_policy` | ENUM(`none`, `next_business_day`, `next_meeting_day`) | no |  | `'none'` |  |
 | `blackout_dates` | JSON | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `requires_rsvp` | BOOL | no |  | `True` |  |
 | `auto_create_records` | BOOL | no |  | `True` |  |
@@ -11608,7 +11609,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `passing_score` | FLOAT | yes |  |  |  |
 | `passed` | BOOL | yes |  |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(255) | yes |  |  |  |
 | `apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus.id` ON DELETE SET NULL |
 | `rank_at_completion` | VARCHAR(100) | yes |  |  |  |
@@ -11646,30 +11647,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_training_records_status` (`status`)
 - UNIQUE `uq_training_record_event_user` (`source_event_id`, `user_id`)
 
-### `training_requirement_overrides`
-
-**TrainingRequirementOverride** · `app/models/training.py`
-
-> A Chief's ruling that a member meets a requirement over a period. Distinct from a TrainingWaiver, which excuses days and leaves the member to meet the rest: an override counts the member as meeting the requirement whenever it is graded as of a date from ``start_date`` to ``end_date``, however short they are. Rare by design: only a requirement with ``allows_chief_override`` accepts one, and only a member holding a Chief position may record or revoke it. Revoked, not deleted, so the record of who granted it survives.
-
-| Column | Type | Null | Key | Default | References |
-|---|---|---|---|---|---|
-| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `requirement_id` | VARCHAR(36) | no | FK |  | → `training_requirements.id` ON DELETE CASCADE |
-| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
-| `start_date` | DATE | no |  |  |  |
-| `end_date` | DATE | no |  |  |  |
-| `reason` | TEXT | no |  |  |  |
-| `granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `granted_at` | DATETIME | no |  | `now()` |  |
-| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `revoked_at` | DATETIME | yes |  |  |  |
-
-**Indexes**
-
-- `idx_requirement_override_org_req_user` (`organization_id`, `requirement_id`, `user_id`)
-
 ### `training_requirements`
 
 **TrainingRequirement** · `app/models/training.py`
@@ -11704,7 +11681,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `passing_score` | FLOAT | yes |  |  |  |
 | `max_attempts` | INTEGER | yes |  |  |  |
 | `required_attendance_pct` | FLOAT | yes |  |  |  |
-| `allows_chief_override` | BOOL | no |  | `0` |  |
 | `frequency` | ENUM(`annual`, `biannual`, `quarterly`, `monthly`, `one_time`) | no |  |  |  |
 | `year` | INTEGER | yes |  |  |  |
 | `due_date_type` | ENUM(`calendar_period`, `rolling`, `certification_period`, `fixed_date`) | yes |  | `'calendar_period'` |  |
@@ -12342,7 +12318,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (439 references)
+### → `users` (436 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12761,9 +12737,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_records` | `created_by` | SET NULL | yes |
 | `training_records` | `user_id` | CASCADE | no |
 | `training_records` | `voided_by` | SET NULL | yes |
-| `training_requirement_overrides` | `granted_by` | SET NULL | yes |
-| `training_requirement_overrides` | `revoked_by` | SET NULL | yes |
-| `training_requirement_overrides` | `user_id` | CASCADE | no |
 | `training_requirements` | `created_by` | SET NULL | yes |
 | `training_sessions` | `created_by` | SET NULL | yes |
 | `training_sessions` | `finalized_by` | SET NULL | yes |
@@ -12786,7 +12759,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (294 references)
+### → `organizations` (293 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13070,7 +13043,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_module_configs` | `organization_id` | CASCADE | no |
 | `training_programs` | `organization_id` | CASCADE | no |
 | `training_records` | `organization_id` | CASCADE | no |
-| `training_requirement_overrides` | `organization_id` | CASCADE | no |
 | `training_requirements` | `organization_id` | CASCADE | no |
 | `training_session_requirements` | `organization_id` | CASCADE | no |
 | `training_sessions` | `organization_id` | CASCADE | no |
@@ -13185,17 +13157,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus` | `current_location_id` | RESTRICT | yes |
 | `apparatus` | `primary_station_id` | RESTRICT | yes |
 | `apparatus_location_history` | `location_id` | RESTRICT | no |
-| `course_classes` | `location_id` | SET NULL | yes |
-| `course_cohort_classes` | `location_id` | SET NULL | yes |
-| `course_cohorts` | `location_id` | SET NULL | yes |
-| `event_requests` | `event_location_id` | SET NULL | yes |
+| `course_classes` | `location_id` | RESTRICT | yes |
+| `course_cohort_classes` | `location_id` | RESTRICT | yes |
+| `course_cohorts` | `location_id` | RESTRICT | yes |
+| `event_requests` | `event_location_id` | RESTRICT | yes |
 | `event_templates` | `default_location_id` | RESTRICT | yes |
 | `events` | `location_id` | RESTRICT | yes |
 | `inventory_items` | `location_id` | SET NULL | yes |
-| `meetings` | `location_id` | SET NULL | yes |
+| `meetings` | `location_id` | RESTRICT | yes |
 | `nfc_card_taps` | `location_id` | SET NULL | yes |
 | `storage_areas` | `location_id` | SET NULL | yes |
-| `training_records` | `location_id` | SET NULL | yes |
+| `training_records` | `location_id` | RESTRICT | yes |
 
 ### → `shifts` (14 references)
 
@@ -13233,23 +13205,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestion_forwards` | `position_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
 
-### → `training_requirements` (12 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `requirement_id` | SET NULL | yes |
-| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
-| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
-| `knowledge_tests` | `requirement_id` | SET NULL | yes |
-| `program_requirements` | `requirement_id` | CASCADE | no |
-| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
-| `requirement_progress` | `requirement_id` | CASCADE | no |
-| `skill_templates` | `requirement_id` | SET NULL | yes |
-| `skill_tests` | `requirement_id` | SET NULL | yes |
-| `training_requirement_overrides` | `requirement_id` | CASCADE | no |
-| `training_session_requirements` | `requirement_id` | CASCADE | no |
-| `training_sessions` | `requirement_id` | SET NULL | yes |
-
 ### → `meeting_minutes` (11 references)
 
 | From table | Column | On delete | Nullable |
@@ -13265,6 +13220,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_revisions` | `minutes_id` | CASCADE | no |
 | `minutes_signatures` | `minutes_id` | CASCADE | no |
 | `minutes_suggestions` | `minutes_id` | CASCADE | no |
+
+### → `training_requirements` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `requirement_id` | SET NULL | yes |
+| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
+| `knowledge_test_attempts` | `requirement_id` | SET NULL | yes |
+| `knowledge_tests` | `requirement_id` | SET NULL | yes |
+| `program_requirements` | `requirement_id` | CASCADE | no |
+| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
+| `requirement_progress` | `requirement_id` | CASCADE | no |
+| `skill_templates` | `requirement_id` | SET NULL | yes |
+| `skill_tests` | `requirement_id` | SET NULL | yes |
+| `training_session_requirements` | `requirement_id` | CASCADE | no |
+| `training_sessions` | `requirement_id` | SET NULL | yes |
 
 ### → `prospective_members` (10 references)
 

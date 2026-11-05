@@ -8,7 +8,17 @@ where events can take place.
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Computed,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -58,6 +68,14 @@ class Location(Base):
     building: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )  # Building name or identifier
+    # The building as the name-uniqueness rule sees it (LOC-41). A unique index
+    # lets NULLs repeat, so keyed on ``building`` itself two "Bunk Room"s with
+    # no building would both be accepted — the very case the service check
+    # handles with its own ``IS NULL`` branch. Folding NULL and "" to one value
+    # makes them collide, as they do in the check. Generated, never written.
+    building_key: Mapped[Optional[str]] = mapped_column(
+        String(100), Computed("coalesce(building, '')", persisted=True)
+    )
     floor: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True
     )  # Floor number or name
@@ -137,6 +155,14 @@ class Location(Base):
     )
 
     __table_args__ = (
+        # Migration 2bb7c963f351 settled the duplicates stored before it and
+        # created this; LocationService maps a violation to its own message.
+        UniqueConstraint(
+            "organization_id",
+            "name",
+            "building_key",
+            name="uq_locations_org_name_building",
+        ),
         Index("ix_locations_organization_id", "organization_id"),
         Index("ix_locations_name", "name"),
         Index("ix_locations_is_active", "is_active"),

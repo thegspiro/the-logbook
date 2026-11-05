@@ -172,27 +172,28 @@ export const getFacilitiesRoutes = () => (
         </Suspense>
       }
     />
-    {/* Any member may check in, and a room tag must work in Locations mode as
-        well as Facilities mode, so neither module nor permission gates it —
-        matching /events/:id/check-in, which this page forwards to and which is
-        ungated the same way.
+    {/* A room's NFC tag lands a member's phone here — the one route entered
+        cold from a physical object rather than from inside a live session, so
+        the likeliest to arrive with none. Any member may check in, and a room
+        tag must work in Locations mode as well as Facilities mode, so the gate
+        is authentication alone: no module, no permission. It matches
+        /events/:id/check-in, which this page forwards to and which is gated
+        the same way.
 
-        Authentication is enforced by the endpoint, not by this route: there is
-        deliberately no `ProtectedRoute` here, so a member whose session has
-        expired renders the page, gets a 401 from
-        `GET /locations/{id}/display`, and is hard-redirected to /login by the
-        axios interceptor — which, unlike `ProtectedRoute`, passes no
-        `state.from`, so `postLoginRedirect` cannot send them back to the room
-        and they land on the dashboard having to walk back to the tag. That
-        matters more here than anywhere else in the app, because this is the
-        one route entered cold from a physical object rather than from inside a
-        live session. Flagged as LOC-37 rather than changed, because the fix
-        belongs to both check-in landing pages at once. */}
+        The bare ProtectedRoute is stated here rather than left to the layout
+        route's in App.tsx, so moving this route out from under the layout
+        (to make it reachable without one, say) cannot quietly drop the
+        sign-in it now promises. An absent session goes to /login with
+        `state.from`; a stale one is caught by the API client's 401 path,
+        which carries the page in `?from=` instead. Either way
+        `postLoginRedirect` brings the member back to this room (LOC-37). */}
     <Route
       path="/locations/:locationId/check-in"
       element={
         <Suspense fallback={null}>
-          <RoomCheckInPage />
+          <ProtectedRoute>
+            <RoomCheckInPage />
+          </ProtectedRoute>
         </Suspense>
       }
     />

@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   Truck,
   Plus,
@@ -30,6 +30,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { NfpaDepartmentSwitch } from '../components/NfpaDepartmentSwitch';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
+import { APPARATUS_MAINTENANCE_DUE_DAYS, MaintenanceDueList } from '../components/MaintenanceDueList';
 
 // The dashboard's fleet-readiness tiles link here with one of these in the
 // query string. Only the exact value a tile sends turns its filter on; anything
@@ -53,6 +54,14 @@ const DASHBOARD_FILTERS = [
     name: 'Inspection overdue',
     label: 'Showing only apparatus whose inspection has expired.',
   },
+  {
+    // DASH-38: the dashboard's "Maintenance due" tile. It counts maintenance
+    // items, not apparatus, so the board lists the items in place of the fleet.
+    param: 'maintenance',
+    value: 'due',
+    name: 'Maintenance due',
+    label: `Showing maintenance due in the next ${APPARATUS_MAINTENANCE_DUE_DAYS} days, overdue work included, in place of the fleet list.`,
+  },
 ] as const;
 
 export const ApparatusListPage: React.FC = () => {
@@ -62,6 +71,7 @@ export const ApparatusListPage: React.FC = () => {
   const unavailableOnly = searchParams.get('serviceStatus') === 'unavailable';
   const deficiencyOnly = searchParams.get('hasDeficiency') === 'true';
   const inspectionOverdueOnly = searchParams.get('inspection') === 'overdue';
+  const maintenanceDueOnly = searchParams.get('maintenance') === 'due';
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterType, setFilterType] = useState<string>('');
@@ -213,14 +223,20 @@ export const ApparatusListPage: React.FC = () => {
                 {isLoadingSummary ? '...' : (fleetSummary?.reserveCount ?? 0)}
               </p>
             </div>
-            <div className="card p-4">
+            {/* The dashboard's "Maintenance due" tile shows this same figure.
+                maintenanceDueSoon already includes the overdue items, so
+                adding maintenanceOverdue to it counted those twice. */}
+            <Link
+              to="/apparatus?maintenance=due"
+              aria-label={`Maintenance due: ${isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0)}. Show the maintenance due`}
+              className="card hover:bg-theme-surface-hover block p-4 transition-colors"
+            >
               <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
               <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-400">
-                {isLoadingSummary
-                  ? '...'
-                  : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
+                {isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0)}
               </p>
-            </div>
+              <p className="text-theme-text-muted mt-1 text-xs">{APPARATUS_MAINTENANCE_DUE_DAYS} days, incl. overdue</p>
+            </Link>
           </div>
         )}
 
@@ -365,7 +381,9 @@ export const ApparatusListPage: React.FC = () => {
         ))}
 
         {/* Apparatus Table */}
-        {isLoading ? (
+        {maintenanceDueOnly ? (
+          <MaintenanceDueList />
+        ) : isLoading ? (
           <div className="card p-12 text-center" role="status" aria-live="polite">
             <div className="border-theme-text-primary mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2"></div>
             <p className="text-theme-text-secondary">Loading apparatus...</p>

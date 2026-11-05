@@ -3,9 +3,10 @@
 Two invariants that are invisible in a response body and so cannot be caught
 by an endpoint test:
 
-* the (name, building) duplicate check caps its result set, because the rule
-  has no unique constraint behind it and an uncapped check turns a duplicate
-  pair into a 500 on every later write of that name;
+* the (name, building) duplicate check caps its result set, because rows
+  stored before the unique key (LOC-41, migration 2bb7c963f351) could hold a
+  duplicate pair, and an uncapped check turns one into a 500 on every later
+  write of that name;
 * the kiosk's check-in-window query eager-loads nothing, because no caller
   reads the RSVP collection and this query runs on every 30-second kiosk poll.
 """
@@ -59,9 +60,9 @@ def _duplicate_check(statements):
 class TestTheDuplicateNameCheckIsCapped:
     """``.limit(1)`` is what keeps a duplicate pair reportable as a 400.
 
-    Nothing in the schema enforces (name, building) uniqueness — the model
-    declares a plain ``ix_locations_name``, not a unique constraint — and the
-    check is a read-then-write, so two concurrent creates can both pass it.
+    The schema now enforces (name, building) uniqueness, but a database that
+    has not run migration 2bb7c963f351 yet, or one restored from before it,
+    can still hold a duplicate pair.
     Uncapped, ``scalar_one_or_none()`` then raises ``MultipleResultsFound`` for
     every subsequent create or update of that name. That is not a
     ``ValueError``, so ``handle_service_errors`` renders it as a 500 with a

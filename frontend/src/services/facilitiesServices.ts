@@ -684,6 +684,7 @@ export const facilitiesService = {
     facility_id?: string;
     is_completed?: boolean;
     is_overdue?: boolean;
+    due_within_days?: number;
     search?: string;
     skip: number;
     limit: number;

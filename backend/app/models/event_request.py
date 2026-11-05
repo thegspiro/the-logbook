@@ -142,8 +142,10 @@ class EventRequest(Base):
     event_end_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # RESTRICT, so deleting the location deactivates it instead (owner
+    # decision 2026-11-01; LocationService._RESTRICTING_LOCATION_REFERENCES).
     event_location_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
 
     # Configurable pipeline task completions (JSON)

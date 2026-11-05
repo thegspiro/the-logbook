@@ -9,6 +9,7 @@ import { formCoercions } from '../../../utils/formValues';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { MAINTENANCE_DUE_WINDOW_DAYS, type MaintenanceStatusFilter } from '../constants';
 interface MaintenanceFormData {
   facility_id: string;
   maintenance_type_id: string;
@@ -75,7 +76,7 @@ function formToPayload(formData: MaintenanceFormData, isEdit: boolean): Maintena
   };
 }
 
-type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue';
+type StatusFilter = MaintenanceStatusFilter;
 
 export const MAINTENANCE_PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -157,6 +158,7 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
       if (statusFilter === 'completed') params.is_completed = true;
       if (statusFilter === 'pending') params.is_completed = false;
       if (statusFilter === 'overdue') params.is_overdue = true;
+      if (statusFilter === 'due') params.due_within_days = MAINTENANCE_DUE_WINDOW_DAYS;
       if (appliedSearch) params.search = appliedSearch;
       const result = await facilitiesService.getMaintenancePage(params);
       if (seq !== requestSeq.current) return;
@@ -181,6 +183,7 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
     if (statusFilter === 'completed' && !r.isCompleted) return false;
     if (statusFilter === 'pending' && r.isCompleted) return false;
     if (statusFilter === 'overdue' && !r.isOverdue) return false;
+    if (statusFilter === 'due' && (r.isCompleted || r.isOverdue)) return false;
     return true;
   });
 

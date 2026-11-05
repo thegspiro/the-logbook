@@ -1600,6 +1600,12 @@ async def get_facility_maintenance_page(
         max_length=200,
         description="Search description, vendor, work order number or performer",
     ),
+    due_within_days: int | None = Query(
+        None,
+        ge=1,
+        le=366,
+        description="Open work due after today and by this many days ahead",
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -1626,6 +1632,7 @@ async def get_facility_maintenance_page(
         occurred_after=occurred_after,
         occurred_before=occurred_before,
         search=search,
+        due_within_days=due_within_days,
         skip=skip,
         limit=limit,
     )

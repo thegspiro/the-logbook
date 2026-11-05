@@ -80,11 +80,18 @@ export const getEventsRoutes = () => {
           </Suspense>
         }
       />
+      {/* Reached from an event's QR code and forwarded to from a room's NFC
+          tag (/locations/:locationId/check-in), so often opened with no
+          session. Any member may check in: authentication alone, no
+          permission. Stated here rather than left to the layout route, so
+          sign-in always returns the member to this event (LOC-37). */}
       <Route
         path="/events/:id/check-in"
         element={
           <Suspense fallback={null}>
-            <EventSelfCheckInPage />
+            <ProtectedRoute>
+              <EventSelfCheckInPage />
+            </ProtectedRoute>
           </Suspense>
         }
       />
