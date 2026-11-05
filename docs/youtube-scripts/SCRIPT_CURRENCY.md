@@ -1,5 +1,60 @@
 # Script currency
 
+## Written into the scripts 2026-11-05
+
+Every row below this one, from **2026-10-24 → 10-25 through 2026-11-04 → 11-05**,
+was worked into the script text in a single pass; those tables are kept as the
+record of what changed and no longer mean "waiting to be written". **Nothing was
+re-recorded or re-timed.** Each new beat carries a SCREEN cue and a production
+note, and 03, 04 and 07 end with an `EDITOR` log of what was added, so the
+re-record list can be read straight from the scripts.
+
+| Script                          | What was applied                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 00, 01, 02                      | Series note; `REDIS_REQUIRED`, cloud-deployment guides and the combined Unraid image; Public Information in setup and the lapsed-setup banner                                                                                                                                                  |
+| 03 IT                           | Historical import (training, drills), Compliance Settings, Months on leave, email-template Off, integration keys first, Gmail service account, passkeys, voter eligibility, member class and status, ID cards and Card Readers, database and Redis TLS, encrypted-at-rest and upload migration |
+| 04 Chief, 07 Secretary          | Session attendance and Chief override, evaluations graded by section, History module, Adopt Minutes, second-person approvals, event QR guest code, forms Sensitive fields and embed code, area-card hubs, recruitment follow-up and My Applicants                                              |
+| 05, 09, 11, 14, 16 Training     | Session attendance, Months on leave, compliance profiles by position and member-class switch, shift evaluation forms, registry import, Shift remaining cap, cohort wizard extras, historical drills                                                                                            |
+| 06, 10, 12 Member and elections | Dashboard and notification stack, My Evaluations, passkeys, privacy Yes/No, leave beside hours, Shift & Call History, My Crew, open-swap bell entry, offline sync, five-layer voter eligibility                                                                                                |
+| 08, 13, 15                      | Passkeys short, labels "Before you print", Items Not Seen, store cart kept, offline skills evaluations kept 7 days                                                                                                                                                                             |
+
+**Corrected on the way:** script 03 said `SECURITY_REQUIRE_TLS` defaults to off;
+it defaults to on. The "five emails that cannot be switched off" in the
+2026-10-28 row is **seven** (`ALWAYS_SENT_TYPES`), and 03 and 07 say seven.
+
+**Closed 2026-11-05 (second pass):**
+
+- The label checks ran against `frontend/src` and the backend: the seven
+  Evaluation email template types match script 03; the budget-request refusal
+  ("Another finance manager has to decide it") matches script 04; the passkey
+  "Remove passkey" dialog exists. Cal.com, Documenso and Salesforce key-first
+  behaviour is still from guide 16 only.
+- Added the Recall lot beat (Short 8AE, now about 70 seconds), the Target
+  Solutions **Import matching pending records** beat (script 16), and the
+  department pulse and **All clear** beat (script 04).
+
+**Still open:**
+
+- Screens and footage for every new beat; the production notes flag them. None
+  of this can be recorded from a scheduled session.
+- Run times for added beats are estimates (04 about +7.5 minutes, 07 about +4,
+  03 about +6); Short 8AS still says about 47 seconds and gained roughly 8.
+- The member script (06) leaves out the leader-only dashboard changes by design.
+
+## Flagged by the 2026-11-04 → 11-05 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                         | Beat                          | Was                                                           | Now                                                                                    |
+| ---------------------------------------------- | ----------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Training Officer (05, 16), Fire Chief (04)** | Drill attendance              | Hours only; waivers for a missed drill                        | **Session Attendance** requirement, **Counts toward attendance** badge; Chief override |
+| **Training Officer (05, 16)**                  | Evaluation scoring            | One weighted percentage                                       | **Graded by section** with grade ranges and an evaluator regrade                       |
+| **Member guide (06)**                          | Dashboard                     | Money and outreach cards on Personal                          | On **My Department**; All clear line; notification stack previews the newest message   |
+| **IT Manager (03)**                            | Historical import, compliance | No training or drills; Configure only in Compliance Reporting | Training rows and drill sessions; **Settings & Data → Compliance Settings**            |
+| **Any medical-screening beat**                 | Grace period                  | Saved but not applied                                         | Applied; clinical detail needs `medical_screening.view_details`                        |
+| **Any phone or tablet beat**                   | Tables and switches           | Tables scroll; oval switches on touch                         | Wide tables become cards by card width; switches are pills                             |
+
 ## Flagged by the 2026-11-02 → 11-03 changes
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).

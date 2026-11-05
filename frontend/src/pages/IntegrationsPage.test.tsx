@@ -1626,11 +1626,18 @@ describe('IntegrationsPage', () => {
       await user.click(within(card).getByText('Connect'));
 
       expect(screen.getByLabelText('Usage location')).toHaveValue('US');
-      await user.type(screen.getByLabelText('Directory (tenant) ID'), tenant);
-      await user.type(screen.getByLabelText('Application (client) ID'), client);
-      await user.type(screen.getByLabelText('Client secret value'), ' s3cret ');
-      await user.type(screen.getByLabelText('Domain'), 'firedept.org');
-      await user.type(screen.getByLabelText('License SKU ID (optional)'), 'c42b9cae-ea4f-4ab7-9717-81576235ccac');
+      // Pasted rather than typed: key-by-key entry of these ids ran the test
+      // to 3.3s of its 5s budget alone and past it on a loaded runner, and the
+      // keystrokes still queued then landed in the next test's form.
+      const paste = async (label: string, value: string) => {
+        await user.click(screen.getByLabelText(label));
+        await user.paste(value);
+      };
+      await paste('Directory (tenant) ID', tenant);
+      await paste('Application (client) ID', client);
+      await paste('Client secret value', ' s3cret ');
+      await paste('Domain', 'firedept.org');
+      await paste('License SKU ID (optional)', 'c42b9cae-ea4f-4ab7-9717-81576235ccac');
       await user.type(
         screen.getByLabelText('Add new members to these groups (optional)'),
         'members@firedept.org{enter}99999999-8888-7777-6666-555555555555'

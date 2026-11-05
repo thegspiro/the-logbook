@@ -504,6 +504,12 @@ business and organization that supports the department.
 
 ![The New Donor form with Donor Type Business: Organization Name Oakville Lumber & Supply filled in, Contact First Name and Contact Last Name left empty because a contact is optional, and the email and address fields](./images/12-17-donor-business.png)
 
+**Editing a donor or campaign** _(2026-11-05)_. Each donor and campaign row has an
+**Edit** button for people with **Manage fundraising**. It opens the same form,
+filled in. An emptied box clears the stored value (an email or end date removed
+here is removed, not kept). A campaign's status and restriction keep the
+controls already on its card. Donations still cannot be edited.
+
 ### What the donor list shows
 
 For each donor: their contact details, **total donated**, how many donations,

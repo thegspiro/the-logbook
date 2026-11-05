@@ -116,16 +116,30 @@ cues.]**
 
 ### PUBLISHING & ARCHIVING (4:00 – 5:00)
 
-> "When your minutes are complete, press **Submit for Approval**. Another
-> officer then approves or rejects them — not you. If you submitted them, the
-> page tells you it's waiting for another officer, because nobody signs off
-> their own minutes."
+> "When your minutes are complete, press **Circulate for Review**. Another
+> officer then selects **Adopt Minutes** or **Return for Changes** — not you. If
+> you circulated them, the page tells you it's waiting for another officer,
+> because nobody signs off their own minutes."
 
-**[SCREEN: Submit for Approval; then, as a second officer, Approve Minutes;
-then Publish to Documents]**
+**[SCREEN: Circulate for Review; then, as a second officer, Adopt Minutes and
+its dialog (the date the body voted, the meeting that accepted them, the
+as-amended tick); then Publish to Documents]**
 
-> "Once they're approved, **Publish to Documents** files them in the
+> "Adopting is a step with a date on it: when the body voted, and whether it was
+> adopted as amended. If a later meeting recorded a motion to accept these
+> minutes, the dialog opens already filled in from it."
+
+> "And adopting does one more thing. The meeting these minutes record is
+> approved at the same moment, in the adopting officer's name. The meeting card
+> stops reading Draft, and an approved meeting can no longer be deleted."
+
+> "Once they're adopted, **Publish to Documents** files them in the
 > department's Documents as a formatted copy. That's the official record."
+
+**[PRODUCTION NOTE — 2026-11-05. The buttons were renamed 2026-10-14: Submit
+for Approval is now Circulate for Review, Approve Minutes is Adopt Minutes,
+Reject Minutes is Return for Changes. Adopt approving the meeting is
+2026-11-03. Re-record this cue with two officer accounts.]**
 
 **[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take offered "save as
 a draft or publish immediately"; minutes have gone through Submit for
@@ -194,6 +208,18 @@ the pipeline task list, **Assign**, then **Schedule Event**, **Postpone** and
 > know: their status link isn't in any of those emails. If you want them to
 > follow along, press **Copy Link** and send it to them yourself."
 
+> "For an open house or any event outside a room with a kiosk, the event has its
+> own guest code. Open the event's QR page and the **Guest Check-In** card shows
+> it once check-in opens; **Reset code** issues a new one and stops every
+> printed copy. On the event page, the **Guests** card has **Add guest** for the
+> walk-in who has no phone to scan with. At a recruitment event, applicants
+> sign in by typing their email and confirming it's them; anyone else is sent
+> to you at the door."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 30 seconds (2026-10-25 → 10-28).
+The event's organizer and alternate run check-in for their own event even
+without event-manager rights.]**
+
 ### EVENTS ADMIN HUB (7:00 – 7:30)
 
 **[SCREEN: Navigate to Events Admin Hub (EventsAdminHub)]**
@@ -201,6 +227,11 @@ the pipeline task list, **Assign**, then **Schedule Event**, **Postpone** and
 > "The Events Admin Hub gives you an administrative overview — all events,
 > attendance summaries, pending requests, and event analytics. This is your
 > command center for the event calendar."
+
+> "It's laid out as area cards — Events, Community Outreach, Check-ins and
+> Settings — with a strip of that area's pages beneath. Create Event and Past
+> Events sit under Events, Requests under Community Outreach, and Card
+> Check-ins under Check-ins, which lists every tap of a member's ID card."
 
 **[SCREEN: Show the admin hub with filters and summary stats]**
 
@@ -253,7 +284,11 @@ dropdown: All Statuses, Active, Inactive, On Leave, Retired, Archived]**
 
 > "The roster itself is the **Members** page, with status indicators. Filter
 > by status — Active, Inactive, On Leave, Retired, and, for officers,
-> Archived — and search by name, membership number or email."
+> Archived — and search by name, membership number or email. For email, type
+> the complete address; part of one no longer matches."
+
+> "The hub itself is three area cards — **Roster**, **Add & Import** and
+> **Settings** — with a strip of pages under whichever is open."
 
 **[PRODUCTION NOTE — 2026-10-04. The previous take filtered "by membership
 type — Active, Probationary, Retired, Honorary" and searched "by position".
@@ -267,8 +302,9 @@ Hub's **Member Management** tab is roles, not the roster. Re-record this cue.]**
 
 > "Adding a new member: click 'Add Member,' fill in their information — name,
 > address, phone, email and an emergency contact are all required — set their
-> **Membership Type**, which for a new joiner is usually **Probationary**, and
-> pick a Rank and Position if they hold one."
+> **Member class** — Operational, Administrative or Social — and **Membership
+> status**, which for a new joiner is usually **Probationary**, and pick a Rank
+> and Position if they hold one."
 
 **[SCREEN: Show the "Set initial password" checkbox — once with email
 working ("Leave unchecked to email the member a temporary password."), once
@@ -290,10 +326,14 @@ cues.]**
 
 > "To update a member's information, click their name and go to the edit view.
 > Update their contact info, address, rank and station, or change their
-> **Membership Type** — Probationary to Active when they come off probation."
+> **Membership status** — Probationary to Regular — Active Member on the shipped ladder — when they come off probation.
+> Class and status are separate questions now, so a probationary treasurer is an
+> Administrative member on Probationary status. Setting the status to
+> Probationary sets the account status to Probationary as well."
 
-**[SCREEN: Show changing Membership Type from Probationary to Active and
-saving]**
+**[SCREEN: Show the **Member class** and **Membership status** controls in
+Department Information; change Membership status from Probationary to Regular
+and save]**
 
 > "Two things aren't on that page. Status — active, on leave, retired — is the
 > **Change status** control on the member's profile. Positions are assigned
@@ -303,6 +343,17 @@ saving]**
 position and added notes on the admin edit page; it has neither, and the
 cue filmed a position change that was really a membership-type change.
 Pre-existing; found, not caused, by this window.]**
+
+**[SCREEN: History in the sidebar: Overview, **Past Members**, **Honor Roll**.]**
+
+> "When a member leaves, the roster isn't where their story ends. If the
+> department has switched on the **History** module under Settings, Modules,
+> Additional Modules, it keeps past members with their titles and years of
+> service, and an **Honor Roll** for members lost in the line of duty. Any
+> signed-in member can read published records; a historian drafts them, and
+> anything marked Historian only stays hidden."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-11-02 → 11-03).]**
 
 ### MEMBER SCANNING (11:00 – 11:30)
 
@@ -454,6 +505,33 @@ The up-front sign-in notice is new (2026-10-03); before it, a visitor learned
 only on Submit and lost their answers. A form that allows one submission per
 person can never be opened to visitors who are not signed in.]**
 
+**[SCREEN: Edit a field: tick **Sensitive** beside Required; the builder shows a
+**Sensitive** badge with a lock; open a submission as a secretary without the
+permission — "Restricted: this submission has answers to sensitive questions…"]**
+
+> "Some questions deserve more care — a driving record, a criminal history. Tick
+> **Sensitive** in the field's settings and its answers are stored encrypted,
+> shown only to staff who hold the sensitive-answers permission, and left out of
+> every CSV export. Managing forms doesn't include it; out of the box only the
+> IT Manager has it, so you may need an administrator to grant it. Mark a field
+> sensitive before you publish, and you can't un-mark it once an answer is
+> stored."
+
+**[SCREEN: The Share dialog with Public Access on: **Allow embedding on your
+website** ticked, the **Embed code** box and **Copy embed code**; then
+Settings → Forms listing the department's website.]**
+
+> "If your department has its own website, a public form can sit inside one of
+> its pages. Someone with access to Organization Settings lists your website
+> once under **Settings → Forms**. Then, in a form's Share dialog, with Public
+> Access on, tick **Allow embedding on your website**, press **Copy embed
+> code**, and paste it where your web host accepts HTML. A form that needs a
+> signed-in member can't be completed inside another site, so embed forms that
+> allow submissions without signing in."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 1:00 (2026-10-25 → 10-26); re-time
+Chapter 5. The Sensitive and Embed-code dialogs are new footage.]**
+
 > "You can review all submissions, export responses as CSV, and analyze results."
 
 **[SCREEN: Show the Forms page's Submissions tab briefly]**
@@ -481,6 +559,11 @@ checking it.]**
 
 **[SCREEN: Quick walkthrough of election admin — focus on the Secretary-specific
 tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
+
+> "Start with **Election Settings → Voter Eligibility**. It holds the
+> department's meeting-attendance rule and a waiting period for each kind of
+> member; a new election copies them, and you can adjust them on the election's
+> Eligibility tab until voting opens."
 
 > "Your specific responsibilities usually include verifying the Eligibility
 > Roster is correct before ballots go out — it shows you exactly who will
@@ -544,6 +627,24 @@ categories with counts — seven, plus Other only when a template fits none.]**
 > Department Store, with Other for anything that fits none. Search still works
 > across all of them, and searching expands every group so a match can't hide
 > behind a collapsed header."
+
+**[SCREEN: A template switched **Off**; the Off filter showing it; then the
+Password Reset template with the dimmed switch and the **Always sent** header.]**
+
+> "One rule to know before you switch anything off. **Off means off**: the email
+> is no longer sent at all. It used to fall back to the built-in wording and go
+> out anyway. A few emails can't be switched off, because their recipient
+> couldn't get the content any other way — Password Reset, IT Password
+> Notification, Welcome, Ballot Notification, Application Status Link,
+> Application Follow-up Form and Application Contact Details Changed. Those read
+> **Always sent**. A department that never opened Email Templates keeps every
+> email."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 30 seconds (2026-10-27 → 10-29).
+The currency table says five essential emails; the training guide lists seven
+after the 10-29 additions, and that is what is above. Evaluation emails sit in
+their own group, **Performance Evaluations**, and applicant emails under
+Prospective Members.]**
 
 **[SCREEN: Open a template; in the signature block, type {{president_name}} and
 {{president_title}}.]**
@@ -914,8 +1015,9 @@ error reports skip the submission and follow-up routes. Narration only.]**
 ### AFTER A MEETING (21:35 – 22:05)
 
 > "**After the meeting:** Review and edit the minutes for clarity. Finalize
-> attendance. Publish the minutes for the membership. Verify action items are
-> assigned with due dates."
+> attendance. Circulate the minutes for review, and have a second officer adopt
+> them at the next meeting — that also approves the meeting record. Then publish
+> them for the membership. Verify action items are assigned with due dates."
 
 ### WEEKLY TASKS (22:05 – 22:35)
 
@@ -1020,3 +1122,17 @@ choice. Add 1:30.
 > "One separation-of-duties fix: **a secretary could submit and approve their
 > own meeting minutes.** That is closed. If you are used to doing both, you now
 > need the second signature your bylaws probably already required."
+
+---
+
+## EDITOR — 2026-11-05 PASS
+
+Applied the 2026-10-25 → 11-05 currency flags that reach the secretary: the
+Circulate for Review and Adopt Minutes buttons, with Adopt approving the meeting;
+the event QR page's guest code, **Add guest** and email sign-in at recruitment
+events; the Events and Members administration area cards; **Member class** and
+**Membership status** in place of Membership Type; the History module and Honor
+Roll; **Sensitive** form fields and the embed code; Voter Eligibility; and
+email templates that stop when switched Off. Adds about 4 minutes if every
+beat is filmed; the beats are separable. Re-time Chapters 2–6 from the
+recorded take.

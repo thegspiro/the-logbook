@@ -434,6 +434,7 @@ const EmailTemplatesPage: React.FC = () => {
       activeSection={activeTab}
       onSectionChange={handleTabChange}
       navLabel="Email settings sections"
+      eyebrow="Administration"
       title="Email Templates"
       // The shell's own slot, not headerAside. headerAside renders inside the
       // header row's shrink-0 aside — fine for the HelpLink it is documented

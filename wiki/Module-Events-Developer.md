@@ -10,7 +10,7 @@ events module. What the module does and how departments use it is on
 
 | URL                               | Page                                                                                                                          | Permission       |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `/events`                         | Events List (the sidebar entry for managers is labeled **Manage Events** and also points here)                                | Authenticated    |
+| `/events`                         | Events List                                                                                                                   | Authenticated    |
 | `/events/:id`                     | Event Detail                                                                                                                  | Authenticated    |
 | `/events/:id/qr-code`             | Event QR Code (and NFC tag writer)                                                                                            | Authenticated    |
 | `/events/:id/check-in`            | Self Check-In                                                                                                                 | Authenticated    |
@@ -21,7 +21,7 @@ events module. What the module does and how departments use it is on
 | `/events/:id/analytics`           | Per-event analytics dashboard                                                                                                 | `analytics.view` |
 | `/events/analytics`               | Event Analytics Dashboard                                                                                                     | `analytics.view` |
 | `/events/templates`               | Event Templates Management                                                                                                    | `events.manage`  |
-| `/events/admin`                   | Events Admin Hub; Create/Settings deep-link here via `?tab=create` / `?tab=settings`                                          | `events.manage`  |
+| `/events/admin`                   | Events Admin Hub (the **Manage Events** menu entry); Create/Settings deep-link here via `?tab=create` / `?tab=settings`       | `events.manage`  |
 | `/events/new`                     | Redirects to `/events/admin?tab=create`                                                                                       | `events.manage`  |
 
 The Events Admin Hub has six tabs: **Create Event**, **Past Events**,

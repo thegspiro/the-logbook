@@ -64,6 +64,23 @@ Forensics tab.]**
 > department doesn't use them. Voting method, victory condition, quorum and
 > anonymity aren't set here — you choose them on each election's own form."
 
+**[SCREEN: Elections Settings → Voter Eligibility. Show the Regular business
+meeting / Annual meeting choice, then **Rules every voter must meet** with the
+attendance **Requirement** and a member type's waiting period.]**
+
+> "Then **Voter Eligibility**. These are your department's default voter rules,
+> and every new election copies them. Under **Rules every voter must meet**, pick
+> a meeting-attendance **Requirement** — attended a number of recent meetings, or
+> a percentage of them — and, for each member type, a waiting period: none, a
+> number of months, or never eligible to vote. Flip to **Annual meeting** and
+> **Use different rules at the annual meeting** if your bylaws differ there. You
+> can also set who votes for each position. Changing the defaults never touches
+> an election that already exists."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 40 seconds; re-time Chapter 2.
+Labels checked against Election Settings. Default is no rules, so a department
+that does nothing here sees no change.]**
+
 > "One note for your IT manager: the settings page — like everything else in
 > this video — is gated behind the `elections.manage` permission. Members
 > can't wander in here."
@@ -289,17 +306,23 @@ the pending entry absent.]**
 ## CHAPTER 6: Who Can Vote — Eligibility, the Roster & Overrides (13:00 – 17:00)
 
 > "This chapter is the one to re-watch before your first real election.
-> Eligibility has four layers, checked in order."
+> Eligibility has five layers, checked in order."
 
-**[SCREEN: Diagram callout — four stacked layers:
+**[SCREEN: Diagram callout — five stacked layers:
 
 1. Election voter list (optional explicit list)
-2. Membership tier rules (org settings)
-3. Per-item voter types
-4. Per-item attendance requirement]**
+2. Election-wide rules every voter must meet (attendance, waiting period)
+3. Membership tier rules (org settings)
+4. Per-item voter types
+5. Per-item attendance requirement]**
 
 > "Layer one: an explicit voter list on the election, if you set one — only
-> those members, period. Layer two: membership tier rules from your
+> those members, period. Layer two: the election's own **Rules every voter must
+> meet** — the meeting-attendance requirement and the waiting period for the
+> member's type, copied from Election Settings and adjustable on the
+> **Eligibility** tab until voting opens. The wait counts from when the member
+> became that type, and never from before their current period of membership.
+> Layer three: membership tier rules from your
 > organization settings. A tier can be marked not voting-eligible — think
 > social members — or can require a minimum meeting-attendance percentage
 > over a lookback window. That window starts on the day the member joined — or
@@ -307,7 +330,7 @@ the pending entry absent.]**
 > that have actually happened. A new member isn't charged with meetings held
 > before they were here. The system computes each member's actual attendance
 > and denies members under the bar, with the percentage in the denial reason.
-> Layers three and four we covered: per-item voter types and per-item
+> Layers four and five we covered: per-item voter types and per-item
 > attendance."
 
 ### THE ELIGIBILITY ROSTER (14:00 – 15:30)
@@ -327,6 +350,16 @@ this row is still current.]**
 
 > "This kills the number-one election headache: 'why can't I vote?' The
 > answer is right here, before it becomes a meeting-night argument."
+
+**[SCREEN: A member's profile → Voting eligibility card: Member type, Became
+this type, the outcome for each kind of meeting; then Override for this member
+with Count the wait from and Waive the waiting period]**
+
+> "One member held back by a waiting period they've already served? On their
+> profile, the **Voting eligibility** card shows their member type and when they
+> became it. If the date is a best guess from an upgrade, set **Count the wait
+> from**, or tick **Waive the waiting period** for that one member. It reaches
+> every election whose voter roll isn't frozen yet."
 
 ### PREVIEW A MEMBER'S BALLOT (15:30 – 16:00)
 
@@ -461,6 +494,13 @@ update the page in place.]**
 > "Members can also vote logged-in, on the Cast Vote tab. Same eligibility
 > checks, same one-ballot rule — the system tracks that a member voted, by
 > either path, and blocks a second attempt."
+
+> "The list of who may vote is fixed when you open the election. A member who
+> isn't on it is told why: if they still fail a rule — a waiting period,
+> attendance or their tier — the message names that rule first. Only a member who
+> now passes every rule, say one waived after opening, reads that they aren't on
+> the roll that was frozen when the election opened. Either way they can't vote
+> without an override."
 
 ### THE ANONYMITY MODEL (21:45 – 23:00)
 
@@ -918,7 +958,8 @@ same demo org as Script 12 for visual continuity.
 
 > "The roster tells you exactly why, per ballot item: wrong membership type —
 > here it wants regular members and they're probationary. Not checked in at
-> the meeting. Attendance percentage below the tier's minimum. Or they're not
+> the meeting. Attendance percentage below the tier's minimum. A waiting period
+> they haven't served, or an election-wide attendance rule. Or they're not
 > on the election's voter list."
 
 **[SCREEN: Ballot preview for that member]**

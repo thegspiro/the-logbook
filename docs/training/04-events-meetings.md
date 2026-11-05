@@ -1394,6 +1394,11 @@ the events list. On any occurrence's page:
 
 ### Calendar View
 
+A training session that counts toward a
+[session attendance requirement](./02-training.md#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04)
+carries a **Counts toward attendance** badge beside **Mandatory** here, on the
+events list and on the event page _(2026-11-04)_.
+
 The calendar icon on the Events page switches to a month view:
 
 - Days with events carry coloured dots.
@@ -1643,7 +1648,9 @@ public, never to events your members create:
 
 The **Overview** lists the four steps with a one-line status each (for example
 _"1 in draft, not yet published"_ or _"No default coordinator"_); select a step
-to open its page.
+to open its page. _(2026-11-05)_ **Handling** shows amber until a default
+coordinator is set, because a request nobody is assigned to waits until someone
+notices it. The Events hub's Settings card is named for public requests.
 
 On a phone the sections become a scrollable strip of tabs, and every control
 is a full-size touch target.
@@ -2133,7 +2140,7 @@ granted from the meeting.
 
 When a member has an active **leave of absence**, meetings during the leave
 are left out of their count automatically. Leaves are created on the
-**Waiver Management** page (see
+**Waivers** page (see
 [Membership → Leave of Absence](./01-membership.md#leave-of-absence)).
 
 - The member's percentage is not lowered by meetings they could not attend.

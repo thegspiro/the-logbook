@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { MemberScanPage } from './MemberScanPage';
@@ -68,12 +68,14 @@ describe('MemberScanPage', () => {
     expect(screen.getByText('Scan Member ID')).toBeInTheDocument();
   });
 
-  it('should render the back link to members', () => {
+  // The shared admin header's trail replaced the "Back to Members" link that
+  // sat above the title; its Members crumb is the same way back.
+  it('should link back to members from the breadcrumb trail', () => {
+    window.history.pushState({}, '', '/members/scan');
     renderWithRouter(<MemberScanPage />);
 
-    const backLink = screen.getByRole('link', { name: /back to members/i });
-    expect(backLink).toBeInTheDocument();
-    expect(backLink).toHaveAttribute('href', '/members');
+    const trail = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByRole('link', { name: 'Members' })).toHaveAttribute('href', '/members');
   });
 
   it('should show the start scanning button initially', () => {
