@@ -285,6 +285,13 @@ python3 -c "import secrets; print(secrets.token_hex(16))"
 
 > "**Redis password** — same idea. Strong, random password."
 
+> "One Redis setting to know about: `REDIS_REQUIRED`. Leave it at its default and
+> the backend runs without Redis if it can't connect — caching off, rate limiting
+> per process. Set it to `true` and the backend now genuinely refuses to start
+> when Redis can't be reached; it retries, logs 'refusing to start', and Docker
+> keeps restarting it until Redis answers. That's what you want in production,
+> but check the backend log says 'Redis connected' before you turn it on."
+
 > "**ALLOWED_ORIGINS** — this is critical for security. Set this to the URL
 > where your members will access The Logbook. If it's running on your local
 > network, that might be something like `http://192.168.1.50:3000`. For a
@@ -455,9 +462,19 @@ docker compose -f docker-compose.yml \
 ### CLOUD DEPLOYMENT (14:00 – 15:00)
 
 > "For cloud deployments — AWS, Azure, Google Cloud, DigitalOcean — the setup is
-> essentially the same, just on a VM instead of local hardware."
+> essentially the same, just on a VM instead of local hardware. Each has its own
+> step-by-step guide in the repository's `docs/deployment` folder, with a simple
+> single-VM method and a production method on the provider's managed MySQL and
+> Redis."
 
-**[CALLOUT: Quick list of supported platforms]**
+**[CALLOUT: Quick list of supported platforms — a VM running Docker Compose on
+each of the four]**
+
+> "One thing those guides are clear about: the supported target is a virtual
+> machine. Container services — Cloud Run, GKE and the like — are not supported
+> platforms, because The Logbook needs its persistent upload and audit-archive
+> volumes, the virus-scanning sidecar and the startup migration lock, and none
+> of that ships for them."
 
 > "The key differences for cloud: make sure your firewall only exposes ports 80
 > and 443 to the internet. The database and Redis ports should never be
@@ -511,6 +528,11 @@ chapter. New screen recording of the command.]**
 > "The Unraid template pre-configures the Docker network, volume mappings, and
 > resource limits to play nicely with other containers on your NAS. Check the
 > Unraid quick-start guide in the repository for the full walkthrough."
+
+> "The template runs one combined container — web interface and API together —
+> from the published image, built on tested runtimes. The separate backend and
+> frontend images aren't published; the compose files build those on the machine
+> that runs them."
 
 > "One field in the template matters more than it looks: **Public Site
 > Address**. That's the address every emailed link uses. Leave it blank and the

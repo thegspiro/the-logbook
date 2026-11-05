@@ -12,25 +12,14 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  AlertTriangle,
-  GitBranch,
-  Pencil,
-} from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ChevronUp, AlertTriangle, GitBranch, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
-import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { DualApprovalSettingsCard } from '../components/DualApprovalSettingsCard';
 import { SubstantiationSettingsCard } from '../components/SubstantiationSettingsCard';
 import { FundOverspendSettingsCard } from '../components/FundOverspendSettingsCard';
@@ -586,22 +575,10 @@ const ApprovalChainsSettingsPage: React.FC = () => {
   if (isLoading && approvalChains.length === 0) {
     return (
       <div className="space-y-6">
-        <Breadcrumbs />
-        <div className="flex items-center gap-4">
-          <Link
-            to="/finance/settings"
-            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-2 text-sm"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to Settings
-          </Link>
-        </div>
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Approval Chains</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            Set who approves purchase requests, expense reports, and check requests
-          </p>
-        </div>
+        <AdminPageHeader
+          title="Approval Chains"
+          description="Set who approves purchase requests, expense reports, and check requests"
+        />
         <SkeletonPage rows={4} showStats={false} />
       </div>
     );
@@ -609,33 +586,21 @@ const ApprovalChainsSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs />
-      {/* Back link */}
-      <Link
-        to="/finance/settings"
-        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-2 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back to Settings
-      </Link>
-
-      {/* Header */}
-      <div className="page-header gap-4 sm:items-center">
-        <div className="page-header-title">
-          <h1 className="text-theme-text-primary text-2xl font-bold">Approval Chains</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            Set who approves purchase requests, expense reports, and check requests
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-        >
-          <Plus className="h-4 w-4" />
-          New Chain
-        </button>
-      </div>
+      {/* The trail's "Settings" crumb is the way back to Finance Settings. */}
+      <AdminPageHeader
+        title="Approval Chains"
+        description="Set who approves purchase requests, expense reports, and check requests"
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+          >
+            <Plus className="h-4 w-4" />
+            New Chain
+          </button>
+        }
+      />
 
       <DualApprovalSettingsCard />
       <SubstantiationSettingsCard />

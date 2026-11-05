@@ -5,6 +5,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { Breadcrumbs, SkeletonText } from '../components/ux';
 import { QrCode } from 'lucide-react';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import { formatTime } from '../utils/dateFormatting';
 import { StatGrid } from '../components/ux/StatGrid';
 
@@ -94,14 +95,20 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       </div>
       {exportButton}
     </div>
-  ) : (
+  ) : eventId ? (
+    // Scoped to one event, this is one of that event's pages, so it keeps the
+    // Events header and section strip the event's other pages carry.
     <EventsPageHeader
       icon={QrCode}
       title="QR Code Analytics"
       subtitle={scopeLine}
-      parentCrumbs={eventId ? [{ label: 'Event', path: `/events/${eventId}` }] : undefined}
+      parentCrumbs={[{ label: 'Event', path: `/events/${eventId}` }]}
       actions={exportButton}
     />
+  ) : (
+    // Department-wide, it is a row of the Administration menu (/admin/analytics)
+    // and draws the header every administration page shares.
+    <AdminPageHeader title="QR Code Analytics" description={scopeLine} actions={exportButton} className="mb-6" />
   );
 
   // Loading draws the page it will become — header and the four metric cards,

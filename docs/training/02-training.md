@@ -79,7 +79,7 @@ and confirm that approved credit appears in history and compliance.
 11. [Compliance Matrix](#compliance-matrix)
 12. [Evaluation Period (Current vs. Prior Month)](#evaluation-period-current-vs-prior-month)
 13. [Expiring Certifications](#expiring-certifications)
-14. [Waiver Management](#waiver-management)
+14. [Waivers](#waivers)
 15. [Compliance Summary](#compliance-summary)
 16. [Shift Completion Reports](#shift-completion-reports)
 17. [Manual Shift Report Entry](#manual-shift-report-entry)
@@ -1311,6 +1311,33 @@ them either way, so tick them yourself if the requirement covers them too.
 
 ![A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary, Life and Retired ticked while Administrative and Honorary are not](./images/02-135-requirement-operational-members.png)
 
+### The Chief's override of a session attendance requirement
+
+Waiving a missed drill stays routine and goes through
+a [training waiver](#waiver-management). An override is the rare exception: the
+Chief counts a member as meeting the requirement over dates the Chief chooses,
+however short their attendance, with a reason on record.
+
+1. Tick **Allow the Chief to override it for a member** on the requirement form
+   (off by default).
+   Switching it off later suspends every override on it without erasing them.
+2. A member holding a **Chief** position opens the member in the Compliance
+   Matrix and uses **Chief override**: dates (starting from the requirement's
+   current period), a required reason, and **Revoke**. This is tied to the Chief
+   position, not a permission, so no role, wildcard or the IT Manager's access
+   reaches it.
+3. The cell then reads **Met by the Chief's override**. The real attendance
+   count is still shown, and a member who met the requirement on their own is
+   never labelled overridden. An override excuses no month and no other drill.
+
+Overrides are revoked, never deleted; grant and revoke are audited with ids and
+dates only, and the reason is stored encrypted.
+
+> **Screenshots needed:** the requirement form with Session Attendance chosen;
+> the create-session checklist; a Compliance Matrix cell with the Chief override
+> control and **Met by the Chief's override**; the **Counts toward attendance**
+> badge on an event card.
+
 ### Never Use an Hours Requirement for a Required Topic
 
 > **Warning — read this before creating any yearly refresher.** An **Hours**
@@ -1718,7 +1745,7 @@ for an officer who can also change the department's settings or holds
 "Manage compliance records", because only they can save it. It lists what the
 compliance settings hold — the department-wide threshold, compliance profiles
 for membership types and positions, and scheduled compliance reports — and
-**Open compliance settings** opens **Compliance Requirements Configuration**,
+**Open compliance settings** opens **Compliance Settings**,
 the same page **Configure** opens from **Compliance Reporting**. The
 requirements members are graded against are not set there but under
 **Curriculum → Requirements**.
@@ -1981,6 +2008,10 @@ Programs**. All are optional:
   from a course cohort can carry a phase from a different program, so this is
   allowed.
 
+- **Counts toward attendance** _(2026-11-04)_. When the department has
+  [session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement), a tick box
+  for each appears here, so the session is linked the moment it is created.
+
 The same pickers appear on the event page as **Requirements & Programs**. That
 is where you fix a session created before a requirement existed, or linked to
 the wrong pipeline. The card also lets you **add training details** to a
@@ -2010,6 +2041,9 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
 - Opening a member shows each requirement's figure — _"44 of 24 hours"_,
   _"Nothing on file"_, _"1 of 1 shifts"_ — with its status and the date or
   window it was judged against.
+- A cell met by an override reads **Met by the Chief's override**; a Chief sees
+  the **Chief override** control on a requirement that allows it (see
+  [Session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement)).
 - **By requirement** turns it around: requirements grouped by how many members
   are behind on them.
 - Arriving from the dashboard's non-compliant link filters the list and shows a
@@ -2416,7 +2450,7 @@ those two choices above.
 
 ---
 
-## Waiver Management
+## Waivers
 
 **Who can do this:** officers who can manage member profiles.
 
@@ -2457,7 +2491,7 @@ Overview**. It shows:
 - a table you can filter, with status badges;
 - where each waiver came from: **Auto (LOA)** for waivers created from a leave,
   **Manual** for waivers created on their own;
-- links to the full Waiver Management page.
+- links to the full Waivers page.
 
 ---
 
@@ -3685,7 +3719,7 @@ you want a platform connected.
 Open **Training Admin → Compliance Reporting** for the compliance officer
 views: **Annual Report**, **ISO Readiness**, **Record Quality**,
 **Attestations** and **Forecast**. The **Configure** button at the top right
-opens **Compliance Requirements Configuration** — thresholds, compliance
+opens **Compliance Settings** — thresholds, compliance
 profiles, automatic reports and report history (see
 [Setting the Department Default](#setting-the-department-default)). Its usual
 home is now **Settings & Data → Compliance Settings → Open compliance
@@ -3863,7 +3897,7 @@ Configuration**).
 | Program progress does not update after a shift         | A shift completion report must be filed. Automatic credit only works for enrolled members with matching requirement types.                                                                                                                                                       |
 | The Compliance Matrix looks wrong                      | Check the requirement's frequency and due-date type. Rolling periods count whole months ending with this one.                                                                                                                                                                    |
 | A member on leave still shows non-compliant            | Check the leave of absence is active under **Members > Admin > Waivers**. Check the department's **Months on leave** setting: under a 15-day rule, a month with only a few days of leave is still mostly or wholly owed. Only hours, shifts and calls requirements are adjusted. |
-| A leave was created but training was not adjusted      | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waiver Management page.                                                  |
+| A leave was created but training was not adjusted      | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waivers page.                                                            |
 | A duplicate training record warning                    | The Logbook spots records with the same member, the same course name (ignoring capitals) and a completion date within a day. Check the warning, then go ahead or skip the duplicate.                                                                                             |
 | The compliance card shows the wrong color              | Red = an expired certification or fewer than half the requirements met. Yellow = a certification expiring soon, or some requirements not met. Green = all met. Check each requirement's progress.                                                                                |
 | A certification alert was not received                 | Each alert stage (90, 60, 30, 7 days) is sent only once. If all stages have been sent, no more alerts come.                                                                                                                                                                      |
@@ -4696,6 +4730,39 @@ neither includes an officer-only section, since that needs your own ranks.
    and a re-verified session. A record of who, when and why is kept and shown
    under **Removed evaluations**; the member is emailed without the reason.
 
+### Grading by section _(2026-11-04)_
+
+A form can be **Graded by section** instead of showing one percentage. This
+fixes the old weighted total, where "Meets expectations" counted as 50% and a
+member rated Meets on every item read as failing.
+
+- Every rating is placed on a 1–5 grade scale (3 of 5 is 3.0; the middle of a
+  3-level scale is 3.0; meets / does not meet is 5 / 1). A section's score is
+  the weighted average of its rated items; the overall is the weighted average of
+  the sections, whose weights share 100%.
+- **Grade ranges** turn a score into a grade. The defaults are halfway points:
+  Outstanding from 4.5, Exceeds from 3.5, Meets from 2.5, Needs improvement from
+  1.5. The grade is read from the score as shown to one decimal, so a printed
+  "3.5" never sits beside "Meets expectations". Change them per form in the
+  builder.
+- **The evaluator may give a section, or the overall, a different grade.** A
+  reason is required at submit, both grades are reported, and a regraded section
+  counts in the overall at the grade given.
+- The builder has **Graded by section**, a weight per section, per-section and
+  across-section totals, and a live preview. The evaluation screen, the preview
+  and the PDF all use one calculation, so they agree. The PDF shows a grade line
+  under each section, the evaluator's grade and why where changed, and a
+  section / weight / grade table in the summary.
+- The **Annual Member Evaluation** starter is graded by section.
+
+### The page header _(2026-11-04)_
+
+The section strip shows counts: evaluations waiting on you and, for a conductor
+or manager, overdue ones. **New review period** and **New template** sit in the
+header (for `evaluations.manage` and `evaluations.configure`); on a phone each
+fills the row. The **Where evaluations happen** box is gone; the **Email
+Templates** link is in the subtitle.
+
 ### Emails
 
 Editable under **Communications → Email Templates**, group **Performance
@@ -4711,7 +4778,7 @@ a rating or comment. A daily task sends reminders and overdue notices once each.
 - Shift-evaluation credit (**Evaluated shifts**, **Transports**, **Refusals**
   requirement types) is described under Shift Evaluations, not here.
 
-> **Screenshots needed:** see `SCREENSHOT_CURRENCY.md` (evaluations list, draft
+> **Screenshots needed:** see `SCREENSHOT_CURRENCY.md` (the grading-by-section builder and evaluation page, evaluations list, draft
 > dialog, evaluation page, sign dialog, calibration flags, response card, amend
 > and delete dialogs).
 

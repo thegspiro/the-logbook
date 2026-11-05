@@ -189,7 +189,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'member-id-cards',
-    label: 'Member ID Cards',
+    label: 'ID Cards',
     description: 'Every NFC ID card, who is missing one, and the tap log',
     path: '/members/admin/id-cards',
     icon: CreditCard,

@@ -28,7 +28,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
-import { Breadcrumbs } from '../components/ux';
+import AdminPageHeader from '../components/admin/AdminPageHeader';
 import { EditLeaveDialog, type EditableLeave } from '../components/members/EditLeaveDialog';
 
 type WaiverTab = 'active' | 'create' | 'history';
@@ -354,16 +354,14 @@ export const WaiverManagementPage: React.FC = () => {
 
   return (
     <div>
-      {/* Header + Tab Bar */}
-      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
-
-        <div className="mb-6">
-          <h1 className="text-theme-text-primary text-2xl font-bold">Waiver Management</h1>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Excuse members from training, meeting and shift requirements
-          </p>
-        </div>
+      {/* Header + Tab Bar. data-page-main: AppLayout supplies the page
+          gutter, and its own padding here doubled it. */}
+      <div data-page-main className="mx-auto max-w-7xl">
+        <AdminPageHeader
+          title="Waivers"
+          description="Excuse members from training, meeting and shift requirements"
+          className="mb-6"
+        />
 
         {error && (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-400">
@@ -396,7 +394,7 @@ export const WaiverManagementPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl py-6">
         {/* Active Waivers Tab */}
         {activeTab === 'active' && (
           <div>
