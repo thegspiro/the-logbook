@@ -86,7 +86,7 @@ const member = {
   roles: [memberRole],
 };
 
-describe('MembersAdminPage — the roster names rank, membership type and positions apart', () => {
+describe('MembersAdminPage — the roster names rank, member class and status, and positions apart', () => {
   beforeEach(() => {
     vi.mocked(userService.getUsersWithRoles).mockReset();
     vi.mocked(roleService.getRoles).mockReset();
@@ -117,6 +117,22 @@ describe('MembersAdminPage — the roster names rank, membership type and positi
     expect(screen.getByRole('columnheader', { name: 'Positions' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Membership' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Roles' })).not.toBeInTheDocument();
+  });
+
+  // The explainer above the roster described one "membership type" after the
+  // record had split it into a member class and a membership status — the
+  // two facts the Membership column shows.
+  it('explains the member class and membership status the column shows', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
+    renderWithRouter(<MembersAdminPage />);
+    await screen.findByRole('row', { name: /Jordan Avery/ });
+
+    const explainer = screen.getByText(
+      (_, el) => el?.tagName === 'P' && (el.textContent ?? '').startsWith('Each member has a')
+    );
+    expect(explainer).toHaveTextContent(/member class \(operational, administrative or social\)/);
+    expect(explainer).toHaveTextContent(/membership status \(their standing: probationary, regular, life/);
+    expect(explainer).not.toHaveTextContent(/membership type/);
   });
 
   it('marks a committee apart from an office on the roster chips', async () => {
