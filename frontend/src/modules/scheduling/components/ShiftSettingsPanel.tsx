@@ -465,7 +465,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                         key={option.value}
                         className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
                           selected
-                            ? 'border-violet-600 bg-violet-500/5'
+                            ? 'border-theme-accent-red bg-theme-accent-red-muted'
                             : 'border-theme-surface-border hover:bg-theme-surface-hover'
                         }`}
                       >
