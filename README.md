@@ -348,13 +348,20 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 | **Windows** (WSL2)                                       | x86_64        | All               | ✅ Full support  |
 | **Raspberry Pi 4/5**                                     | ARM64         | minimal, standard | ✅ Full support  |
 | **Raspberry Pi 3**                                       | ARMv7         | —                 | ❌ Not supported |
-| **AWS** (EC2, ECS, Fargate)                              | x86_64, ARM64 | All               | ✅ Full support  |
-| **Azure** (VMs, Container Instances)                     | x86_64        | All               | ✅ Full support  |
+| **AWS** (EC2 VM)                                         | x86_64, ARM64 | All               | ✅ Full support  |
+| **Azure** (VM)                                           | x86_64        | All               | ✅ Full support  |
 | **Google Cloud** (Compute Engine VM)                     | x86_64        | All               | ✅ Full support  |
-| **DigitalOcean** (Droplets, App Platform)                | x86_64        | All               | ✅ Full support  |
+| **DigitalOcean** (Droplet)                               | x86_64        | All               | ✅ Full support  |
 | **Proxmox VE** (LXC, VM)                                 | x86_64        | All               | ✅ Full support  |
 | **Synology NAS** (DS+, XS+ series)                       | x86_64        | minimal, standard | ✅ Full support  |
 | **Unraid**                                               | x86_64        | standard          | ✅ Optimized     |
+
+Every cloud row means the Docker Compose stack on a virtual machine. Container
+services — AWS ECS and Fargate, Azure Container Instances, Google Cloud Run,
+DigitalOcean App Platform — are not supported: the repository ships no
+definitions for them, and they would need the persistent `uploads` and
+`audit_archives` volumes, the ClamAV sidecar and the startup migration lock
+re-created by hand.
 
 ARMv7 (32-bit) hosts cannot run the stack: the ClamAV image every profile requires is published for amd64, arm64 and ppc64le only.
 
