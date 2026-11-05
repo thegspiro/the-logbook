@@ -588,14 +588,13 @@ Then create the backup encryption keys, as in Method 1, Step 6:
 ```
 
 **TLS for the backup script.** `./scripts/backup.sh` runs `mysqldump` and
-`mysql` on the Droplet against `DB_HOST`. Those clients read their TLS settings
-— and here the port too — from an option file, not from `.env`, so give them
-one, as the user the backups run as (`deploy`, not root):
+`mysql` on the Droplet against `DB_HOST` and `DB_PORT`. Those clients read
+their TLS settings from an option file, not from `.env`, so give them one, as
+the user the backups run as (`deploy`, not root):
 
 ```bash
 cat > ~/.my.cnf <<'EOF'
 [client]
-port=MYSQL-PORT
 ssl-mode=VERIFY_IDENTITY
 ssl-ca=/opt/the-logbook/infrastructure/certs/do-mysql-ca.pem
 
@@ -609,11 +608,13 @@ EOF
 chmod 600 ~/.my.cnf
 ```
 
-**`port=` is required here.** `./scripts/backup.sh` passes the host to
-`mysqldump` and `mysql` but not the port, so without it they try 3306, which a
-DigitalOcean cluster does not listen on. If Step 5's test sent MySQL to the
-public hostname, `VERIFY_IDENTITY` is checked against that name, which is what
-you want.
+If Step 5's test sent MySQL to the public hostname, `VERIFY_IDENTITY` is
+checked against that name, which is what you want.
+
+**On a release from before 2026-11-05**, `./scripts/backup.sh` ignored
+`DB_PORT` and the clients tried 3306, which a DigitalOcean cluster does not
+listen on. If you are on such a release, add `port=MYSQL-PORT` under
+`[client]` above.
 
 ### Step 7: Start the Stack
 
@@ -835,7 +836,7 @@ table (see the warning in Method 2, Step 2).
    Add `--private-key FILE` if you brought the backup's private key rather
    than `backup-keys/`. In Method 2, the restore runs `mysql` on the Droplet
    against the managed cluster, which is why it needs the `mysql-client`
-   package and `~/.my.cnf` — including its `port=` line.
+   package and `~/.my.cnf`.
 
 6. **Verify** as in BACKUP.md's
    [restore drill](../BACKUP.md#verify-your-backups-restore-drill), then move
@@ -908,9 +909,10 @@ If it times out:
 `Access denied`: check `DB_USER` / `DB_PASSWORD` against the user from
 Method 2, Step 2 (`doctl databases user get MYSQL-ID logbook`).
 
-`./scripts/backup.sh` fails to connect while the backend works: `~/.my.cnf` is
-missing its `port=` line, or belongs to a different user than the one running
-the script.
+`./scripts/backup.sh` fails to connect while the backend works: `~/.my.cnf`
+belongs to a different user than the one running the script, or — on a
+release from before 2026-11-05, which ignored `DB_PORT` — is missing a
+`port=` line (see Method 2, Step 6).
 
 ### Cannot Connect to Managed Valkey
 
@@ -992,7 +994,7 @@ read every step.
 | **A database without `alembic_version`** | The backend drops every table in it on start, taking it for a fresh install.                                                                                                                                                                                       | A database for The Logbook alone — never `defaultdb`; restore with `./scripts/backup.sh --restore` ([Method 2, Step 2](#step-2-create-the-managed-mysql-cluster), [Moving](#moving-an-existing-installation-to-digitalocean)). |
 | **Backups never encrypted**              | Without `./scripts/backup-keygen.sh`, every archive is plaintext.                                                                                                                                                                                                  | Create the keys before the first backup; sync only `*.enc` files ([Backups](#backups)).                                                                                                                                        |
 | **A firewall with no outbound rules**    | Every outbound connection is refused: package installs, builds, certificates, backups.                                                                                                                                                                             | The outbound rules in [Method 1, Step 3](#step-3-create-the-cloud-firewall).                                                                                                                                                   |
-| **Managed clusters' ports**              | Neither cluster listens on 3306 or 6379, and `./scripts/backup.sh` does not pass `DB_PORT` to `mysqldump` / `mysql`.                                                                                                                                               | The ports `doctl databases connection` prints, in `.env` and in `~/.my.cnf` ([Method 2, Step 6](#step-6-configure-env)).                                                                                                       |
+| **Managed clusters' ports**              | Neither cluster listens on 3306 or 6379.                                                                                                                                                                                                                           | The ports `doctl databases connection` prints, in `.env` ([Method 2, Step 6](#step-6-configure-env)). `./scripts/backup.sh` uses `DB_PORT` from `.env` too.                                                                    |
 | **Hostname verification**                | The backend checks that each server's certificate names the host it connected to. Whether DigitalOcean's certificates name the `private-` hostnames is something to test, not assume.                                                                              | The `openssl` tests in [Method 2, Step 5](#step-5-create-the-droplet-fetch-the-certificates-and-test-them), and the public hostname if a private one fails — never disabled verification.                                      |
 | **Redis misconfigured**                  | By default the backend starts anyway, with caching off and per-process rate limiting.                                                                                                                                                                              | `REDIS_REQUIRED=true`, so it refuses to start instead ([Method 2, Step 7](#step-7-start-the-stack)).                                                                                                                           |
 | **Collation**                            | A database created by `doctl` or the control panel takes MySQL 8's default collation, not the `utf8mb4_unicode_ci` the application is tested with, and every table inherits it.                                                                                    | Create it with SQL ([Method 2, Step 5](#step-5-create-the-droplet-fetch-the-certificates-and-test-them)).                                                                                                                      |
@@ -1035,7 +1037,7 @@ read every step.
 | 3    | Cloud Firewall: 22 from you, 80/443 from anyone, all outbound | Managed Valkey cluster                                                        |
 | 4    | Point DNS at the Reserved IP                                  | Trusted sources: the Droplet only                                             |
 | 5    | Sudo user and Docker                                          | Droplet, `mysql-client`, CA files, the database — and the `openssl` tests     |
-| 6    | Clone, configure `.env`, create backup keys, start            | Configure `.env`, backup keys and `~/.my.cnf` (with `port=`)                  |
+| 6    | Clone, configure `.env`, create backup keys, start            | Configure `.env`, backup keys and `~/.my.cnf`                                 |
 | 7    | Nginx and HTTPS                                               | `up -d` with `docker-compose.external-services.yml`; confirm Valkey           |
 | 8    | Encrypted backups to Spaces; mail relay on an open port       | Nginx and HTTPS; encrypted backups and `audit_archives` to Spaces; mail relay |
 

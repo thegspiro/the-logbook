@@ -1124,13 +1124,22 @@ jobs:
   # once consumed a whole job's budget — because a cache miss (a new Ubuntu
   # image, a Playwright bump that changes the dependency list) still goes to
   # the network: a stall fails this job in minutes rather than hanging it.
+  #
+  # 45, raised from 30 on 2026-11-05. The table-fit specs merged that day
+  # (#4068-#4077) check each table at the six TABLE_FIT_VIEWPORTS, and this
+  # project runs them too: main's whole-job time went from 16-26 min on
+  # 2026-11-04 to 19.9 and 28.7 min as they landed (f4db7d49, 417d2b11), and
+  # the next two (a02bdd96, a58012e0) were cancelled at 30 with every test so
+  # far passing, still mid-suite. 45 leaves room for the suite to finish and for a slow
+  # runner; it is a hang guard, not a target.
+  #
+  # 50, raised again the same day: the project runs serially on one worker at
+  # 4-5 s a test under WebKit, and the table-fit specs took it to 450 tests,
+  # about 35-38 minutes plus ~2 minutes of setup (PR #4082, cancelled twice at
+  # 30 with every test passing), which leaves 45 too little headroom.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari)
     runs-on: ubuntu-latest
-    # The project runs serially on one worker at 4-5 s a test under WebKit.
-    # The table-fit specs (#4072-#4077, 2026-11-05) took it to 450 tests,
-    # about 35-38 minutes plus ~2 minutes of setup, so 30 cancelled it with
-    # every test passing (PR #4082, twice). 50 leaves room to grow.
     timeout-minutes: 50
     defaults:
       run:
