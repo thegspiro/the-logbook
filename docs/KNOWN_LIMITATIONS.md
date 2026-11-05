@@ -216,6 +216,15 @@ on one install are closed on that basis.
 - Should skills-evaluation, checklist and knowledge-test requirements stop matching records by name, as certifications did? _Decision:_ Extend the cut-off (Apply the same rule to fallback types). From "Training — Credit From Event Attendance (2026-09-29)".
 - What should happen to the older, duplicate training-enrollment endpoint? _Decision:_ Remove it (Delete the route). From "Training — `POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path (2026-10-06)".
 
+## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
+
+The Donations list shows a Receipt column read from `receipt_sent`, but nothing
+in the application sends a donor receipt or sets the flag, so it shows a dash
+for every gift (workflow review W69). **Owner decision (2026-11-05): leave
+it as it is for now.** The column is kept rather than hidden, and no manual
+"mark sent" control is added. Receipts are issued outside the application until
+the department decides how it wants them sent.
+
 ## History — Decisions the Module Ships With (2026-11-03)
 
 The History module's first phase (past members, the Honor Roll, titles, family
