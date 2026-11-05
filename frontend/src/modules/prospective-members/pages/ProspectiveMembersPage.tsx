@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import type { PipelineTab } from '../store/prospectiveMembersStore';
 import { PipelineKanban } from '../components/PipelineKanban';
@@ -514,36 +515,33 @@ export const ProspectiveMembersPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-3 text-xl font-bold sm:text-2xl">
-            <Users className="h-6 w-6 text-red-700 sm:h-7 sm:w-7 dark:text-red-500" />
-            Prospective Members
-          </h1>
-          <p className="text-theme-text-muted mt-1 text-sm">Manage your organization's applicant pipeline</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => void navigate('/prospective-members/settings')}
-            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
-          >
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Pipeline Settings</span>
-            <span className="sm:hidden">Settings</span>
-          </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            disabled={!currentPipeline}
-            title={currentPipeline ? undefined : 'Set up a pipeline first'}
-            className="btn-primary flex items-center gap-2 px-3 text-sm sm:px-4"
-          >
-            <UserPlus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Applicant</span>
-            <span className="sm:hidden">Add</span>
-          </button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Prospective Members"
+        description="Manage your organization's applicant pipeline"
+        className="mb-6"
+        actions={
+          <>
+            <button
+              onClick={() => void navigate('/prospective-members/settings')}
+              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Pipeline Settings</span>
+              <span className="sm:hidden">Settings</span>
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              disabled={!currentPipeline}
+              title={currentPipeline ? undefined : 'Set up a pipeline first'}
+              className="btn-primary flex items-center gap-2 px-3 text-sm sm:px-4"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Applicant</span>
+              <span className="sm:hidden">Add</span>
+            </button>
+          </>
+        }
+      />
 
       {/* Stats Bar */}
       {pipelineStats && !isLoadingStats && (

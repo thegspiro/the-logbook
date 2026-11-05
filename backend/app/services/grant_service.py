@@ -1068,6 +1068,18 @@ class GrantService:
         app = await self.get_application(application_id, organization_id)
         if not app:
             raise ValueError("Application not found")
+        # XC-1: the assignee is the client's; it must be one of this
+        # department's members before it is stored, as on update.
+        await assert_in_org(
+            self.db,
+            User,
+            data.get("assigned_to"),
+            organization_id,
+            allow_none=True,
+            label="Assigned user",
+        )
+        if data.get("assigned_to") is not None:
+            data = {**data, "assigned_to": str(data["assigned_to"])}
         task = GrantComplianceTask(
             application_id=application_id,
             created_by=user_id,
@@ -1105,8 +1117,7 @@ class GrantService:
             return None
 
         # XC-1: a client-supplied assignee must belong to the caller's org
-        # before it is persisted (the create schema can't set it, but the
-        # update schema can — validate the update path too).
+        # before it is persisted, on create and on update alike.
         await assert_in_org(
             self.db,
             User,

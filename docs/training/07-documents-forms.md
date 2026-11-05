@@ -767,7 +767,7 @@ or a chosen group.
 
 ### Posting a message
 
-1. Open **Administration → Forms & Comms → Messages** and select **New
+1. Open **Administration → Forms & Comms → Department Messages** and select **New
    message**.
 2. Enter a **title** and the **message**. Web addresses you type become links.
 3. Set the **priority**: **Normal**, **Important** or **Urgent**. It decides the

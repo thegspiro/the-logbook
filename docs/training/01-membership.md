@@ -42,7 +42,7 @@ _member class_, _membership status_, _position_, _rank_ and _waiver_.
 10. [Rank and Qualification Are Different Things](#rank-and-qualification-are-different-things)
 11. [Member Status Management](#member-status-management)
 12. [Leave of Absence](#leave-of-absence)
-13. [Waiver Management](#waiver-management)
+13. [Waivers](#waivers)
 14. [Rank Validation](#rank-validation)
 15. [Membership Tiers](#membership-tiers)
 16. [Member Lifecycle Management](#member-lifecycle-management)
@@ -316,6 +316,7 @@ member in without showing their card.
 | Section                       | What it shows                                                                                                    | Who sees it                                                  |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **Training & Certifications** | A green, yellow or red compliance summary, requirements met, hours this year, certifications and recent training | The member, and officers who can manage training records     |
+| **Shift & Call History**      | Shift hours and calls by month and year, on-call hours, and hours with other departments                         | The member, and officers who can see scheduling reports      |
 | **Administrative Hours**      | The member's administrative hours                                                                                | The member, and officers who can manage administrative hours |
 | **Assigned Inventory**        | Equipment currently signed out to the member                                                                     | The member, and officers who can manage gear and equipment   |
 
@@ -335,6 +336,24 @@ member in without showing their card.
 
 Date of birth is restricted the same way as emergency contacts.
 
+**Shift & Call History** _(2026-11-04)_ shows, for the member, the same
+figures as their own **My Hours** screen in Scheduling: hours, shifts and calls
+this month, for the year you pick and for all time, with how many of those
+hours were on call (recall) and how many were worked with other departments.
+Shifts brought in by a
+[Historical Data Import](./16-integrations.md#historical-data-import) count
+here once committed. It appears only when Scheduling is turned on. A member
+sees their own; officers who can see scheduling reports (by default the
+chiefs, captains, lieutenants, the President and the Scheduling Officer) see
+anyone's. The member adds their own outside shifts on **My Hours**, not here.
+
+**Membership status and Member since** _(2026-11-04)_. The membership status
+reads in your department's own tier names ("Senior Member"), for every member
+who opens the profile. **Member since** is the date the member's
+[credited service](#auto-advancement) runs from, not their hire date: the hire
+date for a member who never left, and later for one who returned after a
+break. The ID card's **Member Since** year uses the same date.
+
 **Contact Information.** If nothing is visible to you on a colleague's
 profile, the panel says: "No contact details shared. This member has not
 added any, or your department keeps them private."
@@ -350,6 +369,32 @@ assignment corrects a mistake rather than recording a change. **End
 assignment** leaves the member with no supervisor as of today. A member cannot
 supervise themselves, and the supervisor must be a current member of the
 department.
+
+_(2026-11-04)_ An assignment that would make a loop is refused: a member cannot
+report to someone they supervise, directly or through others. The message names
+the chain, for example _"This would create a supervision loop: Dana would report
+to Lee, who reports to Dana. Dana cannot report to someone they supervise,
+directly or through others."_
+
+**What a supervisor can do** _(2026-11-04)_. A member who supervises someone
+today gets **My Crew** in their menu. It lists each member who reports to them,
+with the date they started, their training standing ("_n_ of _m_ requirements
+met") and a **Training records** button, and below that the **Evaluations**
+written about the crew, each opening once it is released to the member. It
+shows no medical records or contact details. A member who supervises nobody
+does not see the link; opening the page anyway reads **Nobody reports to you**.
+A supervisor is also emailed when a member of their crew asks for time off, and
+can approve or deny the request from Scheduling's requests list alongside the
+scheduling officers. See [Scheduling](./03-scheduling.md).
+
+**Shift & Call History** _(2026-11-04)_. The profile shows the member's hours,
+calls and outside-agency hours by month, year and all time (the same figures My
+Hours shows the member). Visible to the member and to holders of **View
+scheduling reports**.
+
+**Member since** on the profile and ID cards counts credited service, so a
+returning member's years carry over. Officers can also preview the property a
+member would return from their profile before they leave.
 
 **Qualifications** marks each entry **In force** or **Not in force**, the way
 shift sign-up reads it today. It also says whether the entry is
@@ -1559,6 +1604,9 @@ department's own membership tiers** by name. The shipped ladder's "Active
 Member" rung is the regular status under that name, so it appears once; a rung
 such as "Senior Member" is a standing of its own. A tier a member reaches by
 years of service shows here exactly as one an officer set by hand.
+_(2026-11-04)_ Every member sees the department's tier names, in the member
+directory's membership-status filter (the one that starts at **All Membership
+Statuses**) and on profiles, not only officers who manage members.
 
 On the edit page, both controls sit in **Department Information**: **Member
 class** beside the hire date, **Membership status** below it. Each has a line
@@ -1574,8 +1622,10 @@ spreadsheet import may still give `membershipType`; the `memberClass` and
 `memberStatus` columns state the pair directly and win when both are given.
 
 When you convert an applicant into a member, the conversion dialog asks for
-**Member class** and **Starting status** directly. An administrative member's
-ID card shows **Member Class** where other cards show **Rank**.
+**Member class** and **Starting status** directly. _(2026-11-04)_ **Starting
+status** offers Probationary, Regular and your department's own tiers by name.
+An administrative member's ID card shows **Member Class** where other cards
+show **Rank**.
 
 > **A member with no class.** A member who was moved onto a department tier
 > before the class existed may show **Not set** for their class. They are
@@ -2011,8 +2061,8 @@ then show as open.
 
 ### Managing Leaves
 
-You create and list leaves on the **Waiver Management** page: **Members >
-Admin > Waivers** (see [Waiver Management](#waiver-management)). A leave of
+You create and list leaves on the **Waivers** page: **Members >
+Admin > Waivers** (see [Waivers](#waivers)). A leave of
 absence is one kind of waiver.
 
 1. Open the **Create Waiver** tab.
@@ -2044,7 +2094,7 @@ member is on leave for 3 months. They now need 9 hours (12 × 9 ÷ 12).
 
 ### Viewing Leaves
 
-- **Active Waivers** tab on Waiver Management: every leave in effect now.
+- **Active Waivers** tab on the Waivers page: every leave in effect now.
   The **Training Waivers** view in Training Admin lists them too.
 - **Member profile**: shows every leave that has not been deactivated, in the
   **Leave of Absence** card, each badged by its dates. You can't edit them
@@ -2079,7 +2129,7 @@ When you create a leave with **Training Requirements** ticked, The Logbook
 
 ---
 
-## Waiver Management
+## Waivers
 
 **Who can do this:** officers who can manage member profiles (the **Manage
 member profiles** permission).
@@ -2131,7 +2181,7 @@ Overview → Training Waivers**. This view has:
   Expired or Deactivated;
 - a **Source** column: **Auto (LOA)** for a waiver created by a leave of
   absence, **Manual** for one created on its own; and
-- a link to the full Waiver Management page, which also covers meetings and
+- a link to the full Waivers page, which also covers meetings and
   shifts.
 
 ---
@@ -2208,6 +2258,14 @@ _"These tiers have not been saved yet — nothing reads them until you do."_
 | **Can hold elected office**                          | When cleared, members at this tier cannot be nominated, accept a nomination or be added as a candidate |
 | **Must meet a meeting-attendance threshold to vote** | Members must have attended a set share of meetings over a set number of months before they can vote    |
 | **Exempt from training requirements**                | Members at this tier are not graded for training compliance at all                                     |
+
+_(2026-11-04)_ These rights follow each member's **Membership status**, whatever
+their class, on every screen that reads them: who may vote and stand for
+office, the ballot check, the turnout count, training exemption, and which
+members an event mandatory for a tier expects. An administrative or social
+member on a tier gets that tier's rights. Before 2026-11-04 some of these
+checks went by the older single membership type, which named such a member by
+their class and so missed their tier.
 
 **Counts as** _(2026-10-29)_ sits on the row of any tier whose id is not one
 of the built-in statuses. A member's tier is their membership status, and some
@@ -2364,15 +2422,15 @@ count the **Needs attention** list is about. See
 | Task                                         | Where to do it                                                                                                              |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Change a member's status**                 | Member profile → status control. Archiving happens automatically; it is not a choice                                        |
-| **Create a leave of absence**                | [Waiver Management](#waiver-management)                                                                                     |
-| **See a leave of absence**                   | Member profile (read-only card), and on Waiver Management and Training Waivers                                              |
-| **Change a leave's dates or reason**         | Waiver Management → Active Waivers → **Edit**                                                                               |
-| **End a leave of absence**                   | Waiver Management → Active Waivers → **Deactivate**                                                                         |
+| **Create a leave of absence**                | [Waivers](#waivers)                                                                                                         |
+| **See a leave of absence**                   | Member profile (read-only card), and on the Waivers page and Training Waivers                                               |
+| **Change a leave's dates or reason**         | Waivers → Active Waivers → **Edit**                                                                                         |
+| **End a leave of absence**                   | Waivers → Active Waivers → **Deactivate**                                                                                   |
 | **Find and reactivate an archived member**   | Members list → status filter **Archived** → **Reactivate**, or the member's profile                                         |
 | **Chase property a former member still has** | Inventory → Member Equipment, or Members Admin → Member Management. Use **Send due reminders** to email everyone who is due |
 | **Set up membership tiers**                  | Members Admin → Settings → Membership Tiers (see [Membership Tiers](#membership-tiers))                                     |
 
-> **Tip.** A leave of absence lives on Waiver Management, not on the member's
+> **Tip.** A leave of absence lives on the Waivers page, not on the member's
 > profile. The profile only shows it.
 
 ---
@@ -2868,7 +2926,7 @@ list and submit the record again.
 | A dropped member still shows as active                         | The status change may not have saved. Check it on the member's profile.                                                                                                                                                                                                                                                                          |
 | No property return report is produced                          | The member must have equipment assigned. With none assigned, there is nothing to report.                                                                                                                                                                                                                                                         |
 | A member's tier did not go up                                  | Check that **Advance members automatically by years of service** is on; that the member is Active or Probationary; that their current membership status is one of your tiers; and that their hire date or Service History gives enough credited years. Advancement happens on the 1st of each month.                                             |
-| A leave of absence did not adjust training                     | On Waiver Management, look at the leave's **Applies to** column. **Meetings & Shifts** means training was left out. Create a separate training waiver on the same page.                                                                                                                                                                          |
+| A leave of absence did not adjust training                     | On the Waivers page, look at the leave's **Applies to** column. **Meetings & Shifts** means training was left out. Create a separate training waiver on the same page.                                                                                                                                                                           |
 | A rank shows as not recognised                                 | The member's rank must exactly match a rank your department has set up, including capitals and spaces. Edit the member's rank, or add it under **Members Admin → Settings → Operational Ranks**.                                                                                                                                                 |
 | A member's audit history is empty                              | The history only holds changes made since the feature was turned on. Older changes do not appear.                                                                                                                                                                                                                                                |
 | You cannot find the Admin Edit page                            | Open **Members Admin → Member Management** and select **Edit** beside the member.                                                                                                                                                                                                                                                                |
@@ -2901,7 +2959,7 @@ Training and Scheduling.
 
 Alex finds OFD's recruitment page and sends in an interest form.
 
-1. Lt. Morrison opens **Administration > Members > Prospective** and selects
+1. Lt. Morrison opens **Administration > Members > Prospective Members** and selects
    **Add Applicant**. She enters Alex's name, email and phone, and sets
    Membership Type to **Regular Member**.
 2. Alex's card appears on the board at **Stage 1: Interest Form**. This stage
@@ -3233,14 +3291,14 @@ One action in one place often fills in another:
 
 ### Cross-Module Edge Cases
 
-| What happened                                           | What it means / what to do                                                                                                                                              |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The membership vote fails                               | The package reads Not Elected and the applicant cannot be made a member. There is no built-in waiting period before applying again.                                     |
-| Gear is out of stock during onboarding                  | Items in stock are issued; the rest are skipped with a reason. The quartermaster raises purchase requests or draft purchase orders from the planner results.            |
-| The drug screen fails                                   | The record shows Failed and the requirement counts as not met. Nothing is flagged or sent automatically.                                                                |
-| A training phase needs a certification Alex already has | Alex uploads the certificate; an officer approves it; the requirement is credited automatically.                                                                        |
-| Alex goes on leave during probation                     | Record the leave on Waiver Management. While it lasts, the training, meeting and shift requirements it covers are adjusted, so Alex is not marked behind for time away. |
-| Dues are not paid by the due date                       | Unpaid dues are marked Overdue after the due date passes. Part-paid dues stay Partial. Late fees are not added automatically.                                           |
+| What happened                                           | What it means / what to do                                                                                                                                             |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The membership vote fails                               | The package reads Not Elected and the applicant cannot be made a member. There is no built-in waiting period before applying again.                                    |
+| Gear is out of stock during onboarding                  | Items in stock are issued; the rest are skipped with a reason. The quartermaster raises purchase requests or draft purchase orders from the planner results.           |
+| The drug screen fails                                   | The record shows Failed and the requirement counts as not met. Nothing is flagged or sent automatically.                                                               |
+| A training phase needs a certification Alex already has | Alex uploads the certificate; an officer approves it; the requirement is credited automatically.                                                                       |
+| Alex goes on leave during probation                     | Record the leave on the Waivers page. While it lasts, the training, meeting and shift requirements it covers are adjusted, so Alex is not marked behind for time away. |
+| Dues are not paid by the due date                       | Unpaid dues are marked Overdue after the due date passes. Part-paid dues stay Partial. Late fees are not added automatically.                                          |
 
 ---
 

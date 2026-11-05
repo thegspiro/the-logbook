@@ -16,6 +16,7 @@ import AllEntriesTab from '../components/AllEntriesTab';
 import SummaryTab from '../components/SummaryTab';
 import ReviewRulesTab from '../components/ReviewRulesTab';
 import toast from 'react-hot-toast';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 type TabKey = 'categories' | 'active' | 'pending' | 'all' | 'summary' | 'rules';
 
@@ -83,10 +84,11 @@ const AdminHoursManagePage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary text-3xl font-bold">Admin Hours Management</h1>
-        <p className="text-theme-text-secondary mt-1">Manage categories, review entries, and view summaries</p>
-      </div>
+      <AdminPageHeader
+        title="Admin Hours"
+        description="Manage categories, review entries, and view summaries"
+        className="mb-6"
+      />
 
       {/* Tabs */}
       <div className="bg-theme-surface hscroll mb-6 flex gap-1 rounded-lg p-1">

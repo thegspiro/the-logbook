@@ -782,11 +782,18 @@ title for a new interview; it stays editable, and an edit keeps the title the
 interview was signed with.
 
 **Sensitive answers for interviewers.** An applicant's assigned interviewers see
-that applicant's sensitive follow-up answers. The grant covers that one
-applicant; `sensitive_answers.view` still governs everywhere else, and a case
-manager without it sees the answers withheld. Each reveal is audit-logged as
+that applicant's sensitive follow-up answers on the applicant's Interview page.
+The grant covers that one applicant and only that page _(2026-11-05)_: the
+Interview page reads answers through
+`/prospects/{id}/interview/follow-up-forms/{request_id}/answers`, the only route
+that reveals them to an interviewer, while the general answers route reveals
+them to `sensitive_answers.view` holders alone. A case manager without the
+permission sees them withheld on both. Each reveal is audit-logged as
 `form_sensitive_answers_viewed` with `via` set to `permission` or
-`interviewer_assignment`.
+`interviewer_assignment`, and `screen` set to `interview` or `applicant`. The
+split keeps a future screen that reuses the general route from revealing them
+by accident; it is not a boundary against an interviewer calling the interview
+route directly, which their assignment already entitles them to.
 
 **Case managers are told.** A case manager is emailed (template **Applicant
 Needs Your Attention**, link only) when their applicant submits a follow-up
@@ -946,12 +953,13 @@ log, not in the coordinator notes.
 
 ### Follow-up Form Endpoints
 
-| Method | Path                                                                          | Permission                   | Description                                   |
-| ------ | ----------------------------------------------------------------------------- | ---------------------------- | --------------------------------------------- |
-| `GET`  | `/prospects/{prospect_id}/follow-up-forms`                                    | view                         | Forms sent, progress and record changes       |
-| `POST` | `/prospects/{prospect_id}/follow-up-forms/{step_id}/send`                     | `prospective_members.manage` | Send or resend a stage's form (same link)     |
-| `POST` | `/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change` | `prospective_members.manage` | Clear the contact-change flag                 |
-| `GET`  | `/prospects/{prospect_id}/follow-up-forms/{request_id}/answers`               | view                         | A submitted form's answers; 409 before submit |
+| Method | Path                                                                          | Permission                   | Description                                                                               |
+| ------ | ----------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms`                                    | view                         | Forms sent, progress and record changes                                                   |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{step_id}/send`                     | `prospective_members.manage` | Send or resend a stage's form (same link)                                                 |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change` | `prospective_members.manage` | Clear the contact-change flag                                                             |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms/{request_id}/answers`               | view                         | A submitted form's answers; 409 before submit                                             |
+| `GET`  | `/prospects/{prospect_id}/interview/follow-up-forms/{request_id}/answers`     | view                         | The same, for the Interview page; also reveals sensitive answers to assigned interviewers |
 
 ### Assignment Endpoints
 

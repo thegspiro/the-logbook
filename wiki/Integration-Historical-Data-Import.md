@@ -99,5 +99,11 @@ are detected and can be changed.
   or leave them out.
 
 Company drills (the `CompanyDrill` flag) are imported as training records like
-any other row. Recording them as drill meetings, for attendance percentages, is
-a later step.
+any other row. A date counts as a held drill when enough members logged it
+(three by default, 1 to 50 allowed). Each held drill becomes one past, finalized
+training session linked to the session attendance requirements chosen, with each
+member's imported record attached, so the attendance grader counts it. The step
+runs after the training commit; the ledger keys each session on
+`drill:YYYY-MM-DD`, so a rerun creates nothing twice and re-links existing
+sessions to the requirements chosen now. A date fewer members logged stays an
+ordinary record.

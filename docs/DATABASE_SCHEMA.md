@@ -7382,7 +7382,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `prospect_id` | VARCHAR(36) | yes | FK, IDX |  | → `prospective_members.id` ON DELETE CASCADE |
 | `screening_type` | ENUM(`physical_exam`, `medical_clearance`, `drug_screening`, `vision_hearing`, `fitness_assessment`, `psychological`) | no |  |  |  |
-| `status` | ENUM(`scheduled`, `completed`, `passed`, `failed`, `pending_review`, `waived`, `expired`) | no |  | `scheduled` |  |
+| `status` | TEXT | no |  | `'scheduled'` |  |
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completed_date` | DATE | yes |  |  |  |
 | `expiration_date` | DATE | yes |  |  |  |
@@ -7400,7 +7400,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_screening_rec_expiration` (`organization_id`, `expiration_date`)
 - `idx_screening_rec_prospect` (`prospect_id`)
-- `idx_screening_rec_status` (`organization_id`, `status`)
 - `idx_screening_rec_user` (`user_id`)
 
 ### `screening_requirements`

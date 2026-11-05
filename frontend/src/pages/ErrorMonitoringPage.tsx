@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
 import { Collapsible } from '../components/ux';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import { errorLogsService, type ErrorCodeEntry } from '../services/api';
 import { errorTracker, type ErrorLog } from '../services/errorTracking';
 import { useAuthStore } from '../stores/authStore';
@@ -168,11 +169,11 @@ const ErrorMonitoringPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary text-3xl font-bold">Error Monitoring</h1>
-        <p className="text-theme-text-secondary mt-1">Errors members have run into, and how to resolve them</p>
-      </div>
+      <AdminPageHeader
+        title="Error Monitor"
+        description="Errors members have run into, and how to resolve them"
+        className="mb-6"
+      />
 
       {/* Statistics Cards */}
       {stats && (

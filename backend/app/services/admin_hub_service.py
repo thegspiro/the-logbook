@@ -23,10 +23,9 @@ from typing import Awaitable, Callable, Optional, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from app.api.dependencies import user_has_permission
 from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
@@ -307,10 +306,6 @@ def _attention_context(attention: list[AdminAttentionItem]) -> str:
 # ── Members ─────────────────────────────────────────────────────────────────
 
 
-#: Outer-query alias for the missed-appointment lookup, so its correlated
-#: "was it answered?" subquery can name the same table twice.
-_OVERDUE_ALIAS = aliased(ScreeningRecord)
-
 #: Statuses that mean the member turned up. A failed screening and one still
 #: under review are both *completed* appointments — they are somebody else's
 #: problem (compliance, the reviewer), not a booking nobody kept.
@@ -320,6 +315,69 @@ _ATTENDED_STATUSES = (
     ScreeningStatus.FAILED,
     ScreeningStatus.PENDING_REVIEW,
 )
+
+
+def _answers(other: ScreeningRecord, missed: ScreeningRecord, today: date) -> bool:
+    """Whether ``other`` answers the appointment ``missed`` records.
+
+    The member attended (a settled result dated on or after the missed day),
+    the requirement was waived, or a later booking has not come round yet. A
+    settled record with no completed date says nothing about *when*, so it
+    answers nothing.
+    """
+    if other.status == ScreeningStatus.WAIVED:
+        return True
+    if other.status in _ATTENDED_STATUSES:
+        return (
+            other.completed_date is not None
+            and missed.scheduled_date is not None
+            and other.completed_date >= missed.scheduled_date
+        )
+    return (
+        other.status == ScreeningStatus.SCHEDULED
+        and other.scheduled_date is not None
+        and other.scheduled_date >= today
+    )
+
+
+async def _missed_screening_appointments(
+    ctx: MetricContext,
+) -> tuple[int, Optional[date]]:
+    """(member-and-type pairs with an unanswered missed booking, oldest day)."""
+    rows = await ctx.db.execute(
+        select(ScreeningRecord)
+        .join(User, ScreeningRecord.user_id == User.id)
+        .where(
+            ScreeningRecord.organization_id == ctx.organization_id,
+            # An appointment somebody off the roster missed is history, not work.
+            User.organization_id == ctx.organization_id,
+            *_current_member_criteria(),
+        )
+    )
+    by_member_and_type: dict[tuple[str, str], list[ScreeningRecord]] = {}
+    for record in rows.scalars().all():
+        key = (str(record.user_id), str(record.screening_type))
+        by_member_and_type.setdefault(key, []).append(record)
+
+    missed_on: dict[tuple[str, str], date] = {}
+    for key, records in by_member_and_type.items():
+        for missed in records:
+            if (
+                missed.status != ScreeningStatus.SCHEDULED
+                or missed.scheduled_date is None
+                or missed.scheduled_date >= ctx.today
+            ):
+                continue
+            if any(
+                _answers(other, missed, ctx.today)
+                for other in records
+                if other.id != missed.id
+            ):
+                continue
+            first = missed_on.get(key)
+            if first is None or missed.scheduled_date < first:
+                missed_on[key] = missed.scheduled_date
+    return len(missed_on), min(missed_on.values(), default=None)
 
 
 def _current_member_criteria():
@@ -477,55 +535,10 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         # *when* they attended, so it answers nothing — over-reporting a
         # "reschedule this" is the safer direction than hiding a member who never
         # had their physical.
-        answered = (
-            select(ScreeningRecord.id)
-            .where(
-                ScreeningRecord.organization_id == ctx.organization_id,
-                ScreeningRecord.user_id == _OVERDUE_ALIAS.user_id,
-                ScreeningRecord.screening_type == _OVERDUE_ALIAS.screening_type,
-                ScreeningRecord.id != _OVERDUE_ALIAS.id,
-                or_(
-                    ScreeningRecord.status == ScreeningStatus.WAIVED,
-                    and_(
-                        ScreeningRecord.status.in_(_ATTENDED_STATUSES),
-                        ScreeningRecord.completed_date.isnot(None),
-                        ScreeningRecord.completed_date >= _OVERDUE_ALIAS.scheduled_date,
-                    ),
-                    and_(
-                        ScreeningRecord.status == ScreeningStatus.SCHEDULED,
-                        ScreeningRecord.scheduled_date.isnot(None),
-                        ScreeningRecord.scheduled_date >= ctx.today,
-                    ),
-                ),
-            )
-            .exists()
-        )
-        missed = (
-            select(
-                _OVERDUE_ALIAS.user_id,
-                _OVERDUE_ALIAS.screening_type,
-                func.min(_OVERDUE_ALIAS.scheduled_date).label("missed_on"),
-            )
-            .join(User, _OVERDUE_ALIAS.user_id == User.id)
-            .where(
-                _OVERDUE_ALIAS.organization_id == ctx.organization_id,
-                _OVERDUE_ALIAS.status == ScreeningStatus.SCHEDULED,
-                _OVERDUE_ALIAS.scheduled_date.isnot(None),
-                _OVERDUE_ALIAS.scheduled_date < ctx.today,
-                # An appointment somebody off the roster missed is history, not work.
-                User.organization_id == ctx.organization_id,
-                *_current_member_criteria(),
-                ~answered,
-            )
-            .group_by(_OVERDUE_ALIAS.user_id, _OVERDUE_ALIAS.screening_type)
-            .subquery()
-        )
-        overdue_row = (
-            await ctx.db.execute(
-                select(func.count(), func.min(missed.c.missed_on)).select_from(missed)
-            )
-        ).one()
-        overdue_count, oldest_due = int(overdue_row[0] or 0), overdue_row[1]
+        #
+        # Decided in Python: the status is ciphertext (MS-15), so the database
+        # cannot tell a booking from a result. One row per member and type.
+        overdue_count, oldest_due = await _missed_screening_appointments(ctx)
         if overdue_count:
             age = _age_days(oldest_due, ctx.today, ctx.timezone_name)
             items.append(

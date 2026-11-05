@@ -135,6 +135,31 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A screening record's status is encrypted at rest (2026-11-05)
+
+A migration (`80fa2c83bf9d`) runs on the next start and turns
+`screening_records.status` (passed, failed, waived, …) from an `ENUM` into
+`TEXT`, then **encrypts every existing value in place**. The provider, results
+and notes beside it were already encrypted; until now the outcome itself was
+readable in a dump or backup. It also drops the `idx_screening_rec_status`
+index, which an encrypted column cannot use. Same rules as the other
+encryption changes:
+
+- `ENCRYPTION_KEY` must be set when screening records exist; with it missing
+  the migration stops with a clear error and changes nothing.
+- **Take the database backup first.** The downgrade decrypts and restores the
+  `ENUM`, but only the same `ENCRYPTION_KEY` / `ENCRYPTION_SALT` can read the
+  ciphertext. Backups taken before the upgrade still hold every status in
+  plaintext.
+- The screens, compliance grading, the expiring list, the Members hub, the
+  membership pipeline's screening stage, the data export and anonymisation
+  behave as before. A report or query of your own that reads or filters the
+  column directly will now see ciphertext.
+- `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
+  the column.
+- **Not part of this change:** the screening type, the dates and which member a
+  record belongs to remain plaintext (see `docs/KNOWN_LIMITATIONS.md`, MS-15).
+
 ### `REDIS_REQUIRED=true` now refuses to start without Redis (2026-11-04)
 
 `REDIS_REQUIRED` was documented — here, in `.env.example.full` and in the
