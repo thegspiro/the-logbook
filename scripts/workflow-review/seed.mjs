@@ -401,6 +401,17 @@ async function main() {
       positions.body.map((p) => [p.slug, p.id]),
     );
 
+    // POST /users requires a recent step-up on the caller's session. The admin
+    // has no second factor yet, so the account password is the proof, and one
+    // verification covers the whole batch below (STEPUP_WINDOW_MINUTES).
+    const stepUp = await apiCall(context, "POST", "/auth/step-up", {
+      password: accounts.admin.password,
+    });
+    if (stepUp.status !== 200)
+      throw new Error(
+        `POST /auth/step-up: ${stepUp.status} ${JSON.stringify(stepUp.body)}`,
+      );
+
     const temporary = {};
     for (const spec of ROLES) {
       const username = `review_${spec.role}`;
