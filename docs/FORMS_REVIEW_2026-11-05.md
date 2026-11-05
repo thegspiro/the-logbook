@@ -3,7 +3,8 @@
 A sweep of every form in the application, driven in a real browser with
 Playwright against a freshly onboarded department (the
 `scripts/workflow-review/` harness, database `logbook_workflow_review`). This is
-a findings report: **nothing in the application was changed by this review.**
+a findings report: **the review itself changed nothing in the application.** F-1
+was fixed afterwards, in the same pull request (see its status line).
 Each finding says what was driven, as whom, and what happened, so the owner can
 decide what to fix and in what order.
 
@@ -62,6 +63,11 @@ Severity follows the workflow review's scale — scored by what happens to the
 department, not by the size of the fix.
 
 ### F-1 — HIGH — A member can save a blank first or last name
+
+**Status: fixed.** `UserUpdate` now strips both names and refuses a blank one
+or an explicit `null`, and `/account` marks them required and refuses a blank
+name before saving. Tests: `tests/test_member_name_required_on_update.py`,
+`UserSettingsPage.test.tsx` ("legal name is required").
 
 **Driven:** as `member` on `/account`, emptied First Name and pressed Save
 Profile. The toast said **"Profile saved"**; after a reload the field was empty
