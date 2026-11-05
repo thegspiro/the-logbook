@@ -31,8 +31,16 @@ import type { NfcCardTap, NfcReaderList, NfcReaderRoom } from '../modules/member
 
 const ROOM_TAPS_PAGE = 25;
 
-const roomLabel = (room: NfcReaderRoom): string =>
-  [room.name, room.building, room.roomNumber ? `Room ${room.roomNumber}` : null].filter(Boolean).join(' · ');
+// A facility room's location is named "Room — Facility" by the backend
+// (FacilitiesService._room_location_name) and carries that same facility as
+// its building, so appending the building again would print it twice.
+const roomLabel = (room: NfcReaderRoom): string => {
+  const building = room.building?.trim();
+  const named = building && (room.name === building || room.name.endsWith(` — ${building}`));
+  return [room.name, named ? null : building, room.roomNumber ? `Room ${room.roomNumber}` : null]
+    .filter(Boolean)
+    .join(' · ');
+};
 
 interface RoomTapsProps {
   room: NfcReaderRoom;
