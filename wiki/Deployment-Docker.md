@@ -396,7 +396,9 @@ The override:
   Never start them by name (`docker compose up -d mysql`). Back the database up
   with the provider's backups, and the `uploads` and `audit_archives` volumes
   separately ([AWS guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-rds),
-  [Azure guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#method-2-managed-services)).
+  [Azure guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#method-2-managed-services),
+  [Google Cloud guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/gcp.md#method-2-managed-services),
+  [DigitalOcean guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/digitalocean.md#method-2-managed-services)).
 
 `MYSQL_ROOT_PASSWORD` still needs a value, because Compose reads the unused
 `mysql` definition. `REDIS_PASSWORD` is sent to the external Redis, so it must
@@ -411,9 +413,13 @@ Check what will start with `docker compose config --services`: `backend`,
 
 Full walkthroughs:
 [AWS Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-ec2--rds--elasticache-production)
-(RDS and ElastiCache) and
+(RDS and ElastiCache),
 [Azure Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#method-2-azure-vm--azure-database-for-mysql--azure-managed-redis-production)
-(Azure Database for MySQL and Azure Managed Redis).
+(Azure Database for MySQL and Azure Managed Redis),
+[Google Cloud Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/gcp.md#method-2-compute-engine-vm--cloud-sql-for-mysql--memorystore-production)
+(Cloud SQL for MySQL and Memorystore for Redis) and
+[DigitalOcean Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/digitalocean.md#method-2-droplet--managed-mysql--managed-valkey-production)
+(Managed MySQL and Managed Valkey).
 
 ---
 

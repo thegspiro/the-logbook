@@ -22,7 +22,8 @@
 #
 # Leave this file out when a proxy outside this stack reaches the frontend on
 # the host's port 3000 — a host-installed nginx (docs/deployment/aws.md,
-# docs/deployment/azure.md) or a
+# docs/deployment/azure.md, docs/deployment/gcp.md,
+# docs/deployment/digitalocean.md) or a
 # proxy in another container — since it needs that port published.
 #
 # nginx will not start without a certificate in infrastructure/nginx/ssl/; see

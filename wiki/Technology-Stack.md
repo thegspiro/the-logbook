@@ -129,16 +129,20 @@ Complete technology reference for The Logbook.
 
 ## Deployment Platforms
 
-| Platform           | Status                                 |
-| ------------------ | -------------------------------------- |
-| **Unraid**         | One-command installer, fully supported |
-| **Docker Compose** | Primary deployment method              |
-| **AWS**            | Documented (ECS, EC2)                  |
-| **Azure**          | Documented (Container Instances)       |
-| **Google Cloud**   | Documented (Cloud Run)                 |
-| **Raspberry Pi**   | Supported (ARM images, MariaDB)        |
-| **Synology NAS**   | Documented                             |
-| **Proxmox**        | Documented                             |
+| Platform           | Status                                                                                                                                                                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unraid**         | One-command installer, fully supported                                                                                                                                           |
+| **Docker Compose** | Primary deployment method                                                                                                                                                        |
+| **AWS**            | Documented: EC2 VM, optionally with RDS and ElastiCache ([aws.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md))                                    |
+| **Azure**          | Documented: Azure VM, optionally with Azure Database for MySQL and Azure Managed Redis ([azure.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md)) |
+| **Google Cloud**   | Documented: Compute Engine VM, optionally with Cloud SQL and Memorystore ([gcp.md](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/gcp.md))                   |
+| **Raspberry Pi**   | Supported (ARM images, MariaDB)                                                                                                                                                  |
+| **Synology NAS**   | Documented                                                                                                                                                                       |
+| **Proxmox**        | Documented                                                                                                                                                                       |
+
+Every cloud platform runs the Docker Compose stack on a VM. Container services
+(ECS/Fargate, Azure Container Instances, Cloud Run, App Platform) are not
+supported: nothing in the repository deploys to them.
 
 ---
 
