@@ -1,8 +1,127 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
 
 ---
+
+## Pass 15 (2026-11-04) — watchdog pickup: real delta verified (approval-link send-status tracking, re-send, and the approver-facing subject fields), 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents` — no
+reachable agents). `list_pull_requests` (state `open`) returned 0 results for
+a `claude/security-review-*` head immediately after PR #4040 (Feature 04,
+Storefront & payments, pass 15) merged. Row 05 was the next `⬜` row,
+confirmed on a freshly-fetched `main`.
+
+**Scope.** Pass 14 merged as `b7f72c67a`. `git diff b7f72c67a..<head>` over
+this feature's full established scope (`endpoints/finance.py`,
+`finance_service.py`, `finance_budget_request_service.py`,
+`finance_budget_access.py`, `finance_report_service.py`,
+`finance_reimbursement.py`, `finance_approver_matching.py`,
+`finance_budget_ownership.py`, `finance_budget_request_notifications.py`,
+`utils/finance_settings.py`, `schemas/finance.py`, `models/finance.py`,
+`public/finance_approvals.py`, `frontend/src/modules/finance/`) touches 15
+files (736/43). Eight non-merge commits land in the window; six are the
+cosmetic shape every recent pass has seen (AAA-contrast badge colors on the
+dues page, a mobile-accessibility fix to its summary tiles and button names,
+a card/field-grid width fix to the dashboard's quick-links, a split-row fix
+to the approval-step actions row, a reflow-table `data-label` fix to the
+QuickBooks mapping tables) — each read against its own diff and confirmed to
+touch only class strings, grid utilities, or `data-label`/`aria-label`
+attributes, never a data flow or a permission gate.
+
+**The one real commit — `da6bbdf70` ("Finance approvals: emailed links
+record their send, can be re-sent, show the request")** — closes
+`docs/KNOWN_LIMITATIONS.md`'s "Finance — Emailed Approvals Cannot Be Re-Sent"
+item per the owner's 2026-11-01 decisions. Read in full against all seven
+checklist dimensions:
+
+- **New columns** (`approval_step_records.email_status`,
+  `email_status_at`, `email_link_version`) via migration `b2d4f6a8c0e3`.
+  Guards the table-only-exists-via-`create_all` case (Pitfall #26), adds each
+  column only if missing (idempotent re-run), leaves existing rows' nullable
+  columns `NULL` rather than inventing a `sent` nobody recorded, and the
+  `NOT NULL` `email_link_version` carries a `server_default` (Pitfall #35)
+  so existing rows backfill to `0` without a separate backfill step. Single
+  head, 717 revisions (`validate_migrations.py --strict`).
+- **`resend_approval_email`** (`finance_service.py`) is a textbook Pitfall
+  #36 idempotent-retry shape: it takes the step row `.with_for_update()` as
+  its _first_ read in the transaction (so, unlike the stale-snapshot trap
+  Pitfall #27 warns about, the lock itself is what the version check reads —
+  a locking read always sees the latest committed row under InnoDB, never a
+  pre-lock snapshot), then compares the caller's `link_version` against the
+  row's current `email_link_version` and no-ops if another re-send already
+  moved it past that version. `test_a_repeated_resend_is_a_no_op` and
+  `test_resend_mints_a_new_link_and_kills_the_old_one`
+  (`test_finance_approval_link_resend.py`) exercise this sequentially; there
+  is no true-concurrency (`asyncio.gather`) test of the race itself, which a
+  future pass could add, but the mechanism is sound by direct trace — the
+  gap is coverage, not correctness.
+- **Org-scoping (XC-3) on the new route** — `POST
+/finance/approvals/{step_record_id}/resend-email` resolves the step
+  through `ApprovalChain.organization_id == org_id` before taking the lock,
+  never a bare `ApprovalStepRecord.id` lookup; `test_another_organizations_
+admin_gets_404` exercises this directly.
+- **Authorization** — the new route is `require_all_permissions("finance.
+approve", "finance.configure_approvals")`, an AND-gate on two permissions
+  that are seeded to no baseline position (`core/permissions.py`; confirmed
+  by grep against `_LINE_MEMBER_PERMISSIONS` and `DEFAULT_POSITIONS`), so
+  Pitfall #23's broadly-seeded-grant pattern doesn't apply here.
+  `test_a_named_approver_without_the_admin_permission_is_refused` covers the
+  single-permission-missing case.
+- **Data exposure to the external, unauthenticated approver** —
+  `FinanceService.approval_subject` adds title/amount/requester to the
+  already-reviewed (PUB-03, pass 15) public `GET /approval-detail` response
+  and to the emailed HTML. Every interpolated value (`title`,
+  `requester_name`) is `html.escape`d before going into the email body sent
+  to someone outside the department; the amount is a `Decimal` formatted
+  through `html.escape(f"${...:,.2f}")`, not raw user text. The query is
+  org-scoped (`model.organization_id == org_id`) per entity type. This is an
+  explicit, documented owner decision (`KNOWN_LIMITATIONS.md`, "Resolved
+  2026-11-01") to show exactly these three fields and nothing more
+  (description, vendor, line items stay behind the login) — not a new gap.
+- **Audit logging** — `finance.approval_link_resent` logs ids, entity type,
+  link version and email status only; no approver email address or name
+  (Pitfall #33's "an id rather than user-supplied text" shape).
+- **Token minting** — `_mint_approval_link` still uses
+  `secrets.token_urlsafe(32)` (256 bits), unchanged generation shape, and
+  overwriting `approval_token` is itself the old link's invalidation (the
+  column is looked up by exact value, so the old token answers "not found"
+  from the moment it's overwritten).
+
+**Route count.** `finance.py` re-enumerated fresh by AST: **137 routes**, up
+from 136 at pass 12–14 — the one new `resend-email` route, which (like every
+other route in the file) carries an explicit auth dependency. `public/
+finance_approvals.py`: **3 routes**, unchanged (the subject fields extend an
+existing response, no new route).
+
+**Standing items** (FIN8-05-1, the `waive_dues` lock, `approve_step`/
+`deny_step` ordering and SoD, the `_mutate_budget` overspend ceiling, FIN-30,
+CSV/LIKE escaping, `_validate_finance_fks`) are all outside this pass's real
+diff — none of their files appear in the six-commit cosmetic set or in
+`da6bbdf70` — so they are not re-read line-by-line this pass; pass 14 already
+re-verified each by direct code read five days prior and nothing in this
+window's diff touches them.
+
+**0 fixed this pass, 0 new findings.** The one real change is a correctly
+-scoped, correctly-idempotent, already-owner-decided feature; the rest is
+cosmetic.
+
+### Completion gate (pass 15)
+
+| Check                                                                                                                 | Result                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI's pin)                                                                              | clean                                                                                                                   |
+| `black --check app/ tests/ alembic/`                                                                                  | clean, 2901 files unchanged                                                                                             |
+| `isort --check-only app/ tests/ alembic/`                                                                             | clean                                                                                                                   |
+| `scripts/validate_migrations.py --strict`                                                                             | 717 revisions, single head `8da91e9d28d6`                                                                               |
+| `scripts/check_route_permissions.py --strict`                                                                         | 300 routes, 0 errors, 0 warnings                                                                                        |
+| `pytest -k "finance or budget_request or approval_chain or dues or reimburs or quickbooks or waive or approval_link"` | 1,620 passed, 2 skipped (both environment-only: `pywebpush`, and a time-zone-table fixture unavailable in this sandbox) |
+| `frontend: npm run typecheck`                                                                                         | 0 errors                                                                                                                |
+| `frontend: npm run lint`                                                                                              | 0 errors, 0 warnings                                                                                                    |
+
+No code change was made this pass (nothing unsafe was found, and nothing
+safe needed fixing), so no new guard test was added.
 
 ## Pass 14 (2026-10-31) — watchdog pickup: near-zero real delta (layout refactors, an error-message length cap reaching one finance refusal, an unrelated commit's incidental test-mock fix), 0 fixed, 0 new findings; all standing items re-verified
 

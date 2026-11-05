@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4043](https://github.com/thegspiro/the-logbook/pull/4043)** (branch
+`claude/security-review-finance-approvals-p15`) —
+Feature 05 (Finance & approvals), pass 15, a watchdog pickup. Real delta: a
+merged commit added send-status tracking and a re-send capability to emailed
+approval links, per the owner's 2026-11-01 decision closing
+`KNOWN_LIMITATIONS.md`'s "Emailed Approvals Cannot Be Re-Sent" item. Verified
+org-scoping (XC-3) on the new resend route, the AND-gated permission check,
+idempotent re-send logic (Pitfall #36), and the HTML-escaped subject fields
+reaching the external approver. 137 routes re-enumerated by AST (136 + 1). 0
+fixed, 0 new findings. See
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 15** section.
+Next in the rotation: Feature 06 (Elections & ballots).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 15, PR #4040, merged), preserved for history</summary>
+
 **PR [#4040](https://github.com/thegspiro/the-logbook/pull/4040)** (branch
 `claude/security-review-storefront-payments-p15`) —
 Feature 04 (Storefront & payments), pass 15, a watchdog pickup. True zero
@@ -24,6 +40,8 @@ byte-identical, 48 routes re-enumerated by AST and unchanged. 0 fixed, 0 new
 findings; 0 findings remain OPEN/FLAGGED for this feature. See
 `docs/security-review/SF-04-storefront-payments.md`'s **Pass 15** section.
 Next in the rotation: Feature 05 (Finance & approvals).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 15, PR #4022, merged), preserved for history</summary>
@@ -24758,7 +24776,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                 | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (49 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py` (added pass 15)                              | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                          | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                                                 | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                                                 | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                              | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                                                      | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                  | ⬜     |
@@ -24806,6 +24824,59 @@ them to be re-discovered by SEC-00 every lap.
 ---
 
 ## Log
+
+### 2026-11-04 — Feature 04 (Storefront & payments, pass 15) merged; Feature 05 (Finance & approvals, pass 15) — watchdog pickup, real delta verified, 0 fixed, 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. PR #4040 (Feature 04, Storefront &
+payments, pass 15) had already merged (`9a365b9f3`); a fresh
+`list_pull_requests` (state `open`) returned zero results for a
+`claude/security-review-*` head, confirming row 05 (Finance & approvals) as
+the next `⬜` row on a freshly-pulled `main`.
+
+Baseline `b7f72c67a` (pass 14's merge) to current `main`: 15 files in this
+feature's tracked scope carry a diff (736/43). Eight non-merge commits land
+in the window; six are the cosmetic shape every recent pass has seen
+(AAA-contrast badge colors, mobile-accessibility fixes, card/field-grid width
+fixes, a split-row fix, a reflow-table `data-label` fix) — each read against
+its own diff and confirmed to touch only class strings/attributes, never a
+data flow or permission gate.
+
+The one real commit, `da6bbdf70` ("Finance approvals: emailed links record
+their send, can be re-sent, show the request"), closes
+`KNOWN_LIMITATIONS.md`'s "Emailed Approvals Cannot Be Re-Sent" item per the
+owner's 2026-11-01 decisions. Verified directly rather than taken on the
+commit message: the new `POST /finance/approvals/{id}/resend-email` route
+resolves its target through an org-scoped join before taking a row lock
+(XC-3), is gated by an AND of two non-baseline permissions
+(`finance.approve` + `finance.configure_approvals`), and its idempotent
+re-send logic reads the version check from the same locking SELECT that
+takes the lock — not a pre-lock snapshot, so Pitfall #27's staleness trap
+doesn't apply. The subject fields (title/amount/requester) added to the
+already-reviewed (PUB-03 pass 15) public approval-detail response and the
+emailed HTML are `html.escape`d and org-scoped per entity type; this is the
+documented owner decision to show exactly these three fields to the
+unauthenticated external approver, not a new exposure. The new migration
+(`b2d4f6a8c0e3`) tolerates the `create_all`-only table (Pitfall #26) and
+gives its `NOT NULL` column a `server_default` (Pitfall #35). 137 routes
+re-enumerated by AST (up from 136 — the one new route), every one carrying
+an explicit auth dependency.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 717
+revisions, single head `8da91e9d28d6`; `check_route_permissions.py --strict`
+— 300 routes, 0 errors/warnings; targeted backend suite (`-k "finance or
+budget_request or approval_chain or dues or reimburs or quickbooks or waive
+or approval_link"`) — 1,620 passed, 2 pre-existing skips (`pywebpush`, a
+time-zone-table fixture unavailable in this sandbox); frontend
+`npm run typecheck`/`npm run lint` — 0 errors, 0 warnings.
+
+Row 05 → ✅. Next in the rotation: Feature 06 (Elections & ballots) — re-check
+`list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-04 — Feature 03 (Public surface & webhooks, pass 15) merged; Feature 04 (Storefront & payments, pass 15) — watchdog pickup, true zero delta, 0 fixed, 0 new findings
 
