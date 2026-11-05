@@ -269,7 +269,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, lock
                   aria-label={`Offer ${type.label} at close-out`}
                   disabled={saving}
                   onClick={() => patch(type.slug, { active: !type.active })}
-                  className={`toggle-track-sm ${type.active ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                  className={`toggle-track-sm ${type.active ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}
                 >
                   <span className={`toggle-knob-sm ${type.active ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
