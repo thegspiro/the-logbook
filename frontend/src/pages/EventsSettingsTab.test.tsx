@@ -8,6 +8,7 @@ const getForms = vi.fn();
 const createEmailTemplate = vi.fn();
 const listEmailTemplates = vi.fn();
 const deleteEmailTemplate = vi.fn();
+const getUsers = vi.fn();
 
 vi.mock('../services/api', () => ({
   eventService: {
@@ -20,7 +21,7 @@ vi.mock('../services/api', () => ({
     getForms: (...args: unknown[]) => getForms(...args) as unknown,
     createEmailTemplate: (...args: unknown[]) => createEmailTemplate(...args) as unknown,
   },
-  userService: { getUsers: () => Promise.resolve([]) },
+  userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -68,6 +69,8 @@ describe('EventsSettingsTab', () => {
     getModuleSettings.mockResolvedValue(structuredClone(settings));
     getForms.mockReset();
     getForms.mockResolvedValue({ forms: [], total: 0, skip: 0, limit: 50 });
+    getUsers.mockReset();
+    getUsers.mockResolvedValue([]);
     listEmailTemplates.mockReset();
     listEmailTemplates.mockResolvedValue([]);
     deleteEmailTemplate.mockReset();
@@ -186,6 +189,32 @@ describe('EventsSettingsTab', () => {
       expect(await screen.findByRole('heading', { name: 'Request Emails' })).toBeInTheDocument();
       const rail = screen.getByRole('navigation', { name: 'Public Requests pages' });
       expect(within(rail).getByRole('button', { name: /^Emails/ })).toHaveAttribute('aria-current', 'page');
+    });
+
+    // A request with nobody assigned sits until someone notices it, so a
+    // missing coordinator leaves the Handling step unfinished even with a
+    // checklist in place.
+    it('marks Handling unfinished until a default coordinator is set', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await openRequestsPage(user, /^Overview/);
+
+      expect(screen.getByText('No default coordinator · 1 checklist step')).toHaveClass('text-amber-800');
+    });
+
+    it('marks Handling done once a coordinator and a checklist are set', async () => {
+      getModuleSettings.mockResolvedValue({
+        ...structuredClone(settings),
+        request_pipeline: { ...structuredClone(settings.request_pipeline), default_assignee_id: 'u1' },
+      });
+      getUsers.mockResolvedValue([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery' }]);
+      const user = userEvent.setup();
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await openRequestsPage(user, /^Overview/);
+
+      expect(screen.getByText('Jordan Avery · 1 checklist step')).toHaveClass('text-green-800');
     });
 
     it('returns to the overview when the section is left and reopened', async () => {

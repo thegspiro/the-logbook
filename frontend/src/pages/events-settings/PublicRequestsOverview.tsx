@@ -70,7 +70,7 @@ const PublicRequestsOverview: React.FC<PublicRequestsOverviewProps> = ({
       title: 'Handling',
       body: 'Who each new request is assigned to, and the checklist your team works through.',
       status: `${coordinator ? displayNameOf(coordinator) : 'No default coordinator'} · ${pipeline.tasks.length} checklist ${pipeline.tasks.length === 1 ? 'step' : 'steps'}`,
-      ready: pipeline.tasks.length > 0,
+      ready: Boolean(coordinator) && pipeline.tasks.length > 0,
     },
     {
       page: 'emails',
