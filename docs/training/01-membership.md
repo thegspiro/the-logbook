@@ -2901,7 +2901,7 @@ Training and Scheduling.
 
 Alex finds OFD's recruitment page and sends in an interest form.
 
-1. Lt. Morrison opens **Administration > Members > Prospective** and selects
+1. Lt. Morrison opens **Administration > Members > Prospective Members** and selects
    **Add Applicant**. She enters Alex's name, email and phone, and sets
    Membership Type to **Regular Member**.
 2. Alex's card appears on the board at **Stage 1: Interest Form**. This stage

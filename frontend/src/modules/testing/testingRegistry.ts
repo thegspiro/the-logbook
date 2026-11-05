@@ -75,7 +75,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/dashboard', label: 'Dashboard', note: 'Landing page after sign-in — widgets, quick actions, alerts' },
       {
         path: '/testing',
-        label: 'Testing home',
+        label: 'Testing Home',
         note: 'This page — listed so the list is complete',
         module: 'testing',
       },

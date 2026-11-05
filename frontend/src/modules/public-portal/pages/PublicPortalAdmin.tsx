@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { Globe, Key, FileText, BarChart3, Shield, Settings, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Key, FileText, BarChart3, Shield, Settings, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ConfigurationTab } from '../components/ConfigurationTab';
@@ -16,6 +16,7 @@ import { UsageStatsTab } from '../components/UsageStatsTab';
 import { DataWhitelistTab } from '../components/DataWhitelistTab';
 import { SkeletonText } from '../../../components/ux';
 import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 type TabType = 'config' | 'keys' | 'logs' | 'stats' | 'whitelist';
 
@@ -80,18 +81,6 @@ const PublicPortalAdmin: React.FC = () => {
     }
   };
 
-  const titleBlock = (
-    <div className="page-header-title flex items-center space-x-3">
-      <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-500/20">
-        <Globe className="h-6 w-6 text-blue-600" />
-      </div>
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Public Portal</h1>
-        <p className="text-theme-text-muted text-sm">Manage public API access for external websites</p>
-      </div>
-    </div>
-  );
-
   // The disabled-portal banner and the tab strip sit between the title and the
   // body, ~200px on a phone, and whether the banner is drawn depends on the
   // config. Everything below the title waits, laid out but invisible, for the
@@ -105,47 +94,52 @@ const PublicPortalAdmin: React.FC = () => {
       <div className="bg-theme-surface border-theme-surface-border border-b">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="py-6">
-            <div className="page-header gap-3 sm:items-center">
-              {titleBlock}
-
-              {/* Status Toggle */}
-              {loading ? (
-                <div className="page-header-actions flex flex-wrap items-center gap-4" aria-hidden="true">
-                  <span className="text-sm">
-                    <SkeletonText className="w-28" />
-                  </span>
-                  <span className="btn-md invisible">Enable Portal</span>
-                </div>
-              ) : (
-                <div className="page-header-actions flex flex-wrap items-center gap-4">
-                  <div className="flex items-center space-x-2">
-                    {config?.enabled ? (
-                      <>
-                        <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-500" />
-                        <span className="text-sm font-medium text-green-700 dark:text-green-400">Portal Enabled</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="text-theme-text-muted h-5 w-5" />
-                        <span className="text-theme-text-muted text-sm font-medium">Portal Disabled</span>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => {
-                      void handleToggleEnabled();
-                    }}
-                    className={`btn-md font-medium transition-colors ${
-                      config?.enabled
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
-                    }`}
-                  >
-                    {config?.enabled ? 'Disable Portal' : 'Enable Portal'}
-                  </button>
-                </div>
-              )}
-            </div>
+            <AdminPageHeader
+              title="Public Portal"
+              description="Manage public API access for external websites"
+              actions={
+                <>
+                  {loading ? (
+                    <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
+                      <span className="text-sm">
+                        <SkeletonText className="w-28" />
+                      </span>
+                      <span className="btn-md invisible">Enable Portal</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center space-x-2">
+                        {config?.enabled ? (
+                          <>
+                            <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-500" />
+                            <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                              Portal Enabled
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="text-theme-text-muted h-5 w-5" />
+                            <span className="text-theme-text-muted text-sm font-medium">Portal Disabled</span>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          void handleToggleEnabled();
+                        }}
+                        className={`btn-md font-medium transition-colors ${
+                          config?.enabled
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
+                            : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
+                        }`}
+                      >
+                        {config?.enabled ? 'Disable Portal' : 'Enable Portal'}
+                      </button>
+                    </div>
+                  )}
+                </>
+              }
+            />
 
             {/* Warning Banner */}
             {!loading && !config?.enabled && (

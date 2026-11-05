@@ -1355,7 +1355,7 @@ in the dashboard's **Needs you** panel with an **Acknowledge** button.
 ### Department Messages
 
 Officers who manage notification rules (**notifications.manage**) post
-department announcements from **Administration > Forms & Comms > Messages**.
+department announcements from **Administration > Forms & Comms > Department Messages**.
 Messages can be escalated by email or text message according to priority, can
 require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
@@ -2812,7 +2812,7 @@ county's submission. **Print / PDF** gives her a copy for the board packet.
 ### Step 4: Following Up
 
 1. **Foster and Harris** — she sends a department message (**Administration >
-   Forms & Comms > Messages**) reminding them of the minimum and asking them to
+   Forms & Comms > Department Messages**) reminding them of the minimum and asking them to
    plan make-up training in the first quarter.
 2. **Brooks** — she notes to follow up in February about CPR renewal.
 3. She saves the Annual Training Report as a **saved report** with the period

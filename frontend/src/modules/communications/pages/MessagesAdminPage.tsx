@@ -20,7 +20,7 @@ import {
   Clock,
   Search,
 } from 'lucide-react';
-import { Breadcrumbs, ConfirmDialog, EmptyState, Pagination, SkeletonPage } from '../../../components/ux';
+import { ConfirmDialog, EmptyState, Pagination, SkeletonPage } from '../../../components/ux';
 import { messagesService } from '../../../services/api';
 import type { DepartmentMessageRecord, AcknowledgmentReport, DeliveryState } from '../../../services/adminServices';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -28,6 +28,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import MessageComposeForm from '../components/MessageComposeForm';
 import toast from 'react-hot-toast';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 const PRIORITY_BADGE: Record<string, string> = {
   normal: 'bg-theme-surface-secondary text-theme-text-secondary',
@@ -189,23 +190,22 @@ const MessagesAdminPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
-      <Breadcrumbs items={[{ label: 'Communications' }, { label: 'Messages' }]} />
-      <div className="page-header mb-4 gap-3 sm:items-center">
-        <h1 className="page-header-title text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <Megaphone className="h-6 w-6 shrink-0" aria-hidden="true" />
-          Department Messages
-        </h1>
-        {!composing && !editing && (
-          <button
-            type="button"
-            onClick={() => setComposing(true)}
-            className="btn-info inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            New message
-          </button>
-        )}
-      </div>
+      <AdminPageHeader
+        title="Department Messages"
+        className="mb-4"
+        actions={
+          !composing && !editing ? (
+            <button
+              type="button"
+              onClick={() => setComposing(true)}
+              className="btn-info inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              New message
+            </button>
+          ) : undefined
+        }
+      />
 
       {error && (
         <div
