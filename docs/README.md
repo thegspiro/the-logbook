@@ -450,7 +450,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 
 12. **[DEPLOYMENT.md](./DEPLOYMENT.md)**
     - Step-by-step deployment guide for all supported methods
-    - See also the platform-specific guides in [deployment/](./deployment/) (AWS, Azure, Google Cloud, Proxmox, Synology, Unraid)
+    - See also the platform-specific guides in [deployment/](./deployment/) (AWS, Azure, Google Cloud, DigitalOcean, Proxmox, Synology, Unraid)
 
 13. **[UPGRADING.md](./UPGRADING.md)**
     - Read before pulling a new version into a running deployment

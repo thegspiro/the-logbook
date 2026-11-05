@@ -214,7 +214,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
   -f docker-compose.external-services.yml up -d
 ```
 
-See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions, [Azure Deployment Guide](docs/deployment/azure.md) for Azure, [Google Cloud Deployment Guide](docs/deployment/gcp.md) for Google Cloud, or [Production Deployment](wiki/Deployment-Production.md#cloud-platforms) for other cloud platforms.
+See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions, [Azure Deployment Guide](docs/deployment/azure.md) for Azure, [Google Cloud Deployment Guide](docs/deployment/gcp.md) for Google Cloud, [DigitalOcean Deployment Guide](docs/deployment/digitalocean.md) for DigitalOcean, or [Production Deployment](wiki/Deployment-Production.md#cloud-platforms) for other cloud platforms.
 
 </details>
 
@@ -380,6 +380,7 @@ ARMv7 (32-bit) hosts cannot run the stack: the ClamAV image every profile requir
 - [AWS Deployment](docs/deployment/aws.md) — EC2, RDS, and ElastiCache
 - [Azure Deployment](docs/deployment/azure.md) — Azure VM, Azure Database for MySQL, and Azure Managed Redis
 - [Google Cloud Deployment](docs/deployment/gcp.md) — Compute Engine, Cloud SQL for MySQL, and Memorystore for Redis
+- [DigitalOcean Deployment](docs/deployment/digitalocean.md) — Droplet, Managed MySQL, and Managed Valkey
 - [Proxmox Deployment](docs/deployment/proxmox.md) — LXC and VM
 - [Synology NAS Deployment](docs/deployment/synology.md) — Docker on Synology DS+/XS+
 - [Unraid Quick Start](unraid/QUICK-START.md) — One-command Unraid setup
