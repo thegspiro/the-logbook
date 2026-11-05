@@ -528,6 +528,9 @@ class TestColumnConstraints:
             "sent_at",
             "exported_at",
             "generated_at",
+            # training_requirement_overrides: the row is the Chief's grant,
+            # server-stamped when given; a created_at would always equal it.
+            "granted_at",
             # department_message_deliveries records when the send was claimed;
             # the row is the attempt, so "attempted_at" is its creation stamp.
             "attempted_at",

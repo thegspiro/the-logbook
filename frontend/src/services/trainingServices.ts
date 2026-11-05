@@ -116,6 +116,8 @@ import type {
   TrainingRequirementEnhancedCreate,
   TrainingRequirementUpdate,
   UserTrainingStats,
+  RequirementOverride,
+  RequirementOverrideCreate,
 } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 
@@ -433,6 +435,29 @@ export const trainingService = {
 
   async getComplianceMatrix(): Promise<ComplianceMatrix> {
     const response = await api.get<ComplianceMatrix>('/training/compliance-matrix');
+    return response.data;
+  },
+
+  /** The Chief's overrides of a session-attendance requirement, revoked ones included. */
+  async listRequirementOverrides(requirementId: string): Promise<RequirementOverride[]> {
+    const response = await api.get<RequirementOverride[]>(`/training/requirements/${requirementId}/overrides`);
+    return response.data;
+  },
+
+  /** Record a Chief's override; refused unless the caller holds a Chief position. */
+  async grantRequirementOverride(
+    requirementId: string,
+    override: RequirementOverrideCreate
+  ): Promise<RequirementOverride> {
+    const response = await api.post<RequirementOverride>(`/training/requirements/${requirementId}/overrides`, override);
+    return response.data;
+  },
+
+  /** Revoke a Chief's override; the record stays, marked revoked. */
+  async revokeRequirementOverride(requirementId: string, overrideId: string): Promise<RequirementOverride> {
+    const response = await api.post<RequirementOverride>(
+      `/training/requirements/${requirementId}/overrides/${overrideId}/revoke`
+    );
     return response.data;
   },
 
