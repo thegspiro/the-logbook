@@ -84,6 +84,15 @@ export interface TrainingAdminArea {
   destinations: TrainingAdminDestination[];
 }
 
+/**
+ * Who may use the compliance configuration screen. Thresholds and profiles
+ * decide who reads as compliant, so saving them takes `settings.manage` or
+ * `compliance.manage`, not `training.manage` — `PUT /compliance/config` and
+ * the page's own route both say so. Every link to that screen from inside the
+ * hub is gated on this list, so none is offered to someone it would turn away.
+ */
+export const COMPLIANCE_CONFIG_PERMISSIONS: readonly string[] = ['settings.manage', 'compliance.manage'];
+
 export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
   {
     // Id kept from the section this replaces, so `?page=dashboard` links resolve as-is.
@@ -199,14 +208,11 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         icon: ClipboardList,
       },
       {
-        // Thresholds and profiles decide who reads as compliant, so saving them
-        // takes `settings.manage` or `compliance.manage`, not `training.manage`
-        // (`PUT /compliance/config` and the page's own route both say so).
         id: 'compliance-settings',
         label: 'Compliance Settings',
         hint: 'Thresholds, profiles and scheduled compliance reports',
         icon: ShieldCheck,
-        anyPermission: ['settings.manage', 'compliance.manage'],
+        anyPermission: COMPLIANCE_CONFIG_PERMISSIONS,
       },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
       {

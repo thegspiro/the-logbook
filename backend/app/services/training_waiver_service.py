@@ -40,7 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.compliance_config import ComplianceConfig, LeaveMonthRule
-from app.models.training import TrainingWaiver
+from app.models.training import TrainingRequirementOverride, TrainingWaiver
 from app.models.user import MemberLeaveOfAbsence
 
 # ---------------------------------------------------------------------------
@@ -50,6 +50,11 @@ from app.models.user import MemberLeaveOfAbsence
 
 SOURCE_LEAVE = "leave"
 SOURCE_WAIVER = "waiver"
+# A Chief's override (TrainingRequirementOverride). It travels with the
+# waivers so every grader receives it without new plumbing, but it excuses
+# no month and no session: month_waivers drops it, and only the attendance
+# rule reads it, as "met" (training_compliance.tally_session_attendance).
+SOURCE_OVERRIDE = "override"
 
 # Days of leave in a month at which the ``half`` rule excuses half of it.
 HALF_MONTH_DAYS = 15
@@ -160,16 +165,17 @@ async def fetch_user_waivers(
 
     waivers = tw_result.scalars().all()
     leaves = ml_result.scalars().all()
+    overrides = await _active_overrides(db, org_id, user_id)
     if not waivers and not leaves:
         # Most members have neither; the rule would go unread.
-        return []
+        return overrides
     rule = await get_leave_month_rule(db, org_id)
     periods: List[WaiverPeriod] = []
     for w in waivers:
         periods.append(_to_waiver_period(w, SOURCE_WAIVER, rule))
     for leave in leaves:
         periods.append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
-    return periods
+    return periods + overrides
 
 
 async def fetch_org_waivers(
@@ -196,8 +202,11 @@ async def fetch_org_waivers(
 
     waivers = tw_result.scalars().all()
     leaves = ml_result.scalars().all()
+    overrides_by_user: Dict[str, List[WaiverPeriod]] = {}
+    for period_user, period in await _active_overrides_by_user(db, org_id):
+        overrides_by_user.setdefault(period_user, []).append(period)
     if not waivers and not leaves:
-        return {}
+        return overrides_by_user
     rule = await get_leave_month_rule(db, org_id)
     by_user: Dict[str, List[WaiverPeriod]] = {}
     for w in waivers:
@@ -206,7 +215,48 @@ async def fetch_org_waivers(
     for leave in leaves:
         uid = str(leave.user_id)
         by_user.setdefault(uid, []).append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
+    for uid, periods in overrides_by_user.items():
+        by_user.setdefault(uid, []).extend(periods)
     return by_user
+
+
+def _override_period(override: TrainingRequirementOverride) -> WaiverPeriod:
+    return WaiverPeriod(
+        start_date=override.start_date,
+        end_date=override.end_date,
+        requirement_ids=[str(override.requirement_id)],
+        source=SOURCE_OVERRIDE,
+    )
+
+
+async def _active_overrides_by_user(
+    db: AsyncSession, org_id: str, user_id: Optional[str] = None
+) -> List[Tuple[str, WaiverPeriod]]:
+    """Unrevoked Chief overrides in ``org_id``, as (user id, period)."""
+    query = select(TrainingRequirementOverride).where(
+        TrainingRequirementOverride.organization_id == str(org_id),
+        TrainingRequirementOverride.revoked_at.is_(None),
+    )
+    if user_id is not None:
+        query = query.where(TrainingRequirementOverride.user_id == str(user_id))
+    result = await db.execute(query)
+    return [(str(o.user_id), _override_period(o)) for o in result.scalars().all()]
+
+
+async def _active_overrides(
+    db: AsyncSession, org_id: str, user_id: str
+) -> List[WaiverPeriod]:
+    return [p for _, p in await _active_overrides_by_user(db, org_id, user_id)]
+
+
+def override_covers(waivers, req_id: str, as_of: date) -> bool:
+    """Whether a Chief override counts ``req_id`` as met when graded as of ``as_of``."""
+    return any(
+        w.source == SOURCE_OVERRIDE
+        and str(req_id) in (w.requirement_ids or [])
+        and w.start_date <= as_of <= w.end_date
+        for w in waivers or []
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +334,9 @@ def month_waivers(
     applicable = [
         w
         for w in waivers
-        if not (w.requirement_ids and req_id and str(req_id) not in w.requirement_ids)
+        # An override excuses no month; see SOURCE_OVERRIDE.
+        if w.source != SOURCE_OVERRIDE
+        and not (w.requirement_ids and req_id and str(req_id) not in w.requirement_ids)
     ]
     if not applicable:
         return {}

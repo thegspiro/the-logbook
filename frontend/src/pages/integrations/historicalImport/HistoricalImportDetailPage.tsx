@@ -30,6 +30,7 @@ import { formatCalendarDate, formatDateTime, formatNumber } from '../../../utils
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { timezoneOptions, zoneLabel } from '../../scheduling/admin/historyImport/historyImportTimezones';
 import AdminHoursSection from './AdminHoursSection';
+import DrillsSection from './DrillsSection';
 import TrainingSection from './TrainingSection';
 
 /** Where each kind of record is reviewed and committed, on this page. */
@@ -596,6 +597,8 @@ const HistoricalImportDetailPage: React.FC = () => {
           <AdminHoursSection detail={detail} />
 
           <TrainingSection detail={detail} />
+
+          <DrillsSection detail={detail} />
         </div>
       )}
     </div>

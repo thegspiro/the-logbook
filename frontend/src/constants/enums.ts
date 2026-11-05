@@ -49,6 +49,10 @@ export const InventoryNfcScanAction = {
   LOOKUP: 'lookup',
   PUT_AWAY: 'put_away',
   AUDIT: 'audit',
+  /** Not a tap: the item was created or imported, which counts as seeing it. */
+  CREATED: 'created',
+  /** Not a tap: the item was put away by barcode scan. */
+  BARCODE_PUT_AWAY: 'barcode_put_away',
 } as const;
 export type InventoryNfcScanAction = (typeof InventoryNfcScanAction)[keyof typeof InventoryNfcScanAction];
 

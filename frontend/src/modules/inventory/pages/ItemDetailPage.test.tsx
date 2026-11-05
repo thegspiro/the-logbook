@@ -13,6 +13,7 @@ const mockGetNFPACompliance = vi.fn();
 const mockGetExposureRecords = vi.fn();
 const mockGetLocations = vi.fn();
 const mockCheckPermission = vi.fn();
+const mockUnassignItem = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   // Read by the Operations section strip in the page header.
@@ -28,7 +29,7 @@ vi.mock('../../../services/api', () => ({
     getNFPACompliance: (...a: unknown[]) => mockGetNFPACompliance(...a) as unknown,
     getExposureRecords: (...a: unknown[]) => mockGetExposureRecords(...a) as unknown,
     assignItem: vi.fn(),
-    unassignItem: vi.fn(),
+    unassignItem: (...a: unknown[]) => mockUnassignItem(...a) as unknown,
   },
 }));
 
@@ -377,5 +378,77 @@ describe('ItemDetailPage', () => {
     await screen.findAllByText('Thermal Camera');
 
     expect(screen.queryByRole('button', { name: /Edit/ })).not.toBeInTheDocument();
+  });
+});
+
+// Owner decision 2026-11-01: unassigning from the item page asks first, and
+// records the condition the gear came back in, as the Returns screen does.
+describe('ItemDetailPage unassign', () => {
+  const assigned = () => makeItem({ status: 'assigned', assigned_to_user_id: 'u-1', assigned_to_name: 'Pat Smith' });
+
+  beforeEach(() => {
+    mockGetItem.mockReset();
+    mockGetCategories.mockReset();
+    mockGetStorageAreas.mockReset();
+    mockGetLocations.mockReset();
+    mockGetItemHistory.mockReset();
+    mockUnassignItem.mockReset();
+    mockCheckPermission.mockReset();
+    mockGetItem.mockResolvedValue(assigned());
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockGetItemHistory.mockResolvedValue({ events: [] });
+    mockUnassignItem.mockResolvedValue({ message: 'Item unassigned successfully' });
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  it('asks before unassigning, and does nothing when kept', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Pat Smith');
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it assigned' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockUnassignItem).not.toHaveBeenCalled();
+  });
+
+  it('requires a return condition and sends it with the notes', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    const confirm = within(dialog).getByRole('button', { name: 'Unassign and record return' });
+    expect(confirm).toBeDisabled();
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Damaged' }));
+    await user.type(within(dialog).getByLabelText(/Return notes/), 'Torn sleeve');
+    await user.click(confirm);
+
+    await waitFor(() =>
+      expect(mockUnassignItem).toHaveBeenCalledWith('it-1', {
+        return_condition: 'damaged',
+        return_notes: 'Torn sleeve',
+      })
+    );
+    expect(toast.success).toHaveBeenCalledWith('Item unassigned');
+  });
+
+  it('omits blank notes rather than sending an empty string', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Good' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Unassign and record return' }));
+
+    await waitFor(() =>
+      expect(mockUnassignItem).toHaveBeenCalledWith('it-1', { return_condition: 'good', return_notes: undefined })
+    );
   });
 });

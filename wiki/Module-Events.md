@@ -978,8 +978,8 @@ school visits, CPR classes, etc.) through a public form. Department
 coordinators manage requests through a configurable workflow on the **Requests**
 tab of the Events admin hub.
 
-> **Public intake is opt-in.** Turn it on under **Event settings → Pipeline →
-> Accept Public Requests**; it is **off by default**. While it is off the
+> **Public intake is opt-in.** Turn it on under **Event settings → Public Requests →
+> Overview → Accept Public Requests**; it is **off by default**. While it is off the
 > public endpoint answers as though the department does not exist —
 > deliberately indistinguishable, so the endpoint cannot be used to enumerate
 > which departments accept requests — and staff can still create requests

@@ -524,8 +524,11 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               }
             />
           ) : (
-            <div>
-              <table className="rwd-table divide-theme-surface-border min-w-full divide-y">
+            // No scroll wrapper, and the card around it is overflow-hidden: a
+            // table wider than the card was clipped with no way to reach the
+            // cut-off columns. It needs ~1000px, so it reflows under 80rem.
+            <div className="rwd-table-container">
+              <table className="rwd-table rwd-table-xwide divide-theme-surface-border min-w-full divide-y">
                 <thead className="bg-theme-surface-secondary">
                   <tr>
                     <th

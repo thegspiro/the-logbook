@@ -286,3 +286,25 @@ describe('MedicalCategoriesPage low stock threshold', () => {
     expect(screen.getAllByText(/Low stock at/)).toHaveLength(1);
   });
 });
+
+describe('MedicalCategoriesPage duplicate names', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(false);
+  });
+
+  it('flags a grandfathered duplicate so it can be renamed', async () => {
+    mockGetCategories.mockResolvedValue([
+      { ...AIRWAY, duplicate_name: true },
+      { ...TRAUMA, duplicate_name: false },
+    ]);
+    renderWithRouter(<MedicalCategoriesPage />);
+    await screen.findByText('Airway');
+
+    const [airwayCard, traumaCard] = screen.getAllByRole('listitem');
+    expect(airwayCard).toHaveTextContent('Airway');
+    expect(airwayCard).toHaveTextContent('Duplicate name');
+    expect(traumaCard).not.toHaveTextContent('Duplicate name');
+  });
+});

@@ -172,9 +172,10 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   still read from code only.
 
 - **Fundraising, a later pass** — the Donations list has a Receipt column
-  but nothing sends a receipt or marks one sent, and donors, donations and
-  campaigns (beyond status and restriction) have no edit control though
-  their `PUT`s now work (W69).
+  but nothing sends a receipt or marks one sent (left as is by the owner,
+  2026-11-05), and a donation has no edit control though its `PUT` works:
+  editing one needs a single-donation `GET` and an edit route, which neither
+  exists yet (W69).
 - **Grants, a later pass** — budget lines and expenditures have update and
   delete endpoints but no control on the detail page, and a compliance task
   cannot be given an assignee when it is created (W68).
@@ -241,6 +242,20 @@ Flagged:
 - W02-11 (NIT): "Logout" beside "Sign in".
 
 New lead: admin actions on a member are audited without an IP. Gate: typecheck and lint clean, flake8, black and isort clean on the backend files, and 188 backend and 202 frontend tests pass; each new test failed before its fix. Next: none pending; the rotation remains complete.
+
+### Lead — Donors and campaigns can be edited — 2026-11-05
+
+Owner decisions: fundraising edit forms first, grants second; the Receipt
+column is left as it is. Read from code and component-tested, not re-driven.
+Fixed: donors and campaigns could be created but never edited (W69), though
+their `PUT`s work. Each now has an Edit control for `fundraising.manage`,
+which opens the page's own create form filled in. An update sends every field
+the form owns and an emptied box as null, so a cleared email or end date is
+cleared (pitfall 1). A campaign's status and restriction keep the controls
+already on its card, so the edit form leaves them out. Donations stay a lead:
+there is no endpoint that returns one donation. `fundraisingEdit.test.tsx`
+failed against the pages without the controls. Gate: typecheck and lint
+clean; the 139 grants and fundraising tests pass.
 
 ### Lead — Reports printed ISO dates — 2026-11-03
 
