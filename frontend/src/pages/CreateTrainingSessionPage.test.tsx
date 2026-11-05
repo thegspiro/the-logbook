@@ -274,6 +274,41 @@ describe('CreateTrainingSessionPage field names', () => {
   });
 });
 
+describe('CreateTrainingSessionPage location picker', () => {
+  beforeEach(() => {
+    tzState.value = 'UTC';
+    getUsers.mockReset();
+    getUsers.mockResolvedValue([]);
+    getCourses.mockReset();
+    getCourses.mockResolvedValue([]);
+    getBasicApparatus.mockReset();
+    getBasicApparatus.mockResolvedValue([]);
+    getLocations.mockReset();
+    // A facility room's location is named "Room — Facility" by the backend
+    // and carries that facility as its building.
+    getLocations.mockResolvedValue([
+      {
+        id: 'room-1',
+        name: 'Volunteer Office — Station 1 - Headquarters',
+        building: 'Station 1 - Headquarters',
+        room_number: '107',
+        is_active: true,
+      },
+      { id: 'loc-2', name: 'Training Room', building: 'Annex', is_active: true },
+    ]);
+  });
+
+  it('names the building once', async () => {
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    const select = await screen.findByLabelText(/^Location/, { selector: 'select' });
+    await waitFor(() => expect((select as HTMLSelectElement).options.length).toBeGreaterThan(2));
+    const labels = Array.from((select as HTMLSelectElement).options).map((option) => option.text);
+    expect(labels).toContain('Volunteer Office — Station 1 - Headquarters #107');
+    expect(labels).toContain('Training Room (Annex)');
+  });
+});
+
 describe('CreateTrainingSessionPage attendance requirements', () => {
   beforeEach(() => {
     getUsers.mockReset();

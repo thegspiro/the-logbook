@@ -27,6 +27,7 @@ import { TrainingLinkageFields } from '../components/training/TrainingLinkageFie
 import { useTrainingLinkageData } from '../hooks/useTrainingLinkageData';
 import AttendanceRequirementChecklist from '../components/training/AttendanceRequirementChecklist';
 import { attendanceRequirements } from '../utils/attendanceRequirements';
+import { buildingNotInName } from '../utils/locationLabel';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -667,13 +668,16 @@ const CreateTrainingSessionPage: React.FC = () => {
                         className="form-input py-3"
                       >
                         <option value="">-- Select a location --</option>
-                        {locations.map((loc) => (
-                          <option key={loc.id} value={loc.id}>
-                            {loc.name}
-                            {loc.building ? ` (${loc.building})` : ''}
-                            {loc.room_number ? ` #${loc.room_number}` : ''}
-                          </option>
-                        ))}
+                        {locations.map((loc) => {
+                          const building = buildingNotInName(loc.name, loc.building);
+                          return (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name}
+                              {building ? ` (${building})` : ''}
+                              {loc.room_number ? ` #${loc.room_number}` : ''}
+                            </option>
+                          );
+                        })}
                         <option value="__other__">Other (off-site / enter manually)</option>
                       </select>
                     ) : (
