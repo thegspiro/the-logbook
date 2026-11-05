@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/Los_Angeles' }));
 vi.mock('../../../stores/authStore', () => ({
@@ -73,11 +74,13 @@ describe('GrantDetailPage mark compliance task complete', () => {
   it('sends the local calendar date, not a timestamp', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={['/grants/applications/app-1']}>
-        <Routes>
-          <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={['/grants/applications/app-1']}>
+          <Routes>
+            <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     );
 
     await user.click(screen.getByRole('button', { name: /Compliance & Follow-Up/ }));

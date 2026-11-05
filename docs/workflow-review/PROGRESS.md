@@ -175,9 +175,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   but nothing sends a receipt or marks one sent, and donors, donations and
   campaigns (beyond status and restriction) have no edit control though
   their `PUT`s now work (W69).
-- **Grants, a later pass** — budget lines and expenditures have update and
-  delete endpoints but no control on the detail page, and a compliance task
-  cannot be given an assignee when it is created (W68).
 - **Admin hours, a later pass** — scanning a second category's QR code while
   clocked in is refused, but the page neither names the running session nor
   offers its Clock Out (W70-5).
@@ -201,6 +198,24 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — Grant budget lines, expenditures and task assignees — 2026-11-05
+
+Read from code and tested, not re-driven. Fixed (W68): a grant's budget lines
+and expenditures had update and delete endpoints but no control on the detail
+page, and a compliance task could be given an assignee only by editing it after
+it was created. Each budget line and expenditure now has Edit, which reopens
+its own add dialog filled in, and Delete behind a confirmation. Deleting a line
+says how many expenditures are charged to it, since they are kept and left with
+no line (`ON DELETE SET NULL`). An edited expenditure sends an emptied vendor,
+invoice number or line as null, so it is cleared, and shows any overspend
+warning as recording one does. The compliance task dialog gains an Assigned To
+picker, shown when the member directory is readable; the create schema gains
+`assigned_to`, checked against the department as the update path already was
+(XC-1). `GrantDetailPage.editLines.test.tsx` and
+`test_grant_compliance_task_assignee.py` failed without the change. Gate:
+typecheck and lint clean, flake8 and black clean, the 141 grants and
+fundraising frontend tests and 913 grant backend tests pass.
 
 ### Lead — Reports printed ISO dates — 2026-11-03
 
