@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router';
-import { useAuthStore } from '../stores/authStore';
+import { lockedUntilFor, useAuthStore } from '../stores/authStore';
 import { postLoginRedirect } from '../utils/postLoginRedirect';
 import { authService } from '../services/api';
 import axios from 'axios';
@@ -40,7 +40,7 @@ export const LoginPage: React.FC = () => {
     isAuthenticated,
     error,
     clearError,
-    lockedUntil,
+    loginLockouts,
     lastLogoutPurge,
     clearLogoutPurgeNotice,
   } = useAuthStore();
@@ -58,6 +58,9 @@ export const LoginPage: React.FC = () => {
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
+  // The wait belongs to the account typed, so the next member at a shared
+  // station is not held by the last one's failures (W02-8).
+  const lockedUntil = lockedUntilFor(loginLockouts, formData.username);
   const [oauthError, setOAuthError] = useState<string | null>(null);
   const [branding, setBranding] = useState<OrgBranding>({ name: null, logo: null });
   const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>({
@@ -306,7 +309,9 @@ export const LoginPage: React.FC = () => {
       if (useRecoveryCode) {
         await completeMfaLogin(undefined, value);
       } else {
-        await completeMfaLogin(value);
+        // Authenticator apps show the code as "123 456"; the server takes
+        // exactly six digits, so the grouping space is dropped (W02-10).
+        await completeMfaLogin(value.replace(/\s+/g, ''));
       }
       redirectAfterAuth();
     } catch (_err) {

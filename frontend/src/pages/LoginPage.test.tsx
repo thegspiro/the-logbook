@@ -16,6 +16,7 @@ vi.mock('react-router', async () => {
 // page to its second-factor step.
 let mockMfaRequired = false;
 let mockMfaToken: string | null = null;
+let mockLoginLockouts: Record<string, { attempts: number; lockedUntil: number | null }> = {};
 const mockCompleteMfaLogin = vi.fn();
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
@@ -28,8 +29,12 @@ vi.mock('../stores/authStore', () => ({
     isAuthenticated: false,
     error: null,
     clearError: vi.fn(),
-    lockedUntil: null,
+    loginLockouts: mockLoginLockouts,
   }),
+  lockedUntilFor: (lockouts: Record<string, { lockedUntil: number | null }>, username: string) => {
+    const until = lockouts[username.trim().toLowerCase()]?.lockedUntil ?? null;
+    return until !== null && Date.now() < until ? until : null;
+  },
 }));
 
 // authService stub (OAuth URL helpers, and the second-factor options)
@@ -167,11 +172,24 @@ describe('LoginPage second-factor step', () => {
         ? Promise.resolve({ data: { needs_onboarding: false } })
         : Promise.reject(new Error('not mocked'))
     );
+    mockCompleteMfaLogin.mockReset();
+    mockCompleteMfaLogin.mockResolvedValue(undefined);
     mockMfaRequired = true;
   });
 
   afterEach(() => {
     mockMfaRequired = false;
+  });
+
+  // Authenticator apps show the code in two groups ("123 456"), and the
+  // server takes exactly six characters, so a correct code typed as shown
+  // was refused with "code: Value is too long" (workflow review W02-10).
+  it('sends an authenticator code typed with a space as six digits', async () => {
+    renderLogin();
+    fireEvent.change(await screen.findByLabelText('Authenticator code'), { target: { value: ' 123 456 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => expect(mockCompleteMfaLogin).toHaveBeenCalledWith('123456'));
   });
 
   // Recovery codes are four groups of five (mfa_service.generate_recovery_codes).
@@ -299,5 +317,35 @@ describe('LoginPage single sign-on (W01-11)', () => {
     );
 
     expect(await screen.findByText(/sign-in service could not be reached/i)).toBeInTheDocument();
+  });
+});
+
+// W02-8 (owner decision 2026-11-05): the wait belongs to the account typed. At a
+// shared station, one member's failures held the next member's Sign in button.
+describe('LoginPage wait after failed sign-ins', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockReset();
+    mockGet.mockImplementation((url: string) =>
+      url === '/api/v1/onboarding/status'
+        ? Promise.resolve({ data: { needs_onboarding: false } })
+        : Promise.reject(new Error('not mocked'))
+    );
+    mockLoginLockouts = { review_member2: { attempts: 6, lockedUntil: Date.now() + 60_000 } };
+  });
+
+  afterEach(() => {
+    mockLoginLockouts = {};
+  });
+
+  it('holds only the account that failed', async () => {
+    renderLogin();
+    const username = await screen.findByLabelText('Username or Email');
+
+    fireEvent.change(username, { target: { value: 'Review_Member2' } });
+    expect(screen.getByRole('button', { name: /^Wait \d+s$/ })).toBeDisabled();
+
+    fireEvent.change(username, { target: { value: 'review_member' } });
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
   });
 });
