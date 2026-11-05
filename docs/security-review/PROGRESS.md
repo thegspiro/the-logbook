@@ -16,6 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (that PR)** (branch `claude/security-review-membership-pipeline`) —
+Feature 08 (Membership pipeline), pass 16, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable; this iteration was
+handed Step 0/1 already done — no open `claude/security-review-*` PR, row 08
+the next `⬜`). Baseline `f57fd5a65` (pass 15's merge, PR #3910) to head
+`a02bdd96a`: 10 non-merge commits touch this feature's declared scope. Real
+delta: required interviewer positions on Interview Requirement stages, with
+an interview-position snapshot column graded by one shared method
+(`interview_requirement_progress()`) that both the stage's own completion
+check and a new `GET /prospects/{id}/interview-requirement` endpoint read, so
+the two cannot disagree (CLAUDE.md #29); case-manager and interviewer
+"needs attention"/"interview requested" emails, org-scoped on both the
+assignment and the recipient row independently; My applicants narrowing
+extended from the board to the stat header and all four archive tabs; a
+transferred prospect's screening records re-linked to the new member
+(org- and prospect-scoped, with a guarded backfill migration for prospects
+transferred earlier); the Convert dialog now accepts the department's own
+membership tiers as a starting status, revalidated server-side against the
+organization's own ladder with the org row locked first (Pitfall #27); and
+an interest-form double-escaping backfill migration. 63 routes re-enumerated
+by AST (62 at pass 15, +1: the new interview-requirement endpoint). 0 fixed,
+0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged.
+See `docs/security-review/MP-08-membership-pipeline.md`'s **Pass 16**
+section.
+
+**Unrelated tooling note, not an MP finding:** `validate_migrations.py
+--strict` currently reports two Alembic heads (`9446e373c7a3`/
+`d1165a97b48e`, from two other features' PRs #4051/#4065 that each branched
+off `bd8fc0c4a941`) — PR #4078 (open) already carries the merge-revision fix;
+none of this feature's own migrations are implicated, and the write-up
+records this so the gate table's one red row is not mistaken for a
+regression here.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `check_route_permissions.py --strict` —
+301 routes, 0 errors/warnings; scoped backend suite (`-k "membership or
+prospect or pipeline or follow_up or assignment"`, no marker filter) — 1,734
+passed, 1 environment-only skip (`py_vapid`); `npm run typecheck` — 0
+errors; scoped `eslint src/modules/prospective-members` — 0 errors/warnings;
+scoped `vitest run src/modules/prospective-members` — 404 passed (44 files).
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical screening,
+PHI) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 15, PR #4069, merged), preserved for history</summary>
+
 **PR [#4069](https://github.com/thegspiro/the-logbook/pull/4069)** (branch
 `claude/security-review-users-organizations-p15`) —
 Feature 07 (Users & organizations), pass 15, a watchdog pickup. Real delta:
@@ -30,6 +77,8 @@ found none. 88 routes re-enumerated by AST. 0 fixed, 0 new findings; USR-5
 and USR-8 re-confirmed unchanged. See
 `docs/security-review/USR-07-users-organizations.md`'s **Pass 15** section.
 Next in the rotation: Feature 08 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 15, PR #4052, merged), preserved for history</summary>
@@ -24821,7 +24870,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                                                 | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                              | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                                                      | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                  | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                  | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                      | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ⬜     |
@@ -47096,3 +47145,61 @@ errors/warnings.
 Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
 payments) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-11-05 — Feature 07 (Users & organizations, pass 15) merged; Feature 08 (Membership pipeline, pass 16) — watchdog pickup, 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN
+
+Step 0/1 were handed to this iteration already done: no open PR with a
+`claude/security-review-*` head exists, and row 08 (Membership pipeline) is
+the next `⬜` row in the rotation table, confirmed directly against a
+freshly-read `main` — row 07 (Users & organizations) was already `✅` from
+PR #4069's own merge.
+
+Baseline `f57fd5a65` (pass 15's merge, PR #3910) to head `a02bdd96a`: 10
+non-merge commits touch this feature's declared scope, each read in full via
+`git show`/`git diff`, not sampled (one is a pure CSS fix, one a pure
+mypy-ratchet type-narrowing commit — both confirmed by reading the diff, not
+the commit title). Real delta: required interviewer positions on Interview
+Requirement stages, graded by one shared method
+(`interview_requirement_progress()`) that both the stage's own completion
+check and a new `GET /prospects/{id}/interview-requirement` endpoint read, so
+the applicant's page and the stage's refusal cannot disagree about what is
+missing (CLAUDE.md #29); a new `prospect_interviews.interviewer_positions`
+snapshot column so a required-position check grades an interview by the
+office its interviewer held that day, not their current one;
+case-manager and interviewer "needs attention"/"interview requested" emails,
+each recipient query filtering `organization_id` on both the assignment row
+and the `User` row independently; My applicants narrowing extended from the
+board to the stat header and all four archive tabs; a transferred prospect's
+screening records re-linked to the new member (org- and prospect-scoped
+service method, plus a guarded backfill migration for prospects transferred
+before it landed, with an exact downgrade); the Convert dialog now accepts
+the department's own membership tiers as a starting status, revalidated
+server-side against the organization's own ladder with the org row locked
+first (Pitfall #27); and an interest-form double-escaping backfill migration
+(over-escaping, not an injection risk — a correctness fix, not a security
+one). 63 routes re-enumerated by AST (62 at pass 15, +1 for the new
+interview-requirement endpoint), every one resolving to a recognized auth
+dependency.
+
+**0 fixed, 0 new findings.** MP-10 (listing half) and MP-22 — both
+owner-accepted tradeoffs — re-confirmed OPEN and unchanged; neither
+`list_election_packages` nor `delete_prospect_document`/
+`_delete_inactive_prospects` appear in this window's diff. Full write-up:
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 16** section.
+
+**Unrelated tooling note, not an MP finding:** `validate_migrations.py
+--strict` currently reports two Alembic heads from two other features' PRs
+(#4051, #4065) that each branched off the same parent independently; PR
+#4078 (open) already carries the merge-revision fix, and none of this
+feature's own four new migrations are implicated.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `check_route_permissions.py --strict` —
+301 routes, 0 errors/warnings; scoped backend suite (`-k "membership or
+prospect or pipeline or follow_up or assignment"`, no marker filter) — 1,734
+passed, 1 environment-only skip (`py_vapid`); `npm run typecheck` — 0
+errors; scoped `eslint src/modules/prospective-members` — 0 errors/warnings;
+scoped `vitest run src/modules/prospective-members` — 404 passed (44 files).
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical screening,
+PHI) — re-check `list_pull_requests` fresh rather than trusting this note.
