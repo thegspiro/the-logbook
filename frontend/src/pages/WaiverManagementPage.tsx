@@ -354,8 +354,9 @@ export const WaiverManagementPage: React.FC = () => {
 
   return (
     <div>
-      {/* Header + Tab Bar */}
-      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+      {/* Header + Tab Bar. data-page-main: AppLayout supplies the page
+          gutter, and its own padding here doubled it. */}
+      <div data-page-main className="mx-auto max-w-7xl">
         <AdminPageHeader
           title="Waivers"
           description="Excuse members from training, meeting and shift requirements"
@@ -393,7 +394,7 @@ export const WaiverManagementPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl py-6">
         {/* Active Waivers Tab */}
         {activeTab === 'active' && (
           <div>

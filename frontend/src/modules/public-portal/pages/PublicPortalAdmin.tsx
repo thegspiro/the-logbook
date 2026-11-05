@@ -89,112 +89,107 @@ const PublicPortalAdmin: React.FC = () => {
   const holdClass = held ? 'invisible' : '';
 
   return (
-    <div className="bg-theme-surface-secondary min-h-screen">
-      {/* Header */}
-      <div className="bg-theme-surface border-theme-surface-border border-b">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <AdminPageHeader
-              title="Public Portal"
-              description="Manage public API access for external websites"
-              actions={
-                <>
-                  {loading ? (
-                    <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
-                      <span className="text-sm">
-                        <SkeletonText className="w-28" />
-                      </span>
-                      <span className="btn-md invisible">Enable Portal</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div className="flex items-center space-x-2">
-                        {config?.enabled ? (
-                          <>
-                            <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-500" />
-                            <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                              Portal Enabled
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="text-theme-text-muted h-5 w-5" />
-                            <span className="text-theme-text-muted text-sm font-medium">Portal Disabled</span>
-                          </>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => {
-                          void handleToggleEnabled();
-                        }}
-                        className={`btn-md font-medium transition-colors ${
-                          config?.enabled
-                            ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
-                            : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
-                        }`}
-                      >
-                        {config?.enabled ? 'Disable Portal' : 'Enable Portal'}
-                      </button>
-                    </div>
-                  )}
-                </>
-              }
-            />
-
-            {/* Warning Banner */}
-            {!loading && !config?.enabled && (
-              <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
-                <div className="flex">
-                  <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-600" />
-                  <div className="ml-3">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                      The portal is disabled. External websites can't read any of your data until you enable it, create
-                      an API key, and turn on the fields to share under Data Control.
-                    </p>
-                  </div>
+    <div className="mx-auto max-w-7xl">
+      {/* Header. No band or padding of its own: AppLayout supplies the page
+          gutter, and the header matches every other admin page. */}
+      <div className="pb-6">
+        <AdminPageHeader
+          title="Public Portal"
+          description="Manage public API access for external websites"
+          actions={
+            <>
+              {loading ? (
+                <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
+                  <span className="text-sm">
+                    <SkeletonText className="w-28" />
+                  </span>
+                  <span className="btn-md invisible">Enable Portal</span>
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center space-x-2">
+                    {config?.enabled ? (
+                      <>
+                        <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-500" />
+                        <span className="text-sm font-medium text-green-700 dark:text-green-400">Portal Enabled</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="text-theme-text-muted h-5 w-5" />
+                        <span className="text-theme-text-muted text-sm font-medium">Portal Disabled</span>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      void handleToggleEnabled();
+                    }}
+                    className={`btn-md font-medium transition-colors ${
+                      config?.enabled
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
+                        : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
+                    }`}
+                  >
+                    {config?.enabled ? 'Disable Portal' : 'Enable Portal'}
+                  </button>
+                </div>
+              )}
+            </>
+          }
+        />
 
-          {/* Tabs */}
-          {/* Six tabs overflow a 390px phone — "Access Logs" ran to 428px.
+        {/* Warning Banner */}
+        {!loading && !config?.enabled && (
+          <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
+            <div className="flex">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-600" />
+              <div className="ml-3">
+                <p className="text-sm text-yellow-800 dark:text-yellow-400">
+                  The portal is disabled. External websites can't read any of your data until you enable it, create an
+                  API key, and turn on the fields to share under Data Control.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      {/* Six tabs overflow a 390px phone — "Access Logs" ran to 428px.
               The marker declares the strip scrollable rather than broken; its
               buttons are focusable, so it needs no tabIndex of its own. */}
-          <div
-            className={`border-theme-surface-border hscroll flex space-x-1 border-b ${holdClass}`}
-            data-mobile-scroll-region
-            aria-label="Public portal sections"
-          >
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  aria-current={activeTab === tab.id ? 'true' : undefined}
-                  className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? // The theme-aware token, not a raw blue: `text-blue-600`
-                        // is 4.06:1 on the high-contrast theme's black ground,
-                        // below the AA floor, in the mode somebody turns on
-                        // precisely because they need contrast.
-                        'text-theme-accent-blue border-blue-500'
-                      : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      <div
+        className={`border-theme-surface-border hscroll flex space-x-1 border-b ${holdClass}`}
+        data-mobile-scroll-region
+        aria-label="Public portal sections"
+      >
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? 'true' : undefined}
+              className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? // The theme-aware token, not a raw blue: `text-blue-600`
+                    // is 4.06:1 on the high-contrast theme's black ground,
+                    // below the AA floor, in the mode somebody turns on
+                    // precisely because they need contrast.
+                    'text-theme-accent-blue border-blue-500'
+                  : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab Content */}
-      <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${holdClass}`}>
+      <div className={`py-6 ${holdClass}`}>
         {activeTab === 'config' && <ConfigurationTab />}
         {activeTab === 'keys' && <APIKeysTab />}
         {activeTab === 'logs' && <AccessLogsTab />}

@@ -192,13 +192,14 @@ const MessagesAdminPage: React.FC = () => {
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
       <AdminPageHeader
         title="Department Messages"
+        description="Post announcements to members and see who has acknowledged them."
         className="mb-4"
         actions={
           !composing && !editing ? (
             <button
               type="button"
               onClick={() => setComposing(true)}
-              className="btn-info inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"
+              className="btn-primary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               New message

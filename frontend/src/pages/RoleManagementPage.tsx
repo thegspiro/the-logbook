@@ -219,7 +219,7 @@ export const RoleManagementPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div data-page-main className="mx-auto max-w-7xl">
           <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-muted" role="status" aria-live="polite">
               Loading...
@@ -232,7 +232,7 @@ export const RoleManagementPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-7xl">
         <AdminPageHeader
           title="Role Management"
           description="Create custom roles and choose what each role can do"
@@ -240,7 +240,7 @@ export const RoleManagementPage: React.FC = () => {
           actions={
             <button
               onClick={handleCreate}
-              className="btn-info inline-flex shrink-0 items-center rounded-md text-sm font-medium"
+              className="btn-primary inline-flex shrink-0 items-center rounded-md text-sm font-medium"
             >
               Create Custom Role
             </button>
