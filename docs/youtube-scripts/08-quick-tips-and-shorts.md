@@ -332,6 +332,14 @@ Demo account only; never show real codes.]**
 > app. Even if someone gets your password, they can't get in without your
 > phone."
 
+**[SCREEN: My Account → Security, the **Passkeys** card; **Add a passkey**, a
+name typed in **Name this passkey**, **Create passkey**. Then the sign-in page's
+second step with **Use your passkey** above the code field.]**
+
+> "Prefer Face ID or a fingerprint to typing a code? Add a passkey from the
+> Passkeys card. At sign-in, the second step offers **Use your passkey** — a
+> passkey or the app code, either one is enough."
+
 **[CALLOUT: "2FA = password + authenticator code = much safer"]**
 
 ---
@@ -1729,6 +1737,13 @@ labels print correctly?" prompt appears.]**
 > straight from the same page. Half a sheet of Avery left? **Start at label**
 > picks up where the last run stopped."
 
+**[SCREEN: Printing through the browser instead: the **Before you print**
+window — Printer, Paper size by name, Margins — then **Open print dialog**.]**
+
+> "Printing from the browser? A **Before you print** window comes first and
+> names the paper size to pick in the print dialog — so a roll printer left on
+> its default doesn't scale your label onto the wrong stock."
+
 **[PRODUCTION NOTE — 2026-10-04. Two lines added (2026-09-24 → 09-27), about 7
 seconds; the short runs nearer 47 seconds. The network-print button reads
 "Print to <printer name>" and needs a printer allowed by
@@ -2221,7 +2236,8 @@ in** 180 days.]**
 that happened — Returned, Checked out, NFC tap — and how long ago.]**
 
 > "Everything nobody has handled lately, with the last thing that happened to it
-> and when. 'Never' means never."
+> and when. 'Never' means never handled — and an item you just added isn't
+> there, because creating it counts as the first sighting."
 
 **[0:18 — SCREEN: Pick a **Category**, then **Download CSV**.]**
 

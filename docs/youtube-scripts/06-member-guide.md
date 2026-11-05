@@ -656,12 +656,25 @@ officer approves; a pair that stopped qualifying while pending is refused unless
 the officer chooses Approve anyway. Needs two members qualified for each
 other's seats.]**
 
-**[SCREEN: Point to the "Open Swap" card: "An officer finds cover; it stays
-yours until then"]**
+**[SCREEN: Point to the "Open Swap" card: "Offered to members cleared for your
+seat; it stays yours until one picks it up"]**
 
-> "The other choice in that dialog, **Open Swap**, is not a notice board. No
-> member sees it. It asks an officer to find cover, and the shift stays yours
-> until they do."
+> "The other choice in that dialog, **Open Swap**, offers your seat to members
+> who are cleared for it, and it stays yours until one of them picks it up. The
+> first to pick it up takes the seat, and no officer approves it — an officer can
+> only deny it."
+
+**[SCREEN: Requests → Swap Requests, "Open shifts you can pick up"; tap Pick up,
+then "Pick it up"; the bell showing one new notice]**
+
+> "From the other side: if somebody's open swap is a seat you're cleared for, you
+> get one bell notice for it — a bell entry, no email, because it's time-sensitive.
+> Open **Requests**, then **Swap Requests**, and it's under **Open shifts you can
+> pick up**. Tap **Pick up**, confirm, and the seat moves onto your schedule."
+
+**[PRODUCTION NOTE — 2026-11-05. The earlier take said an open swap asks an
+officer to find cover and that no member sees it; that is no longer true. About
+15 seconds added; re-time Chapter 5.]**
 
 **[SCREEN: Show the pending status.]**
 
@@ -692,6 +705,10 @@ shift"]**
 > "One more thing on the Hours tab: if you ride on another department's
 > apparatus, **Log outside shift** under **Shifts with other departments**
 > records it, and it counts toward your hours."
+
+> "Some departments switch on **Require approval for outside-department shifts**.
+> If yours has, the shift shows **Awaiting approval** and stays out of your totals
+> until a scheduling officer approves it."
 
 **[EDITOR: The two beats above are new (2026-10-04) and add roughly 25
 seconds; re-time Chapter 5.]**
