@@ -31,7 +31,7 @@ the browser.
 | `15-43-interview-follow-up-answers` | New | Mocked: his request list (marked submitted) and its answers |
 | `15-44-follow-up-drawer-resend` | New | Mocked: his request read as sent; in the demo it is Not sent (`15-34`) |
 | `15-45-follow-up-drawer-contact-changed` | New | Mocked: his request read as submitted, with the mobile and street address changes. Resend and Mark reviewed never share one request (Resend is for an unsubmitted form, the flag is raised by a submission), so they are two images |
-| `15-46-card-contact-changed` | New | Mocked: the board's real applicant list with his `contact_change_pending` set. The card's selection checkbox sits over the flag's warning icon, as it sits over the avatar on every card; see the list below |
+| `15-46-card-contact-changed` | New | Mocked: the board's real applicant list with his `contact_change_pending` set. Re-shot 2026-11-05 once the card's selection checkbox stopped covering the flag's warning icon; see the list below |
 | `04-97-event-qr-page-guest-code` | New | The QR page of the Volunteer Interest Night while check-in is open: the member code with **Print QR Code** and the guest card with **Print Guest QR Code**. Nothing mocked |
 | `03-130-pattern-paused` | Re-shot | Now on Shift Patterns, card open; alt text corrected and the image moved to the guide's Shift Patterns section, replacing the sentence that pointed to the Templates section |
 | `01-22-member-lifecycle` | Re-shot | The roster's Actions column is no longer clipped. Taller frame, since a Needs attention card now sits above the area cards |
@@ -199,7 +199,8 @@ code:
 - On the prospective-members board, each card's selection checkbox
   (`PipelineKanban.tsx`, `absolute top-2 left-2`) sits over the card's top-left
   corner: the avatar, or the warning icon of a **Contact details changed** or
-  inactivity banner (seen 2026-11-04 in `15-46`).
+  inactivity banner (seen 2026-11-04 in `15-46`). **Fixed**: a card with the
+  box insets its content; `15-46` re-shot 2026-11-05.
 - A case manager without manage rights sees **Send now**, which guide 15 says
   needs `prospective_members.manage`.
 
