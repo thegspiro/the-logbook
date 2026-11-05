@@ -113,12 +113,13 @@ export interface TemplateUpdate {
 
 // ── Existing types (unchanged) ──
 
-export type AttendanceStatus = 'present' | 'late' | 'left_early' | 'excused' | 'absent' | 'guest';
+export type AttendanceStatus = 'present' | 'late' | 'left_early' | 'excused' | 'absent' | 'guest' | 'proxy';
 
 /**
  * One line of the roll call. `status` is the record; `present` is derived from
- * it by the server and means "counted toward quorum" (present, late, left
- * early). Rows saved before statuses existed have no `status`.
+ * it by the server and means "in the room" (present, late, left early). Who
+ * counts toward quorum is the department's setting, applied by the server.
+ * Rows saved before statuses existed have no `status`.
  */
 export interface AttendeeEntry {
   user_id?: string | null;
@@ -477,6 +478,16 @@ export interface MinutesElectionResult {
   captured_by?: string | null;
   captured_by_name?: string | null;
   created_at: string;
+  /**
+   * The dated correction a rollback of the election filed: this result no
+   * longer stands, and stays on file as the minutes recorded it.
+   */
+  superseded_at?: string | null;
+  superseded_reason?: string | null;
+  superseded_by?: string | null;
+  superseded_by_name?: string | null;
+  /** On a re-run's result: the date of the correction it replaces. */
+  replaces_superseded_at?: string | null;
 }
 
 // ── Attachments ──
@@ -634,6 +645,11 @@ export interface MinutesReminderSettings {
   attendance_listing: AttendanceListing;
   /** File a closed election's result with its meeting's minutes without being asked. */
   auto_file_election_results: boolean;
+  /** Who counts toward quorum, as the server applies it. Present always counts; a guest never does. */
+  quorum_counts_late: boolean;
+  quorum_counts_left_early: boolean;
+  /** The roll call offers "Represented by proxy", and a proxy counts toward quorum. */
+  proxy_attendance: boolean;
 }
 
 /** What every panel on the minutes settings page is given. */

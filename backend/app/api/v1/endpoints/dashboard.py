@@ -5,14 +5,15 @@ Provides aggregated statistics for the main dashboard,
 including an admin-level summary for Chiefs and department leaders.
 """
 
+import heapq
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -39,11 +40,10 @@ from app.models.inventory import (
     InventoryLot,
     RequestStatus,
 )
-from app.models.meeting import ActionItemStatus, MeetingActionItem
+from app.models.meeting import ActionItemStatus, Meeting, MeetingActionItem
 from app.models.minute import (
     ActionItem,
     MeetingMinutes,
-    MinutesActionItemStatus,
     MinutesMeetingType,
     MinutesStatus,
 )
@@ -68,12 +68,14 @@ from app.services.facilities_service import (
     FacilitiesService,
 )
 from app.services.inventory_service import InventoryService, overdue_checkout_clause
+from app.services.minutes_record_service import OPEN_ITEM_STATUSES
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import (
     compute_org_compliance_pct,
     count_active_requirements,
 )
 from app.utils.hours import hours_from_minutes
+from app.utils.member_names import format_display_name
 from app.utils.org_timezone import local_date, resolve_org_today, scheduling_timezone
 
 router = APIRouter()
@@ -106,23 +108,43 @@ def minutes_visibility_filter(current_user: User):
     )
 
 
-# One definition of "overdue" per action-item source, shared by the dashboard
-# tiles that count them and by the unified feed those tiles link to, so the
-# list a tile opens holds exactly the rows the tile counted (DASH-37).
-def meeting_action_item_overdue(local_today: date):
-    """Open or in-progress meeting items due before today on the department
-    calendar. ``due_date`` is a DATE."""
+# One definition of "open" and of "overdue" per action-item source, shared by
+# the dashboard tiles that count them and by the unified feed those tiles link
+# to, so the list a tile opens holds exactly the rows the tile counted
+# (DASH-37, DASH-40).
+def meeting_action_item_open():
+    """A meeting item still to be done: ``open`` or ``in_progress``."""
+    return MeetingActionItem.status.in_(
+        [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+    )
+
+
+def minutes_action_item_open():
+    """A minutes item still to be done, as the Minutes module counts it.
+
+    ``OPEN_ITEM_STATUSES`` includes a hand-set ``overdue``, and an item carried
+    into later minutes is open there, not here — the same rule the Minutes
+    page's open tile and "My action items" apply, so the dashboard tile and
+    the Action Items page agree with them rather than counting a carried item
+    twice.
+    """
     return and_(
-        MeetingActionItem.status.in_(
-            [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
-        ),
+        ActionItem.status.in_(OPEN_ITEM_STATUSES),
+        ActionItem.carried_forward_at.is_(None),
+    )
+
+
+def meeting_action_item_overdue(local_today: date):
+    """Open meeting items due before today on the department calendar.
+    ``due_date`` is a DATE."""
+    return and_(
+        meeting_action_item_open(),
         MeetingActionItem.due_date < local_today,
     )
 
 
 def minutes_action_item_overdue(local_today: date):
-    """Pending or in-progress minutes items due before today on the
-    department calendar.
+    """Open minutes items due before today on the department calendar.
 
     A minutes ``due_date`` is the UTC midnight of the calendar day it was
     entered for, so the cut-off is the UTC midnight of the department's today.
@@ -131,12 +153,7 @@ def minutes_action_item_overdue(local_today: date):
     fixed on the action-items page, whose Overdue card already counts this way.
     """
     return and_(
-        ActionItem.status.in_(
-            [
-                MinutesActionItemStatus.PENDING.value,
-                MinutesActionItemStatus.IN_PROGRESS.value,
-            ]
-        ),
+        minutes_action_item_open(),
         ActionItem.due_date < datetime.combine(local_today, time.min, timezone.utc),
     )
 
@@ -549,7 +566,23 @@ class ActionItemSummary(BaseModel):
     status: str
     priority: str | None = None
     completion_notes: str | None = None
+    # The meeting's title, for a meeting item. A minutes item's record is not
+    # named: an assignee may see an item on minutes they cannot read (W52-7).
+    source_title: str | None = None
+    # A minutes item carried into later minutes is closed here and open there.
+    carried_forward: bool = False
     created_at: str
+
+
+class ActionItemPage(BaseModel):
+    """One page of the unified feed, with totals over every matching row."""
+
+    items: list[ActionItemSummary]
+    total: int
+    open_total: int
+    overdue_total: int
+    limit: int
+    offset: int
 
 
 class CommunityEngagement(BaseModel):
@@ -1290,12 +1323,7 @@ async def get_admin_summary(
             result = await db.execute(
                 select(func.count(MeetingActionItem.id)).where(
                     MeetingActionItem.organization_id == org_id,
-                    MeetingActionItem.status.in_(
-                        [
-                            ActionItemStatus.OPEN.value,
-                            ActionItemStatus.IN_PROGRESS.value,
-                        ]
-                    ),
+                    meeting_action_item_open(),
                 )
             )
             open_meeting = result.scalar() or 0
@@ -1323,12 +1351,7 @@ async def get_admin_summary(
                 .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
                 .where(
                     MeetingMinutes.organization_id == org_id,
-                    ActionItem.status.in_(
-                        [
-                            MinutesActionItemStatus.PENDING.value,
-                            MinutesActionItemStatus.IN_PROGRESS.value,
-                        ]
-                    ),
+                    minutes_action_item_open(),
                 )
             )
             open_minutes = result.scalar() or 0
@@ -1398,6 +1421,36 @@ async def get_admin_summary(
     )
 
 
+# DASH-40 ("page or cap"): neither route answers unbounded, so a department
+# with years of minutes does not send every description on every visit. The
+# bare-list route keeps its original shape and is capped; ``/page`` pages.
+ACTION_ITEMS_PAGE_DEFAULT = 50
+ACTION_ITEMS_PAGE_MAX = 200
+ACTION_ITEMS_LIST_CAP = ACTION_ITEMS_PAGE_MAX
+
+
+def _calendar_day(value: date | datetime | None) -> str | None:
+    """The calendar day a due date names, as ``YYYY-MM-DD``.
+
+    A meeting item stores a DATE and a minutes item the UTC midnight of its
+    day; the two sources are merged on this day so neither sorts ahead of the
+    other merely because one carries a time.
+    """
+    if value is None:
+        return None
+    return value.isoformat()[:10]
+
+
+def _merge_key(item: ActionItemSummary) -> tuple:
+    # Mirrors the ORDER BY each half is read with: undated items last, then
+    # by day, then oldest first. Ties keep each half's own order, because
+    # ``heapq.merge`` is stable, so the merged order never contradicts the
+    # order the rows were read in — which is what makes "read offset + limit
+    # from each half, merge, slice" return the same rows as merging all of
+    # them would.
+    return (item.due_date is None, item.due_date or "", item.created_at[:19])
+
+
 @router.get("/action-items", response_model=list[ActionItemSummary])
 async def get_unified_action_items(
     status_filter: str | None = None,
@@ -1406,14 +1459,30 @@ async def get_unified_action_items(
     current_user: User = Depends(get_current_active_user),
     overdue: bool = False,
     source: Literal["meeting", "minutes"] | None = None,
+    open_only: bool = False,
+    assignee_id: str | None = None,
+    source_id: str | None = None,
+    limit: Annotated[
+        int, Query(ge=1, le=ACTION_ITEMS_PAGE_MAX)
+    ] = ACTION_ITEMS_LIST_CAP,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ActionItemSummary]:
     """
-    Unified view of action items from both Meeting and Minutes modules.
-    Merges results and returns them sorted by due date.
+    Unified view of action items from both Meeting and Minutes modules, as a
+    bare list sorted by due date — the shape this route has always answered.
+
+    **Capped at 200 items** (``ACTION_ITEMS_LIST_CAP``; DASH-40, owner
+    decision 2026-11-01 "page or cap"). It used to return every matching item.
+    ``limit`` (at most 200) and ``offset`` move through the list, but this
+    route carries no totals: ``GET /dashboard/action-items/page`` answers the
+    same rows with ``total``, ``open_total`` and ``overdue_total``.
 
     ``overdue`` and ``source`` are what the operations dashboard's overdue
     cards link with: ``overdue`` applies the very predicate those cards count
-    by, so the page opens on the rows the card counted (DASH-37).
+    by, so the page opens on the rows the card counted (DASH-37). ``open_only``
+    applies the predicate the admin summary's open tile counts by.
+    ``assignee_id`` and ``source_id`` (a meeting or minutes id) narrow the list
+    for the Action Items screen's filters.
 
     Both halves are owned by the Minutes module (``/meetings`` and
     ``/minutes-records`` are gated on it), so a department that has switched
@@ -1422,16 +1491,99 @@ async def get_unified_action_items(
     ``/api/v1/minutes-records`` answered 403 while this endpoint handed the
     identical descriptions back through the dashboard.
     """
+    page = await _read_action_items(
+        db,
+        current_user,
+        status_filter=status_filter,
+        assigned_to_me=assigned_to_me,
+        overdue=overdue,
+        source=source,
+        open_only=open_only,
+        assignee_id=assignee_id,
+        source_id=source_id,
+        limit=limit,
+        offset=offset,
+        with_totals=False,
+    )
+    return page.items
+
+
+@router.get("/action-items/page", response_model=ActionItemPage)
+async def get_action_items_page(
+    status_filter: str | None = None,
+    assigned_to_me: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    overdue: bool = False,
+    source: Literal["meeting", "minutes"] | None = None,
+    open_only: bool = False,
+    assignee_id: str | None = None,
+    source_id: str | None = None,
+    limit: Annotated[
+        int, Query(ge=1, le=ACTION_ITEMS_PAGE_MAX)
+    ] = ACTION_ITEMS_PAGE_DEFAULT,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ActionItemPage:
+    """
+    One page of the unified action-item feed, soonest due first, with totals
+    (DASH-40). The Action Items screen reads this; the bare-list route stays
+    for existing clients.
+
+    ``total``, ``open_total`` and ``overdue_total`` describe every row the
+    filters match, not the page, so the screen's tiles do not shrink to the
+    page size. Filters, gating and the module switch are the bare-list
+    route's.
+    """
+    return await _read_action_items(
+        db,
+        current_user,
+        status_filter=status_filter,
+        assigned_to_me=assigned_to_me,
+        overdue=overdue,
+        source=source,
+        open_only=open_only,
+        assignee_id=assignee_id,
+        source_id=source_id,
+        limit=limit,
+        offset=offset,
+        with_totals=True,
+    )
+
+
+async def _read_action_items(
+    db: AsyncSession,
+    current_user: User,
+    *,
+    status_filter: str | None,
+    assigned_to_me: bool,
+    overdue: bool,
+    source: str | None,
+    open_only: bool,
+    assignee_id: str | None,
+    source_id: str | None,
+    limit: int,
+    offset: int,
+    with_totals: bool,
+) -> ActionItemPage:
+    """Both routes' rows: each half read in the merged order only as far as
+    ``offset + limit``, merged, then sliced. ``with_totals`` adds the count
+    queries only ``/page`` reports."""
     org_id = current_user.organization_id
-    items: list[ActionItemSummary] = []
+    page = ActionItemPage(
+        items=[], total=0, open_total=0, overdue_total=0, limit=limit, offset=offset
+    )
 
     enabled = set(
         (await OrganizationService(db).get_enabled_modules(org_id)).enabled_modules
     )
     if "minutes" not in enabled:
-        return items
+        return page
 
-    local_today = await resolve_org_today(db, org_id) if overdue else None
+    local_today = (
+        await resolve_org_today(db, org_id) if (overdue or with_totals) else None
+    )
+    # Each half is read only as far as this page could reach into it.
+    window = offset + limit
 
     # This unified feed merges two modules and is NOT permission-gated at the
     # route, so gate each half in-code exactly as its owning module does —
@@ -1445,34 +1597,67 @@ async def get_unified_action_items(
     ) or user_has_permission(current_user, "minutes.view")
     can_view_minutes = user_has_permission(current_user, "minutes.view")
 
+    meeting_items: list[ActionItemSummary] = []
+    minutes_items: list[ActionItemSummary] = []
+
     # ── Meeting action items ──
     if can_view_meetings and source != "minutes":
-        query = select(MeetingActionItem).where(
-            MeetingActionItem.organization_id == org_id,
-        )
+        conditions = [MeetingActionItem.organization_id == org_id]
         if status_filter:
-            query = query.where(MeetingActionItem.status == status_filter)
+            conditions.append(MeetingActionItem.status == status_filter)
+        if open_only:
+            conditions.append(meeting_action_item_open())
         if assigned_to_me:
-            query = query.where(MeetingActionItem.assigned_to == current_user.id)
-        if local_today is not None:
-            query = query.where(meeting_action_item_overdue(local_today))
+            conditions.append(MeetingActionItem.assigned_to == current_user.id)
+        if assignee_id:
+            conditions.append(MeetingActionItem.assigned_to == assignee_id)
+        if source_id:
+            conditions.append(MeetingActionItem.meeting_id == source_id)
+        if local_today is not None and overdue:
+            conditions.append(meeting_action_item_overdue(local_today))
 
-        result = await db.execute(query.order_by(MeetingActionItem.due_date.asc()))
-        for item in result.scalars().all():
-            items.append(
+        result = await db.execute(
+            select(MeetingActionItem)
+            .where(*conditions)
+            .order_by(
+                MeetingActionItem.due_date.is_(None),
+                MeetingActionItem.due_date,
+                MeetingActionItem.created_at,
+                MeetingActionItem.id,
+            )
+            .limit(window)
+        )
+        rows = list(result.scalars().all())
+        if local_today is not None and with_totals:
+            await _count_into(
+                db,
+                page,
+                MeetingActionItem.id,
+                conditions,
+                meeting_action_item_open(),
+                meeting_action_item_overdue(local_today),
+            )
+        names, titles = await _meeting_item_labels(db, org_id, rows)
+        for item in rows:
+            meeting_items.append(
                 ActionItemSummary(
                     id=item.id,
                     source="meeting",
                     source_id=item.meeting_id,
+                    source_title=titles.get(item.meeting_id),
                     description=item.description,
                     assignee_id=item.assigned_to,
-                    due_date=item.due_date.isoformat() if item.due_date else None,
+                    assignee_name=(
+                        names.get(item.assigned_to) if item.assigned_to else None
+                    ),
+                    due_date=_calendar_day(item.due_date),
                     status=(
                         item.status.value
                         if hasattr(item.status, "value")
                         else str(item.status)
                     ),
                     priority=str(item.priority) if item.priority else None,
+                    completion_notes=item.completion_notes,
                     created_at=(item.created_at.isoformat() if item.created_at else ""),
                 )
             )
@@ -1484,28 +1669,52 @@ async def get_unified_action_items(
         # update its status (W52-7), and "Assigned to me" must find it (W52-6).
         # Only the item is disclosed, never the minutes it was recorded in.
         assigned_to_caller = ActionItem.assignee_id == current_user.id
-        query2 = (
-            select(ActionItem)
-            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
-            .where(MeetingMinutes.organization_id == org_id)
-        )
+        conditions = [MeetingMinutes.organization_id == org_id]
         if can_view_minutes:
             restriction = minutes_visibility_filter(current_user)
             if restriction is not None:
-                query2 = query2.where(or_(restriction, assigned_to_caller))
+                conditions.append(or_(restriction, assigned_to_caller))
         else:
-            query2 = query2.where(assigned_to_caller)
+            conditions.append(assigned_to_caller)
 
         if status_filter:
-            query2 = query2.where(ActionItem.status == status_filter)
+            conditions.append(ActionItem.status == status_filter)
+        if open_only:
+            conditions.append(minutes_action_item_open())
         if assigned_to_me:
-            query2 = query2.where(assigned_to_caller)
-        if local_today is not None:
-            query2 = query2.where(minutes_action_item_overdue(local_today))
+            conditions.append(assigned_to_caller)
+        if assignee_id:
+            conditions.append(ActionItem.assignee_id == assignee_id)
+        if source_id:
+            conditions.append(ActionItem.minutes_id == source_id)
+        if local_today is not None and overdue:
+            conditions.append(minutes_action_item_overdue(local_today))
 
-        result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
-        for minutes_item in result2.scalars().all():
-            items.append(
+        result2 = await db.execute(
+            select(ActionItem)
+            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+            .where(*conditions)
+            .order_by(
+                ActionItem.due_date.is_(None),
+                func.date(ActionItem.due_date),
+                ActionItem.created_at,
+                ActionItem.id,
+            )
+            .limit(window)
+        )
+        minutes_rows = list(result2.scalars().all())
+        if local_today is not None and with_totals:
+            await _count_into(
+                db,
+                page,
+                ActionItem.id,
+                conditions,
+                minutes_action_item_open(),
+                minutes_action_item_overdue(local_today),
+                join=(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id),
+            )
+        for minutes_item in minutes_rows:
+            minutes_items.append(
                 ActionItemSummary(
                     id=minutes_item.id,
                     source="minutes",
@@ -1513,11 +1722,7 @@ async def get_unified_action_items(
                     description=minutes_item.description,
                     assignee_id=minutes_item.assignee_id,
                     assignee_name=minutes_item.assignee_name,
-                    due_date=(
-                        minutes_item.due_date.isoformat()
-                        if minutes_item.due_date
-                        else None
-                    ),
+                    due_date=_calendar_day(minutes_item.due_date),
                     status=(
                         minutes_item.status.value
                         if hasattr(minutes_item.status, "value")
@@ -1533,6 +1738,7 @@ async def get_unified_action_items(
                         else None
                     ),
                     completion_notes=minutes_item.completion_notes,
+                    carried_forward=minutes_item.carried_forward_at is not None,
                     created_at=(
                         minutes_item.created_at.isoformat()
                         if minutes_item.created_at
@@ -1541,9 +1747,69 @@ async def get_unified_action_items(
                 )
             )
 
-    # Sort by due date (nulls last)
-    items.sort(key=lambda x: x.due_date or "9999-12-31")
-    return items
+    # Sorted across both halves before the page is cut, so page two starts
+    # where page one ended whichever half its rows come from.
+    merged = list(heapq.merge(meeting_items, minutes_items, key=_merge_key))
+    page.items = merged[offset:window]
+    return page
+
+
+async def _count_into(
+    db: AsyncSession,
+    page: ActionItemPage,
+    id_column,
+    conditions: list,
+    open_clause,
+    overdue_clause,
+    join: tuple | None = None,
+) -> None:
+    """Add one half's totals, under the same filters as its rows, to *page*."""
+    query = select(
+        func.count(id_column),
+        func.coalesce(func.sum(case((open_clause, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((overdue_clause, 1), else_=0)), 0),
+    )
+    if join is not None:
+        query = query.join(*join)
+    total, open_total, overdue_total = (
+        await db.execute(query.where(*conditions))
+    ).one()
+    page.total += int(total or 0)
+    page.open_total += int(open_total or 0)
+    page.overdue_total += int(overdue_total or 0)
+
+
+async def _meeting_item_labels(
+    db: AsyncSession, org_id: str, rows: list[MeetingActionItem]
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Assignee names and meeting titles for one page of meeting items.
+
+    A meeting item stores only the assignee's id, so without this the screen
+    showed a meeting item with nobody against it. Both lookups are confined to
+    the caller's department.
+    """
+    user_ids = {r.assigned_to for r in rows if r.assigned_to}
+    meeting_ids = {r.meeting_id for r in rows}
+    names: dict[str, str] = {}
+    titles: dict[str, str] = {}
+    if user_ids:
+        result = await db.execute(
+            select(User.id, User.first_name, User.last_name, User.preferred_name).where(
+                User.id.in_(user_ids), User.organization_id == org_id
+            )
+        )
+        names = {
+            uid: format_display_name(first, last, preferred)
+            for uid, first, last, preferred in result.all()
+        }
+    if meeting_ids:
+        meeting_rows = await db.execute(
+            select(Meeting.id, Meeting.title).where(
+                Meeting.id.in_(meeting_ids), Meeting.organization_id == org_id
+            )
+        )
+        titles = {mid: title for mid, title in meeting_rows.all()}
+    return names, titles
 
 
 @router.get("/community-engagement", response_model=CommunityEngagement)

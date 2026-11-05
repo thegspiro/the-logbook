@@ -372,7 +372,9 @@ const MinutesPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs font-medium uppercase">This Month</p>
             <p className="mt-1 text-2xl font-bold text-cyan-700">{summary?.meetings_this_month ?? 0}</p>
           </div>
-          <div className="card p-4">
+          {/* A link to the Action Items screen, where these are worked and
+              meeting items are managed (owner decision 2026-11-01). */}
+          <Link to="/action-items?status=open" className="card hover:bg-theme-surface-hover block p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Open Action Items</p>
             {/* Action items live on meetings and on minutes; each service
                 counts its own open ones, and both lists feed Action Items. The
@@ -380,7 +382,7 @@ const MinutesPage: React.FC = () => {
             <p className="mt-1 text-2xl font-bold text-yellow-700">
               {(summary?.open_action_items ?? 0) + (minutesStats?.open_action_items ?? 0)}
             </p>
-          </div>
+          </Link>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Pending Approval</p>
             {/* Minutes awaiting approval, as the minutes service counts them —
@@ -538,9 +540,16 @@ const MinutesPage: React.FC = () => {
                         <span>
                           {meeting.attendee_count} attendee{meeting.attendee_count !== 1 ? 's' : ''}
                         </span>
-                        <span>
-                          {meeting.action_item_count} action item{meeting.action_item_count !== 1 ? 's' : ''}
-                        </span>
+                        {meeting.action_item_count > 0 ? (
+                          <Link
+                            to={`/action-items?meeting=${meeting.id}`}
+                            className="touch-target-phone text-cyan-800 hover:underline dark:text-cyan-400"
+                          >
+                            {meeting.action_item_count} action item{meeting.action_item_count !== 1 ? 's' : ''}
+                          </Link>
+                        ) : (
+                          <span>0 action items</span>
+                        )}
                         {meeting.creator_name && <span>Created by {meeting.creator_name}</span>}
                       </div>
                       {/* Waivers Toggle */}

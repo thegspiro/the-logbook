@@ -865,6 +865,17 @@ election's result into its meeting's minutes
 
 ### ELEC-49 — MEDIUM — FLAGGED — A rolled-back election leaves a stale, permanent addendum in circulated minutes
 
+**Resolved 2026-11-05 (owner decision 2026-11-01: supersede with a dated
+correction).** `rollback_election` now calls `supersede_filed_results` in its
+own transaction: a result in circulated or adopted minutes keeps its row and
+gains `superseded_at` / `superseded_reason` / `superseded_by`, a draft's own
+result is removed, and the unique key moved to (`minutes_id`,
+`current_election_id`) so the re-run's result files beside the superseded one.
+Migration `61e85742f52b`; tests
+`tests/test_minutes_election_correction_integration.py`,
+`tests/test_election_result_correction_migration.py`. See
+`docs/KNOWN_LIMITATIONS.md`. The original finding follows.
+
 `close_election` (`election_service.py`) now calls `file_closed_election`;
 `rollback_election` (`election_service.py`, CLOSED → OPEN) does not touch the
 filing. When the meeting's minutes were already circulated or adopted, the
@@ -1191,6 +1202,11 @@ pattern `test_application_self_withdraw.py` and `test_capacity_locking.py`
 use for this exact class of invariant.
 
 ### ELEC-48 — LOW — the synchronous send endpoints still race each other directly, with no job row for either side to lock against — 🚩 FLAGGED (new finding, owner decision needed)
+
+**Resolved 2026-11-05 (owner decision 2026-11-01: retire them).** Both
+synchronous endpoints are removed; `ballot-send-jobs` and `reminder-send-jobs`
+are the only send paths. `tests/test_retired_ballot_send_routes.py` asserts the
+routes are gone. The original finding follows.
 
 **File:** `backend/app/api/v1/endpoints/elections.py` — `send_ballot_emails`
 (≈3007-3053) and `remind_non_voters` (≈3401-3435).

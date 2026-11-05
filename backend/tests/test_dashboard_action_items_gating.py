@@ -15,12 +15,16 @@ caller may read once the department does run Minutes, so they hold it on and
 count only the action-item queries.
 """
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.v1.endpoints.dashboard import get_unified_action_items
+from app.api.v1.endpoints.dashboard import (
+    get_action_items_page,
+    get_unified_action_items,
+)
 
 
 def _perms(*granted):
@@ -99,6 +103,32 @@ class TestActionItemsGating:
         # widened by exactly one thing: their own items.
         sql = _sql(db.execute.await_args_list[1].args[0])
         assert f"OR {_OWN_ITEMS}" in sql
+
+
+class TestPagedRouteGating:
+    async def test_the_page_and_its_totals_are_gated_like_the_list(self):
+        """DASH-40: ``/action-items/page`` adds totals queries. They must be
+        confined exactly as the rows are, or the counts would disclose items
+        the caller cannot read."""
+        db = MagicMock()
+        result = _empty_result()
+        result.one.return_value = (0, 0, 0)
+        db.execute = AsyncMock(return_value=result)
+        with _minutes_on(), patch(
+            "app.api.v1.endpoints.dashboard.resolve_org_today",
+            new=AsyncMock(return_value=date(2026, 10, 3)),
+        ), patch(
+            "app.api.v1.endpoints.dashboard.user_has_permission",
+            side_effect=_perms(),
+        ):
+            page = await get_action_items_page(db=db, current_user=_user())
+        assert page.items == []
+        assert page.total == 0
+        reads = [_sql(call.args[0]) for call in db.execute.await_args_list]
+        # The minutes half's rows and totals; no meeting query at all.
+        assert len(reads) == 2
+        assert all("meeting_action_items" not in sql for sql in reads)
+        assert all(_OWN_ITEMS in sql for sql in reads)
 
 
 if __name__ == "__main__":  # pragma: no cover

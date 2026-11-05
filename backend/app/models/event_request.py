@@ -12,6 +12,7 @@ requesters express preferences rather than committing to exact dates.
 """
 
 import enum
+import hashlib
 import secrets
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
@@ -27,7 +28,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -185,9 +186,21 @@ class EventRequest(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    # Public status tracking
-    status_token: Mapped[Optional[str]] = mapped_column(
-        String(64), unique=True, index=True, default=generate_status_token
+    # Public status token, protected as the applicant status token is (PP-6).
+    # It is a bearer credential — whoever holds it can read the request and
+    # cancel it — so neither column yields it from a database or backup read:
+    #   - status_token_hash is the SHA-256 of the token and is the ONLY column
+    #     a lookup may match on. A hash, not a password KDF, because the token
+    #     is 256 bits of randomness — there is nothing to brute-force.
+    #   - status_token is the token itself, AES-256-GCM encrypted, kept only
+    #     because the coordinator's Copy status link control has to show it.
+    #     It is never queried.
+    # Writers assign status_token only: the validator below keeps the hash in
+    # step. The token is issued in __init__ rather than by a column default,
+    # because a default fires at INSERT and never reaches the validator.
+    status_token: Mapped[Optional[str]] = mapped_column(EncryptedText)
+    status_token_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), unique=True, index=True, nullable=True
     )
 
     # Source tracking (from form submission)
@@ -222,6 +235,21 @@ class EventRequest(Base):
         Index("idx_event_request_org_status", "organization_id", "status"),
         Index("idx_event_request_org_type", "organization_id", "outreach_type"),
     )
+
+    def __init__(self, **kwargs: Any) -> None:
+        if "status_token" not in kwargs:
+            kwargs["status_token"] = generate_status_token()
+        super().__init__(**kwargs)
+
+    @staticmethod
+    def hash_status_token(token: str) -> str:
+        """The lookup key for a public status token: hex SHA-256."""
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    @validates("status_token")
+    def _sync_status_token_hash(self, _key: str, token: str | None) -> str | None:
+        self.status_token_hash = self.hash_status_token(token) if token else None
+        return token
 
     def __repr__(self):
         return f"<EventRequest(contact={self.contact_name}, type={self.outreach_type}, status={self.status})>"

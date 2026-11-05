@@ -1700,17 +1700,77 @@ made these choices where nothing had been decided. Each is easy to reverse.
 - **Approved minutes from before this change have no approved version.**
   `GET /{id}/verify` says so rather than inventing a hash for content nobody
   hashed. Reopening and re-approving one creates version 1.
-- **Quorum counts present, late and left early; not guests, and there is no
-  proxy status.** The code does not know the department's bylaws on a member
-  who left before the vote, or on proxies. If either should change the count,
-  it is `COUNTS_TOWARD_QUORUM` in `app/utils/minutes_attendance.py`.
-- **Attachments are not searchable, are not in the published Documents copy,
-  and the PDF lists them without embedding them.**
+- ~~**Quorum counts present, late and left early; not guests, and there is no
+  proxy status.**~~ **Resolved (owner decision 2026-11-01: make it a
+  department setting; built 2026-11-05).** **Minutes → Settings → Quorum**
+  chooses whether members marked Late or Left early count (both on unless
+  switched off, which is how every department counted before) and whether the
+  department uses proxies (off unless switched on). With proxies on, the roll
+  call offers **Represented by proxy** and such a member counts toward quorum.
+  A member marked present always counts and a guest never does. The rule is
+  stored in the `minutes` settings (`quorum_counts_late`,
+  `quorum_counts_left_early`, `proxy_attendance`, read by
+  `quorum_counting_in` in `app/utils/minutes_settings.py`) and applied only by
+  `QuorumService.calculate_quorum`, whose description names any departure
+  from the default ("members who left early not counted; proxies counted").
+  `proxy` is a stored roll-call status (JSON, no migration). A proxy is never
+  `present`, which now means "in the room" rather than "counted toward
+  quorum", so a proxy does not vote in a roll call and is not counted toward a
+  "majority of members present" threshold; the published copy, the PDF and the
+  public page name proxies separately, under every attendance listing. A line
+  already recorded as a proxy stays editable after the department switches
+  proxies off, but then no longer counts. Changing the rule recounts drafts
+  the next time their quorum is checked; adopted minutes keep the quorum they
+  were adopted with. Tests: `tests/test_minutes_quorum_counting.py`,
+  `tests/test_quorum_service.py` (`TestWhoCounts`),
+  `QuorumCountingPanel.test.tsx`, `AttendancePanel.test.tsx`.
+- ~~**Attachments are not searchable, are not in the published Documents copy,
+  and the PDF lists them without embedding them.**~~ **Resolved (owner
+  decision 2026-11-01: include in published copy and PDF; built 2026-11-05).**
+  Publishing lists the files in the library copy and stamps each
+  `minutes_attachments.published_at`; whoever can read that document opens
+  them from its paperclip in Documents
+  (`GET /documents/{id}/minutes-attachments[/{attachment_id}/file]`), under
+  the document's own folder rules, so an executive copy's files stay with
+  leadership and a `minutes.view` holder without access to the document still
+  opens them from the minutes only. Only files the copy lists are served: a
+  signed copy filed after publishing appears once the minutes are published
+  again. The bytes stay in the minutes' storage area; nothing is copied into
+  Documents. `GET /{id}/pdf` draws images after the signatures, appends PDFs
+  after the minutes and lists Word, Excel and text files by name, within a
+  budget of 40 MB of files read, 300 appended pages and 40 megapixels per
+  image (`app/utils/minutes_pdf_attachments.py`); a file left out is listed
+  with the reason. **Accepted costs, as the decision named them:** a PDF with
+  attachments is larger, and every reader of the published copy can now open
+  its files — a department that files something on minutes it would not show
+  the library's audience must leave it off or not publish. **Still not
+  done:** attachments are not searchable (the decision covered the published
+  copy and the PDF only); the public copy carries none, as before; appended
+  pages carry no minutes footer, so a printed attachment page is matched to
+  the record by the SHA-256 in the attachment table, not by its own footer;
+  and Documents has no viewer for a generated document's text, so the
+  published copy's readers see its card and attachments but read the minutes
+  themselves in Minutes. Tests: `tests/test_minutes_published_attachments_integration.py`,
+  `tests/test_minutes_pdf_attachments.py`, `PublishedMinutesAttachments.test.tsx`.
 - **Assignees are emailed when minutes are approved.** An item added to
   approved minutes emails its assignee then; a carried-forward item is not
-  re-announced. The due-date reminders in `run_action_item_reminders` still go
+  re-announced. ~~The due-date reminders in `run_action_item_reminders` still go
   only to the in-app bell, not to email — at odds with the email-first rule
-  (CLAUDE.md pitfall #18), and unchanged by this work.
+  (CLAUDE.md pitfall #18), and unchanged by this work.~~ **Resolved (owner
+  decision 2026-11-01: email them, member can opt out; built 2026-11-05).**
+  Items on adopted minutes were already emailed by
+  `minutes_action_item_reminders` (2026-10-15). The remaining bell-only
+  reminders, for action items on a meeting record, are now emailed on the same
+  days as the bell (3 and 1 days before, the due date, the day after), under
+  the member's "Action items from meetings and minutes" switch
+  (`EmailKind.MINUTES_ACTION_ITEMS`). `meeting_action_items.reminder_emailed_on`
+  makes a second run on the same day send nothing; a failed send is retried
+  on the next run. Items on draft or circulated minutes still get the bell
+  only: their items are not yet a commitment, the rule the minutes reminder
+  email follows. **Residual:** the bell entry itself has no such marker, so
+  running `action_item_reminders` twice in a day still puts a second bell
+  entry in front of the assignee, as it always has. Tests:
+  `tests/test_meeting_action_item_reminder_emails.py`.
 - **Confirmed by the owner (2026-10-14).** Minutes are circulated for review
   and adopted (the API statuses are unchanged); any member who can view minutes
   may suggest changes; an election that runs past the meeting is attached to the
@@ -2371,7 +2431,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Executive-session minutes need a viewer tier below `minutes.manage`?**                                                                                                        | Accepted by the owner (2026-10-05)                                                                                                      | MM-3 is fixed: plain `minutes.view` holders now see only approved, non-executive minutes; `minutes.manage` sees all. Follow-up open decision: if board members who attend executive sessions but don't hold `minutes.manage` should read executive minutes, a dedicated `minutes.view_executive` tier is needed (seed + roles + frontend). Also: frontend `canManage` uses `meetings.manage` while the backend uses `minutes.manage` — roles managing minutes should hold both. **Update (MM2-1, 2026-08-06):** publishing executive minutes to the shared Meeting Minutes document folder is now blocked, because that folder is readable by the broad `documents.view` audience and so bypassed the restriction. Sharing an executive session with a _restricted_ audience is the same build as the `minutes.view_executive` tier above (a restricted document folder or per-document permission), not a one-click publish. **Accepted by the owner (2026-10-05):** leave as is — only `minutes.manage` holders read executive minutes, and no `minutes.view_executive` tier is built.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Equipment-check: read endpoints bypass `equipment_check.view`; compliance metrics stubbed**                                                                                   | ✅ Resolved (2026-10-11, owner decision: gate reads on view and build the cadence counts)                                               | **Fixed earlier:** `complete_incomplete_check` re-applies the expired/under-min auto-fail rule (EC-10); `create_report` validates a client-supplied `trainee_id` is in-org (EC-6); `get_report` takes an org filter (EC-9). **EC-7:** the detail reads (`get_shift_checklists`, `get_check`, the template list/detail) gate on `inventory.check_view` OR `inventory.check_submit`; the routes still on bare `get_current_user` are self-scoped (`/my-checklists`, its history, the photo upload on the caller's org's check), scope themselves by permission (`/log`), or carry a router-level `check_manage` gate (the changelog). **EC-11, built 2026-10-11:** `get_compliance_report` counts an expected check as one per shift per applicable checklist — the fleet board's rule, through `EquipmentReadinessService.expected_checks_between` — so each apparatus carries `checks_expected` and `checks_missed` and the report's `overdue_count` is the missed total; owed checks only (a rig out of service or a check not yet due is not counted). No cadence setting and no migration. The Check Reports compliance tab, its CSV and PDF show them. Still flagged: a few by-id reads used only for changelog text lack an org filter (harmless, EC-8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Public portal: per-process rate limiter + application-status token plaintext at rest**                                                                                        | ✅ Resolved (2026-10-05, owner decision PP-6)                                                                                           | **Both halves done (owner: "do both").** The portal's per-IP and per-API-key limits now count in Redis, shared by every worker (`_shared_window_hit` in `app/core/public_portal_security.py`), so the ceiling is the limit rather than workers × limit; the per-process caches answer only when Redis is down or a command fails (degraded, never unchecked). The applicant status token is looked up only by its SHA-256 (`status_token_hash`) and stored AES-256-GCM encrypted (`EncryptedText`) for the emails that re-send the link, so a database or backup read no longer yields a live token. Migration `f7c09cfec5b0` hashes and encrypts existing tokens in place — the token itself never changes, so links already in applicants' inboxes keep working. Tests: `test_public_portal_security.py::TestSharedRateLimit`, `test_status_token_at_rest.py`. **Resolved earlier from this cluster:** `authenticate_api_key` throttles the `last_used_at` write (≤ once/60 s per key) and `detect_anomalies` uses 2 COUNT queries instead of 3 (PP-7); the access-log viewer auto-escapes `user-agent`/`referer`/`ip` via JSX (no stored-XSS — PP-5). Accepted design limitations: the whitelist has no per-subfield granularity (a whitelisted `mailing_address` exposes the whole nested dict — intentionally-public org data, not member PII), and the ≥36-bit display code has no per-code lockout (bounded by the per-IP limit, now global). **Not covered:** `EventRequest.status_token` (the public event-request status link) is a separate credential on a separate table and is still plaintext at rest; it was not part of PP-6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Public portal: per-process rate limiter + application-status token plaintext at rest**                                                                                        | ✅ Resolved (2026-10-05, owner decision PP-6)                                                                                           | **Both halves done (owner: "do both").** The portal's per-IP and per-API-key limits now count in Redis, shared by every worker (`_shared_window_hit` in `app/core/public_portal_security.py`), so the ceiling is the limit rather than workers × limit; the per-process caches answer only when Redis is down or a command fails (degraded, never unchecked). The applicant status token is looked up only by its SHA-256 (`status_token_hash`) and stored AES-256-GCM encrypted (`EncryptedText`) for the emails that re-send the link, so a database or backup read no longer yields a live token. Migration `f7c09cfec5b0` hashes and encrypts existing tokens in place — the token itself never changes, so links already in applicants' inboxes keep working. Tests: `test_public_portal_security.py::TestSharedRateLimit`, `test_status_token_at_rest.py`. **Resolved earlier from this cluster:** `authenticate_api_key` throttles the `last_used_at` write (≤ once/60 s per key) and `detect_anomalies` uses 2 COUNT queries instead of 3 (PP-7); the access-log viewer auto-escapes `user-agent`/`referer`/`ip` via JSX (no stored-XSS — PP-5). Accepted design limitations: the whitelist has no per-subfield granularity (a whitelisted `mailing_address` exposes the whole nested dict — intentionally-public org data, not member PII), and the ≥36-bit display code has no per-code lockout (bounded by the per-IP limit, now global). ~~**Not covered:** `EventRequest.status_token` (the public event-request status link) is a separate credential on a separate table and is still plaintext at rest; it was not part of PP-6.~~ ✅ **Resolved (owner decision 2026-11-01: hash/encrypt it, the same protection; built 2026-11-05).** The event-request token now has the applicant token's protection: the public status page and the requester's cancel look a request up only by `status_token_hash` (SHA-256), and `status_token` is stored AES-256-GCM encrypted (`EncryptedText`) because the coordinator's **Copy status link** control still shows it. An unknown token is the same plain 404 as before. The token is issued in `EventRequest.__init__` so the hash is set from the start (a column default would never reach the validator). Migration `e429ae62992e` hashes and encrypts existing tokens in place — reversible with the same `ENCRYPTION_KEY` — so links coordinators have already shared keep working. Both key-rotation scripts now re-encrypt the column. Tests: `tests/test_event_request_status_token_at_rest.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Onboarding: role editor accepts client-controlled permissions / priority / system-flag**                                                                                      | ✅ Resolved (owner decision 2026-10-11: clamp and allowlist)                                                                            | `save_session_roles` accepted client-supplied `permissions`, `priority` and `is_custom` (which set `is_system`), keyed on the client slug — so a setup session could mint a high-priority `is_system` role, rewrite an existing system role by slug, or emit near-arbitrary `{module}.*` grants. **Resolved 2026-10-11 (owner decision: clamp and allowlist):** before anything is written, every `permissions` key must be a module row the Positions editor renders (`ONBOARDING_POSITION_EDITOR_MODULE_IDS` — the frontend registry including Positions and Settings, held to `moduleRegistry.ts` by a test), else 400 naming the modules; a custom position may not reuse a built-in identifier (a `DEFAULT_POSITIONS` slug or an existing system row), else 400. A built-in position stores the registry priority (or its seeded row's own when the registry no longer lists it) — the client's figure is ignored, matching `RoleService.update_role` after setup; anything client-defined is clamped to one below the System Owner's `it_manager` (99). `is_system` now follows the registry, not the client flag: a non-custom slug the registry does not define (a template a stale draft remembers) is stored as an ordinary, deletable position. Three wizard templates whose displayed priority disagreed with the registry (Board of Directors, Historian, Fundraising Chair) were aligned. **What the editor can no longer express:** a custom position named like a built-in one, or a per-position priority of its own. Tested in `tests/test_onboarding_role_clamps.py`. (ONB-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Onboarding: session TTL has no absolute cap, only a sliding 30-minute window**                                                                                                | ✅ Resolved (owner decision 2026-10-11: cap at 24 hours)                                                                                | `validate_session` renewed `expires_at` by another 30 minutes on every successful call with no maximum age, and three routes (`GET /system-info`, `/security-check`, `/database-check`) call it with `require_csrf=False`, so a holder of just the session id could keep the pre-completion window open indefinitely by polling. **Resolved 2026-10-11:** `SESSION_MAX_LIFETIME_HOURS = 24` in `api/v1/onboarding.py`. Both places that slide the expiry (`validate_session` and `get_or_create_session`) now clamp it to `created_at + 24h`, and `validate_session` refuses a session past that ceiling with 401 `ONBD_SESSION_INVALID` ("reached its 24-hour limit") even when an earlier poll had slid `expires_at` forward. Resuming a session past the ceiling mints a fresh one, which rehydrates the saved progress exactly as a 30-minute lapse does. Tested in `tests/test_onboarding_session_lifetime_cap.py`. (ONB2-30-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Onboarding: `/test/email`'s self-hosted SMTP test has no SSRF/private-network protection**                                                                                    | ✅ Resolved (owner decision 2026-10-11: unify error messages only — on-premises relays keep working)                                    | `POST /onboarding/test/email` (`platform: "selfhosted"`/`"other"`) connects via `smtplib` to a fully client-supplied `smtpHost`/`smtpPort`, reachable pre-auth while no organization exists. Differentiated errors (connection-refused vs. timeout vs. DNS-failure vs. wrong-protocol) let a caller fingerprint an internal `host:port`. **Resolved 2026-10-11:** private addresses stay allowed (blocking them would break the on-premises SMTP relays this audience runs), but the oracle is gone — the onboarding path now calls `test_smtp_connection_uniform`, which returns one message (`UNIFORM_SMTP_UNREACHABLE_MESSAGE`) and one set of detail keys (`error: "connection_failed"`, the echoed host/port/encryption/from) for **every** failure before a server greets as SMTP, including the endpoint's own 30-second timeout; the specific cause goes to the backend log only. After an SMTP greeting, authentication and TLS errors keep their specific messages. The authenticated **Settings → Email** test is unchanged. **What remains, accepted with the decision:** the connection is still made, so response **timing** still differs (a refused port answers at once, a filtered one after the 10-second socket timeout), and a target that greets as SMTP is distinguishable from one that does not — the latter is inherent in a test that can succeed. Tested in `tests/test_onboarding_smtp_uniform_errors.py`. (ONB-30-3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -4193,10 +4253,10 @@ anonymity salt, and by a change to the ballot.
 records a `ballot_send_jobs` row and returns `202`. The send runs after the
 response, and the page polls `GET /elections/{id}/ballot-send-jobs/{job_id}`
 for the outcome. While a send is queued or running, a second one for the same
-election is refused with `409`, from both the new endpoint and the synchronous
-`POST /elections/{id}/send-ballot`. The synchronous endpoint is kept, unchanged
-in behaviour otherwise, for API callers. Tests: `tests/test_ballot_send_jobs.py`,
-`electionService.test.ts`.
+election is refused with `409`. The synchronous
+`POST /elections/{id}/send-ballot` that was kept beside it for API callers was
+removed on 2026-11-05 (see ELEC-48 below). Tests:
+`tests/test_ballot_send_jobs.py`, `electionService.test.ts`.
 
 Two limitations remain:
 
@@ -4228,9 +4288,16 @@ Two limitations remain:
   every tick, and an alert per retry would mail them every fifteen minutes
   through an outage. Tests: `test_election_lifecycle.py`
   (`TestAutomaticReminderJob`), `test_w50_auto_open_sends_ballots.py`.
-- **The synchronous endpoints can still race each other directly (ELEC-48,
-  security review pass 10, 2026-10-18).** The "refused with 409" guard above
-  was, until pass 10, a plain read behind a snapshot the auth dependency's own
+- ~~**The synchronous endpoints can still race each other directly (ELEC-48,
+  security review pass 10, 2026-10-18).**~~ **Resolved (owner decision
+  2026-11-01: retire them; built 2026-11-05).** `POST /elections/{id}/send-ballot`
+  and `POST /elections/{id}/remind-non-voters` are removed and answer 404/405;
+  `ballot-send-jobs` and `reminder-send-jobs`, whose in-progress check is a
+  locking read, are the one way to send either. Nothing in the frontend called
+  them. `tests/test_retired_ballot_send_routes.py` pins the removal, and the
+  tests that drove the old routes now drive the queue. API clients: see
+  `docs/UPGRADING.md`. The original finding follows.
+  The "refused with 409" guard above was, until pass 10, a plain read behind a snapshot the auth dependency's own
   user lookup had already fixed earlier in the same transaction — two requests
   to `POST /elections/{id}/ballot-send-jobs` arriving together could both see
   no job in progress and both queue one, even though the endpoint locks the
@@ -4252,8 +4319,9 @@ as a `ballot_send_jobs` row with `kind = 'reminder'`, polled through the same
 outright (election not open, reminders off, inside the one-hour cooldown) is
 refused before anything is queued. Ballot sends and reminders share the
 in-progress guard, because both mint fresh tokens. The synchronous
-`POST /elections/{id}/remind-non-voters` is kept for API callers and now also
-answers `409` while a send is running.
+`POST /elections/{id}/remind-non-voters` was kept for API callers, answering
+`409` while a send was running, until it was removed with `send-ballot` on
+2026-11-05.
 
 ## Elections — A Rolled-Back Election Leaves Its Filed Result in Circulated Minutes (2026-10-22)
 
@@ -4265,11 +4333,45 @@ so after a rollback the minutes keep the old tally, the next close files
 nothing (a result is filed once per minutes and election), and the addendum
 cannot be removed. Found by the pass-11 security review (ELEC-49).
 
-**Needs an owner decision:** on a rollback, supersede the addendum with a
-dated correction, annotate it as withdrawn, or refuse a rollback once the
-result sits in adopted minutes. Until then, a manager who must roll back an
-election whose result is in adopted minutes should record the correction in
-the next meeting's minutes.
+**Resolved (owner decision 2026-11-01: supersede with a dated correction;
+built 2026-11-05).** Rolling an election back from closed now settles every
+result filed for it, in the same transaction as the reopening
+(`supersede_filed_results` in `app/services/minutes_election_filing.py`):
+
+- **Circulated or adopted minutes, or a result filed as an addendum:** the
+  result stays word for word and gains a dated correction —
+  `superseded_at`, `superseded_reason` (the rollback's reason) and
+  `superseded_by` on `minutes_election_results`. The adopted text is not
+  edited, and the correction sits outside the approval snapshot like any
+  addendum, so an adopted version still verifies.
+- **A draft's own result** is content the secretary can still edit, so it is
+  removed, as the secretary could have done by hand.
+- **The re-run.** A superseded result gives up its slot (the unique pair is now
+  minutes + `current_election_id`, which is NULL once superseded), so when the
+  election closes again its new result is filed as a further addendum —
+  automatically into the meeting's newest minutes, or by hand anywhere else —
+  and every copy shows it as replacing the superseded one. Each rollback
+  corrects only the result standing at that moment; an earlier correction keeps
+  its date.
+- **Every copy shows it.** The minutes screen badges the old result
+  _Superseded_ with the correction over it; the PDF and the library copy print
+  the correction above the result, with the reason; the public copy shows the
+  date but not the reason (free text that may name people). Standing library
+  and public copies of approved minutes are re-rendered in place when a
+  correction or any later addendum is filed, keeping their version, posting
+  date and replacement note; a withdrawn copy, or one marked as being corrected,
+  is left alone.
+- **Existing rows.** Migration `61e85742f52b` supersedes results filed before
+  a recorded rollback from closed, dated from the election's
+  `rollback_history`. It supersedes rather than removes a draft's stale row; a
+  re-run that has already re-closed has no result filed and can be imported by
+  hand.
+
+Safe to run twice (Pitfall #36): only a standing result is touched, and the
+unique slot means two filings racing for one election cannot both stand.
+Tests: `tests/test_minutes_election_correction_integration.py`,
+`tests/test_election_result_correction_migration.py`,
+`ElectionResultsPanel.test.tsx`, `PublicMinutesPage.test.tsx`.
 
 ## Elections — Broadcast Election Emails Go One Message Per Member (2026-10-18)
 
@@ -5923,13 +6025,18 @@ made these choices. Everything is off until the department switches it on.
 **Open — owner decisions to confirm.** See
 [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#who-the-minutes-name-2026-10-18).
 
-- **Unset reads as "everyone", not "present only".** The owner preferred present
-  only as the default, but an installation that never chose would otherwise
-  start hiding absences on printed and published copies the moment it upgraded.
-  A department switches to present only under Minutes → Settings → Attendance. To make
-  present only the default for new installs, change `DEFAULT_ATTENDANCE_LISTING`
-  in `app/utils/minutes_attendance.py` (existing installs that never set it
-  would change too).
+- ~~**Unset reads as "everyone", not "present only".**~~ **Resolved (owner
+  decision 2026-11-01: present only for new installs, existing ones
+  unchanged; built 2026-11-05).** Setup writes `attendance_listing: "present"`
+  into a new department's `minutes` settings when it creates the department
+  (`OnboardingService.create_organization`, from
+  `NEW_DEPARTMENT_ATTENDANCE_LISTING`), unless the caller supplied a listing
+  of its own. How an absent value reads did not change: it is still
+  "everyone" (`DEFAULT_ATTENDANCE_LISTING`), so a department that predates
+  the decision and never chose keeps naming everyone across the upgrade, and
+  no migration touches existing settings. Either kind of department changes it
+  under Minutes → Settings → Attendance. Tested in
+  `tests/test_minutes_quorum_counting.py` (`TestANewInstallListsPresentOnly`).
 - **The listing applies when a copy is shown, not when minutes are adopted.**
   Changing the department default changes how already adopted minutes print,
   and a library copy already filed keeps the listing it was published with
@@ -7141,8 +7248,21 @@ same screen, and left as they are:
   occurrences too, and a later finalized occurrence that has a category refuses
   the save. A save from a finalized occurrence leaves all of these fields out
   and is not affected.
-- **Reminder and validation markers an earlier series save copied are still
-  there.** Before this change, a "This and all future events" save wrote the
+- ~~**Reminder and validation markers an earlier series save copied are still
+  there.**~~ ✅ **Resolved (owner decision 2026-11-01: clear with a migration,
+  based on each row's schedule; built 2026-11-05).** Migration
+  `f4583df5025b` examines rows in a recurring series only. It removes a
+  `reminders_sent` interval whose send moment for that row's own start — worked
+  out as `run_event_reminders` works it out, in the department's timezone and
+  reminder time — is still ahead, and a `validation_notification_sent` on an
+  event that has not ended. To keep a reminder from going out twice (pitfall
+  #36), a row keeps its reminder markers if an `event_reminder` notice was ever
+  logged for it, and its validation marker if an `event_validation` notice was.
+  **Still true:** a copied marker for an interval whose moment has already
+  passed cannot be told from a sent one and stays, so that occurrence still
+  skips that one notice; the cleanup is irreversible (downgrade leaves rows as
+  they are). Tests: `tests/test_clear_copied_event_markers_migration.py`. The
+  original finding: Before this change, a "This and all future events" save wrote the
   edited occurrence's `reminders_sent` and `validation_notification_sent` onto
   every later occurrence. It no longer does, and each row now keeps only its own
   markers, but rows already reached keep the copies: those occurrences skip the
@@ -7268,6 +7388,48 @@ Found driving W52 (`docs/workflow-review/W52-action-items.md`).
   name before this are left as they are — they show their name but never match
   "Assigned to me".
   - Still open: meeting action items (`assigned_to`) have no screen.
+
+    **✅ Resolved (owner decision 2026-11-01: build a screen; built
+    2026-11-05).** The existing **Action Items** page (`/action-items`,
+    `ActionItemsPage`) is the screen, rather than a second list beside it: it
+    already listed both sources, sat in the Governance navigation and was where
+    the dashboard tile pointed. It now manages meeting items as well as showing
+    them:
+    - **Filters:** status (now including Cancelled), source, **meeting** and
+      **assignee**, plus "Assigned to me". `?meeting=` and `?assignee=` seed
+      them like `?status=` and `?source=`. The meeting list is the 100 most
+      recent meetings; the assignee list is the active-member picker, offered
+      to whoever can assign (below).
+    - **Meeting items** (`meetings.manage`, as the API requires): **Mark
+      complete**, **Edit** (`MeetingActionItemDialog`: description, assignee,
+      due date, priority, status, completion notes — every field
+      `PATCH /meetings/action-items/{id}` takes, all sent on every save, a
+      cleared one as `null`) and **Delete**, behind `useConfirm`. Rows now name
+      their meeting and their assignee, which the feed did not carry for
+      meeting items. An assignee who has since left stays selectable in the
+      edit form, so saving does not unassign the item.
+    - **Minutes items** keep W52-7's rule: the assignee, or any
+      `minutes.manage` holder, may **Mark complete** or **Update status**
+      (status and completion notes). The other fields are still edited on the
+      minutes, which the dialog links to. A carried-forward item shows a
+      **Carried forward** badge and offers nothing: it is worked in the minutes
+      it was carried to.
+    - `GET /minutes-records/action-item-assignees` now admits
+      `meetings.manage` as well as `minutes.manage`, so a meetings manager
+      assigns from the same active-member list.
+    - **Linked from:** the Minutes page's **Open Action Items** tile
+      (`/action-items?status=open`), each meeting card's "N action items"
+      (`/action-items?meeting=<id>`), the Governance navigation as before, and
+      the dashboard tile (DASH-40 below).
+
+    Tests: `ActionItemsPage.manage.test.tsx`, the updated
+    `ActionItemsPage*.test.tsx`, `MinutesPage.minutesLinks.test.tsx`,
+    `tests/test_action_item_assignee_picker_gate.py`,
+    `tests/test_dashboard_action_items_paging.py`. Residuals: a meeting item's
+    row still links to `/minutes`, because a meeting has no page of its own;
+    new meeting items are still created only through the API (the screen
+    edits what exists, as decided); and the meeting filter offers the 100 most
+    recent meetings, so an older one is reached through `?meeting=`.
 - **W52-7 — An assignee cannot close their own item.** ✅ Resolved
   (2026-10-11), as the owner chose: `PUT /minutes-records/{id}/action-items/
 {item_id}` accepts the item's assignee, keyed on `assignee_id`, for `status`
@@ -8356,6 +8518,51 @@ A neutral total tile (the Inventory count) now says only **Open**.
   free-text `description`, so the payload grows with the content rather than
   just the row count; a department with years of minutes sends the lot on every
   dashboard load.
+
+  **✅ Resolved (owner decision 2026-11-01: page or cap — both; built
+  2026-11-05).** `GET /dashboard/action-items` keeps the bare list it always
+  answered, so no API client breaks, but is **capped at 200**
+  (`ACTION_ITEMS_LIST_CAP`); `limit` (at most 200) and `offset` move through
+  it. A new `GET /dashboard/action-items/page` (the
+  `/facilities/maintenance/page` precedent) answers
+  `{items, total, open_total, overdue_total, limit, offset}`, default 50 a
+  page, and is what the Action Items screen reads. Both routes share one
+  reader. Each half is read in the merged order (undated last, then by
+  calendar day, then oldest first) only as far as `offset + limit`, the two are
+  merged with a stable `heapq.merge`, and the page is cut from the merged list,
+  so page two starts where page one ended whichever source its rows come
+  from. `/page`'s totals are one aggregate query per half under the same
+  filters, so they count every matching row, not the page; the bare list runs
+  no count queries. Three filters were added to both: `assignee_id`,
+  `source_id` (a meeting or minutes id) — inside the same organization and
+  permission conditions as before — and `open_only`, which replaced the page's
+  fetch-everything-and-filter "Open".
+
+  **Open and overdue now have one definition each (Pitfall #29).** The
+  dashboard's admin summary counted a minutes item open when `pending` or
+  `in_progress`; the Minutes page's tile, "My action items" and carry-forward
+  counted `overdue` too and left out an item already carried into later
+  minutes; and the Action Items page's own tiles counted every non-closed row
+  it had been sent. `minutes_action_item_open()` in `dashboard.py` now uses the
+  Minutes module's `OPEN_ITEM_STATUSES` and excludes carried-forward items, and
+  the admin summary, the overdue predicates (the operations dashboard cards
+  too), the feed's `open_only` and its totals all read it. A department with
+  hand-set `overdue` items or carried items will see the dashboard tile's
+  number move to match the Minutes page's.
+
+  **No dashboard list widget existed.** Nothing on the dashboard itself read
+  this feed; its only reader was the Action Items page. The dashboard's
+  Action Items tile counts open items from the admin summary, and now opens
+  `/action-items?status=open`, the list of exactly what it counted, instead of
+  every item ever recorded. The page asks for one page at a time
+  (`DEFAULT_PAGE_SIZE`, with the shared `Pagination` control) and shows the
+  feed's totals in its tiles. API clients are told about the cap and the new
+  route in `docs/UPGRADING.md`. Tests: `tests/test_dashboard_action_items_paging.py`
+  (real rows: page boundaries across both sources, totals, the open rule, the
+  tile and the list agreeing, filters, org scoping, the bare list's shape and
+  its cap of 200), the updated overdue-filter test, `adminServices.test.ts`, `ActionItemsPage.manage.test.tsx`,
+  `Dashboard.test.tsx`. Residual: a deep page costs `offset + limit` rows per
+  half, since neither half can skip rows the other may need to precede.
 
 ## Training — `POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path (2026-10-06)
 

@@ -205,6 +205,11 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({
                         Addendum
                       </span>
                     )}
+                    {result.superseded_at && (
+                      <span className="ml-2 rounded-sm bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-500/20 dark:text-red-300">
+                        Superseded
+                      </span>
+                    )}
                   </h3>
                   <p className="text-theme-text-muted text-xs">
                     {result.election_closed_at ? `Closed ${formatDateTime(result.election_closed_at, tz)} · ` : ''}
@@ -228,6 +233,24 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Filed after the minutes were circulated. It records the final result of an election held at this
                   meeting and is not part of the text that was adopted.
+                </p>
+              )}
+              {result.superseded_at && (
+                <p className="alert-warning mt-2 text-xs" role="note">
+                  <span className="font-semibold">
+                    Correction filed {formatDateTime(result.superseded_at, tz)}
+                    {result.superseded_by_name ? ` by ${result.superseded_by_name}` : ''}: this result has been
+                    superseded.
+                  </span>{' '}
+                  The election was rolled back and reopened, so the result below no longer stands. It is kept as the
+                  minutes recorded it.
+                  {result.superseded_reason ? ` Reason given: ${result.superseded_reason}` : ''}
+                </p>
+              )}
+              {result.replaces_superseded_at && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Corrected result: replaces the result superseded on{' '}
+                  {formatDateTime(result.replaces_superseded_at, tz)}.
                 </p>
               )}
               <p className="text-theme-text-secondary mt-2 text-xs">

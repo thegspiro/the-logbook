@@ -289,7 +289,11 @@ SCHEDULE = {
         "cron": "0 8 1 * *",
     },
     "action_item_reminders": {
-        "description": "Send reminders for action items due within 3 days, 1 day, or overdue (from meetings and minutes)",
+        "description": (
+            "Send bell reminders for action items due within 3 days, 1 day, or "
+            "overdue (from meetings and minutes), and email them for items on "
+            "meeting records"
+        ),
         "frequency": "daily",
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
@@ -1291,6 +1295,11 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     Send reminders for action items approaching or past their due dates.
     Checks both meeting_action_items and minutes_action_items tables.
     Sends notifications at 3 days before, 1 day before, and on overdue.
+
+    A meeting-record item's reminder is also emailed (owner decision
+    2026-11-01); a minutes item's email comes from
+    ``run_minutes_action_item_reminders``. See
+    ``app/services/meeting_action_item_reminder_service.py``.
     """
     from datetime import timedelta
     from datetime import timezone as _tz_reminders
@@ -1300,6 +1309,10 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
     from app.models.minute import MeetingMinutes, MinutesActionItemStatus
+    from app.services.meeting_action_item_reminder_service import (
+        OwedReminder,
+        send_meeting_action_item_emails,
+    )
 
     todays = await _org_todays(db)
     fallback_today = org_today(None)
@@ -1307,6 +1320,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     # department's date below. The latest calendar anywhere bounds them all.
     three_days = max(todays.values(), default=fallback_today) + timedelta(days=3)
     total_reminders = 0
+    owed_emails: List[OwedReminder] = []
 
     # Both sweeps run platform-wide, so each joins back to its organization
     # and skips a deactivated one, as the per-org jobs do (CRON2-31-12).
@@ -1349,6 +1363,14 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
                     db.add(log)
                     total_reminders += 1
+                    owed_emails.append(
+                        OwedReminder(
+                            item_id=str(item.id),
+                            organization_id=str(item.organization_id),
+                            days_until=days_until,
+                            today=today,
+                        )
+                    )
                 except Exception as e:
                     logger.error(f"Failed to create action item notification: {e}")
 
@@ -1430,8 +1452,17 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
 
     await db.commit()
-    logger.info(f"Action item reminders complete: {total_reminders} notifications sent")
-    return {"task": "action_item_reminders", "total_reminders": total_reminders}
+    emails_sent = await send_meeting_action_item_emails(db, owed_emails)
+    logger.info(
+        "Action item reminders complete: {} notifications, {} emails sent",
+        total_reminders,
+        emails_sent,
+    )
+    return {
+        "task": "action_item_reminders",
+        "total_reminders": total_reminders,
+        "emails_sent": emails_sent,
+    }
 
 
 async def run_inventory_notifications(db: AsyncSession) -> Dict[str, Any]:

@@ -157,7 +157,11 @@ _PLAIN_COLUMNS = [
     ("facility_insurance_policies", "id", ["agent_phone", "agent_email"]),
     ("facility_occupants", "id", ["contact_phone"]),
     ("inventory_vendor_contacts", "id", ["phone", "email"]),
-    ("event_requests", "id", ["contact_phone", "venue_address", "contact_email"]),
+    (
+        "event_requests",
+        "id",
+        ["contact_phone", "venue_address", "contact_email", "status_token"],
+    ),
     ("form_submissions", "id", ["sensitive_data"]),
     ("prospect_form_requests", "id", ["token", "draft_data", "changes"]),
     (

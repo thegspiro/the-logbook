@@ -7762,8 +7762,9 @@ class ElectionService:
             return None, 0, f"Cannot rollback election with status {from_status}"
 
         # Create rollback record
+        rolled_back_at = datetime.now(timezone.utc)
         rollback_record: Dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": rolled_back_at.isoformat(),
             "performed_by": str(performed_by),
             "from_status": from_status,
             "to_status": to_status,
@@ -7781,6 +7782,21 @@ class ElectionService:
         history = copy.deepcopy(election.rollback_history or [])
         history.append(rollback_record)
         election.rollback_history = history
+
+        # A result filed with minutes no longer stands once its election
+        # reopens. In the same transaction as the reopening, so neither lands
+        # without the other (owner decision 2026-11-01, ELEC-49).
+        corrected_minutes: List[str] = []
+        if from_status == ElectionStatus.CLOSED.value:
+            from app.services.minutes_election_filing import supersede_filed_results
+
+            corrected_minutes = await supersede_filed_results(
+                self.db,
+                election,
+                str(performed_by),
+                reason,
+                rolled_back_at.replace(microsecond=0),
+            )
 
         # Update status
         election.status = new_status
@@ -7805,10 +7821,23 @@ class ElectionService:
                 "reason": reason,
                 "anonymity_salt_regenerated": salt_regenerated,
                 "voting_tokens_invalidated": tokens_invalidated,
+                "minutes_corrected": corrected_minutes,
             },
             severity="warning",
             user_id=str(performed_by),
         )
+
+        if corrected_minutes:
+            from app.services.minutes_publishing_service import (
+                refresh_published_copies,
+            )
+
+            for minutes_id in corrected_minutes:
+                await refresh_published_copies(
+                    self.db, minutes_id, organization_id, str(performed_by)
+                )
+            # A refresh that failed rolled the session back, expiring the row.
+            await self.db.refresh(election)
 
         # Send email notifications to leadership (non-blocking — the
         # rollback is already committed, so notification failures must

@@ -1,0 +1,93 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+const mockUpdate = vi.fn();
+
+vi.mock('../../../services/api', () => ({
+  organizationService: { updateSettings: (...a: unknown[]) => mockUpdate(...a) as unknown },
+}));
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+
+import { QuorumCountingPanel } from './QuorumCountingPanel';
+import type { MinutesReminderSettings } from '../types/minutes';
+
+const settings = (overrides: Partial<MinutesReminderSettings> = {}): MinutesReminderSettings => ({
+  action_item_reminders: true,
+  reminder_days_before_due: 3,
+  overdue_repeat_days: 7,
+  open_items_digest: true,
+  signature_slots: [],
+  public_posting: false,
+  executive_library_publishing: false,
+  executive_public_posting: false,
+  executive_effective_library: false,
+  executive_effective_public: false,
+  attendance_listing: 'all',
+  auto_file_election_results: true,
+  quorum_counts_late: true,
+  quorum_counts_left_early: true,
+  proxy_attendance: false,
+  ...overrides,
+});
+
+describe('QuorumCountingPanel', () => {
+  const onSaved = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdate.mockReset();
+    mockUpdate.mockResolvedValue({});
+    onSaved.mockReset();
+    onSaved.mockResolvedValue(undefined);
+  });
+
+  const open = (overrides: Partial<MinutesReminderSettings> = {}, canEdit = true) =>
+    render(<QuorumCountingPanel settings={settings(overrides)} canEdit={canEdit} onSaved={onSaved} />);
+
+  it('shows what the server applies', () => {
+    open({ quorum_counts_left_early: false, proxy_attendance: true });
+
+    expect(screen.getByRole('checkbox', { name: /arrived late/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /left early/ })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /proxies/ })).toBeChecked();
+  });
+
+  it('offers nothing to save until a choice changes', () => {
+    open();
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('saves every switch it owns and asks the page to re-read', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByRole('checkbox', { name: /left early/ }));
+    await user.click(screen.getByRole('checkbox', { name: /proxies/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mockUpdate).toHaveBeenCalledWith({
+      minutes: { quorum_counts_late: true, quorum_counts_left_early: false, proxy_attendance: true },
+    });
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('is read-only without the settings permission', () => {
+    open({}, false);
+
+    expect(screen.getByRole('checkbox', { name: /left early/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  });
+
+  it('does not report a save that failed', async () => {
+    mockUpdate.mockRejectedValue(new Error('Nope'));
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByRole('checkbox', { name: /arrived late/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+});

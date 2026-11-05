@@ -725,7 +725,8 @@ a tile whose only action is Access Denied. For `inventory` the destination gate
 | -------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
 | `GET /dashboard/stats`                       | Authenticated                                                | Member, document and event counts, setup percentage                             |
 | `GET /dashboard/admin-summary`               | `settings.manage`                                            | Department-wide summary; module-owned figures are `null` when the module is off |
-| `GET /dashboard/action-items`                | Authenticated; each half gated as its owning module gates it | Unified meeting and minutes action items                                        |
+| `GET /dashboard/action-items`                | Authenticated; each half gated as its owning module gates it | Meeting and minutes action items as a list, at most 200 (`limit`, `offset`)     |
+| `GET /dashboard/action-items/page`           | As above                                                     | One page of the same items (`limit` ≤ 200, default 50; `offset`) with totals    |
 | `GET /dashboard/community-engagement`        | `events.manage`                                              | Public-outreach event and attendee counts                                       |
 | `GET/PUT/DELETE /dashboard/pulse-layout`     | Authenticated                                                | The caller's own dashboard layout                                               |
 | `PUT/DELETE /dashboard/pulse-layout/default` | `settings.manage` or `organization.update_settings`          | The department's default layout                                                 |

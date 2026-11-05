@@ -8,6 +8,7 @@ sees only approved, non-executive minutes, and everything attached to a set of
 minutes is exactly as visible as the minutes themselves.
 """
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
@@ -79,15 +80,21 @@ from app.services.minutes_record_service import (
 )
 from app.services.minutes_signature_service import MinutesSignatureService
 from app.utils import download_names
+from app.utils.minutes_election_corrections import replaced_corrections
 from app.utils.minutes_pdf import render_minutes_pdf
+from app.utils.minutes_pdf_attachments import select_for_pdf
 from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
 
 
-def _election_result_response(row, names: dict) -> MinutesElectionResultResponse:
+def _election_result_response(
+    row, names: dict, replaced: Optional[dict] = None
+) -> MinutesElectionResultResponse:
     response = MinutesElectionResultResponse.model_validate(row)
     response.captured_by_name = names.get(row.captured_by)
+    response.superseded_by_name = names.get(row.superseded_by)
+    response.replaces_superseded_at = (replaced or {}).get(row.id)
     return response
 
 
@@ -220,9 +227,11 @@ async def list_election_results(
         "Meeting minutes",
     )
     names = await service.member_names(
-        [r.captured_by for r in rows], current_user.organization_id
+        [r.captured_by for r in rows] + [r.superseded_by for r in rows],
+        current_user.organization_id,
     )
-    return [_election_result_response(r, names) for r in rows]
+    replaced = replaced_corrections(rows)
+    return [_election_result_response(r, names, replaced) for r in rows]
 
 
 @router.post(
@@ -1210,12 +1219,21 @@ async def download_minutes_pdf(
     )
     data, org, tz, local = printed.data, printed.org, printed.tz, printed.local
     status_value = printed.status_value
-    pdf = render_minutes_pdf(
+    # The files are those of minutes this caller may read, so the PDF reaches
+    # no one the attachments themselves would not (owner decision 2026-11-01).
+    contents = await MinutesRecordService(db).attachment_contents(
+        minutes, select_for_pdf(data.get("attachments") or []), organization_id
+    )
+    # Off the event loop: decoding images and copying PDF pages is CPU work,
+    # bounded by the budgets in minutes_pdf_attachments.
+    pdf = await asyncio.to_thread(
+        render_minutes_pdf,
         data,
         {
             "org_name": org.name if org else None,
             "generated_at": local(datetime.now(timezone.utc), "%B %d, %Y %I:%M %p %Z"),
         },
+        contents,
     )
 
     await log_audit_event(

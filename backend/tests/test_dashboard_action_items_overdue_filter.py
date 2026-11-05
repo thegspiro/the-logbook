@@ -30,6 +30,7 @@ def _sql(statement) -> str:
 def _empty_result():
     result = MagicMock()
     result.scalars.return_value.all.return_value = []
+    result.one.return_value = (0, 0, 0)
     return result
 
 
@@ -63,7 +64,13 @@ async def _feed(user, **kwargs):
     modules, perms, today = _patches(user)
     with modules, perms, today:
         await get_unified_action_items(None, False, db, user, **kwargs)
-    return [_sql(call.args[0]) for call in db.execute.await_args_list]
+    # The page reads only; each half also runs a totals query beside it, whose
+    # overdue tally names the predicate whatever the filters (DASH-40).
+    return [
+        sql
+        for sql in (_sql(call.args[0]) for call in db.execute.await_args_list)
+        if not sql.startswith("SELECT count(")
+    ]
 
 
 class TestOverdueFeed:
@@ -85,9 +92,11 @@ class TestOverdueFeed:
             _user("minutes.manage", "minutes.view"), overdue=True, source="minutes"
         )
         assert "meeting_minutes.organization_id = 'org-1'" in minutes_sql
-        assert "minutes_action_items.status IN ('pending', 'in_progress')" in (
-            minutes_sql
+        assert (
+            "minutes_action_items.status IN ('pending', 'in_progress', 'overdue')"
+            in minutes_sql
         )
+        assert "minutes_action_items.carried_forward_at IS NULL" in minutes_sql
         # A due date is the UTC midnight of its calendar day, so an item due
         # 4 October is not late on the evening of the 3rd in Chicago.
         assert "minutes_action_items.due_date < '2026-10-03 00:00:00" in minutes_sql
@@ -144,7 +153,8 @@ class TestCardsAndFeedAgree:
             assert predicate in meeting_count
             assert predicate in meeting_feed
         for predicate in (
-            "minutes_action_items.status IN ('pending', 'in_progress')",
+            "minutes_action_items.status IN ('pending', 'in_progress', 'overdue')",
+            "minutes_action_items.carried_forward_at IS NULL",
             "minutes_action_items.due_date < '2026-10-03 00:00:00",
         ):
             assert predicate in minutes_count

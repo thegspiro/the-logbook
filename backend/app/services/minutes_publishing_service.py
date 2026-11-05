@@ -28,6 +28,7 @@ from app.models.minute import (
     MeetingMinutes,
     MinutesMeetingType,
     MinutesPublicCopy,
+    MinutesStatus,
 )
 from app.models.user import User
 from app.services.document_service import DocumentService
@@ -291,3 +292,84 @@ class MinutesPublishingService:
         if copy is None or not self._servable(copy, settings):
             return None
         return copy
+
+
+async def refresh_published_copies(
+    db: AsyncSession,
+    minutes_id: str,
+    organization_id: UUID | str,
+    actor: Optional[UUID | str],
+) -> None:
+    """Re-render the standing published copies of approved minutes in place.
+
+    Called once an addendum has been filed with them: a late election result,
+    or the dated correction a rollback files over a result that no longer
+    stands. Readers of the library and public copies must see the correction
+    without waiting for somebody to publish again, or the copy keeps presenting
+    the withdrawn result as the department's record. An addendum is not a new
+    version, so each copy keeps its version, posting date and replacement note.
+
+    Only approved minutes whose copies are not marked as being corrected: a
+    reopened record's copies keep the adopted text until the corrected version
+    is published over them, and must never be rebuilt from a draft. A withdrawn
+    public copy stays withdrawn.
+
+    Never raises. The addendum has already committed; a copy that could not be
+    refreshed is logged, and the next publish brings it up to date.
+    """
+    # Imported here: MinuteService pulls in the election filing, which calls
+    # back into this module.
+    from app.services.minute_service import MinuteService
+
+    try:
+        minutes = await MinuteService(db).get_minutes(
+            str(minutes_id), organization_id, refresh=True
+        )
+        status = getattr(minutes, "status", None)
+        if minutes is None or getattr(status, "value", status) != (
+            MinutesStatus.APPROVED.value
+        ):
+            return
+        executive = is_executive(minutes)
+        documents = DocumentService(db)
+        if minutes.published_document_id:
+            document = await documents.get_document(
+                minutes.published_document_id, organization_id
+            )
+            if document is not None and document.under_correction_since is None:
+                settings = await load_minutes_publishing_settings(
+                    db, str(organization_id)
+                )
+                await documents.publish_minutes(
+                    minutes,
+                    organization_id,
+                    actor or document.uploaded_by or "",
+                    allow_executive=settings.library_allowed(executive),
+                    refresh_only=True,
+                )
+
+        # The same lock order as posting (MM-20): minutes row, then the copy.
+        await db.execute(
+            select(MeetingMinutes.id)
+            .where(MeetingMinutes.id == str(minutes.id))
+            .with_for_update()
+        )
+        copy = await MinutesPublishingService(db)._copy_for(
+            minutes.id, organization_id, for_update=True
+        )
+        if (
+            copy is not None
+            and copy.withdrawn_at is None
+            and copy.under_correction_since is None
+        ):
+            printed = await build_print_data(
+                db, minutes, organization_id, restricted=False
+            )
+            copy.content = narrow_for_public(printed.data)
+        await db.commit()
+    except Exception:
+        logger.exception(
+            "Published minutes not refreshed after an addendum | minutes={}",
+            minutes_id,
+        )
+        await db.rollback()

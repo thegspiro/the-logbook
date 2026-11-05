@@ -414,7 +414,9 @@ async def check_request_status(
     Pipeline progress is included if the department has enabled public visibility.
     """
     result = await db.execute(
-        select(EventRequest).where(EventRequest.status_token == token)
+        select(EventRequest).where(
+            EventRequest.status_token_hash == EventRequest.hash_status_token(token)
+        )
     )
     event_request = result.scalar_one_or_none()
     if not event_request:
@@ -519,7 +521,9 @@ async def public_cancel_request(
         )
 
     result = await db.execute(
-        select(EventRequest).where(EventRequest.status_token == token)
+        select(EventRequest).where(
+            EventRequest.status_token_hash == EventRequest.hash_status_token(token)
+        )
     )
     event_request = result.scalar_one_or_none()
     if not event_request:

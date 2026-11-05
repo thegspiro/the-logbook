@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
-import type { ActionItemSummary } from '../services/api';
+import type { ActionItemPage, ActionItemSummary } from '../services/api';
 
 const ME = 'user-me';
 
@@ -37,6 +37,15 @@ vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
 import ActionItemsPage from './ActionItemsPage';
 
+const pageOf = (items: ActionItemSummary[]): ActionItemPage => ({
+  items,
+  total: items.length,
+  open_total: items.length,
+  overdue_total: 0,
+  limit: 25,
+  offset: 0,
+});
+
 const item = (overrides: Partial<ActionItemSummary>): ActionItemSummary => ({
   id: 'a1',
   source: 'minutes',
@@ -51,12 +60,14 @@ describe('ActionItemsPage — an assignee updates their own item (W52-7)', () =>
   beforeEach(() => {
     mockGetActionItems.mockReset();
     mockUpdateActionItem.mockReset();
-    mockGetActionItems.mockResolvedValue([
-      item({ id: 'mine', assignee_id: ME, description: 'Order hose' }),
-      item({ id: 'theirs', assignee_id: 'someone-else', description: 'Fix door' }),
-      item({ id: 'by-name', assignee_name: 'Me, typed', description: 'Sweep bay' }),
-      item({ id: 'meeting', source: 'meeting', assignee_id: ME, description: 'Radio check' }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([
+        item({ id: 'mine', assignee_id: ME, description: 'Order hose' }),
+        item({ id: 'theirs', assignee_id: 'someone-else', description: 'Fix door' }),
+        item({ id: 'by-name', assignee_name: 'Me, typed', description: 'Sweep bay' }),
+        item({ id: 'meeting', source: 'meeting', assignee_id: ME, description: 'Radio check' }),
+      ])
+    );
     mockUpdateActionItem.mockResolvedValue({});
   });
 
@@ -83,9 +94,9 @@ describe('ActionItemsPage — an assignee updates their own item (W52-7)', () =>
   });
 
   it('clears the notes with an explicit null', async () => {
-    mockGetActionItems.mockResolvedValue([
-      item({ id: 'mine', assignee_id: ME, description: 'Order hose', completion_notes: 'old note' }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([item({ id: 'mine', assignee_id: ME, description: 'Order hose', completion_notes: 'old note' })])
+    );
     const user = userEvent.setup();
     renderWithRouter(<ActionItemsPage />);
 

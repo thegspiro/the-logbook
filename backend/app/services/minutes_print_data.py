@@ -20,6 +20,7 @@ from app.models.user import Organization, User
 from app.services.minutes_record_service import MinutesRecordService
 from app.services.minutes_signature_service import MinutesSignatureService
 from app.utils.minutes_attendance import effective_listing, listed_attendees
+from app.utils.minutes_election_corrections import replaced_corrections
 from app.utils.minutes_settings import attendance_listing_in
 from app.utils.motion_votes import acceptance_label, recorded_motions, vote_summary
 from app.utils.org_timezone import scheduling_timezone, stored_calendar_day
@@ -109,6 +110,7 @@ async def build_print_data(
     status_value = (
         minutes.status if isinstance(minutes.status, str) else minutes.status.value
     )
+    replaced = replaced_corrections(elections or [])
     current_revision = next(
         (r for r in (revisions or []) if r.superseded_at is None), None
     )
@@ -233,15 +235,23 @@ async def build_print_data(
                 "snapshot": r.snapshot,
                 "addendum": r.is_addendum,
                 "filed_display": local(r.created_at, "%B %d, %Y"),
+                # A rollback's dated correction: this result no longer stands.
+                "superseded_display": local(r.superseded_at, "%B %d, %Y"),
+                "superseded_reason": r.superseded_reason,
+                # A re-run's result: the correction it replaces.
+                "replaces_display": local(replaced.get(r.id), "%B %d, %Y"),
             }
             for r in (elections or [])
         ],
         "attachments": [
             {
+                "id": a.id,
                 "title": a.title,
                 "category": a.category,
                 "name": a.original_name,
                 "sha256": a.sha256,
+                "mime_type": a.mime_type,
+                "file_size": a.file_size,
             }
             for a in (attachments or [])
         ],

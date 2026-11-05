@@ -2931,6 +2931,20 @@ describe('Dashboard', () => {
       });
     });
 
+    // DASH-40: the tile counts open items, so it opens the list on the same
+    // open rule rather than on every item the department ever recorded.
+    it('opens the Action Items list on the open items the tile counts', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      mockGetAdminSummary.mockResolvedValue({ open_action_items: 4, overdue_action_items: 1 });
+      window.history.replaceState({}, '', '/dashboard?tab=department');
+      const user = userEvent.setup();
+
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: 'Action Items: 4 open, 1 overdue' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/action-items?status=open');
+    });
+
     it.each(['overview', 'organization'])('keeps legacy %s bookmarks working', async (legacyTab) => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
       window.history.replaceState({}, '', `/dashboard?tab=${legacyTab}`);

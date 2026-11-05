@@ -68,6 +68,7 @@ from app.utils.minutes_settings import (
     load_auto_file_election_results,
     load_minutes_publishing_settings,
     load_minutes_reminder_settings,
+    load_quorum_counting,
     load_signature_slots,
 )
 from app.utils.motion_votes import (
@@ -186,7 +187,11 @@ async def get_minutes_settings(
     publishing = await load_minutes_publishing_settings(
         db, str(current_user.organization_id)
     )
+    counting = await load_quorum_counting(db, str(current_user.organization_id))
     return MinutesReminderSettingsResponse(
+        quorum_counts_late=counting.late,
+        quorum_counts_left_early=counting.left_early,
+        proxy_attendance=counting.proxies,
         attendance_listing=await load_attendance_listing(
             db, str(current_user.organization_id)
         ),
@@ -318,16 +323,20 @@ async def list_templates(
 @router.get("/action-item-assignees", response_model=list[ActionItemAssignee])
 async def list_action_item_assignees(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(
+        require_permission("minutes.manage", "meetings.manage")
+    ),
 ):
     """
     The members an action item may be assigned to: every active member
 
     Names and ids only — the picker on the minutes page needs nothing more,
-    and its users may not hold the member-list permissions.
+    and its users may not hold the member-list permissions. ``meetings.manage``
+    reads it too: the Action Items screen assigns meeting items from the same
+    list.
 
     **Authentication required**
-    **Requires permission: minutes.manage**
+    **Requires permission: minutes.manage or meetings.manage**
     """
     return await MinuteService(db).list_assignable_members(current_user.organization_id)
 

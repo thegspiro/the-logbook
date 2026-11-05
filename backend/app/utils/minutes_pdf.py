@@ -14,7 +14,7 @@ be unit-tested without a database (same convention as
 
 import html
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -22,7 +22,9 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     HRFlowable,
+    Image,
     KeepTogether,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -30,6 +32,12 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.utils.minutes_pdf_attachments import (
+    IMAGE,
+    PreparedAttachment,
+    append_pdfs,
+    prepare,
+)
 from app.utils.rich_text import (
     FORMAT_HTML,
     html_to_pdf_blocks,
@@ -49,8 +57,17 @@ _STATUS_LABELS = {
     "excused": "Excused",
     "absent": "Absent",
     "guest": "Guest",
+    "proxy": "Represented by proxy",
 }
-_STATUS_ORDER = ["present", "late", "left_early", "excused", "absent", "guest"]
+_STATUS_ORDER = [
+    "present",
+    "late",
+    "left_early",
+    "proxy",
+    "excused",
+    "absent",
+    "guest",
+]
 
 
 def _esc(value: Any) -> str:
@@ -81,6 +98,37 @@ def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
     return Table(data, colWidths=col_widths, repeatRows=1, style=style)
 
 
+def _correction_notes(election: Dict[str, Any], styles: Any) -> List[Any]:
+    """A rollback's dated correction over a result, and the re-run's link to it.
+
+    The superseded result is printed in full beneath its correction: the
+    minutes recorded it, and a record is corrected, never rewritten.
+    """
+    out: List[Any] = []
+    superseded = election.get("superseded_display")
+    if superseded:
+        reason = election.get("superseded_reason")
+        out.append(
+            Paragraph(
+                f"<b>Correction filed {_esc(superseded)}: this result has been "
+                "superseded.</b> The election was rolled back and reopened, so "
+                "the result below no longer stands. It is kept as the minutes "
+                "recorded it." + (f" Reason given: {_text(reason)}" if reason else ""),
+                styles["Normal"],
+            )
+        )
+    replaces = election.get("replaces_display")
+    if replaces:
+        out.append(
+            Paragraph(
+                "<i>Corrected result: replaces the result superseded on "
+                f"{_esc(replaces)}.</i>",
+                styles["Normal"],
+            )
+        )
+    return out
+
+
 def _election_block(
     election: Dict[str, Any], styles: Any, section_style: ParagraphStyle
 ) -> List[Any]:
@@ -99,6 +147,7 @@ def _election_block(
                 styles["Normal"],
             )
         )
+    out.extend(_correction_notes(election, styles))
     closed = election.get("closed_display")
     facts = [
         f"Eligible voters: {snapshot.get('total_eligible_voters', '—')}",
@@ -147,7 +196,40 @@ def _election_block(
     return out
 
 
-def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
+def _image_pages(
+    attachments: List[Dict[str, Any]],
+    prepared: Mapping[str, PreparedAttachment],
+    heading_style: ParagraphStyle,
+) -> List[Any]:
+    """Each image attachment on its own, scaled to fit the page."""
+    max_width = letter[0] - 1.4 * inch
+    max_height = letter[1] - 1.35 * inch - 48
+    flow: List[Any] = []
+    for att in attachments:
+        entry = prepared.get(str(att.get("id")))
+        if entry is None or entry.kind != IMAGE or not entry.image:
+            continue
+        # Drawn no larger than at 96 dpi, so a small photo is not blown up.
+        natural_w = entry.width * 72 / 96
+        natural_h = entry.height * 72 / 96
+        scale = min(max_width / natural_w, max_height / natural_h, 1.0)
+        flow.append(PageBreak())
+        flow.append(Paragraph(f"Attachment: {_esc(att.get('title'))}", heading_style))
+        flow.append(
+            Image(
+                BytesIO(entry.image),
+                width=natural_w * scale,
+                height=natural_h * scale,
+            )
+        )
+    return flow
+
+
+def render_minutes_pdf(
+    data: Dict[str, Any],
+    meta: Dict[str, Any],
+    attachment_contents: Optional[Mapping[str, bytes]] = None,
+) -> BytesIO:
     """Render the minutes, returning a BytesIO at position 0.
 
     *data* — ``title``, ``meeting_type_display``, ``meeting_date_display``,
@@ -160,6 +242,12 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     ``header`` and ``footer`` configs.
 
     *meta* — ``org_name``, ``generated_at``.
+
+    *attachment_contents* — the bytes of the attachments to embed, keyed by
+    attachment id, read for the ids ``minutes_pdf_attachments.select_for_pdf``
+    chose. Images are drawn after the signatures, PDFs appended after the
+    minutes, and every other file is listed (owner decision 2026-11-01). Left
+    out, the attachments are listed only.
     """
     header: Dict[str, Any] = data.get("header") or {}
     footer: Dict[str, Any] = data.get("footer") or {}
@@ -394,20 +482,26 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
 
     # ── Attachments ──────────────────────────────────────────────────
     attachments = data.get("attachments") or []
+    prepared = prepare(attachments, attachment_contents or {}) if attachments else {}
     if attachments:
         story.append(Paragraph("Attachments", section_style))
-        rows = [["Title", "Kind", "File", "SHA-256"]]
+        rows = [["Title", "Kind", "File", "SHA-256", "In this PDF"]]
         for att in attachments:
+            entry = prepared.get(str(att.get("id")))
             rows.append(
                 [
                     Paragraph(_esc(att.get("title")), styles["Normal"]),
                     _esc(str(att.get("category") or "").replace("_", " ")),
                     Paragraph(_esc(att.get("name")), styles["Normal"]),
                     _esc(str(att.get("sha256") or "")[:16] + "…"),
+                    Paragraph(_esc(entry.note if entry else ""), styles["Normal"]),
                 ]
             )
         story.append(
-            _styled_table(rows, [2.4 * inch, 1.2 * inch, 2.2 * inch, 1.3 * inch])
+            _styled_table(
+                rows,
+                [1.7 * inch, 0.9 * inch, 1.6 * inch, 1.1 * inch, 1.8 * inch],
+            )
         )
 
     # ── Approval and signatures ──────────────────────────────────────
@@ -489,6 +583,9 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     )
     story.append(KeepTogether(sign))
 
+    # ── Image attachments, after the record they belong to ──────────
+    story.extend(_image_pages(attachments, prepared, section_style))
+
     footer_left = " · ".join(
         part
         for part in (
@@ -523,5 +620,9 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)
+    if prepared:
+        # PDF attachments go after the minutes, page for page. They carry no
+        # minutes footer: the version and hash above are the record's own.
+        return BytesIO(append_pdfs(buf.getvalue(), attachments, prepared))
     buf.seek(0)
     return buf

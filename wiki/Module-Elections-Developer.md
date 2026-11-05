@@ -68,7 +68,7 @@ PATCH  /elections/{id}                              # Update election; field all
 DELETE /elections/{id}                              # Delete election; reason required unless draft (manage)
 POST   /elections/{id}/open                         # Open voting (manage)
 POST   /elections/{id}/close                        # Close voting; evaluates runoffs (manage)
-POST   /elections/{id}/rollback                     # Roll back status, guarded (manage)
+POST   /elections/{id}/rollback                     # Roll back status, guarded; closed → open supersedes a filed minutes result with a dated correction (manage)
 POST   /elections/{id}/clone                        # Fresh draft from this election's setup (manage)
 GET    /elections/settings                          # Election settings: proxy voting, features (manage)
 PATCH  /elections/settings                          # Update election settings (manage)
@@ -120,13 +120,11 @@ GET    /elections/{id}/forensics                    # Forensic report (manage)
 DELETE /elections/{id}/votes/{vote_id}              # Void a vote; ?reason= 3-500 chars (manage)
 
 # Ballot email and communication
-POST   /elections/{id}/send-ballot                  # Email ballots with unique tokens; open elections only synchronous, kept for API callers (manage)
-POST   /elections/{id}/ballot-send-jobs             # Queue the same send in the background; 202, 409 while any send runs (manage)
+POST   /elections/{id}/ballot-send-jobs             # Queue ballot emails with unique tokens, open elections only; 202, 409 while any send runs (manage)
 GET    /elections/{id}/ballot-send-jobs/{job_id}    # Status of a queued ballot, reminder or package send and its outcome (manage)
 POST   /elections/{id}/send-test-ballot             # Test ballot to yourself; excluded from results (manage)
 GET    /elections/{id}/non-voters                   # Eligible voters who haven't voted (manage)
-POST   /elections/{id}/remind-non-voters            # Reminder with fresh link to non-voters only; synchronous, kept for API callers (manage)
-POST   /elections/{id}/reminder-send-jobs           # Queue the same reminder in the background; 202, 409 while any send runs (manage)
+POST   /elections/{id}/reminder-send-jobs           # Queue a reminder with a fresh link to non-voters only; 202, 409 while any send runs (manage)
 GET    /elections/{id}/package-recipients           # Prefill list for the pre-meeting package (manage)
 GET    /elections/{id}/package-pdf                  # Pre-meeting package PDF; variant=member|full (manage)
 POST   /elections/{id}/send-package                 # Email pre-meeting package, one message per address; synchronous, kept for API callers (manage)
@@ -183,16 +181,33 @@ needs `allow_over_count`, which is audited. The recording officer cannot
 attest their own batch, and each officer attests a batch once. Voiding a
 batch requires a reason.
 
-**Reminders.** `remind-non-voters` sends a fresh ballot link to eligible
+**Reminders.** A reminder sends a fresh ballot link to eligible
 members who have not voted, with a one-hour cooldown that starts only when
 a reminder is delivered.
 The page queues it through `reminder-send-jobs` and polls the job, as it
-does for ballot sends; the two kinds share the `ballot_send_jobs` table and
+does for ballot sends (the synchronous `send-ballot` and `remind-non-voters`
+routes were removed on 2026-11-05, owner decision 2026-11-01: two calls to
+either could race past the in-progress check); the two kinds share the `ballot_send_jobs` table and
 the one-send-at-a-time guard.
 The election lifecycle task queues its own sends the same way — the ballots
 after an automatic open, and the pre-close reminder — so they share that
 guard too, and the task never waits on a send. An automatic reminder that
 fails for anyone emails the managers once per election.
+
+**Rollback and filed minutes results.** `rollback_election` (closed → open)
+calls `supersede_filed_results` (`app/services/minutes_election_filing.py`)
+inside its own transaction. A result in circulated or adopted minutes, or one
+filed as an addendum, keeps its row and snapshot and gains `superseded_at`,
+`superseded_reason` and `superseded_by`; its `current_election_id` goes NULL.
+A draft's own result is deleted. The unique key on `minutes_election_results`
+is (`minutes_id`, `current_election_id`), so a superseded result does not block
+the re-run's result from being filed, while two standing results for one
+election cannot exist. `replaced_corrections` (`app/utils/minutes_election_corrections.py`)
+links a later result to the correction it replaces, for the screen, the PDF
+and both published copies, which are re-rendered in place
+(`refresh_published_copies`) after a correction or any later addendum. Only a
+standing result is touched, so a repeated call is a no-op. Owner decision
+2026-11-01 (ELEC-49).
 
 **Saved ballot templates** store reusable ballot configuration only —
 `name` (1–200), `description`, `ballot_items` (1–250), `voting_method` and

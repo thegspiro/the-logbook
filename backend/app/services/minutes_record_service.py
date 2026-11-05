@@ -57,6 +57,7 @@ from app.services.file_storage_service import (
 from app.services.minute_service import MinuteService
 from app.utils import download_names
 from app.utils.minutes_attendance import normalize_attendee
+from app.utils.minutes_election_corrections import filing_order
 from app.utils.minutes_snapshot import (
     build_snapshot,
     content_hash,
@@ -322,10 +323,12 @@ class MinutesRecordService:
         )
         if minutes is None:
             return None
+        # A superseded result (its election was rolled back) does not count:
+        # the re-run's result may be filed beside it.
         filed = {
-            r.election_id
+            r.current_election_id
             for r in await self._election_rows(minutes.id)
-            if r.election_id
+            if r.current_election_id
         }
         rows = await self.db.execute(
             select(Election)
@@ -369,11 +372,11 @@ class MinutesRecordService:
 
     async def _election_rows(self, minutes_id: str) -> List[MinutesElectionResult]:
         result = await self.db.execute(
-            select(MinutesElectionResult)
-            .where(MinutesElectionResult.minutes_id == str(minutes_id))
-            .order_by(MinutesElectionResult.created_at, MinutesElectionResult.id)
+            select(MinutesElectionResult).where(
+                MinutesElectionResult.minutes_id == str(minutes_id)
+            )
         )
-        return list(result.scalars().all())
+        return sorted(result.scalars().all(), key=filing_order)
 
     async def list_election_results(
         self, minutes_id: str, organization_id: UUID | str, restricted: bool = False
@@ -410,12 +413,18 @@ class MinutesRecordService:
         await assert_in_org(
             self.db, Election, election_id, organization_id, label="election"
         )
+        # Locked: a rollback holds the election row while it supersedes the
+        # results filed for it, so a filing cannot read the election as closed
+        # and then land a stale result beside the rollback's correction.
         election = (
             await self.db.execute(
-                select(Election).where(
+                select(Election)
+                .where(
                     Election.id == str(election_id),
                     Election.organization_id == str(organization_id),
                 )
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one()
         if election.status != ElectionStatus.CLOSED:
@@ -423,10 +432,12 @@ class MinutesRecordService:
                 "Only a closed election has a result to file with the minutes"
             )
 
+        # The standing result only: one superseded by a rollback's correction
+        # stays on file and does not stop the re-run's result being filed.
         existing = await self.db.execute(
             select(MinutesElectionResult.id).where(
                 MinutesElectionResult.minutes_id == minutes.id,
-                MinutesElectionResult.election_id == election.id,
+                MinutesElectionResult.current_election_id == election.id,
             )
         )
         if existing.first() is not None:
@@ -453,11 +464,22 @@ class MinutesRecordService:
             election_closed_at=election.closed_at,
             snapshot=results.model_dump(mode="json"),
             is_addendum=is_addendum,
+            current_election_id=election.id,
             captured_by=str(captured_by) if captured_by else None,
         )
         self.db.add(row)
         await self.db.commit()
         await self.db.refresh(row)
+        if is_addendum:
+            # Imported here: the publishing service builds on this one.
+            from app.services.minutes_publishing_service import (
+                refresh_published_copies,
+            )
+
+            await refresh_published_copies(
+                self.db, minutes.id, organization_id, captured_by
+            )
+            await self.db.refresh(row)
         return row
 
     async def remove_election_result(
@@ -619,6 +641,58 @@ class MinutesRecordService:
             ),
             media_type=attachment.mime_type or "application/octet-stream",
         )
+
+    async def attachment_contents(
+        self,
+        minutes: MeetingMinutes,
+        attachment_ids: Sequence[str],
+        organization_id: UUID | str,
+    ) -> Dict[str, bytes]:
+        """The stored bytes of *attachment_ids*, for embedding in the minutes PDF.
+
+        The caller has already authorized the minutes, and chose the ids within
+        the PDF's size budget. A file that is missing, outside the
+        organization's storage or unreadable is left out, and the PDF lists it
+        as not included rather than failing.
+        """
+        if not attachment_ids:
+            return {}
+        rows = (
+            (
+                await self.db.execute(
+                    select(MinutesAttachment).where(
+                        MinutesAttachment.minutes_id == minutes.id,
+                        MinutesAttachment.organization_id == str(organization_id),
+                        MinutesAttachment.id.in_([str(i) for i in attachment_ids]),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        contents: Dict[str, bytes] = {}
+        for attachment in rows:
+            path = file_storage.resolve(
+                attachment.file_path,
+                str(organization_id),
+                StorageArea.MINUTES_ATTACHMENTS,
+            )
+            if path is None:
+                logger.warning(
+                    "Left minutes attachment {} out of the PDF: its stored path "
+                    "is outside the organization's storage",
+                    attachment.id,
+                )
+                continue
+            try:
+                contents[attachment.id] = await file_storage.read_bytes(path)
+            except Exception as exc:
+                logger.warning(
+                    "Left minutes attachment {} out of the PDF: {}",
+                    attachment.id,
+                    exc,
+                )
+        return contents
 
     async def delete_attachment(
         self, minutes_id: str, attachment_id: str, organization_id: UUID | str

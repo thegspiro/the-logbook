@@ -24,6 +24,7 @@ from app.models.document import (
 )
 from app.models.minute import (
     MeetingMinutes,
+    MinutesAttachment,
     MinutesClosedSession,
     MinutesElectionResult,
     MinutesMeetingType,
@@ -32,6 +33,7 @@ from app.models.minute import (
 )
 from app.models.user import Organization
 from app.utils.minutes_attendance import derive_status, effective_listing, is_listed
+from app.utils.minutes_election_corrections import replaced_corrections
 from app.utils.minutes_settings import attendance_listing_in
 from app.utils.motion_votes import acceptance_label, recorded_motions, vote_summary
 from app.utils.org_timezone import stored_calendar_day
@@ -173,6 +175,7 @@ class DocumentService:
         published_by: UUID | str,
         *,
         allow_executive: bool = False,
+        refresh_only: bool = False,
     ) -> Document:
         """
         Publish approved meeting minutes as a formatted HTML document
@@ -181,6 +184,12 @@ class DocumentService:
         Executive-session minutes are filed only when the department allows it
         (``allow_executive``, from its publishing settings), and then into a
         leadership-only folder, never the one every member can read.
+
+        ``refresh_only`` re-renders the copy already published, in place, to
+        carry an addendum filed since (a late election result, or the dated
+        correction a rollback files). An addendum is not a new version, so the
+        copy keeps the version, publication date and replacement note it had;
+        with no copy published, nothing is created and ValueError is raised.
         """
         if minutes.status != MinutesStatus.APPROVED.value:
             raise ValueError("Only approved minutes can be published")
@@ -262,11 +271,33 @@ class DocumentService:
             minutes.attendance_listing,
             attendance_listing_in(org.settings if org else None),
         )
+        # Owner decision 2026-11-01: the published copy lists the files filed
+        # with the minutes, and its readers can open them through it
+        # (``GET /documents/{id}/minutes-attachments``). Stamping each one is
+        # what lets that route serve exactly the files this copy lists, so a
+        # file filed later (a signed copy) waits for the next publish.
+        attachments = (
+            (
+                await self.db.execute(
+                    select(MinutesAttachment)
+                    .where(
+                        MinutesAttachment.minutes_id == minutes.id,
+                        MinutesAttachment.organization_id == str(organization_id),
+                    )
+                    .order_by(MinutesAttachment.uploaded_at, MinutesAttachment.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        published_at = datetime.now(timezone.utc)
+        for attachment in attachments:
+            attachment.published_at = published_at
         html = self._generate_minutes_html(
-            minutes, tz_name, filed_results, sessions, listing
+            minutes, tz_name, filed_results, sessions, listing, attachments
         )
         version = await self._current_revision_version(minutes.id, organization_id)
-        note = self._replacement_note(minutes, tz_name)
+        note = None if refresh_only else self._replacement_note(minutes, tz_name)
         if note:
             html = note + html
 
@@ -276,6 +307,8 @@ class DocumentService:
                 minutes.published_document_id, organization_id
             )
             if existing:
+                if refresh_only:
+                    html = self._standing_note(existing.content_html) + html
                 # Republishing replaces the document in place, so links to it
                 # stay valid, and ends any correction notice a reopen set.
                 existing.content_html = html
@@ -286,11 +319,14 @@ class DocumentService:
                     # Closed-session copies stay in the restricted folder even if
                     # someone moved the document out of it.
                     existing.folder_id = folder.id
-                minutes.published_revision_version = version
-                minutes.published_at = datetime.now(timezone.utc)
+                if not refresh_only:
+                    minutes.published_revision_version = version
+                    minutes.published_at = datetime.now(timezone.utc)
                 await self.db.commit()
                 await self.db.refresh(existing)
                 return existing
+        if refresh_only:
+            raise ValueError("These minutes have no published copy to refresh")
 
         # Create the document
         meeting_date = (
@@ -327,6 +363,40 @@ class DocumentService:
         await self.db.refresh(doc)
         return doc
 
+    @staticmethod
+    def _attachments_html(attachments: Sequence[MinutesAttachment]) -> List[str]:
+        """The files filed with the minutes, by name.
+
+        The bytes are not inlined: a reader opens each from the published
+        document's attachment list, which serves them under this document's
+        folder rules.
+        """
+        if not attachments:
+            return []
+        cell = "padding:6px; text-align:left; border:1px solid #ddd;"
+        parts = [
+            '<div class="minutes-attachments" style="margin-bottom:24px;">',
+            '<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; '
+            f'padding-bottom:4px;">Attachments ({len(attachments)})</h4>',
+            '<table style="width:100%; border-collapse:collapse; font-size:13px;">',
+            f'<tr style="background:#f3f4f6;"><th style="{cell}">Title</th>'
+            f'<th style="{cell}">Kind</th><th style="{cell}">File</th></tr>',
+        ]
+        for attachment in attachments:
+            kind = str(attachment.category or "").replace("_", " ")
+            parts.append(
+                f'<tr><td style="{cell}">{escape(attachment.title)}</td>'
+                f'<td style="{cell}">{escape(kind)}</td>'
+                f'<td style="{cell}">{escape(attachment.original_name)}</td></tr>'
+            )
+        parts.append("</table>")
+        parts.append(
+            '<p style="font-size:12px; color:#666;">Open these from the '
+            "document's attachments in Documents.</p>"
+        )
+        parts.append("</div>")
+        return parts
+
     async def _current_revision_version(
         self, minutes_id: str, organization_id: UUID | str
     ) -> Optional[int]:
@@ -344,6 +414,19 @@ class DocumentService:
             )
         ).scalar_one_or_none()
         return revision
+
+    @staticmethod
+    def _standing_note(html: Optional[str]) -> str:
+        """The replacement note a published copy already opens with, if any.
+
+        It cannot be rebuilt: after a publish the minutes record only the
+        version just published, not the one it replaced.
+        """
+        marker = '<div class="minutes-replacement-note"'
+        if not html or not html.startswith(marker):
+            return ""
+        end = html.find("</div>")
+        return html[: end + len("</div>")] if end != -1 else ""
 
     @staticmethod
     def _replacement_note(
@@ -493,9 +576,18 @@ class DocumentService:
             parts.append("</div>")
         return parts
 
-    def _election_results_html(self, results: Sequence[MinutesElectionResult]) -> list:
+    def _election_results_html(
+        self,
+        results: Sequence[MinutesElectionResult],
+        tz_name: Optional[str] = None,
+    ) -> list:
         """The election results filed with the minutes, as published HTML."""
         parts: list = []
+        replaced = replaced_corrections(results)
+
+        def day(value: datetime) -> str:
+            return escape(self._to_local(value, tz_name).strftime("%B %d, %Y"))
+
         for filed in results:
             snapshot = filed.snapshot or {}
             parts.append('<div class="minutes-election" style="margin-bottom:24px;">')
@@ -509,6 +601,29 @@ class DocumentService:
                     "these minutes were circulated. It records the final result of an "
                     "election held at this meeting that closed later; it is not part "
                     "of the text that was adopted.</em></p>"
+                )
+            # A rollback's dated correction over the result, which stays as it
+            # was recorded; and a re-run's result, linked to the one it replaces.
+            superseded_at = getattr(filed, "superseded_at", None)
+            if superseded_at is not None:
+                reason = getattr(filed, "superseded_reason", None)
+                parts.append(
+                    '<div class="minutes-election-correction" style="margin:8px 0; '
+                    "padding:8px 12px; border-left:4px solid #991b1b; "
+                    'background:#fef2f2; font-size:13px; color:#333;">'
+                    f"<strong>Correction filed {day(superseded_at)}: this result "
+                    "has been superseded.</strong> The election was rolled back and "
+                    "reopened, so the result below no longer stands. It is kept as "
+                    "the minutes recorded it."
+                    + (f" Reason given: {escape(reason)}" if reason else "")
+                    + "</div>"
+                )
+            replaces = replaced.get(getattr(filed, "id", None) or "")
+            if replaces is not None:
+                parts.append(
+                    '<p style="font-size:12px; color:#666;"><em>Corrected result: '
+                    f"replaces the result superseded on {day(replaces)}."
+                    "</em></p>"
                 )
             facts = [
                 (
@@ -580,6 +695,7 @@ class DocumentService:
         election_results: Sequence[MinutesElectionResult] = (),
         closed_sessions: Sequence[MinutesClosedSession] = (),
         attendance_listing: str = "all",
+        attachments: Sequence[MinutesAttachment] = (),
     ) -> str:
         """Generate formatted HTML for published meeting minutes.
 
@@ -672,8 +788,8 @@ class DocumentService:
                 '<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Attendance</h4>'
             )
             # Grouped by the roll-call status, not by the derived ``present``
-            # flag: that flag means "counted toward quorum", which would file
-            # an excused member and a guest under Absent.
+            # flag: that flag means "in the room", which would file an excused
+            # member, a proxy and a guest under Absent.
             by_status: dict = {}
             for entry in minutes.attendees:
                 if is_listed(derive_status(entry), attendance_listing):
@@ -685,6 +801,11 @@ class DocumentService:
             ]
             for label, entries, muted in (
                 ("Present", in_room, False),
+                (
+                    "Represented by proxy",
+                    [(e, "proxy") for e in by_status.get("proxy", [])],
+                    False,
+                ),
                 (
                     "Excused",
                     [(e, "excused") for e in by_status.get("excused", [])],
@@ -799,7 +920,9 @@ class DocumentService:
         parts.extend(self._closed_sessions_html(closed_sessions, tz_name))
 
         # Election results filed with the minutes
-        parts.extend(self._election_results_html(election_results))
+        parts.extend(self._election_results_html(election_results, tz_name))
+
+        parts.extend(self._attachments_html(attachments))
 
         # Action Items
         if minutes.action_items:

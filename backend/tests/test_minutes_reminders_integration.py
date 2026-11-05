@@ -437,6 +437,9 @@ class TestSettingsEndpoint:
             "overdue_repeat_days": 7,
             "open_items_digest": True,
             "auto_file_election_results": True,
+            "quorum_counts_late": True,
+            "quorum_counts_left_early": True,
+            "proxy_attendance": False,
         }
 
     async def test_it_reports_what_the_department_chose(self, world):
@@ -462,6 +465,9 @@ class TestSettingsEndpoint:
             "overdue_repeat_days": 14,
             "open_items_digest": False,
             "auto_file_election_results": True,
+            "quorum_counts_late": True,
+            "quorum_counts_left_early": True,
+            "proxy_attendance": False,
         }
 
     async def test_a_member_who_does_not_manage_minutes_is_refused(self, world):

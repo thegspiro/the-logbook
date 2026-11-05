@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.utils.minutes_attendance import counts_toward_quorum
+from app.utils.minutes_settings import quorum_counting_in
 
 
 class QuorumService:
@@ -24,9 +25,20 @@ class QuorumService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_org_quorum_config(self, organization_id: UUID | str) -> Dict:
+    async def _org_settings(self, organization_id: UUID | str) -> Optional[Dict]:
+        """The organization's settings JSON, or None when there is no such org."""
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = result.scalar_one_or_none()
+        if not org:
+            return None
+        return org.settings or {}
+
+    @staticmethod
+    def _quorum_config_in(settings: Optional[Dict]) -> Dict:
         """
-        Get the organization's default quorum configuration.
+        The organization's default quorum configuration.
 
         Stored in organization.settings.quorum_config:
         {
@@ -36,14 +48,14 @@ class QuorumService:
             "count_method": "checked_in" # "checked_in" (present at this meeting)
         }
         """
-        result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
-        org = result.scalar_one_or_none()
-        if not org:
+        if settings is None:
             return {"enabled": False}
-        config: Dict = (org.settings or {}).get("quorum_config", {"enabled": False})
+        config: Dict = settings.get("quorum_config", {"enabled": False})
         return config
+
+    async def get_org_quorum_config(self, organization_id: UUID | str) -> Dict:
+        """Get the organization's default quorum configuration."""
+        return self._quorum_config_in(await self._org_settings(organization_id))
 
     async def get_active_member_count(self, organization_id: UUID | str) -> int:
         """Count active members in the organization (denominator for percentage quorum)."""
@@ -94,20 +106,28 @@ class QuorumService:
         if not minutes:
             return False, 0, 0, "Meeting not found"
 
+        # One read of the department's settings serves both the default
+        # quorum rule and who counts toward it.
+        org_settings = await self._org_settings(organization_id)
+
         # Determine quorum config: per-meeting override > org default
         if minutes.quorum_type and minutes.quorum_threshold is not None:
             q_type = minutes.quorum_type
             q_threshold = minutes.quorum_threshold
         else:
-            config = await self.get_org_quorum_config(organization_id)
+            config = self._quorum_config_in(org_settings)
             if not config.get("enabled"):
                 return True, 0, 0, "Quorum checking not enabled"
             q_type = config.get("type", "percentage")
             q_threshold = config.get("threshold", 50.0)
 
-        # Count present attendees
+        # Who counts is the department's choice (late arrivals, early leavers,
+        # proxies); absent settings count as before the choice existed.
+        counting = quorum_counting_in(org_settings)
         attendees = minutes.attendees or []
-        present_count = sum(1 for a in attendees if counts_toward_quorum(a))
+        present_count = sum(
+            1 for a in attendees if counts_toward_quorum(a, counting.statuses)
+        )
 
         # Calculate required count
         if q_type == "count":
@@ -126,6 +146,9 @@ class QuorumService:
             description = (
                 f"{q_threshold}% of {total_active} active members = {required} required"
             )
+
+        if counting.note():
+            description = f"{description} ({counting.note()})"
 
         quorum_met = present_count >= required
 

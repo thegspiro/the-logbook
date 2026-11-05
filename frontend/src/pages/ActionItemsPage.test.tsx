@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
 import { renderWithRouter } from '../test/utils';
-import type { ActionItemSummary } from '../services/api';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
+import type { ActionItemPage, ActionItemSummary } from '../services/api';
 
 const mockGetActionItems = vi.fn();
 vi.mock('../services/api', () => ({
@@ -24,10 +25,24 @@ const LocationProbe: React.FC = () => <output data-testid="location">{useLocatio
 const renderAt = (url: string) =>
   render(
     <MemoryRouter initialEntries={[url]}>
-      <ActionItemsPage />
-      <LocationProbe />
+      <ConfirmProvider>
+        <ActionItemsPage />
+        <LocationProbe />
+      </ConfirmProvider>
     </MemoryRouter>
   );
+
+// The feed answers a page (DASH-40); these tests are about what is asked for,
+// so its totals simply count the rows.
+const pageOf = (items: ActionItemSummary[]): ActionItemPage => ({
+  items,
+  total: items.length,
+  open_total: items.length,
+  overdue_total: 0,
+  limit: 25,
+  offset: 0,
+});
+const PAGE_ONE = { limit: 25, offset: 0 };
 
 const item = (overrides: Partial<ActionItemSummary>): ActionItemSummary => ({
   id: 'a1',
@@ -42,7 +57,7 @@ const item = (overrides: Partial<ActionItemSummary>): ActionItemSummary => ({
 describe('ActionItemsPage', () => {
   beforeEach(() => {
     mockGetActionItems.mockReset();
-    mockGetActionItems.mockResolvedValue([]);
+    mockGetActionItems.mockResolvedValue(pageOf([]));
   });
 
   it('explains where action items come from when nothing is filtered', async () => {
@@ -56,16 +71,18 @@ describe('ActionItemsPage', () => {
     await screen.findByText('No action items');
     await userEvent.click(screen.getByRole('checkbox', { name: 'Assigned to me' }));
     expect(await screen.findByText('No matching action items')).toBeInTheDocument();
-    expect(screen.getByText('Choose a different status or clear "Assigned to me" to see more.')).toBeInTheDocument();
-    expect(mockGetActionItems).toHaveBeenLastCalledWith({ assigned_to_me: true });
+    expect(screen.getByText('Choose a different filter or clear "Assigned to me" to see more.')).toBeInTheDocument();
+    expect(mockGetActionItems).toHaveBeenLastCalledWith({ assigned_to_me: true, ...PAGE_ONE });
   });
 
   it('shows a meeting item priority as a word, not its stored number', async () => {
-    mockGetActionItems.mockResolvedValue([
-      item({ id: 'a1', source: 'meeting', priority: '2', description: 'Order radios' }),
-      item({ id: 'a2', source: 'meeting', priority: '1', description: 'Fix door' }),
-      item({ id: 'a3', source: 'minutes', priority: 'medium', description: 'Update roster' }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([
+        item({ id: 'a1', source: 'meeting', priority: '2', description: 'Order radios' }),
+        item({ id: 'a2', source: 'meeting', priority: '1', description: 'Fix door' }),
+        item({ id: 'a3', source: 'minutes', priority: 'medium', description: 'Update roster' }),
+      ])
+    );
     renderWithRouter(<ActionItemsPage />);
     expect(await screen.findByText('urgent')).toBeInTheDocument();
     expect(screen.getByText('high')).toBeInTheDocument();
@@ -78,15 +95,17 @@ describe('ActionItemsPage opened from a dashboard card (DASH-37)', () => {
   beforeEach(() => {
     mockGetActionItems.mockReset();
     // The server applies the overdue predicate; it answers with what it kept.
-    mockGetActionItems.mockResolvedValue([
-      item({
-        id: 'a1',
-        source: 'minutes',
-        status: 'pending',
-        description: 'Order radios',
-        due_date: '2026-09-01T00:00:00+00:00',
-      }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([
+        item({
+          id: 'a1',
+          source: 'minutes',
+          status: 'pending',
+          description: 'Order radios',
+          due_date: '2026-09-01T00:00:00+00:00',
+        }),
+      ])
+    );
   });
 
   it('asks for overdue minutes items and shows both filters as set', async () => {
@@ -94,19 +113,21 @@ describe('ActionItemsPage opened from a dashboard card (DASH-37)', () => {
 
     expect(await screen.findByText('Order radios')).toBeInTheDocument();
     expect(mockGetActionItems).toHaveBeenCalledTimes(1);
-    expect(mockGetActionItems).toHaveBeenCalledWith({ overdue: true, source: 'minutes' });
+    expect(mockGetActionItems).toHaveBeenCalledWith({ overdue: true, source: 'minutes', ...PAGE_ONE });
     expect(screen.getByLabelText('Filter action items by status')).toHaveValue('overdue');
     expect(screen.getByLabelText('Filter action items by source')).toHaveValue('minutes');
   });
 
   it('asks for overdue meeting items from the meeting card', async () => {
-    mockGetActionItems.mockResolvedValue([
-      item({ id: 'a2', source: 'meeting', status: 'open', description: 'Fix bay door', due_date: '2026-09-01' }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([
+        item({ id: 'a2', source: 'meeting', status: 'open', description: 'Fix bay door', due_date: '2026-09-01' }),
+      ])
+    );
     renderAt('/action-items?source=meeting&status=overdue');
 
     expect(await screen.findByText('Fix bay door')).toBeInTheDocument();
-    expect(mockGetActionItems).toHaveBeenCalledWith({ overdue: true, source: 'meeting' });
+    expect(mockGetActionItems).toHaveBeenCalledWith({ overdue: true, source: 'meeting', ...PAGE_ONE });
     expect(screen.getByLabelText('Filter action items by source')).toHaveValue('meeting');
   });
 
@@ -114,7 +135,7 @@ describe('ActionItemsPage opened from a dashboard card (DASH-37)', () => {
     renderAt('/action-items?status=overdue');
 
     await screen.findByText('Order radios');
-    expect(mockGetActionItems).toHaveBeenCalledWith({ overdue: true });
+    expect(mockGetActionItems).toHaveBeenCalledWith({ overdue: true, ...PAGE_ONE });
     expect(screen.getByLabelText('Filter action items by source')).toHaveValue('');
   });
 
@@ -123,11 +144,11 @@ describe('ActionItemsPage opened from a dashboard card (DASH-37)', () => {
     await screen.findByText('Order radios');
 
     await userEvent.selectOptions(screen.getByLabelText('Filter action items by status'), '');
-    expect(mockGetActionItems).toHaveBeenLastCalledWith({ source: 'minutes' });
+    expect(mockGetActionItems).toHaveBeenLastCalledWith({ source: 'minutes', ...PAGE_ONE });
     expect(screen.getByTestId('location')).toHaveTextContent('?source=minutes');
 
     await userEvent.selectOptions(screen.getByLabelText('Filter action items by source'), '');
-    expect(mockGetActionItems).toHaveBeenLastCalledWith({});
+    expect(mockGetActionItems).toHaveBeenLastCalledWith(PAGE_ONE);
     expect(screen.getByTestId('location')).toBeEmptyDOMElement();
   });
 
@@ -135,7 +156,7 @@ describe('ActionItemsPage opened from a dashboard card (DASH-37)', () => {
     renderAt('/action-items?status=bogus&source=elsewhere');
 
     await screen.findByText('Order radios');
-    expect(mockGetActionItems).toHaveBeenCalledWith({});
+    expect(mockGetActionItems).toHaveBeenCalledWith(PAGE_ONE);
     expect(screen.getByLabelText('Filter action items by status')).toHaveValue('');
   });
 });

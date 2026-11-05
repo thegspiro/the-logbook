@@ -80,6 +80,15 @@ was destroyed at close and prior voters could vote again undetected — create a
 new election instead. With zero votes a reopen mints a fresh salt; the old
 ballot links are retired (`superseded_at`) and new ones must be sent.
 
+Reopening a closed election also corrects any result already filed with
+meeting minutes (owner decision 2026-11-01). In circulated or adopted minutes
+the result is kept as recorded and marked **Superseded**, with a dated
+correction carrying the rollback's reason; a draft's own result is removed.
+When the election closes again, its new result is filed beside the old one and
+shown as replacing it. The minutes screen, the PDF and the published library
+and public copies all show the correction (the public copy shows its date, not
+the reason).
+
 ---
 
 ## Voter Eligibility
@@ -442,13 +451,15 @@ on screen.
 
 ### Emailed (Token) Ballot
 
-**Send Ballot Emails** (`POST /elections/{id}/send-ballot`) issues each
-eligible member a unique voting token and emails a "Vote Now" link. It is
-available only while the election is **open**; drafts are previewed with a
-test ballot instead. The button shows in text why it is disabled when it is.
+**Send Ballot Emails** issues each eligible member a unique voting token and
+emails a "Vote Now" link. It is available only while the election is
+**open**; drafts are previewed with a test ballot instead. The button shows in
+text why it is disabled when it is.
 
 The send runs in the background (`POST /elections/{id}/ballot-send-jobs`),
-so a large roster no longer hits the browser's 30-second timeout. The dialog
+so a large roster no longer hits the browser's 30-second timeout. The older
+synchronous `POST /elections/{id}/send-ballot` was removed on 2026-11-05: two
+calls to it could both pass the in-progress check and mail every member twice. The dialog
 stays in its sending state until it finishes. Leaving the page does not stop
 the send. A second send for the same election is refused while one is still
 running, so members are not mailed twice. A resend gives each member a new
@@ -718,7 +729,7 @@ Audit events: `election_auto_opened`, `election_auto_closed`,
 
 ### Reminders
 
-**Remind non-voters** (`POST /elections/{id}/remind-non-voters`) emails only
+**Remind non-voters** emails only
 eligible members who haven't voted, with a minimum of 60 minutes between
 reminder sends. The mail is titled "Reminder: vote in …" and each reminded
 member gets a fresh voting link; the previous link is stamped `superseded_at`.
@@ -726,7 +737,8 @@ The vote dedup hash guarantees at most one vote per member regardless of how
 many links they hold.
 
 Like ballot sends, a reminder runs in the background
-(`POST /elections/{id}/reminder-send-jobs`), so many non-voters no longer hit
+(`POST /elections/{id}/reminder-send-jobs`; the synchronous
+`remind-non-voters` route was removed on 2026-11-05), so many non-voters no longer hit
 the browser's 30-second timeout, and leaving the page does not stop it. A
 reminder cannot start while a ballot send or another reminder for the same
 election is still running.

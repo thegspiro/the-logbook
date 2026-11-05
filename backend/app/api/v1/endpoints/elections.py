@@ -89,7 +89,6 @@ from app.schemas.election import (
     EligibilityDefaults,
     EligibilityRosterResponse,
     EmailBallot,
-    EmailBallotResponse,
     ForensicsResponse,
     ImportMeetingAttendeesResponse,
     ManualBallotBatchListResponse,
@@ -130,10 +129,8 @@ from app.schemas.election import (
     seat_rule_error,
 )
 from app.services.ballot_send_jobs import (
-    BALLOT_GUARD_KINDS,
     PACKAGE_GUARD_KINDS,
     PACKAGE_IN_PROGRESS_DETAIL,
-    SEND_IN_PROGRESS_DETAIL,
     BallotSend,
     NominationsAnnouncementSend,
     PackageSend,
@@ -145,8 +142,6 @@ from app.services.ballot_send_jobs import (
     get_job,
     job_response,
     latest_job,
-    perform_ballot_send,
-    perform_reminder_send,
     queue_automatic_send,
 )
 from app.services.election_service import (
@@ -3564,72 +3559,6 @@ async def get_stats(
     return stats
 
 
-@router.post("/{election_id}/send-ballot", response_model=EmailBallotResponse)
-async def send_ballot_emails(
-    election_id: UUID,
-    email_data: EmailBallot,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("elections.manage")),
-):
-    """
-    Send ballot notification emails to eligible voters
-
-    **Authentication required**
-    **Requires permission: elections.manage**
-    """
-    # Verify election exists
-    election_result = await db.execute(
-        select(Election)
-        .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
-    )
-    election = election_result.scalar_one_or_none()
-
-    if not election:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
-        )
-
-    try:
-        ensure_election_open(election)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    # A queued send is about to mint every member a new token; one sent here
-    # alongside it would void whichever links land first.
-    if (
-        await find_active_job(
-            db,
-            election.id,
-            str(current_user.organization_id),
-            kinds=BALLOT_GUARD_KINDS,
-        )
-        is not None
-    ):
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=SEND_IN_PROGRESS_DETAIL,
-        )
-
-    service = ElectionService(db)
-    try:
-        return await perform_ballot_send(
-            service,
-            election,
-            str(current_user.organization_id),
-            recipient_user_ids=email_data.recipient_user_ids,
-            subject=email_data.subject,
-            message=email_data.message,
-            base_ballot_url=_ballot_base_url(email_data),
-            send_eligibility_summary=bool(email_data.send_eligibility_summary),
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
-
-
 def _ballot_base_url(email_data: EmailBallot) -> Optional[str]:
     """The ballot page the emailed links point at, or None for no link.
 
@@ -4015,55 +3944,6 @@ class RemindNonVotersRequest(BaseModel):
 
     subject: Optional[str] = Field(None, max_length=200)
     message: Optional[str] = Field(None, max_length=2000)
-
-
-@router.post("/{election_id}/remind-non-voters", response_model=EmailBallotResponse)
-async def remind_non_voters(
-    election_id: UUID,
-    payload: Optional[RemindNonVotersRequest] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("elections.manage")),
-):
-    """
-    Send a reminder ballot email — with a fresh voting link — to every
-    eligible voter who has not yet cast a vote.
-
-    Members who already voted are not contacted. Also stamps the election's
-    reminder_sent_at, which suppresses the automatic pre-close reminder.
-
-    **Authentication required**
-    **Requires permission: elections.manage**
-    """
-    if (
-        await find_active_job(
-            db,
-            str(election_id),
-            str(current_user.organization_id),
-            kinds=BALLOT_GUARD_KINDS,
-        )
-        is not None
-    ):
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=SEND_IN_PROGRESS_DETAIL,
-        )
-
-    service = ElectionService(db)
-    try:
-        return await perform_reminder_send(
-            service,
-            election_id,
-            str(current_user.organization_id),
-            requested_by=str(current_user.id),
-            subject=payload.subject if payload else None,
-            message=payload.message if payload else None,
-            base_ballot_url=_reminder_ballot_url(),
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 def _reminder_ballot_url() -> str:

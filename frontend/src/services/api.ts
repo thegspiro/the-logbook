@@ -167,6 +167,7 @@ export type {
   OperationsDashboard,
   OperationsItem,
   ActionItemSummary,
+  ActionItemPage,
   CommunityEngagement,
   MainDashboardWidgets,
   WidgetPeriod,
