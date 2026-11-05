@@ -55,6 +55,7 @@ import {
 } from './training/trainingDetailsValue';
 import { asArray } from '../utils/asArray';
 import { fileTypeLabel } from '../utils/fileTypeLabel';
+import { buildingNotInName } from '../utils/locationLabel';
 
 export interface ConflictEvent {
   id: string;
@@ -588,7 +589,8 @@ export const EventForm: React.FC<EventFormProps> = ({
     const roomName = hasSingleFacility && loc.facility_room_id ? loc.name.split(' — ', 1)[0] : loc.name;
     if (hasSingleFacility && loc.facility_room_id) return roomName;
     const parts = [roomName];
-    if (loc.building) parts.push(`(${loc.building})`);
+    const building = buildingNotInName(loc.name, loc.building);
+    if (building) parts.push(`(${building})`);
     const addr = [loc.address, loc.city].filter(Boolean).join(', ');
     if (addr) parts.push(`— ${addr}`);
     return parts.join(' ');

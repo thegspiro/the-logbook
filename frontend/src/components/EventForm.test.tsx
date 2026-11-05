@@ -498,6 +498,39 @@ describe('EventForm', () => {
       expect(locationSelect).toHaveTextContent('Storage — Office — Station 2');
     });
 
+    // A facility room's location is named "Room — Facility" by the backend and
+    // carries that facility as its building, so the label must not add it again.
+    it("does not repeat a facility room's building when rooms span facilities", async () => {
+      vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([
+        {
+          id: 'room-1',
+          name: 'Volunteer Office — Station 1 - Headquarters',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-1',
+          building: 'Station 1 - Headquarters',
+          is_active: true,
+        },
+        {
+          id: 'room-2',
+          name: 'Day Room — Station 3 - Eastside',
+          facility_id: 'facility-2',
+          facility_room_id: 'room-2',
+          building: 'Station 3 - Eastside',
+          is_active: true,
+        },
+        { id: 'loc-3', name: 'Training Room', building: 'Annex', is_active: true },
+      ] as unknown as Location[]);
+
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const locationSelect = await screen.findByLabelText(/location/i);
+      await waitFor(() => expect((locationSelect as HTMLSelectElement).options.length).toBeGreaterThan(3));
+      const labels = Array.from((locationSelect as HTMLSelectElement).options).map((option) => option.text);
+      expect(labels).toContain('Volunteer Office — Station 1 - Headquarters');
+      expect(labels).toContain('Day Room — Station 3 - Eastside');
+      expect(labels).toContain('Training Room (Annex)');
+    });
+
     it('should toggle between select and manual location modes', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
