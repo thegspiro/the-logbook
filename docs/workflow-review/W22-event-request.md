@@ -23,7 +23,7 @@
    and its activity log reads `cancelled_by_requester` / "Cancelled by
    requester".
 6. As `member`: `GET /event-requests` and `/events/admin?tab=requests`.
-7. As `secretary`, Settings → Pipeline: the Default Coordinator list.
+7. As `secretary`, Settings → Public Requests → Handling: the Default Coordinator list.
 
 Not driven: the email the requester and the coordinator receive. The
 harness does not deliver mail, so what the acknowledgement says is read
