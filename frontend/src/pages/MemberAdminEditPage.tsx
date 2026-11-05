@@ -502,7 +502,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
                 >
                   First Name{' '}
-                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                  <span aria-hidden="true" className="text-red-800 dark:text-red-300">
                     *
                   </span>
                 </label>
@@ -518,7 +518,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   disabled={saving}
                 />
                 {!form.first_name.trim() && (
-                  <p id="member-first-name-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                  <p id="member-first-name-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
                     Enter a first name.
                   </p>
                 )}
@@ -545,7 +545,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
                 >
                   Last Name{' '}
-                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                  <span aria-hidden="true" className="text-red-800 dark:text-red-300">
                     *
                   </span>
                 </label>
@@ -561,7 +561,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   disabled={saving}
                 />
                 {!form.last_name.trim() && (
-                  <p id="member-last-name-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                  <p id="member-last-name-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
                     Enter a last name.
                   </p>
                 )}

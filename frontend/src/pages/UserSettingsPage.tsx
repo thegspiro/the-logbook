@@ -707,7 +707,7 @@ export const UserSettingsPage: React.FC = () => {
                       <div>
                         <label htmlFor="firstName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                           First Name{' '}
-                          <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                          <span aria-hidden="true" className="text-red-800 dark:text-red-300">
                             *
                           </span>
                         </label>
@@ -724,7 +724,7 @@ export const UserSettingsPage: React.FC = () => {
                           disabled={savingProfile}
                         />
                         {blankNames.includes('first_name') && (
-                          <p id="firstName-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                          <p id="firstName-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
                             Enter your {LEGAL_NAME_LABELS.first_name}.
                           </p>
                         )}
@@ -748,7 +748,7 @@ export const UserSettingsPage: React.FC = () => {
                       <div>
                         <label htmlFor="lastName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                           Last Name{' '}
-                          <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                          <span aria-hidden="true" className="text-red-800 dark:text-red-300">
                             *
                           </span>
                         </label>
@@ -765,7 +765,7 @@ export const UserSettingsPage: React.FC = () => {
                           disabled={savingProfile}
                         />
                         {blankNames.includes('last_name') && (
-                          <p id="lastName-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                          <p id="lastName-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
                             Enter your {LEGAL_NAME_LABELS.last_name}.
                           </p>
                         )}
