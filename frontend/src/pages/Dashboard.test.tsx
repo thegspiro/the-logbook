@@ -15,6 +15,11 @@ vi.mock('../hooks/useRegisterPullToRefresh', () => ({
   },
 }));
 
+// The pulse fetches its own data; a stub shows which panel mounted it.
+vi.mock('../components/dashboard/DashboardOrganizationWidgets', () => ({
+  default: () => <section aria-label="Department pulse" />,
+}));
+
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -2898,6 +2903,27 @@ describe('Dashboard', () => {
 
       await user.click(within(alert).getByRole('button', { name: 'Try again' }));
       await waitFor(() => expect(mockGetAdminSummary).toHaveBeenCalledTimes(2));
+    });
+
+    it('shows the department pulse on My Department, not Personal, for a leader', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('tab', { name: 'Personal' });
+      expect(screen.queryByRole('region', { name: 'Department pulse' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: 'My Department' }));
+      expect(screen.getByRole('region', { name: 'Department pulse' })).toBeInTheDocument();
+    });
+
+    it('keeps the department pulse on the personal view for a member without My Department', async () => {
+      // finance.manage feeds the pulse's money cards but opens no department tab.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'finance.manage');
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('region', { name: 'Department pulse' })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'My Department' })).not.toBeInTheDocument();
     });
   });
 });

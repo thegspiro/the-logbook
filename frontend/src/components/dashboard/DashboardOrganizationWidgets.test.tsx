@@ -98,6 +98,14 @@ describe('DashboardOrganizationWidgets', () => {
     expect(cardTitles()).toEqual(['Community engagement', 'Public requests']);
   });
 
+  it('names the reporting period once for the section, not on every card', async () => {
+    renderWithRouter(<DashboardOrganizationWidgets />);
+
+    await screen.findByText('Community engagement');
+    expect(screen.getAllByText(/This month/)).toHaveLength(1);
+    expect(screen.getByText(/This month/)).not.toHaveTextContent('Community engagement');
+  });
+
   it('applies a saved order, hidden card and custom title', async () => {
     getPulseLayout.mockResolvedValue(
       pulse({
