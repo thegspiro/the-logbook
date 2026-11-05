@@ -1537,27 +1537,22 @@ account lockout and the suspicious-IP throttle already cover the cross-account
 case. Until then, with Redis running, the cost is a member asked to wait a
 minute.
 
-### Still open: the sign-in screen's own back-off is per tab (W02-8, 2026-11-05)
+### Resolved: the sign-in screen's own back-off is per account (W02-8, 2026-11-05)
 
-The server is now per account, but the browser is not. `authStore.login`
-(`frontend/src/stores/authStore.ts`) keeps one failed-attempt counter per tab
-in `sessionStorage`. From the fifth failure it disables Sign in for
-`2s × 2^(n−5)`, capped at five minutes, whatever username is typed. The
-counter resets only on a successful sign-in.
+**Owner decision 2026-11-05: per account.** The sign-in page's failed-attempt
+counter used to be one per tab. From the fifth failure it disabled Sign in
+for `2s × 2^(n−5)`, capped at five minutes, whatever name was typed. So at a
+station computer one member's mistakes held the next member at the sign-in
+screen. The workflow review's W02 second pass drove it.
 
-Driven in the workflow review's W02 second pass: after 11 failures across two
-members in one tab, a third member typing their own name saw "Wait 60s". At a
-station computer that is one member's mistakes holding the next at the
-sign-in screen, which is what the 2026-11-01 decision set out to stop. It is
-a defence-in-depth control, not the limit: the server still counts per
-account and answers `429` with `Retry-After`, which the screen already
-honours.
-
-**Owner decision needed:**
-
-- **Key the counter by the typed account**, the way the server counts. The countdown then follows the name in the field.
-- **Drop the client back-off** and rely on the server's `429` / `Retry-After` and the account lockout alone.
-- **Keep it per tab, as it is**, and accept that a shared station computer can make the next member wait.
+`authStore` (`frontend/src/stores/authStore.ts`) now keeps `loginLockouts`,
+one entry per account, keyed the way the server folds a name (trimmed,
+lower-cased). It keeps at most 20 accounts per tab. A successful sign-in
+clears only that account, and the sign-in page shows the wait for the name in
+the field. A `429` still sets that account's wait from `Retry-After`. If the
+server's per-address backstop is what refused, every other account reaches
+the server and gets its own `429`, so nothing is lost by keying the client
+per account. Tests: `authStore.test.ts`, `LoginPage.test.tsx`.
 
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 

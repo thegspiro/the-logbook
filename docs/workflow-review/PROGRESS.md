@@ -237,7 +237,7 @@ Fixed:
 
 Flagged:
 
-- W02-8 (MED): the sign-in screen's own back-off counts every name tried in a tab, so one member's failures hold the next at a station computer for up to five minutes, against the 2026-11-01 per-account decision. Mirrored to KNOWN_LIMITATIONS.
+- W02-8 (MED): the sign-in screen's own back-off counted every name tried in a tab, so one member's failures held the next at a station computer for up to five minutes. Flagged, then fixed on the owner's decision of 2026-11-05: the count is now per account, as the server's is.
 - W02-11 (NIT): "Logout" beside "Sign in".
 
 New lead: admin actions on a member are audited without an IP. Gate: typecheck and lint clean, flake8, black and isort clean on the backend files, and 188 backend and 202 frontend tests pass; each new test failed before its fix. Next: none pending; the rotation remains complete.

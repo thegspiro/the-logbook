@@ -171,13 +171,23 @@ the suspicious-IP block.
 **Fix:** `min_length=1`; the 128-character ceiling (the Argon2 cost guard) stays. Re-driven: `wrong-1` now gets `401` "Incorrect username or password" and writes a `login_failed` row. Test: `tests/test_sign_in_short_password.py`, whose three short-password cases failed before the fix.
 **Behaviour change:** a short wrong password now counts toward the five-failure lockout, like any other wrong password.
 
-### W02-8 — MED — The sign-in screen's own back-off counts every name tried in the tab — FLAGGED
+### W02-8 — MED — The sign-in screen's own back-off counts every name tried in the tab — ✅ FIXED (owner decision 2026-11-05)
 
 **Did:** made 11 failed attempts in one tab across `member` and `member2`, then typed `review_member` in the same tab.
 **Saw:** the Sign in button read "Wait 60s" and was disabled for `member`, who had made no recent attempt. `sessionStorage.login_lockout` held `{"loginAttempts":11,...}`.
 **Where:** `authStore.login` (`frontend/src/stores/authStore.ts`) keeps one counter per tab. From the fifth failure it holds the button for `2s × 2^(n−5)`, capped at five minutes, whatever username is typed. The counter resets only on a successful sign-in.
 **Why it matters:** on a station computer, one member's mistyped passwords hold the next member at the sign-in screen for up to five minutes. The owner's 2026-11-01 decision moved the server to per-account limits so that "one station's members don't block each other". The client-side counter still does.
-**Why not fixed:** it is an authentication control. Keying it by account changes how the countdown behaves as someone edits the username field, and dropping it in favour of the server's `Retry-After` alone is also a fair choice. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+**Decision:** flagged on the first write-up. The owner chose per account (2026-11-05).
+**Fix:**
+
+- `authStore` keeps `loginLockouts`, one entry per account. The key is the name as typed, trimmed and lower-cased, the way the server folds it.
+- At most 20 accounts are kept per tab.
+- A successful sign-in clears only that account.
+- The sign-in page shows the wait for the name in the field (`lockedUntilFor`).
+- The `sessionStorage` shape is now `{ accounts: { … } }`. The old per-tab value names nobody, so it is dropped on load.
+
+Re-driven: after five failures for `review_member2` the button read "Wait 2s"; changing the name to `review_member` in the same tab gave an enabled Sign in, and `member` signed in.
+Tests: `authStore.test.ts` ("does not hold another account for one account's failures", "counts a name the same however it is cased or padded") and `LoginPage.test.tsx` ("holds only the account that failed"); both failed against the per-tab code. The existing lockout tests changed with the state they read (`loginAttempts` / `lockedUntil` became `loginLockouts`).
 
 ### W02-9 — LOW — The account and sign-out controls at the foot of the phone menu were 36px tall — ✅ FIXED
 
@@ -215,7 +225,7 @@ password alone.
 | ----------------------- | ---------------------------------------------------------------------------------------- |
 | 1. The job gets done    | ✅ sign in, out, MFA, deep-link return; W02-10 fixed                                     |
 | 2. The right people     | ✅ revoked token refused; no enumeration; Unlock gated to `members.manage`               |
-| 3. Wrong input, failure | ✅ after W02-7; W02-8 flagged                                                            |
+| 3. Wrong input, failure | ✅ after W02-7 and W02-8                                                                 |
 | 4. Browser signals      | ✅ only the expected 401s, the deliberate 429s, and the 422s that W02-7 and W02-10 fixed |
 | 5. Coming back to it    | ✅ Back after sign-out stays out; lock state survives a reload                           |
 | 6. On a phone           | ✅ `/login` clean; W02-9 fixed                                                           |
