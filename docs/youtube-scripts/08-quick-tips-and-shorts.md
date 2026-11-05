@@ -1136,7 +1136,7 @@ Inventory. Members reach them at Operations → My Checklists; the old
 
 ## SHORT 8AE: Three Boxes, Three Expiry Dates, One Bracket
 
-**Length:** 45 seconds
+**Length:** 70 seconds
 **Extracted From:** Script 6
 **Audience:** All members, EMS officers, supply officers
 
@@ -1176,6 +1176,20 @@ dates. The lots sheet opens.]**
 
 > "And when you record using one, it comes off the soonest-expiring lot first —
 > which is the order you should be pulling from anyway."
+
+**[SCREEN: Medical Supplies → Expiring tab → Find a lot, a lot number typed, the
+lot found on the shelf, then **Recall lot** and its reason box]**
+
+> "One more reason that lot number matters. When a manufacturer recalls a lot,
+> type the number under **Find a lot**, select **Find**, then **Recall lot**.
+> It reaches every unit with that number — on the shelf, on a truck, and any
+> later delivery. Recalled units stop counting as stock, can't be swapped onto an
+> apparatus, and are listed first on the Expiring tab, marked **Recalled**, until
+> you pull them."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-10-24 row); the
+short now runs about 70 seconds, so re-time it. Screens `05-142` and `05-143`
+exist.]**
 
 ---
 

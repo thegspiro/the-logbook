@@ -22,19 +22,24 @@ re-record list can be read straight from the scripts.
 it defaults to on. The "five emails that cannot be switched off" in the
 2026-10-28 row is **seven** (`ALWAYS_SENT_TYPES`), and 03 and 07 say seven.
 
+**Closed 2026-11-05 (second pass):**
+
+- The label checks ran against `frontend/src` and the backend: the seven
+  Evaluation email template types match script 03; the budget-request refusal
+  ("Another finance manager has to decide it") matches script 04; the passkey
+  "Remove passkey" dialog exists. Cal.com, Documenso and Salesforce key-first
+  behaviour is still from guide 16 only.
+- Added the Recall lot beat (Short 8AE, now about 70 seconds), the Target
+  Solutions **Import matching pending records** beat (script 16), and the
+  department pulse and **All clear** beat (script 04).
+
 **Still open:**
 
-- Screens and footage for every new beat; the production notes flag them.
-- Run times for added beats are estimates (04 about +7 minutes, 07 about +4, 03
-  about +6); Short 8AS still says about 47 seconds and gained roughly 8.
-- Unverified against the UI: Cal.com, Documenso and Salesforce key-first
-  behaviour; the exact Evaluation email template names; the "Remove just that
-  passkey" wording; budget-request and IP-exception second-person refusal text.
-- Not applied: the 2026-10-24 afternoon "Find a lot → Recall lot" row (no recall
-  beat exists in any script) and Target Solutions "Import matching pending
-  records" for script 05.
-- Leader-only dashboard changes (department pulse, All clear) are not in the
-  member script by design; the Chief script (04) is the place if you want them.
+- Screens and footage for every new beat; the production notes flag them. None
+  of this can be recorded from a scheduled session.
+- Run times for added beats are estimates (04 about +7.5 minutes, 07 about +4,
+  03 about +6); Short 8AS still says about 47 seconds and gained roughly 8.
+- The member script (06) leaves out the leader-only dashboard changes by design.
 
 ## Flagged by the 2026-11-04 → 11-05 changes
 

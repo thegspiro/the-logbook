@@ -556,6 +556,18 @@ Queue]**
 > often it re-reads the last thirty days so a late correction on their side
 > isn't missed."
 
+**[SCREEN: Mappings window, matching an external user to a member; then the
+provider's Import Queue with the **Import matching pending records** button]**
+
+> "Matching is what credits the history. When you map an outside user to a member,
+> that member's waiting records come in at once, so older training outside the
+> sync window isn't left stranded in the queue. And **Import matching pending
+> records**, on the provider's Import Queue, brings in every waiting record whose
+> member you've already matched."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-10-22 row). The
+provider needs a resolvable API host to capture the Import Queue screen.]**
+
 **[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take described
 **External Training Integrations** (ExternalTrainingPage) as the member
 submission queue — it is the provider sync screen; member submissions are

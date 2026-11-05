@@ -83,6 +83,24 @@ Both = leadership oversight."]**
 > "**Member Stats** — total active members, new members this month, and
 > attendance trends."
 
+**[SCREEN: My Department tab, the department pulse cards (money, grants,
+outreach) under one section heading; then Critical exceptions and Pending
+approvals folded into a single "All clear · N checks" line, opened to show its
+rows]**
+
+> "Since November the money, grant and outreach cards live here, on **My
+> Department**, instead of crowding the top of your own page — so your shifts and
+> training are the first thing you see on **Personal**. The one period they cover
+> is named once, in the section description, not on every card. And when every
+> count in **Critical exceptions** or **Pending approvals** is zero, the section
+> folds into a single **All clear** line. Select it and each check is still one
+> click away. If Scheduling Operations has a Station or Platoon filter, it is now a
+> dropdown of values your shifts really carry, not a box you type a guess into."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 35 seconds (2026-11-05 dashboard
+changes). Re-capture the My Department tab; `00-24` and `00-25` are queued for
+replacement.]**
+
 > "**Scheduling Overview** — who's on shift today, any open slots that need
 > filling."
 
