@@ -13,7 +13,7 @@ Gives training officers an at-a-glance department readiness picture.
 
 import calendar
 from datetime import date, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -30,6 +30,7 @@ from app.models.training import (
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    HeldSession,
     apply_recency,
     biannual_window,
     catch_up_deadline,
@@ -38,7 +39,9 @@ from app.services.training_compliance import (
     evaluate_member_requirement_detail,
     fallback_record_matches,
     get_org_include_current_month,
+    is_session_attendance,
     load_credited_shift_dates,
+    load_held_sessions,
     member_join_date,
     requirement_applies_to_user,
 )
@@ -160,6 +163,9 @@ class CompetencyMatrixService:
             today,
             org_include_current,
         )
+        held_sessions = await load_held_sessions(
+            self.db, str(organization_id), requirements
+        )
 
         # Counters
         current_count = 0
@@ -210,6 +216,7 @@ class CompetencyMatrixService:
                     waivers=member_waivers,
                     org_include_current_month=org_include_current,
                     shift_dates=shifts_by_user.get(uid, []),
+                    held_sessions=held_sessions,
                     join_date=join_date,
                 )
                 deadline = catch_up_deadline(req, join_date, today)
@@ -308,21 +315,25 @@ class CompetencyMatrixService:
         waivers: Optional[List[WaiverPeriod]] = None,
         org_include_current_month: bool = True,
         shift_dates: Optional[List[date]] = None,
+        held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
         join_date: Optional[date] = None,
     ) -> Dict:
         """Evaluate a single requirement for a single member using type-aware matching."""
-        if counts_shift_attendance(requirement):
-            # Counted from shifts worked by the one shared grader, so this
-            # cell reads what the compliance matrix reads for the member
-            # (shifts-three-sources). Partial progress is yellow, as hours is.
+        attendance = is_session_attendance(requirement)
+        if attendance or counts_shift_attendance(requirement):
+            # Counted from shifts worked, or from sessions attended, by the
+            # one shared grader, so this cell reads what the compliance matrix
+            # reads for the member (shifts-three-sources). Partial progress is
+            # yellow, as hours is.
             ev = evaluate_member_requirement_detail(
                 requirement,
-                [],
+                user_records if attendance else [],
                 today,
                 waivers=waivers,
                 org_include_current_month=org_include_current_month,
                 join_date=join_date,
                 shift_dates=shift_dates,
+                held_sessions=held_sessions,
             )
             # A catch-up status lands on "not_started" here; the caller turns
             # an unmet cell inside the catch-up period into its own status.
@@ -335,7 +346,8 @@ class CompetencyMatrixService:
                 "expiration_date": None,
                 "completion_date": ev.completion_date,
                 "details": (
-                    f"{ev.progress_current:g}/{ev.progress_required:g} shifts"
+                    f"{ev.progress_current:g}/{ev.progress_required:g} "
+                    f"{ev.progress_unit or 'shifts'}"
                     if cell_status != "not_started"
                     and ev.progress_current is not None
                     and ev.progress_required is not None

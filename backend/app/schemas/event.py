@@ -521,6 +521,8 @@ class EventResponse(EventBase, UTCResponseBase):
     actual_end_time: Optional[datetime] = None
     is_draft: bool = False
     is_cancelled: bool = False
+    # As on EventListItem: a session-attendance requirement counts this event.
+    counts_toward_attendance: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
     # Attendance lock. The UI reads attendance_finalized_at to decide which
@@ -665,6 +667,9 @@ class EventListItem(UTCResponseBase):
     # configured for "maybe" only rendered a button the API always rejected.
     allowed_rsvp_statuses: Optional[List[str]] = None
     user_rsvp_status: Optional[str] = None
+    # The event's training session counts toward a session-attendance
+    # requirement: members it grades are charged with attending it.
+    counts_toward_attendance: bool = False
 
     # Fields the member-facing list needs to tell an urgent event from a
     # routine one without a per-card round trip. The check-in window is

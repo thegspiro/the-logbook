@@ -101,6 +101,11 @@ app/api/v1/endpoints/elections.py::submit_member_ballot
 # and the signer's own name typed.
 app/api/v1/endpoints/evaluations.py::download_evaluation_document
 app/api/v1/endpoints/evaluations.py::get_evaluation
+# /attention returns two counts scoped to the caller: their own evaluations
+# waiting on them, and — only for a holder of evaluations.conduct, view_all or
+# manage — the overdue rows of the same list the conduct page shows them
+# (2026-11-04).
+app/api/v1/endpoints/evaluations.py::get_attention_counts
 app/api/v1/endpoints/evaluations.py::get_my_live_data
 # /mine/removed lists the deletion records of the caller's own evaluations,
 # filtered on current_user.id within its organization (2026-11-02).
@@ -326,6 +331,11 @@ app/api/v1/endpoints/scheduling.py::get_active_shift_for_apparatus
 app/api/v1/endpoints/scheduling.py::get_calendar_feed
 app/api/v1/endpoints/scheduling.py::get_eligible_positions
 app/api/v1/endpoints/scheduling.py::get_eligible_positions_bulk
+# Self or scheduling.report: the handler returns 403 unless the caller is the
+# member or holds scheduling.report, and 404 for a member of another org
+# (tests/test_member_hours_history.py::TestMemberHoursEndpoint). A dependency
+# cannot express "or is that member", hence the check in the body.
+app/api/v1/endpoints/scheduling.py::get_member_hours_history
 app/api/v1/endpoints/scheduling.py::get_my_assignments
 app/api/v1/endpoints/scheduling.py::get_my_attendance
 app/api/v1/endpoints/scheduling.py::get_my_attendance_history

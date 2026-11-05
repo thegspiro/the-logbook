@@ -20,6 +20,12 @@
  * The three cards read this month, the selected year, and all time. The middle
  * one follows the year picker rather than pinning to the current year, so it
  * can never state a figure the table beneath it contradicts.
+ *
+ * Given a `memberId`, the same view shows that member's history on their
+ * profile — read from the endpoint that answers for any member to the member
+ * themself or an officer with `scheduling.report` — so a profile and My Hours
+ * can never disagree about what a member has done. On-call (recall) hours are
+ * shown as a part of the hours, never added to them.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -65,6 +71,10 @@ interface StatCardProps {
   showCalls: boolean;
   /** Hours logged with other departments in the same period. */
   externalHours: number;
+  /** Calls credited on other departments' units in the same period. */
+  externalCalls: number;
+  /** The part of `hours` worked on recall (on-call) shifts. */
+  onCallHours: number;
   icon: React.ReactNode;
 }
 
@@ -76,6 +86,8 @@ const StatCard: React.FC<StatCardProps> = ({
   calls,
   showCalls,
   externalHours,
+  externalCalls,
+  onCallHours,
   icon,
 }) => (
   // Grouped and labelled so a screen reader announces which period a figure
@@ -98,13 +110,28 @@ const StatCard: React.FC<StatCardProps> = ({
       {formatNumber(shifts)} {shifts === 1 ? 'shift' : 'shifts'}
       {showCalls ? ` · ${formatNumber(calls)} ${calls === 1 ? 'call' : 'calls'}` : ''}
     </p>
+    {onCallHours > 0 && (
+      <p className="text-theme-text-secondary mt-1 text-sm">of which {formatHours(onCallHours)} hrs on call</p>
+    )}
     {externalHours > 0 && (
-      <p className="text-theme-text-secondary mt-1 text-sm">+{formatHours(externalHours)} hrs with other departments</p>
+      <p className="text-theme-text-secondary mt-1 text-sm">
+        +{formatHours(externalHours)} hrs with other departments
+        {showCalls && externalCalls > 0
+          ? ` · ${formatNumber(externalCalls)} ${externalCalls === 1 ? 'call' : 'calls'}`
+          : ''}
+      </p>
     )}
   </div>
 );
 
-export const MyHoursSummary: React.FC = () => {
+interface MyHoursSummaryProps {
+  /** Show this member's history (their profile) instead of the caller's own. */
+  memberId?: string | undefined;
+}
+
+export const MyHoursSummary: React.FC<MyHoursSummaryProps> = ({ memberId }) => {
+  const own = memberId === undefined;
+  const idPrefix = own ? 'my-hours' : 'member-hours';
   // 'off' hides the calls column outright: a department that does not record
   // call volume would otherwise read a column of zeros as a broken counter.
   const callTrackingMode = useSchedulingStore((s) => s.callTrackingMode);
@@ -124,20 +151,25 @@ export const MyHoursSummary: React.FC = () => {
     void loadSettings();
   }, [loadSettings]);
 
-  const load = useCallback(async (year: number | null) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await schedulingService.getMyHoursHistory(year ?? undefined);
-      setHistory(data);
-      setSelectedYear(data.year);
-      setLatestYear((prev) => (prev === null ? data.current_month.year : prev));
-    } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load your hours'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (year: number | null) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = own
+          ? await schedulingService.getMyHoursHistory(year ?? undefined)
+          : await schedulingService.getMemberHoursHistory(memberId, year ?? undefined);
+        setHistory(data);
+        setSelectedYear(data.year);
+        setLatestYear((prev) => (prev === null ? data.current_month.year : prev));
+      } catch (err) {
+        setError(getErrorMessage(err, own ? 'Failed to load your hours' : 'Failed to load shift history'));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [own, memberId]
+  );
 
   useEffect(() => {
     void load(null);
@@ -164,10 +196,10 @@ export const MyHoursSummary: React.FC = () => {
         className="flex items-center justify-center py-20"
         role="status"
         aria-live="polite"
-        aria-label="Loading your hours"
+        aria-label={own ? 'Loading your hours' : 'Loading shift history'}
       >
         <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
-        <span className="sr-only">Loading your hours…</span>
+        <span className="sr-only">{own ? 'Loading your hours…' : 'Loading shift history…'}</span>
       </div>
     );
   }
@@ -200,15 +232,19 @@ export const MyHoursSummary: React.FC = () => {
     <div className="space-y-4">
       <div className="split-row gap-3 sm:items-center">
         <div className="split-row-main">
-          <h3 className="text-theme-text-primary text-lg font-semibold">My Hours</h3>
-          <p className="text-theme-text-muted text-sm">Hours and calls credited to you once a shift is closed out.</p>
+          <h3 className="text-theme-text-primary text-lg font-semibold">{own ? 'My Hours' : 'Shift & Call History'}</h3>
+          <p className="text-theme-text-muted text-sm">
+            {own
+              ? 'Hours and calls credited to you once a shift is closed out.'
+              : 'Hours and calls credited once a shift is closed out, including on-call (recall) shifts.'}
+          </p>
         </div>
         <div className="split-row-aside flex flex-wrap items-center gap-2">
-          <label htmlFor="my-hours-year" className="form-label mb-0">
+          <label htmlFor={`${idPrefix}-year`} className="form-label mb-0">
             Year
           </label>
           <select
-            id="my-hours-year"
+            id={`${idPrefix}-year`}
             value={selectedYear ?? history.year}
             onChange={(e) => void load(Number(e.target.value))}
             className="form-input w-32"
@@ -233,6 +269,8 @@ export const MyHoursSummary: React.FC = () => {
           calls={current.calls}
           showCalls={showCalls}
           externalHours={current.external_hours ?? 0}
+          externalCalls={current.external_calls ?? 0}
+          onCallHours={current.on_call_hours ?? 0}
           icon={<Flame className="h-5 w-5" />}
         />
         <StatCard
@@ -243,6 +281,8 @@ export const MyHoursSummary: React.FC = () => {
           calls={totals.calls}
           showCalls={showCalls}
           externalHours={totals.external_hours ?? 0}
+          externalCalls={totals.external_calls ?? 0}
+          onCallHours={totals.on_call_hours ?? 0}
           icon={<TrendingUp className="h-5 w-5" />}
         />
         <StatCard
@@ -253,14 +293,16 @@ export const MyHoursSummary: React.FC = () => {
           calls={allTime.calls}
           showCalls={showCalls}
           externalHours={allTime.external_hours ?? 0}
+          externalCalls={allTime.external_calls ?? 0}
+          onCallHours={allTime.on_call_hours ?? 0}
           icon={<History className="h-5 w-5" />}
         />
       </div>
 
       {pendingHours > 0 && (
         <p className="text-theme-text-muted text-sm">
-          {formatHours(pendingHours)} more {pendingHours === 1 ? 'hour is' : 'hours are'} logged on shifts your officer
-          has not closed out yet. Those count once the shift is finalized.
+          {formatHours(pendingHours)} more {pendingHours === 1 ? 'hour is' : 'hours are'} logged on shifts{' '}
+          {own ? 'your officer has' : 'an officer has'} not closed out yet. Those count once the shift is finalized.
         </p>
       )}
 
@@ -280,7 +322,9 @@ export const MyHoursSummary: React.FC = () => {
             so the tail was clipped rather than scrollable. Percentages cannot
             exceed the table, whatever the sidebar takes. */}
         <table className="rwd-table w-full table-fixed text-sm">
-          <caption className="sr-only">Your shift hours by month for {history.year}</caption>
+          <caption className="sr-only">
+            {own ? 'Your shift hours' : 'Shift hours'} by month for {history.year}
+          </caption>
           <thead>
             <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary border-b text-left">
               <th scope="col" className="w-[26%] px-4 py-3 font-medium">
@@ -333,6 +377,11 @@ export const MyHoursSummary: React.FC = () => {
                       (+{formatHours(m.pending_hours)} pending)
                     </span>
                   )}
+                  {(m.on_call_hours ?? 0) > 0 && (
+                    <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                      ({formatHours(m.on_call_hours ?? 0)} on call)
+                    </span>
+                  )}
                   {(m.external_hours ?? 0) > 0 && (
                     <span className="text-theme-text-muted ml-1 text-xs font-normal">
                       (+{formatHours(m.external_hours ?? 0)} outside)
@@ -346,7 +395,7 @@ export const MyHoursSummary: React.FC = () => {
                 )}
                 <td
                   className="table-col-tertiary px-4 py-3"
-                  title={`${formatHours(m.hours)} of ${formatHours(peakHours)} hours in your busiest month of ${history.year}`}
+                  title={`${formatHours(m.hours)} of ${formatHours(peakHours)} hours in the busiest month of ${history.year}`}
                 >
                   {/* aria-hidden: the same hours are announced from the Hours
                       cell of this row, so labelling the bar would read the
@@ -371,6 +420,11 @@ export const MyHoursSummary: React.FC = () => {
               </td>
               <td className="px-4 py-3 text-right" data-label="Hours">
                 {formatHours(totals.hours)}
+                {(totals.on_call_hours ?? 0) > 0 && (
+                  <span className="text-theme-text-muted ml-1 text-xs font-normal">
+                    ({formatHours(totals.on_call_hours ?? 0)} on call)
+                  </span>
+                )}
                 {(totals.external_hours ?? 0) > 0 && (
                   <span className="text-theme-text-muted ml-1 text-xs font-normal">
                     (+{formatHours(totals.external_hours ?? 0)} outside)
@@ -388,7 +442,11 @@ export const MyHoursSummary: React.FC = () => {
         </table>
       </div>
 
-      <MyExternalShifts onChanged={() => void load(selectedYear)} />
+      {/* The member's own list of outside shifts, which they add to and
+          withdraw from. Not on someone else's profile: the outside hours are
+          already in the figures above, and the list's actions are the
+          member's. */}
+      {own && <MyExternalShifts onChanged={() => void load(selectedYear)} />}
     </div>
   );
 };

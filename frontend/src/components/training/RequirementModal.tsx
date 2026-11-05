@@ -81,6 +81,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_calls: seed?.required_calls || undefined,
     required_transports: seed?.required_transports || undefined,
     required_refusals: seed?.required_refusals || undefined,
+    required_attendance_pct: seed?.required_attendance_pct || undefined,
     evaluation_excludes_lowest_rating: seed?.evaluation_excludes_lowest_rating ?? false,
     required_call_types: seed?.required_call_types ?? ([] as string[]),
     checklist_items: seed?.checklist_items ?? [],
@@ -195,6 +196,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       toast.error('Required refusals must be set for a refusals requirement');
       return;
     }
+    if (formData.requirement_type === 'session_attendance' && !formData.required_attendance_pct) {
+      toast.error('Attendance percentage must be set for a session attendance requirement');
+      return;
+    }
     if (formData.requirement_type === 'knowledge_test' && !formData.passing_score) {
       toast.error('Passing score must be set for a knowledge test requirement');
       return;
@@ -252,6 +257,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
       required_transports: formData.requirement_type === 'transports' ? (formData.required_transports ?? null) : null,
       required_refusals: formData.requirement_type === 'refusals' ? (formData.required_refusals ?? null) : null,
+      required_attendance_pct:
+        formData.requirement_type === 'session_attendance' ? (formData.required_attendance_pct ?? null) : null,
       // A boolean on every save: the column refuses null.
       evaluation_excludes_lowest_rating:
         formData.requirement_type === 'evaluated_shifts' && formData.evaluation_excludes_lowest_rating,
@@ -467,61 +474,69 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <option value="evaluated_shifts">Evaluated Shifts</option>
                   <option value="transports">Transports</option>
                   <option value="refusals">Refusals</option>
+                  <option value="session_attendance">Session Attendance</option>
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="req-training-type"
-                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                  >
-                    Training Type
-                  </label>
-                  <select
-                    id="req-training-type"
-                    value={formData.training_type}
-                    onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
-                    className="form-input"
-                  >
-                    <option value="">Any Type</option>
-                    <option value="certification">Certification</option>
-                    <option value="continuing_education">Continuing Education</option>
-                    <option value="skills_practice">Skills Practice</option>
-                    <option value="orientation">Orientation</option>
-                    <option value="refresher">Refresher</option>
-                    <option value="specialty">Specialty</option>
-                    <option value="policy_acknowledgment">Policy Acknowledgment</option>
-                  </select>
-                </div>
+              {/* Neither applies to session attendance, which counts linked
+                  sessions attended and reads no record's type or hours. */}
+              {formData.requirement_type !== 'session_attendance' && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="req-training-type"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Training Type
+                    </label>
+                    <select
+                      id="req-training-type"
+                      value={formData.training_type}
+                      onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
+                      className="form-input"
+                    >
+                      <option value="">Any Type</option>
+                      <option value="certification">Certification</option>
+                      <option value="continuing_education">Continuing Education</option>
+                      <option value="skills_practice">Skills Practice</option>
+                      <option value="orientation">Orientation</option>
+                      <option value="refresher">Refresher</option>
+                      <option value="specialty">Specialty</option>
+                      <option value="policy_acknowledgment">Policy Acknowledgment</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label
-                    htmlFor="req-required-hours"
-                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                  >
-                    Required Hours
-                    {formData.requirement_type === 'hours' && (
-                      <span aria-hidden="true" className="text-red-700 dark:text-red-400">
-                        {' '}
-                        *
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    id="req-required-hours"
-                    type="number"
-                    value={formData.required_hours || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })
-                    }
-                    className="form-input placeholder-theme-text-muted"
-                    placeholder="e.g., 36"
-                    min="0"
-                    step="0.5"
-                  />
+                  <div>
+                    <label
+                      htmlFor="req-required-hours"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Required Hours
+                      {formData.requirement_type === 'hours' && (
+                        <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                          {' '}
+                          *
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      id="req-required-hours"
+                      type="number"
+                      value={formData.required_hours || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          required_hours: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
+                      className="form-input placeholder-theme-text-muted"
+                      placeholder="e.g., 36"
+                      min="0"
+                      step="0.5"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Per-type quantity fields */}
               {/* Courses are picked from the library, never typed: compliance
@@ -611,6 +626,41 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                 onRefusalsChange={(v) => setFormData({ ...formData, required_refusals: v ? Number(v) : undefined })}
                 onExcludesLowestChange={(v) => setFormData({ ...formData, evaluation_excludes_lowest_rating: v })}
               />
+
+              {formData.requirement_type === 'session_attendance' && (
+                <div>
+                  <label
+                    htmlFor="req-attendance-pct"
+                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                  >
+                    Sessions to Attend (%){' '}
+                    <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                      *
+                    </span>
+                  </label>
+                  <input
+                    id="req-attendance-pct"
+                    type="number"
+                    value={formData.required_attendance_pct || ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        required_attendance_pct: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="e.g., 60"
+                    min="1"
+                    max="100"
+                    aria-describedby="req-attendance-pct-help"
+                  />
+                  <p id="req-attendance-pct-help" className="text-theme-text-muted mt-1 text-xs">
+                    Of the training sessions linked to this requirement and held in the period. Link sessions when you
+                    create them or from their event pages; sessions not linked are optional. A waiver or leave covering
+                    a session&apos;s day excuses the member from it.
+                  </p>
+                </div>
+              )}
 
               {formData.requirement_type === 'checklist' && (
                 <ChecklistItemsEditor

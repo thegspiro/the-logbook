@@ -283,6 +283,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
                           Mandatory
                         </span>
                       )}
+                      {event.counts_toward_attendance && (
+                        <span className="bg-theme-alert-info-bg text-theme-alert-info-title inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium">
+                          Counts toward attendance
+                        </span>
+                      )}
                     </div>
                     <div className="mt-0.5 flex items-center gap-2">
                       <span

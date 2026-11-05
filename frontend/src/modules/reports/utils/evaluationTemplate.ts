@@ -12,6 +12,7 @@ import {
   EvaluationTool,
   SCALE_TOOLS,
   SCORED_TOOLS,
+  type GradeBand,
   type ScaleLevel,
   type TemplateDefinition,
   type TemplateItem,
@@ -104,6 +105,29 @@ export function weightTotal(definition: TemplateDefinition): number {
     .filter((item) => SCORED_TOOLS.includes(item.tool))
     .reduce((sum, item) => sum + item.weight, 0);
 }
+
+/** Sum of the weights on a section's rated items — its share of 100% when the form is graded by section. */
+export function sectionItemWeightTotal(section: TemplateSection): number {
+  return section.items.filter((item) => SCORED_TOOLS.includes(item.tool)).reduce((sum, item) => sum + item.weight, 0);
+}
+
+/** Sum of the sections' weights — shown beside the overall setting when the form is graded by section. */
+export function sectionWeightTotal(definition: TemplateDefinition): number {
+  return definition.sections.reduce((sum, section) => sum + (section.weight ?? 0), 0);
+}
+
+/**
+ * The server's default grade ranges (`default_grade_bands`), for a definition
+ * that arrived without its own. Every stored definition carries them, so this
+ * only fills an older client-built object.
+ */
+export const DEFAULT_GRADE_BANDS: GradeBand[] = [
+  { level: 1, min: 1 },
+  { level: 2, min: 1.5 },
+  { level: 3, min: 2.5 },
+  { level: 4, min: 3.5 },
+  { level: 5, min: 4.5 },
+];
 
 /** Steps appear in this order; approvals may repeat in the middle. */
 const STEP_ORDER: Record<EvaluationStepType, number> = {

@@ -364,6 +364,11 @@ export interface MemberHoursMonth {
    */
   external_shifts?: number;
   external_hours?: number;
+  /** Calls credited on outside units (recorded only by a historical import). */
+  external_calls?: number;
+  /** How much of `shifts` / `hours` was on recall shifts — part of them, not added. */
+  on_call_shifts?: number;
+  on_call_hours?: number;
 }
 
 export interface MemberHoursTotals {
@@ -374,6 +379,9 @@ export interface MemberHoursTotals {
   pending_hours: number;
   external_shifts?: number;
   external_hours?: number;
+  external_calls?: number;
+  on_call_shifts?: number;
+  on_call_hours?: number;
 }
 
 export interface MemberHoursHistory {
@@ -1004,6 +1012,14 @@ export const schedulingService = {
     const response = await api.get<MemberHoursHistory>('/scheduling/my-hours-history', {
       params: year ? { year } : {},
     });
+    return response.data;
+  },
+  /** Another member's history, for their profile: theirs, or `scheduling.report`. */
+  async getMemberHoursHistory(userId: string, year?: number): Promise<MemberHoursHistory> {
+    const response = await api.get<MemberHoursHistory>(
+      `/scheduling/members/${encodeURIComponent(userId)}/hours-history`,
+      { params: year ? { year } : {} }
+    );
     return response.data;
   },
   async getWidgetSummary(params: {

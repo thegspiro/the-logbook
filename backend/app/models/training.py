@@ -101,6 +101,9 @@ class RequirementType(str, enum.Enum):
     EVALUATED_SHIFTS = "evaluated_shifts"  # Shifts with a submitted evaluation
     TRANSPORTS = "transports"  # Patient transports recorded on evaluations
     REFUSALS = "refusals"  # Patient refusals recorded on evaluations
+    # Attend a share of the sessions linked to the requirement
+    # (training_session_requirements), graded by training_compliance.
+    SESSION_ATTENDANCE = "session_attendance"
 
 
 class RequirementSource(str, enum.Enum):
@@ -682,6 +685,11 @@ class TrainingRequirement(Base):
     max_attempts: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # For KNOWLEDGE_TEST type - max number of attempts
+    # SESSION_ATTENDANCE: the share (1-100) of the linked sessions held in the
+    # window a member must attend.
+    required_attendance_pct: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
 
     # Frequency
     frequency: Mapped[RequirementFrequency] = mapped_column(
@@ -960,6 +968,47 @@ class TrainingSession(Base):
 
     def __repr__(self):
         return f"<TrainingSession(course_name={self.course_name}, event_id={self.event_id})>"
+
+
+class TrainingSessionRequirement(Base):
+    """A session that counts toward a SESSION_ATTENDANCE requirement.
+
+    A link table rather than ``TrainingSession.requirement_id``: that column
+    credits one requirement with the session's training, while one drill
+    usually belongs to several attendance requirements at once (the same
+    drills graded at 60% for active members and 30% for senior members).
+    A session linked to none is optional and counts against nobody.
+    """
+
+    __tablename__ = "training_session_requirements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requirement_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "requirement_id", name="uq_training_session_requirement"
+        ),
+        Index("idx_training_session_requirement_org", "organization_id"),
+    )
 
 
 class CohortStatus(str, enum.Enum):

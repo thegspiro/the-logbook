@@ -64,9 +64,14 @@ class TestGetTrainingSessionByEvent:
         )
 
     async def test_an_attached_session_is_returned_unchanged(self):
-        attached = object()
+        attached = SimpleNamespace(id="session-1")
         shaped = object()
-        service = SimpleNamespace(get_session_by_event=AsyncMock(return_value=attached))
+        service = SimpleNamespace(
+            get_session_by_event=AsyncMock(return_value=attached),
+            attendance_requirement_ids=AsyncMock(
+                return_value={"session-1": ["requirement-1"]}
+            ),
+        )
         with (
             patch.object(endpoint, "TrainingSessionService", return_value=service),
             patch.object(endpoint, "_session_response", return_value=shaped) as shape,
@@ -76,7 +81,7 @@ class TestGetTrainingSessionByEvent:
             )
 
         assert result is shaped
-        shape.assert_called_once_with(attached)
+        shape.assert_called_once_with(attached, ["requirement-1"])
 
     def test_declared_response_admits_null_so_the_contract_matches(self):
         # A handler that returns None under a non-optional response_model is a

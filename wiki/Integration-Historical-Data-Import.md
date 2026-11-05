@@ -63,6 +63,14 @@ position on purpose.
   the 24-hour cap or overlap check a member's own entry gets — those are for
   hours typed today, not for settled history.
 
+## Where the imported hours show up
+
+A member's **profile** has a _Shift & Call History_ section with the same
+figures as their own **My Hours** screen: hours by month and year, how many of
+them were on call, calls, and hours and calls with other departments. The
+member sees their own; officers holding `scheduling.report` (the chiefs,
+captains, lieutenants and scheduling officer by default) see anyone's.
+
 ## Running it twice is safe
 
 Every row a batch writes is recorded against the source system's row ID. A

@@ -5,12 +5,14 @@ import { MyHoursSummary } from './MyHoursSummary';
 import type { MemberHoursHistory } from '../../modules/scheduling/services/api';
 
 const mockGetMyHoursHistory = vi.fn();
+const mockGetMemberHoursHistory = vi.fn();
 const mockLoadSettings = vi.fn();
 let mockCallTrackingMode = 'detailed';
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyHoursHistory: (...args: unknown[]) => mockGetMyHoursHistory(...args) as unknown,
+    getMemberHoursHistory: (...args: unknown[]) => mockGetMemberHoursHistory(...args) as unknown,
   },
 }));
 
@@ -259,5 +261,56 @@ describe('MyHoursSummary', () => {
 
       expect(await screen.findByText('My Hours')).toBeInTheDocument();
     });
+  });
+});
+
+describe('MyHoursSummary on a member profile', () => {
+  beforeEach(() => {
+    mockGetMyHoursHistory.mockReset();
+    mockGetMemberHoursHistory.mockReset();
+    mockCallTrackingMode = 'detailed';
+    mockGetMemberHoursHistory.mockResolvedValue(
+      history({
+        totals: {
+          shifts: 3,
+          hours: 36,
+          calls: 9,
+          pending_shifts: 0,
+          pending_hours: 0,
+          on_call_shifts: 1,
+          on_call_hours: 12,
+          external_shifts: 1,
+          external_hours: 4,
+          external_calls: 2,
+        },
+      })
+    );
+  });
+
+  it("reads the member's history, not the viewer's own", async () => {
+    render(<MyHoursSummary memberId="u-77" />);
+
+    expect(await screen.findByRole('heading', { name: 'Shift & Call History' })).toBeInTheDocument();
+    expect(mockGetMemberHoursHistory).toHaveBeenCalledWith('u-77', undefined);
+    expect(mockGetMyHoursHistory).not.toHaveBeenCalled();
+    // The outside-shift editor is the member's own, on My Hours.
+    expect(screen.queryByTestId('my-external-shifts')).not.toBeInTheDocument();
+  });
+
+  it('shows on-call hours as part of the total and outside calls beside it', async () => {
+    render(<MyHoursSummary memberId="u-77" />);
+
+    const year = await screen.findByRole('group', { name: 'This year' });
+    expect(within(year).getByText('of which 12 hrs on call')).toBeInTheDocument();
+    expect(within(year).getByText(/\+4 hrs with other departments · 2 calls/)).toBeInTheDocument();
+  });
+
+  it('asks for the chosen year of that member', async () => {
+    const user = userEvent.setup();
+    render(<MyHoursSummary memberId="u-77" />);
+    await screen.findByRole('heading', { name: 'Shift & Call History' });
+    await user.selectOptions(screen.getByLabelText('Year'), '2025');
+
+    await waitFor(() => expect(mockGetMemberHoursHistory).toHaveBeenLastCalledWith('u-77', 2025));
   });
 });

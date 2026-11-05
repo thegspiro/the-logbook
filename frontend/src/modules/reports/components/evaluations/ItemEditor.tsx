@@ -26,6 +26,8 @@ interface ItemEditorProps {
   onChange: (item: TemplateItem) => void;
   onRemove: () => void;
   onMove: (to: number) => void;
+  /** What the weight is a share of: the overall, or the item's section when the form is graded by section. */
+  weightLabel?: string | undefined;
 }
 
 /** One option per line, trimmed, blanks and repeats dropped. */
@@ -50,6 +52,7 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
   onChange,
   onRemove,
   onMove,
+  weightLabel = 'Weight in overall (%)',
 }) => {
   const id = `item-${item.key}`;
   const isScale = SCALE_TOOLS.includes(item.tool);
@@ -213,7 +216,7 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
         {isScored && (
           <div>
             <label htmlFor={`${id}-weight`} className="form-label">
-              Weight in overall (%)
+              {weightLabel}
             </label>
             <input
               id={`${id}-weight`}

@@ -30,6 +30,7 @@ const removePeriod = vi.fn();
 const listStarters = vi.fn();
 const draftOptions = vi.fn();
 const bulkPreview = vi.fn();
+const attention = vi.fn();
 vi.mock('../services/evaluationsApi', () => ({
   evaluationTemplatesService: {
     list: (...a: unknown[]) => listTemplates(...a) as unknown,
@@ -38,6 +39,7 @@ vi.mock('../services/evaluationsApi', () => ({
   },
   evaluationsService: {
     draftOptions: (...a: unknown[]) => draftOptions(...a) as unknown,
+    attention: (...a: unknown[]) => attention(...a) as unknown,
     bulkPreview: (...a: unknown[]) => bulkPreview(...a) as unknown,
   },
   evaluationPeriodsService: {
@@ -95,6 +97,7 @@ describe('EvaluationsPage', () => {
       listStarters,
       draftOptions,
       bulkPreview,
+      attention,
     ]) {
       m.mockReset();
     }
@@ -103,20 +106,36 @@ describe('EvaluationsPage', () => {
     listStarters.mockResolvedValue([]);
     draftOptions.mockResolvedValue({ members: [], evaluators: [], periods: [] });
     bulkPreview.mockResolvedValue({ period: period(), kind: 'annual', rows: [], evaluators: [] });
+    attention.mockResolvedValue({ mine: 0, overdue: 0 });
   });
 
-  it('points to where evaluations are drafted and where their emails are worded', async () => {
+  it('names the page in the strip, with the email wording one link away and the actions in the header', async () => {
+    window.history.pushState({}, '', '/reports/evaluations');
     renderWithRouter(<EvaluationsPage />);
-    expect(await screen.findByText(/Where evaluations happen/)).toBeInTheDocument();
-    // A manager sees every evaluation, so the conduct list is named for that —
-    // in the note and in the section strip alike.
-    const conductLinks = screen.getAllByRole('link', { name: 'All evaluations' });
-    expect(conductLinks).toHaveLength(2);
-    for (const link of conductLinks) expect(link).toHaveAttribute('href', '/reports/evaluations/conduct');
+
+    const strip = await screen.findByRole('navigation', { name: 'Evaluations sections' });
+    expect(within(strip).getByRole('link', { name: 'Templates & periods' })).toHaveAttribute('aria-current', 'page');
+    // The strip already names the page, so from sm up the heading is for
+    // screen readers only; on a phone the strip scrolls, so it stays visible.
+    expect(screen.getByRole('heading', { level: 1, name: 'Templates & periods' })).toHaveClass('sm:sr-only');
+    expect(screen.queryByText(/Where evaluations happen/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Email Templates' })).toHaveAttribute(
       'href',
       '/communications/email-templates'
     );
+    expect(screen.getByRole('button', { name: 'New review period' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New template' })).toBeInTheDocument();
+  });
+
+  it('badges the strip with what waits in each section, as the server counts it', async () => {
+    attention.mockResolvedValue({ mine: 2, overdue: 5 });
+    window.history.pushState({}, '', '/reports/evaluations');
+    renderWithRouter(<EvaluationsPage />);
+
+    const strip = await screen.findByRole('navigation', { name: 'Evaluations sections' });
+    expect(await within(strip).findByRole('link', { name: 'My evaluations, 2 waiting on you' })).toBeInTheDocument();
+    expect(within(strip).getByRole('link', { name: 'All evaluations, 5 overdue' })).toBeInTheDocument();
+    expect(within(strip).getByRole('link', { name: 'Templates & periods' })).toBeInTheDocument();
   });
 
   it('shows each template with who it applies to and its version', async () => {
@@ -228,19 +247,18 @@ describe('EvaluationsPage', () => {
     expect(within(strip).getByRole('link', { name: 'Templates & periods' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('names the conduct list without linking it for a builder its route refuses', async () => {
+  it('offers a builder only the sections their grants open', async () => {
     granted = new Set(['evaluations.configure']);
     window.history.pushState({}, '', '/reports/evaluations');
     renderWithRouter(<EvaluationsPage />);
 
-    expect(await screen.findByText(/Evaluations I conduct/)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Evaluations I conduct' })).not.toBeInTheDocument();
-    const strip = screen.getByRole('navigation', { name: 'Evaluations sections' });
+    const strip = await screen.findByRole('navigation', { name: 'Evaluations sections' });
     expect(
       within(strip)
         .getAllByRole('link')
         .map((link) => link.textContent)
     ).toEqual(['My evaluations', 'Templates & periods']);
+    expect(screen.queryByRole('button', { name: 'New review period' })).not.toBeInTheDocument();
   });
 
   it('gives a template builder read-only periods', async () => {
@@ -331,7 +349,7 @@ describe('EvaluationsPage', () => {
 
       const templatesSection = await screen.findByRole('region', { name: 'Templates' });
       expect(await within(templatesSection).findByText('No templates yet')).toBeInTheDocument();
-      expect(within(templatesSection).getByRole('button', { name: /new template/i })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'New template' }).length).toBeGreaterThan(0);
     });
   });
 

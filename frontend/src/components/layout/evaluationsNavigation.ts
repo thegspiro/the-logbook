@@ -37,15 +37,30 @@ export const EVALUATION_SETUP_LABEL = 'Templates & periods';
  *
  * My evaluations has no permission because its route has none — every member
  * can read the evaluations written about them.
+ *
+ * `counts` badge the links: the caller's own evaluations waiting on them, and
+ * the overdue rows of the conduct list. Both come from the server
+ * (`GET /evaluations/attention`); none are drawn until they arrive.
  */
-export function evaluationsNavItems(checkPermission: (permission: string) => boolean): SectionNavItem[] {
+export function evaluationsNavItems(
+  checkPermission: (permission: string) => boolean,
+  counts?: { mine: number; overdue: number } | null
+): SectionNavItem[] {
   return [
-    { label: 'My evaluations', path: EVALUATIONS_HOME_PATH, icon: ClipboardCheck },
+    {
+      label: 'My evaluations',
+      path: EVALUATIONS_HOME_PATH,
+      icon: ClipboardCheck,
+      count: counts?.mine,
+      countLabel: 'waiting on you',
+    },
     {
       label: conductListLabel(checkPermission),
       path: '/reports/evaluations/conduct',
       icon: ClipboardList,
       anyPermission: ['evaluations.conduct', 'evaluations.view_all', 'evaluations.manage'],
+      count: counts?.overdue,
+      countLabel: 'overdue',
     },
     {
       label: EVALUATION_SETUP_LABEL,

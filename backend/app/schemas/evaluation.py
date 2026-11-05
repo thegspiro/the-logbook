@@ -205,6 +205,9 @@ class TemplateSection(BaseModel):
     description: Optional[str] = Field(default=None, max_length=1000)
     # Shown only to members holding one of the definition's officer ranks.
     officer_only: bool = False
+    # The section's share of the overall when ``overall_mode`` is
+    # ``sectioned``; its items' weights are then shares of the section.
+    weight: int = Field(default=0, ge=0, le=100)
     items: List[TemplateItem] = Field(
         default_factory=list, max_length=MAX_ITEMS_PER_SECTION
     )
@@ -215,11 +218,41 @@ class TemplateSection(BaseModel):
         return _check_key(v, "Section")
 
 
+#: The five grades every section and overall score is reported in, lowest
+#: first. Fixed for the same reason as ``OVERALL_LEVELS``, which uses the
+#: same words: a grade is compared across members and years.
+GRADE_LEVELS = (1, 2, 3, 4, 5)
+
+
+class GradeBand(BaseModel):
+    """The lowest score, on the 1-5 grade scale, that earns ``level``."""
+
+    level: int = Field(ge=1, le=5)
+    min: float = Field(ge=1, le=5)
+
+
+def default_grade_bands() -> List["GradeBand"]:
+    """Half-way between levels, so a score reads as the nearest grade."""
+    return [
+        GradeBand(level=1, min=1.0),
+        GradeBand(level=2, min=1.5),
+        GradeBand(level=3, min=2.5),
+        GradeBand(level=4, min=3.5),
+        GradeBand(level=5, min=4.5),
+    ]
+
+
 class TemplateDefinition(BaseModel):
     sections: List[TemplateSection] = Field(
         default_factory=list, max_length=MAX_SECTIONS
     )
-    overall_mode: Literal["weighted", "evaluator", "none"] = "weighted"
+    # ``sectioned`` grades each section from its own items and the overall
+    # from the sections' weights; ``weighted`` is the older single
+    # percentage, kept so forms built with it score as they always have.
+    overall_mode: Literal["weighted", "sectioned", "evaluator", "none"] = "weighted"
+    # The scores that count as each grade, used in ``sectioned`` mode for
+    # every section and for the overall alike.
+    grade_bands: List[GradeBand] = Field(default_factory=default_grade_bands)
     # Rank codes (``operational_ranks.rank_code``) that add officer-only
     # sections. Checked against the department's ranks by the service.
     officer_ranks: List[str] = Field(default_factory=list, max_length=50)
@@ -233,6 +266,14 @@ class TemplateDefinition(BaseModel):
         if len(set(item_keys)) != len(item_keys):
             raise ValueError("Item keys must be unique across the template")
         self.officer_ranks = list(dict.fromkeys(self.officer_ranks))
+        bands = sorted(self.grade_bands, key=lambda b: b.level)
+        if [b.level for b in bands] != list(GRADE_LEVELS):
+            raise ValueError("Give one score range for each of the five grades")
+        if bands[0].min != 1:
+            raise ValueError("The lowest grade must start at 1")
+        if any(lower.min >= upper.min for lower, upper in zip(bands, bands[1:])):
+            raise ValueError("Each higher grade must start at a higher score")
+        self.grade_bands = bands
         return self
 
 
@@ -260,10 +301,47 @@ def definition_publish_errors(definition: TemplateDefinition) -> List[str]:
             errors.append("A weighted overall needs at least one weighted item.")
         elif sum(weights) != 100:
             errors.append(f"Item weights add up to {sum(weights)}%, not 100%.")
+    elif definition.overall_mode == "sectioned":
+        errors.extend(_sectioned_errors(definition))
     if any(s.officer_only for s in definition.sections) and not (
         definition.officer_ranks
     ):
         errors.append("Choose the ranks that receive the officer-only sections.")
+    return errors
+
+
+def _sectioned_errors(definition: TemplateDefinition) -> List[str]:
+    """A by-section overall: each graded section's items share 100% of it,
+    and the graded sections share 100% of the overall."""
+    errors: List[str] = []
+    graded = 0
+    section_total = 0
+    for section in definition.sections:
+        item_weights = [
+            i.weight for i in section.items if i.tool in SCORED_TOOLS and i.weight
+        ]
+        if section.weight and not item_weights:
+            errors.append(
+                f"Section '{section.title}' counts toward the overall but no item "
+                "in it is weighted."
+            )
+        elif item_weights and not section.weight:
+            errors.append(
+                f"Section '{section.title}' has weighted items; give the section "
+                "a weight too."
+            )
+        elif item_weights and sum(item_weights) != 100:
+            errors.append(
+                f"Item weights in '{section.title}' add up to "
+                f"{sum(item_weights)}%, not 100%."
+            )
+        if section.weight:
+            graded += 1
+            section_total += section.weight
+    if not graded:
+        errors.append("Weight at least one section to calculate an overall grade.")
+    elif section_total != 100:
+        errors.append(f"Section weights add up to {section_total}%, not 100%.")
     return errors
 
 
@@ -687,16 +765,41 @@ class ItemAnswer(BaseModel):
         return self
 
 
+class GradeOverride(BaseModel):
+    """An evaluator's grade for a section in place of the calculated one,
+    with the reason, which is printed beside both."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    level: int = Field(ge=1, le=5)
+    reason: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+
+    @field_validator("reason")
+    @classmethod
+    def _blank(cls, v: Optional[str]) -> Optional[str]:
+        return _blank_to_none(v)
+
+
 class PartContent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     answers: dict[str, ItemAnswer] = Field(
         default_factory=dict, max_length=MAX_SECTIONS * MAX_ITEMS_PER_SECTION
     )
+    # In ``evaluator`` mode the overall the evaluator chooses; in
+    # ``sectioned`` mode their grade in place of the calculated overall,
+    # which then needs ``overall_override_reason``.
     overall_rating: Optional[int] = Field(default=None, ge=1, le=5)
+    overall_override_reason: Optional[str] = Field(
+        default=None, max_length=MAX_ANSWER_TEXT
+    )
     overall_comment: Optional[str] = Field(default=None, max_length=MAX_ANSWER_TEXT)
+    # Section key -> the evaluator's grade in place of the calculated one.
+    section_grades: dict[str, GradeOverride] = Field(
+        default_factory=dict, max_length=MAX_SECTIONS
+    )
 
-    @field_validator("overall_comment")
+    @field_validator("overall_comment", "overall_override_reason")
     @classmethod
     def _blank(cls, v: Optional[str]) -> Optional[str]:
         return _blank_to_none(v)
@@ -743,6 +846,15 @@ class ExcludedRangeResponse(BaseModel):
     start: date
     end: date
     reason: Literal["leave", "separation"]
+
+
+class AttentionCounts(BaseModel):
+    """Badges for the evaluation pages' section strip, decided by the server.
+    ``mine``: the caller's own evaluations waiting on them. ``overdue``: those
+    they may list on the conduct page with a step past due."""
+
+    mine: int
+    overdue: int
 
 
 class EvaluationSummary(BaseModel):
@@ -833,6 +945,44 @@ class SignatureWrite(BaseModel):
         return self
 
 
+class GradeResult(BaseModel):
+    """A calculated grade and, where the evaluator gave a different one,
+    theirs and why. ``level`` is the grade that stands."""
+
+    score: Optional[float] = None
+    calculated_level: Optional[int] = None
+    calculated_label: Optional[str] = None
+    override_level: Optional[int] = None
+    override_label: Optional[str] = None
+    reason: Optional[str] = None
+    level: Optional[int] = None
+    label: Optional[str] = None
+
+
+class SectionGradeResult(GradeResult):
+    key: str
+    title: str
+    weight: int
+
+
+class GradesResponse(BaseModel):
+    """Section and overall grades for a ``sectioned`` form. Scores are on the
+    1-5 grade scale, rounded to one decimal, and the grade is read from that
+    rounded score."""
+
+    sections: List[SectionGradeResult]
+    overall: GradeResult
+
+
+class GradeRequest(BaseModel):
+    """A form and an evaluator's answers to grade, without saving either:
+    what the evaluation screen and the builder's preview show as ratings
+    change."""
+
+    definition: TemplateDefinition
+    content: PartContent
+
+
 class EvaluationDetail(EvaluationSummary):
     coverage_start: Optional[date] = None
     coverage_end: Optional[date] = None
@@ -854,6 +1004,7 @@ class EvaluationDetail(EvaluationSummary):
     # The evaluator's weighted overall, as a percentage of each item's scale,
     # when the template calculates one and the caller may read the part.
     weighted_overall: Optional[float] = None
+    grades: Optional[GradesResponse] = None
     signatures: List[SignatureResponse] = Field(default_factory=list)
     # The finalized PDF can be downloaded.
     document_available: bool = False

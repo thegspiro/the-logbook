@@ -46,6 +46,7 @@ from app.services.training_compliance import (
     evaluate_member_requirement,
     load_credited_shift_dates,
     load_graded_records,
+    load_held_sessions,
     member_join_date,
     tally_standing,
 )
@@ -980,6 +981,9 @@ class AnnualComplianceReportService:
             today,
             org_include_current,
         )
+        held_sessions = await load_held_sessions(
+            self.db, str(organization_id), requirements
+        )
 
         # A period that ended in the past is graded on what was known then.
         if as_of_cap is not None:
@@ -1043,6 +1047,7 @@ class AnnualComplianceReportService:
                     org_include_current_month=org_include_current,
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(member.id), []),
+                    held_sessions=held_sessions,
                 )[0]
                 for req in applicable_reqs
             )
@@ -1134,6 +1139,7 @@ class AnnualComplianceReportService:
                     org_include_current_month=org_include_current,
                     join_date=member_join_date(member),
                     shift_dates=shifts_by_user.get(str(member.id), []),
+                    held_sessions=held_sessions,
                 )[0]
                 for member in applicable_members
             )

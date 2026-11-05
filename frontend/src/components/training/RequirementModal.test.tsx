@@ -501,4 +501,73 @@ describe('RequirementModal', () => {
       );
     });
   });
+
+  describe('session attendance', () => {
+    it('creates one with its attendance percentage', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Company drills');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+      await user.type(screen.getByLabelText(/^Sessions to Attend/), '60');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requirement_type: 'session_attendance',
+          required_attendance_pct: 60,
+          required_hours: null,
+        }),
+        false,
+        undefined
+      );
+    });
+
+    it('does not offer the hours and training-type fields it never reads', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      expect(screen.getByLabelText(/^Required Hours/)).toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+
+      expect(screen.queryByLabelText(/^Required Hours/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Training Type/)).not.toBeInTheDocument();
+    });
+
+    it('will not create one without a percentage', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Company drills');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('clears the percentage when the type is switched away', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ requirement_type: 'session_attendance', required_attendance_pct: 60 })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      expect(screen.getByLabelText(/^Sessions to Attend/)).toHaveValue(60);
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'hours');
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ requirement_type: 'hours', required_attendance_pct: null }),
+        true,
+        'req-1'
+      );
+    });
+  });
 });

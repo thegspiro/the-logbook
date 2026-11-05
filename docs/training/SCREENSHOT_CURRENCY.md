@@ -1,5 +1,16 @@
 # Screenshot currency
 
+## Queued by the November 3 – 4 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-3--4-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 16 | Historical Data Import: upload, column mapping, sorted rows, batch list | Create |
+| 02 | Evaluations strip and the Getting started checklist with the template preview | Create |
+| 01 | Members roster at tablet width (cards below 1024px); `01-22-member-lifecycle`; profile ID Cards empty state | Replace |
+
 ## Captured 2026-11-04 — screens unblocked by #3988, #3997 and #4005
 
 Taken on the demo department seeded from `main` at `e850590f`, with malware
@@ -26,8 +37,10 @@ the browser.
 | `01-22-member-lifecycle` | Re-shot | The roster's Actions column is no longer clipped. Taller frame, since a Needs attention card now sits above the area cards |
 | `02-126-shift-evaluation-settings` | Re-shot | The "Not in use on shifts yet" notice is gone; an **Outside shifts awaiting an evaluation** card now leads the tab. Alt text updated |
 
-Left for later: `05-141`, `06-36` and `04-92`, whose wording fixes are in PR
-#4035, not yet merged.
+`05-141-nfc-move-tag`, `06-36-card-readers` and `04-92-card-readers` were
+re-shot the same day, after #4035 merged: the Move tag dialog reads **Find an
+item**, and Card Readers counts **1 tap**. Their alt text quotes neither phrase,
+so the guides are unchanged.
 
 ## Queued by the November 2 – 3 documentation pass
 
@@ -172,13 +185,17 @@ code:
 
 - Guide 02: the Shift Evaluations notice still says evaluations are not in use
   on shifts. **Removed on main**; `02-126` re-shot 2026-11-04.
-- Guide 05: the Move tag dialog says "Find a item". Open: fixed in PR #4035, not yet merged.
-- Card Readers says "1 taps" and repeats a room's station in its name. Open: the wording is fixed in PR #4035, not yet merged.
+- Guide 05: the Move tag dialog says "Find a item". **Fixed** by #4035;
+  `05-141` re-shot 2026-11-04.
+- Card Readers says "1 taps" and repeats a room's station in its name. "1 taps"
+  is **fixed** by #4035 (`06-36`, `04-92` re-shot 2026-11-04); the repeated
+  station is still open.
 - The Members roster's Actions column is clipped at 1440px, and the explainer
   above it still describes one "membership type". The Actions column is
   **fixed on main** (#03f21141 and follow-ups; `01-22` re-shot 2026-11-04).
   The explainer still says "membership type".
-- An unchanged draft purchase request reads "Saving soon…" as soon as it opens. Open: fixed in PR #4037, not yet merged.
+- An unchanged draft purchase request reads "Saving soon…" as soon as it opens.
+  **Fixed** by #4037. No guide image pictured the status line.
 - On the prospective-members board, each card's selection checkbox
   (`PipelineKanban.tsx`, `absolute top-2 left-2`) sits over the card's top-left
   corner: the avatar, or the warning icon of a **Contact details changed** or

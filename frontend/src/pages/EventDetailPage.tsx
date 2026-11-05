@@ -965,6 +965,11 @@ export const EventDetailPage: React.FC = () => {
   const isTrainingEvent = event.event_type === EventTypeEnum.TRAINING;
   // The card has found a session, so it — not custom_fields — describes it.
   const trainingSessionReported = isTrainingEvent && trainingSession !== null;
+  // The session the card loaded is current after an officer changes its links
+  // there; the event's own flag answers until the card has loaded.
+  const countsTowardAttendance = trainingSession
+    ? (trainingSession.attendance_requirement_ids?.length ?? 0) > 0
+    : Boolean(event.counts_toward_attendance);
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
   const occupiedSeats = event.occupied_seats ?? event.going_count ?? 0;
@@ -1144,6 +1149,12 @@ export const EventDetailPage: React.FC = () => {
                 {event.is_mandatory && (
                   <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                     Mandatory
+                  </span>
+                )}
+                {countsTowardAttendance && (
+                  <span className="bg-theme-alert-info-bg text-theme-alert-info-title inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
+                    Counts toward attendance
                   </span>
                 )}
                 {(event.is_recurring || event.recurrence_parent_id) && (

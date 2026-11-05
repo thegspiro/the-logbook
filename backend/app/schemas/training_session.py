@@ -66,6 +66,14 @@ class TrainingSessionCreate(BaseModel):
     requirement_id: Optional[UUID] = Field(
         None, description="Specific requirement this session satisfies"
     )
+    attendance_requirement_ids: Optional[List[UUID]] = Field(
+        None,
+        max_length=50,
+        description=(
+            "Session-attendance requirements this session counts toward; "
+            "members they grade are charged with attending it"
+        ),
+    )
 
     # New course details (if not using existing)
     course_name: Optional[str] = Field(None, max_length=255)
@@ -213,6 +221,15 @@ class TrainingSessionLinkageUpdate(BaseModel):
         return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
+class TrainingSessionAttendanceRequirements(BaseModel):
+    """The full set of attendance requirements a session counts toward.
+
+    A replacement, not a patch: an empty list unlinks every one.
+    """
+
+    requirement_ids: List[UUID] = Field(default_factory=list, max_length=50)
+
+
 class TrainingSessionAttach(BaseModel):
     """Training details picked for a Training event created from Events.
 
@@ -251,6 +268,7 @@ class TrainingSessionResponse(UTCResponseBase):
     program_id: Optional[UUID] = None
     phase_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
+    attendance_requirement_ids: List[str] = Field(default_factory=list)
 
     course_name: str
     course_code: Optional[str]

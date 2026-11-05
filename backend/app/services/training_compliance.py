@@ -6,9 +6,10 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 """
 
 import calendar
+import math
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy import ColumnElement, and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,8 @@ from app.models.training import (
     RequirementType,
     TrainingRecord,
     TrainingRequirement,
+    TrainingSession,
+    TrainingSessionRequirement,
     TrainingStatus,
 )
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
@@ -31,6 +34,7 @@ from app.services.training_waiver_service import (
     SOURCE_LEAVE,
     SOURCE_WAIVER,
     MonthWaiver,
+    WaiverPeriod,
     adjust_required,
     excused_month_reasons,
     fetch_org_waivers,
@@ -38,7 +42,11 @@ from app.services.training_waiver_service import (
 )
 from app.utils.hours import meets_required_hours
 from app.utils.membership import MemberStatus, canonical_member_status
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+)
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.training_match_key import training_match_key
 
@@ -545,6 +553,177 @@ def _require_shift_dates(req, shift_dates: Optional[Sequence[date]]):
     return shift_dates
 
 
+def is_session_attendance(req) -> bool:
+    """Whether ``req`` is graded on attendance at its linked sessions."""
+    req_type = getattr(req, "requirement_type", None)
+    req_type = getattr(req_type, "value", req_type)
+    return req_type == RequirementType.SESSION_ATTENDANCE.value
+
+
+@dataclass(frozen=True)
+class HeldSession:
+    """A session linked to an attendance requirement that has been held.
+
+    ``held_on`` is the session's day on the department's calendar, the date
+    its attendance records carry (see ``TrainingSessionService`` finalize).
+    """
+
+    event_id: str
+    held_on: date
+
+
+@dataclass(frozen=True)
+class AttendanceTally:
+    """One member's standing on one SESSION_ATTENDANCE requirement.
+
+    ``held`` counts the linked sessions held in the window since the member
+    joined; ``charged`` is those minus the ones a waiver or leave excused
+    (a session the member attended anyway stays charged, and counts);
+    ``needed`` is how many of ``charged`` the percentage asks for, and
+    ``base_needed`` what it would ask of ``held``.
+    """
+
+    attended: int
+    charged: int
+    held: int
+    needed: int
+    base_needed: int
+    latest_attended: Optional[date]
+
+    @property
+    def met(self) -> bool:
+        return self.attended >= self.needed
+
+
+def _sessions_needed(pct: float, count: int) -> int:
+    # The tolerance keeps 60% of 5 at 3: 0.6 * 5 is 3.0000000000000004.
+    return max(0, math.ceil(pct * count / 100 - 1e-9))
+
+
+def _waiver_excuses(waiver: WaiverPeriod, req_id: str, day: date) -> bool:
+    # The same reading of requirement_ids as excused_month_reasons: an
+    # empty or missing list is a blanket waiver.
+    if waiver.requirement_ids and req_id not in [
+        str(r) for r in waiver.requirement_ids
+    ]:
+        return False
+    return waiver.start_date <= day <= waiver.end_date
+
+
+def tally_session_attendance(
+    req,
+    member_records,
+    held_sessions: Sequence[HeldSession],
+    as_of: date,
+    waivers=None,
+    join_date: Optional[date] = None,
+) -> AttendanceTally:
+    """Count a member's attendance at ``req``'s sessions as of ``as_of``.
+
+    The one definition of the rule, read by every grader. ``as_of`` is the
+    requirement's evaluation cut-off (:func:`requirement_as_of`). A session
+    counts when it falls in :func:`completion_window`, on or before the
+    cut-off and on or after ``join_date``; a member is not charged with a
+    drill held before they joined. A member attended it when they hold a
+    COMPLETED record whose ``source_event_id`` is the session's event, the
+    record finalizing the session writes.
+    """
+    start, end = completion_window(req, as_of)
+    last = as_of if end is None else min(end, as_of)
+    req_id = str(req.id)
+    attended_events = {
+        str(r.source_event_id)
+        for r in member_records
+        if r.status == TrainingStatus.COMPLETED and getattr(r, "source_event_id", None)
+    }
+    in_window = [
+        s
+        for s in held_sessions
+        if (start is None or s.held_on >= start)
+        and s.held_on <= last
+        and (join_date is None or s.held_on >= join_date)
+    ]
+    charged = [
+        s
+        for s in in_window
+        if s.event_id in attended_events
+        or not any(_waiver_excuses(w, req_id, s.held_on) for w in waivers or [])
+    ]
+    attended = [s for s in charged if s.event_id in attended_events]
+    pct = float(req.required_attendance_pct or 0)
+    return AttendanceTally(
+        attended=len(attended),
+        charged=len(charged),
+        held=len(in_window),
+        needed=_sessions_needed(pct, len(charged)),
+        base_needed=_sessions_needed(pct, len(in_window)),
+        latest_attended=max((s.held_on for s in attended), default=None),
+    )
+
+
+def _require_held_sessions(
+    req, held_sessions: Optional[Mapping[str, Sequence[HeldSession]]]
+) -> Sequence[HeldSession]:
+    """``req``'s held sessions, or a loud failure when a caller did not load them.
+
+    Grading without them would read every member as owing nothing, which
+    looks like full compliance.
+    """
+    if held_sessions is None:
+        raise ValueError(
+            f"Requirement {getattr(req, 'id', '?')} counts session attendance; "
+            "pass held_sessions (load_held_sessions)"
+        )
+    return held_sessions.get(str(req.id), [])
+
+
+async def load_held_sessions(
+    db: AsyncSession,
+    org_id: str,
+    requirements: Iterable[TrainingRequirement],
+) -> Dict[str, List[HeldSession]]:
+    """The held sessions of each SESSION_ATTENDANCE requirement, by requirement id.
+
+    A session is held once it is finalized and its event was not cancelled,
+    the point at which finalizing writes its attendance records. Counting a
+    session before that would charge every member who attended it as absent
+    until an officer closed it out (the same reason SHIFTS counts only
+    finalized shifts). ``{}`` when none of ``requirements`` is of the type,
+    and callers pass the mapping whole.
+    """
+    from app.models.event import Event
+
+    ids = [str(r.id) for r in requirements if is_session_attendance(r)]
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(
+            TrainingSessionRequirement.requirement_id,
+            Event.id,
+            Event.start_datetime,
+        )
+        .join(
+            TrainingSession,
+            TrainingSession.id == TrainingSessionRequirement.session_id,
+        )
+        .join(Event, Event.id == TrainingSession.event_id)
+        .where(
+            TrainingSessionRequirement.organization_id == str(org_id),
+            TrainingSessionRequirement.requirement_id.in_(ids),
+            TrainingSession.organization_id == str(org_id),
+            TrainingSession.is_finalized.is_(True),
+            Event.is_cancelled.is_(False),
+        )
+    )
+    tz = await resolve_scheduling_timezone(db, org_id)
+    by_req: Dict[str, List[HeldSession]] = {rid: [] for rid in ids}
+    for req_id, event_id, start in rows.all():
+        by_req[str(req_id)].append(HeldSession(str(event_id), local_date(start, tz)))
+    for sessions in by_req.values():
+        sessions.sort(key=lambda s: s.held_on)
+    return by_req
+
+
 @dataclass(frozen=True)
 class RequirementEvaluation:
     """A single member's standing against a single requirement.
@@ -586,6 +765,7 @@ def evaluate_member_requirement_detail(
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
     shift_dates: Optional[Sequence[date]] = None,
+    held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
 ) -> RequirementEvaluation:
     """Evaluate one member against one requirement, honouring a catch-up period.
 
@@ -599,6 +779,9 @@ def evaluate_member_requirement_detail(
     ``shift_dates`` is the member's worked shifts from
     :func:`load_credited_shift_dates`, required whenever ``req`` is counted
     from attendance (:func:`counts_shift_attendance`).
+
+    ``held_sessions`` is :func:`load_held_sessions` for the requirements being
+    graded, required whenever ``req`` is a SESSION_ATTENDANCE requirement.
     """
     ev = _grade_member_requirement(
         req,
@@ -607,6 +790,8 @@ def evaluate_member_requirement_detail(
         waivers=waivers,
         org_include_current_month=org_include_current_month,
         shift_dates=shift_dates,
+        held_sessions=held_sessions,
+        join_date=join_date,
     )
     # Measured against the real day rather than the evaluation cut-off: the
     # deadline is a calendar promise to the member, not a period boundary.
@@ -625,6 +810,8 @@ def _grade_member_requirement(
     waivers=None,
     org_include_current_month: bool = True,
     shift_dates: Optional[Sequence[date]] = None,
+    held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
+    join_date: Optional[date] = None,
 ) -> RequirementEvaluation:
     """
     Evaluate a single member's status for a single requirement.
@@ -651,6 +838,9 @@ def _grade_member_requirement(
                       (:func:`counts_shift_attendance`), or matching records
                       when the requirement is not shift-credited
     - CALLS:          Count matching records within date window
+    - SESSION_ATTENDANCE: Share of the linked sessions held since
+                      ``join_date`` the member attended
+                      (:func:`tally_session_attendance`)
     - Others:         Match by training_type, or by name for legacy records
                       (see fallback_record_matches)
     """
@@ -960,6 +1150,34 @@ def _grade_member_requirement(
             return _ev("in_progress", latest_comp, latest_exp, **progress)
         return _ev("not_started", None, None, **progress)
 
+    # ---- SESSION_ATTENDANCE requirements ----
+    if req_type == RequirementType.SESSION_ATTENDANCE.value:
+        tally = tally_session_attendance(
+            req,
+            member_records,
+            _require_held_sessions(req, held_sessions),
+            today,
+            waivers=_waivers,
+            join_date=join_date,
+        )
+        progress = {
+            "current": tally.attended,
+            "required": tally.needed,
+            "unit": "sessions",
+            "base": tally.base_needed,
+        }
+        latest_comp = (
+            tally.latest_attended.isoformat() if tally.latest_attended else None
+        )
+        # No session charged yet (none held, or every one excused) is met:
+        # the member owes nothing for the window, as a target prorated to
+        # zero is for shifts and calls.
+        if tally.met:
+            return _ev("completed", latest_comp, None, **progress)
+        if tally.attended > 0:
+            return _ev("in_progress", latest_comp, None, **progress)
+        return _ev("not_started", None, None, **progress)
+
     # ---- Fallback (skills_evaluation, checklist, knowledge_test, etc.) ----
     matching = fallback_record_matches(req, windowed)
 
@@ -991,6 +1209,7 @@ def evaluate_member_requirement(
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
     shift_dates: Optional[Sequence[date]] = None,
+    held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
 ):
     """
     Evaluate a single member's status for a single requirement.
@@ -1011,6 +1230,7 @@ def evaluate_member_requirement(
         org_include_current_month=org_include_current_month,
         join_date=join_date,
         shift_dates=shift_dates,
+        held_sessions=held_sessions,
     )
     return ev.status, ev.completion_date, ev.expiry_date
 
@@ -1025,6 +1245,7 @@ _TYPED_BRANCH_TYPES = frozenset(
         RequirementType.CERTIFICATION.value,
         RequirementType.SHIFTS.value,
         RequirementType.CALLS.value,
+        RequirementType.SESSION_ATTENDANCE.value,
     }
 )
 
@@ -1075,6 +1296,10 @@ def graded_records_clause(
     lets through is dropped by the grader, which compares the stored keys in
     Python. A record is never loaded for text its key does not carry.
 
+    - **SESSION_ATTENDANCE** reads COMPLETED records by ``source_event_id``,
+      not by date, so the records of every session linked to one are
+      selected whatever their completion date.
+
     SCHEDULED, CANCELLED and FAILED records are never read and never loaded.
     Grandfathering, catch-up deadlines and waivers read the member and the
     waiver tables, not records, so they widen nothing.
@@ -1089,7 +1314,10 @@ def graded_records_clause(
     # Clauses for the requirements whose records are found by what they match
     # (certification and fallback types) rather than by date alone.
     matched: List[ColumnElement[bool]] = []
+    attendance_ids: List[str] = []
     for req in requirements:
+        if is_session_attendance(req):
+            attendance_ids.append(str(req.id))
         as_of = requirement_as_of(req, today, org_include_current_month)
         req_type = getattr(req.requirement_type, "value", req.requirement_type)
         if req_type == RequirementType.CERTIFICATION.value:
@@ -1151,6 +1379,22 @@ def graded_records_clause(
             )
         )
     clauses.extend(matched)
+    if attendance_ids:
+        clauses.append(
+            and_(
+                completed,
+                TrainingRecord.source_event_id.in_(
+                    select(TrainingSession.event_id)
+                    .join(
+                        TrainingSessionRequirement,
+                        TrainingSessionRequirement.session_id == TrainingSession.id,
+                    )
+                    .where(
+                        TrainingSessionRequirement.requirement_id.in_(attendance_ids)
+                    )
+                ),
+            )
+        )
     return or_(*clauses) if clauses else false()
 
 
@@ -1639,6 +1883,7 @@ def _evaluate_member_compliance(
     org_include_current_month: bool = True,
     join_date: Optional[date] = None,
     shift_dates: Optional[Sequence[date]] = None,
+    held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
 ) -> Tuple[str, Optional[float]]:
     """Evaluate a member's compliance status against a set of requirements.
 
@@ -1655,6 +1900,7 @@ def _evaluate_member_compliance(
             org_include_current_month=org_include_current_month,
             join_date=join_date,
             shift_dates=shift_dates,
+            held_sessions=held_sessions,
         )
         statuses.append(req_status)
     completed_count, total_count = tally_standing(statuses)
@@ -1937,6 +2183,7 @@ async def compute_org_compliance_tally(
         today,
         grading.include_current_month,
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     # Fetch waivers
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
@@ -1960,6 +2207,7 @@ async def compute_org_compliance_tally(
             org_include_current_month=grading.include_current_month,
             join_date=member_join_date(member),
             shift_dates=shifts_by_user.get(str(member.id), []),
+            held_sessions=held_sessions,
         )
         if status == STANDING_NOT_APPLICABLE:
             not_applicable_count += 1
@@ -2035,6 +2283,7 @@ async def grade_org_members(
     shifts_by_user = await load_credited_shift_dates(
         db, org_id, member_ids, requirements, today, grading.include_current_month
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
     graded: List[MemberCompliance] = []
@@ -2052,6 +2301,7 @@ async def grade_org_members(
                     org_include_current_month=grading.include_current_month,
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(member.id), []),
+                    held_sessions=held_sessions,
                 ),
             )
             for req in member_grading.requirements

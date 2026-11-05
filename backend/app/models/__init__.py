@@ -492,6 +492,7 @@ from app.models.training import (
     TrainingRecord,
     TrainingRequirement,
     TrainingSession,
+    TrainingSessionRequirement,
 )
 from app.models.user import (
     LeaveType,
@@ -715,6 +716,7 @@ __all__ = [
     "TrainingRecord",
     "TrainingRequirement",
     "TrainingSession",
+    "TrainingSessionRequirement",
     "TrainingApproval",
     "TrainingProgram",
     "ProgramPhase",

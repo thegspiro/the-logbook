@@ -5,6 +5,22 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 3 – 4, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-3--4-2026).
+
+- **Historical Data Import** brings hours from your old system (shifts, on-call,
+  training, administrative) into The Logbook, reviewed in monthly batches.
+- **Interviewers are emailed** when an applicant reaches an interview stage, and
+  **My applicants** now narrows the counts and archive tabs as well.
+- **Evaluations** is one menu entry, with a setup checklist, a preview and two
+  starter templates for a first-time chief.
+- **Setup** asks about Public Information and says when the session has ended.
+- **Shift Patterns** shows paused patterns so they can be resumed.
+- **Members roster** switches to cards below 1024px.
+- Operators: `REDIS_REQUIRED=true` now refuses to start without Redis.
+
 ## Recent changes: November 2 – 3, 2026
 
 The engineering audit is

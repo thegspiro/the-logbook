@@ -1,7 +1,7 @@
 """External shift approval state, and open-swap notice ledger.
 
 Revision ID: c4ee38cd931c
-Revises: 06b52fa4b688
+Revises: 89cfef37cca8
 Create Date: 2026-11-04 16:59:43.377406
 
 Two owner decisions of 2026-11-01, built 2026-11-04:
@@ -40,7 +40,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c4ee38cd931c"
-down_revision: Union[str, None] = "06b52fa4b688"
+down_revision: Union[str, None] = "89cfef37cca8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

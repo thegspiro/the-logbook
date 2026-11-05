@@ -16,16 +16,19 @@ invariants carry that:
 import json
 import uuid
 from datetime import date, datetime, timedelta
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [pytest.mark.integration]
 
 from app.api.v1.endpoints import scheduling as scheduling_endpoint
-from app.models.training import Shift, ShiftAttendance
+from app.models.external_shift_hours import ExternalShiftHours, ExternalShiftHoursStatus
+from app.models.training import Shift, ShiftAttendance, ShiftDutyType
 from app.models.user import User
 from app.services.scheduling_service import SchedulingService
 
@@ -380,6 +383,9 @@ class TestMyHoursHistory:
             "pending_hours": 0.0,
             "external_shifts": 0,
             "external_hours": 0.0,
+            "external_calls": 0,
+            "on_call_shifts": 0,
+            "on_call_hours": 0.0,
         }
 
         assert history["earliest_year"] is None
@@ -562,3 +568,148 @@ class TestAllTimeTotals:
         assert history["earliest_year"] == 2023
         assert history["all_time"]["hours"] == 10.0
         assert history["all_time"]["pending_hours"] == 5.0
+
+
+class TestOnCallAndOutsideCalls:
+    """Recall shifts are a part of the credited hours, never added to them."""
+
+    @pytest.mark.asyncio
+    async def test_on_call_hours_are_a_part_of_the_total(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        await _worked(
+            db_session, org_id, user_id, date(2025, 4, 7), 720, finalized=True, calls=2
+        )
+        recall = await _worked(
+            db_session, org_id, user_id, date(2025, 4, 9), 600, finalized=True, calls=0
+        )
+        shift = await db_session.get(Shift, recall)
+        shift.duty_type = ShiftDutyType.ON_CALL.value
+        await db_session.flush()
+
+        buckets = await SchedulingService(db_session).get_member_month_totals(
+            user_id, org_id
+        )
+
+        april = buckets[(2025, 4)]
+        assert april["hours"] == 22.0
+        assert april["shifts"] == 2
+        assert april["on_call_hours"] == 10.0
+        assert april["on_call_shifts"] == 1
+        assert april["calls"] == 2
+
+    @pytest.mark.asyncio
+    async def test_an_unfinalized_recall_shift_is_pending_not_on_call(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        recall = await _worked(
+            db_session, org_id, user_id, date(2025, 4, 9), 600, finalized=False
+        )
+        shift = await db_session.get(Shift, recall)
+        shift.duty_type = ShiftDutyType.ON_CALL.value
+        await db_session.flush()
+
+        april = (
+            await SchedulingService(db_session).get_member_month_totals(user_id, org_id)
+        )[(2025, 4)]
+        assert april["pending_hours"] == 10.0
+        assert april["on_call_hours"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_outside_agency_calls_are_reported(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        db_session.add(
+            ExternalShiftHours(
+                id=_uid(),
+                organization_id=org_id,
+                user_id=user_id,
+                shift_date=date(2025, 5, 3),
+                duration_minutes=240,
+                agency_name="County",
+                apparatus_name="E116",
+                call_count=3,
+                status=ExternalShiftHoursStatus.COUNTED.value,
+            )
+        )
+        await db_session.flush()
+
+        history = await SchedulingService(db_session).get_my_hours_history(
+            user_id, org_id, 2025
+        )
+        assert history["totals"]["external_calls"] == 3
+        assert history["totals"]["external_hours"] == 4.0
+        # Outside time stays beside the department's own figure.
+        assert history["totals"]["hours"] == 0.0
+
+
+class TestMemberHoursEndpoint:
+    """A member's history on their profile: theirs, or an officer's to read."""
+
+    @pytest.mark.asyncio
+    async def test_a_member_reads_their_own(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        await _worked(
+            db_session, org_id, user_id, date(2025, 4, 7), 480, finalized=True
+        )
+        me = await db_session.get(User, user_id)
+        result = await scheduling_endpoint.get_member_hours_history(
+            uuid.UUID(user_id), 2025, db_session, me
+        )
+        assert result["totals"]["hours"] == 8.0
+
+    @pytest.mark.asyncio
+    async def test_another_member_is_refused_without_the_report_permission(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        other_id = await _add_user(db_session, org_id)
+        await db_session.flush()
+        other = await db_session.get(User, other_id)
+        with patch.object(
+            scheduling_endpoint, "user_has_permission", return_value=False
+        ):
+            with pytest.raises(HTTPException) as refused:
+                await scheduling_endpoint.get_member_hours_history(
+                    uuid.UUID(user_id), 2025, db_session, other
+                )
+        assert refused.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_an_officer_reads_a_member_in_their_department(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        officer_id = await _add_user(db_session, org_id)
+        await _worked(
+            db_session, org_id, user_id, date(2025, 4, 7), 480, finalized=True
+        )
+        officer = await db_session.get(User, officer_id)
+        with patch.object(
+            scheduling_endpoint, "user_has_permission", return_value=True
+        ) as check:
+            result = await scheduling_endpoint.get_member_hours_history(
+                uuid.UUID(user_id), 2025, db_session, officer
+            )
+        check.assert_called_once_with(officer, "scheduling.report")
+        assert result["totals"]["hours"] == 8.0
+
+    @pytest.mark.asyncio
+    async def test_a_member_of_another_department_reads_as_not_found(
+        self, db_session, org_and_member
+    ):
+        org_id, _ = org_and_member
+        officer_id = await _add_user(db_session, org_id)
+        other_org = await _add_org(db_session)
+        stranger = await _add_user(db_session, other_org)
+        await db_session.flush()
+        officer = await db_session.get(User, officer_id)
+        with patch.object(
+            scheduling_endpoint, "user_has_permission", return_value=True
+        ):
+            with pytest.raises(HTTPException) as missing:
+                await scheduling_endpoint.get_member_hours_history(
+                    uuid.UUID(stranger), 2025, db_session, officer
+                )
+        assert missing.value.status_code == 404

@@ -99,6 +99,20 @@ describe('EventListCard', () => {
     });
   });
 
+  describe('attendance flag', () => {
+    it('says when a session-attendance requirement counts the event', () => {
+      renderCard(makeEvent({ counts_toward_attendance: true }));
+      expect(screen.getByText('Counts toward attendance')).toBeInTheDocument();
+    });
+
+    it('says nothing for an optional event or an older backend', () => {
+      renderCard(makeEvent({ counts_toward_attendance: false }));
+      expect(screen.queryByText('Counts toward attendance')).not.toBeInTheDocument();
+      renderCard(makeEvent());
+      expect(screen.queryByText('Counts toward attendance')).not.toBeInTheDocument();
+    });
+  });
+
   describe('body rows', () => {
     it('renders the time range with its duration', () => {
       renderCard(makeEvent({ start_datetime: '2026-09-08T19:00:00Z', end_datetime: '2026-09-08T21:00:00Z' }));

@@ -569,6 +569,15 @@ section. Files are stored securely.
 
 Select **Interview** in the applicant's drawer to open their interview page.
 
+**Interviewers are asked to interview.** When an applicant reaches an
+**Interview Requirement** stage, each interviewer assigned to them is emailed
+a link to the applicant's Interview page (the **Interview Requested**
+template). It goes out each time the applicant lands on the stage: advanced,
+moved back, placed from no stage, or moved to a deleted stage's fallback. An
+interviewer who has already logged an interview for that stage is not asked
+again, and a member who is both interviewer and case manager gets this email
+only, not the case managers' notice as well.
+
 ### Recording an Interview
 
 1. Select **New Interview** to open the form.
@@ -1315,6 +1324,10 @@ one) and from that applicant's **Interview** page.
 only the applicants assigned to them. An upgrade gave `view_all` to every
 position that already held `view` or `manage`, so nobody's list narrowed;
 check **Positions** if you want a position to see only its own applicants.
+
+**My applicants narrows the counts too.** With **My applicants** on, the
+pipeline's totals and the Inactive, Rejected, Withdrawn and Converted tabs
+count and list only the applicants assigned to you, not the whole pipeline.
 
 **Withdrawing as a case manager.** The status dialog offers a case manager only
 **Withdraw** (no Reject, Hold or Resume).
