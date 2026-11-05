@@ -917,6 +917,18 @@ class SchedulingWidgetPreferences(BaseModel):
     widgets: dict[str, SchedulingWidgetFilters] = Field(default_factory=dict)
 
 
+class SchedulingWidgetPreferencesResponse(SchedulingWidgetPreferences):
+    """Saved defaults plus the filter values a save would accept.
+
+    The station and platoon filters only accept values some shift in the
+    department carries, so the dashboard offers these as choices rather than
+    asking an officer to type an id.
+    """
+
+    available_station_ids: list[str] = Field(default_factory=list)
+    available_platoons: list[str] = Field(default_factory=list)
+
+
 class SchedulingWidgetSummary(BaseModel):
     timezone: str
     window_start: datetime
