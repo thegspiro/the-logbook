@@ -58,7 +58,7 @@ names it the way the **Role Management** screen lists it — for example
 20. [Governance: Legal Documents](#governance-legal-documents)
 21. [Governance: Organizational Chart](#governance-organizational-chart)
 22. [Testing Checklist Module](#testing-checklist-module)
-23. [Compliance Requirements Configuration](#compliance-requirements-configuration)
+23. [Compliance Settings](#compliance-settings)
 24. [Medical Screening and Equipment Checks](#medical-screening-and-equipment-checks)
 25. [Realistic Example: Generating the Annual Training Summary Report](#realistic-example-generating-the-annual-training-summary-report)
 26. [Realistic Example: First-Time Department Setup](#realistic-example-first-time-department-setup)
@@ -2568,7 +2568,7 @@ blocked), and `n` jumps to the next page with no mark.
 
 ---
 
-## Compliance Requirements Configuration
+## Compliance Settings
 
 **Who can open it:** officers with **settings.manage** or **compliance.manage**
 ("Manage compliance records"), with the Training module turned on. Generating a

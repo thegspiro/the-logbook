@@ -79,7 +79,7 @@ and confirm that approved credit appears in history and compliance.
 11. [Compliance Matrix](#compliance-matrix)
 12. [Evaluation Period (Current vs. Prior Month)](#evaluation-period-current-vs-prior-month)
 13. [Expiring Certifications](#expiring-certifications)
-14. [Waiver Management](#waiver-management)
+14. [Waivers](#waivers)
 15. [Compliance Summary](#compliance-summary)
 16. [Shift Completion Reports](#shift-completion-reports)
 17. [Manual Shift Report Entry](#manual-shift-report-entry)
@@ -1718,7 +1718,7 @@ for an officer who can also change the department's settings or holds
 "Manage compliance records", because only they can save it. It lists what the
 compliance settings hold — the department-wide threshold, compliance profiles
 for membership types and positions, and scheduled compliance reports — and
-**Open compliance settings** opens **Compliance Requirements Configuration**,
+**Open compliance settings** opens **Compliance Settings**,
 the same page **Configure** opens from **Compliance Reporting**. The
 requirements members are graded against are not set there but under
 **Curriculum → Requirements**.
@@ -2416,7 +2416,7 @@ those two choices above.
 
 ---
 
-## Waiver Management
+## Waivers
 
 **Who can do this:** officers who can manage member profiles.
 
@@ -2457,7 +2457,7 @@ Overview**. It shows:
 - a table you can filter, with status badges;
 - where each waiver came from: **Auto (LOA)** for waivers created from a leave,
   **Manual** for waivers created on their own;
-- links to the full Waiver Management page.
+- links to the full Waivers page.
 
 ---
 
@@ -3685,7 +3685,7 @@ you want a platform connected.
 Open **Training Admin → Compliance Reporting** for the compliance officer
 views: **Annual Report**, **ISO Readiness**, **Record Quality**,
 **Attestations** and **Forecast**. The **Configure** button at the top right
-opens **Compliance Requirements Configuration** — thresholds, compliance
+opens **Compliance Settings** — thresholds, compliance
 profiles, automatic reports and report history (see
 [Setting the Department Default](#setting-the-department-default)). Its usual
 home is now **Settings & Data → Compliance Settings → Open compliance
@@ -3863,7 +3863,7 @@ Configuration**).
 | Program progress does not update after a shift         | A shift completion report must be filed. Automatic credit only works for enrolled members with matching requirement types.                                                                                                                                                       |
 | The Compliance Matrix looks wrong                      | Check the requirement's frequency and due-date type. Rolling periods count whole months ending with this one.                                                                                                                                                                    |
 | A member on leave still shows non-compliant            | Check the leave of absence is active under **Members > Admin > Waivers**. Check the department's **Months on leave** setting: under a 15-day rule, a month with only a few days of leave is still mostly or wholly owed. Only hours, shifts and calls requirements are adjusted. |
-| A leave was created but training was not adjusted      | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waiver Management page.                                                  |
+| A leave was created but training was not adjusted      | The leave may have been created with **Meeting Attendance & Shift Requirements** only. Its training waiver should appear on the Training Waivers tab. If it is missing, create a training waiver on the Waivers page.                                                            |
 | A duplicate training record warning                    | The Logbook spots records with the same member, the same course name (ignoring capitals) and a completion date within a day. Check the warning, then go ahead or skip the duplicate.                                                                                             |
 | The compliance card shows the wrong color              | Red = an expired certification or fewer than half the requirements met. Yellow = a certification expiring soon, or some requirements not met. Green = all met. Check each requirement's progress.                                                                                |
 | A certification alert was not received                 | Each alert stage (90, 60, 30, 7 days) is sent only once. If all stages have been sent, no more alerts come.                                                                                                                                                                      |
