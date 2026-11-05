@@ -1420,6 +1420,12 @@ is not saved until you fix it.
 above. You change them in the **membership tier settings**, which the section
 links to.
 
+_(2026-11-04)_ A member's tier is their **Membership status**, whatever their
+class: an administrative or social member on a tier gets that tier's voting,
+office-holding and attendance rules, on the ballot check and in the turnout
+count alike. Before 2026-11-04 these checks went by the older membership type,
+which named such a member by their class, so they did not find their tier.
+
 **After an upgrade, nothing changes.** Elections that already exist have no
 election-wide rules and count as held at a regular business meeting. The
 defaults start empty, or as before: new items require check-in and start at
