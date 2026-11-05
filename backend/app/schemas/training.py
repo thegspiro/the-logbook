@@ -423,6 +423,8 @@ class TrainingRequirementBase(BaseModel):
     # Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
     # this requirement by category? Off by default — in-house delivery only.
     allows_external_credit: bool = False
+    # SESSION_ATTENDANCE: may a Chief override it for a member?
+    allows_chief_override: bool = False
     # May shift attendance satisfy it on the Shift Compliance report? Omitted
     # on create, the model decides: on for a SHIFTS requirement, off otherwise.
     shift_credited: Optional[bool] = None
@@ -647,6 +649,7 @@ class TrainingRequirementUpdate(RefusesNull):
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: Optional[bool] = None
     allows_external_credit: Optional[bool] = None
+    allows_chief_override: Optional[bool] = None
     shift_credited: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
@@ -717,6 +720,7 @@ class TrainingRequirementUpdate(RefusesNull):
     null_refused = frozenset(
         {
             "active",
+            "allows_chief_override",
             "allows_external_credit",
             "applies_to_all",
             "due_date_type",
@@ -730,6 +734,46 @@ class TrainingRequirementUpdate(RefusesNull):
             "source",
         }
     )
+
+
+class RequirementOverrideCreate(BaseModel):
+    """A Chief's override of a session-attendance requirement for one member.
+
+    The member counts as meeting the requirement whenever it is graded as of
+    a date from ``start_date`` to ``end_date``.
+    """
+
+    user_id: UUID
+    start_date: date
+    end_date: date
+    reason: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A reason is required")
+        return v.strip()
+
+    @model_validator(mode="after")
+    def _dates_in_order(self) -> "RequirementOverrideCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("The end date must be on or after the start date")
+        return self
+
+
+class RequirementOverrideResponse(UTCResponseBase):
+    id: str
+    requirement_id: str
+    user_id: str
+    member_name: str
+    start_date: date
+    end_date: date
+    reason: str
+    granted_by_name: Optional[str] = None
+    granted_at: datetime
+    revoked_at: Optional[datetime] = None
+    revoked_by_name: Optional[str] = None
 
 
 class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):

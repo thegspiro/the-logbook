@@ -46,6 +46,8 @@ from app.models.inventory import (
 from app.models.nfc_tag import NfcCredentialType
 from app.models.user import User
 from app.services.inventory_service import InventoryService
+from app.services.inventory_sightings import add_sighting
+from app.services.inventory_storage_area_names import active_storage_area_names
 from app.services.nfc_tag_service import hash_tag_uid, uid_preview
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
@@ -445,16 +447,15 @@ class InventoryNfcService:
         Callers decide whether a tap is logged at all — only staff taps are —
         so this never checks the caller's permissions itself.
         """
-        self.db.add(
-            InventoryNfcScan(
-                organization_id=str(organization_id),
-                item_id=str(item_id),
-                tag_id=tag_id,
-                action=action,
-                storage_area_id=storage_area_id,
-                from_storage_area_id=from_storage_area_id,
-                scanned_by=str(scanned_by) if scanned_by else None,
-            )
+        add_sighting(
+            self.db,
+            organization_id=organization_id,
+            item_id=item_id,
+            action=action,
+            seen_by=scanned_by,
+            tag_id=tag_id,
+            storage_area_id=storage_area_id,
+            from_storage_area_id=from_storage_area_id,
         )
         await self.db.flush()
 
@@ -633,17 +634,14 @@ class InventoryNfcService:
 
         # Every tapped item was seen on this shelf, whatever the record said.
         for item in tapped_items.values():
-            self.db.add(
-                InventoryNfcScan(
-                    organization_id=org_id,
-                    item_id=item.id,
-                    tag_id=await self._tag_on_item(
-                        tag_for.get(item.id), item.id, org_id
-                    ),
-                    action=InventoryNfcScanAction.AUDIT,
-                    storage_area_id=area.id,
-                    scanned_by=str(audited_by) if audited_by else None,
-                )
+            add_sighting(
+                self.db,
+                organization_id=org_id,
+                item_id=item.id,
+                tag_id=await self._tag_on_item(tag_for.get(item.id), item.id, org_id),
+                action=InventoryNfcScanAction.AUDIT,
+                storage_area_id=area.id,
+                seen_by=audited_by,
             )
         await self.db.flush()
         return await self.get_audit(audit.id, org_id)
@@ -1097,13 +1095,21 @@ class InventoryNfcService:
             )
         )
         items = list(result.scalars().all())
-        areas = await self._area_name_map(org_id, {i.storage_area_id for i in items})
+        # Named as the item page names it, so a deleted area is not offered as
+        # where to find the item (W44-4's rule, shared).
+        areas = await active_storage_area_names(
+            self.db, org_id, {i.storage_area_id for i in items}
+        )
         return [
             {
                 "id": item.id,
                 "name": item.name,
                 "serial_number": item.serial_number,
                 "asset_tag": item.asset_tag,
+                # Every item gets one on creation, so it tells apart two items
+                # sharing a name with no serial or asset tag (W44-3). Nullable
+                # all the same: a legacy row may lack it.
+                "barcode": item.barcode,
                 "category_name": item.category.name if item.category else None,
                 "storage_area_name": (
                     areas.get(item.storage_area_id) if item.storage_area_id else None

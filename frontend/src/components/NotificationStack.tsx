@@ -2,7 +2,7 @@ import React, { useId, useState } from 'react';
 import { CheckCheck, ChevronDown, Loader2 } from 'lucide-react';
 import { formatRelativeTime } from '../hooks/useRelativeTime';
 import type { NotificationLogRecord } from '../services/adminServices';
-import { describeStack } from '../utils/notificationStacks';
+import { describeStack, stackPreview } from '../utils/notificationStacks';
 import NotificationCard from './NotificationCard';
 import { getCategoryDisplay } from './notificationCategoryDisplay';
 
@@ -73,7 +73,7 @@ const NotificationStack: React.FC<NotificationStackProps> = ({
                   </p>
                   {!isExpanded && newest && (
                     <p className="text-theme-text-muted mt-0.5 truncate text-xs">
-                      Latest: {newest.subject || 'Notification'}
+                      Latest: {stackPreview(notifications)}
                     </p>
                   )}
                 </div>

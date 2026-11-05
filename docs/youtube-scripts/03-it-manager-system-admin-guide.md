@@ -548,17 +548,18 @@ the browser console for CSP, not the server log."]**
 ### EVENTS SETTINGS (18:00 – 19:00)
 
 **[SCREEN: Navigate to Events → Event settings (EventsSettingsTab); show the
-section list: Visibility, Categories, Attendance, Outreach Types, Hour
-Tracking, Pipeline, Email, Public Form, Headline Metrics]**
+section list: Visibility, Categories, Attendance, Hour Tracking, Public
+Requests, Headline Metrics]**
 
 > "Each module has its own settings page. Let's walk through the most important
 > ones, starting with Events."
 
 > "In **Event settings**, **Visibility** and **Categories** shape how events
 > are sorted — which categories members filter by, and your own categories on
-> top of the built-in types. **Pipeline**, **Email** and **Public Form** cover
-> event requests from the public: how they're handled, what's sent, and the
-> form itself."
+> top of the built-in types. **Public Requests** gathers everything about
+> event requests from the public in one place: its overview turns intake on,
+> and its pages cover the form, the request types, how requests are handled,
+> and what's sent."
 
 **[SCREEN: The Attendance section: "Who can see who's going", then the
 per-event-type choice of who takes attendance requests]**
@@ -1648,7 +1649,7 @@ written."]**
 
 #### 3. PUBLISHED EVENT-REQUEST FORMS KEEP WORKING
 
-**[SCREEN: Events → Settings → Pipeline, the accept-public-requests toggle]**
+**[SCREEN: Events → Settings → Public Requests → Overview, the accept-public-requests toggle]**
 
 > "There's a setting called 'accept public event requests'. It worked on the
 > API path. It was **never read** by the Forms path — which is the one your own

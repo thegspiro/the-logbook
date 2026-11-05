@@ -17,6 +17,7 @@ PROGRAM_ENROLLMENT = "program_enrollment"
 ADMIN_CONTINUITY = "admin_continuity"
 QUICKBOOKS_EXPORT = "quickbooks_export"
 EVALUATION_TEMPLATE_MATCHING = "evaluation_template_matching"
+INVENTORY_CATEGORY_NAMES = "inventory_category_names"
 
 
 async def lock_organization_scope(

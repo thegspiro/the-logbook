@@ -260,6 +260,10 @@ class TrainingSettingsUpdate(BaseModel):
     provider_patterns: Optional[List[str]] = Field(None, max_length=20)
     unmatched_provider_action: Optional[Literal["import", "skip"]] = None
     subject_courses: Optional[Dict[str, Optional[str]]] = None
+    drill_column: Optional[str] = Field(None, max_length=_MAX_KEY_LENGTH)
+    # Session-attendance requirements the drills count toward; replaces the set.
+    drill_requirement_ids: Optional[List[str]] = Field(None, max_length=50)
+    drill_min_members: Optional[int] = Field(None, ge=1, le=50)
 
     @field_validator("subject_courses")
     @classmethod
@@ -280,6 +284,9 @@ class TrainingSettingsView(BaseModel):
     provider_patterns: List[str]
     unmatched_provider_action: Optional[str] = None
     subject_courses: Dict[str, str]
+    drill_column: str = ""
+    drill_requirement_ids: List[str] = Field(default_factory=list)
+    drill_min_members: int = 3
 
 
 class TrainingSubject(BaseModel):
@@ -321,6 +328,39 @@ class TrainingPreview(BaseModel):
     problem_count: int
     members: List[AdminMember]
     member_options: List[AdminMemberOption]
+    can_commit: bool
+    result: Optional[Dict[str, Any]] = None
+
+
+class DrillDate(BaseModel):
+    date: date
+    members: int
+    # The session the import created for it, once it has.
+    session_created: bool
+
+
+class DrillRequirementOption(BaseModel):
+    id: str
+    name: str
+    required_attendance_pct: Optional[float] = None
+
+
+class DrillPreview(BaseModel):
+    """CompanyDrill rows, by date: which dates become held drills."""
+
+    settings: TrainingSettingsView
+    headers: List[str]
+    drill_rows: int
+    drill_dates: int
+    # Dates with at least ``drill_min_members`` members: these become sessions.
+    qualifying_dates: int
+    qualifying_rows: int
+    sessions_created: int
+    # One page of qualifying dates, newest first.
+    dates: List[DrillDate]
+    requirements: List[DrillRequirementOption]
+    # The drills attach the training records the training step wrote.
+    training_committed: bool
     can_commit: bool
     result: Optional[Dict[str, Any]] = None
 

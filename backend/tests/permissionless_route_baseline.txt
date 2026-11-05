@@ -449,6 +449,11 @@ app/api/v1/endpoints/testing_checklist.py::start_run
 app/api/v1/endpoints/testing_checklist.py::upsert_entry
 
 app/api/v1/endpoints/training.py::generate_user_report
+# Chief only: gated on holding a Chief position (CHIEF_POSITION_SLUGS), which
+# no permission or wildcard can grant, so it cannot be a require_permission
+# dependency. 403 otherwise; the requirement is org-scoped (404 elsewhere).
+# tests/test_requirement_override.py::TestRecordingOverrides.
+app/api/v1/endpoints/training.py::grant_requirement_override
 app/api/v1/endpoints/training.py::get_category
 app/api/v1/endpoints/training.py::get_category_hour_breakdown
 app/api/v1/endpoints/training.py::get_compliance_summary
@@ -459,7 +464,15 @@ app/api/v1/endpoints/training.py::get_user_stats
 app/api/v1/endpoints/training.py::list_categories
 app/api/v1/endpoints/training.py::list_courses
 app/api/v1/endpoints/training.py::list_records
+# The Chief or training.manage, checked in the body because one of the two
+# is a position; 403 otherwise, and the requirement is org-scoped.
+app/api/v1/endpoints/training.py::list_requirement_overrides
 app/api/v1/endpoints/training.py::list_requirements
+# Chief only: gated on holding a Chief position (CHIEF_POSITION_SLUGS), which
+# no permission or wildcard can grant, so it cannot be a require_permission
+# dependency. 403 otherwise; the requirement is org-scoped (404 elsewhere).
+# tests/test_requirement_override.py::TestRecordingOverrides.
+app/api/v1/endpoints/training.py::revoke_requirement_override
 
 app/api/v1/endpoints/training_enhancements.py::create_effectiveness_evaluation
 app/api/v1/endpoints/training_enhancements.py::download_record_attachment

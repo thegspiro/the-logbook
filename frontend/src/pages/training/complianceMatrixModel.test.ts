@@ -733,3 +733,23 @@ describe('an existing member inside a catch-up period', () => {
     expect(rollup?.behind.map((m) => m.member.user_id)).toEqual(['u2']);
   });
 });
+
+describe('a Chief override', () => {
+  it('says the override, not the count, met the requirement', () => {
+    const overridden = evaluateCell(
+      cell({
+        status: 'completed',
+        overridden: true,
+        progress_current: 1,
+        progress_required: 3,
+        progress_unit: 'sessions',
+      }),
+      requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' }),
+      AS_OF
+    );
+    const counted = evaluateCell(cell({ status: 'completed' }), requirement(), AS_OF);
+    expect(overridden.overrideNote).toBe("Met by the Chief's override");
+    expect(overridden.progressLabel).toBe('1 of 3 sessions');
+    expect(counted.overrideNote).toBeNull();
+  });
+});

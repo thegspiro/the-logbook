@@ -183,8 +183,8 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({ analysis, fields, busy, onRowUp
       {shown.length === 0 ? (
         <p className="card text-theme-text-secondary p-4 text-sm">No rows here.</p>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="rwd-table w-full text-sm">
+        <div className="card rwd-table-container overflow-x-auto">
+          <table className="rwd-table rwd-table-wide w-full text-sm">
             <thead>
               <tr className="text-theme-text-secondary text-left text-xs uppercase">
                 <th scope="col" className="px-3 py-2">

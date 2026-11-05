@@ -14,6 +14,7 @@ import { ITEM_TYPES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { DuplicateCategoryNameBadge } from '../components/DuplicateCategoryNameBadge';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 
@@ -253,6 +254,11 @@ const InventoryCategoriesPage: React.FC = () => {
                 </div>
                 <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{cat.name}</h3>
               </div>
+              {cat.duplicate_name && (
+                <div className="mb-3">
+                  <DuplicateCategoryNameBadge />
+                </div>
+              )}
               {/* Edit shares the type badge's row, not the title's: at its 44px
                   touch size beside the title it cut a 320px phone's category
                   names to half their length. */}
