@@ -1291,17 +1291,27 @@
  * wide table (the member roster's seven columns) then scrolls sideways with
  * its scrollbar at the foot of the list, out of sight.
  *
- * Put `rwd-table-container` on the table's scroll wrapper and `rwd-table-wide`
- * on the table: it reflows to cards whenever the wrapper is under 64rem,
- * whatever the screen or sidebar state.
+ * Put `rwd-table-container` on the table's scroll wrapper (or on the card that
+ * clips it) and one tier class on the table. It reflows to cards whenever the
+ * wrapper is narrower than that tier, whatever the screen or sidebar state:
  *
- * 64rem is measured, and the measurement depends on the browser and pointer.
- * With long names the roster stops fitting at ~57rem in Chromium with a mouse,
- * ~60rem with touch (the 44px targets widen the Actions column) and ~62rem in
- * WebKit with touch, whose text runs wider. 60rem was tried first and left a
- * 1280px touch screen — card exactly 60rem — on a table 33px too wide. The
- * rules repeat the base reflow rather than changing it, so every other reflow
- * table keeps its 767px switch.
+ *   rwd-table-wide    under 64rem
+ *   rwd-table-xwide   under 80rem
+ *   rwd-table-2xwide  under 96rem
+ *
+ * Pick the tier from a measurement, not from the column count: render the
+ * table with long data, read its min-content width, add ~4% for WebKit (whose
+ * text runs wider than Chromium's) and take the smallest tier above that. A
+ * tier that is too small leaves a band of widths where the table is shown and
+ * still overflows. The member roster is why: it stops fitting at ~57rem in
+ * Chromium with a mouse, ~60rem with touch (the 44px targets widen the Actions
+ * column) and ~62rem in WebKit with touch, and a 60rem first attempt left a
+ * 1280px touch screen — card exactly 60rem — on a table 33px too wide.
+ *
+ * The three blocks below must stay identical apart from the tier class and the
+ * width; `rwdTableTiers.test.ts` holds them to that. They repeat the base
+ * reflow rather than changing it, so every other reflow table keeps its 767px
+ * switch.
  */
 .rwd-table-container {
   container: rwd-table / inline-size;
@@ -1342,6 +1352,84 @@
     padding-bottom: 0.125rem;
   }
   .rwd-table.rwd-table-wide tbody td.rwd-table-lead::before {
+    content: none;
+  }
+}
+
+@container rwd-table (width < 80rem) {
+  .rwd-table.rwd-table-xwide thead {
+    display: none;
+  }
+  .rwd-table.rwd-table-xwide tbody tr {
+    display: block;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--color-theme-surface-border);
+  }
+  .rwd-table.rwd-table-xwide tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .rwd-table.rwd-table-xwide tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.375rem 0.75rem;
+    text-align: right;
+  }
+  .rwd-table.rwd-table-xwide tbody td[data-label]::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    color: var(--color-theme-text-muted);
+  }
+  .rwd-table.rwd-table-xwide tbody td:not([data-label]) {
+    display: none;
+  }
+  .rwd-table.rwd-table-xwide tbody td.rwd-table-lead {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.125rem;
+  }
+  .rwd-table.rwd-table-xwide tbody td.rwd-table-lead::before {
+    content: none;
+  }
+}
+
+@container rwd-table (width < 96rem) {
+  .rwd-table.rwd-table-2xwide thead {
+    display: none;
+  }
+  .rwd-table.rwd-table-2xwide tbody tr {
+    display: block;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--color-theme-surface-border);
+  }
+  .rwd-table.rwd-table-2xwide tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .rwd-table.rwd-table-2xwide tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.375rem 0.75rem;
+    text-align: right;
+  }
+  .rwd-table.rwd-table-2xwide tbody td[data-label]::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    color: var(--color-theme-text-muted);
+  }
+  .rwd-table.rwd-table-2xwide tbody td:not([data-label]) {
+    display: none;
+  }
+  .rwd-table.rwd-table-2xwide tbody td.rwd-table-lead {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.125rem;
+  }
+  .rwd-table.rwd-table-2xwide tbody td.rwd-table-lead::before {
     content: none;
   }
 }
