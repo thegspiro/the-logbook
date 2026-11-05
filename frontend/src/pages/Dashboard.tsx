@@ -77,6 +77,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useEnabledModules } from '../hooks/useEnabledModules';
 import {
   addCalendarDays,
+  calendarDaysBetween,
   formatCalendarDate,
   formatDate,
   formatDateCustom,
@@ -95,7 +96,12 @@ import type { EventListItem } from '../types/event';
 import { dashboardService } from '../services/api';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
-import { describeStack, groupNotificationsIntoStacks, stackUnreadCount } from '../utils/notificationStacks';
+import {
+  describeStack,
+  groupNotificationsIntoStacks,
+  stackPreview,
+  stackUnreadCount,
+} from '../utils/notificationStacks';
 
 /**
  * Main Dashboard Component — "station board"
@@ -1236,10 +1242,35 @@ const Dashboard: React.FC = () => {
     const formatShiftTime = (value: string | null | undefined) =>
       value && value.includes('T') ? formatTime(value, tz) : formatTimeOfDay(value);
 
+    // Days from a shift's start to its end. A bare "HH:MM" end at or before
+    // the start wraps past midnight -- equal times are a full 24, as
+    // hoursBetweenTimesOfDay reads them -- and a datetime end is compared by
+    // its calendar date in the department's zone.
+    const shiftEndDayOffset = (shift: ShiftRecord): number => {
+      const { start_time: start, end_time: end } = shift;
+      if (!start || !end) return 0;
+      if (start.includes('T') && end.includes('T')) {
+        return calendarDaysBetween(toLocalISODate(end, tz), toLocalISODate(start, tz)) ?? 0;
+      }
+      if (!start.includes('T') && !end.includes('T')) {
+        // "Midnight" already says where the day ends; "Midnight next day" does not help.
+        if (end.startsWith('00:00')) return 0;
+        return end.slice(0, 5) <= start.slice(0, 5) ? 1 : 0;
+      }
+      return 0;
+    };
+
+    // A start-to-start 24 otherwise reads "7:00 AM–7:00 AM", which looks like a
+    // shift of no length; the fire service's commonest shift is exactly that.
     const shiftTimeRange = (shift: ShiftRecord) => {
       const start = formatShiftTime(shift.start_time);
       const end = formatShiftTime(shift.end_time);
-      return end ? `${start}–${end}` : start;
+      if (!end) return start;
+      const days = shiftEndDayOffset(shift);
+      // An exact start-to-start 24 gets the shortest form, so it fits a phone row.
+      if (days === 1 && start === end) return `${start} · 24 hr`;
+      const suffix = days === 1 ? ' next day' : days > 1 ? ` (+${days} days)` : '';
+      return `${start}–${end}${suffix}`;
     };
 
     const shiftSortAt = (shift: ShiftRecord) =>
@@ -1415,7 +1446,7 @@ const Dashboard: React.FC = () => {
         entries.push({
           key: `notif-stack-${entry.category}`,
           title: describeStack(entry.category, count),
-          body: newest ? `Latest: ${newest.subject || 'Notification'}` : '',
+          body: newest ? `Latest: ${stackPreview(entry.notifications)}` : '',
           meta: newest ? formatRelativeTime(newest.sent_at || newest.created_at) : '',
           sortAt: newest?.sent_at ? new Date(newest.sent_at).getTime() : 0,
           unread: true,
@@ -1673,7 +1704,11 @@ const Dashboard: React.FC = () => {
           <div className={`w-1 self-stretch rounded-full ${TIMELINE_ACCENT[entry.kind]}`} aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="text-theme-text-primary truncate text-[15px] font-semibold sm:text-base">{entry.title}</p>
-            <p className="text-theme-text-muted truncate text-xs sm:text-sm">{entry.detail}</p>
+            {/* Two lines on a phone, so an overnight time and a staffing count
+                are not cut off mid-word; one line once there is room. */}
+            <p className="text-theme-text-muted line-clamp-2 text-xs sm:line-clamp-none sm:truncate sm:text-sm">
+              {entry.detail}
+            </p>
           </div>
 
           {entry.kind === 'my-shift' && (
@@ -1968,13 +2003,22 @@ const Dashboard: React.FC = () => {
                         <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">
                           Take a Shift
                         </span>
-                        <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
+                        {/* Shown at every width: on a phone, where a member most often
+                            grabs a seat, the count is what says one needs filling. It
+                            may wrap there; from sm up there is room for one line. */}
+                        <span className="text-theme-text-muted mt-0.5 block text-[13px] sm:truncate">
                           {openShiftsError ? (
                             'Open shifts unavailable'
                           ) : (
                             <>
                               <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
-                              {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
+                              {/* Its own line on a phone rather than wrapping mid-phrase. */}
+                              {shortStaffedOpenShifts > 0 && (
+                                <span className="block sm:inline">
+                                  <span className="hidden sm:inline"> · </span>
+                                  {shortStaffedOpenShifts} short-staffed
+                                </span>
+                              )}
                             </>
                           )}
                         </span>
