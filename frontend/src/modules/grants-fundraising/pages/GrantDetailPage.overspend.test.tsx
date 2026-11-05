@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../stores/authStore', () => ({
@@ -50,11 +51,13 @@ function application(overrides: Record<string, unknown>) {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/grants/applications/app-1']}>
-      <Routes>
-        <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
-      </Routes>
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={['/grants/applications/app-1']}>
+        <Routes>
+          <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>
   );
 }
 
