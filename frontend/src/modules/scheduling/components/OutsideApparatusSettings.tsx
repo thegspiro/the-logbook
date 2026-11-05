@@ -40,7 +40,7 @@ const ActiveToggle: React.FC<ToggleProps> = ({ checked, label, disabled, onChang
     onClick={onChange}
     className="mobile-touch-target flex items-center justify-center"
   >
-    <span className={`toggle-track-sm ${checked ? 'bg-violet-600' : 'bg-theme-surface-border'}`}>
+    <span className={`toggle-track-sm ${checked ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}>
       <span className={`toggle-knob-sm ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </span>
   </button>
