@@ -183,6 +183,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'read-only admin list of email kinds and text alerts: single-column cards that go two-up at md, no controls, so /messages remains the module representative',
   },
   {
+    path: '/communications/member-emails/opt-outs',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'read-only admin roster beside Member Emails & Texts: one filter select, an rwd-table that stacks to cards under 768px and the shared Pagination, so /messages remains the module representative',
+  },
+  {
     path: '/communications/messages',
     source: 'src/modules/communications/routes.tsx',
     coverage: 'exempt',

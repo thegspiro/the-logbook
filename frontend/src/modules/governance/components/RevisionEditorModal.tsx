@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 import { Modal } from '../../../components/Modal';
+import LegalMarkup from '../../../pages/legal/LegalMarkup';
 import { LEGAL_DOCUMENT_LABEL, type LegalDocumentType } from '../types/legal';
 
 interface RevisionDraftValues {
@@ -26,10 +27,10 @@ const inputClass = 'form-input';
 /**
  * Editor for a proposed revision to a public legal document.
  *
- * The body is plain text, not rich text or HTML, because that is exactly what
- * the public page will render — department-supplied text is split into
- * paragraphs on blank lines and never interpreted as markup, so anything
- * fancier here would promise formatting the published page cannot deliver.
+ * The body is text with a small formatting subset — headings and lists, and
+ * nothing else (pages/legal/legalMarkup.ts) — because that is exactly what the
+ * public page renders. Rich text or HTML here would promise formatting the
+ * published page refuses to apply; the preview below shows what it will.
  */
 export const RevisionEditorModal: React.FC<RevisionEditorModalProps> = ({
   isOpen,
@@ -97,16 +98,28 @@ export const RevisionEditorModal: React.FC<RevisionEditorModalProps> = ({
           <label className={labelClass} htmlFor="revision-body">
             Document text
           </label>
-          <p className="text-theme-text-muted mb-2 text-xs">
-            Plain text. Leave a blank line between paragraphs. Formatting marks such as * or # are not applied &mdash;
-            they appear exactly as typed.
+          <p id="revision-body-help" className="text-theme-text-muted mb-2 text-xs">
+            Leave a blank line between paragraphs. Start a line with <code>## </code> for a heading,
+            <code>### </code> for a smaller one, <code>- </code> for a bulleted list item, or <code>1. </code> for a
+            numbered one. Nothing else is formatted: links, bold and HTML appear exactly as typed.
           </p>
           <textarea
             id="revision-body"
             className={`${inputClass} min-h-[24rem] font-mono text-xs leading-5`}
             value={values.body}
+            aria-describedby="revision-body-help"
             onChange={(e) => setValues({ ...values, body: e.target.value })}
           />
+          <details className="mt-2">
+            <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
+              Preview as members will see it
+            </summary>
+            <LegalMarkup
+              text={values.body}
+              headingLevel={3}
+              className="bg-theme-surface-secondary mt-2 max-h-96 overflow-auto rounded-md px-4 pb-4"
+            />
+          </details>
         </div>
 
         <div>

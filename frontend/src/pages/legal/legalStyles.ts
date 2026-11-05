@@ -7,7 +7,9 @@
 
 export const sectionHeading = 'mt-8 text-xl font-semibold text-theme-text-primary';
 export const bodyText = 'mt-3 text-sm leading-6 text-theme-text-secondary';
+export const subsectionHeading = 'mt-6 text-base font-semibold text-theme-text-primary';
 export const listClass = 'mt-3 list-disc space-y-1 pl-6 text-sm leading-6 text-theme-text-secondary';
+export const orderedListClass = 'mt-3 list-decimal space-y-1 pl-6 text-sm leading-6 text-theme-text-secondary';
 
 /**
  * Callout used for the statements a reader must not miss — department control

@@ -41,6 +41,7 @@ const UNCACHEABLE_PREFIXES = [
   '/notifications/my', // user-specific notification state (list too, not just sub-paths)
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
+  '/email-templates/member-email-opt-outs', // which named members turned off which emails (per-member preferences)
   '/officers', // office holders: member names, emails, phone numbers (PII)
   '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
   '/nfc-activity', // card taps by room and by event: who checked in where and when (PII)

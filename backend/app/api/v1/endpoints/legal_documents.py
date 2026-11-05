@@ -62,6 +62,10 @@ def _to_response(
         published_by=revision.published_by,
         published_by_name=names.get(str(revision.published_by or "")),
         published_at=revision.published_at,
+        reverts_to_default=bool(revision.reverts_to_default),
+        edited_by=revision.edited_by,
+        edited_by_name=names.get(str(revision.edited_by or "")),
+        edited_at=revision.edited_at,
         created_at=revision.created_at,
         updated_at=revision.updated_at,
     )
@@ -154,6 +158,7 @@ async def _names_for(
     return await service.get_user_names(
         {str(r.created_by) for r in revisions if r.created_by}
         | {str(r.published_by) for r in revisions if r.published_by}
+        | {str(r.edited_by) for r in revisions if r.edited_by}
     )
 
 
@@ -263,6 +268,7 @@ async def update_revision(
             revision_id=revision_id,
             organization_id=organization_id,
             updates=payload.model_dump(exclude_unset=True),
+            edited_by=str(current_user.id),
         )
         await log_audit_event(
             db=db,
@@ -281,9 +287,7 @@ async def update_revision(
     except ValueError as e:
         await db.rollback()
         raise HTTPException(status_code=_status_for(e), detail=safe_error_detail(e))
-    names = await service.get_user_names(
-        {str(revision.created_by or ""), str(revision.published_by or "")}
-    )
+    names = await _names_for(service, [revision])
     return _to_response(revision, names)
 
 
@@ -364,9 +368,7 @@ async def publish_revision(
     except ValueError as e:
         await db.rollback()
         raise HTTPException(status_code=_status_for(e), detail=safe_error_detail(e))
-    names = await service.get_user_names(
-        {str(revision.created_by or ""), str(revision.published_by or "")}
-    )
+    names = await _names_for(service, [revision])
     return _to_response(revision, names)
 
 
@@ -381,20 +383,27 @@ async def revert_to_default(
     """
     Remove the department's published text so the built-in default is shown again.
 
+    The revert is recorded in the document's published history, naming who
+    restored the built-in text and when.
+
     Requires: legal.publish or settings.manage permission.
     """
     service = LegalDocumentService(db)
     try:
-        await service.revert_to_default(
+        revert = await service.revert_to_default(
             organization_id=str(current_user.organization_id),
             document_type=document_type,
+            reverted_by=str(current_user.id),
         )
         await log_audit_event(
             db=db,
             event_type="legal.document_reverted_to_default",
             event_category="administration",
             severity="warning",
-            event_data={"document_type": document_type.value},
+            event_data={
+                "document_type": document_type.value,
+                "revision_id": str(revert.id) if revert else None,
+            },
             user_id=str(current_user.id),
             username=current_user.username,
         )

@@ -16,7 +16,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -38,7 +38,9 @@ class LegalRevisionStatus(str, enum.Enum):
     /terms currently serves — at most one per document type per organization.
     ``ARCHIVED`` is a revision that was published and has since been replaced,
     or a draft that was superseded; archived rows are kept, never deleted, so
-    the history of what members were shown stays intact.
+    the history of what members were shown stays intact. A revert row
+    (``reverts_to_default``) is born ``ARCHIVED``: it is a history entry, never
+    a draft and never the live text.
     """
 
     DRAFT = "draft"
@@ -89,6 +91,27 @@ class LegalDocumentRevision(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Owner decision W54-3 (2026-11-01): restoring the built-in text is part of
+    # the visible history, not only the audit log. It is recorded as a row of
+    # its own — empty body, ``published_by``/``published_at`` saying who
+    # restored it and when — because a revert can follow text that has no row
+    # here at all (configured in settings before this screen existed). Without
+    # it the history reads "Replaced" and stops, and cannot say what members
+    # saw on a date after the revert.
+    reverts_to_default: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
+    # Owner decision W54-4 (2026-11-01): a publisher may edit anyone's draft,
+    # and the proposer stays the proposer — so an edit by somebody else is
+    # named separately. Only an edit by someone other than ``created_by`` sets
+    # these; the proposer revising their own wording is not an attribution
+    # question. The latest such edit wins; every edit is in the audit log.
+    edited_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    edited_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

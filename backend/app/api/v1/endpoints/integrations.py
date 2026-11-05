@@ -7,7 +7,7 @@ Endpoints for managing external integration configurations.
 import re
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, NotRequired, Optional, TypedDict
+from typing import Any, Literal, NotRequired, Optional, TypedDict
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import ValidationError
@@ -38,6 +38,7 @@ from app.models.integration import (
 from app.models.user import User
 from app.schemas.integration import (
     CALENDAR_OAUTH_MANAGED_KEYS,
+    CALENDAR_PUBLISH_EVENT_TYPES,
     INTEGRATION_CONFIG_SCHEMAS,
     SECRET_CONFIG_KEYS,
     ActiveWeatherAlertResponse,
@@ -406,6 +407,36 @@ _CATALOG_BY_TYPE: dict[str, _CatalogEntry] = {
     item["integration_type"]: item for item in INTEGRATION_CATALOG
 }
 
+# What the catalog owns on a department's integration row (INT2-4, owner
+# decision 2026-11-01). ensure_catalog rewrites these on every existing row,
+# so a catalog change reaches every department, not only new ones.
+#
+# Owned: how the integration is named, described and filed, which is the
+# same for every department.
+CATALOG_OWNED_COLUMNS: tuple[Literal["name", "description", "category"], ...] = (
+    "name",
+    "description",
+    "category",
+)
+# Owned in part: ``status`` is shared. "available" and "coming_soon" say
+# whether the integration can be used at all, which is the catalog's to say;
+# "connected" and "error" are the department's connection, which a catalog
+# change never undoes — a demoted integration a department has connected
+# stays connected until it disconnects, and is coming soon from then on.
+CATALOG_AVAILABILITY_STATUSES = frozenset({"available", "coming_soon"})
+# Not owned, because a department or the server writes them after seeding:
+# ``enabled``, ``config`` and the encrypted secrets, the health columns, and
+# ``contains_phi`` (the Claude MCP row derives it from the department's
+# medical-screening switch; see _apply_type_specific_flags).
+
+
+def catalog_status(catalog_value: str, row_status: str) -> str:
+    """The status a row should hold under the catalog's availability."""
+    if row_status in CATALOG_AVAILABILITY_STATUSES:
+        return catalog_value
+    return row_status
+
+
 # One-way publishing to Google/Outlook. While CALENDAR_SYNC_ENABLED is off
 # these two are reported as coming soon whatever their stored row says. With
 # it on, a row only counts as connected once the provider sign-in has left
@@ -563,6 +594,16 @@ def _stored_config_for_validation(integration: Integration) -> dict[str, Any]:
         # "both". Nothing reads it — the reconciler only pushes — so the old
         # value must not make every later settings change fail validation.
         stored.pop("sync_direction")
+    if integration.integration_type in CALENDAR_PUBLISH_TYPES:
+        types = stored.get("event_types_to_sync")
+        if not isinstance(types, list) or not all(
+            isinstance(t, str) and t in CALENDAR_PUBLISH_EVENT_TYPES for t in types
+        ):
+            # Before 2026-11-05 the API stored any list here. Validating such a
+            # value would refuse every later change, and rewriting it would
+            # change what the pass publishes, so it is left out of the merge:
+            # the stored value stays until an administrator replaces it.
+            stored.pop("event_types_to_sync", None)
     return stored
 
 
@@ -935,28 +976,56 @@ async def _check_directory_ready(
         )
 
 
+def reconcile_catalog_columns(integration: Integration, item: _CatalogEntry) -> bool:
+    """Bring a row's catalog-owned columns to the catalog's values.
+
+    Returns whether anything changed. The rule is CATALOG_OWNED_COLUMNS and
+    catalog_status; migration 7c41e9a2b6d8 applied a frozen copy of it to the
+    rows that existed when it ran.
+    """
+    changed = False
+    for column in CATALOG_OWNED_COLUMNS:
+        value = item[column]
+        if getattr(integration, column) != value:
+            setattr(integration, column, value)
+            changed = True
+    status_value = catalog_status(item["status"], integration.status)
+    if integration.status != status_value:
+        integration.status = status_value
+        changed = True
+    return changed
+
+
 async def ensure_catalog(db: AsyncSession, organization_id: str) -> None:
-    """Ensure all catalog integrations exist for this org."""
+    """Seed missing catalog integrations and reconcile the existing ones.
+
+    INT2-4 (owner decision 2026-11-01): a catalog change — a promotion from
+    coming soon, a demotion, a reworded description — reaches departments
+    seeded before it, not only new ones. Only catalog-owned columns move.
+    """
     result = await db.execute(
         select(Integration).where(Integration.organization_id == organization_id)
     )
-    existing = {row.integration_type for row in result.scalars().all()}
+    rows = {row.integration_type: row for row in result.scalars().all()}
 
     for item in INTEGRATION_CATALOG:
-        if item["integration_type"] not in existing:
-            db.add(
-                Integration(
-                    organization_id=organization_id,
-                    integration_type=item["integration_type"],
-                    name=item["name"],
-                    description=item["description"],
-                    category=item["category"],
-                    status=item["status"],
-                    config={},
-                    enabled=False,
-                    contains_phi=item.get("contains_phi", False),
-                )
+        row = rows.get(item["integration_type"])
+        if row is not None:
+            reconcile_catalog_columns(row, item)
+            continue
+        db.add(
+            Integration(
+                organization_id=organization_id,
+                integration_type=item["integration_type"],
+                name=item["name"],
+                description=item["description"],
+                category=item["category"],
+                status=item["status"],
+                config={},
+                enabled=False,
+                contains_phi=item.get("contains_phi", False),
             )
+        )
     await db.commit()
 
 

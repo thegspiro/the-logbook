@@ -52,7 +52,40 @@ person `settings.manage` and carry on.
    immediately.
 
 **Revert to the built-in text** (confirmed with **Use the default**) returns a
-document to the platform wording. It needs `legal.publish`.
+document to the platform wording. It needs `legal.publish`. The published
+history records it as **Built-in text restored by …** with the date — a row of
+its own (`reverts_to_default`), born `archived` so it can never be edited or
+published. Nothing is recorded if the built-in text was already live. The
+history is ordered by when each entry went live.
+
+## Who edited a proposal
+
+A publisher may edit anyone's draft. The proposer stays the proposer: the
+revision also records `edited_by` / `edited_at`, and the card reads
+"Sam Ortiz proposed this" with "Edited by Pat Lee on …" beneath; the published
+history keeps both names. Only an edit by someone **other than** the proposer
+sets them, and only the latest such editor is shown — every edit is in the
+audit log as `legal.revision_updated`.
+
+## Formatting department text
+
+Department text may use headings and lists, and nothing else:
+
+| Type                   | Becomes              |
+| ---------------------- | -------------------- |
+| `## Heading` (or `# `) | a section heading    |
+| `### Heading`          | a smaller heading    |
+| `- item` or `* item`   | a bulleted list item |
+| `1. item` or `1) item` | a numbered list item |
+| a blank line           | a new paragraph      |
+
+Links, bold, and any HTML are shown exactly as typed. There is no sanitizer and
+no dependency behind this: `frontend/src/pages/legal/legalMarkup.ts` parses
+the subset into plain data and `LegalMarkup.tsx` renders every string as a
+React text node, so a `<script>` or a `javascript:` link is only ever text. The
+same renderer draws `/privacy` and `/terms`, the published text, proposals and
+history on this screen, and the editor's preview. A new proposal starts from
+the built-in text with its headings as `## ` lines.
 
 ## Where the text actually lives
 
@@ -138,8 +171,12 @@ Archived rows are kept permanently.
 | `created_by`                | VARCHAR(36) NULL     | FK → `users.id`, `SET NULL`               |
 | `published_by`              | VARCHAR(36) NULL     | FK → `users.id`, `SET NULL`               |
 | `published_at`              | DATETIME(tz) NULL    |                                           |
+| `reverts_to_default`        | BOOL NOT NULL        | A "built-in text restored" history row    |
+| `edited_by`                 | VARCHAR(36) NULL     | FK → `users.id`, `SET NULL`               |
+| `edited_at`                 | DATETIME(tz) NULL    | When `edited_by` last edited the draft    |
 | `created_at` / `updated_at` | DATETIME(tz)         |                                           |
 
 Index: `ix_legal_revisions_org_type_status (organization_id, document_type, status)`.
 
-Migration: `06adc68a8b84`.
+Migrations: `06adc68a8b84` (table), `81b38694152f` (revert rows and edit
+attribution).

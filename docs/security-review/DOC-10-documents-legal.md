@@ -309,7 +309,7 @@ organization_id == org_id`, also org-scoped.
   message `_release_document_references` raises is already written to name
   only the request/report number (no PII, no path, no SQL).
 
-### DOC-31 — LOW — FLAGGED — `_release_document_references`'s refusal check is a read, not a locking read
+### DOC-31 — LOW — FLAGGED → ✅ RESOLVED 2026-11-05 — `_release_document_references`'s refusal check is a read, not a locking read
 
 `_release_document_references` selects `PurchaseRequest`/`ExpenseReport` rows
 by status with a plain `SELECT`, not `.with_for_update()`. A purchase request
@@ -328,6 +328,28 @@ rows for update inside a document-delete transaction, which introduces a new
 cross-feature lock-ordering question against Finance's own locking
 conventions (Pitfall #27) that this pass should not decide unilaterally.
 Mirrored to `KNOWN_LIMITATIONS.md`.
+
+**✅ Resolved 2026-11-05 (owner decision 2026-11-01: agree a lock order and
+lock).** Built outside this rotation; the next pass verifies it. The
+canonical lock order at the top of `documents_service.py` now spans both
+features — document folder, document, then the referencing record (facility
+reference, purchase request, expense line, expense report). The guard reads
+purchase requests and expense lines `FOR UPDATE NOWAIT` (the `SET NULL` key
+writes them) and their reports `LOCK IN SHARE MODE NOWAIT`
+(`app/utils/document_locks.py`), so it sees a submit committed after the
+snapshot and holds a draft a draft until the delete ends. It never waits on
+a finance or minutes row, since those writers can hold their record and then
+need the document; a row in flight is refused with a "try again" 400. Two
+deadlocks found on the way are fixed with it: Finance's purchase and report
+are now locked purchase-first on every path, and the minutes clear takes only
+the rows naming the document (`published_document_id` indexed, migration
+`c6b690cc33d6`) with NOWAIT. The reimbursement path share-locks the receipt before the
+purchase and the receipt uploads share-lock Finance > Receipts before the
+record, so Finance takes the document side first wherever it writes a
+reference. `tests/test_document_receipt_reference_race.py` and
+`tests/test_cross_feature_lock_order.py` (twelve two-connection tests, all
+seen failing before the fix). See
+`KNOWN_LIMITATIONS.md` → DOC-31.
 
 **0 fixes applied this pass, 1 new finding flagged (DOC-31, LOW).** No standing
 OPEN finding carried from pass 10 (pass 10 closed with none).

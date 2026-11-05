@@ -7,10 +7,19 @@ Accessible by admins via the membership module admin area.
 
 import copy
 import uuid
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.exc import DataError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +47,8 @@ from app.schemas.email_template import (
     EmailTemplateResponse,
     EmailTemplateUpdate,
     MemberEmailKindResponse,
+    MemberEmailOptOutRow,
+    MemberEmailOptOutsResponse,
     MemberEmailPolicyResponse,
     MemberEmailPolicyUpdate,
     MemberTextAlertResponse,
@@ -52,7 +63,10 @@ from app.services.email_policy import (
     OPTIONAL_KINDS,
     ORG_REQUIRED_KEY,
     ORG_SETTINGS_KEY,
+    EmailKind,
     department_required_kinds,
+    member_opt_outs,
+    not_emailed,
 )
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
@@ -238,6 +252,104 @@ async def update_member_email_policy(
     return await _member_email_policy_response(db, current_user)
 
 
+@router.get("/member-email-opt-outs", response_model=MemberEmailOptOutsResponse)
+async def list_member_email_opt_outs(
+    kind: Optional[str] = Query(
+        None,
+        description=(
+            "An optional email kind: list only the members who are not emailed "
+            "it. Omit to list every member who has turned anything off."
+        ),
+    ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "settings.manage", "organization.update_settings", "notifications.manage"
+        )
+    ),
+):
+    """
+    Which current members have opted out of which optional emails.
+
+    Read-only: an opt-out is the member's own choice, set from their settings
+    page. A department that needs everyone to receive a kind makes it
+    required on the Member Emails & Texts page instead, which this view sits
+    beside. Owner decision 2026-11-01.
+
+    Requires: settings.manage, organization.update_settings or
+    notifications.manage permission — the same as the policy page.
+    """
+    filter_kind: Optional[EmailKind] = None
+    if kind is not None:
+        optional = {k.value: k for k in OPTIONAL_KINDS}
+        filter_kind = optional.get(kind)
+        if filter_kind is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Not an optional email: members cannot turn it off",
+            )
+
+    org_id = str(current_user.organization_id)
+    org = await db.get(Organization, org_id)
+    department_required = department_required_kinds(org)
+
+    # The whole roster is read and filtered here, not in SQL: whether a member
+    # misses a kind depends on the master switch, the per-kind choice and a
+    # legacy switch inside a JSON column, and member_opt_outs is the one place
+    # that reads them the way the senders do. One department is a few hundred
+    # rows (owner policy 2026-11-01: one department per installation).
+    rows = (
+        await db.execute(
+            select(
+                User.id,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.membership_number,
+                User.notification_preferences,
+            )
+            .where(User.organization_id == org_id, User.is_active)
+            .order_by(User.last_name, User.first_name, User.id)
+        )
+    ).all()
+
+    not_emailed_counts = {k.value: 0 for k in EMAIL_POLICIES if k in OPTIONAL_KINDS}
+    matching: list[MemberEmailOptOutRow] = []
+    for row in rows:
+        opt_outs = member_opt_outs(row.notification_preferences)
+        for counted in OPTIONAL_KINDS:
+            if not_emailed(opt_outs, counted, department_required):
+                not_emailed_counts[counted.value] += 1
+        if filter_kind is not None:
+            if not not_emailed(opt_outs, filter_kind, department_required):
+                continue
+        elif not opt_outs.has_any:
+            continue
+        matching.append(
+            MemberEmailOptOutRow(
+                user_id=str(row.id),
+                name=format_display_name(
+                    row.first_name, row.last_name, row.preferred_name
+                ),
+                membership_number=row.membership_number,
+                email_notifications_off=opt_outs.email_notifications_off,
+                turned_off=[k.value for k in opt_outs.turned_off],
+            )
+        )
+
+    return MemberEmailOptOutsResponse(
+        members=matching[skip : skip + limit],
+        total=len(matching),
+        skip=skip,
+        limit=limit,
+        members_considered=len(rows),
+        not_emailed=not_emailed_counts,
+        department_required=sorted(k.value for k in department_required),
+    )
+
+
 @router.get("/footers", response_model=EmailFooterLibraryResponse)
 async def get_email_footers(
     db: AsyncSession = Depends(get_db),
@@ -263,7 +375,6 @@ async def update_email_footers(
     per-footer save could leave ``default_key`` naming a footer the same
     request deleted.
     """
-    from sqlalchemy import select
 
     from app.models.user import Organization
 
@@ -384,7 +495,6 @@ async def list_scheduled_emails(
     ),
 ):
     """List scheduled emails for the current organization."""
-    from sqlalchemy import select
 
     q = (
         select(ScheduledEmail)
@@ -414,7 +524,6 @@ async def get_email_template(
     ),
 ):
     """Get a specific email template by ID"""
-    from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     result = await db.execute(
@@ -564,7 +673,6 @@ async def preview_email_template(
     - If ``member_id`` is set, the selected member's name/email replaces
       static sample values in the preview context.
     """
-    from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     from app.models.user import Organization
@@ -788,7 +896,6 @@ async def upload_attachment(
     Files are malware-scanned and stored on the uploads volume under the
     organization's own directory. Max file size: 10MB.
     """
-    from sqlalchemy import select
 
     # Verify template exists and belongs to this org
     result = await db.execute(
@@ -862,7 +969,6 @@ async def delete_attachment(
     ),
 ):
     """Delete an attachment from an email template"""
-    from sqlalchemy import select
 
     result = await db.execute(
         select(EmailAttachment)
@@ -1030,7 +1136,6 @@ async def update_scheduled_email(
     ),
 ):
     """Update or reschedule a pending scheduled email."""
-    from sqlalchemy import select
 
     result = await db.execute(
         select(ScheduledEmail).where(
@@ -1130,7 +1235,6 @@ async def cancel_scheduled_email(
     The sender only sends a row it finds PENDING under the same row lock taken
     here, so a cancelled one is never sent.
     """
-    from sqlalchemy import select
 
     result = await db.execute(
         select(ScheduledEmail).where(

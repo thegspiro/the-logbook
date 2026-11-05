@@ -53,6 +53,7 @@ from app.models.minute import MeetingMinutes
 from app.models.user import Organization, Position, User
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
+from app.utils.document_locks import read_referencing_rows_nowait
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -81,7 +82,7 @@ LIBRARY_MANAGER_PERMISSIONS = ["documents.manage"]
 FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 
 # ============================================================================
-# FAC-35: canonical lock order for facility document/photo references
+# FAC-35 / DOC-31: canonical lock order for references to a document
 # ============================================================================
 # Three independent code paths mutate the same three resources concurrently
 # -- facilities.py's ``_validate_shared_document_reference`` (the creator
@@ -118,7 +119,62 @@ FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 # two documented here are exhaustive; grep this file and facilities.py for
 # ``with_for_update``/``for_update=True`` against these three models before
 # trusting this comment's site list over the code.
+#
+# DOC-31 (owner decision 2026-11-01): Finance's receipt references and the
+# minutes' published copy join level 3. A purchase request's
+# ``receipt_document_id``, an expense line's and a minutes row's
+# ``published_document_id`` are references to a Document like a
+# FacilityDocument row is, so the same order holds across the features:
+#
+#   1. DocumentFolder
+#   2. Document
+#   3. the referencing record -- FacilityDocument / FacilityPhoto; Finance's
+#      PurchaseRequest -> ExpenseReport -> ExpenseLineItem -> CheckRequest,
+#      in that order among themselves; MeetingMinutes (``published_document_id``)
+#
+# * Finance follows it when it is about to point a record at a document: the
+#   reimbursement path share-locks the receipt it copies before the purchase
+#   (``lock_documents_for_reference``), and the receipt uploads share-lock
+#   Finance > Receipts before the request or report
+#   (``lock_finance_receipts_folder``). A foreign key check takes a shared
+#   lock on the parent row when the reference is written; taken that late it
+#   would be Finance before Documents.
+# * Within Finance, a purchase comes before the report that claims it back.
+#   Cancelling or paying a purchase and raising a claim lock the purchase and
+#   then its live report; submitting or paying the report and issuing or
+#   voiding the check that pays it lock the purchase first
+#   (``FinanceService._lock_claimed_purchase``) and then the report. They
+#   used to take report-then-purchase, a deadlock against the others.
+# * Minutes lock their own row and then write their library copy (reopening
+#   flags it, republishing rewrites it): level 3 before level 2. That is
+#   allowed only because of the next rule.
+# * The Documents side never waits on a level-3 row. It reads the Finance
+#   rows and the minutes that name a document with NOWAIT locking reads
+#   (``_release_document_references``, ``read_referencing_rows_nowait``) and
+#   refuses with "try again" when one is being changed. A writer that holds
+#   its level-3 record and then needs the document -- through a foreign key
+#   check, or the minutes' own copy -- therefore never closes a cycle with a
+#   delete. Each such read goes through an index on the referencing column,
+#   so it locks only the rows naming the document.
+# * A finance status change that touches no document (submit, approve,
+#   cancel, pay) takes no lock from levels 1-2 and so cannot be out of order;
+#   it waits on the delete's lock, or the delete refuses it in flight.
+#
+# tests/test_document_receipt_reference_race.py and
+# tests/test_cross_feature_lock_order.py hold both directions.
 # ============================================================================
+
+# The delete refused because a record using the document as its receipt is
+# locked by another transaction; the same delete a moment later is decided on
+# that record's committed state.
+_RECEIPT_HOLDER_BUSY = (
+    "A purchase request or expense report that uses this document as a "
+    "receipt is being changed right now; try the delete again in a moment"
+)
+_MINUTES_BUSY = (
+    "The minutes this document was published from are being changed right "
+    "now; try the delete again in a moment"
+)
 
 
 def _get_user_permissions(user: User) -> Set[str]:
@@ -1519,18 +1575,37 @@ class DocumentsService:
         if not document_ids:
             return
         org_id = str(organization_id)
-        ids = list(document_ids)
+        ids = sorted(document_ids)
 
-        requests = await self.db.execute(
-            select(PurchaseRequest.request_number)
+        # DOC-31: locking reads, NOWAIT. A plain SELECT answered from this
+        # transaction's snapshot, so a request submitted after it still read
+        # as a draft and lost its receipt to the SET NULL key. The locks keep
+        # a draft a draft until this delete ends; a submit that arrives
+        # waits. Requests and lines are locked exclusively because the SET
+        # NULL key writes them when the document goes; reports only shared,
+        # as nothing here writes them. These rows come after the document in
+        # the canonical lock order (top of this module), and a finance writer
+        # can hold one while it needs the document (a foreign key check), so
+        # this side never waits on them -- see read_referencing_rows_nowait.
+        # Every referencing row is locked, not
+        # only those past draft: the draft is the one that could still move.
+        # Status is filtered here, in Python, for the same reason.
+        requests = await read_referencing_rows_nowait(
+            self.db,
+            select(PurchaseRequest.request_number, PurchaseRequest.status)
             .where(
                 PurchaseRequest.organization_id == org_id,
                 PurchaseRequest.receipt_document_id.in_(ids),
-                PurchaseRequest.status != PurchaseRequestStatus.DRAFT,
             )
-            .order_by(PurchaseRequest.request_number)
+            .order_by(PurchaseRequest.id),
+            _RECEIPT_HOLDER_BUSY,
+            exclusive=True,
         )
-        request_numbers = list(requests.scalars().all())
+        request_numbers = sorted(
+            number
+            for number, status in requests
+            if status != PurchaseRequestStatus.DRAFT
+        )
         if request_numbers:
             raise ValueError(
                 list_within_detail_limit(
@@ -1541,20 +1616,36 @@ class DocumentsService:
                 )
             )
 
-        reports = await self.db.execute(
-            select(ExpenseReport.report_number)
-            .join(
-                ExpenseLineItem, ExpenseLineItem.expense_report_id == ExpenseReport.id
-            )
-            .where(
-                ExpenseReport.organization_id == org_id,
-                ExpenseLineItem.receipt_document_id.in_(ids),
-                ExpenseReport.status != ExpenseReportStatus.DRAFT,
-            )
-            .distinct()
-            .order_by(ExpenseReport.report_number)
+        # The lines first, by the receipt index, and their reports by primary
+        # key -- not one join, whose plan could drive from the reports'
+        # organization index and lock every report the department has.
+        lines = await read_referencing_rows_nowait(
+            self.db,
+            select(ExpenseLineItem.expense_report_id)
+            .where(ExpenseLineItem.receipt_document_id.in_(ids))
+            .order_by(ExpenseLineItem.id),
+            _RECEIPT_HOLDER_BUSY,
+            exclusive=True,
         )
-        report_numbers = list(reports.scalars().all())
+        report_ids = sorted({report_id for (report_id,) in lines})
+        reports = (
+            await read_referencing_rows_nowait(
+                self.db,
+                select(ExpenseReport.report_number, ExpenseReport.status)
+                .where(
+                    ExpenseReport.organization_id == org_id,
+                    ExpenseReport.id.in_(report_ids),
+                )
+                .order_by(ExpenseReport.id),
+                _RECEIPT_HOLDER_BUSY,
+                exclusive=False,
+            )
+            if report_ids
+            else []
+        )
+        report_numbers = sorted(
+            number for number, status in reports if status != ExpenseReportStatus.DRAFT
+        )
         if report_numbers:
             raise ValueError(
                 list_within_detail_limit(
@@ -1565,12 +1656,31 @@ class DocumentsService:
                 )
             )
 
+        # Minutes lock their own row and then write their library copy
+        # (reopening flags it, republishing rewrites it): level 3 before level
+        # 2, the direction this side never waits on. So the rows are taken
+        # NOWAIT, by the published_document_id index -- found through the
+        # organization index instead, the lock covered every minutes row in
+        # the department -- and cleared by primary key.
+        minutes_ids = [
+            minutes_id
+            for (minutes_id,) in await read_referencing_rows_nowait(
+                self.db,
+                select(MeetingMinutes.id)
+                .where(
+                    MeetingMinutes.organization_id == org_id,
+                    MeetingMinutes.published_document_id.in_(ids),
+                )
+                .order_by(MeetingMinutes.id),
+                _MINUTES_BUSY,
+                exclusive=True,
+            )
+        ]
+        if not minutes_ids:
+            return
         await self.db.execute(
             update(MeetingMinutes)
-            .where(
-                MeetingMinutes.organization_id == org_id,
-                MeetingMinutes.published_document_id.in_(ids),
-            )
+            .where(MeetingMinutes.id.in_(minutes_ids))
             .values(
                 published_document_id=None,
                 published_revision_version=None,
@@ -2931,6 +3041,26 @@ class DocumentsService:
         )
         self.db.add(folder)
         await self.db.flush()
+        return folder
+
+    async def lock_finance_receipts_folder(
+        self, organization_id: UUID | str
+    ) -> DocumentFolder:
+        """Finance > Receipts, share-locked, for a receipt about to be filed.
+
+        Called before the purchase request or expense report is locked: the
+        folder is level 1 of the canonical lock order (top of this module)
+        and the finance record level 3. Filing the receipt would otherwise
+        take the folder's lock last, through the new document's foreign key,
+        while already holding the record. Shared, so two uploads do not wait
+        on each other; a delete of the folder does.
+        """
+        folder = await self.ensure_finance_receipts_folder(organization_id)
+        await self.db.execute(
+            select(DocumentFolder.id)
+            .where(DocumentFolder.id == folder.id)
+            .with_for_update(read=True)
+        )
         return folder
 
     async def _lock_events_root(

@@ -1028,6 +1028,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
       },
       {
+        path: '/communications/member-emails/opt-outs',
+        label: 'Member email opt-outs',
+        anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
+      },
+      {
         path: '/communications/photo-use-consent',
         label: 'Photo use consent',
         anyPermission: ['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit'],

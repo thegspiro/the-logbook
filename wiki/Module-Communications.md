@@ -48,6 +48,7 @@ _rules_ and the member notification inbox are covered under
 | Suggestions                 | `/suggestions`                                | All members | Authenticated — the **Review** tab appears only for a box's reviewers _(2026-09-23)_                                                    |
 | Suggestion Box Management   | `/communications/suggestion-boxes`            | Admins      | `suggestions.manage` — configures boxes, **does not read them** _(2026-09-23)_                                                          |
 | Member Emails & Texts       | `/communications/member-emails`               | Admins      | View: `settings.manage`, `organization.update_settings` or `notifications.manage`; make an email required: the first two _(2026-09-28)_ |
+| Member Email Opt-Outs       | `/communications/member-emails/opt-outs`      | Admins      | `settings.manage`, `organization.update_settings` or `notifications.manage` — read-only _(2026-11-05)_                                  |
 
 Members also see messages needing their attention (unread, unacknowledged, or
 persistent) on the **dashboard** "Department Messages" card and in the
@@ -519,7 +520,16 @@ and not others.
   `organization.update_settings` they can switch **Require for every member**
   on an optional email; every sender then delivers it regardless of the
   member's choices. One-way, audited.
+- **Who has opted out** _(2026-11-05)_: **See which members have turned these
+  off** on that page opens **Member Email Opt-Outs**
+  (`/communications/member-emails/opt-outs`), a read-only list of current
+  members who have turned off Email Notifications or any optional email. Pick
+  an email under **Show** to list just the members who will not be emailed it;
+  each choice shows how many that is. An opt-out from an email the department
+  requires is marked **still sent**. Members change their own choices; the
+  department's lever is **Require for every member**.
 - API: `GET`/`PUT /api/v1/email-templates/member-email-policy`,
+  `GET /api/v1/email-templates/member-email-opt-outs`,
   `GET /api/v1/users/me/email-choices`.
 
 **Same-category notifications stack.** Two or more in-app notifications sharing

@@ -7,6 +7,7 @@ import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { LEGAL_SECTIONS, toPlainText } from '../../../pages/legal/legalContent';
+import LegalMarkup from '../../../pages/legal/LegalMarkup';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -25,6 +26,13 @@ import { GovernancePageHeader } from '../../../components/governance/GovernanceP
  * separately gated, so opening a proposal to review cannot change what the
  * public sees by accident.
  */
+
+/**
+ * A revision's text, rendered with its headings and lists exactly as the public
+ * page will show it, in a scrolling panel so a long notice does not push the
+ * actions off the screen.
+ */
+const renderedBodyClass = 'bg-theme-surface-secondary mt-3 max-h-96 overflow-auto rounded-md px-4 pb-4';
 
 const DOCUMENT_ORDER: LegalDocumentType[] = [LegalDocumentType.PRIVACY_POLICY, LegalDocumentType.TERMS_OF_SERVICE];
 
@@ -52,6 +60,12 @@ const RevisionCard: React.FC<{
       </p>
       <p className="text-theme-text-muted text-xs">{formatDateTime(revision.updatedAt, timezone)}</p>
     </div>
+    {revision.editedByName ? (
+      <p className="text-theme-text-muted text-xs">
+        Edited by {revision.editedByName}
+        {revision.editedAt ? ` on ${formatDateTime(revision.editedAt, timezone)}` : ''}
+      </p>
+    ) : null}
     <p className="text-theme-text-secondary text-sm leading-6">{revision.changeNote}</p>
     {revision.effectiveDate ? (
       <p className="text-theme-text-muted text-xs">Effective date: {revision.effectiveDate}</p>
@@ -60,9 +74,7 @@ const RevisionCard: React.FC<{
       <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
         Read the proposed text
       </summary>
-      <pre className="text-theme-text-secondary bg-theme-surface-secondary mt-3 max-h-96 overflow-auto rounded-md p-3 text-xs leading-5 whitespace-pre-wrap">
-        {revision.body}
-      </pre>
+      <LegalMarkup text={revision.body} headingLevel={3} className={renderedBodyClass} />
     </details>
     <div className="flex flex-wrap gap-2">
       {canModify ? (
@@ -347,9 +359,7 @@ const LegalDocumentsPage: React.FC = () => {
                   <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
                     Read the published text
                   </summary>
-                  <pre className="text-theme-text-secondary bg-theme-surface-secondary mt-3 max-h-96 overflow-auto rounded-md p-3 text-xs leading-5 whitespace-pre-wrap">
-                    {active.publishedBody}
-                  </pre>
+                  <LegalMarkup text={active.publishedBody ?? ''} headingLevel={3} className={renderedBodyClass} />
                 </details>
               </>
             )}
@@ -420,26 +430,50 @@ const LegalDocumentsPage: React.FC = () => {
                 Every version published here, kept so the department can show what members saw on a given date.
               </p>
               <ul className="space-y-3">
-                {active.history.map((revision) => (
-                  <li key={revision.id} className="card-secondary space-y-2 p-4">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="text-theme-text-primary text-sm font-semibold">
-                        {revision.status === 'published' ? 'Live now' : 'Replaced'}
-                        {revision.publishedByName ? ` — published by ${revision.publishedByName}` : ''}
+                {active.history.map((revision) =>
+                  revision.revertsToDefault ? (
+                    <li key={revision.id} className="card-secondary space-y-2 p-4">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-theme-text-primary text-sm font-semibold">
+                          Built-in text restored
+                          {revision.publishedByName ? ` by ${revision.publishedByName}` : ''}
+                        </p>
+                        <p className="text-theme-text-muted text-xs">
+                          {formatDateTime(revision.publishedAt, timezone)}
+                        </p>
+                      </div>
+                      <p className="text-theme-text-secondary text-sm leading-6">
+                        From this point members saw the platform&rsquo;s built-in{' '}
+                        {LEGAL_DOCUMENT_LABEL[revision.documentType].toLowerCase()}.
                       </p>
-                      <p className="text-theme-text-muted text-xs">{formatDateTime(revision.publishedAt, timezone)}</p>
-                    </div>
-                    <p className="text-theme-text-secondary text-sm leading-6">{revision.changeNote}</p>
-                    <details>
-                      <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
-                        Read this version
-                      </summary>
-                      <pre className="text-theme-text-secondary bg-theme-surface mt-3 max-h-96 overflow-auto rounded-md p-3 text-xs leading-5 whitespace-pre-wrap">
-                        {revision.body}
-                      </pre>
-                    </details>
-                  </li>
-                ))}
+                    </li>
+                  ) : (
+                    <li key={revision.id} className="card-secondary space-y-2 p-4">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-theme-text-primary text-sm font-semibold">
+                          {revision.status === 'published' ? 'Live now' : 'Replaced'}
+                          {revision.publishedByName ? ` — published by ${revision.publishedByName}` : ''}
+                        </p>
+                        <p className="text-theme-text-muted text-xs">
+                          {formatDateTime(revision.publishedAt, timezone)}
+                        </p>
+                      </div>
+                      {revision.createdByName || revision.editedByName ? (
+                        <p className="text-theme-text-muted text-xs">
+                          {revision.createdByName ? `Proposed by ${revision.createdByName}` : 'Proposed'}
+                          {revision.editedByName ? `, edited by ${revision.editedByName}` : ''}
+                        </p>
+                      ) : null}
+                      <p className="text-theme-text-secondary text-sm leading-6">{revision.changeNote}</p>
+                      <details>
+                        <summary className="text-theme-accent-red touch:py-3 cursor-pointer text-sm font-medium">
+                          Read this version
+                        </summary>
+                        <LegalMarkup text={revision.body} headingLevel={3} className={renderedBodyClass} />
+                      </details>
+                    </li>
+                  )
+                )}
               </ul>
               <LoadMore
                 shown={active.history.length}

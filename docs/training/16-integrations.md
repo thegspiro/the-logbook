@@ -708,6 +708,13 @@ event in The Logbook. Drafts are never sent, and a cancelled or deleted event
 is removed from the calendar. Who is going, RSVP answers, custom fields and
 attachments are never sent. Publishing runs every five minutes.
 
+To change that, use **What is published** on the connected card: **Days
+ahead** takes a whole number from 1 to 730, and ticking **Event types** limits
+the calendar to those types (leave them all unticked for every type). Select
+**Save publishing settings**. The next run adds what now falls inside and
+removes what no longer does; events that have aged past 30 days ago stay in
+the calendar either way.
+
 **Sync event descriptions** is off by default, because a description can hold
 notes meant only for members. Turn it on from the card to publish
 descriptions too.

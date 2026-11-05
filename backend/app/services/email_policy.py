@@ -693,3 +693,53 @@ def clean_email_kind_choices(value: Any) -> dict:
         for key, choice in value.items()
         if key in optional and isinstance(choice, bool)
     }
+
+
+@dataclass(frozen=True)
+class MemberOptOuts:
+    """What one member has turned off, for the administrators' opt-out view."""
+
+    # The member's Email Notifications switch is off, which stops every
+    # optional kind the department has not made required.
+    email_notifications_off: bool
+    # Optional kinds the member's own setting turns off, in the order of
+    # EMAIL_POLICIES. Kept apart from the master switch because turning that
+    # back on restores exactly these choices.
+    turned_off: Sequence[EmailKind]
+
+    @property
+    def has_any(self) -> bool:
+        return self.email_notifications_off or bool(self.turned_off)
+
+
+def member_opt_outs(preferences: Optional[Mapping[str, Any]]) -> MemberOptOuts:
+    """The member's own opt-outs, read the way :func:`member_choice` reads them.
+
+    Department requirements are deliberately not applied: the view reports
+    what the member chose, and :func:`not_emailed` says what that costs.
+    """
+    prefs = preferences if isinstance(preferences, Mapping) else {}
+    return MemberOptOuts(
+        email_notifications_off=prefs.get(MASTER_SWITCH) is False,
+        turned_off=tuple(
+            kind
+            for kind in EMAIL_POLICIES
+            if kind in OPTIONAL_KINDS and not member_choice(prefs, kind)
+        ),
+    )
+
+
+def not_emailed(
+    opt_outs: MemberOptOuts,
+    kind: EmailKind,
+    department_required: DepartmentRequired,
+) -> bool:
+    """Whether a member with *opt_outs* misses *kind*.
+
+    The same answer as ``not member_receives_email`` for the preferences the
+    opt-outs were read from; the opt-out view filters on it, so its counts
+    agree with who the senders actually skip (CLAUDE.md pitfall #29).
+    """
+    if is_required(kind, department_required):
+        return False
+    return opt_outs.email_notifications_off or kind in opt_outs.turned_off

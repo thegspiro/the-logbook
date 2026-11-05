@@ -1844,10 +1844,20 @@ async def get_user_with_roles(
     payload = MemberProfileResponse.model_validate(user)
     await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
     # "Member since" on the profile and the digital ID card is credited
-    # service (owner decision 2026-11-01), not hire_date.
-    payload.service_since = await MemberServiceHistoryService(db).service_since_for(
-        user
-    )
+    # service (owner decision 2026-11-01), not hire_date. It can count time at
+    # another department, so it is shown to the member and to officers who
+    # manage members or their ID cards, not to everyone who can open the
+    # roster (owner decision 2026-11-05).
+    if (
+        is_self
+        or is_admin
+        or _has_permission("members.manage_id_cards", user_permissions)
+    ):
+        payload.service_since = await MemberServiceHistoryService(db).service_since_for(
+            user
+        )
+    else:
+        payload.service_since = None
 
     return payload
 

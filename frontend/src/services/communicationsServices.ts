@@ -422,6 +422,32 @@ const normalizeMemberEmailPolicy = (data: MemberEmailPolicy): MemberEmailPolicy 
   can_edit: Boolean(data.can_edit),
 });
 
+/** One current member and the optional emails they have turned off. */
+export interface MemberEmailOptOut {
+  user_id: string;
+  name: string;
+  membership_number: string | null;
+  /** Email Notifications is off: every optional email the department has not made required is stopped. */
+  email_notifications_off: boolean;
+  /** Keys of the optional email kinds the member's own setting turns off. */
+  turned_off: string[];
+}
+
+/** A page of the administrators' opt-out view. Snake case, like its module. */
+export interface MemberEmailOptOutPage {
+  members: MemberEmailOptOut[];
+  /** Members matching the filter, across every page. */
+  total: number;
+  skip: number;
+  limit: number;
+  /** Current members of the department, opted out or not. */
+  members_considered: number;
+  /** Per optional kind, how many current members are not emailed it. */
+  not_emailed: Record<string, number>;
+  /** Optional kinds the department has made required. */
+  department_required: string[];
+}
+
 export const emailTemplatesService = {
   /** Every member email and text, and whether members can opt out. Read-only. */
   async getMemberEmailPolicy(): Promise<MemberEmailPolicy> {
@@ -435,6 +461,30 @@ export const emailTemplatesService = {
       required_kinds: requiredKinds,
     });
     return normalizeMemberEmailPolicy(response.data);
+  },
+
+  /**
+   * Which current members have opted out of which optional emails. Read-only:
+   * an opt-out is the member's own choice. Never cached (apiCache).
+   */
+  async getMemberEmailOptOuts(params: {
+    kind?: string | undefined;
+    skip: number;
+    limit: number;
+  }): Promise<MemberEmailOptOutPage> {
+    const response = await api.get<MemberEmailOptOutPage>('/email-templates/member-email-opt-outs', {
+      params: { skip: params.skip, limit: params.limit, ...(params.kind ? { kind: params.kind } : {}) },
+    });
+    const data = response.data;
+    return {
+      members: asArray(data.members),
+      total: Number(data.total) || 0,
+      skip: Number(data.skip) || 0,
+      limit: Number(data.limit) || params.limit,
+      members_considered: Number(data.members_considered) || 0,
+      not_emailed: data.not_emailed ?? {},
+      department_required: asArray(data.department_required),
+    };
   },
 
   async getTemplates(): Promise<EmailTemplate[]> {

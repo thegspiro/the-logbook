@@ -649,9 +649,11 @@ class MeetingMinutes(Base):
     header_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     footer_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
-    # Published document reference
+    # Published document reference. Indexed so a document delete finds and
+    # locks only the minutes naming it (DOC-31's lock order), not every
+    # minutes row the department has.
     published_document_id: Mapped[Optional[str]] = mapped_column(
-        String(36), nullable=True
+        String(36), nullable=True, index=True
     )
     # Which adopted version the library copy shows, and when it was filed, so a
     # republish can say "replaces version N, published <date>".

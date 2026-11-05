@@ -306,9 +306,11 @@ To propose a revision:
 2. Select **Propose a revision**. The editor opens filled in with the text
    members see today — your department's own version, or the built-in wording
    if it has none. You edit rather than retype.
-3. Edit the text. It is plain text, exactly as the public page shows it. Leave
-   a blank line between paragraphs. Do not use formatting marks; they would be
-   printed as typed.
+3. Edit the text. Leave a blank line between paragraphs. Start a line with
+   `## ` for a heading (`### ` for a smaller one), `- ` for a bulleted item or
+   `1. ` for a numbered one. Nothing else is formatted: links, bold and HTML
+   are printed exactly as typed. Open **Preview as members will see it** under
+   the box to check.
 4. Say **what this changes and why**, naming the bylaw, SOP, law or legal
    advice behind it. This is required. It is what a future officer reads to
    understand the change. You will want it in front of you if the notice is
@@ -324,7 +326,12 @@ An officer with publishing rights reviews the draft and selects **Publish**,
 then **Publish it** to confirm. This replaces the live page immediately. The
 version that was live is archived, not deleted, so the department can always
 answer what a member was shown on a given date. **Revert to the built-in text**
-puts the built-in wording back.
+puts the built-in wording back, and the published history records it as
+**Built-in text restored by …** with the date.
+
+A publisher may edit someone else's proposal. The card still says who proposed
+it, and adds **Edited by …** with the date; the published history keeps both
+names.
 
 > **Admins:** your wording replaces the built-in wording **entirely**. The two
 > are not merged. Carry the department-control and status-based-access language
