@@ -153,8 +153,8 @@ const AttendanceDashboardPage: React.FC = () => {
               description="Attendance is shown for active members only."
             />
           ) : (
-            <div className="card overflow-hidden">
-              <table className="rwd-table w-full text-sm">
+            <div className="card rwd-table-container overflow-hidden">
+              <table className="rwd-table rwd-table-wide w-full text-sm">
                 <thead>
                   <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary border-b text-left">
                     <th scope="col" className="px-4 py-3 font-medium">
