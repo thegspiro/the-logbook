@@ -1367,10 +1367,14 @@ export const followUpFormService = {
     return response.data;
   },
 
-  /** A submitted form's answers; sensitive ones are withheld from a viewer without the permission. */
-  async getAnswers(applicantId: string, requestId: string): Promise<FollowUpAnswers> {
+  /**
+   * A submitted form's answers, for the Interview page. Sensitive ones reach
+   * holders of sensitive_answers.view and, on this route only, the
+   * applicant's assigned interviewers; anyone else sees them withheld.
+   */
+  async getInterviewAnswers(applicantId: string, requestId: string): Promise<FollowUpAnswers> {
     const response = await api.get<FollowUpAnswers>(
-      `/prospective-members/prospects/${applicantId}/follow-up-forms/${requestId}/answers`
+      `/prospective-members/prospects/${applicantId}/interview/follow-up-forms/${requestId}/answers`
     );
     return { ...response.data, answers: asArray(response.data.answers) };
   },

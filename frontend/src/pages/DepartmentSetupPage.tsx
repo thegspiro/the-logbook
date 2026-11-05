@@ -26,7 +26,6 @@ import {
   Plug,
   ChevronRight,
   Loader2,
-  Rocket,
   PartyPopper,
   UserCheck,
   KeyRound,
@@ -36,6 +35,7 @@ import {
   Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import AdminPageHeader from '../components/admin/AdminPageHeader';
 import { organizationService } from '../services/api';
 import type { SetupChecklistItem } from '../services/api';
 
@@ -131,20 +131,10 @@ const DepartmentSetupPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
-      {/* Header */}
-      <div>
-        <div className="mb-2 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
-            <Rocket className="h-5 w-5 text-red-500" />
-          </div>
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Department Setup</h1>
-            <p className="text-theme-text-muted text-sm">
-              Complete these steps to get your department fully operational.
-            </p>
-          </div>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Department Setup"
+        description="Complete these steps to get your department fully operational."
+      />
 
       {/* Progress Card */}
       <div className="card p-6">

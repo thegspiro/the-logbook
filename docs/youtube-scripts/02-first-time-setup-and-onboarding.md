@@ -107,6 +107,16 @@ lists: what setup requires and what it will ask for but can skip.]**
 > you're allowed to finish, which is what stops a half-built department being
 > taken over by whoever finds it."
 
+**[SCREEN: A step page with the warning banner **Your setup session has
+ended**, its **Return to the first step** link, and the dismiss X.]**
+
+> "If the session does lapse — you closed the browser, or thirty minutes went by
+> with nothing happening — you'll see a banner that says so. The answers on screen
+> are a draft kept on that device: steps you'd finished are saved, but anything
+> you hadn't continued past hasn't reached the server. Return to the first step
+> to start a new session. If the System Owner account already exists, you'll be
+> asked to sign in with it."
+
 > "And if you see 'Onboarding has already been completed' — that's a different
 > message entirely. It means a department already exists on this install. Sign
 > in rather than setting up again."
@@ -301,7 +311,12 @@ organized by category, each card with **Enable**, **Later** and **Skip**.]**
 > Reports & Analytics. If your department elects officers, takes meeting minutes,
 > or needs reporting, enable these."
 
-> "**Communication modules** cover Email Notifications and Mobile App Access."
+> "**Communication modules** cover Email Notifications, Mobile App Access and
+> **Public Information** — the public-facing pages for your community, such as a
+> department information page and fire safety education. Setup asks about it now,
+> so your answer is the one that's stored. It has no permissions of its own; it's
+> managed by whoever manages organization settings, so the Positions step shows
+> no row for it."
 
 > "**Advanced modules** include External Integrations and the Prospective
 > Members Pipeline."

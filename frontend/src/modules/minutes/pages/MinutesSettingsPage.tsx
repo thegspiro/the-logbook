@@ -102,6 +102,7 @@ export const MinutesSettingsPage: React.FC = () => {
           icon={SettingsIcon}
           title="Minutes Settings"
           breadcrumbLabel="Settings"
+          adminHeader
           subtitle={SECTIONS.find((section) => section.key === active)?.description}
           actions={controls}
         />

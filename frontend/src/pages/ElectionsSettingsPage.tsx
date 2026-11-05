@@ -613,6 +613,7 @@ export const ElectionsSettingsPage: React.FC = () => {
           icon={SettingsIcon}
           title="Election Settings"
           breadcrumbLabel="Settings"
+          adminHeader
           subtitle="Voter eligibility, proxy voting, election features, and ballot integrity"
           actions={controls}
         />

@@ -38,7 +38,7 @@ vi.mock('react-hot-toast', () => ({
 vi.mock('../services/api', () => ({
   followUpFormService: {
     list: () => Promise.resolve([]),
-    getAnswers: () => Promise.resolve(null),
+    getInterviewAnswers: () => Promise.resolve(null),
   },
   applicantService: {
     getMyAccess: (...a: unknown[]) => mocks.getMyAccess(...a) as unknown,

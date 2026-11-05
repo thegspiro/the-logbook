@@ -199,8 +199,8 @@ A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens 
 | ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`                                                                                                                                 |
 | `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`                                                                                                                                 |
-| `/members/admin/waivers`             | Waiver Management                     | `members.manage`                                                                                                                                 |
-| `/members/admin/id-cards`            | Member ID Cards                       | `members.manage_id_cards`                                                                                                                        |
+| `/members/admin/waivers`             | Waivers                               | `members.manage`                                                                                                                                 |
+| `/members/admin/id-cards`            | ID Cards                              | `members.manage_id_cards`                                                                                                                        |
 | `/members/admin/settings`            | Members Settings                      | `members.manage`, `settings.manage`, `settings.manage_contact_visibility`, `settings.edit`, `organization.update_settings` or `apparatus.manage` |
 | `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`, `settings.manage`, `settings.manage_contact_visibility` or `organization.update_settings`                                      |
 | `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
@@ -1740,7 +1740,7 @@ the click.
 | `/settings`              | Organization Settings | `settings.manage`              |
 | `/settings/roles`        | Role Management       | `positions.manage_permissions` |
 | `/setup`                 | Department Setup      | `settings.manage`              |
-| `/admin/errors`          | Error Monitoring      | `settings.manage`              |
+| `/admin/errors`          | Error Monitor         | `settings.manage`              |
 | `/admin/analytics`       | Analytics Dashboard   | `analytics.view`               |
 | `/admin/audit-log`       | `AuditLogPage`        | `audit.view`                   |
 | `/admin/security-alerts` | `SecurityAlertsPage`  | `audit.view`                   |

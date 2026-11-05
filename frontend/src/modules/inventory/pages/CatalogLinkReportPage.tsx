@@ -16,7 +16,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { ChevronDown, ChevronRight, Link2, Loader2, RefreshCw, Undo2, Wand2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Breadcrumbs, EmptyState, SkeletonPage } from '../../../components/ux';
+import { EmptyState, SkeletonPage } from '../../../components/ux';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import InventoryItemPicker from '../components/InventoryItemPicker';
@@ -450,12 +450,13 @@ const CatalogLinkReportPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 pb-28 sm:px-6 sm:py-8">
-      <Breadcrumbs className="mb-0" />
+    <div className="max-w-5xl space-y-6 py-6 pb-28">
+      {/* No trail or <h1> of its own: drawn inside Inventory Administration's
+          header (InventoryAdminLayout), like the Equipment Checklists pages. */}
 
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Catalog Links</h1>
+          <h2 className="text-theme-text-primary text-2xl font-bold">Catalog Links</h2>
           <p className="text-theme-text-muted mt-0.5 text-sm">
             Checklist lines not yet connected to inventory or Medical Supplies, grouped by name across every template.
             Choose the catalog item once and it links everywhere the line appears.

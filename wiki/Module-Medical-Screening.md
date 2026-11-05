@@ -103,7 +103,7 @@ A banner across the top counts screenings expiring in the next 30 days.
 | One-time requirement (not recurring)   | Ticked: a screening on file satisfies it indefinitely                                                                                                                                                |
 | Frequency (months)                     | For a recurring requirement. A record saved without an expiration date falls due this many calendar months after it was completed                                                                    |
 | Applies to Positions (comma-separated) | Position names or slugs, case and spacing ignored. Blank: every member. Listed: only members holding one of them. **Applicants are always graded on every requirement** — they hold no positions yet |
-| Grace Period (days past expiration)    | **Saved but not enforced.** A screening is non-compliant the day after it expires, whatever this says; the form says so                                                                              |
+| Grace Period (days past expiration)    | Days past the due date that still count as compliant, read by the one deadline rule every screen uses (`screening_deadline`). Required; 0 means none. Default 30                                     |
 | Active                                 | Only active requirements are graded                                                                                                                                                                  |
 
 **Deleting a requirement keeps its records.** They are unlinked from it and stay

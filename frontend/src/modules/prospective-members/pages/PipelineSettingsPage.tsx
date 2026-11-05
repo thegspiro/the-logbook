@@ -8,9 +8,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { DialogPortal } from '../../../components/DialogPortal';
-import { useNavigate } from 'react-router';
 import {
-  ArrowLeft,
   Plus,
   Settings,
   Loader2,
@@ -35,6 +33,7 @@ import {
   BarChart3,
   UserCheck,
 } from 'lucide-react';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { STAGE_TYPE_ICONS, STAGE_TYPE_COLORS } from '../constants';
@@ -51,7 +50,6 @@ import { StageType as StageTypeConst } from '../../../constants/enums';
 import { getEffectiveTimeoutDays } from '../utils';
 
 export const PipelineSettingsPage: React.FC = () => {
-  const navigate = useNavigate();
   const {
     pipelines,
     currentPipeline,
@@ -378,23 +376,13 @@ export const PipelineSettingsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center gap-4">
-        <button
-          onClick={() => void navigate('/prospective-members')}
-          className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-2 transition-colors"
-          aria-label="Back to prospective members"
-        >
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
-            <Settings className="h-7 w-7 text-red-700 dark:text-red-500" aria-hidden="true" />
-            Pipeline Settings
-          </h1>
-          <p className="text-theme-text-muted mt-1">Configure the stages prospective members go through</p>
-        </div>
-      </div>
+      {/* The trail's Prospective Members crumb is the way back; it replaced
+          a back arrow beside the title. */}
+      <AdminPageHeader
+        title="Pipeline Settings"
+        description="Configure the stages prospective members go through"
+        className="mb-6"
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Pipeline List Sidebar */}

@@ -364,7 +364,7 @@ const TrainingWaiversTab: React.FC = () => {
           to="/members/admin/waivers"
           className="inline-flex min-h-11 items-center text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
-          Open full Waiver Management page (includes meetings & shifts)
+          Open the full Waivers page (includes meetings & shifts)
         </Link>
       </div>
     </div>
