@@ -265,18 +265,15 @@ backend empties any database that has no `alembic_version` table.
 
 #### Google Cloud Platform (GCP)
 
-1. **Create Compute Engine Instance**
-   - Ubuntu 22.04 LTS
-   - e2-medium or larger
-   - Allow HTTP/HTTPS traffic
-
-2. **SSH and Install**
-   ```bash
-   gcloud compute ssh your-instance-name
-   git clone https://github.com/your-org/the-logbook.git
-   cd the-logbook
-   ./install.sh --docker
-   ```
+Follow the [Google Cloud Deployment Guide](deployment/gcp.md). It covers a
+single Compute Engine VM running the whole stack, and a VM backed by Cloud SQL
+for MySQL and Memorystore for Redis through
+`docker-compose.external-services.yml`, with a private network, verified TLS,
+encrypted backups to Cloud Storage, moving an existing installation, and the
+Google Cloud-specific pitfalls. Read its
+[Pitfalls](deployment/gcp.md#pitfalls) before you start: among them, the
+backend empties any database that has no `alembic_version` table, and a VM
+created with the default access scopes cannot upload its backups.
 
 ---
 
