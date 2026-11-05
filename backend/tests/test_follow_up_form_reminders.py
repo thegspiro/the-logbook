@@ -414,7 +414,14 @@ class TestAnswers:
         return seed, await _request(db, seed)
 
     async def _call(
-        self, db, seed, request_id, *, can_view_sensitive: bool, roles=frozenset()
+        self,
+        db,
+        seed,
+        request_id,
+        *,
+        can_view_sensitive: bool,
+        roles=frozenset(),
+        interview: bool = False,
     ):
         """Called as FastAPI would: ``access`` is what require_prospect_access
         resolved, here a view_all holder with the given assignments."""
@@ -428,7 +435,12 @@ class TestAnswers:
             ),
             patch.object(endpoints, "log_audit_event", audit),
         ):
-            result = await endpoints.get_follow_up_form_answers(
+            route = (
+                endpoints.get_interview_follow_up_form_answers
+                if interview
+                else endpoints.get_follow_up_form_answers
+            )
+            result = await route(
                 prospect_id=seed.prospect_id,
                 request_id=request_id,
                 db=db,
@@ -489,8 +501,32 @@ class TestAnswers:
             request.id
         )
         assert audit.await_args.kwargs["event_data"]["via"] == "permission"
+        assert audit.await_args.kwargs["event_data"]["screen"] == "applicant"
 
     async def test_an_assigned_interviewer_reads_it_and_the_reveal_says_why(
+        self, db_session, mail
+    ):
+        seed, request = await self._submitted(db_session, mail)
+
+        result, audit = await self._call(
+            db_session,
+            seed,
+            request.id,
+            can_view_sensitive=False,
+            roles={"interviewer"},
+            interview=True,
+        )
+
+        secret = next(a for a in result["answers"] if a["label"] == "Criminal history")
+        assert secret["answer"] == SECRET
+        assert not secret.get("withheld")
+        audit.assert_awaited_once()
+        assert audit.await_args.kwargs["event_data"]["via"] == (
+            "interviewer_assignment"
+        )
+        assert audit.await_args.kwargs["event_data"]["screen"] == "interview"
+
+    async def test_an_interviewer_sees_it_withheld_off_the_interview_page(
         self, db_session, mail
     ):
         seed, request = await self._submitted(db_session, mail)
@@ -504,12 +540,27 @@ class TestAnswers:
         )
 
         secret = next(a for a in result["answers"] if a["label"] == "Criminal history")
-        assert secret["answer"] == SECRET
-        assert not secret.get("withheld")
-        audit.assert_awaited_once()
-        assert audit.await_args.kwargs["event_data"]["via"] == (
-            "interviewer_assignment"
+        assert secret["answer"] is None
+        assert secret["withheld"] is True
+        audit.assert_not_awaited()
+
+    async def test_a_case_manager_does_not_on_the_interview_page_either(
+        self, db_session, mail
+    ):
+        seed, request = await self._submitted(db_session, mail)
+
+        result, audit = await self._call(
+            db_session,
+            seed,
+            request.id,
+            can_view_sensitive=False,
+            roles={"case_manager"},
+            interview=True,
         )
+
+        secret = next(a for a in result["answers"] if a["label"] == "Criminal history")
+        assert secret["withheld"] is True
+        audit.assert_not_awaited()
 
     async def test_a_case_manager_does_not(self, db_session, mail):
         seed, request = await self._submitted(db_session, mail)

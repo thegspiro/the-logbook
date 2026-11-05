@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedJSON, EncryptedText
+from app.core.encrypted_types import EncryptedEnum, EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -181,15 +181,16 @@ class ScreeningRecord(Base):
         ),
         nullable=False,
     )
+    # MS-15: the outcome is PHI too — "failed" beside a member's name and a
+    # psychological evaluation says what the encrypted notes would. Stored as
+    # ciphertext, so the database cannot filter or sort on it: readers load
+    # rows and compare the decrypted value in Python, and the column refuses
+    # a SQL comparison outright. No server default: a database default would
+    # be plaintext. The ORM default always supplies a value.
     status: Mapped[ScreeningStatus] = mapped_column(
-        Enum(
-            ScreeningStatus,
-            name="screening_status_enum",
-            values_callable=lambda x: [e.value for e in x],
-        ),
+        EncryptedEnum(ScreeningStatus),
         nullable=False,
         default=ScreeningStatus.SCHEDULED,
-        server_default="scheduled",
     )
     scheduled_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     completed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
@@ -258,7 +259,6 @@ class ScreeningRecord(Base):
     __table_args__ = (
         Index("idx_screening_rec_user", "user_id"),
         Index("idx_screening_rec_prospect", "prospect_id"),
-        Index("idx_screening_rec_status", "organization_id", "status"),
         Index(
             "idx_screening_rec_expiration",
             "organization_id",

@@ -149,7 +149,7 @@ _PLAIN_COLUMNS = [
     (
         "screening_records",
         "id",
-        ["provider_name", "result_summary", "notes", "result_data"],
+        ["provider_name", "result_summary", "notes", "result_data", "status"],
     ),
     (
         "historical_members",

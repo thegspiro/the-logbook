@@ -980,6 +980,17 @@
 @utility toggle-knob {
   /* Standard toggle-switch knob: always a visible light circle */
   @apply pointer-events-none inline-block transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out dark:bg-slate-200;
+
+  /* High contrast paints --surface-border pure white, and that is the off
+     track at most call sites, so the light knob sat on it at ~1.2:1 and an
+     off switch read as a blank white pill. The shared SettingsToggle's off
+     track is --surface-hover (#222), where a plain black knob would vanish
+     instead. A black knob with a white ring is visible on all three tracks
+     it can land on: white (off), #222 (off) and the accent red (on). */
+  .high-contrast & {
+    background-color: #000000;
+    box-shadow: 0 0 0 2px #ffffff;
+  }
 }
 
 @utility toggle-knob-sm {
