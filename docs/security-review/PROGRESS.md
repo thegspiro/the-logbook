@@ -16,7 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(No security-review PR open — confirmed via a fresh `list_pull_requests` call, `state=open`, both unfiltered and filtered on `head=thegspiro:claude/security-review`, 0 matches. This pass's own PR number is recorded here in a follow-up commit on this same branch once opened, per the rotation's own rule.)_
+**PR [#4069](https://github.com/thegspiro/the-logbook/pull/4069)** (branch
+`claude/security-review-users-organizations-p15`) —
+Feature 07 (Users & organizations), pass 15, a watchdog pickup. Real delta:
+9 commits since pass 14's baseline touch the twelve declared files. The
+security-relevant one (`1fd977dd0`, an owner-decision batch landed outside
+this rotation) closes USR-11 (step-up now gates `change_member_status`/
+`archive_member`) and USR-12 (step-up now gates the Gmail delegated-
+service-account save paths) — both verified directly against the code and
+`test_mfa_policy.py`'s AST-enforced `STEPUP_HANDLERS` set. One new route,
+`GET /users/membership-tiers/names`, traced for cross-tenant leakage and
+found none. 88 routes re-enumerated by AST. 0 fixed, 0 new findings; USR-5
+and USR-8 re-confirmed unchanged. See
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 15** section.
+Next in the rotation: Feature 08 (Membership pipeline).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 15, PR #4052, merged), preserved for history</summary>
