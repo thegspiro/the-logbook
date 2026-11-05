@@ -1199,8 +1199,10 @@ submitted.
 - **Send now** appears when the applicant is on a Follow-up Form stage but the
   email has not gone out — for example, the department's email was down.
 - **Resend** sends the same link again, for an applicant who lost the email.
-- Both need **prospective_members.manage**, and work only while the application
-  is in progress or on hold. Neither is offered once the form is submitted.
+- Both are offered to a member with **prospective_members.manage** and to the
+  applicant's **case manager** (see Case Managers and Interviewers below). They
+  work only while the application is in progress or on hold, and neither is
+  offered once the form is submitted.
 - If the stage's form was deleted or unpublished, nothing is sent and you are
   told why. Publish the form, or pick another on the stage.
 
