@@ -1,5 +1,19 @@
 # Script currency
 
+## Flagged by the 2026-11-04 → 11-05 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                         | Beat                          | Was                                                           | Now                                                                                    |
+| ---------------------------------------------- | ----------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Training Officer (05, 16), Fire Chief (04)** | Drill attendance              | Hours only; waivers for a missed drill                        | **Session Attendance** requirement, **Counts toward attendance** badge; Chief override |
+| **Training Officer (05, 16)**                  | Evaluation scoring            | One weighted percentage                                       | **Graded by section** with grade ranges and an evaluator regrade                       |
+| **Member guide (06)**                          | Dashboard                     | Money and outreach cards on Personal                          | On **My Department**; All clear line; notification stack previews the newest message   |
+| **IT Manager (03)**                            | Historical import, compliance | No training or drills; Configure only in Compliance Reporting | Training rows and drill sessions; **Settings & Data → Compliance Settings**            |
+| **Any medical-screening beat**                 | Grace period                  | Saved but not applied                                         | Applied; clinical detail needs `medical_screening.view_details`                        |
+| **Any phone or tablet beat**                   | Tables and switches           | Tables scroll; oval switches on touch                         | Wide tables become cards by card width; switches are pills                             |
+
 ## Flagged by the 2026-11-02 → 11-03 changes
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).

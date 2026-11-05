@@ -5,6 +5,31 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 4 – 5, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+
+- **Drill attendance can be a requirement.** A Session Attendance requirement
+  (for example 60% of company drills this year) counts the drills a member
+  attended. Drills are marked when created, and a badge tells members which count.
+  The Chief can override it for a member, with a reason on record.
+- **Evaluations can be graded by section**, with grade ranges, so "Meets
+  expectations" across the board no longer reads as failing.
+- **Historical import** brings in training records and turns company drill dates
+  into held drills.
+- **Medical screening grace periods now work**, and clinical details need their
+  own permission. Check who holds it.
+- **Members:** a My Crew page for supervisors and Shift & Call History on profiles.
+- **Scheduling:** officers can seat anyone in a custom seat (with a reason), outside
+  shifts can require approval, and open swaps post a bell entry.
+- **Inventory:** category names are unique within a parent, and adding an item now
+  counts as seeing it.
+- **Fundraising:** donors and campaigns can be edited.
+- **Dashboard and phones:** clearer shift times, All clear fold, wide tables turn
+  into cards when narrow, and switches are round-ended pills.
+- Operators: DigitalOcean and Google Cloud deployment guides.
+
 ## Recent changes: November 3 – 4, 2026
 
 The engineering audit is

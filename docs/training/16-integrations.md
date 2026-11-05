@@ -890,6 +890,21 @@ the system the department used before The Logbook: shifts on a unit, on-call
    crews and commit. Administrative hours import as administrative hours.
 5. **Download the log**: one line per row saying what became of it.
 
+**Training rows** _(2026-11-04)_ become completed training records in one commit.
+Set up the subject, instructor and "taught the class" columns; map each subject
+to a library course (or let it import as continuing education); and choose, for
+rows naming Target Solutions or Vector Solutions, whether to import ones no
+synced record matches. Rows a synced record already covers are left out.
+
+**Company drills** _(2026-11-05)_. A `CompanyDrill` date counts as a held drill
+when enough members logged it (three by default, 1 to 50). Each held drill
+becomes one past, finalized training session linked to the session attendance
+requirements you choose, with each member's imported record attached, so
+[session attendance](./02-training.md#session-attendance-requirements) grades
+correctly. A date fewer members logged stays an ordinary record. The step runs
+after the training commit and is safe to run again. Its confirmation is a plain
+confirmation, not a red delete warning, because it only creates sessions.
+
 Running the same file twice is safe. Full detail is in the wiki page
 [Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
 

@@ -613,7 +613,9 @@ same list, so an officer sees the programs that already exist first. **New
 Pipeline** (or **Create Your First Pipeline**) opens the wizard in the same
 tab, and choosing **Programs** in the hub returns to the list. _(2026-10-25)_
 **Import from Registry** (NFPA, Pro Board, NREMT) now lives on **Curriculum →
-Requirements**; the standalone Training Programs page keeps it too.
+Requirements**; the standalone Training Programs page keeps it too. _(2026-11-05)_
+On both, the panel sits **below** the requirements list, so your own
+requirements start at the top of the page.
 For training officers, the page's breadcrumb starts at **Training
 Administration**, one tap back to the admin page. Other members do not see that
 link.
@@ -1204,16 +1206,17 @@ happened.
 
 ### Requirement Types
 
-| Type                  | What the member must do                 | What you enter                                                              |
-| --------------------- | --------------------------------------- | --------------------------------------------------------------------------- |
-| **Hours**             | Build up a number of training hours     | Required hours                                                              |
-| **Courses**           | Complete a specific list of courses     | Courses picked from the course library                                      |
-| **Certification**     | Get or keep a specific certification    | Courses that earn it, from the course library (**Certification earned by**) |
-| **Shifts**            | Complete a number of qualifying shifts  | Required shifts                                                             |
-| **Calls**             | Respond to a number of qualifying calls | Required calls                                                              |
-| **Skills Evaluation** | Pass a hands-on skills evaluation       | —                                                                           |
-| **Checklist**         | Complete a set of check-off items       | Checklist items                                                             |
-| **Knowledge Test**    | Pass a written test                     | Passing score (%), optional max attempts                                    |
+| Type                                  | What the member must do                                           | What you enter                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Hours**                             | Build up a number of training hours                               | Required hours                                                                                      |
+| **Courses**                           | Complete a specific list of courses                               | Courses picked from the course library                                                              |
+| **Certification**                     | Get or keep a specific certification                              | Courses that earn it, from the course library (**Certification earned by**)                         |
+| **Shifts**                            | Complete a number of qualifying shifts                            | Required shifts                                                                                     |
+| **Calls**                             | Respond to a number of qualifying calls                           | Required calls                                                                                      |
+| **Skills Evaluation**                 | Pass a hands-on skills evaluation                                 | —                                                                                                   |
+| **Checklist**                         | Complete a set of check-off items                                 | Checklist items                                                                                     |
+| **Knowledge Test**                    | Pass a written test                                               | Passing score (%), optional max attempts                                                            |
+| **Session Attendance** _(2026-11-04)_ | Attend a share of the linked training sessions held in the window | **Sessions to Attend (%)**; see [Session attendance requirements](#session-attendance-requirements) |
 
 The form shows the right value box for the type you choose, and checks it
 before saving.
@@ -1233,6 +1236,57 @@ unticks those four. **Administrative** and **Honorary** are left as you set
 them either way, so tick them yourself if the requirement covers them too.
 
 ![A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary, Life and Retired ticked while Administrative and Honorary are not](./images/02-135-requirement-operational-members.png)
+
+### Session attendance requirements
+
+_Added 2026-11-04._ A **Session Attendance** requirement is met by attending a
+share of the training sessions linked to it that were held in its window, for
+example "attend 60% of the company drills this year". Use it for drills where
+what matters is turning up, not the hours logged. It counts against standing on
+every compliance screen: the Compliance Matrix reads _"2 of 3 sessions"_ and
+_"Annual · 60% of sessions"_, and My Training and the reports follow.
+
+- **The form** shows **Sessions to Attend (%)** and hides **Training Type** and
+  **Required Hours**, which this type does not read.
+- **A session counts only if it is linked.** One drill can count toward several
+  requirements (the same drills at 60% for active members and 30% for senior
+  members). A session linked to none is optional and charges nobody.
+- **Held means finalized and not cancelled**, dated on the department's calendar.
+  A member is charged only for drills held since they joined. A waiver or leave
+  covering the day excuses the drill unless they attended anyway. With nothing
+  charged yet the requirement reads as met, not as 0%.
+- **Link sessions when you create them.** Under **Connect to Requirements &
+  Programs** there is a tick box for each session attendance requirement, for a
+  single session or a recurring series. You can still change the links later
+  from the event page's **Counts toward attendance** editor, even after
+  attendance is finalized, since links change only how the session is graded.
+- **Members can see it.** A **Counts toward attendance** badge appears beside
+  **Mandatory** on the events list, the calendar and the event page.
+
+**The Chief's override.** Waiving a missed drill stays routine and goes through
+a [training waiver](#waiver-management). An override is the rare exception: the
+Chief counts a member as meeting the requirement over dates the Chief chooses,
+however short their attendance, with a reason on record.
+
+1. Tick **Allow the Chief to override it for a member** on the requirement form
+   (off by default).
+   Switching it off later suspends every override on it without erasing them.
+2. A member holding a **Chief** position opens the member in the Compliance
+   Matrix and uses **Chief override**: dates (starting from the requirement's
+   current period), a required reason, and **Revoke**. This is tied to the Chief
+   position, not a permission, so no role, wildcard or the IT Manager's access
+   reaches it.
+3. The cell then reads **Met by the Chief's override**. The real attendance
+   count is still shown, and a member who met the requirement on their own is
+   never labelled overridden. An override excuses no month and no other drill.
+
+Overrides are revoked, never deleted; grant and revoke are audited with ids and
+dates only, and the reason is stored encrypted.
+
+> **Screenshots needed:** the requirement form with Session Attendance chosen;
+> the create-session checklist; a Compliance Matrix cell with the Chief override
+> control and **Met by the Chief's override**; the **Counts toward attendance**
+> badge on an event card.
 
 ### Never Use an Hours Requirement for a Required Topic
 
@@ -1622,15 +1676,23 @@ opens **Records → Sessions**.
 
 The areas are:
 
-| Area                     | What is in it                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                |
-| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                                |
-| **Curriculum**           | Requirements, Course Library, Programs                                                                        |
-| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                       |
-| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                |
-| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                       |
-| **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Integrations, Import Past Training, Headline Metrics |
+| Area                     | What is in it                                                                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                     |
+| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                     |
+| **Curriculum**           | Requirements, Course Library, Programs                                                                                             |
+| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                            |
+| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                     |
+| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                            |
+| **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Compliance Settings, Integrations, Import Past Training, Headline Metrics |
+
+**Compliance Settings** _(2026-11-05)_. The compliance configuration
+(thresholds, profiles, **Months on leave**) is now also listed under **Settings
+& Data**; its panel says what is set there and opens the same page as
+**Compliance Reporting → Configure**. Saving needs **Manage settings** or
+**Manage compliance**; **Manage training** alone opens the hub but does not
+show **Configure** or offer the link, so an officer is not sent to a page that
+refuses them.
 
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
@@ -1891,6 +1953,10 @@ Programs**. All are optional:
   from a course cohort can carry a phase from a different program, so this is
   allowed.
 
+- **Counts toward attendance** _(2026-11-04)_. When the department has
+  [session attendance requirements](#session-attendance-requirements), a tick box
+  for each appears here, so the session is linked the moment it is created.
+
 The same pickers appear on the event page as **Requirements & Programs**. That
 is where you fix a session created before a requirement existed, or linked to
 the wrong pipeline. The card also lets you **add training details** to a
@@ -1919,6 +1985,9 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
 - Opening a member shows each requirement's figure — _"44 of 24 hours"_,
   _"Nothing on file"_, _"1 of 1 shifts"_ — with its status and the date or
   window it was judged against.
+- A cell met by an override reads **Met by the Chief's override**; a Chief sees
+  the **Chief override** control on a requirement that allows it (see
+  [Session attendance requirements](#session-attendance-requirements)).
 - **By requirement** turns it around: requirements grouped by how many members
   are behind on them.
 - Arriving from the dashboard's non-compliant link filters the list and shows a
@@ -4505,6 +4574,39 @@ neither includes an officer-only section, since that needs your own ranks.
    and a re-verified session. A record of who, when and why is kept and shown
    under **Removed evaluations**; the member is emailed without the reason.
 
+### Grading by section _(2026-11-04)_
+
+A form can be **Graded by section** instead of showing one percentage. This
+fixes the old weighted total, where "Meets expectations" counted as 50% and a
+member rated Meets on every item read as failing.
+
+- Every rating is placed on a 1–5 grade scale (3 of 5 is 3.0; the middle of a
+  3-level scale is 3.0; meets / does not meet is 5 / 1). A section's score is
+  the weighted average of its rated items; the overall is the weighted average of
+  the sections, whose weights share 100%.
+- **Grade ranges** turn a score into a grade. The defaults are halfway points:
+  Outstanding from 4.5, Exceeds from 3.5, Meets from 2.5, Needs improvement from
+  1.5. The grade is read from the score as shown to one decimal, so a printed
+  "3.5" never sits beside "Meets expectations". Change them per form in the
+  builder.
+- **The evaluator may give a section, or the overall, a different grade.** A
+  reason is required at submit, both grades are reported, and a regraded section
+  counts in the overall at the grade given.
+- The builder has **Graded by section**, a weight per section, per-section and
+  across-section totals, and a live preview. The evaluation screen, the preview
+  and the PDF all use one calculation, so they agree. The PDF shows a grade line
+  under each section, the evaluator's grade and why where changed, and a
+  section / weight / grade table in the summary.
+- The **Annual Member Evaluation** starter is graded by section.
+
+### The page header _(2026-11-04)_
+
+The section strip shows counts: evaluations waiting on you and, for a conductor
+or manager, overdue ones. **New review period** and **New template** sit in the
+header (for `evaluations.manage` and `evaluations.configure`); on a phone each
+fills the row. The **Where evaluations happen** box is gone; the **Email
+Templates** link is in the subtitle.
+
 ### Emails
 
 Editable under **Communications → Email Templates**, group **Performance
@@ -4520,7 +4622,7 @@ a rating or comment. A daily task sends reminders and overdue notices once each.
 - Shift-evaluation credit (**Evaluated shifts**, **Transports**, **Refusals**
   requirement types) is described under Shift Evaluations, not here.
 
-> **Screenshots needed:** see `SCREENSHOT_CURRENCY.md` (evaluations list, draft
+> **Screenshots needed:** see `SCREENSHOT_CURRENCY.md` (the grading-by-section builder and evaluation page, evaluations list, draft
 > dialog, evaluation page, sign dialog, calibration flags, response card, amend
 > and delete dialogs).
 
@@ -4542,7 +4644,8 @@ have moved, been renamed or work differently.
   Competency, Instructors, Effectiveness, Multi-Agency and Reports under
   **Program Management**. Old links still open the right page.
 - **Compliance settings** are reached from **Compliance Reporting →
-  Configure**, not a "Compliance Requirements" tab.
+  Configure** or **Settings & Data → Compliance Settings**, not a "Compliance
+  Requirements" tab.
 - **Closing out a shift** uses **Close out shift**, not "Finalize Shift". The
   steps are in the [scheduling guide](./03-scheduling.md#closing-out-a-shift).
 - **New programs** start from **New Pipeline**, and the wizard ends with

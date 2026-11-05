@@ -65,16 +65,17 @@ says how many, for example "2 screenings expiring in the next 30 days".
 
 ### Permissions
 
-Two permissions control this module. Role Management lists them under
-Compliance as **View member medical screenings** and **Manage member medical
-screenings**.
+Three permissions control this module. Role Management lists them under
+Compliance as **View member medical screenings**, **View member screening
+details** _(2026-11-04)_ and **Manage member medical screenings**.
 
-| What you want to do                                | Who can do it                                       |
-| -------------------------------------------------- | --------------------------------------------------- |
-| See requirements, records and compliance           | Roles that can **view** member medical screenings   |
-| Add, edit or delete requirements                   | Roles that can **manage** member medical screenings |
-| Add, edit or delete screening records              | Roles that can **manage** member medical screenings |
-| See **your own** screening counts on the dashboard | Every signed-in member                              |
+| What you want to do                                                  | Who can do it                                       |
+| -------------------------------------------------------------------- | --------------------------------------------------- |
+| See requirements, records and compliance status                      | Roles that can **view** member medical screenings   |
+| See the clinical narrative: provider, result summary and data, notes | Roles that can **view details**                     |
+| Add, edit or delete requirements                                     | Roles that can **manage** member medical screenings |
+| Add, edit or delete screening records                                | Roles that can **manage** member medical screenings |
+| See **your own** screening counts on the dashboard                   | Every signed-in member                              |
 
 The last row is the only part of this module a member sees without either
 permission. It shows counts only. See
@@ -83,8 +84,12 @@ permission. It shows counts only. See
 > **Important — this is protected health information.** Screening records are
 > private health information under HIPAA. Give the two permissions only to
 > roles that truly need them, such as chief officers, the health and safety
-> officer or HR administrators. The view permission shows every member's
-> results, notes and providers — there is no narrower level.
+> officer or HR administrators. **View** shows every member's compliance status
+> (met, expiring, not compliant). The provider, result summary, result data and
+> notes need the separate **view details** permission, so a role that only
+> tracks who is compliant never reads the clinical narrative. On upgrade, every
+> position that held **view** was given **view details** as well, so nobody lost
+> access; remove it from positions that should see status only.
 
 > **What is recorded in the audit log?** Adding, editing and deleting
 > requirements and records is logged. So is every screen that shows someone's
@@ -129,7 +134,7 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 | **One-time requirement (not recurring)**   | Tick for a screening needed only once. Leave unticked for a repeating one                                                     |
 | **Frequency (months)**                     | How often it repeats. Shown only for repeating requirements; must be at least 1                                               |
 | **Applies to Positions (comma-separated)** | Members are graded on this only if they hold one of these positions — see [Role-Based Requirements](#role-based-requirements) |
-| **Grace Period (days past expiration)**    | Saved, but **not applied** — see [Grace Period](#grace-period)                                                                |
+| **Grace Period (days past expiration)**    | Days after the expiration date that still count as compliant — see [Grace Period](#grace-period)                              |
 | **Active**                                 | Only active requirements count toward compliance                                                                              |
 
 ### One-Time vs Recurring Requirements
@@ -211,20 +216,19 @@ a blank list, such as a CPR card.
 
 ### Grace Period
 
-> **Important — the grace period is not applied.** **Grace Period (days past
-> expiration)** is saved with the requirement (30 days unless you change it),
-> but nothing reads it. A member becomes **Not compliant** the day after their
-> screening's expiration date, whatever grace period you set. The dialog says
-> so under the field: _"Not enforced yet — a screening is marked non-compliant
-> the day after its expiration date; this value is saved but does not extend
-> that deadline."_
+_Applied from 2026-11-04._ **Grace Period (days past expiration)** now extends
+the deadline. A screening that has passed its expiration date but is still
+inside the grace period keeps counting as compliant. The compliance list shows
+it as **Past due N days** with **Grace period until** the date it ends, and it
+appears on the expiring list. Once the grace period ends the member becomes
+**Not compliant**. Every screen uses the same due-date rule, so the dashboard,
+the department list, the expiring list and the assistant agree.
 
-What this means for you:
-
-- Plan renewals before the expiration date, not after it. The
-  [Expiring Screenings](#expiring-screenings) list gives you 60 days' notice.
-- **What if I type 0?** The form saves 30 instead of 0. This makes no
-  difference today, because the value is not used.
+- The field is required. Enter **0** for no grace period; a blank is refused
+  rather than quietly saved as 30. A new requirement starts at 30.
+- A record counts only for its **linked requirement**. On upgrade, an unlinked
+  record was linked where exactly one requirement of its type exists; ambiguous
+  ones stay unlinked, so open them and choose the requirement.
 
 ---
 
@@ -682,9 +686,10 @@ What she does:
   records.
 - **Lt. Chen:** his physical was done by a different provider. She enters it
   as **Passed**.
-- **Martinez:** the requirement's grace period is 30 days, but grace periods
-  are not applied. Martinez reads **Expired**. Captain Alvarez books her
-  physical for the following week.
+- **Martinez:** her physical expired 26 days ago, inside the requirement's
+  30-day grace period, so she still counts and reads **Past due 26 days** with
+  the date her grace period ends. Captain Alvarez books her physical for the
+  following week, before it runs out.
 - **Kim and Washington:** books their first department physicals.
 - **Larson:** on leave. The physical will be needed when she returns to duty.
 
@@ -760,7 +765,7 @@ everyone expiring in September.
 | You get a permission message when viewing records     | Your role needs **View member medical screenings**. Ask your administrator                                                                                                 |
 | You get a permission message when adding or editing   | Your role needs **Manage member medical screenings**. Ask your administrator                                                                                               |
 | A member shows not compliant but has a passing record | Check the record's expiration date — it may have passed. Check the status is Passed, Completed or Waived, and that its screening type matches the requirement              |
-| A member shows not compliant inside the grace period  | Expected. The grace period is saved but not applied. See [Grace Period](#grace-period)                                                                                     |
+| A member shows not compliant inside the grace period  | Check the requirement's Grace Period (days) and that the record is linked to that requirement. See [Grace Period](#grace-period)                                           |
 | A member is not graded on a requirement               | Check the requirement's **Applies to Positions**: it applies only to members who hold one of the positions listed. See [Role-Based Requirements](#role-based-requirements) |
 | The counts do not match your own count                | Check which requirements are **Active**. A member is graded only on the active requirements that apply to their positions; prospects are graded on all of them             |
 | The expiring list is empty                            | Nothing Passed, Completed or Waived expires or falls due in the next 60 days                                                                                               |

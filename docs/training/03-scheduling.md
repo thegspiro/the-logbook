@@ -338,6 +338,12 @@ already taken, whether they sign up or an officer assigns them.
 positions, only a minimum staffing number, members can't sign up past that
 number. An officer can still add an extra person on purpose.
 
+**Custom seats** _(2026-11-04)_. An officer with **Manage scheduling** may seat
+anyone in a department-defined seat that nothing grants. A reason is required and
+the action is audited; caps, leave, overlap and EVOC rules still apply. A
+certification can confer a custom seat, and notifications, reminders and printed
+rosters show the department's own seat label.
+
 **Position rules apply to officers too.** If your department has set which
 ranks may fill a position, that rule also applies when an officer assigns
 somebody. The refusal names the missing qualification.
@@ -382,6 +388,12 @@ From here you can also **Swap** a shift or **Request Time Off**. See
 ![My Shifts tab listing upcoming shifts with status badges](./images/03-04-my-shifts.png)
 
 ### Your hours and calls for the year
+
+_Added 2026-11-04._ The same figures appear on a member's profile as **Shift &
+Call History** (hours, calls and outside-agency hours by month, year and all
+time), for the member themself and for holders of **View scheduling reports**.
+It shows on-call (recall) hours and outside-unit calls separately; they are
+part of the totals, never added to them.
 
 Select **Hours** to see your own totals. You don't need any special
 permission. It shows only your own record.
@@ -517,6 +529,12 @@ hours."_). Select **Log outside shift**.
 or delete your own entry. If an officer decides an entry should not count,
 they reject it with a reason. It then reads **Not counted**, with the reason
 below it, and you can no longer change it. An officer can restore it.
+
+**Officer approval** _(2026-11-04)_. A department can switch on **Require approval for
+outside-department shifts** in the scheduling shift settings, which holds outside
+shifts as **Pending** until an officer approves them. A pending shift does not count, and
+officers are notified. With the setting off, shifts count as soon as saved, as
+described here.
 
 **Shift evaluations** _(2026-11-02)_. If your department evaluates shifts on
 that agency's units and you are in a training program with an evaluation form,
@@ -1127,6 +1145,11 @@ reason.
 2. Confirm with **Pick it up**.
 3. The seat moves onto your schedule and off theirs straight away. They are
    told who took it.
+
+**A bell entry, no email** _(2026-11-04)_. When an open swap appears that you could
+pick up, you get one bell notification per seat. This is a deliberate exception to
+the email-first rule, because an open swap is time-sensitive and a second message
+adds nothing.
 
 **Who is offered an open swap.** The same rule decides this as decides who can
 sign up for a seat: your rank, your qualifications and completed training,

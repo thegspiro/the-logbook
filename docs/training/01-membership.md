@@ -351,6 +351,22 @@ assignment** leaves the member with no supervisor as of today. A member cannot
 supervise themselves, and the supervisor must be a current member of the
 department.
 
+**My Crew** _(2026-11-04)_. A current supervisor gets a **My Crew** entry in the
+navigation. It lists the members who report to them with their training standing,
+training records and released evaluations. It shows no medical or other health
+information. A time-off request from a crew member now notifies the supervisor,
+who may decide it alongside scheduling officers. Assigning a supervisor that
+would create a loop (A supervises B who supervises A) is refused.
+
+**Shift & Call History** _(2026-11-04)_. The profile shows the member's hours,
+calls and outside-agency hours by month, year and all time (the same figures My
+Hours shows the member). Visible to the member and to holders of **View
+scheduling reports**.
+
+**Member since** on the profile and ID cards counts credited service, so a
+returning member's years carry over. Officers can also preview the property a
+member would return from their profile before they leave.
+
 **Qualifications** marks each entry **In force** or **Not in force**, the way
 shift sign-up reads it today. It also says whether the entry is
 **From a training record** or **Entered directly**. Officers can add, edit

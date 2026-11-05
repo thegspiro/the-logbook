@@ -336,7 +336,10 @@ your department uses.
 - **Next 30 days.** Upcoming shifts, including open ones. If you are allowed
   to take an open shift, it shows **Sign Up**. If you aren't, it shows **Not
   eligible** straight away, so you don't find out only after you tap. See
-  [Scheduling](./03-scheduling.md).
+  [Scheduling](./03-scheduling.md). _(2026-11-05)_ A shift that runs exactly 24
+  hours reads "7:00 AM · 24 hr" rather than "7:00 AM–7:00 AM", and one that
+  ends on a later day says "next day". The **Take a Shift** count (for example
+  "2 open · 2 short-staffed") now shows on a phone too.
 - **Recent activity.** The latest things done across the department.
 - **Needs you.** Anything waiting for you to act. For example, a department
   message that asks you to confirm you have read it has an **Acknowledge**
@@ -348,12 +351,23 @@ your department uses.
   Five show at a time; **Older Items** opens your full inbox. A message you
   have read disappears the next time the page loads, unless it is persistent.
   Every department message is also emailed to you, and urgent ones are texted
-  too. Your full message history is on the **Messages** page.
+  too. Your full message history is on the **Messages** page. _(2026-11-05)_ A
+  stack of notifications of one kind previews the **newest** message instead of
+  repeating the stack's title; where the messages differ, it keeps the subject so
+  you can tell which drill or item it is.
 - **Scheduling Operations** (officers who manage scheduling, on the **My
   Department** tab). Seven tiles: Today's Staffing, Future Coverage Gaps, Open
   Slots, Pending Changes, Incomplete Closeouts, Workload Balance and Special
   Operations. Select a tile to open the schedule already filtered to what it
-  counted.
+  counted. _(2026-11-05)_ The Station and Platoon filters are now dropdowns of
+  values your shifts actually carry (a filter with no values is hidden); they
+  used to be free text that refused a typed guess. Today's Staffing reads
+  "Today".
+- **Department pulse and all-clear.** The money, grant and outreach cards now
+  sit on **My Department** for leaders instead of crowding the top of
+  **Personal**, and the one period they cover is named once in the section
+  description. Critical exceptions and pending approvals with every count at zero
+  fold into one **All clear · N checks** line that opens to the rows.
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 

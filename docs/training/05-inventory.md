@@ -214,6 +214,10 @@ uniforms, hand tools, power equipment, ladders, radios, EMS supplies and more.
 Each one arrives with its serial-number, maintenance and NFPA switches already
 set.
 
+- **Category names are unique among siblings** _(2026-11-05)_. You cannot add
+  or rename a category to a name its parent already has. Categories that already
+  shared a name before this rule are flagged with a duplicate-name badge so you
+  can merge or rename them.
 - A category your department already has is marked **already added**, so you
   can come back to this step safely. A second visit adds only what is missing.
 - **Select all** ticks everything still available.
@@ -1915,13 +1919,21 @@ The page only appears while NFC tags are turned on.
 
 Needs the **Manage gear, uniforms and equipment** permission.
 
+**Item dates and Unassign** _(2026-11-05)_. A date you change on an item (purchase,
+warranty, expiration) is checked against your department's date, not the
+server's, so an evening entry is not refused as "tomorrow". **Unassign** now opens
+its own dialog instead of sharing the assign form. **Tag Items in Bulk** shows
+each item's barcode.
+
 **Inventory Administration → Items Not Seen** lists items nobody has handled in
 30, 90, 180 (the default) or 365 days. "Handled" means an NFC tap by a
-quartermaster, an assignment or return, a loan or check-in, or an issuance or
-its return. Editing the item's record does not count.
+quartermaster, an assignment or return, a loan or check-in, an issuance or
+its return, creating the item, or putting it away by barcode _(2026-11-05)_.
+Editing the item's record does not count.
 
-Items never handled at all are listed first as **Never**. That includes items
-added today, because being added is not being handled. Filter by **Category**,
+Items never handled at all are listed first as **Never**. An item added today is
+no longer in that group, because creating it now counts as the first sighting.
+A deleted storage area is no longer named in the "last seen" place. Filter by **Category**,
 and use **Download CSV** for the full list.
 
 This report works whether or not NFC tags are turned on.

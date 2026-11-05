@@ -1391,6 +1391,11 @@ the events list. On any occurrence's page:
 
 ### Calendar View
 
+A training session that counts toward a
+[session attendance requirement](./02-training.md#session-attendance-requirements)
+carries a **Counts toward attendance** badge beside **Mandatory** here, on the
+events list and on the event page _(2026-11-04)_.
+
 The calendar icon on the Events page switches to a month view:
 
 - Days with events carry coloured dots.
@@ -1640,7 +1645,9 @@ public, never to events your members create:
 
 The **Overview** lists the four steps with a one-line status each (for example
 _"1 in draft, not yet published"_ or _"No default coordinator"_); select a step
-to open its page.
+to open its page. _(2026-11-05)_ **Handling** shows amber until a default
+coordinator is set, because a request nobody is assigned to waits until someone
+notices it. The Events hub's Settings card is named for public requests.
 
 On a phone the sections become a scrollable strip of tabs, and every control
 is a full-size touch target.
