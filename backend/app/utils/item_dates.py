@@ -8,7 +8,7 @@ purchase, or a purchase date of 0001-01-01; applying the rules to the
 item to another shelf, naming two fields the edit never touched.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Any, Mapping, Optional
 
 ITEM_DATE_LABELS: dict[str, str] = {
@@ -44,11 +44,16 @@ def _as_date(value: Any) -> Optional[date]:
     return None
 
 
+def touches_item_dates(changes: Mapping[str, Any]) -> bool:
+    """Whether ``changes`` writes any date this module checks."""
+    return any(field in changes for field in ITEM_DATE_LABELS)
+
+
 def item_date_error(
     changes: Mapping[str, Any],
     current: Optional[Mapping[str, Any]] = None,
     *,
-    today: Optional[date] = None,
+    today: date,
 ) -> Optional[str]:
     """Why the dates in ``changes`` are implausible, or None if they are fine.
 
@@ -62,9 +67,12 @@ def item_date_error(
     in front of the rule on any edit made from the screen. The warranty /
     purchase pair is compared when either side changes, against the stored
     other side, so editing one date without fixing the pair is refused.
+
+    ``today`` is the department's date (``resolve_org_today``), not the
+    server's: the server is UTC, already tomorrow for a US department every
+    evening, and on New Year's Eve that moves the upper bound by a year.
     """
-    latest_year = (today or datetime.now(timezone.utc).date()).year
-    latest_year += ITEM_DATE_YEARS_AHEAD
+    latest_year = today.year + ITEM_DATE_YEARS_AHEAD
 
     if current is None:
         changed = {field for field in ITEM_DATE_LABELS if field in changes}

@@ -121,7 +121,7 @@ from app.utils.garment_styles import (
     style_combinations,
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
-from app.utils.item_dates import item_date_error
+from app.utils.item_dates import item_date_error, touches_item_dates
 from app.utils.label_renderer import (
     SYMBOLOGY_CODE128,
     LabelSpec,
@@ -2170,7 +2170,14 @@ class InventoryService:
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
         """Create a new inventory item"""
         try:
-            date_err = item_date_error(item_data)
+            date_err = (
+                item_date_error(
+                    item_data,
+                    today=await resolve_org_today(self.db, organization_id),
+                )
+                if touches_item_dates(item_data)
+                else None
+            )
             if date_err:
                 return None, date_err
 
@@ -3764,14 +3771,19 @@ class InventoryService:
             # Only the dates this update changes are checked, each against the
             # stored other half of its pair: an item saved with a bad pair
             # before the rule existed stays editable for every other field.
-            date_err = item_date_error(
-                update_data,
-                {
-                    "purchase_date": item.purchase_date,
-                    "warranty_expiration": item.warranty_expiration,
-                    "last_inspection_date": item.last_inspection_date,
-                    "next_inspection_due": item.next_inspection_due,
-                },
+            date_err = (
+                item_date_error(
+                    update_data,
+                    {
+                        "purchase_date": item.purchase_date,
+                        "warranty_expiration": item.warranty_expiration,
+                        "last_inspection_date": item.last_inspection_date,
+                        "next_inspection_due": item.next_inspection_due,
+                    },
+                    today=await resolve_org_today(self.db, organization_id),
+                )
+                if touches_item_dates(update_data)
+                else None
             )
             if date_err:
                 return None, date_err
