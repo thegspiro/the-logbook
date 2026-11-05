@@ -227,8 +227,8 @@ const BudgetRequestReviewPage: React.FC = () => {
 
       {year && shown.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="rwd-table w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-2xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th scope="col" className={HEADER_CELL}>
@@ -349,7 +349,8 @@ const BudgetRequestReviewPage: React.FC = () => {
                   <td data-label="This year budgeted" className={`${MONEY_CELL} font-semibold`}>
                     {formatCurrency(totals.lastYear)}
                   </td>
-                  <td data-label="This year spent" className={MONEY_CELL} />
+                  {/* Unlabelled so the card layout hides it: there is no total to show. */}
+                  <td className={MONEY_CELL} />
                   <td data-label="Requested" className={`${MONEY_CELL} font-semibold`}>
                     {formatCurrency(totals.requested)}
                   </td>
