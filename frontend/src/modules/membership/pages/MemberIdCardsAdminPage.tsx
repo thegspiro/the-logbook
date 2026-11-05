@@ -15,8 +15,8 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { CreditCard, Nfc } from 'lucide-react';
-import { Breadcrumbs } from '../../../components/ux';
+import { Nfc } from 'lucide-react';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { useConnectedIntegrations } from '../../../hooks/useConnectedIntegrations';
 import { useTablist } from '../../../hooks/useTablist';
@@ -68,18 +68,11 @@ const MemberIdCardsAdminPage: React.FC = () => {
   );
 
   const header = (
-    <>
-      <Breadcrumbs underHub="/members/admin" />
-      <div className="flex items-center gap-3">
-        <CreditCard className="text-theme-text-secondary h-6 w-6" aria-hidden="true" />
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Member ID Cards</h1>
-          <p className="text-theme-text-secondary text-sm">
-            Every NFC ID card in the department, who is missing one, and every tap.
-          </p>
-        </div>
-      </div>
-    </>
+    <AdminPageHeader
+      title="ID Cards"
+      description="Every NFC ID card in the department, who is missing one, and every tap."
+      underHub="/members/admin"
+    />
   );
 
   if (!integrationsLoading && !cardsEnabled) {

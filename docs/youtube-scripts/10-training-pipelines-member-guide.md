@@ -1,7 +1,7 @@
 # Script 10: Your Training Pipeline — A Member's Guide
 
 **Video Type:** Feature Deep Dive (Short/Medium-Form)
-**Estimated Length:** 8–12 minutes
+**Estimated Length:** 9–12 minutes
 **Target Audience:** Recruits, probationary members, and any member enrolled in a training program
 **Roles Covered:** firefighter, member (baseline), recruit
 **Chapters:** 6 (each designed as a standalone clip)
@@ -88,6 +88,18 @@ evaluation — cut to the progress bar moving.]**
 > can count too, once it's imported."
 
 **[CALLOUT: "Sessions · Shifts · Skills tests · Imported courses — all automatic"]**
+
+**[SCREEN: A requirement row reading "Attend the required training sessions"; then
+an event card with the "Counts toward attendance" badge beside "Mandatory"]**
+
+> "Some requirements are graded on turning up rather than on hours — your
+> department may ask you to attend a share of its drills. For those, the sessions
+> that count carry a **Counts toward attendance** badge on the events list, the
+> calendar and the event page. A drill without the badge doesn't count against
+> you, and a missed one that a leave or waiver covers is excused."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 20 seconds; re-time Chapter 3.
+Requires a Session Attendance requirement in the demo pipeline.]**
 
 ### WHY YOUR BAR MIGHT NOT MOVE YET (4:30 – 5:00)
 

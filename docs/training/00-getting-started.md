@@ -309,7 +309,11 @@ The dashboard is the first page you see after signing in. It has two tabs:
   department. Only officers and administrators have this tab.
 
 The two tabs never mix. Nothing on **Personal** is someone else's, and nothing
-on **My Department** is shown as yours.
+on **My Department** is shown as yours. The one exception is **Department
+pulse** _(2026-11-04)_, the department's money, grant and outreach totals: it
+sits on **My Department**, but a member whose positions reach those totals
+without giving them a **My Department** tab (a treasurer, say) sees it on
+**Personal** instead, so nobody loses it.
 
 ![The dashboard's personal tab: the member's own attention items, shifts and hours, under a tab strip whose other tab is the leadership view](./images/00-24-dashboard-my-department.png)
 
@@ -336,7 +340,10 @@ your department uses.
 - **Next 30 days.** Upcoming shifts, including open ones. If you are allowed
   to take an open shift, it shows **Sign Up**. If you aren't, it shows **Not
   eligible** straight away, so you don't find out only after you tap. See
-  [Scheduling](./03-scheduling.md).
+  [Scheduling](./03-scheduling.md). _(2026-11-05)_ A shift that runs exactly 24
+  hours reads "7:00 AM · 24 hr" rather than "7:00 AM–7:00 AM", and one that
+  ends on a later day says "next day". The **Take a Shift** count (for example
+  "2 open · 2 short-staffed") now shows on a phone too.
 - **Recent activity.** The latest things done across the department.
 - **Needs you.** Anything waiting for you to act. For example, a department
   message that asks you to confirm you have read it has an **Acknowledge**
@@ -348,12 +355,27 @@ your department uses.
   Five show at a time; **Older Items** opens your full inbox. A message you
   have read disappears the next time the page loads, unless it is persistent.
   Every department message is also emailed to you, and urgent ones are texted
-  too. Your full message history is on the **Messages** page.
+  too. Your full message history is on the **Messages** page. _(2026-11-05)_ A
+  stack of notifications of one kind previews the **newest** message instead of
+  repeating the stack's title; where the messages differ, it keeps the subject so
+  you can tell which drill or item it is.
 - **Scheduling Operations** (officers who manage scheduling, on the **My
   Department** tab). Seven tiles: Today's Staffing, Future Coverage Gaps, Open
   Slots, Pending Changes, Incomplete Closeouts, Workload Balance and Special
   Operations. Select a tile to open the schedule already filtered to what it
-  counted.
+  counted. **Today’s Staffing** counts today only, and says **Today**; the
+  others name their window, such as "14-day window".
+- **Operations panels** (on the **My Department** tab, each for the officers
+  whose permissions feed it). _(2026-11-04)_ When every count in **Critical
+  exceptions** or **Pending approvals** is zero, the panel folds to one line,
+  **All clear · _n_ checks**; select it to see each check. A zero elsewhere says
+  what it means for that panel, such as **None scheduled** or **None this
+  period**.
+- **Department pulse.** _(2026-11-05)_ The money, grant and outreach cards sit on
+  **My Department** for leaders instead of crowding the top of **Personal**, and
+  the one period they cover is named once in the section description. The Station
+  and Platoon filters on Scheduling Operations are dropdowns of values your shifts
+  actually carry (a filter with no values is hidden).
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 

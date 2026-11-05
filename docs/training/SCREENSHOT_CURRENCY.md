@@ -1,5 +1,29 @@
 # Screenshot currency
 
+## Queued by the November 4 – 5 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | Shift list with the **Awaiting approval** filter and **Approve** | Create |
+| 02 | Session Attendance requirement form | Create |
+| 16 | Historical Data Import, **5. Training** | Create |
+| 01 | Member profile **Shift & Call History** | Create |
+| 02, 08 | Training Admin **Settings & Data** with the Compliance Settings card | Replace |
+| 00 | Dashboard Department pulse and Today's Staffing | Replace |
+| 13 | Medical Screening requirement with **Not linked to a requirement** | Replace |
+| 02 | Create-session step 2 with the attendance checklist; event card **Counts toward attendance** badge | Create |
+| 02 | Compliance Matrix cell: Chief override control and **Met by the Chief's override** | Create |
+| 02 | Evaluation builder **Graded by section** with grade ranges; evaluation page with a regraded section | Create |
+| 02 | `02-92` and any capture of the Requirements tab showing Import from Registry (now below the list) | Replace |
+| 05 | `05-127-items-not-seen` (items added today no longer first as Never) | Replace |
+| 04 | Event form location picker and Create Training Session picker (no repeated building); Public Requests Overview with an amber Handling step | Replace / Create |
+| Any | Every capture showing a toggle switch: the track is now a true pill and the accent is red, not purple | Replace |
+| 01, 10 | Wide tables at tablet width (roster, inventory items, dues, finance approvals) as cards | Replace |
+| 15 | Applicant board with selection on, card content inset | Replace (`15-46` was re-shot) |
+
 ## Queued by the Event settings Public Requests regroup (2026-11-05)
 
 Event settings' **Outreach Types**, **Pipeline**, **Email** and **Public Form**

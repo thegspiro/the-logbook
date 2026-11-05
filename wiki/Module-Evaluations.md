@@ -229,6 +229,19 @@ their part.
   Either one finalizes the evaluation. Acknowledging is not agreeing, and the
   PDF says so.
 
+## Grading by section
+
+A form with `overall_mode` `sectioned` (2026-11-04) is graded by section instead
+of showing one weighted percentage. Each rating is placed on a 1 to 5 scale, a
+section is the weighted average of its rated items, and the overall is the
+weighted average of the sections. Per-form `grade_bands` turn a score into a
+grade (defaults: Outstanding 4.5, Exceeds 3.5, Meets 2.5, Needs improvement 1.5),
+read from the score as shown to one decimal. The evaluator may regrade a section
+or the overall with a required reason; both grades are reported. The one
+definition is `services/evaluation_grading.py`, used by the detail response, the
+PDF and the stateless `POST /evaluations/grades` the screen and builder preview
+call. `GET /evaluations/attention` feeds the counts on the section strip.
+
 ## The PDF
 
 When the evaluation is final, a PDF is made once, with the department's logo

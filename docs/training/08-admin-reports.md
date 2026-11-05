@@ -58,7 +58,7 @@ names it the way the **Role Management** screen lists it — for example
 20. [Governance: Legal Documents](#governance-legal-documents)
 21. [Governance: Organizational Chart](#governance-organizational-chart)
 22. [Testing Checklist Module](#testing-checklist-module)
-23. [Compliance Requirements Configuration](#compliance-requirements-configuration)
+23. [Compliance Settings](#compliance-settings)
 24. [Medical Screening and Equipment Checks](#medical-screening-and-equipment-checks)
 25. [Realistic Example: Generating the Annual Training Summary Report](#realistic-example-generating-the-annual-training-summary-report)
 26. [Realistic Example: First-Time Department Setup](#realistic-example-first-time-department-setup)
@@ -1022,8 +1022,13 @@ depend on administrator permissions.
 ### Department pulse
 
 The dashboard's **My Department** view has a **Department pulse** section —
-"Summaries for the areas you can access, over the period you choose." Its
-period picker is the **Reporting period**.
+"Summaries for the areas you can access", followed by the period it covers.
+Its period picker is the **Reporting period**. _(2026-11-04)_ The period is
+named once, under the section title, rather than on every card. A member whose
+positions reach the pulse but who has no **My Department** tab (for example a
+treasurer holding only **finance.manage**) sees the section on the
+**Personal** view instead; it used to sit there for everyone, above their own
+shifts and training.
 
 **Each part of Department pulse checks its own permission**, so what you see
 depends on your positions. A section you cannot see is not broken; your
@@ -1082,7 +1087,13 @@ tiles: Today's Staffing, Future Coverage Gaps, Open Slots, Pending Changes,
 Incomplete Closeouts, Workload Balance and Special Operations.
 
 Each tile opens the schedule **already filtered to what it counted**. Each keeps
-its own time range and filters, saved per person.
+its own time range and filters, saved per person: pick the tile under
+**Widget**, set its filters, and select **Save defaults**. _(2026-11-04)_ The
+**Station** and **Platoon** filters are lists of the values your shifts
+actually carry, with **All stations** and **All platoons** first; a filter
+with no values to offer is not shown, which is usually the case for
+**Station**. **Today’s Staffing** counts today alone, so its tile reads
+**Today** whatever its **Days** setting.
 
 ### My Hours and the Next 30 Days list
 
@@ -1355,7 +1366,7 @@ in the dashboard's **Needs you** panel with an **Acknowledge** button.
 ### Department Messages
 
 Officers who manage notification rules (**notifications.manage**) post
-department announcements from **Administration > Forms & Comms > Messages**.
+department announcements from **Administration > Forms & Comms > Department Messages**.
 Messages can be escalated by email or text message according to priority, can
 require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
@@ -2557,15 +2568,21 @@ blocked), and `n` jumps to the next page with no mark.
 
 ---
 
-## Compliance Requirements Configuration
+## Compliance Settings
 
 **Who can open it:** officers with **settings.manage** or **compliance.manage**
 ("Manage compliance records"), with the Training module turned on. Generating a
 report on demand also needs permission to manage training.
 
-Open **Training Admin → Compliance Reporting** and select **Configure**. The page
-has four tabs: **Thresholds**, **Profiles**, **Auto Reports** and **Report
-History**. For how compliance is worked out and shown to members, see
+_(2026-11-04)_ Open **Training Admin → Settings & Data → Compliance Settings**
+and select **Open compliance settings**. **Compliance Settings** is listed only
+for officers who hold **settings.manage** or **compliance.manage**; a training
+officer without either does not see it. The **Configure** button at the top of
+each **Compliance Reporting** page opens the same screen, and an officer who
+holds **compliance.manage** but not training management goes straight to
+`/training/compliance-config`. The page has four tabs: **Thresholds**,
+**Profiles**, **Auto Reports** and **Report History**. For how compliance is
+worked out and shown to members, see
 [Training → Compliance Matrix](./02-training.md#compliance-matrix).
 
 ### Configuring Thresholds
@@ -2703,7 +2720,11 @@ fitness assessments and psychological evaluations for members and applicants.
 Turn it on in **Settings → Modules → Additional Modules**. It appears under
 **Administration > Members > Medical Screening** for officers with
 **medical_screening.view** ("View member medical screenings"); recording and
-setting requirements needs **medical_screening.manage**.
+setting requirements needs **medical_screening.manage**. _(2026-11-04)_ A
+record's provider, result summary and notes are shown only with
+**medical_screening.view_details** ("View the clinical detail of medical
+screenings (provider, results, notes)") or **medical_screening.manage**; the
+upgrade gave it to every position that already held the view permission.
 
 ![Medical Screening page showing the configured requirements](./images/08-21-medical-screening.png)
 
@@ -2711,11 +2732,12 @@ setting requirements needs **medical_screening.manage**.
 
 ![The medical-screening Compliance tab: the 60-day list, soonest first, under the 30-day count](./images/08-68-compliance-dashboard.png)
 
-> **Important: two requirement settings are not enforced yet.** On a screening
-> requirement, **Applies to Roles** and the **grace period** are saved but not
-> used. The form says so under each field. Every requirement applies to every
-> active member and applicant, and a screening is non-compliant the day after it
-> expires.
+> **Who is graded, and until when.** _(2026-11-04)_ A requirement's **Applies
+> to Positions** limits it to members who hold one of the positions listed, and
+> its **Grace Period** keeps a member compliant that many days after a
+> screening falls due. A screening record counts only toward the requirement it
+> is linked to. See
+> [Medical Screening → Grace Period](./13-medical-screening.md#grace-period).
 
 Full instructions:
 
@@ -2812,7 +2834,7 @@ county's submission. **Print / PDF** gives her a copy for the board packet.
 ### Step 4: Following Up
 
 1. **Foster and Harris** — she sends a department message (**Administration >
-   Forms & Comms > Messages**) reminding them of the minimum and asking them to
+   Forms & Comms > Department Messages**) reminding them of the minimum and asking them to
    plan make-up training in the first quarter.
 2. **Brooks** — she notes to follow up in February about CPR renewal.
 3. She saves the Annual Training Report as a **saved report** with the period

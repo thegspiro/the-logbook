@@ -83,6 +83,7 @@ import type {
   CallVolumeReport,
   PipelineOverviewReport,
 } from '../types';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 // ============================================================================
 // Report type → API mapping
@@ -465,15 +466,12 @@ export const ReportsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">Reports</h1>
-              <p className="text-theme-text-secondary">Run department reports and export them to CSV or PDF</p>
-            </div>
-            <div className="flex items-center gap-2">
+      <div data-page-main className="mx-auto max-w-7xl">
+        <AdminPageHeader
+          title="Reports"
+          description="Run department reports and export them to CSV or PDF"
+          actions={
+            <>
               <Link
                 to="/reports/saved"
                 className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium"
@@ -494,9 +492,10 @@ export const ReportsPage: React.FC = () => {
                 tooltip="Select Generate Report on a card. Filter by category, set the reporting period for Date Range reports, then export to CSV or print to PDF."
                 tooltipPosition="left"
               />
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          className="mb-8"
+        />
 
         {/* Category Filter */}
         <div className="mb-6 flex items-center space-x-2">
