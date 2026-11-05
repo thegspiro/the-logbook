@@ -21,7 +21,7 @@ interface AdminPageHeaderProps {
   /** One line under the title. A ReactNode so a page can append a timestamp or a link. */
   description?: React.ReactNode;
   /** Small caps line above the title. */
-  eyebrow?: string;
+  eyebrow?: string | undefined;
   /**
    * Overrides the trail. Omit it and the trail is generated from the URL and
    * ends at the parent — the `<h1>` directly below already names this page,

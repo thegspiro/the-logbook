@@ -208,13 +208,18 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   if (adminHeader && typeof title === 'string') {
     return (
       <div>
-        <SectionNav items={items} active={active} label={stripLabel} accent={accent} />
         {/* The URL-generated trail, ending at the parent as on every admin
-            page: the <h1> directly below already names this one. An explicit
-            trail cannot do that (its last crumb is always the current page),
-            and these settings screens sit directly under their module's
-            registered route, so the generated trail links back to it. */}
-        <AdminPageHeader title={title} description={subtitle} actions={actions} className="mb-8" />
+            page: the <h1> below already names this one. An explicit trail
+            cannot do that (its last crumb is always the current page), and
+            these settings screens sit directly under their module's registered
+            route, so the generated trail links back to it.
+
+            Drawn here, above the section strip, rather than by AdminPageHeader
+            below it: every other admin page opens with its trail, and between
+            the strip and the title it read as part of the module's own nav. */}
+        <Breadcrumbs omitCurrentPage />
+        <SectionNav items={items} active={active} label={stripLabel} accent={accent} />
+        <AdminPageHeader title={title} description={subtitle} actions={actions} breadcrumbs={[]} className="mb-8" />
       </div>
     );
   }

@@ -55,6 +55,7 @@ const PAGES: [string, string][] = [
   ['/training/admin', 'Training Administration'],
   ['/scheduling/admin', 'Scheduling Administration'],
   ['/inventory/admin', 'Inventory Administration'],
+  ['/inventory/admin/store', 'Department Store'],
   ['/admin-hours/manage', 'Admin Hours'],
   ['/communications/email-templates', 'Email Templates'],
   ['/communications/member-emails', 'Member Emails & Texts'],
@@ -88,18 +89,10 @@ const PAGES: [string, string][] = [
 ];
 
 /**
- * Pages whose title does not start at the gutter, by design: a centred
- * narrow column (the setup checklist, the camera view) or the settings-screen
- * layout, which centres a 960px column and puts its icon tile before the title.
+ * Pages whose title does not start at the gutter, by design: a centred narrow
+ * column -- the setup checklist, the camera view, History's clearance list.
  */
-const NARROW_COLUMN = new Set([
-  '/setup',
-  '/members/scan',
-  '/settings',
-  '/communications/email-templates',
-  '/members/admin/settings/visibility',
-  '/history/settings',
-]);
+const NARROW_COLUMN = new Set(['/setup', '/members/scan', '/history/settings']);
 
 const shotDir = process.env.ADMIN_HEADER_SHOTS;
 
@@ -159,6 +152,20 @@ async function expectAdminHeader(page: Page, path: string, title: string) {
   // The eyebrow sits directly above the title in the same header block.
   const header = h1.first().locator('xpath=..');
   await expect(header.getByText('Administration', { exact: true })).toBeVisible();
+  // The trail opens the page. Any other navigation drawn above the title -- a
+  // module's section strip -- comes after it, as on every admin page.
+  const navsBeforeTitle = await page.evaluate(() => {
+    const title = [...document.querySelectorAll('h1')].find((el) => (el as HTMLElement).offsetParent !== null);
+    const layout = document.querySelector('[data-page-layout="application"]');
+    if (!title || !layout) return [];
+    return [...layout.querySelectorAll('nav')]
+      .filter((nav) => nav.offsetParent !== null)
+      .filter((nav) => nav.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .map((nav) => nav.getAttribute('aria-label') ?? '');
+  });
+  if (navsBeforeTitle.includes('Breadcrumb')) {
+    expect(navsBeforeTitle[0], `${path} trail comes first`).toBe('Breadcrumb');
+  }
   if (!NARROW_COLUMN.has(path)) {
     // The title starts at the layout's own gutter. A page that pads its own
     // wrapper as well doubles the gutter and its header sits 32px further in
