@@ -25,7 +25,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from app.services import shift_history_import_engine as shift_engine
 from app.services.external_course_mapping import normalize_course_title
@@ -804,6 +804,12 @@ _SELF_WORDS = frozenset({"me", "myself", "self", "i"})
 # all match; "ts" alone is matched only as the whole cell.
 DEFAULT_PROVIDER_PATTERNS: Tuple[str, ...] = ("targetsolution", "vector")
 
+# A CompanyDrill date with fewer members than this is not taken as a drill the
+# department held; the owner chose three (2026-11-04). Configurable per import.
+DEFAULT_DRILL_MIN_MEMBERS = 3
+MAX_DRILL_MIN_MEMBERS = 50
+DRILL_SOURCE_PREFIX = "drill:"
+
 # What to do with a provider row no synced record matches: import it as an
 # ordinary record, or leave it out because the sync is the record of truth.
 UNMATCHED_IMPORT = "import"
@@ -830,6 +836,12 @@ class TrainingSettings:
     # Subject key -> library course id. A subject with no entry is imported as
     # written.
     subject_courses: Mapping[str, str] = field(default_factory=dict)
+    # A yes/no column marking a department drill (CompanyDrill).
+    drill_column: str = ""
+    # The session-attendance requirements the imported drills count toward.
+    drill_requirement_ids: Sequence[str] = ()
+    # A date counts as a held drill when at least this many members logged it.
+    drill_min_members: int = DEFAULT_DRILL_MIN_MEMBERS
 
     @classmethod
     def from_stored(cls, value: Any) -> "TrainingSettings":
@@ -848,6 +860,11 @@ class TrainingSettings:
             else {}
         )
         action = value.get("unmatched_provider_action")
+        drill_ids = value.get("drill_requirement_ids")
+        try:
+            drill_min = int(value.get("drill_min_members") or DEFAULT_DRILL_MIN_MEMBERS)
+        except (TypeError, ValueError):
+            drill_min = DEFAULT_DRILL_MIN_MEMBERS
         return cls(
             subject_column=str(value.get("subject_column") or ""),
             instructor_column=str(value.get("instructor_column") or ""),
@@ -855,6 +872,11 @@ class TrainingSettings:
             provider_patterns=patterns,
             unmatched_provider_action=action if action in UNMATCHED_ACTIONS else None,
             subject_courses=courses,
+            drill_column=str(value.get("drill_column") or ""),
+            drill_requirement_ids=(
+                [str(i) for i in drill_ids if i] if isinstance(drill_ids, list) else []
+            ),
+            drill_min_members=min(max(drill_min, 1), MAX_DRILL_MIN_MEMBERS),
         )
 
     def to_stored(self) -> Dict[str, Any]:
@@ -865,6 +887,9 @@ class TrainingSettings:
             "provider_patterns": list(self.provider_patterns),
             "unmatched_provider_action": self.unmatched_provider_action,
             "subject_courses": dict(self.subject_courses),
+            "drill_column": self.drill_column,
+            "drill_requirement_ids": list(self.drill_requirement_ids),
+            "drill_min_members": self.drill_min_members,
         }
 
 
@@ -877,6 +902,7 @@ _SUBJECT_SPELLINGS = (
 )
 _INSTRUCTOR_SPELLINGS = ("training_instructor", "traininginstructor", "taught_by")
 _TAUGHT_SPELLINGS = ("instructor", "taught", "is_instructor", "was_instructor")
+_DRILL_SPELLINGS = ("company_drill", "companydrill", "dept_drill", "drill")
 
 
 def detect_training_settings(headers: Sequence[str]) -> TrainingSettings:
@@ -890,6 +916,7 @@ def detect_training_settings(headers: Sequence[str]) -> TrainingSettings:
         subject_column=find(_SUBJECT_SPELLINGS),
         instructor_column=find(_INSTRUCTOR_SPELLINGS),
         taught_column=find(_TAUGHT_SPELLINGS),
+        drill_column=find(_DRILL_SPELLINGS),
     )
 
 
@@ -927,6 +954,36 @@ def record_instructor(
 
 def taught(raw: Mapping[str, Any], settings: TrainingSettings) -> bool:
     return bool(settings.taught_column) and is_flag_set(raw.get(settings.taught_column))
+
+
+def is_drill_row(raw: Mapping[str, Any], settings: TrainingSettings) -> bool:
+    """Whether the row is a member's attendance at a department drill."""
+    return bool(settings.drill_column) and is_flag_set(raw.get(settings.drill_column))
+
+
+def drill_source_id(day: date) -> str:
+    """The ledger key of the session the import creates for one drill date."""
+    return f"{DRILL_SOURCE_PREFIX}{day.isoformat()}"
+
+
+@dataclass
+class DrillDay:
+    """The drill rows of one date, and whether the date counts as a held drill.
+
+    Members are counted distinct: one member's two rows for an evening are one
+    attendance. A date only a member or two logged is far likelier to be their
+    own training flagged as a drill than a drill the department held, so it
+    is left as ordinary training records (the owner's threshold, 2026-11-04).
+    """
+
+    day: date
+    member_keys: Set[str] = field(default_factory=set)
+    source_ids: List[Tuple[str, str]] = field(default_factory=list)
+    start_cells: List[str] = field(default_factory=list)
+    minutes: List[int] = field(default_factory=list)
+
+    def qualifies(self, min_members: int) -> bool:
+        return len(self.member_keys) >= min_members
 
 
 def provider_match(day: Optional[date], synced_days: Sequence[date]) -> bool:

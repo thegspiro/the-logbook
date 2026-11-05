@@ -65,6 +65,9 @@ class ImportedRecordKind(str, Enum):
     EXTERNAL_SHIFT_HOURS = "external_shift_hours"
     ADMIN_HOURS_ENTRY = "admin_hours_entry"
     TRAINING_RECORD = "training_record"
+    # A drill date the import turned into a held training session; its
+    # source_id is engine.drill_source_id(date) and record_id the session.
+    TRAINING_SESSION = "training_session"
 
 
 class HistoricalImport(Base):
