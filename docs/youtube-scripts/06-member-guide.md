@@ -1,7 +1,7 @@
 # Script 6: The Member Experience — Your Day-to-Day Guide
 
 **Video Type:** Role-Based Guide (Medium-Form)
-**Estimated Length:** 18–22 minutes
+**Estimated Length:** 20–24 minutes
 **Target Audience:** All members — Firefighters, Engineers, Lieutenants, anyone using the platform daily
 **Roles Covered:** firefighter, engineer, lieutenant, member (baseline)
 **Chapters:** 7 (each designed as a standalone clip)

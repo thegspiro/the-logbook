@@ -690,6 +690,18 @@ Outside Apparatus is new (2026-09-27). New footage needed.]**
 > so you can preview what members see. Voting method, victory condition and
 > ballot secrecy are chosen per election, on the election's own form."
 
+**[SCREEN: Elections → Settings → Voter Eligibility. Regular business meeting vs Annual meeting at the top; Rules every voter must meet — meeting attendance and a waiting period per member type.]**
+
+> "One section matters most for the secretary's life and yours: **Voter
+> Eligibility**. It holds the department's default rules for who may vote —
+> a meeting-attendance requirement and a waiting period for each member type,
+> from none, to a number of months, to never eligible. There's one set for
+> regular business meetings and, if you switch it on, a different set for the
+> annual meeting. Each new election copies the defaults when it's created and
+> can change its own copy until voting opens. Changing the settings later never
+> alters an election that already exists, and a secretary's voter override still
+> lets in a member who fails the rules. Each change saves as you make it."
+
 **[TRANSITION: Integrations]**
 
 ---
@@ -1016,17 +1028,26 @@ department's logo on both.]**
 
 **[SCREEN: `SECURITY_REQUIRE_TLS=true` in the `.env`.]**
 
-> "While you're in that file — `SECURITY_REQUIRE_TLS`. If your database and Redis
-> traffic crosses any network you don't control, turn it on. Without it, a
-> deployment running those connections in cleartext gets a boot **warning**, which
-> blocks nothing, so it can run that way indefinitely. Turned on, it becomes a
-> refusal to start."
+> "While you're in that file — `SECURITY_REQUIRE_TLS`. It defaults to **true**:
+> in production, a deployment whose database and Redis connections are cleartext
+> is a blocking finding, and the app refuses to start. Set it to false only as an
+> explicit risk acceptance — a trusted private network, a service mesh, the
+> bundled MySQL and Redis on a private Docker network."
 
-**[CALLOUT: "Defaults to false so upgrading can't refuse to boot your instance"]**
+**[CALLOUT: "TLS is on offer, not just a refusal — scripts/tls-setup.sh"]**
 
-> "It ships off deliberately — plenty of deployments terminate TLS somewhere else,
-> in a VPC or a service mesh, and forcing it on would refuse to start a perfectly
-> secure setup. That makes it your call, which is why it's worth making."
+**[SCREEN: Terminal — `./scripts/tls-setup.sh`, `./scripts/tls-setup.sh --print-env`, then `./scripts/tls-enforce.sh`; `.env` with `DB_REQUIRE_TLS` and `REDIS_REQUIRE_TLS`.]**
+
+> "Since October twenty-fourth you can make the bundled database and Redis
+> actually speak TLS. Run `scripts/tls-setup.sh` on the host: it creates a private
+> certificate authority plus server and client certificates, and `--print-env`
+> gives you the lines to add to `.env`. At first, plaintext still works, so
+> nothing breaks while you move over. When you're ready, run
+> `scripts/tls-enforce.sh` — it lists any client still connecting without TLS —
+> and then set `DB_REQUIRE_TLS=true` and `REDIS_REQUIRE_TLS=true`. Plaintext is
+> refused, Redis also requires the client certificate, and a server that can't
+> honour the switch refuses to start. Administrators see a banner thirty days
+> before a certificate expires. Keep the CA's private key off the server."
 
 ### MONITORING WITH SENTRY (26:30 – 27:00)
 
@@ -1454,6 +1475,23 @@ bottom of the page]**
 > membership view no longer covers it. And **Print ID Cards** makes plastic-card
 > sized pages — 3.375 by 2.125 inches — that print through any card printer's
 > normal driver."
+
+**[SCREEN: Members Admin → Member ID cards — the Cards, Coverage, Tap log and Settings tabs. Then the Card Readers page, and Events Admin → Card Check-ins.]**
+
+> "Cards are no longer managed one profile at a time. **Members Admin, Member ID
+> cards** lists every card in four tabs: **Cards**, where you can suspend,
+> reactivate, report lost or revoke several at once; **Coverage**, which shows
+> current members without a working card and cards still held by former members;
+> **Tap log**, with every tap — refused ones included — and an Export CSV; and
+> **Settings**, where you choose how many months to keep the tap log, three to
+> eighty-four, twenty-four by default. When a member becomes inactive, suspended,
+> dropped or archived, their active cards suspend themselves, and come back only
+> if the member does."
+
+> "For rooms with a kiosk, the **Card Readers** page lists each room, whether its
+> reader is on, and the last seven days of taps and refusals; Events Admin has a
+> **Card Check-ins** page for taps against events. A tap from a card nobody
+> registered is logged as Unknown card, without the card's number."
 
 **[PRODUCTION NOTE — 2026-10-06. New beat, about 50 seconds; new footage for
 Print ID Cards and the Accept old badges switch (0549b7e0, 5273c49a). Never film
@@ -2040,6 +2078,22 @@ docker compose exec mysql mysqldump -u root -p intranet_db > backup_$(date +%Y%m
 > "**File Storage:** Uploaded documents, member photos, logos, and attachments
 > are stored in the uploads volume. Back this up alongside the database."
 
+> "**Encrypted at rest:** personal phone numbers, postal addresses, email
+> addresses, dates of birth, emergency contacts and leave reasons are stored as
+> ciphertext, and the upgrade encrypts the existing values in place. Screens and
+> exports look the same. Two consequences: **backups taken before the upgrade
+> still hold the plain values** for as long as you keep them, so expire or
+> re-encrypt them on your data-protection schedule; and losing `ENCRYPTION_KEY`
+> and `ENCRYPTION_SALT` loses those values."
+
+> "**Departments with their own file store:** if a department moved its files to
+> an S3 or MinIO bucket or a Google Shared Drive, the nightly backup does not
+> download them. Check with
+> `python scripts/migrate_uploads_to_remote.py --stores` — that's the move
+> command's new name; the old `--buckets` flag still works. On a Shared Drive, a
+> deleted file sits in the drive's trash for thirty days and a drive manager can
+> restore it with its id intact, so don't empty that trash by hand."
+
 > "**Audit archives:** One more, and it's easy to miss. When old audit entries
 > pass the seven-year retention period, they're exported to archive files and
 > removed from the database. Those archives are the _only_ copy of your oldest
@@ -2186,6 +2240,12 @@ name → **Anonymize** enabled (do not confirm).]**
 
 > "You type their name to confirm, and afterwards they leave the roster — they
 > can't be reactivated."
+
+> "One more thing it leaves alone: a **History** record. If your department
+> keeps one for the member, it holds its own copy of their name and details, and
+> anonymizing doesn't touch it. If the request should reach that record too, ask
+> your historian to edit or delete it — a published record has to go back to
+> draft first."
 
 > "It's irreversible, it only works on members who've already been dropped or
 > archived, and you can't run it on yourself. Do it _after_ departure clearance
@@ -2407,3 +2467,29 @@ department's printer address.
 
 **EDITOR:** ~5:00 on top of everything above. Re-time Chapters 2–10 and the
 clip table from the recorded take.
+
+### Added 2026-11-05 — written in-script, not queued
+
+Beats added from the 2026-10-24 through 2026-11-05 currency flags. All are
+narration only; none changes a chapter's order.
+
+- **Chapter 3:** member class and membership status in the import template,
+  the Members Admin area cards, and email search needing a complete address.
+- **Chapter 5:** passkeys (Allow passkeys, Use your passkey), and the
+  second-person rule on IP exceptions.
+- **Chapter 6:** Compliance Settings (Months on leave, profiles by position)
+  and Election Settings, Voter Eligibility.
+- **Chapter 7:** keys-first connecting, **Historical Data Import** (training
+  rows and company drills), the Gmail **Service account** method, **Email
+  Templates: off means off** with its seven always-sent emails and the
+  Performance Evaluations group, and the DB/Redis TLS scripts. The
+  `SECURITY_REQUIRE_TLS` beat said it defaults to false; it defaults to true,
+  and the beat is corrected.
+- **Chapter 9:** Member ID cards, Card Readers and Card Check-ins; encryption at
+  rest and its effect on older backups; `migrate_uploads_to_remote.py` and the
+  Google Drive trash.
+- **Chapter 10:** History records are not anonymized.
+
+**EDITOR:** roughly 6:00 on top of everything above. Re-time Chapters 2–10 and
+the clip table from the recorded take. New footage needed for every screen
+named above; use made-up keys, client IDs and addresses on screen.
