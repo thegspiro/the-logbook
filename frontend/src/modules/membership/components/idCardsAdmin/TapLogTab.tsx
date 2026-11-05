@@ -217,7 +217,7 @@ export const TapLogTab: React.FC<TapLogTabProps> = ({ scope, onClearScope }) => 
       )}
 
       {taps.length > 0 && (
-        <div className="card overflow-hidden">
+        <div className="card rwd-table-container overflow-hidden">
           <CardTapTable taps={taps} tz={tz} />
         </div>
       )}
