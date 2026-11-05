@@ -560,6 +560,15 @@ with a type breakdown and average response time.
 
 ## Shifts With Other Departments
 
+_Since 2026-11-04:_ the setting `external_shifts_require_approval` holds an
+outside shift as pending until an officer approves it, with an officer notice.
+`GET /scheduling/members/{user_id}/hours-history` returns the my-hours shape for
+one member (403 without `scheduling.report` unless it is the caller) and feeds
+the profile's Shift & Call History; it reports on-call hours and outside calls as
+parts of the totals, not additions. An open swap a member could pick up posts one
+bell entry per seat and recipient (`open_swap_notices`), a deliberate departure
+from email-first.
+
 A member who rides a neighbouring jurisdiction's apparatus gets credit for it
 from **My Shifts → Hours → Shifts with other departments**, with **Log outside
 shift**:

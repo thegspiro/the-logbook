@@ -1432,6 +1432,7 @@ export const SettingsPage: React.FC = () => {
         activeSubPage={activeSubPage}
         onSubPageChange={switchSubPage}
         navLabel="Settings sections"
+        eyebrow="Administration"
         title="Organization Settings"
         subtitle="Department-wide configuration"
         saveState={AUTOSAVED_SECTIONS.has(activeSection) ? saveState : undefined}

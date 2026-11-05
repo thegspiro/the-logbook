@@ -5,6 +5,79 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 4 – 5, 2026
+
+Merged to `main` after `9df03d0d` (2026-11-04 12:53 UTC) through `905bd6cf`
+(2026-11-05 03:22 UTC), 26 merges. Security-review passes (finance-approvals,
+storefront-payments, public-surface-webhooks) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                          | Guide                  | Disposition                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------- |
+| Scheduling batch 4 (#4044): **Require approval for outside-department shifts** with an **Awaiting approval** filter; open-swap bell notice; seats filled by officer override; **Certifications that qualify** per position; seat labels in notices and rosters; close-out capped at 100 credits | 03                     | Added; "There is no approval step" corrected                                  |
+| Training batch 4 (#4044): name matching only for older records; cohort wizard fields; editing an approved shift report corrects its credit; students can open a cohort page                                                                                                                     | 02                     | Added; "Students cannot open a cohort page" corrected                         |
+| **Session Attendance** requirement and **Counts toward attendance** (#4036, #4039)                                                                                                                                                                                                              | 02                     | Added                                                                         |
+| Compliance Settings moved to **Training Admin → Settings & Data** (#4047)                                                                                                                                                                                                                       | 02, 08                 | Path updated in both                                                          |
+| Evaluations: counts on tabs, actions in the header (#4011); section grades (#3995)                                                                                                                                                                                                              | 02                     | Header text updated; #3995's grading was already described                    |
+| Historical Data Import parts 3–4: training records, and **Shift & Call History** on the member profile (#4033, #4029)                                                                                                                                                                           | 01, 02, 16             | Sections added; 16's TOC extended                                             |
+| Dashboard review fixes (#4050): Department pulse, **Today**, **All clear · n checks**, **None scheduled**, Scheduling Operations defaults                                                                                                                                                       | 00, 08                 | Added                                                                         |
+| Members batch 3 (#4024): tier names for every member, tier rules follow membership status, supervision loops refused, **My Crew**, starting status tiers; medical screening grace periods, detail permission and linked requirements                                                            | 01, 04, 08, 13, 14, 15 | Added; 13's "type 0 saves 30" and prospect-screening contradictions corrected |
+| Toggle tracks on touch (#4048); "Draft saved" on an unchanged purchase request (#4037); Move tag and Card Readers wording (#4035); Public Information on the legacy onboarding path (#4010)                                                                                                     | none                   | No guide text quotes these                                                    |
+| Operator-facing: alembic head merges (#4025, #4041), workflow-review seed (#4045), Dependabot (#4026, #4027, #4028)                                                                                                                                                                             | none                   | `UPGRADING` entries for #4024 and #4044 written with the changes              |
+| Docs merges (#4032, #4038, #4042)                                                                                                                                                                                                                                                               | none                   | Already documentation                                                         |
+
+**Screenshots to create:** Scheduling **Awaiting approval** filter; Session
+Attendance requirement form; Historical Data Import training section; profile
+**Shift & Call History**. **Replace:** Training Admin Settings & Data (Compliance
+Settings card); dashboard Department pulse and Today's Staffing; Medical
+Screening requirement badge. See `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts. None describes these screens.
+
+## Change audit: November 5, 2026 (later merges)
+
+The pass above stops at `905bd6cf`. This one covers what merged after it, through
+`a02bdd96` (2026-11-05 06:53 UTC), and adds changes both passes had missed.
+Merged to `main` after `c1cd3492` (2026-11-04 14:21 UTC, the previous pass)
+through `a02bdd96` (2026-11-05 06:53 UTC). It also picks up three changes that
+merged in that range but were not described before: grading by section,
+Members batch 3 and the shift and call history. Security-review passes
+(public-surface-webhooks, storefront-payments, finance-approvals,
+elections-ballots, users-organizations; all 0 fixed) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                    | Guide  | Disposition                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session Attendance** requirement type; sessions link at creation; **Counts toward attendance** badge; the Chief's override (#4033 range, #4044)                                                         | 02, 04 | New "Session attendance requirements" section in 02; badge noted in 04; `Module-Training` wiki written. `UPGRADING` covers the migrations                                   |
+| **Compliance Settings** listed under Settings & Data; **Configure** hidden from `training.manage` alone                                                                                                   | 02     | Area table and "older version" list corrected                                                                                                                               |
+| Import from Registry moved below the requirements list                                                                                                                                                    | 02     | Added                                                                                                                                                                       |
+| Evaluations **graded by section** with grade ranges and evaluator regrade; header counts and actions                                                                                                      | 02     | New "Grading by section" and header subsections; `Module-Evaluations` wiki written                                                                                          |
+| Historical import: **training rows** and **company drills** become held sessions                                                                                                                          | 16     | Added; wiki page corrected (it said drills were "a later step")                                                                                                             |
+| Members batch 3: **My Crew**, profile **Shift & Call History**, "Member since" from credited service                                                                                                      | 01, 03 | Added to 01 and 03                                                                                                                                                          |
+| Medical screening: **grace period now applied**; new `medical_screening.view_details`; records count only for their linked requirement                                                                    | 13     | **Corrected.** Guide 13 and `Module-Medical-Screening` said the grace period was not applied; the Grace Period section, permissions table and worked example were rewritten |
+| Scheduling batch 4: custom seats seatable by an officer with a reason; outside shifts can require approval; open-swap bell entry                                                                          | 03     | Added; `Module-Scheduling` wiki written                                                                                                                                     |
+| Skills evaluations unsent at automatic sign-out are kept 7 days for the same examiner                                                                                                                     | 09, 10 | Corrected: both said unsent work was deleted at sign-out                                                                                                                    |
+| Inventory batch 5: unique sibling category names, item dates checked against the department's date, Unassign dialog, creation counts as a sighting                                                        | 05     | **Corrected:** 05 said an item added today is "Never" in Items Not Seen                                                                                                     |
+| Fundraising: **Edit** on donors and campaigns                                                                                                                                                             | 12     | Added                                                                                                                                                                       |
+| Dashboard: department pulse on My Department, All clear fold, real-value Scheduling filters, 24-hour shift times, phone open-shift count, notification stack preview                                      | 00     | Added to "What's on the dashboard"                                                                                                                                          |
+| Event settings regrouped as **Public Requests**; Handling step amber until a coordinator is set                                                                                                           | 04     | Handling note added (the regroup itself was documented in the previous pass)                                                                                                |
+| Wide tables reflow to cards by their card's width (80rem and 96rem tiers; ten finance tables, training history, minutes attendance, pledges, tap log and others); switch tracks fixed on touch            | 10     | Added to "On a Tablet"                                                                                                                                                      |
+| Location pickers and Card Readers stop repeating a room's building; applicant board selection box no longer covers card content; purple switches use the theme red                                        | none   | No guide text describes these; screenshots queued                                                                                                                           |
+| Operator-facing: DigitalOcean and Google Cloud deployment guides; container services removed from the supported-platform list; workflow-review seed steps up first; migration heads rejoined (five times) | none   | Deployment docs written with the changes                                                                                                                                    |
+
+**Screenshots to create:** requirement form with Session Attendance; create-session
+attendance checklist; Compliance Matrix Chief override and **Met by the Chief's
+override**; **Counts toward attendance** badge; grading-by-section builder and
+evaluation page; Settings & Data → Compliance Settings; Historical Import training
+set-up and drill step. **Replace:** any screenshot showing a toggle switch (ovals on
+touch, purple); the dashboard captures `00-24` and `00-25`; Items Not Seen
+(`05-127`); medical screening Martinez rows; the event form and Create Training
+Session location pickers. See `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** `docs/training/21-october-2026-release-changes.md` is a frozen
+release summary; November changes are in the guides above. YouTube scripts are
+flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited.
+
 ## Change audit: November 3 – 4, 2026
 
 Merged to `main` after `12f1430d` (2026-11-03 16:55 UTC) through `9df03d0d`

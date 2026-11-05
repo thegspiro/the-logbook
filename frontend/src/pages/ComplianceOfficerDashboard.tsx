@@ -110,7 +110,7 @@ const ComplianceOfficerDashboard: React.FC<ComplianceOfficerDashboardProps> = ({
           <button
             onClick={() => void navigate(COMPLIANCE_CONFIG_HREF)}
             className="bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-            title="Compliance Requirements Configuration"
+            title="Compliance Settings"
           >
             <Settings className="h-4 w-4" />
             Configure

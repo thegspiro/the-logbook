@@ -22,13 +22,12 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ClipboardCheck, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { CHECKIN_BOUNDS, DEFAULT_CHECKLIST_TIMING, type ChecklistTimingSettings } from '../types/checklistSettings';
 import { useSchedulingStore } from '../../scheduling/store/schedulingStore';
-import { Breadcrumbs } from '../../../components/ux';
 
 export const ChecklistSettingsPage: React.FC = () => {
   const [timing, setTiming] = useState<ChecklistTimingSettings>(DEFAULT_CHECKLIST_TIMING);
@@ -142,16 +141,13 @@ export const ChecklistSettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-      {/* compactOnPhone collapses the four-deep trail to one "← Equipment
-          Checklists" link below 640px, which is also why there is no separate
-          Back link: on a phone it repeated the trail above it word for word. */}
-      <Breadcrumbs compactOnPhone />
-
+    <div className="max-w-3xl py-6">
+      {/* No trail or <h1> of its own: like its Equipment Checklists siblings it
+          is drawn inside Inventory Administration's header (InventoryAdminLayout),
+          which carries the page's <h1> and trail. A settings admin the header
+          refuses still gets the trail, from the layout. */}
       <header className="mb-4 sm:mb-6">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-xl font-bold sm:text-2xl">
-          <ClipboardCheck className="h-5 w-5 shrink-0" aria-hidden="true" /> Checklist Settings
-        </h1>
+        <h2 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Checklist Settings</h2>
         <p className="text-theme-text-secondary mt-1 text-sm sm:hidden">
           When crews are prompted, and how long they have to check in.
         </p>

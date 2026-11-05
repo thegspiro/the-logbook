@@ -415,7 +415,9 @@ don't have to do anything.
   **Sign Out** tries to send them. If it cannot, it warns you and offers **Stay
   signed in**. Signing out anyway deletes them from the device, so the next
   person on a shared station cannot read them. The automatic sign-out after
-  you are idle cannot ask. Do not leave a phone with unsent evaluations alone
+  you are idle cannot ask, but since 2026-11-04 it **keeps** unsent
+  evaluations on the device for 7 days, and only the same examiner signing back
+  in can see and send them. Do not leave a phone with unsent evaluations alone
   until it has signal.
 
 ### The timer records what you measured
