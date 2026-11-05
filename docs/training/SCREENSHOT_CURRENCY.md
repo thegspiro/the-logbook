@@ -1,15 +1,22 @@
 # Screenshot currency
 
-## Queued by the Event settings Public Requests regroup (2026-11-05)
+## Captured 2026-11-05 — Event settings Public Requests (#4049)
 
-Event settings' **Outreach Types**, **Pipeline**, **Email** and **Public Form**
-sections became pages of one **Public Requests** section, with a new
-**Overview** page. Nothing was captured.
+#4049 turned Event settings' **Outreach Types**, **Pipeline**, **Email** and
+**Public Form** sections into pages of one **Public Requests** section, with a
+new **Overview**. Taken on the demo department seeded from `main` at
+`a02bdd96`, with malware scanning on. Nothing mocked and nothing written to the
+demo beyond the seed.
 
-| Guide | Screen | Action |
+`main` at that commit carried two Alembic heads (#4051 and #4065 both branch
+from `bd8fc0c4a941`; #4078 rejoins them), so the demo database was brought up
+with `alembic upgrade heads`. Neither shot reads a table either migration
+touches.
+
+| Image | Disposition | Notes |
 | --- | --- | --- |
-| 04 | `19-24` — now Public Requests → Request form, with the page rail beside it | Replace |
-| 04 | Public Requests → Overview: the intake switch, lead time and the four step cards | Create |
+| `19-24-outreach-form-section` | Re-shot | Now reached through Public Requests → Request form; the page rail sits beside the panel. Manifest entry reopened it through the rail, and its alt text now names the new path |
+| `04-98-public-requests-overview` | New | The Overview as seeded: intake on, 21-day lead time, and the four step cards. Handling reads amber ("No default coordinator"), because the seed sets no coordinator, which is the state a new department sees |
 
 ## Queued by the November 3 – 4 documentation pass
 
