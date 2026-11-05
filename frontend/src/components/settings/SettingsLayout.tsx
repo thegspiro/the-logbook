@@ -76,6 +76,13 @@ interface SettingsLayoutProps<K extends string, S extends string> {
    * the page, and nothing that competes with the pill for the same meaning.
    */
   headerAside?: React.ReactNode;
+  /**
+   * Small caps line above the title, as `AdminPageHeader` draws it. Set to
+   * "Administration" on a settings screen reached from the Administration
+   * menu, so it reads as one of that menu's pages; a member's own settings
+   * leave it unset.
+   */
+  eyebrow?: string | undefined;
   /** Renders a back button left of the icon tile when set. */
   onBack?: (() => void) | undefined;
   backLabel?: string;
@@ -145,6 +152,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
   saveState,
   onRetrySave,
   headerAside,
+  eyebrow,
   onBack,
   backLabel = 'Go back',
   showBreadcrumbs = false,
@@ -209,6 +217,9 @@ export function SettingsLayout<K extends string, S extends string = string>({
                   <SettingsIcon className="h-6 w-6 text-white" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
+                  {eyebrow ? (
+                    <p className="text-theme-text-muted text-[11px] font-bold tracking-[0.16em] uppercase">{eyebrow}</p>
+                  ) : null}
                   <h1 className="text-theme-text-primary text-2xl leading-8 font-bold">{title}</h1>
                   <p className="text-theme-text-muted mt-0.5 text-sm">{subtitle ?? current?.description}</p>
                 </div>

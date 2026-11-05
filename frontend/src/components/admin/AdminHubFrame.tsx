@@ -9,7 +9,8 @@ import { attentionCountsForTabs } from './attentionCounts';
 import AdminAttentionQueue from './AdminAttentionQueue';
 import AdminMetricsRow from './AdminMetricsRow';
 import AdminHubCardTabs from './AdminHubCardTabs';
-import { Breadcrumbs, type BreadcrumbItem } from '../ux/Breadcrumbs';
+import type { BreadcrumbItem } from '../ux/Breadcrumbs';
+import AdminPageHeader from './AdminPageHeader';
 
 /**
  * The shared administration-page frame.
@@ -249,60 +250,47 @@ export function AdminHubFrame<K extends string>({
           where ordinary pages sit at 16px and 32px. The hubs' own bodies and
           the Events tabs carried the same duplicate and lost it with this. */}
       <div className="mx-auto flex max-w-7xl flex-col gap-5 pt-6 sm:pt-8">
-        {/* 0 — Trail. Above the eyebrow, because it says where the page sits
-            rather than what kind of page it is. Rendered by the frame so all
-            six hubs carry one without each remembering to; `mb-0` because the
-            frame's own flex gap already spaces it.
-
-            It ends at the PARENT. This header already names the page twice —
-            eyebrow "Administration", then an <h1> of "Inventory
-            Administration" — and a crumb repeating the <h1> verbatim
-            immediately above it is a third near-identical line to a reader and
-            a name announced twice to a screen reader. What the trail is here
-            for is the step up, which nothing else on a hub offers. */}
-        <Breadcrumbs items={breadcrumbs} className="mb-0" omitCurrentPage />
-
-        {/* 1 — Header. Icon actions and a single red primary; never two reds.
-            The title's 16rem basis is what makes this row wrap. With `flex-1`
-            (basis 0) the title claimed no width of its own, so the row never
-            wrapped and the non-shrinking actions crushed it — at 390px the
-            <h1> was 53px wide and the actions sat over the eyebrow. Now the
-            actions drop beneath the title as soon as both cannot fit. */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 grow basis-64">
-            <p className="text-theme-text-muted text-[11px] font-bold tracking-[0.16em] uppercase">{eyebrow}</p>
-            <h1 className="text-theme-text-primary mt-0.5 text-2xl font-bold">{title}</h1>
-            <p className="text-theme-text-muted mt-1 text-sm">{description}</p>
-          </div>
-
-          {(actions.length > 0 || primaryAction || headerAside) && (
-            <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
-              {actions.map((action) => (
-                <button
-                  key={action.key}
-                  type="button"
-                  onClick={action.onClick}
-                  aria-label={action.label}
-                  title={action.label}
-                  className="btn-icon border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring border transition-colors focus:ring-2 focus:outline-hidden"
-                >
-                  <action.icon className={`h-4.5 w-4.5 ${action.busy ? 'animate-spin' : ''}`} aria-hidden="true" />
-                </button>
-              ))}
-              {primaryAction && (
-                <button
-                  type="button"
-                  onClick={primaryAction.onClick}
-                  className="btn-primary flex items-center gap-2 text-sm font-semibold"
-                >
-                  <primaryAction.icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{primaryAction.label}</span>
-                </button>
-              )}
-              {headerAside}
-            </div>
-          )}
-        </div>
+        {/* 0 & 1 — Trail and header, shared with every non-hub admin page
+            through AdminPageHeader so the two cannot drift. The trail ends at
+            the PARENT: the eyebrow and the <h1> already name this page, and a
+            crumb repeating the <h1> immediately above it is a name announced
+            twice to a screen reader. Icon actions and a single red primary;
+            never two reds. */}
+        <AdminPageHeader
+          title={title}
+          description={description}
+          eyebrow={eyebrow}
+          breadcrumbs={breadcrumbs}
+          actions={
+            actions.length > 0 || primaryAction || headerAside ? (
+              <>
+                {actions.map((action) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onClick={action.onClick}
+                    aria-label={action.label}
+                    title={action.label}
+                    className="btn-icon border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring border transition-colors focus:ring-2 focus:outline-hidden"
+                  >
+                    <action.icon className={`h-4.5 w-4.5 ${action.busy ? 'animate-spin' : ''}`} aria-hidden="true" />
+                  </button>
+                ))}
+                {primaryAction && (
+                  <button
+                    type="button"
+                    onClick={primaryAction.onClick}
+                    className="btn-primary flex items-center gap-2 text-sm font-semibold"
+                  >
+                    <primaryAction.icon className="h-4 w-4" aria-hidden="true" />
+                    <span>{primaryAction.label}</span>
+                  </button>
+                )}
+                {headerAside}
+              </>
+            ) : undefined
+          }
+        />
 
         {/* 2 & 3 — Metrics and queue. Source order is the desktop order; the
             phone swaps them, because the queue is the only thing worth a phone

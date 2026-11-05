@@ -16,6 +16,8 @@ import { screen, act, fireEvent, within } from '@testing-library/react';
 import { renderWithRouter } from '../../test/utils';
 
 const navigated: string[] = [];
+/** null grants everything; a set grants only what it holds. */
+let granted: Set<string> | null = null;
 
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
@@ -29,7 +31,7 @@ vi.mock('../../contexts/ThemeContext', () => ({
 vi.mock('../../stores/authStore', () => ({
   useAuthStore: (selector?: (s: unknown) => unknown) => {
     const state = {
-      checkPermission: () => true,
+      checkPermission: (permission: string) => granted === null || granted.has(permission),
       user: { id: 'member-1', organization_id: 'org-1', membership_type: 'active' },
     };
     return typeof selector === 'function' ? selector(state) : state;
@@ -111,6 +113,7 @@ const topDestinations = (): Set<string> => {
 describe('side and top navigation parity', () => {
   beforeEach(() => {
     navigated.length = 0;
+    granted = null;
   });
 
   it('offers every destination in both layouts', () => {
@@ -123,5 +126,24 @@ describe('side and top navigation parity', () => {
       onlyInSide: [...side].filter((path) => !top.has(path)).sort(),
       onlyInTop: [...top].filter((path) => !side.has(path)).sort(),
     }).toEqual({ onlyInSide: [], onlyInTop: [] });
+  });
+
+  // Granting everything cannot see a group-level gate stricter than its rows:
+  // the side layout once hid its whole Organization Settings group behind
+  // settings.manage, so an officer holding only audit.view, analytics.view or
+  // positions.manage_permissions found their page in the top layout and not in
+  // the side one.
+  it.each([
+    ['audit.view', ['/admin/audit-log', '/admin/security-alerts']],
+    ['analytics.view', ['/admin/analytics']],
+    ['positions.manage_permissions', ['/settings/roles']],
+  ])('offers the %s holder their page in both layouts', (permission, paths) => {
+    granted = new Set([permission]);
+    const side = sideDestinations();
+    const top = topDestinations();
+    for (const path of paths) {
+      expect({ path, side: side.has(path), top: top.has(path) }).toEqual({ path, side: true, top: true });
+    }
+    expect(side.has('/settings')).toBe(false);
   });
 });

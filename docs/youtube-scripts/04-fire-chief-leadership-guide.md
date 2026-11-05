@@ -73,8 +73,33 @@ Both = leadership oversight."]**
 > on their required certifications. If this number drops below your threshold,
 > you know you need to schedule training."
 
+> "Two things about that number changed in November 2026. A month a member spent
+> on leave is excused as soon as they have a single day of leave in it — your
+> department can go back to a fifteen-day rule under **Months on leave** in the
+> compliance settings. And a member nothing is asked of reads **Not
+> applicable** rather than a free hundred percent, and is left out of the
+> department figure."
+
 > "**Member Stats** — total active members, new members this month, and
 > attendance trends."
+
+**[SCREEN: My Department tab, the department pulse cards (money, grants,
+outreach) under one section heading; then Critical exceptions and Pending
+approvals folded into a single "All clear · N checks" line, opened to show its
+rows]**
+
+> "Since November the money, grant and outreach cards live here, on **My
+> Department**, instead of crowding the top of your own page — so your shifts and
+> training are the first thing you see on **Personal**. The one period they cover
+> is named once, in the section description, not on every card. And when every
+> count in **Critical exceptions** or **Pending approvals** is zero, the section
+> folds into a single **All clear** line. Select it and each check is still one
+> click away. If Scheduling Operations has a Station or Platoon filter, it is now a
+> dropdown of values your shifts really carry, not a box you type a guess into."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 35 seconds (2026-11-05 dashboard
+changes). Re-capture the My Department tab; `00-24` and `00-25` are queued for
+replacement.]**
 
 > "**Scheduling Overview** — who's on shift today, any open slots that need
 > filling."
@@ -214,6 +239,38 @@ check-in" and "Create a prospective member from each guest".]**
 > than from anything the visitor sends. But the judgment about which events get it
 > is yours."
 
+### GUEST CODE ON THE EVENT'S OWN QR PAGE (added 2026-11-05)
+
+**[SCREEN: An open house at an outside venue: the event's QR page with the member
+code and **Print QR Code**, then the **Guest Check-In** card — the guest code,
+its link, **Show full size**, **Reset code** and **Print Guest QR Code**.]**
+
+> "That guest code used to exist only on a room's kiosk display, so an open
+> house at an outside venue had none. Now every event has its own. Open the
+> event's QR page and the **Guest Check-In** card shows it — you need
+> **events.manage** to see it, and members who aren't managers never receive
+> it."
+
+> "Like the member code, it stays hidden until check-in opens, so nobody scans
+> it early. **Reset code** issues a new one and kills every printed copy — use
+> it if the flyer leaked before the night."
+
+**[SCREEN: The Guests card on the event page: **Add guest** beside the heading,
+a guest row with its **Sign in** button.]**
+
+> "At a recruitment event the guest page asks for an **email address** instead of
+> a name. An applicant types the one they applied with, confirms 'Is this you?',
+> and they're checked in against their application. Anyone else — a first-time
+> walk-in — is told to see a member of staff. That's your person at the door:
+> **Add guest** on the Guests card takes a name, optionally an email and phone,
+> and signs them in. Give an email and it opens their application, marked as
+> entered by staff."
+
+**[PRODUCTION NOTE — 2026-11-05. New beats (2026-10-25 → 10-28), about 45
+seconds; fold into the pending Chapter 3 re-timing. The two switches in the
+beat above are unchanged. Guests are not counted in event attendance — the card
+says so.]**
+
 ### EVENT TEMPLATES (7:00 – 8:00)
 
 **[SCREEN: Navigate to Events → Templates (EventTemplatesPage)]**
@@ -245,6 +302,49 @@ RSVP list and check-in status]**
 > "This is great to have on a tablet at the door. It shows a live feed of
 > check-ins as they happen."
 
+> "One more thing on the door: the event's own **organizer** and alternate run
+> check-in for their event even without event-manager rights, and training
+> managers run Training events."
+
+**[SCREEN: Events Administration — the area cards across the top (**Events**,
+**Community Outreach**, **Check-ins**, **Settings**) with a page strip beneath;
+open **Check-ins → Card Check-ins**.]**
+
+> "Events Administration is laid out as area cards over a strip of pages, the
+> same as Training and Inventory: Events, Community Outreach, Check-ins and
+> Settings. A red count on a card means the Needs attention list has something
+> in that area."
+
+### DRILL ATTENDANCE THAT COUNTS, AND THE CHIEF'S OVERRIDE (added 2026-11-05)
+
+**[SCREEN: A Training event's form, **Connect to Requirements & Programs** with a
+tick box for a session attendance requirement; then the event list card with
+the **Counts toward attendance** badge beside **Mandatory**.]**
+
+> "Some drills are about turning up, not hours logged — 'attend sixty percent of
+> the company drills this year.' That's a **Session Attendance** requirement. You
+> tick it when you create the drill, under **Connect to Requirements &
+> Programs**, and a **Counts toward attendance** badge appears on the event so
+> members can see this one is graded. A drill linked to nothing is optional and
+> charges nobody. You can still change the links from the event page's
+> **Counts toward attendance** editor, even after attendance is finalized."
+
+**[SCREEN: Compliance Matrix → a member's cell reading "2 of 3 sessions"; the
+**Chief override** control with dates and a required reason; the cell now
+reading **Met by the Chief's override**.]**
+
+> "A missed drill is normally a training waiver. The override is the rare
+> exception, and it's yours alone: on a requirement where **Allow the Chief to
+> override it for a member** is ticked, you open the member in the Compliance
+> Matrix, choose **Chief override**, pick the dates and write the reason. The
+> cell reads **Met by the Chief's override** — the real attendance count is
+> still shown. It's tied to the Chief position, not a permission, so not even
+> the IT Manager can use it. You can **Revoke** it; it's never deleted."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 1:15 (2026-11-04). The Matrix and
+the Counts toward attendance badge are Training Officer territory too — Scripts
+05 and 16.]**
+
 ### EVENT ANALYTICS (9:00 – 10:00)
 
 **[SCREEN: Navigate to Event Analytics (EventAnalyticsPage)]**
@@ -274,13 +374,19 @@ selector]**
 **[SCREEN: Navigate to Members list page]**
 
 > "As Chief or President, you can view the full member roster. You can see every
-> active member, their position, their station assignment, and their membership
-> type."
+> active member, their position, their station assignment, and their
+> membership — a member **class** (Operational, Administrative or Social) and a
+> **status** (Probationary, Regular, Life, or one of your own tiers)."
 
 **[SCREEN: Show the members list with sorting and filtering]**
 
 > "Filter by position to see all your Captains, or by station to see who's
 > assigned where. The search bar lets you find anyone instantly."
+
+**[PRODUCTION NOTE — 2026-11-05. "Membership type" is now two fields on the
+edit page, **Member class** and **Membership status** (2026-10-29). Setting
+the status to Probationary sets the account status to Probationary too. Searching
+by email needs the complete address; part of one no longer matches.]**
 
 ### MEMBER PROFILES (11:00 – 12:00)
 
@@ -314,6 +420,45 @@ selector]**
 > that's why you have the access. But if a member ever asks who's been looking
 > at their family's phone number, you want that to be a question with an
 > answer."
+
+**[SCREEN: History in the sidebar (module switched on under Settings → Modules →
+Additional Modules): Overview, **Past Members**, **Honor Roll**.]**
+
+> "And when someone leaves, they're not simply gone. If your department turns on
+> the **History** module, it keeps your past members, their titles and service,
+> and an **Honor Roll** for members who died in the line of duty. Any signed-in
+> member can read what's been published; a historian drafts it, and anything
+> marked Historian only stays hidden. Nothing on the Honor Roll is shared until
+> someone chooses to share it — date, circumstances and resting place each have
+> their own setting."
+
+**[SCREEN: Reports → Evaluations. Templates & periods; draft a review period; an
+evaluation page with the member's figures and suggested ratings; the sign
+dialog; the finalized PDF.]**
+
+> "One more thing you do each year, and used to do outside the Logbook: member
+> performance evaluations. Under **Evaluations** you build a form once — an
+> **Annual Member Evaluation** and a **Probationary Check-in** come as starters
+> — then **Draft a review period** to create one for every current member. The
+> member does a self-evaluation, the evaluator rates, and at calibration you can
+> tick items the evaluator should revisit. Each item shows the member's own
+> figures with a suggested rating, and a rating that departs from it needs a
+> reason."
+
+> "The approving position signs, the member acknowledges, and the last signature
+> freezes a PDF on your letterhead. The member then has thirty days to write a
+> response. Nobody evaluates, amends or deletes their own — and only the Chief
+> can delete one, with a reason that's kept on record."
+
+> "Forms can be **Graded by section**: each rating is put on a one-to-five scale,
+> each section gets a score, and your grade ranges turn the score into a grade —
+> so a member rated Meets on every item reads as Meets, not as failing. The
+> evaluator may regrade a section, with a reason, and both grades are shown."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 1:45 (2026-11-02 → 11-04). Members
+read their own under **My evaluations** — Script 06. The evaluation emails are
+a template group, **Performance Evaluations**, under Communications → Email
+Templates. Film the grading-by-section builder and the PDF's section table.]**
 
 ### MEMBER ID CARDS (12:00 – 12:30)
 
@@ -475,6 +620,36 @@ stage. Both buttons carry the same gate, so the refusal is the same.]**
 > this touches you. A stage with no election package — or one still Draft or
 > Ready — converts exactly as it always did."
 
+**[SCREEN: A pipeline's stage picker with **Follow-up Form** chosen; an applicant's
+Interview page with the follow-up answers panel.]**
+
+> "Three more pipeline changes. First, a **Follow-up Form** stage: the applicant
+> is emailed a personal link to a form pre-filled with what you already have on
+> file, and any answers they change update their record. It advances them when
+> they submit, unless you switch that off for a stage you want a coordinator to
+> close by hand. Reminders go out, a coordinator is told when it comes back, and
+> the answers show on the Interview page."
+
+> "Second, who sees whom. Seeing every applicant now takes
+> `prospective_members.view_all`. An officer with only view or manage sees just
+> the applicants assigned to them, and a board member you've named a case
+> manager or interviewer finds theirs under **My Applicants**. The upgrade gave
+> view-all to every position that already had view or manage, so nobody's list
+> shrank — check Positions if you want one narrowed."
+
+**[SCREEN: The public application status page: the **Your next step** card with
+the next meeting, **Add to calendar** and **Get directions**.]**
+
+> "Third, the applicant's own status page now names the next meeting they should
+> attend, with the date in your time zone, the address, an **Add to calendar**
+> download and **Get directions**. If they miss it, the card moves to the next
+> one."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 1:00 (2026-10-29 → 11-01). Re-time
+Chapter 4. Applicant emails are editable templates under Prospective Members
+in Email Templates; switching one off stops it, except Application Follow-up
+Form and Application Contact Details Changed, which cannot be switched off.]**
+
 **[TRANSITION: Elections section]**
 
 ---
@@ -513,6 +688,16 @@ stage. Both buttons carry the same gate, so the refusal is the same.]**
 > "Set eligibility rules — who can vote? Active members only? Minimum tenure of
 > one year? The system automatically determines eligible voters based on your
 > rules."
+
+> "Who may vote now has department-wide rules too. In **Election Settings →
+> Voter Eligibility** you set a meeting-attendance rule — say, six of the last
+> twelve meetings — and a waiting period for each kind of member. A new election
+> copies the rules for the meeting it's held at, and you can adjust them on the
+> election's **Eligibility** tab until voting opens. After that they're fixed."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-10-29). Detail in
+Script 12. Administrative and social members follow their class for the
+waiting period; everyone else follows their status.]**
 
 ### MANAGING CANDIDATES AND OFFICES (15:30 – 16:30)
 
@@ -932,6 +1117,28 @@ Written by me, Review Queue, Flagged, Drafts — and the New report button]**
 Scheduling. Review Queue and Flagged appear only when report review is switched
 on.]**
 
+### DECISIONS THAT NEED A SECOND PERSON (added 2026-11-05)
+
+**[SCREEN: Finance → Budget requests, a request the viewer submitted; then a
+minutes page where the submitter is told "Waiting for another officer to
+approve."]**
+
+> "A few decisions can't be made by the person who started them. A budget
+> request can't be decided by whoever submitted it, or by the owner of the line
+> it's for — and an IP exception can't be approved by the member it's for or the
+> officer who filed it. Minutes work the same way: the officer who circulated
+> them can't adopt them. If your department has one finance manager, grant
+> **finance.manage** to a second member, because the refusal is deliberate."
+
+> "And when a second officer does select **Adopt Minutes**, the meeting those
+> minutes record is approved in the same step, in their name. The meeting card
+> stops reading Draft, and an approved meeting can't be deleted."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 40 seconds (2026-10-27, 11-03).
+Budget requests and IP exceptions have no new screen; the refusal appears as a
+message on **Record decision**. Reimbursement approvals already refuse the
+requester in the same way.]**
+
 ### USING DATA FOR DECISIONS (24:15 – 25:15)
 
 > "Here's the bigger picture on reports. The Logbook replaces the filing cabinet,
@@ -1177,3 +1384,18 @@ hold and **Sign-offs** before Convert, the Convert dialog's class, status and
 password choices, one-way swap offers, outside-apparatus hours, the
 finalized-attendance refusal, and the mandatory Event reminders switch. Adds
 ~1:30; re-time Chapters 3–8 and the clip table from the recorded take.
+
+---
+
+## EDITOR — 2026-11-05 PASS
+
+Applied the 2026-10-25 → 11-05 currency flags: the event QR page's guest code,
+**Add guest** and email sign-in at recruitment events; organizer-run check-in;
+Events Administration area cards; **Session Attendance**, **Counts toward
+attendance** and the Chief's override; **Months on leave** and **Not
+applicable**; member class and status; History and the Honor Roll; member
+performance evaluations (graded by section); Follow-up Form stages, My
+Applicants and the applicant's next meeting; Voter Eligibility; and the
+second-person rules, including Adopt Minutes approving the meeting. Adds about
+7 minutes of narration if every beat is filmed; the beats are separable. Re-time
+Chapters 3, 4, 5 and 7 from the recorded take.
