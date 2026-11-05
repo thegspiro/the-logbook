@@ -1314,7 +1314,7 @@ them either way, so tick them yourself if the requirement covers them too.
 ### The Chief's override of a session attendance requirement
 
 Waiving a missed drill stays routine and goes through
-a [training waiver](#waiver-management). An override is the rare exception: the
+a [training waiver](#waivers). An override is the rare exception: the
 Chief counts a member as meeting the requirement over dates the Chief chooses,
 however short their attendance, with a reason on record.
 
