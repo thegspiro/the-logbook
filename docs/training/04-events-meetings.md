@@ -1640,7 +1640,14 @@ public, never to events your members create:
 
 The **Overview** lists the four steps with a one-line status each (for example
 _"1 in draft, not yet published"_ or _"No default coordinator"_); select a step
-to open its page.
+to open its page. A status reads green once that step is set up and amber
+while something is missing: **Handling** stays amber until there is both a
+default coordinator and at least one checklist step.
+
+<!-- Screenshot needed:
+Event settings, Public Requests, Overview: the Accept Public Requests switch,
+Minimum Lead Time, and the four numbered step cards with their statuses
+-->
 
 On a phone the sections become a scrollable strip of tabs, and every control
 is a full-size touch target.
