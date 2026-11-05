@@ -80,38 +80,87 @@ async function waitForLoginCookies(csrfBefore: string | null): Promise<void> {
   // if the httpOnly cookies were stored independently of the csrf one.
 }
 
+/**
+ * One account's failed sign-ins in this tab.
+ *
+ * Kept per account, not per tab (workflow review W02-8; owner decision
+ * 2026-11-05): a station computer is shared, and one member's mistyped
+ * passwords must not hold the next member at the sign-in screen. The server
+ * counts the same way (per account at an address, `rate_limit_login`).
+ */
+export interface LoginLockout {
+  attempts: number;
+  lockedUntil: number | null; // epoch ms
+}
+
+/** Accounts remembered per tab; the oldest is dropped past this (CLAUDE.md #9). */
+const MAX_LOCKOUT_ACCOUNTS = 20;
+
+/** The key an account's attempts are counted under: the name as the server folds it. */
+export const loginAccountKey = (username: string): string => username.trim().toLowerCase();
+
+/** When the account typed may next try, or null if it may try now. */
+export function lockedUntilFor(lockouts: Record<string, LoginLockout>, username: string): number | null {
+  const until = lockouts[loginAccountKey(username)]?.lockedUntil ?? null;
+  return until !== null && Date.now() < until ? until : null;
+}
+
 /** Read lockout state from sessionStorage (survives page refresh, cleared on tab close). */
-function loadLockoutState(): { loginAttempts: number; lockedUntil: number | null } {
+function loadLockoutState(): Record<string, LoginLockout> {
   try {
     const raw = sessionStorage.getItem(LOCKOUT_STORAGE_KEY);
-    if (!raw) return { loginAttempts: 0, lockedUntil: null };
+    if (!raw) return {};
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return { loginAttempts: 0, lockedUntil: null };
-    const obj = parsed as Record<string, unknown>;
-    const attempts = typeof obj.loginAttempts === 'number' ? obj.loginAttempts : 0;
-    const until = typeof obj.lockedUntil === 'number' ? obj.lockedUntil : null;
-    // Clear expired lockouts
-    if (until !== null && Date.now() >= until) {
-      sessionStorage.removeItem(LOCKOUT_STORAGE_KEY);
-      return { loginAttempts: 0, lockedUntil: null };
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    // The per-tab shape ({ loginAttempts, lockedUntil }) written before W02-8
+    // has no `accounts` and names nobody, so it is dropped.
+    const accounts = (parsed as Record<string, unknown>).accounts;
+    if (typeof accounts !== 'object' || accounts === null) return {};
+    const out: Record<string, LoginLockout> = {};
+    for (const [key, value] of Object.entries(accounts as Record<string, unknown>)) {
+      if (typeof value !== 'object' || value === null) continue;
+      const entry = value as Record<string, unknown>;
+      const attempts = typeof entry.attempts === 'number' ? entry.attempts : 0;
+      const until = typeof entry.lockedUntil === 'number' ? entry.lockedUntil : null;
+      // An expired lock starts the account afresh, as a reload always has.
+      if (until !== null && Date.now() >= until) continue;
+      if (attempts > 0 || until !== null) out[key] = { attempts, lockedUntil: until };
     }
-    return { loginAttempts: attempts, lockedUntil: until };
+    return out;
   } catch {
-    return { loginAttempts: 0, lockedUntil: null };
+    return {};
   }
 }
 
 /** Persist lockout state to sessionStorage. */
-function saveLockoutState(loginAttempts: number, lockedUntil: number | null): void {
+function saveLockoutState(lockouts: Record<string, LoginLockout>): void {
   try {
-    if (loginAttempts === 0 && lockedUntil === null) {
+    if (Object.keys(lockouts).length === 0) {
       sessionStorage.removeItem(LOCKOUT_STORAGE_KEY);
     } else {
-      sessionStorage.setItem(LOCKOUT_STORAGE_KEY, JSON.stringify({ loginAttempts, lockedUntil }));
+      sessionStorage.setItem(LOCKOUT_STORAGE_KEY, JSON.stringify({ accounts: lockouts }));
     }
   } catch {
     // sessionStorage unavailable (e.g. private browsing quota exceeded) — ignore
   }
+}
+
+/** The lockouts with one account's entry replaced, or removed when `entry` is null. */
+function withLockout(
+  lockouts: Record<string, LoginLockout>,
+  key: string,
+  entry: LoginLockout | null
+): Record<string, LoginLockout> {
+  const next = { ...lockouts };
+  delete next[key];
+  if (entry) {
+    next[key] = entry;
+    const keys = Object.keys(next);
+    for (const stale of keys.slice(0, Math.max(0, keys.length - MAX_LOCKOUT_ACCOUNTS))) {
+      delete next[stale];
+    }
+  }
+  return next;
 }
 
 /**
@@ -217,9 +266,8 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  // Brute-force tracking (client-side defense-in-depth)
-  loginAttempts: number;
-  lockedUntil: number | null; // epoch ms
+  // Brute-force tracking (client-side defense-in-depth), per account typed
+  loginLockouts: Record<string, LoginLockout>;
 
   // MFA challenge state (set when login returns mfa_required)
   mfaRequired: boolean;
@@ -277,7 +325,7 @@ interface AuthState {
   setBottomNavSlots: (slots: string[] | null) => void;
 }
 
-const initialLockout = loadLockoutState();
+const initialLockouts = loadLockoutState();
 
 /**
  * Survives a reload: the store is in memory, and a refreshed tab would
@@ -320,8 +368,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
   error: null,
-  loginAttempts: initialLockout.loginAttempts,
-  lockedUntil: initialLockout.lockedUntil,
+  loginLockouts: initialLockouts,
   mfaRequired: false,
   mfaToken: null,
   lastLogoutPurge: null,
@@ -329,8 +376,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (credentials: LoginCredentials) => {
     // Client-side lockout check (defense-in-depth; backend enforces the real limit)
-    const { lockedUntil } = get();
-    if (lockedUntil && Date.now() < lockedUntil) {
+    const accountKey = loginAccountKey(credentials.username);
+    const lockedUntil = lockedUntilFor(get().loginLockouts, credentials.username);
+    if (lockedUntil) {
       const remainingSec = Math.ceil((lockedUntil - Date.now()) / 1_000);
       set({
         error: `Too many failed attempts. Try again in ${remainingSec} second${remainingSec === 1 ? '' : 's'}.`,
@@ -354,10 +402,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isLoading: false,
           mfaRequired: true,
           mfaToken: loginResponse.mfa_token,
-          loginAttempts: 0,
-          lockedUntil: null,
+          loginLockouts: withLockout(get().loginLockouts, accountKey, null),
         });
-        saveLockoutState(0, null);
+        saveLockoutState(get().loginLockouts);
         return;
       }
 
@@ -403,13 +450,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       // Reset brute-force counters on successful login
-      saveLockoutState(0, null);
-      set({ isLoading: false, loginAttempts: 0, lockedUntil: null });
+      // Only this account's count: another member's failures in the tab
+      // stay theirs.
+      set({ isLoading: false, loginLockouts: withLockout(get().loginLockouts, accountKey, null) });
+      saveLockoutState(get().loginLockouts);
     } catch (err: unknown) {
       const appError = toAppError(err);
 
       // Track failed attempts for client-side progressive lockout
-      const attempts = get().loginAttempts + 1;
+      const attempts = (get().loginLockouts[accountKey]?.attempts ?? 0) + 1;
       let newLockedUntil: number | null = null;
 
       if (attempts >= LOGIN_LOCKOUT_THRESHOLD) {
@@ -430,11 +479,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         newLockedUntil = Date.now() + retryAfter * 1_000;
       }
 
-      saveLockoutState(attempts, newLockedUntil);
+      const loginLockouts = withLockout(get().loginLockouts, accountKey, {
+        attempts,
+        lockedUntil: newLockedUntil,
+      });
+      saveLockoutState(loginLockouts);
       set({
         isLoading: false,
-        loginAttempts: attempts,
-        lockedUntil: newLockedUntil,
+        loginLockouts,
         error: getErrorMessage(err, 'Sign-in failed. Try again.'),
       });
       throw Object.assign(new Error(appError.message), appError);

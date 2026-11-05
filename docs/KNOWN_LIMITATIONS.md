@@ -1576,6 +1576,23 @@ account lockout and the suspicious-IP throttle already cover the cross-account
 case. Until then, with Redis running, the cost is a member asked to wait a
 minute.
 
+### Resolved: the sign-in screen's own back-off is per account (W02-8, 2026-11-05)
+
+**Owner decision 2026-11-05: per account.** The sign-in page's failed-attempt
+counter used to be one per tab. From the fifth failure it disabled Sign in
+for `2s × 2^(n−5)`, capped at five minutes, whatever name was typed. So at a
+station computer one member's mistakes held the next member at the sign-in
+screen. The workflow review's W02 second pass drove it.
+
+`authStore` (`frontend/src/stores/authStore.ts`) now keeps `loginLockouts`,
+one entry per account, keyed the way the server folds a name (trimmed,
+lower-cased). It keeps at most 20 accounts per tab. A successful sign-in
+clears only that account, and the sign-in page shows the wait for the name in
+the field. A `429` still sets that account's wait from `Retry-After`. If the
+server's per-address backstop is what refused, every other account reaches
+the server and gets its own `429`, so nothing is lost by keying the client
+per account. Tests: `authStore.test.ts`, `LoginPage.test.tsx`.
+
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
 **Accepted.** An anonymous suggestion is stored with no record of its author:
