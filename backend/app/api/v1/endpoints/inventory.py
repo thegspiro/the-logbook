@@ -365,6 +365,9 @@ async def list_categories(
         exclude_item_types=MEDICAL_ITEM_TYPES,
         active_only=active_only,
     )
+    await service.flag_duplicate_category_names(
+        current_user.organization_id, categories
+    )
     return categories
 
 
@@ -4978,6 +4981,8 @@ async def put_away_items(
         area_id=area_id,
         item_ids=request.item_ids,
         organization_id=current_user.organization_id,
+        # A barcode put-away counts as seeing each item (Items Not Seen).
+        barcode_scanned_by=current_user.id,
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Storage area not found")

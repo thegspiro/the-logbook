@@ -432,6 +432,9 @@ class InventoryCategory(Base):
         # InventoryCategoryResponse (category_item_counts); declared only for
         # the type checker, as on InventoryItem.
         item_count: Optional[int]
+        # Not a column either: stamped by the category lists
+        # (flag_duplicate_category_names) on a grandfathered duplicate name.
+        duplicate_name: bool
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     organization_id: Mapped[str] = mapped_column(
@@ -3265,12 +3268,24 @@ class InventoryNfcScanAction(str, enum.Enum):
     # An item was tapped during a shelf audit (found there, or found there
     # unexpectedly). ``storage_area_id`` is the audited shelf.
     AUDIT = "audit"
+    # The two below are not taps but are sightings all the same, so they share
+    # this trail and its writer (``app/services/inventory_sightings.py``)
+    # instead of a second store the Items Not Seen report would also read.
+    #
+    # The item was created or imported. Creation counts as seeing it (owner
+    # decision W44-2, 2026-11-01), so a fresh import no longer heads Items Not
+    # Seen as "Never". ``storage_area_id`` is where it was entered as being.
+    CREATED = "created"
+    # The item was scanned by barcode onto a storage area (Put away panel or a
+    # contents check). Same fields as PUT_AWAY; no tag.
+    BARCODE_PUT_AWAY = "barcode_put_away"
 
 
 class InventoryNfcScan(Base):
-    """One staff tap of an NFC tag on an item — the "last seen" trail.
+    """One sighting of an item — the "last seen" trail.
 
-    Only taps by ``inventory.manage`` holders are written (see
+    Mostly staff taps of an NFC tag; also an item's creation and a barcode
+    put-away (see ``InventoryNfcScanAction``). Only taps by ``inventory.manage`` holders are written (see
     ``InventoryNfcService.record_scan``'s callers). A member opening a written
     tag from their own phone leaves no row: a tap log of everybody would be a
     record of where each member was, which is not what the quartermaster

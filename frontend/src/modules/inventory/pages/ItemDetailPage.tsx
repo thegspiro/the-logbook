@@ -55,6 +55,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { AssignTermsModal, type AssignTerms } from '../components/AssignTermsModal';
+import { UnassignItemModal, type UnassignReturn } from '../components/UnassignItemModal';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatHistoryDetails } from './itemHistoryDetails';
 import { onHandQuantity } from '../utils/onHand';
@@ -214,6 +215,9 @@ const ItemDetailPage: React.FC = () => {
   // whether the assignment is permanent or temporary.
   const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
   const [assigning, setAssigning] = useState(false);
+  // Unassigning asks first and records the return condition.
+  const [showUnassign, setShowUnassign] = useState(false);
+  const [unassigning, setUnassigning] = useState(false);
 
   // NFPA compliance + exposure modals
   const [showNfpaModal, setShowNfpaModal] = useState(false);
@@ -332,14 +336,18 @@ const ItemDetailPage: React.FC = () => {
     }
   };
 
-  const handleUnassign = async () => {
+  const handleUnassign = async (details: UnassignReturn) => {
     if (!id) return;
+    setUnassigning(true);
     try {
-      await inventoryService.unassignItem(id);
+      await inventoryService.unassignItem(id, details);
       toast.success('Item unassigned');
+      setShowUnassign(false);
       void loadItem();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to unassign item'));
+    } finally {
+      setUnassigning(false);
     }
   };
 
@@ -557,7 +565,7 @@ const ItemDetailPage: React.FC = () => {
               item.assigned_to_user_id ? (
                 canManage && (
                   <div className="mt-3">
-                    <button onClick={() => void handleUnassign()} className="btn-secondary btn-sm">
+                    <button onClick={() => setShowUnassign(true)} className="btn-secondary btn-sm">
                       Unassign
                     </button>
                   </div>
@@ -666,6 +674,14 @@ const ItemDetailPage: React.FC = () => {
         submitting={assigning}
         onClose={() => setAssignTarget(null)}
         onConfirm={(terms) => void handleAssign(terms)}
+      />
+      <UnassignItemModal
+        isOpen={showUnassign}
+        itemName={item.name}
+        memberName={item.assigned_to_name ?? 'the member it is assigned to'}
+        submitting={unassigning}
+        onClose={() => setShowUnassign(false)}
+        onConfirm={(details) => void handleUnassign(details)}
       />
 
       {/* Edit Item Modal */}

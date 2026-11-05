@@ -397,7 +397,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_nfc_audit_digests`](#inventory_nfc_audit_digests) | `InventoryNfcAuditDigest` | 5 | One "shelf audits overdue" digest sent to an organization. |
 | [`inventory_nfc_audit_items`](#inventory_nfc_audit_items) | `InventoryNfcAuditItem` | 10 | One item's line in a shelf audit. |
 | [`inventory_nfc_audits`](#inventory_nfc_audits) | `InventoryNfcAudit` | 13 | One shelf audit: the items tapped on a storage area, compared with the |
-| [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One staff tap of an NFC tag on an item — the "last seen" trail. |
+| [`inventory_nfc_scans`](#inventory_nfc_scans) | `InventoryNfcScan` | 9 | One sighting of an item — the "last seen" trail. |
 | [`inventory_nfc_tags`](#inventory_nfc_tags) | `InventoryNfcTag` | 14 | An NFC tag physically attached to an inventory item, a storage area, or |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
 | [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
@@ -6415,7 +6415,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **InventoryNfcScan** · `app/models/inventory.py`
 
-> One staff tap of an NFC tag on an item — the "last seen" trail. Only taps by ``inventory.manage`` holders are written (see ``InventoryNfcService.record_scan``'s callers). A member opening a written tag from their own phone leaves no row: a tap log of everybody would be a record of where each member was, which is not what the quartermaster asked for. The foreign keys other than the organization's are ``SET NULL`` so the trail outlives an unlinked tag, a deleted storage area, or a departed member; only deleting the item itself takes its trail with it.
+> One sighting of an item — the "last seen" trail. Mostly staff taps of an NFC tag; also an item's creation and a barcode put-away (see ``InventoryNfcScanAction``). Only taps by ``inventory.manage`` holders are written (see ``InventoryNfcService.record_scan``'s callers). A member opening a written tag from their own phone leaves no row: a tap log of everybody would be a record of where each member was, which is not what the quartermaster asked for. The foreign keys other than the organization's are ``SET NULL`` so the trail outlives an unlinked tag, a deleted storage area, or a departed member; only deleting the item itself takes its trail with it.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -6423,7 +6423,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `item_id` | VARCHAR(36) | no | FK |  | → `inventory_items.id` ON DELETE CASCADE |
 | `tag_id` | VARCHAR(36) | yes | FK |  | → `inventory_nfc_tags.id` ON DELETE SET NULL |
-| `action` | ENUM(`lookup`, `put_away`, `audit`) | no |  |  |  |
+| `action` | ENUM(`lookup`, `put_away`, `audit`, `created`, `barcode_put_away`) | no |  |  |  |
 | `storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
 | `from_storage_area_id` | VARCHAR(36) | yes | FK |  | → `storage_areas.id` ON DELETE SET NULL |
 | `scanned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |

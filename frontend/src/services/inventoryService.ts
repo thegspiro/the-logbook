@@ -403,7 +403,7 @@ export const inventoryService = {
 
   async unassignItem(
     itemId: string,
-    options?: { return_condition?: string; return_notes?: string }
+    options?: { return_condition?: string | undefined; return_notes?: string | undefined }
   ): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/inventory/items/${itemId}/unassign`, {
       return_condition: options?.return_condition,
