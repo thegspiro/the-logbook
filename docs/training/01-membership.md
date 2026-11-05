@@ -387,6 +387,15 @@ A supervisor is also emailed when a member of their crew asks for time off, and
 can approve or deny the request from Scheduling's requests list alongside the
 scheduling officers. See [Scheduling](./03-scheduling.md).
 
+**Shift & Call History** _(2026-11-04)_. The profile shows the member's hours,
+calls and outside-agency hours by month, year and all time (the same figures My
+Hours shows the member). Visible to the member and to holders of **View
+scheduling reports**.
+
+**Member since** on the profile and ID cards counts credited service, so a
+returning member's years carry over. Officers can also preview the property a
+member would return from their profile before they leave.
+
 **Qualifications** marks each entry **In force** or **Not in force**, the way
 shift sign-up reads it today. It also says whether the entry is
 **From a training record** or **Entered directly**. Officers can add, edit

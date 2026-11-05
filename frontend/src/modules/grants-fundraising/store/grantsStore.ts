@@ -64,6 +64,14 @@ interface GrantsState {
   createDonation: (data: DonationCreatePayload) => Promise<Donation>;
   addBudgetItem: (applicationId: string, data: Partial<GrantBudgetItem>) => Promise<GrantBudgetItem>;
   addExpenditure: (applicationId: string, data: Partial<GrantExpenditure>) => Promise<GrantExpenditure>;
+  updateBudgetItem: (applicationId: string, itemId: string, data: Partial<GrantBudgetItem>) => Promise<GrantBudgetItem>;
+  deleteBudgetItem: (applicationId: string, itemId: string) => Promise<void>;
+  updateExpenditure: (
+    applicationId: string,
+    expenditureId: string,
+    data: Partial<GrantExpenditure>
+  ) => Promise<GrantExpenditure>;
+  deleteExpenditure: (applicationId: string, expenditureId: string) => Promise<void>;
   addComplianceTask: (applicationId: string, data: Partial<GrantComplianceTask>) => Promise<GrantComplianceTask>;
   updateComplianceTask: (
     applicationId: string,
@@ -304,6 +312,55 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({
         error: handleStoreError(error, 'Failed to record expenditure'),
       });
+      throw error;
+    }
+  },
+
+  // The four below re-fetch the application, as the add actions do: a line's
+  // amount spent is recomputed on the server from its expenditures, so the
+  // page reads the totals back rather than adjusting them itself.
+  updateBudgetItem: async (applicationId, itemId, data) => {
+    try {
+      const item = await grantsService.updateBudgetItem(applicationId, itemId, data);
+      const application = await grantsService.getApplication(applicationId);
+      set({ selectedApplication: application, currentApplication: application });
+      return item;
+    } catch (error) {
+      set({ error: handleStoreError(error, 'Failed to update budget item') });
+      throw error;
+    }
+  },
+
+  deleteBudgetItem: async (applicationId, itemId) => {
+    try {
+      await grantsService.deleteBudgetItem(applicationId, itemId);
+      const application = await grantsService.getApplication(applicationId);
+      set({ selectedApplication: application, currentApplication: application });
+    } catch (error) {
+      set({ error: handleStoreError(error, 'Failed to delete budget item') });
+      throw error;
+    }
+  },
+
+  updateExpenditure: async (applicationId, expenditureId, data) => {
+    try {
+      const expenditure = await grantsService.updateExpenditure(applicationId, expenditureId, data);
+      const application = await grantsService.getApplication(applicationId);
+      set({ selectedApplication: application, currentApplication: application });
+      return expenditure;
+    } catch (error) {
+      set({ error: handleStoreError(error, 'Failed to update expenditure') });
+      throw error;
+    }
+  },
+
+  deleteExpenditure: async (applicationId, expenditureId) => {
+    try {
+      await grantsService.deleteExpenditure(applicationId, expenditureId);
+      const application = await grantsService.getApplication(applicationId);
+      set({ selectedApplication: application, currentApplication: application });
+    } catch (error) {
+      set({ error: handleStoreError(error, 'Failed to delete expenditure') });
       throw error;
     }
   },

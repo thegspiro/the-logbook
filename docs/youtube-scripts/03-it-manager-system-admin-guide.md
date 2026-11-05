@@ -88,6 +88,15 @@ IP Security, Platform Analytics.]**
 
 **[CALLOUT: "Disabling a module hides it — data is preserved"]**
 
+**[SCREEN: Settings → Modules → Additional Modules, with History switched on]**
+
+> "Some modules are opt-in, under **Additional Modules**. One worth knowing is
+> **History**, added in November 2026 — the department's archive of past
+> members, the Honor Roll, and published records. It's off until you switch it
+> on, and a History record keeps its own copy of a person's details, so it
+> isn't touched when you anonymize a member's account. We'll come back to that
+> in the privacy chapter."
+
 ### BRANDING & APPEARANCE (4:30 – 5:00)
 
 > "Branding is your logo. Upload it under General, Profile — a PNG or JPEG, up
@@ -186,8 +195,12 @@ member. Show the success confirmation.]**
 application briefly to show the columns.]**
 
 > "The template has columns for name, email, membership number, address, phone,
-> rank, role, station, platoon, and two emergency contacts. Fill this in with
-> your department roster. A few tips:"
+> rank, role, station, platoon, and two emergency contacts — plus **memberClass**
+> and **memberStatus**, because a member's standing is two separate questions
+> now: Operational, Administrative or Social for the class, and Probationary,
+> Regular, Life, or one of your own tiers for the status. The older
+> `membershipType` column still works; if you fill in both, the pair wins. Fill
+> this in with your department roster. A few tips:"
 
 **[CALLOUT: Tips list]**
 
@@ -273,14 +286,21 @@ errorReason column]**
 
 **[SCREEN: Navigate to the Members Admin Hub (MembersAdminHub)]**
 
-> "Once members are imported, the Admin Hub is your command center. From here
-> you can see every member, filter by position or membership type, and perform
-> bulk actions."
+> "Once members are imported, the Admin Hub is your command center. It opens
+> with four headline numbers and a Needs attention list, then three area cards —
+> **Roster**, **Add & Import**, and **Settings** — with a strip of that area's
+> pages beneath. In the roster you can see every member, filter by position,
+> member class or membership status, and perform bulk actions. Search by name,
+> or type a member's complete email address — part of an address no longer
+> matches, because email addresses are now stored encrypted."
 
 **[SCREEN: Show the admin hub with filters, search, and member list]**
 
 > "Click on any member to see their full profile — personal info, position
-> assignments, training records, attendance history, equipment assignments."
+> assignments, training records, attendance history, equipment assignments. On
+> the edit page, **Member class** and **Membership status** are two controls in
+> Department Information. That's how you record a probationary treasurer, or a
+> life member who still rides."
 
 **[SCREEN: Click into a member profile. Show the detail tabs.]**
 
@@ -418,6 +438,21 @@ tab.]**
 > "Members use any TOTP-compatible authenticator app. The setup flow is simple —
 > scan a QR code, enter the verification code, done."
 
+**[SCREEN: Settings → Authentication → MFA Policy: the Require two-factor authentication switch and the Allow passkeys switch. Then the sign-in second step showing "Use your passkey" above the 6-digit code field.]**
+
+> "Since October twenty-sixth, a **passkey** works as the second step too —
+> Face ID, a fingerprint or a device PIN instead of a six-digit code. Members add
+> one under My Account, Security, on the **Passkeys** card, up to three, and at
+> sign-in they choose **Use your passkey**. Either method is enough, and a wrong
+> passkey counts toward the account lock like a wrong code. In the MFA Policy
+> card, **Allow passkeys** is on by default; turn it off and members can't add
+> new ones, though existing passkeys keep working until someone removes them."
+
+> "Passkeys reach the sensitive-action prompt as well: where I said a fresh
+> authenticator code, it can be **Use your passkey** — and a member whose only
+> second step is a passkey must use it there. If a member loses one phone, Reset
+> MFA lets you remove just that passkey rather than everything."
+
 ### IP SECURITY (15:30 – 16:30)
 
 **[SCREEN: Go to `/ip-security` (IPSecurityAdminPage) — "Review IP exception
@@ -433,6 +468,13 @@ Exceptions, Blocked Attempts and Blocked Countries tabs.]**
 > and how many days. You review those under **Pending Requests**, see every one
 > under **All Exceptions**, and see what was turned away under **Blocked
 > Attempts**."
+
+**[CALLOUT: "Someone else must approve it — never the member, never the filer"]**
+
+> "Separation of duties applies here: the member an exception is for, and the
+> officer who filed it, are both refused when they try to approve it. In a
+> one-administrator department, that means granting the permission to a second
+> member before the first exception can be decided."
 
 **[CALLOUT: "An approved exception does not currently lift a country block"]**
 
@@ -593,6 +635,24 @@ thresholds]**
 
 **[SCREEN: Show the training programs configuration]**
 
+**[SCREEN: Training Admin → Settings & Data → Compliance Settings, then Compliance Reporting → Configure. Thresholds tab with the Months on leave choice; Profiles tab with "Applies to Members Holding a Position".]**
+
+> "How compliance is graded lives in one place, now listed under **Settings &
+> Data** as **Compliance Settings** as well as behind **Configure** in
+> Compliance Reporting. Saving needs the settings or compliance-management
+> permission; training management alone opens the hub but doesn't show
+> Configure."
+
+> "Two rules there are yours to choose. **Months on leave** decides what a
+> partly-covered month is worth: **Full month**, the default, excuses the whole
+> month if leave touches any day of it; the two 15-day rules excuse it
+> proportionally or by half. Before November second, a month was excused only
+> at fifteen days, so on upgrade some members' hours, shift and call targets
+> drop. Pick a 15-day rule if your policy needs one. And a **compliance
+> profile** can now apply to members holding a particular **position**, not
+> only to a membership type — useful when two groups share a class and status
+> but owe different training."
+
 ### SCHEDULING SETTINGS (20:00 – 21:00)
 
 **[SCREEN: Navigate to Scheduling → Shift Templates (ShiftTemplatesPage)]**
@@ -630,6 +690,18 @@ Outside Apparatus is new (2026-09-27). New footage needed.]**
 > so you can preview what members see. Voting method, victory condition and
 > ballot secrecy are chosen per election, on the election's own form."
 
+**[SCREEN: Elections → Settings → Voter Eligibility. Regular business meeting vs Annual meeting at the top; Rules every voter must meet — meeting attendance and a waiting period per member type.]**
+
+> "One section matters most for the secretary's life and yours: **Voter
+> Eligibility**. It holds the department's default rules for who may vote —
+> a meeting-attendance requirement and a waiting period for each member type,
+> from none, to a number of months, to never eligible. There's one set for
+> regular business meetings and, if you switch it on, a different set for the
+> annual meeting. Each new election copies the defaults when it's created and
+> can change its own copy until voting opens. Changing the settings later never
+> alters an election that already exists, and a secretary's voter override still
+> lets in a member who fails the rules. Each change saves as you make it."
+
 **[TRANSITION: Integrations]**
 
 ---
@@ -646,6 +718,41 @@ Outside Apparatus is new (2026-09-27). New footage needed.]**
 > and other organization-level connections."
 
 **[SCREEN: Show the integrations dashboard with available/connected services]**
+
+**[SCREEN: Try to connect PayPal with the key fields empty — the message "PayPal needs: client_id, client_secret"]**
+
+> "One change to know when you connect things. **PayPal, Documenso, Cal.com and
+> Salesforce** now ask for their keys first. Leave them blank and it refuses,
+> naming what's missing. Before, they connected with empty keys and showed as
+> connected until the first test failed. Addresses have to be public ones too —
+> a station computer or a home router address is refused."
+
+### HISTORICAL DATA IMPORT (ADDED 2026-11-05)
+
+**[SCREEN: Integrations → the Historical Data Import card, Open. Upload, column mapping, then the sorted-rows check.]**
+
+> "At the top of the dashboard there's a card you'll use once, and it matters:
+> **Historical Data Import**. It brings in the hours members logged in your
+> previous system — shifts on a unit, on-call time, training, and administrative
+> hours — from one CSV export. By default only the IT Manager can open it."
+
+> "Upload the export and name the source system — use the same name every time,
+> so rows already brought in are recognised and skipped. Say how to read it:
+> confirm the detected columns, and mark each hours column as shift, on-call,
+> training or administrative. Check how the rows sorted, then send shifts to
+> review. Shift and on-call rows become monthly review batches where you match
+> members, units and crews before you commit."
+
+**[SCREEN: The Training section — subjects mapped to library courses; then the Drills section and the "Create the held drills?" confirmation]**
+
+> "Two additions in November. **Training rows** become completed training
+> records in one commit: you map each subject to a library course, or let it
+> import as continuing education. And **company drills**: a drill date counts as
+> held when enough members logged it — three by default. Each held drill becomes
+> one past, finalized training session, linked to the session-attendance
+> requirements you choose, so those requirements grade your history correctly.
+> A date fewer members logged stays an ordinary record. Running the same file
+> twice is safe, and the log tells you what became of every row."
 
 ### SALESFORCE SERVICE-ACCOUNT SYNC (22:30 – 24:30)
 
@@ -740,6 +847,25 @@ public https address and its source line.]**
 > on. That is far and away the commonest reason a correct host and port still
 > won't authenticate."
 
+**[SCREEN: Gmail selected, **Service account** chosen — the key file picked, the client ID shown, the three setup steps]**
+
+> "Gmail on Google Workspace has a second method, **Service account**, and it's
+> the better one for an IT manager because a password change doesn't break it.
+> Choosing it needs the `admin.access` permission — yours by default — and
+> anyone else sees it greyed out. In Google Cloud you enable the Gmail API,
+> create a service account and download its JSON key. Upload the key here and
+> the form shows its **client ID**. Then, in the Google Admin console, under
+> Security, API controls, **Domain-wide delegation**, add that client ID and
+> authorize only the `gmail.send` scope. Use an active user in your domain as
+> the account email, save, and run **Test Connection** — it checks that Google
+> will let the key send as that address, and sends nothing."
+
+**[CALLOUT: "The key can send as anyone in the domain — keep it in a Google Cloud project used only for this"]**
+
+> "Google can't limit that key to one mailbox, so treat it like a master key.
+> And if you later change the account email address, the saved key is cleared
+> and you upload it again."
+
 **[CALLOUT: "'Other' stores nothing and cannot send — it is not a fallback"]**
 
 > "One trap to call out, because it has bitten departments. The button now
@@ -806,6 +932,31 @@ current address and where it came from; then Change address]**
 **[PRODUCTION NOTE — 2026-10-04. New beat (2026-09-25), about 20 seconds;
 re-time Chapter 7. Out of the box only the IT Manager's wildcard holds
 `system.manage_link_domain`. Use a documentation domain on screen.]**
+
+### EMAIL TEMPLATES: OFF MEANS OFF (ADDED 2026-11-05)
+
+**[SCREEN: Communications → Email Templates, the Off filter; then the Password Reset template with its "Always sent" label and the switch dimmed]**
+
+> "Once email works, look at **Communications, Email Templates**. Each template
+> can be switched off — and since October twenty-seventh, **off means off**. The
+> email is not sent at all. It used to fall back to the built-in wording and keep
+> going out, so a department that switched templates off years ago may find
+> those emails have stopped. Before you upgrade, open the **Off** filter and
+> switch back on anything you still want sent."
+
+> "Seven emails can't be switched off, because their recipient couldn't get the
+> content any other way: Password Reset, IT Password Notification, Welcome,
+> Ballot Notification, Application Status Link, and the two applicant
+> follow-up-form emails. They read **Always sent**, with the switch dimmed."
+
+**[SCREEN: The category list — Prospective Members, then Performance Evaluations opened]**
+
+> "Two groups are new. **Prospective Members** now holds the applicant emails —
+> status link, going inactive, withdrawn, follow-up form and the rest — so you
+> can edit the wording. And **Performance Evaluations** holds the member
+> evaluation emails — Evaluation Waiting on You, Step Due Soon, Step Overdue,
+> Finalized, and the amended, response and deleted notices. They name the
+> member, period, step and due date, and never a rating or comment."
 
 ### CALENDAR SYNC (25:30 – 26:00)
 
@@ -877,17 +1028,26 @@ department's logo on both.]**
 
 **[SCREEN: `SECURITY_REQUIRE_TLS=true` in the `.env`.]**
 
-> "While you're in that file — `SECURITY_REQUIRE_TLS`. If your database and Redis
-> traffic crosses any network you don't control, turn it on. Without it, a
-> deployment running those connections in cleartext gets a boot **warning**, which
-> blocks nothing, so it can run that way indefinitely. Turned on, it becomes a
-> refusal to start."
+> "While you're in that file — `SECURITY_REQUIRE_TLS`. It defaults to **true**:
+> in production, a deployment whose database and Redis connections are cleartext
+> is a blocking finding, and the app refuses to start. Set it to false only as an
+> explicit risk acceptance — a trusted private network, a service mesh, the
+> bundled MySQL and Redis on a private Docker network."
 
-**[CALLOUT: "Defaults to false so upgrading can't refuse to boot your instance"]**
+**[CALLOUT: "TLS is on offer, not just a refusal — scripts/tls-setup.sh"]**
 
-> "It ships off deliberately — plenty of deployments terminate TLS somewhere else,
-> in a VPC or a service mesh, and forcing it on would refuse to start a perfectly
-> secure setup. That makes it your call, which is why it's worth making."
+**[SCREEN: Terminal — `./scripts/tls-setup.sh`, `./scripts/tls-setup.sh --print-env`, then `./scripts/tls-enforce.sh`; `.env` with `DB_REQUIRE_TLS` and `REDIS_REQUIRE_TLS`.]**
+
+> "Since October twenty-fourth you can make the bundled database and Redis
+> actually speak TLS. Run `scripts/tls-setup.sh` on the host: it creates a private
+> certificate authority plus server and client certificates, and `--print-env`
+> gives you the lines to add to `.env`. At first, plaintext still works, so
+> nothing breaks while you move over. When you're ready, run
+> `scripts/tls-enforce.sh` — it lists any client still connecting without TLS —
+> and then set `DB_REQUIRE_TLS=true` and `REDIS_REQUIRE_TLS=true`. Plaintext is
+> refused, Redis also requires the client certificate, and a server that can't
+> honour the switch refuses to start. Administrators see a banner thirty days
+> before a certificate expires. Keep the CA's private key off the server."
 
 ### MONITORING WITH SENTRY (26:30 – 27:00)
 
@@ -1315,6 +1475,23 @@ bottom of the page]**
 > membership view no longer covers it. And **Print ID Cards** makes plastic-card
 > sized pages — 3.375 by 2.125 inches — that print through any card printer's
 > normal driver."
+
+**[SCREEN: Members Admin → Member ID cards — the Cards, Coverage, Tap log and Settings tabs. Then the Card Readers page, and Events Admin → Card Check-ins.]**
+
+> "Cards are no longer managed one profile at a time. **Members Admin, Member ID
+> cards** lists every card in four tabs: **Cards**, where you can suspend,
+> reactivate, report lost or revoke several at once; **Coverage**, which shows
+> current members without a working card and cards still held by former members;
+> **Tap log**, with every tap — refused ones included — and an Export CSV; and
+> **Settings**, where you choose how many months to keep the tap log, three to
+> eighty-four, twenty-four by default. When a member becomes inactive, suspended,
+> dropped or archived, their active cards suspend themselves, and come back only
+> if the member does."
+
+> "For rooms with a kiosk, the **Card Readers** page lists each room, whether its
+> reader is on, and the last seven days of taps and refusals; Events Admin has a
+> **Card Check-ins** page for taps against events. A tap from a card nobody
+> registered is logged as Unknown card, without the card's number."
 
 **[PRODUCTION NOTE — 2026-10-06. New beat, about 50 seconds; new footage for
 Print ID Cards and the Accept old badges switch (0549b7e0, 5273c49a). Never film
@@ -1901,6 +2078,22 @@ docker compose exec mysql mysqldump -u root -p intranet_db > backup_$(date +%Y%m
 > "**File Storage:** Uploaded documents, member photos, logos, and attachments
 > are stored in the uploads volume. Back this up alongside the database."
 
+> "**Encrypted at rest:** personal phone numbers, postal addresses, email
+> addresses, dates of birth, emergency contacts and leave reasons are stored as
+> ciphertext, and the upgrade encrypts the existing values in place. Screens and
+> exports look the same. Two consequences: **backups taken before the upgrade
+> still hold the plain values** for as long as you keep them, so expire or
+> re-encrypt them on your data-protection schedule; and losing `ENCRYPTION_KEY`
+> and `ENCRYPTION_SALT` loses those values."
+
+> "**Departments with their own file store:** if a department moved its files to
+> an S3 or MinIO bucket or a Google Shared Drive, the nightly backup does not
+> download them. Check with
+> `python scripts/migrate_uploads_to_remote.py --stores` — that's the move
+> command's new name; the old `--buckets` flag still works. On a Shared Drive, a
+> deleted file sits in the drive's trash for thirty days and a drive manager can
+> restore it with its id intact, so don't empty that trash by hand."
+
 > "**Audit archives:** One more, and it's easy to miss. When old audit entries
 > pass the seven-year retention period, they're exported to archive files and
 > removed from the database. Those archives are the _only_ copy of your oldest
@@ -2047,6 +2240,12 @@ name → **Anonymize** enabled (do not confirm).]**
 
 > "You type their name to confirm, and afterwards they leave the roster — they
 > can't be reactivated."
+
+> "One more thing it leaves alone: a **History** record. If your department
+> keeps one for the member, it holds its own copy of their name and details, and
+> anonymizing doesn't touch it. If the request should reach that record too, ask
+> your historian to edit or delete it — a published record has to go back to
+> draft first."
 
 > "It's irreversible, it only works on members who've already been dropped or
 > archived, and you can't run it on yourself. Do it _after_ departure clearance
@@ -2268,3 +2467,29 @@ department's printer address.
 
 **EDITOR:** ~5:00 on top of everything above. Re-time Chapters 2–10 and the
 clip table from the recorded take.
+
+### Added 2026-11-05 — written in-script, not queued
+
+Beats added from the 2026-10-24 through 2026-11-05 currency flags. All are
+narration only; none changes a chapter's order.
+
+- **Chapter 3:** member class and membership status in the import template,
+  the Members Admin area cards, and email search needing a complete address.
+- **Chapter 5:** passkeys (Allow passkeys, Use your passkey), and the
+  second-person rule on IP exceptions.
+- **Chapter 6:** Compliance Settings (Months on leave, profiles by position)
+  and Election Settings, Voter Eligibility.
+- **Chapter 7:** keys-first connecting, **Historical Data Import** (training
+  rows and company drills), the Gmail **Service account** method, **Email
+  Templates: off means off** with its seven always-sent emails and the
+  Performance Evaluations group, and the DB/Redis TLS scripts. The
+  `SECURITY_REQUIRE_TLS` beat said it defaults to false; it defaults to true,
+  and the beat is corrected.
+- **Chapter 9:** Member ID cards, Card Readers and Card Check-ins; encryption at
+  rest and its effect on older backups; `migrate_uploads_to_remote.py` and the
+  Google Drive trash.
+- **Chapter 10:** History records are not anonymized.
+
+**EDITOR:** roughly 6:00 on top of everything above. Re-time Chapters 2–10 and
+the clip table from the recorded take. New footage needed for every screen
+named above; use made-up keys, client IDs and addresses on screen.

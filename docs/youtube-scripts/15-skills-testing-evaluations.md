@@ -219,6 +219,47 @@ section chips across the top, the "scored / total" count and save-status line.]*
 > the biggest, reddest button on every single section **ended the evaluation**,
 > while moving on was a small grey one next to it. That was backwards."
 
+### NO SIGNAL (added 2026-11-05)
+
+**[SCREEN: Phone in airplane mode on the active test. The offline banner
+appears; the save line reads **Saved on this device**.]**
+
+> "Fire stations and training grounds are not known for their signal. If it
+> drops mid-test, keep scoring. A banner says you're offline, the save line reads
+> **Saved on this device**, and the scoring is sent when the signal comes back."
+
+> "Two habits. Open the test once with signal before you head somewhere without
+> it, so the phone has a copy of the tests you're examining. And if you submit
+> with no signal, it shows **Submitted on this device** — the test is scored when
+> the phone reconnects, and there's no result on the phone until then."
+
+**[CALLOUT: "Chrome and Edge send it even if The Logbook is closed. Safari: open the app."]**
+
+> "In Chrome or Edge, including on Android, the scoring goes out in the
+> background once you have signal, even with The Logbook closed. Safari on an
+> iPhone or iPad sends it only when you next open The Logbook with a
+> connection."
+
+**[SCREEN: Sign Out with an unsent evaluation: the warning, **Stay signed in**.]**
+
+> "Sign Out checks first. If evaluations are still waiting, it tries to send
+> them, and if it can't, it warns you. Sign out anyway and they're deleted from
+> the device, so the next person on a shared station can't read them. The
+> automatic sign-out after you've been idle can't ask — so it keeps unsent
+> evaluations on the device for seven days, and only the same examiner signing
+> back in can see and send them."
+
+**[SCREEN: A refused evaluation — red banner with the reason, **Discard from
+this device**.]**
+
+> "If The Logbook refuses one — the test was voided or completed elsewhere —
+> you get the reason, and the scoring stays on the device until you choose to
+> discard it. It's never thrown away on its own."
+
+**[PRODUCTION: about 60 seconds; re-time Chapter 3 onward. Offline footage needs
+a device with airplane mode; never film a shared station's sign-in page with
+another member's unsent work.]**
+
 ### CLEARING A MIS-TAP (added 2026-08-09)
 
 **[SCREEN: Tap Pass, then tap Pass again to clear it. Same with a score.]**
