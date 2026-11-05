@@ -1,5 +1,34 @@
 # Known Limitations & Open Decisions
 
+## Medical Screening — What Is Still Plaintext at Rest (MS-15, 2026-11-05)
+
+**Decided 2026-11-04: encrypt the status first.** `screening_records.status` is
+now AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
+dump no longer says which member _failed_ a screening. The provider, results
+and notes were already encrypted (MS-1). Searchable fingerprints were ruled
+out: with seven statuses and six types, a keyed hash puts every "failed"
+record under one value, and one known record reveals the rest.
+
+Still plaintext, and each waiting on its own decision:
+
+- **The screening type.** A dump still reads "this member — psychological
+  evaluation — 25 Oct 2026", without the outcome. Encrypting it is the same
+  shape of change as the status: the pipeline gate's lookup by type, the
+  Members hub's grouping by type and the records list's type filter move to
+  Python, and `screening_type` leaves `enum_normalization`.
+- **The requirement link reveals the type anyway.** `requirement_id` is a
+  plain foreign key to a requirement whose name and type are plaintext (for
+  example "Pre-membership Drug Screen"), and the record form links most
+  records. Encrypting the type without it protects only unlinked records.
+  Encrypting the link means giving up the database foreign key, so deleting a
+  requirement would clear its records' links in code instead.
+- **The audit log names the type.** Creating a record writes `screening_type`
+  into the audit entry, and the records-list filters are logged too. New
+  entries could stop doing that. Existing ones cannot be scrubbed: the audit
+  log is hash-chained, so rewriting a row breaks the chain.
+- **The dates and the member link** stay plaintext: grading, the expiring list
+  and every screen filter and join on them.
+
 ## Owner Decisions of 2026-11-01
 
 The owner answered every open question in this file on 2026-11-01, from a page
@@ -1546,6 +1575,23 @@ count, or to key the backend limiter on the account as well as the address;
 account lockout and the suspicious-IP throttle already cover the cross-account
 case. Until then, with Redis running, the cost is a member asked to wait a
 minute.
+
+### Resolved: the sign-in screen's own back-off is per account (W02-8, 2026-11-05)
+
+**Owner decision 2026-11-05: per account.** The sign-in page's failed-attempt
+counter used to be one per tab. From the fifth failure it disabled Sign in
+for `2s × 2^(n−5)`, capped at five minutes, whatever name was typed. So at a
+station computer one member's mistakes held the next member at the sign-in
+screen. The workflow review's W02 second pass drove it.
+
+`authStore` (`frontend/src/stores/authStore.ts`) now keeps `loginLockouts`,
+one entry per account, keyed the way the server folds a name (trimmed,
+lower-cased). It keeps at most 20 accounts per tab. A successful sign-in
+clears only that account, and the sign-in page shows the wait for the name in
+the field. A `429` still sets that account's wait from `Retry-After`. If the
+server's per-address backstop is what refused, every other account reaches
+the server and gets its own `429`, so nothing is lost by keying the client
+per account. Tests: `authStore.test.ts`, `LoginPage.test.tsx`.
 
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 

@@ -46,7 +46,7 @@ vi.mock('../services/apiClient', () => ({
 }));
 
 // ---- Import store AFTER mocks are in place ----
-import { markSignInPending, useAuthStore } from './authStore';
+import { lockedUntilFor, markSignInPending, useAuthStore } from './authStore';
 import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 
 // ---- Helpers ----
@@ -86,8 +86,7 @@ describe('authStore', () => {
       isAuthenticated: false,
       isLoading: false,
       error: null,
-      loginAttempts: 0,
-      lockedUntil: null,
+      loginLockouts: {},
       signOutUnconfirmed: false,
     });
 
@@ -118,8 +117,7 @@ describe('authStore', () => {
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
-      expect(state.loginAttempts).toBe(0);
-      expect(state.lockedUntil).toBeNull();
+      expect(state.loginLockouts).toEqual({});
     });
   });
 
@@ -151,8 +149,7 @@ describe('authStore', () => {
       expect(state.user).not.toBeNull();
       expect(state.user?.username).toBe('testuser');
       expect(state.isLoading).toBe(false);
-      expect(state.loginAttempts).toBe(0);
-      expect(state.lockedUntil).toBeNull();
+      expect(state.loginLockouts).toEqual({});
     });
 
     it('calls markLoginComplete without tokens (cookie-only auth)', async () => {
@@ -197,7 +194,7 @@ describe('authStore', () => {
       expect(state.isLoading).toBe(false);
       expect(state.error).toBe('Invalid credentials');
       expect(state.isAuthenticated).toBe(false);
-      expect(state.loginAttempts).toBe(1);
+      expect(state.loginLockouts.bad?.attempts).toBe(1);
     });
 
     it('enforces client-side lockout after reaching threshold', async () => {
@@ -212,8 +209,8 @@ describe('authStore', () => {
         ).rejects.toThrow();
       }
 
-      expect(getState().loginAttempts).toBe(5);
-      expect(getState().lockedUntil).not.toBeNull();
+      expect(getState().loginLockouts.bad?.attempts).toBe(5);
+      expect(lockedUntilFor(getState().loginLockouts, 'bad')).not.toBeNull();
 
       // Next call should be blocked by client-side lockout (no throw, just sets error)
       await act(async () => {
@@ -222,6 +219,45 @@ describe('authStore', () => {
 
       expect(mockLogin).toHaveBeenCalledTimes(5); // NOT called again
       expect(getState().error).toMatch(/too many failed attempts\. try again in \d+ seconds?\./i);
+    });
+
+    // W02-8 (owner decision 2026-11-05): the count is per account. At a shared
+    // station, five failures for one member held the next member's sign-in
+    // for up to five minutes.
+    it("does not hold another account for one account's failures", async () => {
+      mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+      for (let i = 0; i < 5; i++) {
+        await expect(
+          act(async () => {
+            await getState().login({ username: 'review_member2', password: 'wrong' });
+          })
+        ).rejects.toThrow();
+      }
+      expect(lockedUntilFor(getState().loginLockouts, 'review_member2')).not.toBeNull();
+
+      await expect(
+        act(async () => {
+          await getState().login({ username: 'review_member', password: 'wrong' });
+        })
+      ).rejects.toThrow();
+
+      expect(mockLogin).toHaveBeenCalledTimes(6);
+      expect(mockLogin).toHaveBeenLastCalledWith({ username: 'review_member', password: 'wrong' });
+      expect(lockedUntilFor(getState().loginLockouts, 'review_member')).toBeNull();
+    });
+
+    it('counts a name the same however it is cased or padded', async () => {
+      mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+      for (const username of ['Bad', ' bad', 'BAD ', 'bad', 'bAd']) {
+        await expect(
+          act(async () => {
+            await getState().login({ username, password: 'wrong' });
+          })
+        ).rejects.toThrow();
+      }
+
+      expect(getState().loginLockouts.bad?.attempts).toBe(5);
+      expect(lockedUntilFor(getState().loginLockouts, ' BAD ')).not.toBeNull();
     });
 
     it("waits as long as the server's Retry-After says, not the client backoff", async () => {
@@ -237,7 +273,7 @@ describe('authStore', () => {
         })
       ).rejects.toThrow();
 
-      const lockedUntil = getState().lockedUntil ?? 0;
+      const lockedUntil = lockedUntilFor(getState().loginLockouts, 'bad') ?? 0;
       expect(lockedUntil - before).toBeGreaterThanOrEqual(59_000);
       expect(lockedUntil - before).toBeLessThanOrEqual(61_000);
     });
@@ -254,13 +290,16 @@ describe('authStore', () => {
       const stored = sessionStorage.getItem('login_lockout');
       expect(stored).not.toBeNull();
       const parsed: unknown = JSON.parse(stored ?? '{}');
-      expect(parsed).toHaveProperty('loginAttempts', 1);
+      expect(parsed).toEqual({ accounts: { bad: { attempts: 1, lockedUntil: null } } });
     });
 
     it('clears lockout state from sessionStorage on successful login', async () => {
       // Seed sessionStorage with prior failed attempt
-      sessionStorage.setItem('login_lockout', JSON.stringify({ loginAttempts: 3, lockedUntil: null }));
-      useAuthStore.setState({ loginAttempts: 3, lockedUntil: null });
+      sessionStorage.setItem(
+        'login_lockout',
+        JSON.stringify({ accounts: { good: { attempts: 3, lockedUntil: null } } })
+      );
+      useAuthStore.setState({ loginLockouts: { good: { attempts: 3, lockedUntil: null } } });
 
       mockLogin.mockImplementation(async () => {
         simulateLoginCookies();
@@ -273,19 +312,21 @@ describe('authStore', () => {
       });
 
       expect(sessionStorage.getItem('login_lockout')).toBeNull();
-      expect(getState().loginAttempts).toBe(0);
+      expect(getState().loginLockouts).toEqual({});
     });
 
-    it('resets lockout counters on successful login', async () => {
-      // First: a few failed attempts
+    it("resets that account's counter on its successful login, and only that account's", async () => {
+      // First: a failed attempt for this account and for another one
       mockLogin.mockRejectedValue(new Error('Invalid credentials'));
-      await expect(
-        act(async () => {
-          await getState().login({ username: 'bad', password: 'wrong' });
-        })
-      ).rejects.toThrow();
+      for (const username of ['good', 'other']) {
+        await expect(
+          act(async () => {
+            await getState().login({ username, password: 'wrong' });
+          })
+        ).rejects.toThrow();
+      }
 
-      expect(getState().loginAttempts).toBe(1);
+      expect(getState().loginLockouts.good?.attempts).toBe(1);
 
       // Now: successful login
       mockLogin.mockImplementation(async () => {
@@ -298,8 +339,8 @@ describe('authStore', () => {
         await getState().login({ username: 'good', password: 'right' });
       });
 
-      expect(getState().loginAttempts).toBe(0);
-      expect(getState().lockedUntil).toBeNull();
+      expect(getState().loginLockouts.good).toBeUndefined();
+      expect(getState().loginLockouts.other?.attempts).toBe(1);
     });
   });
 

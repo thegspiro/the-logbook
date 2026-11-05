@@ -27,7 +27,7 @@ vi.mock('../../../utils/createApiClient', () => ({
 }));
 
 // Import after the mock is registered.
-import { applicantService, pipelineService } from './api';
+import { applicantService, followUpFormService, pipelineService } from './api';
 
 const prospectResponse = {
   data: {
@@ -199,5 +199,15 @@ describe('pipelineService counts', () => {
 
     const [, config] = mockGet.mock.calls[0] as [string, { params: Record<string, unknown> }];
     expect(config.params.assigned_to_me).toBeUndefined();
+  });
+});
+
+describe('followUpFormService answers for the Interview page', () => {
+  it('reads through the interview route, which alone reveals answers to an interviewer', async () => {
+    mockGet.mockResolvedValue({ data: { request_id: 'r1', answers: [] } });
+
+    await followUpFormService.getInterviewAnswers('p1', 'r1');
+
+    expect(mockGet).toHaveBeenCalledWith('/prospective-members/prospects/p1/interview/follow-up-forms/r1/answers');
   });
 });

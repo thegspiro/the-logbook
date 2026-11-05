@@ -2426,18 +2426,16 @@ class MembershipPipelineService:
                         and_(
                             ScreeningRecord.prospect_id == prospect.id,
                             ScreeningRecord.screening_type.in_(required_screenings),
-                            ScreeningRecord.status.in_(
-                                [
-                                    ScreeningStatus.PASSED,
-                                    ScreeningStatus.COMPLETED,
-                                ]
-                            ),
                         )
                     )
                 )
-                screening_records = screening_result.scalars().all()
+                # The status is ciphertext (MS-15), so the cleared results are
+                # picked here rather than in the query.
+                cleared = (ScreeningStatus.PASSED, ScreeningStatus.COMPLETED)
                 passed_types = {
-                    record.screening_type.value for record in screening_records
+                    record.screening_type.value
+                    for record in screening_result.scalars().all()
+                    if record.status in cleared
                 }
                 missing = [s for s in required_screenings if s not in passed_types]
                 if missing:
