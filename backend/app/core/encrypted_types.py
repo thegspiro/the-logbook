@@ -96,19 +96,22 @@ class EncryptedEnum(EncryptedText):
     comparator_factory = _NoComparison
 
     def __init__(self, enum_class, *args, **kwargs):
-        self.enum_class = enum_class
+        # Not ``enum_class``: that is SQLAlchemy ``Enum``'s attribute, and the
+        # schema tests take a type carrying it for a database enum with an
+        # ``enums`` list, which ciphertext in a TEXT column does not have.
+        self.python_enum = enum_class
         super().__init__(*args, **kwargs)
 
     def _member(self, value):
-        if isinstance(value, self.enum_class):
+        if isinstance(value, self.python_enum):
             return value
         if isinstance(value, str):
             try:
-                return self.enum_class(value)
+                return self.python_enum(value)
             except ValueError:
-                if value in self.enum_class.__members__:
-                    return self.enum_class[value]
-        raise ValueError(f"not a {self.enum_class.__name__} value")
+                if value in self.python_enum.__members__:
+                    return self.python_enum[value]
+        raise ValueError(f"not a {self.python_enum.__name__} value")
 
     def process_bind_param(self, value, dialect):
         if value is None:
