@@ -5,7 +5,7 @@
  * appearance, and notification preferences.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
   User,
@@ -152,6 +152,9 @@ export const UserSettingsPage: React.FC = () => {
   const [profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [blankName, setBlankName] = useState<'first_name' | 'last_name' | null>(null);
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
   const [downloadingData, setDownloadingData] = useState(false);
   const [consents, setConsents] = useState<ConsentItem[]>([]);
   const [savingConsent, setSavingConsent] = useState<string | null>(null);
@@ -256,12 +259,26 @@ export const UserSettingsPage: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!user?.id) return;
+    // Reports and legal records print the legal name, and the server refuses a
+    // blank one; say which box is empty here rather than after a round trip.
+    const firstName = profileForm.first_name?.trim() ?? '';
+    const lastName = profileForm.last_name?.trim() ?? '';
+    if (!firstName || !lastName) {
+      const field = firstName ? 'last_name' : 'first_name';
+      setBlankName(field);
+      toast.error(field === 'first_name' ? 'Enter your first name.' : 'Enter your last name.');
+      (field === 'first_name' ? firstNameRef : lastNameRef).current?.focus();
+      return;
+    }
+    setBlankName(null);
     setSavingProfile(true);
     try {
       // Strip fields that are only editable by Membership Coordinators via Members admin
       const { membership_number: _mn, rank: _r, station: _s, ...editableFields } = profileForm;
       const updated = await userService.updateUserProfile(user.id, {
         ...editableFields,
+        first_name: firstName,
+        last_name: lastName,
         // An emptied box must clear the stored name, not be omitted (CLAUDE.md #1).
         preferred_name: blankToNull(profileForm.preferred_name),
       });
@@ -280,6 +297,7 @@ export const UserSettingsPage: React.FC = () => {
 
   const handleProfileChange = (field: keyof UserProfileUpdate, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
+    if (field === blankName) setBlankName(null);
   };
 
   const passwordValidation = validatePasswordStrength(newPassword);
@@ -649,11 +667,17 @@ export const UserSettingsPage: React.FC = () => {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                       <div>
                         <label htmlFor="firstName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          First Name
+                          First Name{' '}
+                          <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                            *
+                          </span>
                         </label>
                         <input
+                          ref={firstNameRef}
                           id="firstName"
                           type="text"
+                          required
+                          aria-invalid={blankName === 'first_name' || undefined}
                           value={profileForm.first_name || ''}
                           onChange={(e) => handleProfileChange('first_name', e.target.value)}
                           className="form-input sm:text-sm"
@@ -678,11 +702,17 @@ export const UserSettingsPage: React.FC = () => {
                       </div>
                       <div>
                         <label htmlFor="lastName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          Last Name
+                          Last Name{' '}
+                          <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                            *
+                          </span>
                         </label>
                         <input
+                          ref={lastNameRef}
                           id="lastName"
                           type="text"
+                          required
+                          aria-invalid={blankName === 'last_name' || undefined}
                           value={profileForm.last_name || ''}
                           onChange={(e) => handleProfileChange('last_name', e.target.value)}
                           className="form-input sm:text-sm"

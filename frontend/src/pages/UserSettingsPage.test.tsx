@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link } from 'react-router';
 import { renderWithRouter } from '../test/utils';
 import { UserSettingsPage } from './UserSettingsPage';
 import * as apiModule from '../services/api';
 import type { MemberEmailChoices } from '../types/user';
+import toast from 'react-hot-toast';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -387,6 +388,59 @@ describe('UserSettingsPage', () => {
       expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({ preferred_name: null })
       );
+    });
+  });
+
+  // An emptied First Name was saved as "" behind "Profile saved", leaving the
+  // member with no name on the roster or on legal records (forms review F-1).
+  describe('legal name is required', () => {
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, ...data } as never)
+      );
+    });
+
+    it('marks first and last name as required', async () => {
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByLabelText(/^First Name/)).toBeRequired();
+      expect(screen.getByLabelText(/^Last Name/)).toBeRequired();
+    });
+
+    it.each([
+      ['First Name', '', 'Enter your first name.'],
+      ['Last Name', '   ', 'Enter your last name.'],
+    ])('refuses to save a blank %s and points at the field', async (label, typed, message) => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByLabelText(new RegExp(`^${label}`));
+      await waitFor(() => expect(input).not.toHaveValue(''));
+      fireEvent.change(input, { target: { value: typed } });
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      expect(toast.error).toHaveBeenCalledWith(message);
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      expect(input).toHaveFocus();
+      expect(userService.updateUserProfile).not.toHaveBeenCalled();
+    });
+
+    it('sends the trimmed name when it is filled in', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByLabelText(/^First Name/);
+      await waitFor(() => expect(input).toHaveValue('John'));
+      await user.clear(input);
+      await user.type(input, '  Johnny ');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ first_name: 'Johnny', last_name: 'Doe' })
+      );
+      expect(input).not.toHaveAttribute('aria-invalid');
     });
   });
 
