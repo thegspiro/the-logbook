@@ -82,6 +82,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_transports: seed?.required_transports || undefined,
     required_refusals: seed?.required_refusals || undefined,
     required_attendance_pct: seed?.required_attendance_pct || undefined,
+    allows_chief_override: seed?.allows_chief_override ?? false,
     evaluation_excludes_lowest_rating: seed?.evaluation_excludes_lowest_rating ?? false,
     required_call_types: seed?.required_call_types ?? ([] as string[]),
     checklist_items: seed?.checklist_items ?? [],
@@ -259,6 +260,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       required_refusals: formData.requirement_type === 'refusals' ? (formData.required_refusals ?? null) : null,
       required_attendance_pct:
         formData.requirement_type === 'session_attendance' ? (formData.required_attendance_pct ?? null) : null,
+      allows_chief_override: formData.requirement_type === 'session_attendance' && formData.allows_chief_override,
       // A boolean on every save: the column refuses null.
       evaluation_excludes_lowest_rating:
         formData.requirement_type === 'evaluated_shifts' && formData.evaluation_excludes_lowest_rating,
@@ -659,6 +661,15 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     create them or from their event pages; sessions not linked are optional. A waiver or leave covering
                     a session&apos;s day excuses the member from it.
                   </p>
+                  <label className="text-theme-text-primary mt-3 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={formData.allows_chief_override}
+                      onChange={(e) => setFormData({ ...formData, allows_chief_override: e.target.checked })}
+                    />
+                    Allow the Chief to override it for a member
+                  </label>
                 </div>
               )}
 

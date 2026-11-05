@@ -6,9 +6,10 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Users, Plus, Search, X, Mail, Phone, Loader2 } from 'lucide-react';
+import { Users, Plus, Search, X, Mail, Phone, Loader2, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { blankToNull } from '@/utils/formValues';
 import { fundraisingService } from '../services/api';
 import type { Donor, DonorType } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -64,6 +65,20 @@ interface NewDonorForm {
 /** The person's name on a donor, or '' for an organization recorded by its name alone. */
 const personName = (donor: Donor): string => `${donor.firstName ?? ''} ${donor.lastName ?? ''}`.trim();
 
+/** The form as an existing donor fills it, for editing. */
+const formFromDonor = (donor: Donor): NewDonorForm => ({
+  firstName: donor.firstName ?? '',
+  lastName: donor.lastName ?? '',
+  email: donor.email ?? '',
+  phone: donor.phone ?? '',
+  donorType: donor.donorType,
+  companyName: donor.companyName ?? '',
+  addressLine1: donor.addressLine1 ?? '',
+  city: donor.city ?? '',
+  state: donor.state ?? '',
+  postalCode: donor.postalCode ?? '',
+});
+
 const EMPTY_FORM: NewDonorForm = {
   firstName: '',
   lastName: '',
@@ -105,6 +120,8 @@ export const DonorsPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState<NewDonorForm>({ ...EMPTY_FORM });
+  // The donor being edited, or null when the form adds a new one.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // -----------------------------------------------------------------------
   // Data fetching
@@ -155,7 +172,15 @@ export const DonorsPage: React.FC = () => {
 
   const resetForm = () => {
     setForm({ ...EMPTY_FORM });
+    setEditingId(null);
     setShowForm(false);
+  };
+
+  const startEdit = (donor: Donor) => {
+    setForm(formFromDonor(donor));
+    setEditingId(donor.id);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -176,6 +201,27 @@ export const DonorsPage: React.FC = () => {
 
     try {
       setIsSubmitting(true);
+      if (editingId) {
+        // An update leaves an omitted key alone, so every field this form
+        // owns is sent, and a box the manager emptied goes as null to clear
+        // it rather than keep the old value behind a success toast.
+        await fundraisingService.updateDonor(editingId, {
+          firstName: blankToNull(form.firstName),
+          lastName: blankToNull(form.lastName),
+          email: blankToNull(form.email),
+          phone: blankToNull(form.phone),
+          donorType: form.donorType,
+          companyName: blankToNull(form.companyName),
+          addressLine1: blankToNull(form.addressLine1),
+          city: blankToNull(form.city),
+          state: blankToNull(form.state),
+          postalCode: blankToNull(form.postalCode),
+        });
+        toast.success('Donor updated');
+        resetForm();
+        void loadDonors();
+        return;
+      }
       await fundraisingService.createDonor({
         firstName: form.firstName.trim() || null,
         lastName: form.lastName.trim() || null,
@@ -192,7 +238,7 @@ export const DonorsPage: React.FC = () => {
       resetForm();
       void loadDonors();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add donor'));
+      toast.error(getErrorMessage(err, editingId ? 'Failed to update donor' : 'Failed to add donor'));
     } finally {
       setIsSubmitting(false);
     }
@@ -214,7 +260,7 @@ export const DonorsPage: React.FC = () => {
         </div>
         {canManage && (
           <button
-            onClick={() => setShowForm((prev) => !prev)}
+            onClick={() => (showForm ? resetForm() : setShowForm(true))}
             className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
           >
             {showForm ? (
@@ -235,7 +281,7 @@ export const DonorsPage: React.FC = () => {
       {/* Inline Add Donor Form */}
       {canManage && showForm && (
         <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-6">
-          <h2 className="text-theme-text-primary text-lg font-semibold">New Donor</h2>
+          <h2 className="text-theme-text-primary text-lg font-semibold">{editingId ? 'Edit Donor' : 'New Donor'}</h2>
 
           <div className="field-grid gap-4">
             {/* First Name */}
@@ -420,7 +466,7 @@ export const DonorsPage: React.FC = () => {
               className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save Donor
+              {editingId ? 'Save Changes' : 'Save Donor'}
             </button>
           </div>
         </form>
@@ -597,6 +643,17 @@ export const DonorsPage: React.FC = () => {
                           >
                             <Phone className="h-4 w-4" />
                           </a>
+                        )}
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => startEdit(donor)}
+                            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded p-1 transition-colors"
+                            title="Edit donor"
+                            aria-label={`Edit ${personName(donor) || donor.companyName || 'donor'}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
                         )}
                       </div>
                     </td>

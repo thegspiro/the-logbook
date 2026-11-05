@@ -53,9 +53,11 @@ const FormSection: React.FC<FormSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-theme-text-primary text-lg font-semibold">Public Event Request Form</h2>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Request Form</h2>
         <p className="text-theme-text-muted mt-1 text-sm">
-          Generate a public form for community members to request outreach events.
+          The public page community members fill in to request an outreach event. Each submission becomes a request for
+          your team to handle. Generate the form here, then customize and publish it from the Forms page and share its
+          link.
         </p>
       </div>
 

@@ -110,6 +110,32 @@ describe('CardReadersPage', () => {
     expect(screen.queryByText(/1 taps/)).not.toBeInTheDocument();
   });
 
+  it('does not repeat the building when a facility room already names it', async () => {
+    // A facility room's location is named "Room — Facility" by the backend's
+    // _room_location_name, and its building is that same facility.
+    mockListReaders.mockResolvedValue(
+      readers({
+        items: [
+          {
+            locationId: 'room-1',
+            name: 'Volunteer Office — Station 1 - Headquarters',
+            building: 'Station 1 - Headquarters',
+            roomNumber: '107',
+            readerEnabled: true,
+            taps: 3,
+            refusals: 0,
+            lastTapAt: '2026-10-20T14:00:00Z',
+          },
+        ],
+      })
+    );
+    renderPage();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Volunteer Office — Station 1 - Headquarters · Room 107' })
+    ).toBeInTheDocument();
+  });
+
   it('shows the state without a switch to someone who may not flip it', async () => {
     mockListReaders.mockResolvedValue(readers({ canSwitch: false }));
     renderPage();

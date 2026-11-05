@@ -1005,6 +1005,12 @@ export interface InventoryCategory {
   updated_at: string;
   /** Active items filed here. Sent by the medical category list only. */
   item_count?: number | null;
+  /**
+   * Another active category under the same parent (and on the same page) has
+   * this name. Only duplicates stored before names were checked can be in this
+   * state; the category lists set it so an officer can rename one.
+   */
+  duplicate_name?: boolean;
 }
 
 /** A truck position whose stock is assumed at its target, because no crew has counted it. */

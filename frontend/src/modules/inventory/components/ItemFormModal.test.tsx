@@ -33,6 +33,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import { ItemFormModal } from './ItemFormModal';
+import { createMockApiError } from '../../../test/utils';
 
 // The Condition control renders only for item types whose ITEM_TYPE_FIELDS
 // include `inspection_interval_days` — ppe alone — so these tests need a PPE
@@ -218,6 +219,47 @@ describe('ItemFormModal', () => {
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
+  });
+
+  // Owner decision 2026-11-01: the server refuses an implausible date pair.
+  // The refusal names two fields in a collapsed section, so a toast alone left
+  // the quartermaster hunting for them; it is shown beside the dates instead.
+  it('shows a refused date pair beside the dates, and clears it on edit', async () => {
+    mockUpdateItem.mockRejectedValue(createMockApiError('Warranty expiration cannot be before the purchase date'));
+    const user = userEvent.setup();
+    render(
+      <ItemFormModal
+        {...baseProps}
+        isOpen
+        editItem={makeItem({ purchase_date: '2024-05-01', warranty_expiration: '2024-01-01' })}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Warranty expiration cannot be before the purchase date');
+    const warranty = screen.getByLabelText('Warranty Expiration');
+    expect(warranty).toHaveAttribute('aria-invalid', 'true');
+    expect(warranty).toHaveAccessibleDescription('Warranty expiration cannot be before the purchase date');
+    expect(screen.getByLabelText('Purchase Date')).toHaveAttribute('aria-invalid', 'true');
+
+    await user.clear(warranty);
+    await user.type(warranty, '2026-05-01');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(warranty).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('keeps an unrelated save error in the toast only', async () => {
+    mockCreateItem.mockRejectedValue(createMockApiError('Serial number already in use'));
+    const user = userEvent.setup();
+    render(<ItemFormModal {...baseProps} isOpen />);
+
+    await user.type(nameInput(), 'X');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Serial number already in use'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   // The Size control writes both size columns. It used to be a free-text box

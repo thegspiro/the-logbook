@@ -535,6 +535,24 @@ describe('RequirementModal', () => {
       expect(screen.queryByLabelText(/^Training Type/)).not.toBeInTheDocument();
     });
 
+    it('sends whether the Chief may override it, and clears it for another type', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Company drills');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+      await user.type(screen.getByLabelText(/^Sessions to Attend/), '60');
+      await user.click(screen.getByRole('checkbox', { name: /Allow the Chief to override/ }));
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ requirement_type: 'session_attendance', allows_chief_override: true }),
+        false,
+        undefined
+      );
+    });
+
     it('will not create one without a percentage', async () => {
       const user = userEvent.setup();
       render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);

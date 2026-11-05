@@ -49,7 +49,7 @@ export const EVENTS_ADMIN_TABS: AdminHubCardTab<EventsAdminTab>[] = [
   {
     id: 'settings',
     label: 'Settings',
-    description: 'Event types, categories, the request pipeline and metrics',
+    description: 'Event types, categories, public requests and metrics',
     icon: Settings,
   },
 ];
@@ -101,7 +101,7 @@ export const EVENTS_ADMIN_AREAS: EventsAdminArea[] = [
   {
     id: 'settings',
     label: 'Settings',
-    description: 'Event types, categories, the request pipeline and metrics',
+    description: 'Event types, categories, public requests and metrics',
     icon: Settings,
     destinations: [tabById('settings')],
   },

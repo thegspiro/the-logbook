@@ -896,10 +896,12 @@ class EventService:
         The event's day is the department's: hire dates and leave periods are
         calendar dates, and an evening drill's UTC date is already the next day.
 
-        Errs toward *not* accusing: anything unknown (no hire date recorded, no
-        membership type recorded) is treated as "cannot show they were required",
-        because the cost of a false accusation on someone's attendance record is
-        much higher than the cost of one missing reminder.
+        Not expected: an event with no start, one before the member's hire
+        date, one on a day an active leave covers, and one mandatory only for
+        tiers the member does not hold. Everyone else is expected. A missing
+        hire date excludes nobody, and a member with no recorded membership
+        status is read by ``member_holds_tier`` as a regular member, so an event
+        mandatory for regular members expects them (owner decision 2026-11-01).
         """
         start = event.start_datetime
         if start is None:

@@ -149,3 +149,25 @@ class TestCsv:
         assert parsed[2][6:] == ["Never", "", ""]
         assert audit.await_args.kwargs["event_type"] == "inventory_not_seen_exported"
         assert service.not_seen.await_args.kwargs["limit"] == 5000
+
+    @pytest.mark.parametrize(
+        ("source", "label"),
+        [("created", "Added to inventory"), ("barcode_put_away", "Barcode put-away")],
+    )
+    async def test_labels_the_sightings_that_are_not_taps(self, source, label):
+        """Creation and a barcode put-away count as seeing an item (owner
+        decisions of 2026-11-01); the report says which it was."""
+        patcher, _ = _service(_report([_row(last_seen_source=source)]))
+        with (
+            patcher,
+            patch(f"{MODULE}.log_audit_event", AsyncMock()),
+            patch(
+                f"{MODULE}.resolve_scheduling_timezone",
+                AsyncMock(return_value=ZoneInfo("UTC")),
+            ),
+        ):
+            listed = await _get(_app_for(_user()), "/inventory/not-seen")
+            exported = await _get(_app_for(_user()), "/inventory/not-seen/export")
+        assert listed.status_code == 200
+        assert listed.json()["items"][0]["last_seen_source"] == source
+        assert list(csv.reader(io.StringIO(exported.text)))[1][7] == label

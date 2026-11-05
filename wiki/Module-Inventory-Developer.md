@@ -479,12 +479,17 @@ GET    /api/v1/inventory/not-seen/export                 # The same as CSV, up t
   no working tag (an item whose only tag is lost counts as untagged) and
   links one after another, by written link or by serial.
 - **Not seen** (`/inventory/admin/not-seen`). An item's last-seen time is the
-  latest of a staff tap (any action), an assignment or its return, a checkout
-  or check-in, and a pool issuance or its return. Editing the item record
-  does not count. A barcode put-away does not count either: it is recorded
-  only as an audit-log event, with no per-item row to read. Retired items are
-  left out; lost and stolen items are listed, since not seeing them is the
-  point.
+  latest of a staff tap (any action), a barcode put-away, an assignment or
+  its return, a checkout or check-in, a pool issuance or its return, and the
+  item's creation. Creation and barcode put-aways are rows in
+  `inventory_nfc_scans` (actions `created` and `barcode_put_away`), written by
+  `app/services/inventory_sightings.py`, the one writer of that table; items
+  created before 2026-11-05 were not backfilled. Editing the item record does
+  not count. Retired items are left out; lost and stolen items are listed,
+  since not seeing them is the point. The storage area is named through
+  `active_storage_area_names` (`app/services/inventory_storage_area_names.py`),
+  which names only an active area, as the item page does; bulk enrollment uses
+  it too.
 
 ### Labels
 

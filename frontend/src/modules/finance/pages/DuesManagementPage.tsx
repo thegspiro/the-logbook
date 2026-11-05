@@ -380,8 +380,8 @@ const DuesManagementPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="rwd-table w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th scope="col" className={`${HEADER_CELL} text-left`}>

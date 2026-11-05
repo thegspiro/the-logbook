@@ -121,6 +121,7 @@ _PLAIN_COLUMNS = [
     ),
     ("member_leaves_of_absence", "id", ["reason"]),
     ("training_waivers", "id", ["reason"]),
+    ("training_requirement_overrides", "id", ["reason"]),
     (
         "prospects",
         "id",

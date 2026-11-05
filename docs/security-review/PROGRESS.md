@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4069](https://github.com/thegspiro/the-logbook/pull/4069)** (branch
+`claude/security-review-users-organizations-p15`) —
+Feature 07 (Users & organizations), pass 15, a watchdog pickup. Real delta:
+9 commits since pass 14's baseline touch the twelve declared files. The
+security-relevant one (`1fd977dd0`, an owner-decision batch landed outside
+this rotation) closes USR-11 (step-up now gates `change_member_status`/
+`archive_member`) and USR-12 (step-up now gates the Gmail delegated-
+service-account save paths) — both verified directly against the code and
+`test_mfa_policy.py`'s AST-enforced `STEPUP_HANDLERS` set. One new route,
+`GET /users/membership-tiers/names`, traced for cross-tenant leakage and
+found none. 88 routes re-enumerated by AST. 0 fixed, 0 new findings; USR-5
+and USR-8 re-confirmed unchanged. See
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 15** section.
+Next in the rotation: Feature 08 (Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 15, PR #4052, merged), preserved for history</summary>
+
 **PR [#4052](https://github.com/thegspiro/the-logbook/pull/4052)** (branch
 `claude/security-review-elections-ballots-p15`) —
 Feature 06 (Elections & ballots), pass 15, a watchdog pickup. Real delta:
@@ -32,6 +50,8 @@ correct; no new finding. 75 routes re-enumerated by AST — unchanged from
 pass 14. 0 fixed, 0 new findings; ELEC-16/40/48/49 re-confirmed unchanged.
 See `docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 15**
 section. Next in the rotation: Feature 07 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 15, PR #4043, merged), preserved for history</summary>
@@ -24799,8 +24819,8 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (49 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py` (added pass 15)                              | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                          | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                                                 | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                              | ⏳     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                                                      | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                              | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                  | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                      | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ⬜     |
@@ -24846,6 +24866,57 @@ them to be re-discovered by SEC-00 every lap.
 ---
 
 ## Log
+
+### 2026-11-05 — Feature 06 (Elections & ballots, pass 15) merged; Feature 07 (Users & organizations, pass 15) — watchdog pickup, USR-11/USR-12 closed by an owner-decision commit, 0 fixed, 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (confirmed via
+`ListAgents`, no reachable agents). PR #4052 (Feature 06, Elections &
+ballots, pass 15) had already merged (`1ebcc5e7f`); a fresh
+`list_pull_requests` (state `open`), both unfiltered and filtered on
+`head=thegspiro:claude/security-review`, returned 0 `claude/security-
+review-*` PRs, confirming row 07 (Users & organizations) as the next `⬜`
+row on a freshly-fetched `main`.
+
+Baseline `856d44030` (pass 14's own fix commit) to current `main`: 9
+non-merge commits touch the twelve declared files directly, 298
+insertions / 83 deletions across 7 files — a real delta, not a zero-delta
+pass. Each read in full via `git show`, not sampled. The security-relevant
+one: `1fd977dd0` (an owner-decision "Security & Auth" batch landed outside
+this rotation) adds `require_stepup` to `change_member_status` and
+`archive_member` (closing **USR-11**, open since pass 12) and a
+`confirm_delegated_email_change` re-verification hook to
+`OrganizationService.update_organization_settings`, wired from both
+`update_email_settings` and the generic settings PATCH (closing
+**USR-12**, open since pass 13). Both verified directly against the
+current code and `tests/test_mfa_policy.py`'s AST-enforced
+`STEPUP_HANDLERS` set, not taken on `KNOWN_LIMITATIONS.md`'s own
+"✅ Resolved" note. `e5fda67e8` adds one new route in scope,
+`GET /users/membership-tiers/names` — deliberately open to any
+authenticated member (ids/names only, org-scoped off
+`current_user.organization_id`), traced end to end for cross-tenant
+leakage and found none — plus a computed `service_since` field on the
+member-profile response and a typed property-return-preview response, both
+read in full with no scoping or permission change. The remaining 7 commits
+are onboarding/module-labeling/leave-accounting changes with no security
+surface in this feature's declared scope.
+
+88 routes across the four principal files re-enumerated by AST (35/30/17/7
+— the +1 on `member_status.py` is the one new route above); every route
+still carries a permission-resolving `Depends(...)`. USR-5 and USR-8
+(both owner-accepted, open) re-confirmed unchanged by direct read of their
+current line ranges. **0 fixed, 0 new findings** — the only change in
+standing is the two closures above, landed by a commit outside this
+rotation.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` all clean
+(2934 files unchanged by black); `validate_migrations.py --strict` — 724
+revisions, single head `bd8fc0c4a941`; `check_route_permissions.py
+--strict` — 301 routes, 0 errors/warnings; scoped pytest (`user or
+organization or member_status or member_leave`) — 864 passed, 2
+pre-existing environment-only skips; frontend `typecheck` and `lint` both
+clean. See `docs/security-review/USR-07-users-organizations.md`'s **Pass
+15** section. Next in the rotation: Feature 08 (Membership pipeline).
 
 ### 2026-11-05 — Feature 05 (Finance & approvals, pass 15) merged; Feature 06 (Elections & ballots, pass 15) — watchdog pickup, real delta verified, 0 fixed, 0 new findings
 

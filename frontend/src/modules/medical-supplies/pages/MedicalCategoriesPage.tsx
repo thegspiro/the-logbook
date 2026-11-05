@@ -22,6 +22,7 @@ import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
+import { DuplicateCategoryNameBadge } from '../../inventory/components/DuplicateCategoryNameBadge';
 
 interface FormState {
   name: string;
@@ -320,6 +321,11 @@ const MedicalCategoriesPage: React.FC = () => {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-theme-text-primary font-medium">{category.name}</p>
+                  {category.duplicate_name && (
+                    <div className="mt-1">
+                      <DuplicateCategoryNameBadge />
+                    </div>
+                  )}
                   {category.description && <p className="text-theme-text-muted mt-1 text-sm">{category.description}</p>}
                   {/* `!= null`: an unset threshold arrives as null, and the
                       strict check printed "Low stock at or below" with no number. */}
