@@ -319,7 +319,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Medical Screening', path: '/medical-screening', permission: 'medical_screening.view' }]
                 : []),
               DIV,
-              { label: 'Manage Events', path: '/events', permission: 'events.manage' },
+              { label: 'Manage Events', path: '/events/admin', permission: 'events.manage' },
               ...(isModuleOn('training')
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),

@@ -115,10 +115,31 @@ program enrollments, external training integrations, and compliance reporting.
 
 ## Training Requirements
 
+### Session attendance and the Chief's override
+
+`session_attendance` (2026-11-04) is met by attending `required_attendance_pct`
+of the sessions linked to it that were held in its window. Sessions link through
+`training_session_requirements`, so one drill can count toward several
+requirements; a session linked to none charges nobody. The rule is written once
+(`training_compliance.tally_session_attendance`) and every grader reads it, with
+`load_held_sessions` passed through each caller. `PUT
+/training/sessions/{id}/attendance-requirements` replaces a session's links and
+is allowed after attendance is finalized.
+
+A requirement with `allows_chief_override` accepts rows in
+`training_requirement_overrides` (who, when, dates, encrypted reason; revoked,
+never deleted). Only a holder of a Chief position (`CHIEF_POSITION_SLUGS`)
+records or revokes one, so the three routes are in the permissionless-route
+baseline. Overrides reach the graders as waiver periods tagged
+`SOURCE_OVERRIDE`; `month_waivers` and the per-session excusal ignore them, and
+only the attendance rule reads one, as met, for a member who would otherwise
+fall short. Certification-style requirements now match records by the stored
+`match_key` / `certification_key` rather than by name.
+
 ### Types, frequency and targeting
 
 A requirement has a `requirement_type` (hours, courses, certification, shifts,
-calls, skills_evaluation, checklist, knowledge_test), a `frequency` (annual,
+calls, skills_evaluation, checklist, knowledge_test, session_attendance), a `frequency` (annual,
 biannual, quarterly, monthly, one_time) and a `due_date_type`
 (calendar_period, rolling, certification_period, fixed_date). `due_date` only
 means anything for `fixed_date`: create and update clear it for every other

@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { Globe, Key, FileText, BarChart3, Shield, Settings, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Key, FileText, BarChart3, Shield, Settings, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ConfigurationTab } from '../components/ConfigurationTab';
@@ -16,6 +16,7 @@ import { UsageStatsTab } from '../components/UsageStatsTab';
 import { DataWhitelistTab } from '../components/DataWhitelistTab';
 import { SkeletonText } from '../../../components/ux';
 import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 type TabType = 'config' | 'keys' | 'logs' | 'stats' | 'whitelist';
 
@@ -80,18 +81,6 @@ const PublicPortalAdmin: React.FC = () => {
     }
   };
 
-  const titleBlock = (
-    <div className="page-header-title flex items-center space-x-3">
-      <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-500/20">
-        <Globe className="h-6 w-6 text-blue-600" />
-      </div>
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Public Portal</h1>
-        <p className="text-theme-text-muted text-sm">Manage public API access for external websites</p>
-      </div>
-    </div>
-  );
-
   // The disabled-portal banner and the tab strip sit between the title and the
   // body, ~200px on a phone, and whether the banner is drawn depends on the
   // config. Everything below the title waits, laid out but invisible, for the
@@ -100,24 +89,24 @@ const PublicPortalAdmin: React.FC = () => {
   const holdClass = held ? 'invisible' : '';
 
   return (
-    <div className="bg-theme-surface-secondary min-h-screen">
-      {/* Header */}
-      <div className="bg-theme-surface border-theme-surface-border border-b">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <div className="page-header gap-3 sm:items-center">
-              {titleBlock}
-
-              {/* Status Toggle */}
+    <div className="mx-auto max-w-7xl">
+      {/* Header. No band or padding of its own: AppLayout supplies the page
+          gutter, and the header matches every other admin page. */}
+      <div className="pb-6">
+        <AdminPageHeader
+          title="Public Portal"
+          description="Manage public API access for external websites"
+          actions={
+            <>
               {loading ? (
-                <div className="page-header-actions flex flex-wrap items-center gap-4" aria-hidden="true">
+                <div className="flex flex-wrap items-center gap-4" aria-hidden="true">
                   <span className="text-sm">
                     <SkeletonText className="w-28" />
                   </span>
                   <span className="btn-md invisible">Enable Portal</span>
                 </div>
               ) : (
-                <div className="page-header-actions flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center space-x-2">
                     {config?.enabled ? (
                       <>
@@ -145,62 +134,62 @@ const PublicPortalAdmin: React.FC = () => {
                   </button>
                 </div>
               )}
-            </div>
+            </>
+          }
+        />
 
-            {/* Warning Banner */}
-            {!loading && !config?.enabled && (
-              <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
-                <div className="flex">
-                  <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-600" />
-                  <div className="ml-3">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                      The portal is disabled. External websites can't read any of your data until you enable it, create
-                      an API key, and turn on the fields to share under Data Control.
-                    </p>
-                  </div>
-                </div>
+        {/* Warning Banner */}
+        {!loading && !config?.enabled && (
+          <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
+            <div className="flex">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-600" />
+              <div className="ml-3">
+                <p className="text-sm text-yellow-800 dark:text-yellow-400">
+                  The portal is disabled. External websites can't read any of your data until you enable it, create an
+                  API key, and turn on the fields to share under Data Control.
+                </p>
               </div>
-            )}
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* Tabs */}
-          {/* Six tabs overflow a 390px phone — "Access Logs" ran to 428px.
+      {/* Tabs */}
+      {/* Six tabs overflow a 390px phone — "Access Logs" ran to 428px.
               The marker declares the strip scrollable rather than broken; its
               buttons are focusable, so it needs no tabIndex of its own. */}
-          <div
-            className={`border-theme-surface-border hscroll flex space-x-1 border-b ${holdClass}`}
-            data-mobile-scroll-region
-            aria-label="Public portal sections"
-          >
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  aria-current={activeTab === tab.id ? 'true' : undefined}
-                  className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? // The theme-aware token, not a raw blue: `text-blue-600`
-                        // is 4.06:1 on the high-contrast theme's black ground,
-                        // below the AA floor, in the mode somebody turns on
-                        // precisely because they need contrast.
-                        'text-theme-accent-blue border-blue-500'
-                      : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      <div
+        className={`border-theme-surface-border hscroll flex space-x-1 border-b ${holdClass}`}
+        data-mobile-scroll-region
+        aria-label="Public portal sections"
+      >
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? 'true' : undefined}
+              className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? // The theme-aware token, not a raw blue: `text-blue-600`
+                    // is 4.06:1 on the high-contrast theme's black ground,
+                    // below the AA floor, in the mode somebody turns on
+                    // precisely because they need contrast.
+                    'text-theme-accent-blue border-blue-500'
+                  : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab Content */}
-      <div className={`mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 ${holdClass}`}>
+      <div className={`py-6 ${holdClass}`}>
         {activeTab === 'config' && <ConfigurationTab />}
         {activeTab === 'keys' && <APIKeysTab />}
         {activeTab === 'logs' && <AccessLogsTab />}

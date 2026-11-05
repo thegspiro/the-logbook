@@ -338,9 +338,19 @@ already taken, whether they sign up or an officer assigns them.
 positions, only a minimum staffing number, members can't sign up past that
 number. An officer can still add an extra person on purpose.
 
+**Custom seats** _(2026-11-04)_. An officer with **Manage scheduling** may seat
+anyone in a department-defined seat that nothing grants. A reason is required and
+the action is audited; caps, leave, overlap and EVOC rules still apply. A
+certification can confer a custom seat, and notifications, reminders and printed
+rosters show the department's own seat label.
+
 **Position rules apply to officers too.** If your department has set which
 ranks may fill a position, that rule also applies when an officer assigns
-somebody. The refusal names the missing qualification.
+somebody. The refusal names the missing qualification. The one exception is
+one of your department's own seats that nothing grants at all: an officer who
+can manage schedules may seat somebody in it by override, with a reason
+_(2026-11-05)_. See
+[Seating a member by officer override](#seating-a-member-by-officer-override-2026-11-05).
 
 Officers who manage schedules can still add people to a past or closed shift
 to correct records. The position rules still apply, because being cleared for
@@ -382,6 +392,12 @@ From here you can also **Swap** a shift or **Request Time Off**. See
 ![My Shifts tab listing upcoming shifts with status badges](./images/03-04-my-shifts.png)
 
 ### Your hours and calls for the year
+
+_Added 2026-11-04._ The same figures appear on a member's profile as **Shift &
+Call History** (hours, calls and outside-agency hours by month, year and all
+time), for the member themself and for holders of **View scheduling reports**.
+It shows on-call (recall) hours and outside-unit calls separately; they are
+part of the totals, never added to them.
 
 Select **Hours** to see your own totals. You don't need any special
 permission. It shows only your own record.
@@ -513,10 +529,27 @@ hours."_). Select **Log outside shift**.
 - A night shift counts on the day it **began**, by your department's
   calendar.
 
-**It counts as soon as you save it.** There is no approval step. You can edit
-or delete your own entry. If an officer decides an entry should not count,
-they reject it with a reason. It then reads **Not counted**, with the reason
-below it, and you can no longer change it. An officer can restore it.
+**It counts as soon as you save it**, unless your department requires
+approval. You can edit or delete your own entry. If an officer decides an
+entry should not count, they reject it with a reason. It then reads **Not
+counted**, with the reason below it, and you can no longer change it. An
+officer can restore it.
+
+**If your department requires approval** _(2026-11-05)_, a new entry is
+marked **Awaiting approval**, with the line _"Not in your totals yet: it
+counts once a scheduling officer approves it."_ The confirmation reads
+"Shift logged; it counts once an officer approves it". Until it is approved it
+counts toward nothing: not your hours, not compliance, not a shift
+evaluation. You can still edit or delete it while it waits. You are not told
+when it is approved; it simply stops being marked.
+
+- **Editing a counted entry can send it back.** Changing its date, times,
+  hours or unit puts it back to **Awaiting approval** ("Shift updated; it
+  counts once an officer approves it"), because the approval was for the
+  hours you first logged. Changing only the position or notes leaves it
+  counted.
+- **Entries logged before your department switched approval on keep
+  counting.**
 
 **Shift evaluations** _(2026-11-02)_. If your department evaluates shifts on
 that agency's units and you are in a training program with an evaluation form,
@@ -563,11 +596,34 @@ You need to be able to manage schedules for both of these.
 - **The review.** **Scheduling Reports → Member Hours** has two sections under
   the table. **Outside apparatus staffed** shows shifts, hours and members per
   unit for the period. **Shifts with other departments** lists every entry,
-  with a **Show** filter (All / Counted / Not counted) and **Reject** (with a
-  reason) or **Restore**. Officers who can only view reports see the list but
-  can't reject or restore.
+  with a **Show** filter (All / Awaiting approval / Counted / Not counted) and
+  **Reject** (with a reason) or **Restore**. Officers who can only view
+  reports see the list but can't approve, reject or restore.
   An entry that needs a shift evaluation carries the same badge as on the
   member's list _(2026-11-02)_.
+- **Approving** _(2026-11-05)_. To make members' outside shifts wait for an
+  officer before they count, switch on **Require approval for
+  outside-department shifts** under **Scheduling Settings → General → Shift
+  close-out rules**. It is off unless you turn it on. With it on:
+  - each new entry is **Awaiting approval** and counts toward nothing until
+    an officer selects **Approve** on it ("Shift approved; it counts now").
+    **Reject** works on a waiting entry too;
+  - every officer who can manage schedules gets a bell entry and an email,
+    _"An outside shift is waiting for approval"_, naming the member, the hours,
+    the unit and the date, with a link to the report. The member who logged it
+    is not told, even if they are an officer. The email is the **Scheduling
+    officer duties** kind, which an officer can switch off unless your
+    department has made it required; the bell entry still comes;
+  - the **Awaiting approval** filter lists every waiting entry, whatever date
+    range the report is set to. With none waiting it says "Nothing is waiting
+    for approval.";
+  - **Restore** on a rejected entry makes it count straight away, without a
+    second approval.
+
+  Switching the setting on leaves entries already logged counting. Switching
+  it off does **not** approve the ones waiting: an officer still has to
+  decide each of them. Shifts an officer imports from a shift history file
+  count as before.
 
 ![Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, and the Add a department field](./images/03-110-outside-apparatus-settings.png)
 
@@ -607,7 +663,9 @@ The member is notified and can confirm or decline.
 the shift at all, for example because they are on leave or already on a
 shift at the same time. It does not filter by qualification. If the member
 isn't cleared for that position under your department's rules, the
-assignment is refused and the message names what is missing.
+assignment is refused and the message names what is missing. For a
+department's own seat that nothing grants, see
+[Seating a member by officer override](#seating-a-member-by-officer-override-2026-11-05).
 
 **Drivers and EVOC.** An apparatus can require a level of Emergency Vehicle
 Operations Course ([EVOC](./GLOSSARY.md)) training for its driver. If you put
@@ -1128,6 +1186,11 @@ reason.
 3. The seat moves onto your schedule and off theirs straight away. They are
    told who took it.
 
+**A bell entry, no email** _(2026-11-04)_. When an open swap appears that you could
+pick up, you get one bell notification per seat. This is a deliberate exception to
+the email-first rule, because an open swap is time-sensitive and a second message
+adds nothing.
+
 **Who is offered an open swap.** The same rule decides this as decides who can
 sign up for a seat: your rank, your qualifications and completed training,
 Emergency Vehicle Operations Course ([EVOC](./GLOSSARY.md#abbreviations))
@@ -1140,6 +1203,15 @@ You are **not** offered:
 - a shift you are already on;
 - a training seat; or
 - a shift more than 90 days away.
+
+**You are told in the bell** _(2026-11-05)_. When an open swap is posted,
+every member it is offered to gets a notification, "Open shift you can pick
+up": "_Name_ is looking for cover on the _date_ shift, in a seat you are
+cleared for. Pick it up from your Requests tab." It opens the Requests tab.
+It is in-app only: there is no email, text or push for an open swap, so a
+member who doesn't open The Logbook can miss one. You are told about a seat
+once, however many times it is posted. A member who becomes cleared after
+it is posted is not told, but still finds it on the Requests tab.
 
 > **What if the pick-up is refused?** The Logbook checks again at the moment
 > you pick it up: approved time off, an overlapping shift, the seat limit, and
@@ -1496,6 +1568,7 @@ and it goes on the shift's record and in the audit log.
 | An administrator removes a call type while you are working        | The Logbook drops counts against that type rather than failing the save                                                                                           |
 | You reopen a closed-out shift                                     | The wizard starts again at step 1                                                                                                                                 |
 | The department switches back to logging individual calls          | Calls already recorded stay recorded. Reports read whichever source matches the current setting. They never add the two together, so no call is counted twice     |
+| More than 100 members on the shift are credited with fewer calls than the apparatus ran | _(2026-11-05)_ Refused with "A close-out can adjust the call credit of at most 100 members. _N_ are adjusted; credit the rest with the full count." A larger crew is fine as long as no more than 100 are lowered |
 
 ### Cancelling, Hand-Offs and Training Seats
 
@@ -1558,6 +1631,10 @@ who can manage scheduling settings.
   exempt. Anyone else sees "You are not assigned to this shift."
 - **How calls are recorded.** Chooses the checklist or the wizard, as
   described at the start of this section.
+- **Require approval for outside-department shifts** _(2026-11-05)_. Off
+  unless you turn it on. When on, a shift a member logs with another
+  department counts only once a scheduling officer approves it. See
+  [For scheduling officers: the list and the review](#for-scheduling-officers-the-list-and-the-review).
 
 **Overtime advisory.** Set a cap on scheduled hours over a window of time. If
 assigning a member, or a member signing up, would push them over the cap, a
@@ -3538,9 +3615,10 @@ computer never sees your values.
 | **How calls are recorded**                                | What officers are asked about calls at close-out                                                                                                                                                               |
 | **Enforce EVOC for drivers**                              | On unless you turn it off. See [Position Eligibility](#position-eligibility)                                                                                                                                   |
 | **Restrict check-in to assigned members**                 | Only members on a shift's roster can check in to it (open shifts are exempt)                                                                                                                                   |
+| **Require approval for outside-department shifts**        | _(2026-11-05)_ Off unless you turn it on. A shift a member logs with another department waits for a scheduling officer's approval before it counts. See [For scheduling officers](#for-scheduling-officers-the-list-and-the-review) |
 | **Allow pre-shift work**                                  | Lets a member time prep work, such as an early equipment check, before check-in opens. An officer approves the time before it counts                                                                           |
 | **Department Defaults**                                   | **Default Shift Duration (hours)** and **Default Min Staffing**. Since 2026-10-31 a new shift template starts with them: the end time is set that many hours after the 08:00 start, and minimum staffing is filled in. The built-in Day, Night and 24 Hour shift types use the minimum staffing too. Overtime is set under **Overtime advisory**, not here |
-| **Position Names**                                        | Add your own seats under **Add Custom Position**. See [Your department's own seats](#your-departments-own-seats). The on/off ticks for built-in seats are saved but marked **Not in effect yet**: templates and shifts still offer the full built-in list                                                                  |
+| **Position Names**                                        | Add your own seats under **Add Custom Position**, and tick the **Certifications that qualify** for each _(2026-11-05)_. See [Your department's own seats](#your-departments-own-seats). The on/off ticks for built-in seats are saved but marked **Not in effect yet**: templates and shifts still offer the full built-in list                                                                  |
 
 ### What the settings do not do
 
@@ -3884,6 +3962,10 @@ clears these seats while it is in force on the day of the shift:
 | Paramedic                   | EMT, Paramedic                 |
 | Officer in Charge           | Officer, Captain, Lieutenant   |
 
+A qualification also clears any of your department's own seats you have
+ticked it on under **Position Names** _(2026-11-05)_. See
+[Your department's own seats](#your-departments-own-seats).
+
 **Officer in Charge** _(2026-10-29)_ is how a member with no officer rank is
 cleared to lead a shift: give it on the profile, with an expiry if your
 clearance has one. A held office such as Quartermaster or Treasurer never
@@ -3903,14 +3985,35 @@ as "Rescue Technician", is a real seat. Members can sign up for it, officers
 can assign it, and it can be swapped, offered, picked up and claimed as a
 standing shift like any built-in seat.
 
-**Nobody is eligible for a new seat until you say who is.** Either:
+**Nobody is eligible for a new seat until you say who is.** Do one or more
+of these:
 
-- tick it on the ranks that should fill it (see above); or
+- tick it on the ranks that should fill it (see above);
+- tick the certifications that qualify for it (see below); or
 - open it to everyone under **Scheduling Settings → Eligibility → Open
   Positions**.
 
 A shift that is open to all members also opens it. Paramedic is never on
 either list: that seat comes from a member's certification, not their rank.
+
+**Certifications that qualify** _(2026-11-05)_. Under each of your own seats
+in **Position Names**, tick the certifications that should clear a member
+for it, for example **Paramedic** for a "Flight Medic" seat. Every member
+holding a ticked certification on the day of the shift is then eligible for
+the seat, however they are seated: signing up, an officer's assignment,
+**Who Can Fill What**, swaps and pickups. A certification that has lapsed by
+the shift date clears nobody. The certifications offered are the same as in
+the table under [Shift Position Eligibility](#shift-position-eligibility).
+Ticks are kept with the rest of General, so save them with the bar at the
+foot of the page (see [Saving your changes](#saving-your-changes)). Training
+programs still unlock built-in seats only.
+
+**Seat names in notices and on paper** _(2026-11-05)_. Assignment, decline
+and confirmation notices (in the bell and by email), the start-of-shift
+reminder and its crew list, swap refusal messages and the printed shift
+roster now name your own seat the way **Position Names** does, for example
+"Rescue Technician". They used to print a name made from the stored value,
+such as "Rescue Tech".
 
 **A seat that drives the vehicle needs Drives apparatus ticked** _(2026-10-31)_.
 If your department calls its wheel seat something other than Driver, such as
@@ -3926,6 +4029,42 @@ one of the seats the shift lists, or add the seat to the shift first."_
 (support code **LB-SCHED-003**). This happens if the seat was removed from the
 shift, or only another template has it. Add the seat to the shift, or to the
 template or vehicle it comes from, first.
+
+#### Seating a member by officer override _(2026-11-05)_
+
+A seat of your own that **nothing** grants (no rank, no ticked
+certification, no training program, not an open position) is still eligible
+for nobody, and no member can sign up for it. An officer can now put a member
+in it anyway.
+
+Assign the member as usual from **Assign someone**. The assignment is refused
+with _"No rank, certification, training program or open position grants the
+… seat, so nobody is eligible for it. A scheduling manager can seat this
+member in it anyway with an override, which is recorded in the audit log."_
+(support code **LB-SCHED-004**).
+
+- **If you can manage schedules,** a window opens instead: **Seat by officer
+  override?**, with that message and a required **Reason** (for example,
+  "Only rope-qualified member on tonight"). Select **Assign anyway** to seat
+  the member, or **Keep the seat open** to back out. The assignment's notes
+  start with "[Seated with officer override]" and your reason, and the
+  override is recorded in the audit log.
+- **If you can assign members but not manage schedules** (a delegated
+  assigner, or the shift officer), you see only the refusal. Grant the seat,
+  or ask a scheduling officer.
+
+The override waives only the eligibility check for that seat. The seat limit,
+leave, approved time off, another shift at the same time and, on a seat
+marked **Drives apparatus**, the EVOC check all still apply. It is never
+offered for a built-in seat, or for one of your own seats that something
+does grant: there, the usual refusal stands, because somebody can fill it.
+
+Changing a member's seat on their row into such a seat is refused with the
+same message, and the screen offers no override there. Remove them from the
+shift and assign them again from **Assign someone** instead.
+
+To stop needing the override, grant the seat: a rank, a certification under
+**Position Names**, or **Open Positions**.
 
 ### Eligibility settings
 
@@ -4208,7 +4347,10 @@ drop-down list per open seat, so you can fill them all at once.
 > eligibility on officer assignments too, and refuses a member not cleared for
 > the seat. A driver short of the vehicle's EVOC level opens the **Driver
 > qualification required** window (see
-> [Position Eligibility](#position-eligibility)).
+> [Position Eligibility](#position-eligibility)). For one of your own seats
+> that nothing grants, an officer who can manage schedules is offered **Assign
+> anyway** with a reason (see
+> [Seating a member by officer override](#seating-a-member-by-officer-override-2026-11-05)).
 
 ### Other things you may notice
 
@@ -4526,6 +4668,15 @@ have moved, been renamed or work differently.
 - **Past shifts lock.** Once the roster locks, confirm, decline, withdraw and
   remove are no longer offered.
 - **Probationary members can sign in and be scheduled.**
+- **Outside-department shifts can wait for approval** _(2026-11-05)_, if your
+  department switches on **Require approval for outside-department shifts**.
+  It is off after an upgrade, so nothing changes until someone turns it on.
+- **An open swap now puts a bell notification in front of every member it is
+  offered to** _(2026-11-05)_. There is still no email or text for it.
+- **A seat of your own that nothing grants can be filled by officer
+  override** _(2026-11-05)_, and a certification can now clear a member for
+  one of your own seats. Seats saved before the upgrade have no
+  certifications ticked, so nobody's eligibility changes until you tick one.
 - **The Platoons page and a shift's platoon roster need permission** to manage
   schedules (or, for the roster, to assign members or be the shift officer).
 - **A failed equipment-check item needs a note** before you can submit.

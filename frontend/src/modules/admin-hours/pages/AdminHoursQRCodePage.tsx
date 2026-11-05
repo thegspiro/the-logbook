@@ -64,7 +64,7 @@ const AdminHoursQRCodePage: React.FC = () => {
           <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
         <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400">
-          &larr; Back to Admin Hours Management
+          &larr; Back to Admin Hours
         </Link>
       </div>
     );
@@ -82,7 +82,7 @@ const AdminHoursQRCodePage: React.FC = () => {
           to="/admin-hours/manage"
           className="mb-4 inline-block text-blue-600 hover:text-blue-800 dark:hover:text-blue-400"
         >
-          &larr; Back to Admin Hours Management
+          &larr; Back to Admin Hours
         </Link>
         <h1 className="text-theme-text-primary text-3xl font-bold">Admin Hours QR Code</h1>
       </div>

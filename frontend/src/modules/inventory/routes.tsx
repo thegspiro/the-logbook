@@ -657,7 +657,11 @@ export const getInventoryRoutes = () => {
             requiredAnyPermission={['settings.manage', 'organization.update_settings']}
           >
             <Suspense fallback={null}>
-              <ChecklistSettingsPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <ChecklistSettingsPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }
@@ -741,7 +745,11 @@ export const getInventoryRoutes = () => {
             requiredPermission="inventory.check_manage"
           >
             <Suspense fallback={null}>
-              <CatalogLinkReportPage />
+              <InventoryAdminLayout>
+                <Suspense fallback={null}>
+                  <CatalogLinkReportPage />
+                </Suspense>
+              </InventoryAdminLayout>
             </Suspense>
           </ProtectedRoute>
         }

@@ -67,7 +67,7 @@ import { formatCalendarDate, formatDate } from '@/utils/dateFormatting';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
 import { DialogPanel } from '@/components/ux/DialogPanel';
-import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 
 // =============================================================================
 // Status Badge
@@ -972,11 +972,7 @@ const FiscalYearSettingsPage: React.FC = () => {
   if (isLoading && fiscalYears.length === 0) {
     return (
       <div className="space-y-6">
-        <Breadcrumbs />
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Manage fiscal years and budget categories</p>
-        </div>
+        <AdminPageHeader title="Finance Settings" description="Manage fiscal years and budget categories" />
         <SkeletonPage rows={4} showStats={false} />
       </div>
     );
@@ -984,13 +980,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <Breadcrumbs />
-
-      {/* Header */}
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">Manage fiscal years and budget categories</p>
-      </div>
+      <AdminPageHeader title="Finance Settings" description="Manage fiscal years and budget categories" />
 
       {/* Error */}
       {error && (

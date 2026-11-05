@@ -23,19 +23,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
-import {
-  Nfc,
-  ArrowLeft,
-  CheckCircle2,
-  XCircle,
-  Info,
-  Loader2,
-  Play,
-  Square,
-  Keyboard,
-  AlertTriangle,
-} from 'lucide-react';
+import { Nfc, CheckCircle2, XCircle, Info, Loader2, Play, Square, Keyboard, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { nfcCardService } from '../services/nfcCardService';
 import { eventService } from '../../../services/api';
@@ -57,7 +45,7 @@ import { useConnectedIntegrations } from '../../../hooks/useConnectedIntegration
 import { signalUserActivity } from '../../../hooks/useIdleTimer';
 import { NfcCheckInDirection, NfcCheckInTarget } from '../../../constants/enums';
 import type { NfcStationCheckInResult } from '../types/idCard';
-import { Breadcrumbs } from '../../../components/ux';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { KioskSessionCard } from '../../../components/KioskSessionCard';
 import { BACKGROUND_REQUEST_CONFIG } from '../../../utils/backgroundRequest';
 
@@ -455,19 +443,11 @@ const CheckInStationPage: React.FC = () => {
   // pattern that cost the Events templates page its route out of an error
   // state. One definition cannot go missing from a branch.
   const header = (
-    <>
-      <Breadcrumbs underHub="/members/admin" />
-
-      <div className="flex items-center gap-3">
-        <Link to="/members" className="btn-icon" aria-label="Back to members">
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Link>
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Check-In Station</h1>
-          <p className="text-theme-text-secondary text-sm">Members tap their ID card to be checked in.</p>
-        </div>
-      </div>
-    </>
+    <AdminPageHeader
+      title="Check-In Station"
+      description="Members tap their ID card to be checked in."
+      underHub="/members/admin"
+    />
   );
 
   // The endpoint refuses while the integration is off, so an armed-looking

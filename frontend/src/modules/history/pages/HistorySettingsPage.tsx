@@ -3,9 +3,9 @@
  * clearance list a record passes before it is published to the public.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
@@ -154,12 +154,8 @@ export const HistorySettingsPage: React.FC = () => {
   const active = titles.filter((t) => !t.is_retired);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
-      <Breadcrumbs items={[{ label: 'History', path: '/history' }, { label: 'Titles and clearance' }]} />
-      <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-        <Settings className="h-6 w-6 shrink-0" aria-hidden="true" />
-        Titles and Clearance
-      </h1>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <AdminPageHeader title="Titles and Clearance" />
 
       <section aria-labelledby="clearance-heading" className="card space-y-3 p-4">
         <h2 id="clearance-heading" className="text-theme-text-primary text-lg font-semibold">

@@ -69,7 +69,7 @@ interface BreadcrumbsProps {
    * used in source and fails on one the registry does not carry, so a typo is
    * caught there rather than by its silence.
    */
-  underHub?: string;
+  underHub?: string | undefined;
   /**
    * Below 640px, show one "← parent" link instead of the trail.
    *
@@ -99,7 +99,9 @@ const PATH_LABELS: Record<string, string> = {
   settings: 'Settings',
   reports: 'Reports',
   forms: 'Forms',
-  admin: 'Admin',
+  // The top-level /admin/* pages (Audit Log, Error Monitor, …) sit in the
+  // Administration menu; their trail names it the same way.
+  admin: 'Administration',
   account: 'My Account',
   setup: 'Setup',
   integrations: 'Integrations',
@@ -120,7 +122,7 @@ const PATH_LABELS: Record<string, string> = {
   courses: 'Course Library',
   programs: 'Programs',
   'skills-testing': 'Skills Testing',
-  'compliance-config': 'Compliance Config',
+  'compliance-config': 'Compliance Settings',
   templates: 'Templates',
 
   // Events module
@@ -186,7 +188,8 @@ const PATH_LABELS: Record<string, string> = {
   'admin-hours': 'Admin Hours',
   'medical-screening': 'Medical Screening',
   'email-templates': 'Email Templates',
-  communications: 'Communications',
+  // Every /communications/* route is a row of the Forms & Comms menu group.
+  communications: 'Forms & Comms',
   'ip-security': 'IP Security',
   'my-requests': 'My Requests',
   'public-portal': 'Public Portal',

@@ -13,13 +13,14 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, Lock, Mail, MessageSquare, ToggleRight } from 'lucide-react';
+import { AlertCircle, Lock, MessageSquare, ToggleRight } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Breadcrumbs, SkeletonPage } from '../../../components/ux';
+import { SkeletonPage } from '../../../components/ux';
 import { SettingsToggle } from '../../../components/settings/SettingsToggle';
 import { emailTemplatesService } from '../../../services/api';
 import type { MemberEmailKind, MemberEmailPolicy } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 interface EmailKindCardProps {
   kind: MemberEmailKind;
@@ -108,16 +109,17 @@ const MemberEmailsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
-      <Breadcrumbs items={[{ label: 'Communications' }, { label: 'Member Emails & Texts' }]} />
-      <h1 className="text-theme-text-primary mb-2 flex items-center gap-2 text-2xl font-bold">
-        <Mail className="h-6 w-6 shrink-0" aria-hidden="true" />
-        Member Emails &amp; Texts
-      </h1>
-      <p className="text-theme-text-secondary mb-6 text-sm">
-        Every email this system sends to members and officers, and whether a member can turn it off. Turning off an
-        email never removes the notice from the member&rsquo;s bell. Email to applicants, event requesters and addresses
-        you type in yourself is not listed here.
-      </p>
+      <AdminPageHeader
+        title="Member Emails & Texts"
+        description={
+          <>
+            Every email this system sends to members and officers, and whether a member can turn it off. Turning off an
+            email never removes the notice from the member&rsquo;s bell. Email to applicants, event requesters and
+            addresses you type in yourself is not listed here.
+          </>
+        }
+        className="mb-6"
+      />
 
       {error && (
         <div role="alert" className="alert-danger mb-4 flex items-center gap-2">
