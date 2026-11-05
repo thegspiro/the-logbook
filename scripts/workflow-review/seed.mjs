@@ -298,6 +298,21 @@ async function enableEveryModule(context) {
   return updated.body.enabled_modules;
 }
 
+/**
+ * Re-verify the administrator's session. `POST /users` requires a recent
+ * step-up (LB-AUTH-013); the administrator has no second factor yet, so the
+ * account password is the proof, and the window (STEPUP_WINDOW_MINUTES, 10 by
+ * default) covers the account creation below, which signs nobody in.
+ */
+async function stepUp(context, password) {
+  const res = await apiCall(context, "POST", "/auth/step-up", { password });
+  if (res.status !== 200) {
+    throw new Error(
+      `POST /auth/step-up: ${res.status} ${JSON.stringify(res.body)}`,
+    );
+  }
+}
+
 async function createMember(context, positionIds, spec, username, password) {
   const missing = spec.positions.filter((slug) => !positionIds[slug]);
   if (missing.length)
@@ -400,6 +415,8 @@ async function main() {
     const positionIds = Object.fromEntries(
       positions.body.map((p) => [p.slug, p.id]),
     );
+
+    await stepUp(context, accounts.admin.password);
 
     const temporary = {};
     for (const spec of ROLES) {
