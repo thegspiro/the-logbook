@@ -611,14 +611,16 @@ const ItemTable: React.FC<ItemTableProps> = ({
         <h2 className="text-theme-text-secondary text-sm font-semibold tracking-wide uppercase">{label}</h2>
         <span className="text-theme-text-muted text-xs">{countLabel}</span>
       </div>
-      <div className="card-secondary overflow-x-auto">
-        {/* Single responsive table: a table on >=md, stacked cards below.
+      <div className="card-secondary rwd-table-container overflow-x-auto">
+        {/* Single responsive table: stacked cards when this wrapper is under
+            80rem (a phone, a tablet, or a laptop up to ~1366px with the side
+            navigation open), a table above. It needs ~1010px.
             Cells marked `hidden` are mobile-only (revealed by the reflow);
             cells with no data-label are hidden in the stacked view. */}
         {/* Named, because the page renders up to three of these and a screen
             reader announcing "table" three times gives no way to tell the
             pinned shortlist from the rest of the shelf. */}
-        <table aria-label={label} className="rwd-table w-full text-sm">
+        <table aria-label={label} className="rwd-table rwd-table-xwide w-full text-sm">
           <thead>
             <tr className="border-theme-surface-border border-b">
               {pinnedMode && <th scope="col" className="w-24 px-2 py-3" />}

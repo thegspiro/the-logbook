@@ -904,9 +904,10 @@ export const ReorderRequestsPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="card-secondary overflow-hidden rounded-lg md:overflow-x-auto">
-            {/* Single responsive table: a table on >=md, stacked cards below. */}
-            <table className="rwd-table w-full text-sm">
+          <div className="card-secondary rwd-table-container overflow-hidden rounded-lg md:overflow-x-auto">
+            {/* Single responsive table: stacked cards when this wrapper is
+                under 80rem (it needs ~990px), a table above. */}
+            <table className="rwd-table rwd-table-xwide w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-secondary border-b">
                   <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
