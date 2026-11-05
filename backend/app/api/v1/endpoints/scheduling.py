@@ -84,6 +84,7 @@ from app.schemas.scheduling import (
     SchedulingFeatureSettings,
     SchedulingSummary,
     SchedulingWidgetPreferences,
+    SchedulingWidgetPreferencesResponse,
     SchedulingWidgetSummary,
     ShiftAssignmentCreate,
     ShiftAssignmentResponse,
@@ -2010,7 +2011,10 @@ async def get_scheduling_widget_summary(
     )
 
 
-@router.get("/dashboard/widget-preferences", response_model=SchedulingWidgetPreferences)
+@router.get(
+    "/dashboard/widget-preferences",
+    response_model=SchedulingWidgetPreferencesResponse,
+)
 async def get_scheduling_widget_preferences(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
@@ -2032,7 +2036,11 @@ async def get_scheduling_widget_preferences(
         if item.get("platoon") not in platoons:
             item.pop("platoon", None)
         clean[key] = item
-    return {"widgets": clean}
+    return {
+        "widgets": clean,
+        "available_station_ids": sorted(stations),
+        "available_platoons": sorted(platoons),
+    }
 
 
 @router.put("/dashboard/widget-preferences", response_model=SchedulingWidgetPreferences)

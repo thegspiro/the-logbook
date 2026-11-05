@@ -410,6 +410,13 @@ export interface SchedulingWidgetPreferences {
   widgets: Record<string, SchedulingWidgetFilters>;
 }
 
+/** Saved defaults plus the station and platoon values a save would accept. */
+export interface SchedulingWidgetPreferencesResponse extends SchedulingWidgetPreferences {
+  // Optional because a backend older than the field omits them.
+  available_station_ids?: string[] | undefined;
+  available_platoons?: string[] | undefined;
+}
+
 /** Event template metadata stored in the positions field for event-category templates. */
 export interface EventTemplatePositions {
   event_type?: string;
@@ -1006,8 +1013,8 @@ export const schedulingService = {
     const response = await api.get<SchedulingWidgetSummary>('/scheduling/dashboard/widgets', { params });
     return response.data;
   },
-  async getWidgetPreferences(): Promise<SchedulingWidgetPreferences> {
-    const response = await api.get<SchedulingWidgetPreferences>('/scheduling/dashboard/widget-preferences');
+  async getWidgetPreferences(): Promise<SchedulingWidgetPreferencesResponse> {
+    const response = await api.get<SchedulingWidgetPreferencesResponse>('/scheduling/dashboard/widget-preferences');
     return response.data;
   },
   async saveWidgetPreferences(preferences: SchedulingWidgetPreferences): Promise<SchedulingWidgetPreferences> {
