@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD]** (branch `claude/security-review-elections-ballots-p15`) —
+**PR [#4052](https://github.com/thegspiro/the-logbook/pull/4052)** (branch
+`claude/security-review-elections-ballots-p15`) —
 Feature 06 (Elections & ballots), pass 15, a watchdog pickup. Real delta:
 three commits landed since pass 14's baseline — W50-R3 (frozen-roll refusal
 reason now runs after the tier/election-wide rule checks, same refused
