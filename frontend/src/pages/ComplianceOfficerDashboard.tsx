@@ -14,6 +14,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '../stores/authStore';
+import { COMPLIANCE_CONFIG_HREF, COMPLIANCE_CONFIG_PERMISSIONS } from '../components/training/trainingAdminAreas';
 import {
   Shield,
   FileText,
@@ -94,22 +96,27 @@ const KNOWN_SECTIONS: ActiveSection[] = [
 
 const ComplianceOfficerDashboard: React.FC<ComplianceOfficerDashboardProps> = ({ activeTab }) => {
   const navigate = useNavigate();
+  // The hub admits `training.manage`; the configuration page does not, so a
+  // training officer without either of these is not shown a way into it.
+  const canConfigure = useAuthStore((s) => COMPLIANCE_CONFIG_PERMISSIONS.some((p) => s.checkPermission(p)));
   const activeSection: ActiveSection =
     activeTab && (KNOWN_SECTIONS as string[]).includes(activeTab) ? (activeTab as ActiveSection) : 'annual-report';
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Configure action — section selection is handled by the admin hub tabs */}
-      <div className="mb-6 flex justify-end">
-        <button
-          onClick={() => void navigate('/training/compliance-config')}
-          className="bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-          title="Compliance Requirements Configuration"
-        >
-          <Settings className="h-4 w-4" />
-          Configure
-        </button>
-      </div>
+      {canConfigure && (
+        <div className="mb-6 flex justify-end">
+          <button
+            onClick={() => void navigate(COMPLIANCE_CONFIG_HREF)}
+            className="bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+            title="Compliance Requirements Configuration"
+          >
+            <Settings className="h-4 w-4" />
+            Configure
+          </button>
+        </div>
+      )}
 
       {/* Section Content */}
       {activeSection === 'annual-report' && <AnnualReportSection />}

@@ -238,6 +238,9 @@ export const InventoryNfcEnrollPage: React.FC = () => {
                     {[
                       current.serial_number && `S/N ${current.serial_number}`,
                       current.asset_tag && `Asset ${current.asset_tag}`,
+                      // Tells apart two items sharing a name and neither
+                      // serial nor asset tag (W44-3).
+                      current.barcode && `Barcode ${current.barcode}`,
                       current.category_name,
                       current.storage_area_name,
                     ]

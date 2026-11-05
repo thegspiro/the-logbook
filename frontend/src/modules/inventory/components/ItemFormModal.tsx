@@ -147,6 +147,14 @@ export interface ItemFormModalProps {
 /** All item types support size/style variant generation (uniforms, PPE,
  *  batteries, lights, etc. — any category where items come in different
  *  sizes, colors, or styles). */
+/**
+ * A save refused for an implausible date (owner decision 2026-11-01). The
+ * server decides the rule (`app/utils/item_dates.py`); this only recognises
+ * its refusal so it can be shown beside the dates rather than only in a toast,
+ * since both fields sit in the collapsed Financial section.
+ */
+const DATE_REFUSAL = /^(Purchase date|Warranty expiration)\b/;
+
 const VARIANT_ITEM_TYPES = new Set([
   'uniform',
   'ppe',
@@ -171,6 +179,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const [f, setF] = useState<FD>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [showFin, setShowFin] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
   // Fetched here rather than threaded through every page that opens this modal.
   // A failed load leaves the picker empty and the free-text name still usable,
   // so it never blocks adding an item.
@@ -267,6 +276,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       });
     }
     setShowFin(false);
+    setDateError(null);
     setGenerateVariants(false);
     setSelectedSizes([]);
     setSelectedStyles([]);
@@ -287,6 +297,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   );
   const has = (k: string) => tf.includes(k);
   const up = (k: keyof FD, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const upDate = (k: 'purchase_date' | 'warranty_expiration', v: string) => {
+    setDateError(null);
+    up(k, v);
+  };
+  const dateErrorProps = dateError ? ({ 'aria-invalid': true, 'aria-describedby': 'item-date-error' } as const) : {};
 
   /** Whether the selected category supports variant generation */
   const supportsVariants = !editItem && VARIANT_ITEM_TYPES.has(itemType);
@@ -470,7 +485,12 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       }
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save item'));
+      const message = getErrorMessage(err, 'Failed to save item');
+      toast.error(message);
+      if (DATE_REFUSAL.test(message)) {
+        setDateError(message);
+        setShowFin(true);
+      }
     } finally {
       setSaving(false);
     }
@@ -928,7 +948,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                       type="date"
                       className={inp}
                       value={f.purchase_date}
-                      onChange={(e) => up('purchase_date', e.target.value)}
+                      onChange={(e) => upDate('purchase_date', e.target.value)}
+                      {...dateErrorProps}
                     />
                   </div>
                   <div>
@@ -975,8 +996,14 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                       type="date"
                       className={inp}
                       value={f.warranty_expiration}
-                      onChange={(e) => up('warranty_expiration', e.target.value)}
+                      onChange={(e) => upDate('warranty_expiration', e.target.value)}
+                      {...dateErrorProps}
                     />
+                    {dateError && (
+                      <p id="item-date-error" role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                        {dateError}
+                      </p>
+                    )}
                   </div>
                 </>
               )}

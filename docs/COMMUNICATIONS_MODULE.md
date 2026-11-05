@@ -316,8 +316,9 @@ questions keeps its single page.
 Accepted limits — server-side timing correlation (the reviewer email's send
 time, in-app `sent_at`, session activity), a reverse proxy the operator runs in
 front of the app (it logs these routes unless configured the same way;
-`docs/deployment/aws.md` and `docs/deployment/azure.md` show how for their
-host nginx), unrecoverable keys,
+`docs/deployment/aws.md`, `docs/deployment/azure.md`,
+`docs/deployment/gcp.md` and `docs/deployment/digitalocean.md` show how for
+their host nginx), unrecoverable keys,
 screenshot content, and exact file `ctime` — are recorded in
 [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) under "Suggestion Boxes — What
 Anonymity Does and Does Not Cover".

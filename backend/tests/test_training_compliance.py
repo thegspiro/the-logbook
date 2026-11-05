@@ -1223,6 +1223,7 @@ class TestEvaluateRequirementDetailFields:
             "completed_hours",
             "progress_percentage",
             "is_met",
+            "overridden",
             "due_date",
             "days_until_due",
             "waived_months",

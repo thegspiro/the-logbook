@@ -32,6 +32,7 @@ from app.services.training_period import (
 )
 from app.services.training_waiver_service import (
     SOURCE_LEAVE,
+    SOURCE_OVERRIDE,
     SOURCE_WAIVER,
     MonthWaiver,
     WaiverPeriod,
@@ -39,6 +40,7 @@ from app.services.training_waiver_service import (
     excused_month_reasons,
     fetch_org_waivers,
     get_rolling_period_months,
+    override_covers,
 )
 from app.utils.hours import meets_required_hours
 from app.utils.membership import MemberStatus, canonical_member_status
@@ -589,10 +591,13 @@ class AttendanceTally:
     needed: int
     base_needed: int
     latest_attended: Optional[date]
+    # A Chief's override covers the cut-off of a member short of the count
+    # (TrainingRequirementOverride): met, with the count reported as it is.
+    overridden: bool = False
 
     @property
     def met(self) -> bool:
-        return self.attended >= self.needed
+        return self.overridden or self.attended >= self.needed
 
 
 def _sessions_needed(pct: float, count: int) -> int:
@@ -601,6 +606,9 @@ def _sessions_needed(pct: float, count: int) -> int:
 
 
 def _waiver_excuses(waiver: WaiverPeriod, req_id: str, day: date) -> bool:
+    # An override excuses no session; it decides the result instead.
+    if waiver.source == SOURCE_OVERRIDE:
+        return False
     # The same reading of requirement_ids as excused_month_reasons: an
     # empty or missing list is a blanket waiver.
     if waiver.requirement_ids and req_id not in [
@@ -626,7 +634,8 @@ def tally_session_attendance(
     cut-off and on or after ``join_date``; a member is not charged with a
     drill held before they joined. A member attended it when they hold a
     COMPLETED record whose ``source_event_id`` is the session's event, the
-    record finalizing the session writes.
+    record finalizing the session writes. A Chief's override covering
+    ``as_of`` makes the tally met; the counts stay as they are.
     """
     start, end = completion_window(req, as_of)
     last = as_of if end is None else min(end, as_of)
@@ -651,13 +660,21 @@ def tally_session_attendance(
     ]
     attended = [s for s in charged if s.event_id in attended_events]
     pct = float(req.required_attendance_pct or 0)
+    needed = _sessions_needed(pct, len(charged))
     return AttendanceTally(
         attended=len(attended),
         charged=len(charged),
         held=len(in_window),
-        needed=_sessions_needed(pct, len(charged)),
+        needed=needed,
         base_needed=_sessions_needed(pct, len(in_window)),
         latest_attended=max((s.held_on for s in attended), default=None),
+        # Only for a member who would otherwise fall short, so "met by
+        # override" never labels one who met it, and only while the
+        # requirement still accepts overrides: switching the setting off
+        # suspends every override on it without erasing them.
+        overridden=len(attended) < needed
+        and bool(getattr(req, "allows_chief_override", False))
+        and override_covers(waivers, req_id, as_of),
     )
 
 
@@ -755,6 +772,8 @@ class RequirementEvaluation:
     window_end: Optional[str] = None
     as_of: Optional[str] = None
     catch_up_deadline: Optional[str] = None
+    # Met by a Chief's override rather than by the count (SESSION_ATTENDANCE).
+    overridden: bool = False
 
 
 def evaluate_member_requirement_detail(
@@ -1173,7 +1192,10 @@ def _grade_member_requirement(
         # the member owes nothing for the window, as a target prorated to
         # zero is for shifts and calls.
         if tally.met:
-            return _ev("completed", latest_comp, None, **progress)
+            return replace(
+                _ev("completed", latest_comp, None, **progress),
+                overridden=tally.overridden,
+            )
         if tally.attended > 0:
             return _ev("in_progress", latest_comp, None, **progress)
         return _ev("not_started", None, None, **progress)

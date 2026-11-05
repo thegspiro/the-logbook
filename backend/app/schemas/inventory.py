@@ -499,6 +499,11 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     # Active items filed here. Set by the medical category list only; other
     # lists leave it empty rather than report a count they did not take.
     item_count: Optional[int] = None
+    # An active sibling (same parent and domain) has the same name, trimmed and
+    # case-folded. Only duplicates stored before names were checked can be in
+    # this state; the gear and medical category lists set it, other responses
+    # leave it false.
+    duplicate_name: bool = False
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

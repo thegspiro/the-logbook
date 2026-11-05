@@ -82,6 +82,8 @@ export interface EvaluatedCell {
   dateLabel: string;
   /** Set only when a waiver moved the target. */
   waiverNote: string | null;
+  /** Set only when the Chief's override, not the count, met the requirement. */
+  overrideNote: string | null;
 }
 
 export interface EvaluatedMember {
@@ -308,6 +310,7 @@ export const evaluateCell = (
     progressLabel: progressLabelOf(cell, tone, basis),
     dateLabel: dateLabelOf(cell, tone),
     waiverNote: waiverNoteOf(cell),
+    overrideNote: cell.overridden ? "Met by the Chief's override" : null,
   };
 };
 

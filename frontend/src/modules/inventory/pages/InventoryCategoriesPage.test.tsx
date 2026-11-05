@@ -213,3 +213,24 @@ describe('InventoryCategoriesPage', () => {
     expect(mockCreateCategory).not.toHaveBeenCalled();
   });
 });
+
+describe('InventoryCategoriesPage duplicate names', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  it('flags a grandfathered duplicate and leaves other cards alone', async () => {
+    mockGetCategories.mockResolvedValue([
+      makeCategory({ id: 'cat-a', name: 'Radios', duplicate_name: true }),
+      makeCategory({ id: 'cat-b', name: 'radios', duplicate_name: true }),
+      makeCategory({ id: 'cat-c', name: 'Turnout Gear', duplicate_name: false }),
+    ]);
+    renderWithRouter(<InventoryCategoriesPage />);
+    await screen.findByText('Turnout Gear');
+
+    // Three cards, two flagged: the unflagged Turnout Gear card carries none.
+    expect(screen.getAllByText('Duplicate name')).toHaveLength(2);
+  });
+});

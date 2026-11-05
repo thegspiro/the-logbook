@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-11-01 (pass 14) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 ([#3809](https://github.com/thegspiro/the-logbook/pull/3809)), pass 14 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-11-01 (pass 14), 2026-11-05 (pass 15) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 ([#3809](https://github.com/thegspiro/the-logbook/pull/3809)), pass 14 ([#3904](https://github.com/thegspiro/the-logbook/pull/3904)), pass 15 (this PR)
 
 ---
 
@@ -109,6 +109,172 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 15 (2026-11-05) — watchdog pickup, real delta: W50-R3 frozen-roll ordering, the tier lookup unified onto `member_status`; 0 fixed, 0 new findings
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests`
+(`state=open`) returned 6 open PRs, none with a head branch starting
+`claude/security-review-`. PR #4043 (Feature 05, Finance & approvals, pass 15) had already merged (`683d04493`, confirmed by `git log -1 origin/main`).
+Row 06 (Elections & ballots) is the next `⬜` row in `PROGRESS.md`'s
+rotation table. Watchdog pickup — the dedicated `/loop 30m /security-review`
+session remains unreachable (confirmed via `ListAgents`, no reachable
+agents).
+
+**Baseline and delta.** Baseline is pass 14's merge (`eaa75b2cb`, PR #3904,
+2026-11-01). `git diff --stat eaa75b2cb..HEAD` across this feature's
+established scope (`elections.py`, `election_service.py`,
+`schemas/election.py`, `models/election.py`, the frontend
+`modules/elections`/`pages/Elections*`/`pages/ElectionDetailPage*`/
+`components/Election*`/`services/electionService.ts`/`utils/election*`
+tree) is small: only `election_service.py` (75/66 lines) and
+`ElectionsPage.tsx` (9/1 lines, plus its tests) carry a diff. `elections.py`
+(the endpoint file) and `minutes_election_filing.py` (ELEC-49's file) are
+byte-identical to the baseline. Three non-merge commits touch the scope:
+
+1. **`88ec8b90a` — W50-R3: a member off the frozen roll is now told the
+   rule they still fail, not just "contact the administrator."**
+   `check_voter_eligibility`'s snapshot check no longer returns immediately;
+   it records `off_frozen_roll` and the tier/election-wide rule checks still
+   run first, returning their own reason if one fails. The frozen-roll
+   refusal is returned only after both pass — before the position/ballot-
+   item checks, since the roll bars every race. **Verified this does not
+   change who is refused, only the reason text and its ordering:** read in
+   full (`election_service.py:1780-1869` before and after) — every path
+   that previously returned `is_eligible=False` immediately for an
+   off-roll member still returns `is_eligible=False` for them, either from
+   a tier/rule check or from the relocated frozen-roll return at line
+   1858-1869; nothing reclassifies an off-roll member as eligible. Guard:
+   `TestOffTheFrozenRoll` (pre-existing, 4 cases, re-ran: 4 passed).
+2. **`aa68e2b02` — W50-R4/R5: frontend-only** (date format on the waiting-
+   period reason; the Create Election position input is now
+   `role="combobox"` with `aria-autocomplete`/`aria-expanded`/
+   `aria-controls`). No backend touch; re-read the diff directly — neither
+   change touches a data flow, a permission gate, or user-controlled input
+   handling, only ARIA attributes and a display format. `git show --stat`
+   confirms zero backend files in this commit.
+3. **`e5fda67e8` — Members feature's own commit (batch 3 of the owner's
+   2026-11-01 decisions); its only touch to this feature's scope is 75/66
+   lines in `election_service.py`**, unifying `_tier_benefits`/`_tier_name`
+   and the quorum denominator onto the shared `tier_for_member` /
+   `configured_tiers` / `tier_benefits` helpers in `app/utils/membership.py`
+   (the same shared-gate pattern Pitfall #29 asks for) instead of a
+   `membership_type`-keyed inline lookup. The commit message states the bug
+   this closes: _"keyed on the legacy membership_type, an administrative
+   member on the 'senior' tier found no tier at all and voted and stood for
+   office whatever the tier said."_ Read in full rather than taken on the
+   commit message's word — see **Verified good** below for what each call
+   site now does and why it is correct.
+
+**Re-enumeration (AST, not inherited from pass 14's count).** `elections.py`:
+**75 routes — unchanged from pass 14.** Every route still carries a
+`Depends(...)` in its signature — 0 routes with no auth dependency.
+Classification unchanged: 5 public/token-scoped, 7 self-service/sign-in-only
+(matching `tests/permissionless_route_baseline.txt`'s 7 `elections.py`
+entries, re-diffed — identical), 1 OR-gated (`list_candidates`), 62
+single-permission `require_permission`-gated. No route was added, removed,
+or re-gated this pass.
+
+## Verified good ✅ (pass 15)
+
+- **The tier-lookup unification is correct at every call site it reached.**
+  `_member_tier` (`election_service.py:594`) now resolves through
+  `tier_for_member(configured_tiers(org.settings), user)`, which in turn
+  calls `member_standing(user)` — `member_status` first, `membership_type`
+  only when `member_status` is absent or not a string
+  (`app/utils/membership.py:411-436`). Read `standing_from` directly: a
+  `MagicMock` user in the pre-existing test suite (`membership_type` set,
+  `member_status` left as an un-set `MagicMock` attribute) resolves correctly
+  because `isinstance(member_status, str)` is `False` for an unset mock
+  attribute, so it falls through to the legacy field exactly as the old
+  inline code did — confirmed by the scoped pytest run (below) rather than
+  inferred.
+- **The voting-eligibility gate's actual decision is unchanged by the
+  refactor — only its lookup mechanism is.** `check_voter_eligibility`
+  (`election_service.py:1794-1806`), `_universal_gate`
+  (`election_service.py:1094-1098`), and `can_hold_office`
+  (`election_service.py:4884`) all call `_tier_benefits`/`_tier_name`, which
+  now read the member's _standing_ (status-first) rather than only their
+  legacy `membership_type` — strictly widening correct detection (an
+  administrative member who holds a configured tier is now subject to that
+  tier's `voting_eligible`/`can_hold_office` benefits, where before they
+  silently bypassed them), never narrowing it: `tier_for_member` falls back
+  to the regular rung when nothing is recorded, matching the legacy
+  `"active"` default exactly.
+- **Remaining `getattr(user, "membership_type", None)` call sites
+  (`election_service.py:1293,1397,1878,1909,11980,12058`) are display-text
+  only — a human-readable "member has: {type}" string built _after_ the
+  real decision was already made by `_user_has_role_type`** (which already
+  reads the `member_class`/`member_status` split with the tier's own
+  `ranks_as` resolution, `election_service.py:936-989`, unchanged this
+  pass) **or by `_tier_benefits`/`_tier_name`**. None of the six feed back
+  into an eligibility decision; confirmed by reading each call site's
+  containing function.
+- **The quorum denominator's per-row loop
+  (`election_service.py:3425-3449`) stays org- and active-scoped** — the
+  replaced query carries the same `User.organization_id ==
+str(organization_id)` / `User.is_active` filters as the grouped query it
+  replaces (XC-3-compliant), and `organization_id` is the election's own
+  (resolved from the already-org-scoped election, never a client-supplied
+  id on this path) — confirmed by reading the caller chain, not assumed.
+- **Standing findings re-confirmed unchanged by direct re-read (not
+  inherited from pass 14's text):** ELEC-12 (fixed, cap unchanged — file
+  untouched this pass), ELEC-14 (fixed, file untouched), ELEC-16 (accepted
+  as is, `list_manual_ballot_batches` still unbounded, file untouched),
+  ELEC-28/W50-10 (resolved per pass 13, file untouched), ELEC-40 (flagged,
+  `_validate_ballot_item_identities` still present at
+  `schemas/election.py:88`, file untouched), ELEC-48 (flagged, both
+  synchronous send endpoints — `send_ballot_emails`, `send_pre_meeting_
+package` — still present with no row lock, `elections.py` byte-identical
+  to the pass-14 baseline), ELEC-49 (flagged, `minutes_election_filing.py`
+  byte-identical to the pass-14 baseline — `git diff --stat
+eaa75b2cb..HEAD` on that path returns nothing), ELEC-50 (fixed, guard
+  test unchanged), ELEC-51 (fixed pass 14, `_get_ineligibility_reason_for_
+user` still calls `_universal_gate`, unchanged by this pass's refactor since
+  it already went through the shared helper before `e5fda67e8` landed).
+- **app-review's ELEC2-9** (default election settings had no reader) —
+  already resolved by `83cf79802` before pass 14, re-confirmed still wired.
+  **ELEC2-8** (`has_user_voted` has no production caller) remains an
+  app-review LOW/dead-code flag, not a security finding; out of this
+  rotation's scope and unchanged.
+
+No finding was opened this pass. The real delta (three commits) was each
+read in full against the checklist's seven dimensions; none introduced a new
+authentication, authorization, tenant-isolation, injection, exposure, abuse,
+or schema/migration defect, and one (`e5fda67e8`'s tier-lookup unification)
+closed a real correctness gap in who a tier's voting/office-holding
+restriction applies to — verified rather than taken on its commit message.
+
+## Schema & migration notes (pass 15)
+
+No migration lands in this feature's scope this pass. `validate_migrations.py
+--strict` re-run: single head, no fork (722 revisions — up from 682 at pass
+14, entirely from other features' work in the window; see **Completion
+gate**).
+
+## Guard tests added (pass 15)
+
+None — no fix was made this pass (the delta was already correct on arrival).
+`TestOffTheFrozenRoll` and the tier-benefit test suites
+(`test_elections.py`, `test_election_office_eligibility.py`,
+`test_election_eligibility_rules.py`) were re-run, not re-written, as part
+of the scoped pytest pass below.
+
+## Completion gate (pass 15)
+
+| Check                                                        | Result                                          |
+| ------------------------------------------------------------ | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                         | ✅ clean, 2921 files unchanged                  |
+| `isort --check-only app/ tests/ alembic/`                    | ✅ clean (isort 9.0.2, already installed)       |
+| `validate_migrations.py --strict`                            | ✅ 722 revisions, single head `89cfef37cca8`    |
+| `check_route_permissions.py --strict` (repo root)            | ✅ 301 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "election or ballot or vote or candidate"` | ✅ 1317 passed, 1 skipped (env-only `py_vapid`) |
+| `cd frontend && npm run typecheck`                           | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings                         |
+
+**0 fixed, 0 new OPEN/FLAGGED findings** (ELEC-16, ELEC-40, ELEC-48, ELEC-49
+re-confirmed unchanged from pass 14, all already mirrored in
+`docs/KNOWN_LIMITATIONS.md`).
 
 ## Pass 14 (2026-11-01) — watchdog pickup, real delta: election-wide voter eligibility rules, per-member voting-wait override, wired election defaults
 

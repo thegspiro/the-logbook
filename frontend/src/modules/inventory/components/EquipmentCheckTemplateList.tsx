@@ -234,7 +234,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                   aria-checked={template.isActive}
                   aria-label={`${template.name} active`}
                   className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                    template.isActive ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    template.isActive ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span

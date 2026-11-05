@@ -49,6 +49,7 @@ import { ItemFormModal } from '../components/ItemFormModal';
 import type { CategoryPreset, InventoryCategory, InventorySetupStatus, Location, StorageAreaResponse } from '../types';
 import { STORAGE_TYPES, ITEM_TYPES } from '../types';
 import { INVENTORY_TERMS } from '../terminology';
+import { buildingNotInName } from '../../../utils/locationLabel';
 
 const STEPS = [
   { label: 'Rooms', description: 'Where equipment lives' },
@@ -483,12 +484,15 @@ const InventorySetupPage: React.FC = () => {
                   value={selectedRoomId}
                   onChange={(e) => setSelectedRoomId(e.target.value)}
                 >
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                      {l.building ? ` — ${l.building}` : ''}
-                    </option>
-                  ))}
+                  {locations.map((l) => {
+                    const building = buildingNotInName(l.name, l.building);
+                    return (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                        {building ? ` — ${building}` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

@@ -48,7 +48,9 @@ export const CardTapTable: React.FC<CardTapTableProps> = ({
   columns = ALL_COLUMNS,
   targetLabel = 'Checked into',
 }) => (
-  <table className="rwd-table w-full text-sm">
+  // rwd-table-wide takes effect only under an rwd-table-container, so the
+  // callers that do not mark their card one keep the 767px reflow alone.
+  <table className="rwd-table rwd-table-wide w-full text-sm">
     <thead>
       <tr className="text-theme-text-secondary text-left">
         <th className="p-3">Time</th>

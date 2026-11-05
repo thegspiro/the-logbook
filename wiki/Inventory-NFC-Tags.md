@@ -174,6 +174,9 @@ item whose only tag is marked lost counts as untagged. Narrow the list with
 - A typed or USB-read serial works in either mode. **Skip this item** passes
   one over.
 
+Each item shows its barcode with its serial, asset tag, category and storage
+area, so two items with the same name can be told apart.
+
 With inventory NFC off, the page says "NFC tag tracking is turned off for your
 department. An administrator can turn it on under NFC Tags." _(2026-09-29)_ —
 the same wording as Put Away and Shelf Audit. It used to tell a quartermaster to
@@ -432,26 +435,25 @@ lists active items nobody has handled in 30, 90, 180 (the default) or 365
 days, never-handled first. "Handled" is the latest of:
 
 - a tap by a quartermaster (lookup, put-away or shelf audit);
+- a barcode put-away, for each item filed or found already on the shelf;
 - an assignment to a member, or its return;
 - a checkout or check-in;
-- a pool issuance, or its return.
+- a pool issuance, or its return;
+- the item's creation or import.
 
-Editing an item's record does **not** count, and neither does a barcode
-put-away, which leaves no per-item record to read. Retired items are left out.
+Creation and barcode put-aways count since 2026-11-05 (owner decisions of
+2026-11-01). Items created before then were not back-dated, so one never
+handled still reads **Never**. Editing an item's record does **not** count.
+Retired items are left out. The storage area column names an area only while it
+exists: an item whose area was deleted shows none, as its own page does.
 **Download CSV** exports up to 5,000 rows. The report works with NFC turned
 off.
-
-Known quirks from workflow review W44 (open, cosmetic): an item created today
-and never handled is listed as **Never**, ahead of everything, because creation
-is not handling (W44-2); an item whose storage area was deleted still shows that
-area's name here, while its own page shows "--" (W44-4). On **Tag Items in
-Bulk**, two items with the same name and no serial or asset tag read
-identically, since the list does not carry the barcode (W44-3).
 
 ### Last Seen
 
 The item page shows **Last Seen (NFC)** below the NFC Tags card: the ten most
-recent taps, with who tapped and where the item was put.
+recent taps, with who tapped and where the item was put. The same list also
+shows when the item was added and its barcode put-aways.
 
 **Only taps by `inventory.manage` holders are logged.** That covers scanner
 lookups, a quartermaster opening a written tag, and every put-away. A member

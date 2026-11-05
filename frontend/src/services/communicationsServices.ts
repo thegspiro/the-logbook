@@ -314,6 +314,8 @@ export interface ComplianceMatrixCell {
   as_of?: string | null;
   /** With status "catch_up": the date an existing member has until. */
   catch_up_deadline?: string | null;
+  /** Met by the Chief's override rather than by the count; absent from an older server. */
+  overridden?: boolean;
 }
 
 export interface ComplianceMatrixMember {
@@ -342,6 +344,8 @@ export interface ComplianceMatrixRequirement {
   frequency?: string | null;
   target?: number | null;
   target_unit?: string | null;
+  /** The viewer may record a Chief's override on this requirement. */
+  can_override?: boolean;
 }
 
 export interface ComplianceMatrix {

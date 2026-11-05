@@ -189,6 +189,10 @@ export interface TrainingSettings {
   unmatched_provider_action?: UnmatchedProviderAction | null;
   /** Subject key -> course id; a subject with no entry is imported as written. */
   subject_courses: Record<string, string>;
+  /** A yes/no column marking a department drill; absent from an older server. */
+  drill_column?: string;
+  drill_requirement_ids?: string[];
+  drill_min_members?: number;
 }
 
 export interface TrainingSettingsUpdate {
@@ -199,6 +203,10 @@ export interface TrainingSettingsUpdate {
   unmatched_provider_action?: UnmatchedProviderAction | null;
   /** Merged by key; null removes a subject's mapping. */
   subject_courses?: Record<string, string | null>;
+  drill_column?: string;
+  /** Replaces the set of attendance requirements the drills count toward. */
+  drill_requirement_ids?: string[];
+  drill_min_members?: number;
 }
 
 export interface TrainingSubject {
@@ -236,4 +244,41 @@ export interface TrainingPreview {
     provider_unmatched_skipped?: number;
     members_created?: number;
   } | null;
+}
+
+export interface DrillDate {
+  date: string;
+  members: number;
+  session_created: boolean;
+}
+
+export interface DrillRequirementOption {
+  id: string;
+  name: string;
+  required_attendance_pct?: number | null;
+}
+
+export interface DrillResult {
+  sessions_created?: number;
+  sessions_relinked?: number;
+  records_attached?: number;
+  committed_at?: string;
+}
+
+/** The CompanyDrill rows by date: which dates become held drills. */
+export interface DrillPreview {
+  settings: TrainingSettings;
+  headers: string[];
+  drill_rows: number;
+  drill_dates: number;
+  qualifying_dates: number;
+  qualifying_rows: number;
+  sessions_created: number;
+  /** One page of qualifying dates, newest first. */
+  dates: DrillDate[];
+  requirements: DrillRequirementOption[];
+  /** The drills attach the records the training step wrote. */
+  training_committed: boolean;
+  can_commit: boolean;
+  result?: DrillResult | null;
 }

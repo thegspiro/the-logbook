@@ -214,7 +214,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
   -f docker-compose.external-services.yml up -d
 ```
 
-See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions, [Azure Deployment Guide](docs/deployment/azure.md) for Azure, or [Production Deployment](wiki/Deployment-Production.md#cloud-platforms) for other cloud platforms.
+See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions, [Azure Deployment Guide](docs/deployment/azure.md) for Azure, [Google Cloud Deployment Guide](docs/deployment/gcp.md) for Google Cloud, [DigitalOcean Deployment Guide](docs/deployment/digitalocean.md) for DigitalOcean, or [Production Deployment](wiki/Deployment-Production.md#cloud-platforms) for other cloud platforms.
 
 </details>
 
@@ -348,13 +348,20 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 | **Windows** (WSL2)                                       | x86_64        | All               | ✅ Full support  |
 | **Raspberry Pi 4/5**                                     | ARM64         | minimal, standard | ✅ Full support  |
 | **Raspberry Pi 3**                                       | ARMv7         | —                 | ❌ Not supported |
-| **AWS** (EC2, ECS, Fargate)                              | x86_64, ARM64 | All               | ✅ Full support  |
-| **Azure** (VMs, Container Instances)                     | x86_64        | All               | ✅ Full support  |
-| **Google Cloud** (Compute, Cloud Run)                    | x86_64        | All               | ✅ Full support  |
-| **DigitalOcean** (Droplets, App Platform)                | x86_64        | All               | ✅ Full support  |
+| **AWS** (EC2 VM)                                         | x86_64, ARM64 | All               | ✅ Full support  |
+| **Azure** (VM)                                           | x86_64        | All               | ✅ Full support  |
+| **Google Cloud** (Compute Engine VM)                     | x86_64        | All               | ✅ Full support  |
+| **DigitalOcean** (Droplet)                               | x86_64        | All               | ✅ Full support  |
 | **Proxmox VE** (LXC, VM)                                 | x86_64        | All               | ✅ Full support  |
 | **Synology NAS** (DS+, XS+ series)                       | x86_64        | minimal, standard | ✅ Full support  |
 | **Unraid**                                               | x86_64        | standard          | ✅ Optimized     |
+
+Every cloud row means the Docker Compose stack on a virtual machine. Container
+services — AWS ECS and Fargate, Azure Container Instances, Google Cloud Run,
+DigitalOcean App Platform — are not supported: the repository ships no
+definitions for them, and they would need the persistent `uploads` and
+`audit_archives` volumes, the ClamAV sidecar and the startup migration lock
+re-created by hand.
 
 ARMv7 (32-bit) hosts cannot run the stack: the ClamAV image every profile requires is published for amd64, arm64 and ppc64le only.
 
@@ -372,6 +379,8 @@ ARMv7 (32-bit) hosts cannot run the stack: the ClamAV image every profile requir
 - [General Deployment Guide](docs/DEPLOYMENT.md) — Overview of all deployment methods
 - [AWS Deployment](docs/deployment/aws.md) — EC2, RDS, and ElastiCache
 - [Azure Deployment](docs/deployment/azure.md) — Azure VM, Azure Database for MySQL, and Azure Managed Redis
+- [Google Cloud Deployment](docs/deployment/gcp.md) — Compute Engine, Cloud SQL for MySQL, and Memorystore for Redis
+- [DigitalOcean Deployment](docs/deployment/digitalocean.md) — Droplet, Managed MySQL, and Managed Valkey
 - [Proxmox Deployment](docs/deployment/proxmox.md) — LXC and VM
 - [Synology NAS Deployment](docs/deployment/synology.md) — Docker on Synology DS+/XS+
 - [Unraid Quick Start](unraid/QUICK-START.md) — One-command Unraid setup
