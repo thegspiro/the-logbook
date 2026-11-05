@@ -37,6 +37,7 @@ from app.models.user import User
 from app.schemas.historical_import import (
     AdminPreview,
     AdminSettingsUpdate,
+    DrillPreview,
     HistoricalImportDetail,
     HistoricalImportListResponse,
     HistoricalImportSettingsUpdate,
@@ -473,6 +474,56 @@ async def accept_suggested_courses(
     try:
         record = await service.get(org, str(import_id), for_update=True)
         return {"mapped": await service.accept_suggested_courses(record)}
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.get("/{import_id}/drills", response_model=DrillPreview)
+async def get_drill_preview(
+    import_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """The CompanyDrill rows by date: which dates have enough members to
+    become held drills, and the attendance requirements they can count
+    toward."""
+    service = HistoricalImportService(db)
+    try:
+        record = await service.get(str(current_user.organization_id), str(import_id))
+        return await service.drill_preview(record, offset=offset, limit=limit)
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post("/{import_id}/drills/commit", response_model=DrillPreview)
+async def commit_drills(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Make each qualifying drill date a held training session linked to the
+    chosen requirements, and attach the members' imported records to it. Run
+    after the training rows are imported; running it again creates nothing
+    twice and re-links the sessions to the requirements chosen now."""
+    org = str(current_user.organization_id)
+    service = HistoricalImportService(db)
+    try:
+        counts = await service.commit_drills(org, str(import_id), str(current_user.id))
+    except Exception as exc:
+        raise _http_error(exc)
+    await log_audit_event(
+        db=db,
+        event_type="historical_import_drills_committed",
+        event_category="integrations",
+        severity="INFO",
+        event_data={"organization_id": org, "import_id": str(import_id), **counts},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    try:
+        return await service.drill_preview(await service.get(org, str(import_id)))
     except Exception as exc:
         raise _http_error(exc)
 
