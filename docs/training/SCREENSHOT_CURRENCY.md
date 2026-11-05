@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Queued by the November 4 – 5 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | Shift list with the **Awaiting approval** filter and **Approve** | Create |
+| 02 | Session Attendance requirement form | Create |
+| 16 | Historical Data Import, **5. Training** | Create |
+| 01 | Member profile **Shift & Call History** | Create |
+| 02, 08 | Training Admin **Settings & Data** with the Compliance Settings card | Replace |
+| 00 | Dashboard Department pulse and Today's Staffing | Replace |
+| 13 | Medical Screening requirement with **Not linked to a requirement** | Replace |
+
 ## Queued by the November 3 – 4 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-3--4-2026).

@@ -5,6 +5,35 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 4 – 5, 2026
+
+Merged to `main` after `9df03d0d` (2026-11-04 12:53 UTC) through `905bd6cf`
+(2026-11-05 03:22 UTC), 26 merges. Security-review passes (finance-approvals,
+storefront-payments, public-surface-webhooks) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                          | Guide                  | Disposition                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------- |
+| Scheduling batch 4 (#4044): **Require approval for outside-department shifts** with an **Awaiting approval** filter; open-swap bell notice; seats filled by officer override; **Certifications that qualify** per position; seat labels in notices and rosters; close-out capped at 100 credits | 03                     | Added; "There is no approval step" corrected                                  |
+| Training batch 4 (#4044): name matching only for older records; cohort wizard fields; editing an approved shift report corrects its credit; students can open a cohort page                                                                                                                     | 02                     | Added; "Students cannot open a cohort page" corrected                         |
+| **Session Attendance** requirement and **Counts toward attendance** (#4036, #4039)                                                                                                                                                                                                              | 02                     | Added                                                                         |
+| Compliance Settings moved to **Training Admin → Settings & Data** (#4047)                                                                                                                                                                                                                       | 02, 08                 | Path updated in both                                                          |
+| Evaluations: counts on tabs, actions in the header (#4011); section grades (#3995)                                                                                                                                                                                                              | 02                     | Header text updated; #3995's grading was already described                    |
+| Historical Data Import parts 3–4: training records, and **Shift & Call History** on the member profile (#4033, #4029)                                                                                                                                                                           | 01, 02, 16             | Sections added; 16's TOC extended                                             |
+| Dashboard review fixes (#4050): Department pulse, **Today**, **All clear · n checks**, **None scheduled**, Scheduling Operations defaults                                                                                                                                                       | 00, 08                 | Added                                                                         |
+| Members batch 3 (#4024): tier names for every member, tier rules follow membership status, supervision loops refused, **My Crew**, starting status tiers; medical screening grace periods, detail permission and linked requirements                                                            | 01, 04, 08, 13, 14, 15 | Added; 13's "type 0 saves 30" and prospect-screening contradictions corrected |
+| Toggle tracks on touch (#4048); "Draft saved" on an unchanged purchase request (#4037); Move tag and Card Readers wording (#4035); Public Information on the legacy onboarding path (#4010)                                                                                                     | none                   | No guide text quotes these                                                    |
+| Operator-facing: alembic head merges (#4025, #4041), workflow-review seed (#4045), Dependabot (#4026, #4027, #4028)                                                                                                                                                                             | none                   | `UPGRADING` entries for #4024 and #4044 written with the changes              |
+| Docs merges (#4032, #4038, #4042)                                                                                                                                                                                                                                                               | none                   | Already documentation                                                         |
+
+**Screenshots to create:** Scheduling **Awaiting approval** filter; Session
+Attendance requirement form; Historical Data Import training section; profile
+**Shift & Call History**. **Replace:** Training Admin Settings & Data (Compliance
+Settings card); dashboard Department pulse and Today's Staffing; Medical
+Screening requirement badge. See `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts. None describes these screens.
+
 ## Change audit: November 3 – 4, 2026
 
 Merged to `main` after `12f1430d` (2026-11-03 16:55 UTC) through `9df03d0d`
