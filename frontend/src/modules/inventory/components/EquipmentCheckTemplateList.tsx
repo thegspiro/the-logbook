@@ -140,7 +140,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
             form-input's own mobile-only floor. */}
         <a
           href="/inventory/admin/checklists/templates/new"
-          className="touch:min-h-[44px] flex items-center gap-1 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-800"
+          className="touch:min-h-[44px] flex items-center gap-1 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900"
         >
           <Plus className="h-3.5 w-3.5" /> Create Template
         </a>
@@ -178,7 +178,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                 type="checkbox"
                 checked={hideInactive}
                 onChange={(e) => setHideInactive(e.target.checked)}
-                className="border-theme-surface-border h-3.5 w-3.5 rounded text-violet-600 focus:ring-violet-500"
+                className="form-checkbox"
               />
               Hide inactive templates
             </label>
@@ -199,7 +199,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
           </p>
           <a
             href="/inventory/admin/checklists/templates/new"
-            className="touch:min-h-[44px] inline-flex items-center gap-1 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-800"
+            className="touch:min-h-[44px] inline-flex items-center gap-1 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900"
           >
             <Plus className="h-3.5 w-3.5" /> Create First Template
           </a>
@@ -295,7 +295,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                 <div className="flex shrink-0 items-center gap-0.5">
                   <a
                     href={`/inventory/admin/checklists/templates/${template.id}`}
-                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] flex items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:p-1.5"
+                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] hover:bg-theme-surface-hover hover:text-theme-text-primary flex items-center justify-center rounded-md p-2 transition-colors sm:p-1.5"
                     aria-label={template.isActive ? `Edit ${template.name}` : `Continue editing ${template.name}`}
                   >
                     <Pencil className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
@@ -306,7 +306,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                     document={StationDocument.APPARATUS_CHECK_SHEET}
                     recordId={template.id}
                     label=""
-                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] flex items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:p-1.5"
+                    className="text-theme-text-muted touch:min-h-[44px] touch:min-w-[44px] hover:bg-theme-surface-hover hover:text-theme-text-primary flex items-center justify-center rounded-md p-2 transition-colors sm:p-1.5"
                   />
                   <button
                     onClick={() => setCloneTarget(template)}

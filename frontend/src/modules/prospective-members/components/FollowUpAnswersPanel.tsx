@@ -2,9 +2,10 @@
  * Follow-up Answers Panel
  *
  * The answers an applicant gave on their submitted follow-up forms, for the
- * Interview page. A sensitive answer is shown only to a viewer the backend
- * reveals it to (sensitive_answers.view, audit-logged); anyone else sees that
- * it was withheld rather than a blank that reads as "not answered".
+ * Interview page, read through the interview route. A sensitive answer is
+ * shown only to a viewer the backend reveals it to (sensitive_answers.view, or
+ * an interviewer assigned to this applicant, audit-logged); anyone else sees
+ * that it was withheld rather than a blank that reads as "not answered".
  * Renders nothing for an applicant with no submitted form.
  */
 
@@ -32,7 +33,7 @@ const FollowUpAnswersPanel: React.FC<FollowUpAnswersPanelProps> = ({ applicantId
     const load = async () => {
       const requests = await followUpFormService.list(applicantId);
       const submitted = requests.filter((r) => r.status === FollowUpFormStatus.SUBMITTED);
-      return Promise.all(submitted.map((r) => followUpFormService.getAnswers(applicantId, r.id)));
+      return Promise.all(submitted.map((r) => followUpFormService.getInterviewAnswers(applicantId, r.id)));
     };
     load()
       .then((loaded) => {
