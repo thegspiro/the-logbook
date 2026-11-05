@@ -383,6 +383,11 @@ export const fundraisingService = {
     return asArray(response.data);
   },
 
+  async getDonation(id: string): Promise<Donation> {
+    const response = await api.get<Donation>(`/grants/donations/${id}`);
+    return response.data;
+  },
+
   async createDonation(data: DonationCreatePayload): Promise<Donation> {
     const response = await api.post<Donation>('/grants/donations', data);
     return response.data;

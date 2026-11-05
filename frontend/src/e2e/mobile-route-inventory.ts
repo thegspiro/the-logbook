@@ -650,6 +650,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/grants/donations/:donationId/edit',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/grants/pledges',
     source: 'src/modules/grants-fundraising/routes.tsx',
     coverage: 'exempt',
