@@ -72,6 +72,7 @@ from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.notifications_service import NotificationsService
+from app.services.scheduling_module_config_service import department_seat_labels
 from app.services.shift_eligibility_service import (
     DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
     DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
@@ -106,6 +107,7 @@ from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.positions import (
+    CANONICAL_POSITIONS,
     UnknownSeatError,
     normalize_stored_positions,
     position_label,
@@ -162,7 +164,7 @@ def _notice_date(value, fallback: str) -> str:
     return value.strftime("%b %d, %Y") if value else fallback
 
 
-def _position_label(position) -> str:
+def _position_label(position, custom_labels=None) -> str:
     """Human-readable position for a notification body.
 
     `ShiftPosition` is declared twice — once in `app.models.training` and once
@@ -177,11 +179,14 @@ def _position_label(position) -> str:
     calls the seat: the EMT seat is stored as "ems", so a body built from the
     token told a member they were assigned to the "ems position" for a seat
     every screen calls EMT.
+
+    ``custom_labels`` (``department_seat_labels``) names a department's own
+    seat the way its Position Names do, rather than by the stored value.
     """
     value = getattr(position, "value", position)
     if not value:
         return "unspecified"
-    return position_label(value)
+    return position_label(value, custom_labels)
 
 
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
@@ -473,6 +478,10 @@ class SchedulingService:
         # Whether the last swap review needed the qualification override, so
         # the endpoint audits the override only when it actually waived one.
         self.last_review_overrode_qualification = False
+        # Whether the last assignment write seated a member in an ungranted
+        # custom seat by officer override, so the endpoint audits it only when
+        # the override actually waived something.
+        self.last_assignment_overrode_seat = False
 
     # ============================================
     # Generic Helpers
@@ -5149,8 +5158,21 @@ class SchedulingService:
         enforce_position_eligibility: bool = True,
         enforce_capacity: bool = False,
         context: str = "shift",
+        seat_override: Optional[bool] = None,
     ) -> Optional[str]:
         """Validate the live state needed to place a member in a shift seat.
+
+        ``seat_override`` is the officer override for a custom seat nothing in
+        the department grants (SCHED-CUSTOM-SEAT owner decision, 2026-11-01).
+        ``None`` — every member path, and any caller that does not offer it —
+        keeps the eligibility refusal exactly as it was. ``False`` raises
+        ``CodedValueError`` (``SCHED_SEAT_NOT_GRANTED``) for such a seat so
+        the screen can offer the override; ``True`` waives the eligibility
+        check for that seat only. A seat some rank, certification, program or
+        open position grants is never overridable: the decision covers seats
+        nobody could otherwise fill, not members an officer would rather see in
+        a granted one. Capacity, leave, overlap and the EVOC check on a seat
+        that drives the apparatus all still apply.
 
         ``exclude_assignment_ids`` describes rows that the same transaction is
         moving away or exchanging.  This lets swaps reuse exactly the duplicate,
@@ -5398,19 +5420,48 @@ class SchedulingService:
             # transaction, so the candidate is always found here.
             if candidate is None:
                 return "Participating member is no longer active in this organization"
-            eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
+            eligibility = ShiftEligibilityService(self.db)
+            eligible = await eligibility.get_eligible_positions(
                 candidate, str(organization_id), str(shift.id)
             )
-            if not eligible:
-                return "Member is no longer eligible for this shift"
             # Checked on a shift with no named seats too. There, any built-in
             # seat resolves and the eligibility answer is the member's whole
             # set, so testing only "eligible for something" let a firefighter
             # take the officer seat by standing claim, officer assignment, offer
             # or pickup — the self-signup endpoint was the one path that asked
             # about the seat itself. Same rule as ``_seat_in``.
-            if position_value and not self._seat_in(eligible, position_value):
-                return f"Member is no longer eligible for the {position_value} position"
+            refusal: Optional[str] = None
+            if not eligible:
+                refusal = "Member is no longer eligible for this shift"
+            elif position_value and not self._seat_in(eligible, position_value):
+                refusal = (
+                    f"Member is no longer eligible for the {position_value} position"
+                )
+            if refusal:
+                overridable = (
+                    seat_override is not None
+                    and bool(position_value)
+                    and str(position_value).casefold() not in CANONICAL_POSITIONS
+                    and not await eligibility.seat_is_granted(
+                        str(organization_id), str(position_value)
+                    )
+                )
+                if not overridable:
+                    return refusal
+                if not seat_override:
+                    seat = position_label(
+                        position_value,
+                        await department_seat_labels(self.db, organization_id),
+                    )
+                    raise CodedValueError(
+                        f"No rank, certification, training program or open "
+                        f"position grants the {seat} seat, so nobody is "
+                        f"eligible for it. A scheduling manager can seat this "
+                        f"member in it anyway with an override, which is "
+                        f"recorded in the audit log.",
+                        error_code=ErrorCode.SCHED_SEAT_NOT_GRANTED,
+                    )
+                self.last_assignment_overrode_seat = True
 
         await self._check_driver_qualification(
             user_id=str(user_id),
@@ -5428,8 +5479,17 @@ class SchedulingService:
         assigned_by: UUID | str,
         self_signup: bool = False,
         actor: Optional[SignupActor] = None,
+        seat_override: Optional[bool] = None,
+        override_reason: Optional[str] = None,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Create a new shift assignment.
+
+        ``seat_override`` is the officer override for an ungranted custom seat
+        (see ``_validate_assignment_candidate``). It is never offered to a
+        self-signup, whatever the caller passes. When it is used, the
+        assignment's notes carry ``SEAT_OVERRIDE_NOTE`` and the officer's
+        ``override_reason``, and ``last_assignment_overrode_seat`` tells the
+        endpoint to audit it.
 
         ``self_signup=True`` marks a member self-service signup (vs an officer
         assigning someone). Self-signup is restricted to an open, current shift
@@ -5444,6 +5504,7 @@ class SchedulingService:
         caller keeps the behaviour it has: a member is bounded as a member, and
         anything else is treated as the records path it is today.
         """
+        self.last_assignment_overrode_seat = False
         try:
             # Verify shift belongs to org, and lock the row on every path.
             # The headcount cap (min_staffing) is waived for officer-made
@@ -5508,9 +5569,14 @@ class SchedulingService:
                 # allowed to make, and the one they make on a busy night.
                 enforce_position_eligibility=True,
                 enforce_capacity=self_signup,
+                seat_override=None if self_signup else seat_override,
             )
             if validation_error:
                 return None, validation_error
+            if self.last_assignment_overrode_seat:
+                assignment_data["notes"] = self._seat_override_notes(
+                    override_reason, assignment_data.get("notes")
+                )
 
             if user_id:
                 await self._clear_inactive_assignment(
@@ -5736,8 +5802,16 @@ class SchedulingService:
         organization_id: UUID | str,
         update_data: Dict[str, Any],
         actor: SignupActor = SignupActor.MANAGER,
+        seat_override: Optional[bool] = None,
+        override_reason: Optional[str] = None,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
-        """Update a shift assignment"""
+        """Update a shift assignment.
+
+        ``seat_override`` / ``override_reason`` as on ``create_assignment``:
+        an edit moving a member into an ungranted custom seat may be made by
+        override, recorded on the assignment's notes and audited.
+        """
+        self.last_assignment_overrode_seat = False
         try:
             result = await self.db.execute(
                 select(ShiftAssignment)
@@ -5815,8 +5889,17 @@ class SchedulingService:
             # firefighter, PATCH to officer" open for every other rule, and a
             # declined row revived while somebody else held its seat.
             await self._validate_assignment_edit(
-                assignment, organization_id, update_data, actor
+                assignment, organization_id, update_data, actor, seat_override
             )
+            if self.last_assignment_overrode_seat:
+                update_data["notes"] = self._seat_override_notes(
+                    override_reason,
+                    (
+                        update_data["notes"]
+                        if "notes" in update_data
+                        else assignment.notes
+                    ),
+                )
 
             # Re-check qualification when an edit moves someone into the
             # driver seat. Without this, an officer blocked at create time
@@ -5891,6 +5974,7 @@ class SchedulingService:
         organization_id: UUID | str,
         update_data: Dict[str, Any],
         actor: SignupActor,
+        seat_override: Optional[bool] = None,
     ) -> None:
         """Run the candidate check for an edit that places the member in a seat.
 
@@ -5926,9 +6010,27 @@ class SchedulingService:
             # finalized roster, as it has on create.
             require_mutable=actor != SignupActor.MANAGER,
             enforce_position_eligibility=True,
+            seat_override=seat_override,
         )
         if error:
             raise ValueError(error)
+
+    #: Prefixed to an assignment's notes when an officer seats a member in a
+    #: custom seat nothing grants. The roster shows it; the audit log has the
+    #: rest.
+    SEAT_OVERRIDE_NOTE = "[Seated with officer override]"
+
+    @classmethod
+    def _seat_override_notes(
+        cls, reason: Optional[str], existing: Optional[str]
+    ) -> str:
+        """The notes an overridden seating is saved with: marker, reason, notes."""
+        parts = [cls.SEAT_OVERRIDE_NOTE]
+        if reason and reason.strip():
+            parts.append(reason.strip())
+        if existing and str(existing).strip():
+            parts.append(str(existing).strip())
+        return " ".join(parts)
 
     async def delete_assignment(
         self,
@@ -6210,7 +6312,9 @@ class SchedulingService:
                 return
 
             shift_date_str = _notice_date(shift.shift_date, "unknown date")
-            position_label = _position_label(position)
+            position_label = _position_label(
+                position, await department_seat_labels(self.db, organization_id)
+            )
             message = (
                 f"{user_name} {action} the {position_label} position "
                 f"on the {shift_date_str} shift. "
@@ -6300,7 +6404,9 @@ class SchedulingService:
 
                 position_label = outreach_role_label(org, outreach_role)
             else:
-                position_label = _position_label(position)
+                position_label = _position_label(
+                    position, await department_seat_labels(self.db, organization_id)
+                )
 
             from app.services.scheduled_tasks import resolve_check_templates
 
@@ -6549,7 +6655,10 @@ class SchedulingService:
                 user_name = user.display_name or "A member"
 
             shift_date_str = _notice_date(shift.shift_date, "unknown date")
-            position_label = _position_label(assignment.position)
+            position_label = _position_label(
+                assignment.position,
+                await department_seat_labels(self.db, assignment.organization_id),
+            )
 
             message = (
                 f"{user_name} has confirmed the "
@@ -6699,6 +6808,19 @@ class SchedulingService:
                 organization_id=organization_id,
             )
             await self.db.commit()
+
+            if self._is_open_swap(swap_request):
+                request_id = str(swap_request.id)
+                try:
+                    await self.notify_members_of_open_swap(request_id, organization_id)
+                except Exception as e:
+                    # The request stands whatever the bell does: it is already
+                    # committed, and the Requests tab lists it either way.
+                    logger.warning(
+                        "Open swap notice failed for request {}: {}", request_id, e
+                    )
+                    await self.db.rollback()
+                await self.db.refresh(swap_request)
 
             return swap_request, None
         except UnknownSeatError:
@@ -6899,10 +7021,11 @@ class SchedulingService:
         """
         self.resolve_shift_seat(offering_shift, offered_seat.position)
         self.resolve_shift_seat(requested_shift, target_seat.position)
+        labels = await department_seat_labels(self.db, organization_id)
         if not await self._qualified_for_seat(
             organization_id, target_id, offering_shift, offered_seat.position
         ):
-            seat = position_label(offered_seat.position) or "offered"
+            seat = position_label(offered_seat.position, labels) or "offered"
             if for_reviewer:
                 return (
                     f"The member asked to exchange is not qualified for the "
@@ -6912,7 +7035,7 @@ class SchedulingService:
         if not await self._qualified_for_seat(
             organization_id, requester_id, requested_shift, target_seat.position
         ):
-            seat = position_label(target_seat.position) or "requested"
+            seat = position_label(target_seat.position, labels) or "requested"
             if for_reviewer:
                 return (
                     f"The requesting member is not qualified for the {seat} "
@@ -7651,6 +7774,199 @@ class SchedulingService:
         """No member named and no shift asked for in return."""
         return not swap_request.target_user_id and not swap_request.requesting_shift_id
 
+    async def _listable_open_swaps(self, organization_id: UUID | str) -> Any:
+        """``(request, shift, offered seat)`` for every open swap on offer.
+
+        The half of the pickup list that does not depend on who is looking:
+        pending, open, a non-training seat still held by its offerer, on an
+        upcoming shift that is neither cancelled nor finalized. Shared by the
+        list (``get_open_swaps_for_member``) and the bell fan-out
+        (``notify_members_of_open_swap``) so a member is never told about a
+        swap their Requests tab then does not show (Pitfall #29).
+        """
+        today = await resolve_org_today(self.db, organization_id)
+        return (
+            select(ShiftSwapRequest, Shift, ShiftAssignment)
+            .join(Shift, Shift.id == ShiftSwapRequest.offering_shift_id)
+            .join(
+                ShiftAssignment,
+                and_(
+                    ShiftAssignment.shift_id == ShiftSwapRequest.offering_shift_id,
+                    ShiftAssignment.user_id == ShiftSwapRequest.requesting_user_id,
+                ),
+            )
+            .where(
+                ShiftSwapRequest.organization_id == str(organization_id),
+                Shift.organization_id == str(organization_id),
+                ShiftAssignment.organization_id == str(organization_id),
+                ShiftSwapRequest.status == SwapRequestStatus.PENDING,
+                ShiftSwapRequest.target_user_id.is_(None),
+                ShiftSwapRequest.requesting_shift_id.is_(None),
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                ),
+                ShiftAssignment.is_training.is_(False),
+                Shift.status != ShiftStatus.CANCELLED,
+                Shift.is_finalized.is_(False),
+                Shift.shift_date >= today,
+                Shift.shift_date <= today + timedelta(days=self.EXCHANGE_HORIZON_DAYS),
+            )
+        )
+
+    #: Category of the bell entry an open swap puts in front of eligible
+    #: members.
+    OPEN_SWAP_NOTICE_CATEGORY = "open_shift_swap"
+
+    async def notify_members_of_open_swap(
+        self, swap_request_id: UUID | str, organization_id: UUID | str
+    ) -> int:
+        """Put a bell entry in front of every member who could pick it up.
+
+        Owner decision 2026-11-01 (W33-4, "Bell entry only"): **in-app only —
+        no email, no SMS, no push.** This departs from Pitfall #18's
+        email-first rule on purpose: an open swap goes to most of the roster,
+        often several a week, and the owner chose less noise over reach,
+        accepting that a member who never opens the app can miss one. The
+        entries are written straight to ``notification_logs``, the path that
+        fans out to nothing else (web push hangs off ``NotificationsService``,
+        which this does not use).
+
+        "Could pick it up" is the pickup list's own rule, not a second one
+        (Pitfall #29): the swap must be listable (``_listable_open_swaps``),
+        and the member must be a current member of this organization, not the
+        offerer, not already on the shift, and cleared for the seat by
+        ``get_eligible_positions_bulk`` + ``_seat_in`` — exactly what decides
+        whether ``get_open_swaps_for_member`` shows it to them.
+
+        Safe to run twice (Pitfall #36). The key is the *seat* — offering
+        shift, offerer — and the recipient, held unique on
+        ``open_swap_notices``. A retried or double-tapped "Ask for cover"
+        creates a second request for the same seat, so a key on the request
+        id would tell everyone twice; this one tells each member once. The
+        ledger row and the bell entry are written in one transaction, so a
+        crash leaves both or neither. Returns how many members were told.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        from app.models.shift_swap_notice import OpenSwapNotice
+        from app.models.user import ACTIVE_ACCOUNT_STATUSES
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        listed = await self._listable_open_swaps(organization_id)
+        row = (
+            await self.db.execute(
+                listed.where(ShiftSwapRequest.id == str(swap_request_id))
+            )
+        ).first()
+        if row is None:
+            return 0
+        swap_request, shift, seat = row
+        # Plain strings from here on: a rollback below expires the ORM rows.
+        offerer_id = str(swap_request.requesting_user_id)
+        shift_id = str(shift.id)
+        request_id = str(swap_request.id)
+
+        on_shift = select(ShiftAssignment.user_id).where(
+            ShiftAssignment.shift_id == shift_id,
+            ShiftAssignment.organization_id == str(organization_id),
+            ShiftAssignment.assignment_status.notin_(self.INACTIVE_ASSIGNMENT_STATUSES),
+        )
+        already_told = select(OpenSwapNotice.recipient_id).where(
+            OpenSwapNotice.offering_shift_id == shift_id,
+            OpenSwapNotice.offered_by_id == offerer_id,
+        )
+        candidates = (
+            (
+                await self.db.execute(
+                    select(User).where(
+                        User.organization_id == str(organization_id),
+                        User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                        User.deleted_at.is_(None),
+                        User.id != offerer_id,
+                        User.id.notin_(on_shift),
+                        User.id.notin_(already_told),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        eligibility = ShiftEligibilityService(self.db)
+        recipients: List[str] = []
+        for member in candidates:
+            eligible = await eligibility.get_eligible_positions_bulk(
+                member, str(organization_id), [shift_id]
+            )
+            if self._seat_in(eligible.get(shift_id, []), seat.position):
+                recipients.append(str(member.id))
+        if not recipients:
+            return 0
+
+        names = await self._get_user_name_map([offerer_id])
+        offerer = names.get(offerer_id) or "A member"
+        date_str = _notice_date(shift.shift_date, "an upcoming")
+        message = (
+            f"{offerer} is looking for cover on the {date_str} shift, in a seat "
+            "you are cleared for. Pick it up from your Requests tab."
+        )
+        action_url = "/scheduling?tab=requests"
+
+        def write(ids: List[str]) -> None:
+            for rid in ids:
+                self.db.add(
+                    OpenSwapNotice(
+                        id=generate_uuid(),
+                        organization_id=str(organization_id),
+                        offering_shift_id=shift_id,
+                        offered_by_id=offerer_id,
+                        recipient_id=rid,
+                        swap_request_id=request_id,
+                    )
+                )
+                self.db.add(
+                    NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=str(organization_id),
+                        recipient_id=rid,
+                        channel="in_app",
+                        category=self.OPEN_SWAP_NOTICE_CATEGORY,
+                        subject="Open shift you can pick up",
+                        message=message,
+                        action_url=action_url,
+                        notification_metadata={
+                            "swap_request_id": request_id,
+                            "shift_id": shift_id,
+                        },
+                        delivered=True,
+                    )
+                )
+
+        write(recipients)
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # Another fan-out for the same seat committed first. Drop what it
+            # already told and send the rest, once.
+            await self.db.rollback()
+            told = set(
+                (
+                    await self.db.execute(
+                        select(OpenSwapNotice.recipient_id).where(
+                            OpenSwapNotice.offering_shift_id == shift_id,
+                            OpenSwapNotice.offered_by_id == offerer_id,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            recipients = [r for r in recipients if r not in told]
+            if not recipients:
+                return 0
+            write(recipients)
+            await self.db.commit()
+        return len(recipients)
+
     async def get_open_swaps_for_member(
         self, organization_id: UUID | str, user_id: UUID | str
     ) -> List[Dict[str, Any]]:
@@ -7685,33 +8001,11 @@ class SchedulingService:
             ShiftAssignment.organization_id == str(organization_id),
             active,
         )
-        today = await resolve_org_today(self.db, organization_id)
+        listed = await self._listable_open_swaps(organization_id)
         rows = (
             await self.db.execute(
-                select(ShiftSwapRequest, Shift, ShiftAssignment)
-                .join(Shift, Shift.id == ShiftSwapRequest.offering_shift_id)
-                .join(
-                    ShiftAssignment,
-                    and_(
-                        ShiftAssignment.shift_id == ShiftSwapRequest.offering_shift_id,
-                        ShiftAssignment.user_id == ShiftSwapRequest.requesting_user_id,
-                    ),
-                )
-                .where(
-                    ShiftSwapRequest.organization_id == str(organization_id),
-                    Shift.organization_id == str(organization_id),
-                    ShiftAssignment.organization_id == str(organization_id),
-                    ShiftSwapRequest.status == SwapRequestStatus.PENDING,
-                    ShiftSwapRequest.target_user_id.is_(None),
-                    ShiftSwapRequest.requesting_shift_id.is_(None),
+                listed.where(
                     ShiftSwapRequest.requesting_user_id != str(user_id),
-                    active,
-                    ShiftAssignment.is_training.is_(False),
-                    Shift.status != ShiftStatus.CANCELLED,
-                    Shift.is_finalized.is_(False),
-                    Shift.shift_date >= today,
-                    Shift.shift_date
-                    <= today + timedelta(days=self.EXCHANGE_HORIZON_DAYS),
                     Shift.id.notin_(members_shifts),
                 )
                 .order_by(Shift.shift_date, Shift.start_time, ShiftSwapRequest.id)

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**355 tables · 5784 columns · 1191 foreign keys**
+**356 tables · 5793 columns · 1196 foreign keys**
 
 ---
 
@@ -662,6 +662,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_history_import_rows`](#shift_history_import_rows) | `ShiftHistoryImportRow` | 12 | One data row of the file, kept as read plus the reviewer's edits. |
 | [`shift_history_imports`](#shift_history_imports) | `ShiftHistoryImport` | 20 | One uploaded file and the review state around it. |
 
+### Shift_Swap_Notice
+
+<sub>`app/models/shift_swap_notice.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`open_swap_notices`](#open_swap_notices) | `OpenSwapNotice` | 7 | One member told about one open-swap seat; makes the fan-out run once. |
+
 ### Skills Testing
 
 <sub>`app/models/skills_testing.py`</sub>
@@ -777,7 +785,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 49 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
-| [`training_records`](#training_records) | `TrainingRecord` | 42 | Training Record model |
+| [`training_records`](#training_records) | `TrainingRecord` | 44 | Training Record model |
 | [`training_requirement_overrides`](#training_requirement_overrides) | `TrainingRequirementOverride` | 11 | A Chief's ruling that a member meets a requirement over a period. |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 52 | Training Requirement model |
 | [`training_session_requirements`](#training_session_requirements) | `TrainingSessionRequirement` | 5 | A session that counts toward a SESSION_ATTENDANCE requirement. |
@@ -3509,7 +3517,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - CHECK `ck_external_shift_hours_ck_external_shift_hours_duration`: `duration_minutes > 0 AND duration_minutes <= 2880`
-- CHECK `ck_external_shift_hours_ck_external_shift_hours_status`: `status IN ('counted', 'rejected')`
+- CHECK `ck_external_shift_hours_ck_external_shift_hours_status`: `status IN ('pending', 'counted', 'rejected')`
 
 ## Facilities
 
@@ -9126,6 +9134,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - CHECK `ck_shift_history_imports_ck_shift_history_imports_status`: `status IN ('draft', 'committed')`
 
+## Shift_Swap_Notice
+
+### `open_swap_notices`
+
+**OpenSwapNotice** · `app/models/shift_swap_notice.py`
+
+> One member told about one open-swap seat; makes the fan-out run once.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `offering_shift_id` | VARCHAR(36) | no | FK |  | → `shifts.id` ON DELETE CASCADE |
+| `offered_by_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `recipient_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `swap_request_id` | VARCHAR(36) | yes | FK |  | → `shift_swap_requests.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_open_swap_notices_org` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_open_swap_notices_seat_recipient` (`offering_shift_id`, `offered_by_id`, `recipient_id`)
+
 ## Skills Testing
 
 ### `skill_templates`
@@ -11567,6 +11601,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `certification_number` | VARCHAR(100) | yes |  |  |  |
 | `issuing_agency` | VARCHAR(255) | yes |  |  |  |
+| `match_key` | VARCHAR(255) | yes |  |  |  |
+| `certification_key` | VARCHAR(255) | yes |  |  |  |
 | `status` | ENUM(`scheduled`, `in_progress`, `completed`, `cancelled`, `failed`) | yes | IDX | `'scheduled'` |  |
 | `score` | FLOAT | yes |  |  |  |
 | `passing_score` | FLOAT | yes |  |  |  |
@@ -11601,6 +11637,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_record_expiration` (`expiration_date`)
 - `idx_record_external` (`external_provider_id`, `external_record_id`)
 - `idx_record_location` (`location_id`)
+- `idx_record_user_certification_key` (`user_id`, `certification_key`)
+- `idx_record_user_match_key` (`user_id`, `match_key`)
 - `idx_record_user_status` (`user_id`, `status`)
 - `ix_training_records_apparatus_id` (`apparatus_id`)
 - `ix_training_records_course_id` (`course_id`)
@@ -12304,7 +12342,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (437 references)
+### → `users` (439 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12602,6 +12640,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `nfpa_item_compliance` | `created_by` | RESTRICT | yes |
 | `notification_logs` | `recipient_id` | SET NULL | yes |
 | `notification_rules` | `created_by` | RESTRICT | yes |
+| `open_swap_notices` | `offered_by_id` | CASCADE | no |
+| `open_swap_notices` | `recipient_id` | CASCADE | no |
 | `org_calls` | `created_by` | SET NULL | yes |
 | `org_chart_node_holders` | `user_id` | SET NULL | yes |
 | `org_chart_nodes` | `updated_by` | SET NULL | yes |
@@ -12746,7 +12786,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (293 references)
+### → `organizations` (294 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12945,6 +12985,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `nfpa_item_compliance` | `organization_id` | CASCADE | no |
 | `notification_logs` | `organization_id` | CASCADE | no |
 | `notification_rules` | `organization_id` | CASCADE | no |
+| `open_swap_notices` | `organization_id` | CASCADE | no |
 | `operational_ranks` | `organization_id` | CASCADE | no |
 | `org_call_responses` | `organization_id` | CASCADE | no |
 | `org_calls` | `organization_id` | CASCADE | no |
@@ -13156,11 +13197,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
-### → `shifts` (13 references)
+### → `shifts` (14 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `open_swap_notices` | `offering_shift_id` | CASCADE | no |
 | `org_call_responses` | `shift_id` | SET NULL | yes |
 | `shift_assignments` | `shift_id` | CASCADE | no |
 | `shift_attendance` | `shift_id` | CASCADE | no |
@@ -14160,6 +14202,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `shift_pattern_occurrences` | `pattern_id` | CASCADE | no |
+
+### → `shift_swap_requests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `open_swap_notices` | `swap_request_id` | SET NULL | yes |
 
 ### → `skill_templates` (1 references)
 

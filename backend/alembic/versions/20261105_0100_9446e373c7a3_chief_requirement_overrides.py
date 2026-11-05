@@ -15,7 +15,7 @@ Downgrade drops the table and the column; the overrides recorded, and which
 requirements accepted them, are lost on the way down.
 
 Revision ID: 9446e373c7a3
-Revises: 89cfef37cca8
+Revises: bd8fc0c4a941
 Create Date: 2026-11-05 01:00:00
 
 """
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9446e373c7a3"
-down_revision: Union[str, None] = "89cfef37cca8"
+down_revision: Union[str, None] = "bd8fc0c4a941"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

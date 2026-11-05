@@ -266,7 +266,9 @@ Rules:
 An **Open Swap** is offered to every member cleared for the seat: they see it on
 the Requests tab under **Open shifts you can pick up**, and the first to pick it
 up takes the seat (`POST /scheduling/swap-requests/{id}/pick-up`). Officers do
-not approve open swaps, but can deny one.
+not approve open swaps, but can deny one. When it is posted, each of those
+members gets a bell entry, **Open shift you can pick up** — in-app only, no
+email, text or push — once per seat, however many times the seat is posted.
 
 ### Trades a member can complete
 
@@ -569,10 +571,14 @@ shift**:
   **Settings → Outside Apparatus** (`/scheduling/admin/settings/outside-apparatus`).
   A unit with shifts logged on it cannot be deleted, only turned off; each entry
   keeps the names it was logged under.
-- **Counts as soon as it is saved.** An officer rejects one with a reason ("Not
-  counted", locked to the member) and can restore it, from **Scheduling Reports
-  → Member Hours**, which also has an **Outside Hours** column and an **Outside
-  apparatus staffed** per-unit summary.
+- **Counts as soon as it is saved**, unless the department has switched on
+  **Settings → Require approval for outside-department shifts**: then it is
+  **Awaiting approval** and counts toward nothing until a scheduling officer
+  approves it (officers are emailed and get a bell entry; the **Awaiting
+  approval** filter lists every one). An officer rejects one with a reason
+  ("Not counted", locked to the member) and can restore it, from **Scheduling
+  Reports → Member Hours**, which also has an **Outside Hours** column and an
+  **Outside apparatus staffed** per-unit summary.
 - Reported **beside** worked hours (`external_*`), but **added into** each
   member's totals on the Shift Compliance report.
 

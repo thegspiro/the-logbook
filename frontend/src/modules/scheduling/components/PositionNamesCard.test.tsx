@@ -41,6 +41,39 @@ describe('PositionNamesCard', () => {
     ]);
   });
 
+  it('maps a certification to a custom seat, and unmaps it', async () => {
+    // SCHED-CUSTOM-SEAT owner decision (2026-11-01): a certification may
+    // confer one of the department's own seats; the mapping is saved on the
+    // seat's own entry, which the server reads in every eligibility answer.
+    const settings: ShiftSettings = {
+      ...DEFAULT_SETTINGS,
+      customPositions: [
+        { value: 'swiftwater', label: 'Swiftwater Rescuer', qualifications: ['paramedic'] },
+        { value: 'rope_team', label: 'Rope Team' },
+      ],
+    };
+    const onSettingsChange = vi.fn<(updater: (prev: ShiftSettings) => ShiftSettings) => void>();
+    const user = userEvent.setup();
+    render(<PositionNamesCard settings={settings} onSettingsChange={onSettingsChange} allPositionOptions={[]} />);
+
+    expect(screen.getByRole('checkbox', { name: 'Paramedic qualifies for Swiftwater Rescuer' })).toBeChecked();
+    const emt = screen.getByRole('checkbox', { name: 'EMT qualifies for Swiftwater Rescuer' });
+    expect(emt).not.toBeChecked();
+    await user.click(emt);
+    await user.click(screen.getByRole('checkbox', { name: 'Paramedic qualifies for Swiftwater Rescuer' }));
+
+    const [added, removed] = onSettingsChange.mock.calls.map((call) => call[0]);
+    expect(added?.(settings).customPositions).toEqual([
+      { value: 'swiftwater', label: 'Swiftwater Rescuer', qualifications: ['paramedic', 'emt'] },
+      { value: 'rope_team', label: 'Rope Team' },
+    ]);
+    expect(removed?.(settings).customPositions[0]).toEqual({
+      value: 'swiftwater',
+      label: 'Swiftwater Rescuer',
+      qualifications: [],
+    });
+  });
+
   it('labels the position ticks as not in effect yet', () => {
     // Nothing reads `enabledPositions`: the template and shift pickers offer a
     // fixed list. A tick that changes nothing must say so (CLAUDE.md #19).

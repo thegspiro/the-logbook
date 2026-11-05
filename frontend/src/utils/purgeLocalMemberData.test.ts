@@ -5,7 +5,7 @@ const mockClearAllQueuedChecks = vi.fn();
 const mockClearAllQueuedReports = vi.fn();
 const mockClearAllGenericQueued = vi.fn();
 const mockClearAllEquipmentCheckDrafts = vi.fn();
-const mockClearAllSkillsOffline = vi.fn();
+const mockPurgeSkillsStores = vi.fn();
 
 vi.mock('./shiftReportDrafts', () => ({
   clearAllDrafts: () => mockClearAllDrafts() as number,
@@ -22,8 +22,12 @@ vi.mock('./genericOfflineQueue', () => ({
 vi.mock('./equipmentCheckDrafts', () => ({
   clearAllEquipmentCheckDrafts: () => mockClearAllEquipmentCheckDrafts() as Promise<number>,
 }));
-vi.mock('./skillsTestOffline', () => ({
-  clearAllSkillsOffline: () => mockClearAllSkillsOffline() as Promise<number>,
+// The skills stores are purged by the store's own purge, which keeps each
+// examiner's unsent evaluations (skillsHeldForExaminer.test.ts runs it for real).
+vi.mock('./skillsTestOfflineStore', () => ({
+  purgeSkillsStores: (discardFor: string | null) =>
+    mockPurgeSkillsStores(discardFor) as Promise<{ discarded: number; held: number }>,
+  releaseHeldSkillsEntries: () => Promise.resolve(),
 }));
 
 import { purgeLocalMemberData } from './purgeLocalMemberData';
@@ -36,18 +40,26 @@ describe('purgeLocalMemberData', () => {
     mockClearAllQueuedReports.mockResolvedValue(0);
     mockClearAllGenericQueued.mockResolvedValue(0);
     mockClearAllEquipmentCheckDrafts.mockResolvedValue(0);
-    mockClearAllSkillsOffline.mockResolvedValue(0);
+    mockPurgeSkillsStores.mockResolvedValue({ discarded: 0, held: 0 });
   });
 
   it('clears offline skills testing and counts its unsent scorecards as lost', async () => {
-    mockClearAllSkillsOffline.mockResolvedValue(2);
+    mockPurgeSkillsStores.mockResolvedValue({ discarded: 2, held: 1 });
     mockClearAllGenericQueued.mockResolvedValue(1);
 
-    const result = await purgeLocalMemberData();
+    const result = await purgeLocalMemberData({ discardSkillsFor: 'examiner-1' });
 
-    expect(mockClearAllSkillsOffline).toHaveBeenCalled();
+    expect(mockPurgeSkillsStores).toHaveBeenCalledWith('examiner-1');
     expect(result.queuedSkillsTests).toBe(2);
+    // Held for their examiner, so not lost.
+    expect(result.heldSkillsTests).toBe(1);
     expect(result.unsyncedDiscarded).toBe(3);
+  });
+
+  it('names no examiner on an automatic purge, so every examiner’s are kept', async () => {
+    await purgeLocalMemberData();
+
+    expect(mockPurgeSkillsStores).toHaveBeenCalledWith(null);
   });
 
   it('clears every device-local store that can hold member PII', async () => {
@@ -133,7 +145,7 @@ describe('purgeLocalMemberData', () => {
     mockClearAllQueuedChecks.mockRejectedValue(new Error('idb gone'));
     mockClearAllQueuedReports.mockRejectedValue(new Error('idb gone'));
     mockClearAllGenericQueued.mockRejectedValue(new Error('idb gone'));
-    mockClearAllSkillsOffline.mockRejectedValue(new Error('idb gone'));
+    mockPurgeSkillsStores.mockRejectedValue(new Error('idb gone'));
 
     await expect(purgeLocalMemberData()).resolves.toEqual({
       drafts: 0,
@@ -141,6 +153,7 @@ describe('purgeLocalMemberData', () => {
       queuedReports: 0,
       queuedGeneric: 0,
       queuedSkillsTests: 0,
+      heldSkillsTests: 0,
       unsyncedDiscarded: 0,
     });
   });

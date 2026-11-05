@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 from app.models.training import RequirementFrequency, RequirementType, TrainingStatus
 from app.services.competency_matrix_service import CompetencyMatrixService
+from app.utils.training_match_key import training_match_key
 
 
 def _svc():
@@ -46,6 +47,9 @@ def _rec(completion_date=None, expiration_date=None, **kw):
         training_type=kw.get("training_type"),
         course_name=kw.get("course_name"),
         certification_number=kw.get("certification_number"),
+        # Keyed as the model keys a saved record (app/models/training.py).
+        match_key=training_match_key(kw.get("course_name")),
+        certification_key=training_match_key(kw.get("certification_number")),
         issuing_agency=kw.get("issuing_agency"),
         course_id=kw.get("course_id"),
         hours_completed=kw.get("hours_completed", 0),
@@ -131,10 +135,14 @@ class TestCertificationStatus:
         assert out["status"] == "current"
         assert out["expiration_date"] is None
 
-    def test_matches_by_name_substring_for_a_legacy_record(self):
+    def test_matches_a_legacy_record_by_the_name_key(self):
+        # By key since 2026-11-01: case and punctuation do not matter, other
+        # words do, so a course that merely contains the name no longer counts.
         req = _req(RequirementType.CERTIFICATION, name="EMT", name_match_until=TODAY)
-        rec = _rec(TODAY - timedelta(days=10), None, course_name="State EMT-B Course")
+        rec = _rec(TODAY - timedelta(days=10), None, course_name="e.m.t.")
         assert _evaluate(req, [rec])["status"] == "current"
+        rec = _rec(TODAY - timedelta(days=10), None, course_name="State EMT-B Course")
+        assert _evaluate(req, [rec])["status"] != "current"
 
     def test_no_name_match_after_the_cutoff(self):
         req = _req(

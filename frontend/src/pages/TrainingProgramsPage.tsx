@@ -651,11 +651,6 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
               </div>
             ) : (
               <div id="tab-panel-requirements" role={panelRole}>
-                {/* Listing and importing a registry are both training.manage-gated,
-                    so members never see the panel — and loadData skips the
-                    listing call that would 403. */}
-                {canManage && <RegistryImportPanel registries={registries} onImported={() => void loadData()} />}
-
                 {/* Requirements List */}
                 <div className="grid gap-4">
                   {filteredRequirements.length === 0
@@ -749,6 +744,12 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
                         </div>
                       ))}
                 </div>
+
+                {/* Below the list, as on the hub's Requirements tab. Listing and
+                    importing a registry are both training.manage-gated, so
+                    members never see the panel — and loadData skips the
+                    listing call that would 403. */}
+                {canManage && <RegistryImportPanel registries={registries} onImported={() => void loadData()} />}
               </div>
             )}
           </>

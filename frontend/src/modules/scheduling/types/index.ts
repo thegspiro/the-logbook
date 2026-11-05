@@ -67,6 +67,10 @@ export interface AssignmentCreate {
   is_training?: boolean;
   training_program_id?: string | undefined;
   training_evaluator_id?: string | undefined;
+  /** Seat the member in an ungranted custom seat (scheduling.manage; LB-SCHED-004). */
+  override_seat_eligibility?: boolean | undefined;
+  /** Required with the override; noted on the assignment and audited. */
+  override_reason?: string | undefined;
 }
 
 export interface AssignmentUpdate {

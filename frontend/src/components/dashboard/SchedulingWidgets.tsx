@@ -32,6 +32,10 @@ const WIDGETS = [
 const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
   const navigate = useNavigate();
   const [preferences, setPreferences] = useState<SchedulingWidgetPreferences>({ widgets: {} });
+  // The backend refuses a station or platoon no shift carries, so the filters
+  // offer only these instead of a free-text id nobody knows.
+  const [stationOptions, setStationOptions] = useState<string[]>([]);
+  const [platoonOptions, setPlatoonOptions] = useState<string[]>([]);
   const [summaries, setSummaries] = useState<Record<string, SchedulingWidgetSummary>>({});
   const [editing, setEditing] = useState('today_staffing');
   const [loading, setLoading] = useState(true);
@@ -42,7 +46,9 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
     setLoadError(null);
     try {
       const saved = await schedulingService.getWidgetPreferences();
-      setPreferences(saved);
+      setPreferences({ widgets: saved.widgets });
+      setStationOptions(saved.available_station_ids ?? []);
+      setPlatoonOptions(saved.available_platoons ?? []);
       const today = getTodayLocalDate(timezone);
       const filterGroups = new Map<
         string,
@@ -152,22 +158,40 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
               ))}
             </select>
           </label>
-          <label className="text-theme-text-secondary text-xs">
-            Station ID
-            <input
-              className="form-input mt-1 w-32"
-              value={current.station_id ?? ''}
-              onChange={(event) => updateOptional('station_id', event.target.value)}
-            />
-          </label>
-          <label className="text-theme-text-secondary text-xs">
-            Platoon
-            <input
-              className="form-input mt-1 w-24"
-              value={current.platoon ?? ''}
-              onChange={(event) => updateOptional('platoon', event.target.value)}
-            />
-          </label>
+          {stationOptions.length > 0 && (
+            <label className="text-theme-text-secondary text-xs">
+              Station
+              <select
+                className="form-input mt-1 block"
+                value={current.station_id ?? ''}
+                onChange={(event) => updateOptional('station_id', event.target.value)}
+              >
+                <option value="">All stations</option>
+                {stationOptions.map((station) => (
+                  <option key={station} value={station}>
+                    {station}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {platoonOptions.length > 0 && (
+            <label className="text-theme-text-secondary text-xs">
+              Platoon
+              <select
+                className="form-input mt-1 block"
+                value={current.platoon ?? ''}
+                onChange={(event) => updateOptional('platoon', event.target.value)}
+              >
+                <option value="">All platoons</option>
+                {platoonOptions.map((platoon) => (
+                  <option key={platoon} value={platoon}>
+                    {platoon}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="text-theme-text-secondary text-xs">
             Days
             <select
@@ -182,7 +206,7 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
               ))}
             </select>
           </label>
-          <button type="button" className="btn-primary min-h-11 px-4" onClick={() => void save()}>
+          <button type="button" className="btn-secondary min-h-11 px-4" onClick={() => void save()}>
             Save defaults
           </button>
         </div>
@@ -206,7 +230,10 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
                 value={summary?.[field] ?? 0}
                 icon={Icon}
                 iconColor="text-red-600 dark:text-red-400"
-                description={`${preferences.widgets[key]?.horizon_days ?? 14}-day window`}
+                // Today's staffing counts today alone whatever the window is.
+                description={
+                  key === 'today_staffing' ? 'Today' : `${preferences.widgets[key]?.horizon_days ?? 14}-day window`
+                }
                 loading={loading}
                 onClick={() => void navigate(widgetLink(key, query))}
                 ariaLabel={`${label}: ${summary?.[field] ?? 0}. View filtered schedule.`}

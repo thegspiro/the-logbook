@@ -23,7 +23,7 @@ export const RegistryImportPanel: React.FC<RegistryImportPanelProps> = ({ regist
 
   return (
     <>
-      <div className="bg-theme-surface-secondary mb-6 rounded-lg p-6">
+      <div className="bg-theme-surface-secondary mt-6 rounded-lg p-6">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Import from Registry</h3>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {(registries.length > 0

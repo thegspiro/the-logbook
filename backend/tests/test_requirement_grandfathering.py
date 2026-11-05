@@ -41,6 +41,7 @@ from app.services.training_compliance import (
     tally_standing,
 )
 from app.services.training_service import TrainingService
+from app.utils.training_match_key import training_match_key
 
 pytestmark = pytest.mark.unit
 
@@ -92,6 +93,8 @@ def _record(name="Live Fire", completed=date(2026, 9, 1)):
     return SimpleNamespace(
         status=TrainingStatus.COMPLETED,
         course_name=name,
+        # Keyed as the model keys a saved record (app/models/training.py).
+        match_key=training_match_key(name),
         course_id=None,
         training_type=None,
         certification_number=None,

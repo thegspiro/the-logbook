@@ -76,7 +76,8 @@ import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { blankToNull } from '../../utils/formValues';
 import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
-import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
+import { DRIVER_NOT_QUALIFIED_CODE, SEAT_NOT_GRANTED_CODE } from '../../constants/enums';
+import { PromptDialog } from '../../components/ux/PromptDialog';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus, ShiftDutyType } from '../../constants/enums';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
@@ -835,7 +836,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     setPendingFlag('bulkAssigning', false);
   };
 
-  const handleAssign = async () => {
+  /**
+   * LB-SCHED-004: the seat is one of the department's own and nothing grants
+   * it. A scheduling manager is offered the officer override (owner decision,
+   * 2026-11-01) with a required reason the server notes and audits; anyone
+   * else sees the refusal, which says how to grant the seat.
+   */
+  const [seatOverride, setSeatOverride] = useState<{ message: string } | null>(null);
+
+  const handleAssign = async (overrideReason?: string) => {
     if (!assignForm.user_id) {
       toast.error('Select a member');
       return;
@@ -848,7 +857,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         is_training: assignForm.is_training,
         training_program_id: assignForm.is_training ? assignForm.training_program_id || undefined : undefined,
         training_evaluator_id: assignForm.is_training ? assignForm.training_evaluator_id || undefined : undefined,
+        ...(overrideReason ? { override_seat_eligibility: true, override_reason: overrideReason } : {}),
       });
+      setSeatOverride(null);
       toast.success('Member assigned');
       surfaceAssignmentWarnings(res);
       setShowAssignForm(false);
@@ -863,6 +874,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
+      const appError = toAppError(err);
+      if (appError.code === SEAT_NOT_GRANTED_CODE && canManage && !overrideReason) {
+        setSeatOverride({ message: appError.message });
+        return;
+      }
+      setSeatOverride(null);
       handleAssignmentError(err, 'Failed to assign member', assignForm.user_id, memberName(assignForm.user_id));
     } finally {
       setPendingFlag('assigning', false);
@@ -3202,6 +3219,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           </DialogPanel>
         </div>
       </DialogPortal>
+
+      <PromptDialog
+        isOpen={seatOverride !== null}
+        onClose={() => setSeatOverride(null)}
+        onSubmit={(reason) => void handleAssign(reason)}
+        title="Seat by officer override?"
+        message={seatOverride?.message ?? ''}
+        label="Reason"
+        placeholder="e.g. Only rope-qualified member on tonight"
+        required
+        multiline
+        hint="Saved on the assignment and in the audit log."
+        confirmLabel="Assign anyway"
+        cancelLabel="Keep the seat open"
+        confirmVariant="warning"
+        loading={pending.assigning}
+      />
 
       {driverBlock && (
         <DriverBlockedDialog

@@ -1881,7 +1881,11 @@ const Dashboard: React.FC = () => {
               {/* First thing a new member sees, because the dashboard is where
                   they land and nothing here pointed at the lessons before. */}
               <DashboardOrientation />
-              <DashboardOrganizationWidgets />
+              {/* Department-wide money, grant and outreach totals. A leader has
+                  a My Department tab for exactly this, and here it pushed their
+                  own shifts and training below the fold; a member whose grants
+                  feed the pulse but open no such tab still sees it here. */}
+              {!canViewOrganization && <DashboardOrganizationWidgets />}
               {/* Both carry the default flex order, so source order puts the
                   verdict above the panel it summarises — on phones too, where
                   the actions and timeline swap around them. */}
@@ -2507,6 +2511,7 @@ const Dashboard: React.FC = () => {
                   Department-wide staffing, compliance, events, action items, and operations.
                 </p>
               </div>
+              <DashboardOrganizationWidgets />
               {operations && <ChiefOperationsDashboard data={operations} />}
               {canViewLegacyAdmin &&
                 (adminError ? (

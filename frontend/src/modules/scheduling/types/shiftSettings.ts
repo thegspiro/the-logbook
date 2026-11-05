@@ -79,6 +79,12 @@ export interface CustomPosition {
   label: string;
   /** The seat drives the apparatus, so it gets the driver seat's EVOC check. Absent on positions saved before 2026-10-31. */
   drivesApparatus?: boolean | undefined;
+  /**
+   * Qualification codes (`COURSE_QUALIFICATIONS`) whose holders are eligible
+   * for this seat. The server validates and settles them on save and absent
+   * means none; saved before 2026-11-04 it is absent.
+   */
+  qualifications?: string[] | undefined;
 }
 
 export interface ResourceTypeDefaults {

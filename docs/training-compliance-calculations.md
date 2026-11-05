@@ -265,15 +265,19 @@ Certification matching considers:
 
 - a course linked on the requirement (`required_courses`)
 - `training_type` match (if the requirement specifies one)
-- Requirement name as substring of `course_name` (case-insensitive) — **legacy
-  records only**: a record completed on or before the requirement's
-  `name_match_until` (an undated record by when it was entered). That date is
-  the day the installation upgraded past migration `60aaf273de27`, set on the
-  requirements that existed then; requirements created since never match by
-  name. Since 2026-10-05 a newer record whose course merely contains the
-  requirement's name — a "CPR Refresher" event against a "CPR" certification —
-  no longer satisfies it, so members relying on that alone change standing.
-- `registry_code` as substring of `certification_number` (case-insensitive)
+- the requirement's name, by **match key** — **legacy records only**: a
+  record completed on or before the requirement's `name_match_until` (an
+  undated record by when it was entered) whose stored `match_key` equals the
+  key of the requirement's name. That date is the day the installation
+  upgraded past migration `60aaf273de27`, set on the requirements that existed
+  then; requirements created since never match by name. A key is the text
+  with case, spacing and punctuation removed (NFKC, Unicode case folding,
+  letters and digits only — `app/utils/training_match_key.py`), so "c.p.r."
+  matches "CPR" and "CPR Refresher" does not. Until 2026-11-04 this was a
+  substring test.
+- `registry_code` at the **start** of `certification_number`, by key: the
+  record's stored `certification_key` begins with the code's key ("NFPA 1001"
+  matches "NFPA-1001-0042"). Until 2026-11-04 the code could appear anywhere.
 
 #### Example: Carla vs. Tom on EMT Certification
 
@@ -290,10 +294,9 @@ Riverside FD has a requirement: **"EMT Certification"**
 The system checks:
 
 1. Training type matches (`certification` = `certification`)
-2. Requirement name "EMT Certification" is a substring of
-   "Paramedic Certification"? No — but "EMT" is not a substring of
-   "Paramedic". However:
-3. Registry code "NREMT" is a substring of "NREMT-P-88421"? **Yes**
+2. Requirement name "EMT Certification" has the same key as
+   "Paramedic Certification"? No. However:
+3. Does "NREMT-P-88421" begin with registry code "NREMT"? **Yes**
 
 Match found. Expiration date Nov 30, 2025 >= today Oct 15, 2025 → **valid**.
 Carla passes this requirement.
@@ -410,9 +413,16 @@ Jake needs to finish the SOGs Review before the period ends.
 
 ### 2e. Fallback (Other Types)
 
-If the requirement type does not match any of the above, the member is
-considered to have met it if they have **any** completed training record
-in the current year.
+Skills evaluation, checklist, knowledge test, and every other type not
+covered above, are met by the latest completed record in the window that is
+of the requirement's `training_type`; when none is, by a record matched by
+name under the certification rule — on or before the requirement's
+`name_match_until`, with the same match key (see Certification Matching
+Rules). The upgrade past migration `bd8fc0c4a941` (2026-11-04) set that date
+on the requirements of these types that existed then; before it, these types
+matched any record whose course name contained the requirement's name, at any
+date. With nothing completed, a matching IN_PROGRESS record reads in
+progress.
 
 **Source:** `TrainingService.check_requirement_progress()`
 (`backend/app/services/training_service.py`)
@@ -1248,29 +1258,30 @@ requirement no deadline, Maria and Tom would not be graded on it at all.
 When determining if a training record satisfies a certification requirement,
 the system checks (in order):
 
-1. **Training type** — record's `training_type` matches requirement's
+1. **Linked course** — the record's course is one of `required_courses`
+2. **Training type** — record's `training_type` matches requirement's
    `training_type` (if specified)
-2. **Name match** — requirement name appears as a substring of
-   `record.course_name` (case-insensitive)
-3. **Registry code** — requirement's `registry_code` appears as a substring
-   of `record.certification_number` (case-insensitive)
+3. **Name match** — legacy records only (on or before `name_match_until`):
+   the record's `match_key` equals the key of the requirement's name
+4. **Registry code** — the record's `certification_key` begins with the key
+   of the requirement's `registry_code`
 
 #### Example: Matching Ambiguity
 
-Requirement: **"HAZMAT Operations"** (`registry_code = "HAZMAT-OPS"`)
+Requirement: **"HAZMAT Operations"** (`registry_code = "HAZMAT-OPS"`), every
+record completed before its `name_match_until`
 
-| Record Course Name              | Cert Number        | Match? | How                               |
-| ------------------------------- | ------------------ | ------ | --------------------------------- |
-| HAZMAT Operations Certification | HAZMAT-OPS-2025-41 | Yes    | Both name and code                |
-| Advanced HAZMAT Operations      | AHO-2025-99        | Yes    | Name contains "HAZMAT Operations" |
-| HAZMAT Awareness                | HAZMAT-OPS-2025-22 | Yes    | Code contains "HAZMAT-OPS"        |
-| General Safety Training         | GS-2025-88         | No     | Neither name nor code             |
+| Record Course Name         | Cert Number        | Match? | How                                    |
+| -------------------------- | ------------------ | ------ | -------------------------------------- |
+| hazmat operations          | HO-2025-41         | Yes    | Same name key                          |
+| Advanced HAZMAT Operations | AHO-2025-99        | No     | Different key (contains is not enough) |
+| HAZMAT Awareness           | HAZMAT-OPS-2025-22 | Yes    | Number begins with "HAZMAT-OPS"        |
+| General Safety Training    | GS-2025-88         | No     | Neither name nor code                  |
 
 The third record ("HAZMAT Awareness") matches on registry code even though
-the course name does not contain "HAZMAT Operations." This is intentional —
-some agencies reuse cert number prefixes across related courses. Training
-officers should ensure registry codes are specific enough to avoid false
-matches.
+its course name is different. This is intentional — some agencies reuse cert
+number prefixes across related courses. Training officers should ensure
+registry codes are specific enough to avoid false matches.
 
 ### Hours Rounding
 

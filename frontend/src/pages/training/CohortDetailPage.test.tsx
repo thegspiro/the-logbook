@@ -180,6 +180,31 @@ describe('CohortDetailPage', () => {
     });
   });
 
+  describe('the description and notes set in the wizard', () => {
+    beforeEach(() => {
+      getCohort.mockReset();
+    });
+
+    it('shows a member the description', async () => {
+      signInWith([]);
+      // The API withholds notes from a member; the page never asks for them.
+      getCohort.mockResolvedValue({ ...memberResponse(), description: 'Fall academy' });
+      renderPage();
+
+      expect(await screen.findByText('Fall academy')).toBeInTheDocument();
+      expect(screen.queryByText(/Notes:/)).not.toBeInTheDocument();
+    });
+
+    it('shows an officer the description and the notes', async () => {
+      signInWith(['training.manage']);
+      getCohort.mockResolvedValue({ ...officerResponse(), description: 'Fall academy', notes: 'Bring turnouts' });
+      renderPage();
+
+      expect(await screen.findByText('Fall academy')).toBeInTheDocument();
+      expect(screen.getByText('Bring turnouts')).toBeInTheDocument();
+    });
+  });
+
   it('still reports a failure that is not a 404', async () => {
     getCohort.mockRejectedValue(new Error('Network Error'));
     renderPage();

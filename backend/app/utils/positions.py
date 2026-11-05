@@ -22,7 +22,7 @@ An ambulance built from the defaults therefore had an EMT seat no EMT could
 sign up for, and no setting could unblock it (see CHANGELOG 2026-08-26).
 """
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from pydantic import BaseModel
 
@@ -101,16 +101,48 @@ POSITION_LABELS = {
 }
 
 
-def position_label(name: Any) -> str:
+def custom_seat_labels(custom_positions: Any) -> Dict[str, str]:
+    """The labels a department chose for its own seats, keyed casefolded.
+
+    ``custom_positions`` is the stored ``scheduling_module_configs`` column —
+    ``[{"value": "rescue_tech", "label": "Rescue Technician"}, ...]`` — read
+    defensively, since it is untyped JSON: an entry with no value or no label
+    contributes nothing rather than raising inside a notification sender.
+    """
+    labels: Dict[str, str] = {}
+    if not isinstance(custom_positions, list):
+        return labels
+    for entry in custom_positions:
+        if not isinstance(entry, dict):
+            continue
+        value = str(entry.get("value") or "").strip()
+        label = str(entry.get("label") or "").strip()
+        if value and label:
+            labels.setdefault(value.casefold(), label)
+    return labels
+
+
+def position_label(name: Any, custom_labels: Optional[Mapping[str, str]] = None) -> str:
     """The display name for one seat token.
 
-    A department's own custom seat is not in the label map — its value is
-    chosen by an admin — so it is returned title-cased rather than blank.
+    The one server-side answer to "what is this seat called", for every
+    notification body, email and printed roster. ``custom_labels`` is
+    ``custom_seat_labels`` of the department's Position Names; with it, a
+    department's own seat reads the way the department named it ("Rescue
+    Technician"), as ``positionLabel`` in
+    ``frontend/src/modules/scheduling/utils/positionLabels.ts`` renders it on
+    screen — the custom entry is consulted first there too. Without it (a
+    caller with no department in hand) a custom seat is returned title-cased
+    rather than blank.
     """
     token = str(getattr(name, "value", name) or "").strip()
     if not token:
         return ""
     canonical = canonical_position(token)
+    if custom_labels:
+        chosen = custom_labels.get(canonical.casefold())
+        if chosen:
+            return chosen
     label = POSITION_LABELS.get(canonical)
     if label:
         return label

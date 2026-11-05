@@ -303,7 +303,15 @@ async def _build_department(db) -> _Dept:
         required_calls=3,
         training_type=TrainingType.ORIENTATION,
     )
-    await _req(db, dept, "Skills Check", RequirementType.SKILLS_EVALUATION, annual)
+    # A fallback type matched by name, on either side of its cut-off.
+    await _req(
+        db,
+        dept,
+        "Skills Check",
+        RequirementType.SKILLS_EVALUATION,
+        annual,
+        name_match_until=today - timedelta(days=200),
+    )
     await _req(
         db,
         dept,
@@ -399,10 +407,12 @@ async def _build_department(db) -> _Dept:
                         dept,
                         member,
                         completion_date=when,
-                        course_name="CPR Renewal",
+                        # Recased and punctuated: the name's key still
+                        # matches "CPR", and the number begins with "BLS".
+                        course_name="c.p.r.",
                         training_type=TrainingType.CERTIFICATION,
                         expiration_date=when + timedelta(days=730),
-                        certification_number=f"AHA-BLS-{step}",
+                        certification_number=f"BLS-{step}",
                     )
                 )
             elif kind == 1:
@@ -432,7 +442,7 @@ async def _build_department(db) -> _Dept:
                         member,
                         status=TrainingStatus.IN_PROGRESS,
                         completion_date=None if step % 2 else when,
-                        course_name="Skills Check Station",
+                        course_name="skills check",
                         training_type=TrainingType.SKILLS_PRACTICE,
                     )
                 )
@@ -449,7 +459,7 @@ async def _build_department(db) -> _Dept:
                         dept,
                         member,
                         completion_date=None,
-                        course_name="CPR Instructor",
+                        course_name="CPR",
                     )
                 )
             elif kind == 6:
@@ -488,7 +498,7 @@ async def _build_department(db) -> _Dept:
                 dept,
                 member,
                 completion_date=today - timedelta(days=1500 + i),
-                course_name="Hazmat Ops Awareness",
+                course_name="HAZMAT ops",
                 training_type=TrainingType.SPECIALTY,
                 expiration_date=today - timedelta(days=770),
             )
@@ -501,7 +511,7 @@ async def _build_department(db) -> _Dept:
                 dept,
                 member,
                 completion_date=today + timedelta(days=10),
-                course_name="CPR Renewal",
+                course_name="CPR",
                 expiration_date=today + timedelta(days=700),
             )
         )

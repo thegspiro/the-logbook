@@ -40,10 +40,13 @@ from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
 from app.services.operational_rank_service import DEFAULT_RANKS
 from app.services.qualification_service import (
+    QUALIFICATIONS,
     QualificationService,
+    custom_qualification_seats,
     positions_for_qualifications,
     qualification_label,
 )
+from app.services.scheduling_module_config_service import load_custom_positions
 from app.utils.membership import (
     effective_member_class,
     is_administrative,
@@ -561,11 +564,17 @@ class ShiftEligibilityService:
             windows = await QualificationService(self.db).get_member_code_windows(
                 str(user.id), organization_id
             )
+            custom_seats = (
+                await self._get_custom_qualification_seats(organization_id)
+                if windows
+                else {}
+            )
             for shift in shifts.values():
                 as_of = self._shift_date(shift, org)
                 if as_of not in quals_by_date:
                     quals_by_date[as_of] = positions_for_qualifications(
-                        QualificationService.codes_in_force(windows, as_of)
+                        QualificationService.codes_in_force(windows, as_of),
+                        custom_seats,
                     )
 
         answers: Dict[str, List[str]] = {}
@@ -663,6 +672,11 @@ class ShiftEligibilityService:
         qualification_map = await QualificationService(self.db).get_current_by_member(
             organization_id, as_of=org_today(org)
         )
+        custom_seats = (
+            await self._get_custom_qualification_seats(organization_id)
+            if qualification_map
+            else {}
+        )
 
         members: List[Dict[str, Any]] = []
         for user in users:
@@ -688,7 +702,9 @@ class ShiftEligibilityService:
 
             for qualification in qualification_map.get(str(user.id), []):
                 code = qualification["code"]
-                if _covers(positions_for_qualifications([code]), position):
+                if _covers(
+                    positions_for_qualifications([code], custom_seats), position
+                ):
                     sources.append(
                         {
                             "type": "qualification",
@@ -993,7 +1009,57 @@ class ShiftEligibilityService:
         codes = await QualificationService(self.db).get_member_codes(
             user_id, organization_id, as_of
         )
-        return positions_for_qualifications(codes)
+        if not codes:
+            # Nothing to map, so the department's mapping is not worth a read.
+            return set()
+        return positions_for_qualifications(
+            codes, await self._get_custom_qualification_seats(organization_id)
+        )
+
+    async def _get_custom_qualification_seats(
+        self, organization_id: str
+    ) -> Dict[str, Set[str]]:
+        """The department's own certification -> custom seat mapping."""
+        return custom_qualification_seats(
+            await load_custom_positions(self.db, organization_id)
+        )
+
+    async def seat_is_granted(self, organization_id: str, seat: str) -> bool:
+        """Whether anything in the department can clear a member for ``seat``.
+
+        The sources are ``get_eligible_positions``'s, asked of the department
+        rather than of a member: any active rank's ``eligible_positions`` (or a
+        built-in rank's default), a certification mapped to it, a training
+        program whose completion unlocks it, or the open-positions list. A
+        seat none of them names is one nobody can ever be eligible for — the
+        "ungranted custom seat" an officer may fill by override
+        (SCHED-CUSTOM-SEAT owner decision, 2026-11-01). Per-shift waivers
+        (open-to-all, the administrative flag) are not sources: they open a
+        seat on one shift, they do not grant it.
+        """
+        org = await self._get_org(organization_id)
+        if org is not None and _covers(self.get_open_positions(org), seat):
+            return True
+        slug_map = await self._get_slug_eligibility_map(organization_id)
+        if any(_covers(seats, seat) for seats in slug_map.values()):
+            return True
+        custom_seats = await self._get_custom_qualification_seats(organization_id)
+        if _covers(
+            positions_for_qualifications(list(QUALIFICATIONS), custom_seats), seat
+        ):
+            return True
+        result = await self.db.execute(
+            select(TrainingProgram.target_position).where(
+                TrainingProgram.organization_id == organization_id,
+                TrainingProgram.target_position.isnot(None),
+            )
+        )
+        targets = [
+            TRAINING_POSITION_MAP.get(target, target)
+            for (target,) in result.all()
+            if target
+        ]
+        return _covers(targets, seat)
 
     async def _get_held_position_slugs(
         self, user_id: str, organization_id: str
@@ -1325,6 +1391,7 @@ class ShiftEligibilityService:
         late_signup_grace_minutes: Optional[int] = None,
         enforce_evoc: Optional[bool] = None,
         call_tracking: Optional[Dict[str, Any]] = None,
+        external_shifts_require_approval: Optional[bool] = None,
     ) -> dict:
         """Update scheduling eligibility settings on the organization."""
         org = await self._get_org(organization_id)
@@ -1363,6 +1430,10 @@ class ShiftEligibilityService:
             scheduling["late_signup_grace_minutes"] = late_signup_grace_minutes
         if enforce_evoc is not None:
             scheduling["enforce_evoc"] = enforce_evoc
+        if external_shifts_require_approval is not None:
+            scheduling["external_shifts_require_approval"] = (
+                external_shifts_require_approval
+            )
         if call_tracking is not None:
             scheduling["call_tracking"] = self._stamp_call_tracking_mode_since(
                 org, scheduling.get("call_tracking"), call_tracking

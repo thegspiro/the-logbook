@@ -313,9 +313,11 @@ Two things are cheaper than they would have been before the
 
 - **§5 — block logout with a warning.** This reverses §5.3's earlier revert, on
   the owner's later call. `useSkillsLogoutGuard` (AppLayout's Sign Out) sends
-  what it can, then asks before the purge deletes the rest. The idle timeout and
-  an expired session still purge without asking; that residual is open in
-  [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#skills-testing--offline-support-2026-08-07).
+  what it can, then asks before the purge deletes the rest. The idle timeout,
+  an expired session and another member signing in keep the examiner's unsent
+  evaluations on the device for that examiner alone, for seven days (owner
+  decision 2026-11-01; see
+  [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#skills-testing--offline-support-2026-08-07)).
 
 - **§6 — A + B.** Cold start is supported. Every create carries a
   client-minted id (`mintTestId`); `create_test` accepts it once and answers a

@@ -70,3 +70,31 @@ async def test_overnight_shift_counts_for_today_and_finalized_shift_is_closed():
     assert result["today_staffing"] == 1
     assert result["incomplete_closeouts"] == 0
     assert result["open_slots"] == 0
+
+
+async def test_widget_preferences_offer_only_filters_the_department_has():
+    """The dashboard picks a station or platoon from this list, not free text.
+
+    A typed value the department has no shifts for is refused on save, so the
+    form must be told which values exist.
+    """
+    from app.api.v1.endpoints.scheduling import get_scheduling_widget_preferences
+
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[_rows(["station-2", "station-1"]), _rows(["B", "A"])]
+    )
+    user = SimpleNamespace(
+        organization_id="org-1",
+        notification_preferences={
+            "scheduling_dashboard_widgets": {
+                "open_slots": {"platoon": "A", "station_id": "gone", "horizon_days": 7}
+            }
+        },
+    )
+
+    result = await get_scheduling_widget_preferences(db=db, current_user=user)
+
+    assert result["available_station_ids"] == ["station-1", "station-2"]
+    assert result["available_platoons"] == ["A", "B"]
+    assert result["widgets"] == {"open_slots": {"platoon": "A", "horizon_days": 7}}

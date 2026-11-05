@@ -104,6 +104,22 @@ describe('TrainingRequirementsPage', () => {
     expect(mockPreviewRegistry).toHaveBeenCalledWith('nfpa');
   });
 
+  // The import cards filled the first screen, so the department's own
+  // requirements started below the fold on a tablet.
+  it('lists the requirements before the registry import cards', async () => {
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    const requirement = await screen.findByText('Annual Fire Training');
+    const registry = screen.getByRole('heading', { name: 'Import from Registry' });
+    const search = screen.getByRole('search', { name: 'Search and filter requirements' });
+    expect(search.compareDocumentPosition(requirement) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(requirement.compareDocumentPosition(registry) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
   it('handles empty requirements list', async () => {
     mockGetRequirements.mockResolvedValue([]);
     const { container } = renderWithRouter(<TrainingRequirementsPage />);

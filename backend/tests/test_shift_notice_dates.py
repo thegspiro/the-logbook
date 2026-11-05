@@ -52,7 +52,9 @@ class TestAssignmentNotice:
             apparatus_id=None,
             template_id=None,
         )
-        service = _service(org, shift)
+        # The third read is the department's Position Names, which name a
+        # custom seat in the body (SCHED-CUSTOM-SEAT); none saved here.
+        service = _service(org, shift, None)
 
         await service._notify_shift_assignment(
             "shift-1", "user-1", "firefighter", "org-1"

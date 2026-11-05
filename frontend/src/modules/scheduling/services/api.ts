@@ -209,6 +209,12 @@ export interface SchedulingFeatureSettings {
   /** Block seating a driver who lacks the apparatus's required EVOC level. */
   enforce_evoc: boolean;
   /**
+   * Outside-department shifts wait for an officer's approval before they
+   * count. Optional because a backend that predates the field omits it, and
+   * absent means off — an entry counts as soon as it is logged.
+   */
+  external_shifts_require_approval?: boolean;
+  /**
    * How the department records call volume. Absent means `detailed` — the
    * behaviour every existing organisation already has.
    */
@@ -418,6 +424,13 @@ export interface SchedulingWidgetPreferences {
   widgets: Record<string, SchedulingWidgetFilters>;
 }
 
+/** Saved defaults plus the station and platoon values a save would accept. */
+export interface SchedulingWidgetPreferencesResponse extends SchedulingWidgetPreferences {
+  // Optional because a backend older than the field omits them.
+  available_station_ids?: string[] | undefined;
+  available_platoons?: string[] | undefined;
+}
+
 /** Event template metadata stored in the positions field for event-category templates. */
 export interface EventTemplatePositions {
   event_type?: string;
@@ -583,7 +596,7 @@ export interface RequirementComplianceSummary {
   compliance_rate: number;
 }
 
-export type ExternalShiftStatus = 'counted' | 'rejected';
+export type ExternalShiftStatus = 'pending' | 'counted' | 'rejected';
 
 /** A shift a member worked outside the department's own schedule. */
 export interface ExternalShiftEntry {
@@ -949,6 +962,11 @@ export const schedulingService = {
     const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/reject`, { reason });
     return response.data;
   },
+  /** Let an entry awaiting approval count. Needs scheduling.manage. */
+  async approveExternalShift(id: string): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/approve`);
+    return response.data;
+  },
   async restoreExternalShift(id: string): Promise<ExternalShiftEntry> {
     const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/restore`);
     return response.data;
@@ -1022,8 +1040,8 @@ export const schedulingService = {
     const response = await api.get<SchedulingWidgetSummary>('/scheduling/dashboard/widgets', { params });
     return response.data;
   },
-  async getWidgetPreferences(): Promise<SchedulingWidgetPreferences> {
-    const response = await api.get<SchedulingWidgetPreferences>('/scheduling/dashboard/widget-preferences');
+  async getWidgetPreferences(): Promise<SchedulingWidgetPreferencesResponse> {
+    const response = await api.get<SchedulingWidgetPreferencesResponse>('/scheduling/dashboard/widget-preferences');
     return response.data;
   },
   async saveWidgetPreferences(preferences: SchedulingWidgetPreferences): Promise<SchedulingWidgetPreferences> {

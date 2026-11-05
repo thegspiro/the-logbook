@@ -8,7 +8,7 @@ keyed by the caller's organization_id.
 """
 
 import copy
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic.alias_generators import to_camel
 from sqlalchemy import select
@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.user import Organization
 from app.schemas.scheduling_module_config import ShiftSettingsSchema
+from app.services.qualification_service import known_qualification_codes
+from app.utils.positions import custom_seat_labels
 
 # Built-in defaults, kept in lockstep with the frontend's DEFAULT_SETTINGS in
 # frontend/src/modules/scheduling/types/shiftSettings.ts. Top-level keys are
@@ -149,6 +151,58 @@ async def apparatus_type_defaults_for_org(
     return apparatus_type_defaults_for(getattr(org_type, "value", org_type))
 
 
+def _settled_custom_positions(custom_positions: Any) -> List[Dict[str, Any]]:
+    """The stored Position Names entries, each in the shape the schema reads.
+
+    A fresh list of fresh dicts, never the row's own JSON (Pitfall #12), with
+    each entry's ``qualifications`` settled by ``known_qualification_codes``:
+    an entry saved before the field existed gains ``[]``, and a code that has
+    left the vocabulary is dropped instead of failing the settings screen's
+    GET on response validation.
+    """
+    settled: List[Dict[str, Any]] = []
+    for entry in custom_positions if isinstance(custom_positions, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        copied = copy.deepcopy(entry)
+        copied["qualifications"] = known_qualification_codes(
+            entry.get("qualifications")
+        )
+        settled.append(copied)
+    return settled
+
+
+async def load_custom_positions(
+    db: AsyncSession, organization_id: Any
+) -> List[Dict[str, Any]]:
+    """The department's own seats (Scheduling → Position Names), settled.
+
+    The one read behind both the label a notification prints for a custom
+    seat and the certifications that confer one. Filtered to the department,
+    so another department's seat never enters either answer.
+    """
+    stored = (
+        await db.execute(
+            select(SchedulingModuleConfig.custom_positions).where(
+                SchedulingModuleConfig.organization_id == str(organization_id)
+            )
+        )
+    ).scalar_one_or_none()
+    return _settled_custom_positions(stored)
+
+
+async def department_seat_labels(
+    db: AsyncSession, organization_id: Any
+) -> Dict[str, str]:
+    """``custom_seat_labels`` for this department, for ``position_label``.
+
+    Every server-rendered seat name — notification bodies, reminder emails,
+    printed rosters — passes this to ``position_label`` so a custom seat reads
+    as the department named it rather than as its stored value.
+    """
+    return custom_seat_labels(await load_custom_positions(db, organization_id))
+
+
 class SchedulingModuleConfigService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -196,6 +250,9 @@ class SchedulingModuleConfigService:
                 value = getattr(row, column)
                 if value is not None:
                     settings[column] = value
+            settings["custom_positions"] = _settled_custom_positions(
+                settings["custom_positions"]
+            )
         return settings, row
 
     async def update_settings(

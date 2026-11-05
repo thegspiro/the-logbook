@@ -95,6 +95,7 @@ class ErrorCode(str, Enum):
     SCHED_DRIVER_NOT_QUALIFIED = "LB-SCHED-001"
     SCHED_EXCHANGE_NOT_QUALIFIED = "LB-SCHED-002"
     SCHED_UNKNOWN_SEAT = "LB-SCHED-003"
+    SCHED_SEAT_NOT_GRANTED = "LB-SCHED-004"
 
     # --- Documents -------------------------------------------------------
     DOC_FOLDER_ADMIN_ONLY = "LB-DOC-001"
@@ -665,6 +666,23 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "For a standing shift, the seat must be a built-in seat or one the "
             "department has defined under Position Names or on a template or "
             "apparatus.",
+        ),
+    ),
+    ErrorCode.SCHED_SEAT_NOT_GRANTED: ErrorCodeInfo(
+        title="Nothing grants this custom seat",
+        description=(
+            "The seat is one of the department's own, and no rank, "
+            "certification, training program or open position grants it, so "
+            "no member is eligible for it. A member cannot sign up for it; a "
+            "scheduling manager may seat somebody in it with an override."
+        ),
+        resolution=(
+            "Grant the seat: add it to a rank's eligible positions, map a "
+            "certification to it under Scheduling → Position Names, or add it "
+            "to the open positions list.",
+            "For a one-off, a member holding scheduling.manage can assign the "
+            "member anyway with the officer override and a reason; the "
+            "override is recorded on the assignment and in the audit log.",
         ),
     ),
 }

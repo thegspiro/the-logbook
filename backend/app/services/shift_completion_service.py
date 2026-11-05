@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +33,9 @@ from app.models.training import (
     MemberCompetency,
     ProgramEnrollment,
     ProgramRequirement,
+    ProgressCreditSource,
     RequirementProgress,
+    RequirementProgressCredit,
     RequirementProgressStatus,
     RequirementType,
     Shift,
@@ -72,6 +74,47 @@ SHIFT_OFFICER_AUTHORSHIP = "shift_officer"
 #: sign-off was recorded from. It is what makes re-approving a report a
 #: no-op for its sign-offs; checkoffs recorded before it existed carry none.
 SHIFT_REPORT_CHECKOFF_KEY = "shift_report_id"
+
+# The report fields the credit calculation reads. An edit to any other field
+# (the narrative, ratings, tasks) cannot move the trainee's credit.
+CREDIT_INPUT_FIELDS = frozenset(
+    {
+        "hours_on_shift",
+        "calls_responded",
+        "call_types",
+        "skills_observed",
+        "enrollment_id",
+    }
+)
+
+
+def _without_report_call_history(notes: dict, report_id: str) -> dict:
+    """``notes`` with one shift report's call-type history taken back out.
+
+    Entries are tagged with the report's id when written; the per-type running
+    totals are reduced by what each removed entry added. Entries written before
+    the tag existed carry none and stay.
+    """
+    history = notes.get("call_type_history") or []
+    removed = [
+        h for h in history if isinstance(h, dict) and h.get("source_id") == report_id
+    ]
+    if not removed:
+        return notes
+    notes = copy.deepcopy(notes)
+    notes["call_type_history"] = [h for h in history if h not in removed]
+    totals = notes.get("call_type_totals") or {}
+    for entry in removed:
+        for call_type in entry.get("types") or []:
+            key = str(call_type).lower()
+            remaining = totals.get(key, 0) - 1
+            if remaining > 0:
+                totals[key] = remaining
+            else:
+                totals.pop(key, None)
+    notes["call_type_totals"] = totals
+    return notes
+
 
 SHIFT_OFFICER_ONLY_MESSAGE = (
     "Your department has each shift's reports filed by that shift's officer"
@@ -1155,10 +1198,17 @@ class ShiftCompletionService:
         skills_observed: Optional[list],
         shift_id: Optional[str] = None,
         report_id: Optional[str] = None,
+        restate: bool = False,
     ) -> List[str]:
         """Create SkillCheckoff records for demonstrated skills.
 
         Returns list of matched SkillEvaluation IDs.
+
+        ``restate`` is for an approved report whose figures were edited: a
+        sign-off this report recorded for a skill it no longer lists as
+        demonstrated is removed. Competency is not stepped back — its history
+        is a rolling window that records no source, so there is nothing to
+        reverse it by.
 
         Repeat-safe per report: a report can reach approval more than once
         (approved, flagged by a reviewer, approved again), and each approval
@@ -1174,7 +1224,7 @@ class ShiftCompletionService:
         quietly raise competency or credit a program step behind it. Both
         approval paths come through here, which is why the check is here.
         """
-        if not skills_observed:
+        if not skills_observed and not restate:
             return []
         method = await get_practical_skills_method(self.db, organization_id)
         if method != "shift_signoffs":
@@ -1182,13 +1232,63 @@ class ShiftCompletionService:
 
         demonstrated = [
             s
-            for s in skills_observed
+            for s in (skills_observed or [])
             if (
                 s.get("demonstrated")
                 if isinstance(s, dict)
                 else getattr(s, "demonstrated", False)
             )
         ]
+        matched = await self._record_skill_checkoffs(
+            organization_id, trainee_id, officer_id, demonstrated, report_id
+        )
+        if restate and report_id:
+            await self._remove_stale_report_checkoffs(
+                organization_id, trainee_id, report_id, set(matched)
+            )
+        return matched
+
+    async def _remove_stale_report_checkoffs(
+        self,
+        organization_id: UUID | str,
+        trainee_id: str,
+        report_id: str,
+        keep_skill_ids: set,
+    ) -> None:
+        """Delete this report's sign-offs for skills it no longer lists."""
+        for checkoff in await self._report_checkoffs(
+            organization_id, trainee_id, report_id
+        ):
+            if str(checkoff.skill_evaluation_id) not in keep_skill_ids:
+                await self.db.delete(checkoff)
+
+    async def _report_checkoffs(
+        self, organization_id: UUID | str, trainee_id: str, report_id: str
+    ) -> List[SkillCheckoff]:
+        """The sign-offs this report recorded for its trainee."""
+        rows = await self.db.execute(
+            select(SkillCheckoff).where(
+                SkillCheckoff.organization_id == str(organization_id),
+                SkillCheckoff.user_id == trainee_id,
+            )
+        )
+        return [
+            checkoff
+            for checkoff in rows.scalars().all()
+            if isinstance(checkoff.evaluation_results, dict)
+            and checkoff.evaluation_results.get(SHIFT_REPORT_CHECKOFF_KEY)
+            == str(report_id)
+        ]
+
+    async def _record_skill_checkoffs(
+        self,
+        organization_id: UUID | str,
+        trainee_id: str,
+        officer_id: UUID | str | None,
+        demonstrated: list,
+        report_id: Optional[str],
+    ) -> List[str]:
+        """Sign off each demonstrated skill once per report."""
         if not demonstrated:
             return []
 
@@ -1354,23 +1454,80 @@ class ShiftCompletionService:
         officer_id: UUID | str | None,
         matched_skill_ids: Optional[List[str]] = None,
         source_id: Optional[str] = None,
+        prior_entries: Optional[list] = None,
     ) -> list:
         """
         Find active enrollment requirements for the trainee and
         increment progress for shift-based and call-based requirements.
+
+        With a ``source_id`` (the shift report) the credit is *restated*: what
+        this report credits now replaces what it credited before, on the
+        requirement-progress ledger keyed (progress, ``shift_report``, report
+        id). The ledger's unique key is what makes a second run a no-op — the
+        same figures find their row and change nothing — so approving the
+        report, re-approving it, or editing it while approved all converge on
+        one credit per requirement. A requirement this report fed before but
+        not now (hours cut to zero, a call type removed, the enrollment
+        changed) has its credit reversed. Requirements already completed are
+        revisited only when this report credited them, so a correction can
+        reach them.
+
+        ``prior_entries`` is the report's stored ``requirements_progressed``.
+        An entry with no ledger row was credited before the ledger existed
+        (or is a linked requirement that keeps no ledger): its units cannot be
+        measured, so it is left alone rather than credited a second time.
         """
         requirements_progressed = []
+        credited_units: Dict[str, float] = {}
+        unledgered: set = set()
+        if source_id:
+            ledger_rows = await self.db.execute(
+                select(
+                    RequirementProgressCredit.progress_id,
+                    RequirementProgressCredit.units,
+                ).where(
+                    RequirementProgressCredit.source_type
+                    == ProgressCreditSource.SHIFT_REPORT,
+                    RequirementProgressCredit.source_id == str(source_id),
+                )
+            )
+            credited_units = {
+                str(pid): float(units or 0) for pid, units in ledger_rows.all()
+            }
+            unledgered = {
+                str(entry.get("requirement_progress_id"))
+                for entry in (prior_entries or [])
+                if isinstance(entry, dict) and entry.get("requirement_progress_id")
+            } - set(credited_units)
+        keep_progress_ids: set = set()
+        preserved_entries = [
+            entry
+            for entry in (prior_entries or [])
+            if isinstance(entry, dict)
+            and str(entry.get("requirement_progress_id")) in unledgered
+        ]
         # Resolved on first use: only a call-type breakdown records a date.
         history_date: Optional[date] = None
         # Likewise loaded on first use: only a type-specific requirement needs
         # the department's call-type list.
         org_call_types: Optional[list] = None
 
-        # Find active enrollments for this trainee
+        # Find active enrollments for this trainee, and any this report
+        # already credited (its credit may have completed one).
+        enrollment_open = ProgramEnrollment.status == EnrollmentStatus.ACTIVE
+        if credited_units:
+            enrollment_open = or_(
+                enrollment_open,
+                ProgramEnrollment.id.in_(
+                    select(RequirementProgress.enrollment_id).where(
+                        RequirementProgress.id.in_(list(credited_units))
+                    )
+                ),
+            )
         enrollment_query = select(ProgramEnrollment).where(
             ProgramEnrollment.user_id == trainee_id,
             ProgramEnrollment.organization_id == str(organization_id),
-            ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+            enrollment_open,
         )
 
         # If specific enrollment provided, narrow down
@@ -1396,17 +1553,23 @@ class ShiftCompletionService:
                 .join(TrainingRequirement)
                 .where(
                     RequirementProgress.enrollment_id == enrollment.id,
-                    RequirementProgress.status.in_(
-                        [
-                            RequirementProgressStatus.NOT_STARTED,
-                            RequirementProgressStatus.IN_PROGRESS,
-                        ]
+                    or_(
+                        RequirementProgress.status.in_(
+                            [
+                                RequirementProgressStatus.NOT_STARTED,
+                                RequirementProgressStatus.IN_PROGRESS,
+                            ]
+                        ),
+                        RequirementProgress.id.in_(list(credited_units)),
                     ),
                 )
             )
             progress_entries = progress_result.all()
 
             for progress, requirement in progress_entries:
+                if str(progress.id) in unledgered:
+                    continue
+                has_credit = str(progress.id) in credited_units
                 value_to_add = 0.0
                 call_type_detail = None
 
@@ -1454,26 +1617,37 @@ class ShiftCompletionService:
                 else:
                     continue
 
+                # This report's earlier call-type history comes out before the
+                # current one goes in, so a restated report is counted once.
+                notes = copy.deepcopy(progress.progress_notes or {})
+                if has_credit and source_id:
+                    notes = _without_report_call_history(notes, str(source_id))
+                    if notes != (progress.progress_notes or {}):
+                        progress.progress_notes = copy.deepcopy(notes)
+
                 if value_to_add > 0:
                     from app.schemas.training_program import RequirementProgressUpdate
 
                     new_value = (progress.progress_value or 0) + value_to_add
+                    if source_id:
+                        keep_progress_ids.add(str(progress.id))
 
                     # Track call type breakdown in progress_notes
-                    notes = copy.deepcopy(progress.progress_notes or {})
                     if call_type_detail:
                         if history_date is None:
                             history_date = await resolve_org_today(
                                 self.db, organization_id
                             )
                         call_type_history = notes.get("call_type_history", [])
-                        call_type_history.append(
-                            {
-                                "date": str(history_date),
-                                "types": call_type_detail["matched_types"],
-                                "count": len(call_type_detail["matched_types"]),
-                            }
-                        )
+                        history_entry = {
+                            "date": str(history_date),
+                            "types": call_type_detail["matched_types"],
+                            "count": len(call_type_detail["matched_types"]),
+                        }
+                        if source_id:
+                            # What lets a restatement take this entry back out.
+                            history_entry["source_id"] = str(source_id)
+                        call_type_history.append(history_entry)
                         notes["call_type_history"] = call_type_history
 
                         # Build running totals per call type
@@ -1486,9 +1660,12 @@ class ShiftCompletionService:
                     if source_id:
                         # Key the accrual on the shift report so re-processing the
                         # same report (draft→approved re-trigger, retry) cannot
-                        # double-credit. Notes + IN_PROGRESS pass through unchanged.
-                        from app.models.training import ProgressCreditSource
-
+                        # double-credit, and restate it so an edited figure
+                        # replaces the old one instead of being skipped.
+                        if has_credit and notes:
+                            # A restatement with unchanged units returns before
+                            # writing notes; the call-type history still moves.
+                            progress.progress_notes = copy.deepcopy(notes)
                         updated_progress, error = (
                             await program_service.apply_requirement_credit(
                                 progress_id=progress.id,
@@ -1499,7 +1676,10 @@ class ShiftCompletionService:
                                 verified_by=officer_id,
                                 applied_by=officer_id,
                                 progress_notes=notes if notes else None,
-                                mark_in_progress=True,
+                                # A completed requirement being restated keeps
+                                # its status; only a fresh credit starts one.
+                                mark_in_progress=not has_credit,
+                                restate=True,
                             )
                         )
                     else:
@@ -1528,7 +1708,17 @@ class ShiftCompletionService:
                             ]
                         requirements_progressed.append(entry)
 
-        return requirements_progressed
+        if source_id and credited_units:
+            # Whatever this report credited and no longer feeds comes back off.
+            await program_service.reverse_credits_for_source_except(
+                organization_id=organization_id,
+                source_id=str(source_id),
+                keep_progress_ids=keep_progress_ids,
+                source_type=ProgressCreditSource.SHIFT_REPORT,
+                verified_by=officer_id,
+            )
+
+        return preserved_entries + requirements_progressed
 
     async def get_report(
         self,
@@ -1673,12 +1863,18 @@ class ShiftCompletionService:
 
         # EC-17: compared before the write. The report form resubmits every
         # field whatever was edited, so presence in `updates` is not a change.
-        content_changed = not was_draft and any(
-            field in UPDATABLE_FIELDS
-            and field != "review_status"
-            and getattr(report, field) != value
-            for field, value in updates.items()
+        changed_fields = (
+            set()
+            if was_draft
+            else {
+                field
+                for field, value in updates.items()
+                if field in UPDATABLE_FIELDS
+                and field != "review_status"
+                and getattr(report, field) != value
+            }
         )
+        content_changed = bool(changed_fields)
 
         for field, value in updates.items():
             if field in UPDATABLE_FIELDS:
@@ -1714,11 +1910,77 @@ class ShiftCompletionService:
         # Pending review is still provisional and may be flagged or corrected.
         if not was_released and report.review_status == "approved":
             await self._trigger_deferred_progress(report, officer_id)
+        elif (
+            was_released
+            and report.review_status == "approved"
+            and changed_fields & CREDIT_INPUT_FIELDS
+        ):
+            # Owner decision 2026-11-01: where review is off the edited report
+            # stays released, so its credit is restated now rather than waiting
+            # for a re-approval that will never come. Same calculation as the
+            # approval path; the ledger keeps it to one credit per requirement.
+            report.credit_restatement = await self._restate_credit(report, officer_id)
 
         await self.db.commit()
         await self.db.refresh(report)
         await self._sync_evaluation_credit(report, organization_id)
         return report
+
+    async def _restate_credit(
+        self, report: ShiftCompletionReport, officer_id: Optional[str]
+    ) -> Optional[dict]:
+        """Restate an approved report's credit; return what moved, for audit.
+
+        None when nothing moved (an edit to the hours of a trainee with no
+        hours requirement, say), so the audit records only real changes.
+        """
+        report_id = str(report.id)
+
+        async def skill_ids() -> set:
+            return {
+                str(c.skill_evaluation_id)
+                for c in await self._report_checkoffs(
+                    report.organization_id, report.trainee_id, report_id
+                )
+            }
+
+        before = await self._report_credit_units(report_id)
+        skills_before = await skill_ids()
+        await self._trigger_deferred_progress(report, officer_id, restate=True)
+        after = await self._report_credit_units(report_id)
+        skills_after = await skill_ids()
+        credits = [
+            {
+                "requirement_progress_id": progress_id,
+                "units_before": before.get(progress_id, 0.0),
+                "units_after": after.get(progress_id, 0.0),
+            }
+            for progress_id in sorted(set(before) | set(after))
+            if before.get(progress_id) != after.get(progress_id)
+        ]
+        removed = sorted(skills_before - skills_after)
+        added = sorted(skills_after - skills_before)
+        if not (credits or removed or added):
+            return None
+        return {
+            "credits": credits,
+            "skill_signoffs_added": added,
+            "skill_signoffs_removed": removed,
+        }
+
+    async def _report_credit_units(self, report_id: str) -> Dict[str, float]:
+        """``{progress_id: units}`` this report holds on the credit ledger."""
+        rows = await self.db.execute(
+            select(
+                RequirementProgressCredit.progress_id,
+                RequirementProgressCredit.units,
+            ).where(
+                RequirementProgressCredit.source_type
+                == ProgressCreditSource.SHIFT_REPORT,
+                RequirementProgressCredit.source_id == report_id,
+            )
+        )
+        return {str(pid): float(units or 0) for pid, units in rows.all()}
 
     async def _sync_evaluation_credit(
         self, report: ShiftCompletionReport, organization_id: UUID | str
@@ -1776,6 +2038,7 @@ class ShiftCompletionService:
         self,
         report: ShiftCompletionReport,
         officer_id: Optional[str],
+        restate: bool = False,
     ) -> None:
         """Trigger training progress deferred until a report is approved.
 
@@ -1783,6 +2046,13 @@ class ShiftCompletionService:
         permanently deleted before the report was approved. The trainee is
         still credited; the checkoffs and progress simply carry no evaluator,
         the same state SET NULL leaves on records approved earlier.
+
+        The one credit calculation for a shift report, run on every approval
+        and — where review is off — on every edit of an approved report
+        (``restate``). Requirement credit is always restated against the
+        ledger (see ``_update_requirement_progress``), so a re-approval after
+        an EC-17 return to review carries the edited figures too; ``restate``
+        additionally removes sign-offs for skills the report no longer lists.
         """
         org_id = UUID(report.organization_id)
         officer_uuid = UUID(officer_id) if officer_id else None
@@ -1794,6 +2064,7 @@ class ShiftCompletionService:
             skills_observed=report.skills_observed,
             shift_id=report.shift_id,
             report_id=str(report.id),
+            restate=restate,
         )
 
         requirements_progressed = await self._update_requirement_progress(
@@ -1806,9 +2077,10 @@ class ShiftCompletionService:
             officer_id=officer_uuid,
             matched_skill_ids=matched_skill_ids,
             source_id=str(report.id),
+            prior_entries=report.requirements_progressed,
         )
-        if requirements_progressed:
-            report.requirements_progressed = requirements_progressed
+        if requirements_progressed or report.requirements_progressed:
+            report.requirements_progressed = requirements_progressed or None
 
     async def shift_unit_labels(
         self, shift_ids: set[str], organization_id: UUID | str

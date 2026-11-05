@@ -295,10 +295,6 @@ const TrainingRequirementsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* This page renders only inside the training.manage-gated hub, which
-            is what both registry calls require. */}
-        <RegistryImportPanel registries={registries} onImported={() => void fetchData()} />
-
         {/* Filters */}
         <div className="card mb-6 p-4" role="search" aria-label="Search and filter requirements">
           <div className="flex flex-col gap-4 md:flex-row">
@@ -388,6 +384,12 @@ const TrainingRequirementsPage: React.FC = () => {
             ))
           )}
         </div>
+
+        {/* Below the list, not above it: the department's own requirements are
+            what an officer opens this page to see, and the import cards are an
+            occasional action. This page renders only inside the
+            training.manage-gated hub, which is what both registry calls require. */}
+        <RegistryImportPanel registries={registries} onImported={() => void fetchData()} />
 
         {/* Create/Edit Modal */}
         {showCreateModal && (
