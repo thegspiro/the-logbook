@@ -4332,7 +4332,8 @@ of `false`.
 
 **What to check:** if you publish an event-request form and do _not_ want
 public submissions, the toggle now genuinely controls it — turn it off at
-**Events → Settings → Pipeline**.
+**Events → Settings → Public Requests → Overview** (called **Pipeline**
+before 2026-11-05).
 
 ### Applicant pipeline stages are renumbered (2026-09-08)
 

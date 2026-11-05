@@ -6,5 +6,6 @@ export { default as AttendanceSection } from './AttendanceSection';
 export { default as PipelineSection } from './PipelineSection';
 export { default as EmailSection } from './EmailSection';
 export { default as FormSection } from './FormSection';
-export type { OrgMember, EventRequestFormSummary } from './types';
+export { default as PublicRequestsOverview } from './PublicRequestsOverview';
+export type { OrgMember, EventRequestFormSummary, PublicRequestsPage } from './types';
 export { MIN_TEMPLATE_DAYS_BEFORE, MAX_TEMPLATE_DAYS_BEFORE } from './types';

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import toast from 'react-hot-toast';
 
@@ -29,6 +29,16 @@ vi.mock('react-hot-toast', () => ({
 
 import { renderWithRouter } from '../test/utils';
 import EventsSettingsTab from './EventsSettingsTab';
+
+/**
+ * Opens one page of the Public Requests section. Scoped to the section's page
+ * rail because the overview's step list carries buttons with the same names.
+ */
+const openRequestsPage = async (user: ReturnType<typeof userEvent.setup>, page: RegExp) => {
+  await user.click(screen.getByRole('button', { name: 'Public Requests' }));
+  const rail = await screen.findByRole('navigation', { name: 'Public Requests pages' });
+  await user.click(within(rail).getByRole('button', { name: page }));
+};
 
 const settings = {
   enabled_event_types: ['training', 'other'],
@@ -77,14 +87,14 @@ describe('EventsSettingsTab', () => {
   });
 
   // The forms list is supplemental, so a malformed one degrades to empty
-  // rather than taking the Public Form section down.
-  it('renders the Public Form section when the forms list is malformed', async () => {
+  // rather than taking the Request form page down.
+  it('renders the Request form page when the forms list is malformed', async () => {
     getForms.mockResolvedValue({});
     const user = userEvent.setup();
     renderWithRouter(<EventsSettingsTab />);
 
     await screen.findByRole('heading', { name: 'Event Settings' });
-    await user.click(screen.getByRole('button', { name: 'Public Form' }));
+    await openRequestsPage(user, /^Request form/);
     expect(await screen.findByRole('button', { name: /View all forms/ })).toBeInTheDocument();
   });
 
@@ -107,10 +117,87 @@ describe('EventsSettingsTab', () => {
     renderWithRouter(<EventsSettingsTab />);
 
     await screen.findByRole('heading', { name: 'Event Settings' });
-    await user.click(screen.getByRole('button', { name: 'Pipeline' }));
+    await openRequestsPage(user, /^Handling/);
 
     expect(await screen.findByRole('button', { name: 'Move "Review Request" up' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Move "Review Request" down' })).toBeDisabled();
+  });
+
+  describe('public requests section', () => {
+    it('groups every request setting under one section that opens on its overview', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+
+      const sections = screen.getByRole('navigation', { name: 'Event settings sections' });
+      for (const retired of ['Pipeline', 'Email', 'Public Form', 'Outreach Types']) {
+        expect(within(sections).queryByRole('button', { name: retired })).not.toBeInTheDocument();
+      }
+
+      await user.click(within(sections).getByRole('button', { name: 'Public Requests' }));
+
+      expect(await screen.findByRole('heading', { name: 'Public Event Requests' })).toBeInTheDocument();
+      const rail = screen.getByRole('navigation', { name: 'Public Requests pages' });
+      expect(
+        within(rail)
+          .getAllByRole('button')
+          .map((b) => b.firstChild?.textContent)
+      ).toEqual(['Overview', 'Request form', 'Types & roles', 'Handling', 'Emails']);
+      expect(within(rail).getByRole('button', { name: /^Overview/ })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('shows the intake switch on the overview and keeps it off the handling page', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await openRequestsPage(user, /^Overview/);
+
+      expect(screen.getByRole('switch', { name: 'Accept public event requests' })).toHaveAttribute(
+        'aria-checked',
+        'false'
+      );
+      expect(screen.getByRole('spinbutton', { name: 'Minimum Lead Time' })).toHaveValue(21);
+
+      const rail = screen.getByRole('navigation', { name: 'Public Requests pages' });
+      await user.click(within(rail).getByRole('button', { name: /^Handling/ }));
+      expect(await screen.findByRole('heading', { name: 'Request Handling' })).toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: 'Accept public event requests' })).not.toBeInTheDocument();
+    });
+
+    it('reports each step from the stored settings and opens its page', async () => {
+      getForms.mockResolvedValue({
+        forms: [{ id: 'f1', name: 'Request an event', status: 'draft', is_public: true }],
+        total: 1,
+        skip: 0,
+        limit: 50,
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await openRequestsPage(user, /^Overview/);
+
+      const steps = screen.getByRole('list');
+      expect(await within(steps).findByText('1 in draft, not yet published')).toBeInTheDocument();
+      expect(within(steps).getByText('1 types · 0 roles')).toBeInTheDocument();
+      expect(within(steps).getByText('No default coordinator · 1 checklist step')).toBeInTheDocument();
+      expect(within(steps).getByText('0 automatic emails on · 0 templates')).toBeInTheDocument();
+
+      await user.click(within(steps).getByRole('button', { name: /^Emails/ }));
+      expect(await screen.findByRole('heading', { name: 'Request Emails' })).toBeInTheDocument();
+      const rail = screen.getByRole('navigation', { name: 'Public Requests pages' });
+      expect(within(rail).getByRole('button', { name: /^Emails/ })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('returns to the overview when the section is left and reopened', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await openRequestsPage(user, /^Handling/);
+      await user.click(screen.getByRole('button', { name: 'Categories' }));
+      await user.click(screen.getByRole('button', { name: 'Public Requests' }));
+
+      expect(await screen.findByRole('heading', { name: 'Public Event Requests' })).toBeInTheDocument();
+    });
   });
 
   describe('email templates', () => {
@@ -125,7 +212,7 @@ describe('EventsSettingsTab', () => {
     const openTemplateForm = async (user: ReturnType<typeof userEvent.setup>) => {
       renderWithRouter(<EventsSettingsTab />);
       await screen.findByRole('heading', { name: 'Event Settings' });
-      await user.click(screen.getByRole('button', { name: 'Email' }));
+      await openRequestsPage(user, /^Emails/);
       await user.click(await screen.findByRole('button', { name: 'New Template' }));
       await user.type(screen.getByPlaceholderText(/Template name/), 'One week out');
       await user.type(screen.getByPlaceholderText('Email subject'), 'Your event is next week');
@@ -215,7 +302,7 @@ describe('EventsSettingsTab', () => {
     const openEmailSection = async (user: ReturnType<typeof userEvent.setup>) => {
       renderWithRouter(<EventsSettingsTab />);
       await screen.findByRole('heading', { name: 'Event Settings' });
-      await user.click(screen.getByRole('button', { name: 'Email' }));
+      await openRequestsPage(user, /^Emails/);
       await screen.findByText('Request received');
     };
 

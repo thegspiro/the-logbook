@@ -1,5 +1,16 @@
 # Screenshot currency
 
+## Queued by the Event settings Public Requests regroup (2026-11-05)
+
+Event settings' **Outreach Types**, **Pipeline**, **Email** and **Public Form**
+sections became pages of one **Public Requests** section, with a new
+**Overview** page. Nothing was captured.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | `19-24` — now Public Requests → Request form, with the page rail beside it | Replace |
+| 04 | Public Requests → Overview: the intake switch, lead time and the four step cards | Create |
+
 ## Queued by the November 3 – 4 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-3--4-2026).
