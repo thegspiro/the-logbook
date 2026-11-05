@@ -75,7 +75,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/dashboard', label: 'Dashboard', note: 'Landing page after sign-in — widgets, quick actions, alerts' },
       {
         path: '/testing',
-        label: 'Testing home',
+        label: 'Testing Home',
         note: 'This page — listed so the list is complete',
         module: 'testing',
       },
@@ -384,7 +384,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/training/log-shift', label: 'Manual shift report', permission: 'training.manage', module: 'training' },
       {
         path: '/training/compliance-config',
-        label: 'Compliance requirements',
+        label: 'Compliance settings',
         anyPermission: ['settings.manage', 'compliance.manage'],
         module: 'training',
       },

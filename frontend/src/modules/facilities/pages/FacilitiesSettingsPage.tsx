@@ -75,6 +75,7 @@ export default function FacilitiesSettingsPage() {
       <OperationsPageHeader
         icon={Settings}
         title="Facility Settings"
+        adminHeader
         subtitle="Choose the types and statuses offered on facility and maintenance record forms."
       />
       {loading ? (

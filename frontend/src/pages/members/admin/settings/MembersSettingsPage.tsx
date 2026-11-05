@@ -132,6 +132,7 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
       activeSection={visibleSection}
       onSectionChange={handleSectionChange}
       navLabel="Members settings sections"
+      eyebrow="Administration"
       title="Members Settings"
       subtitle="Contact visibility, membership numbers, ranks, tiers and EVOC levels"
       saveState={saveState}

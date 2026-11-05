@@ -638,6 +638,10 @@ class GrantComplianceTaskBase(BaseModel):
 class GrantComplianceTaskCreate(GrantComplianceTaskBase):
     """Schema for creating a new grant compliance task"""
 
+    # W68: a task could be given an assignee only by editing it after it was
+    # created. Kept off the Base so the response's own field is unchanged.
+    assigned_to: Optional[UUID] = None
+
 
 class GrantComplianceTaskUpdate(BaseModel):
     """Schema for updating a grant compliance task"""

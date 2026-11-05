@@ -14,6 +14,7 @@ import { mirrorsRank } from '../utils/positions';
 import { PositionKind } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 
 export const RoleManagementPage: React.FC = () => {
   const { confirm } = useConfirm();
@@ -218,7 +219,7 @@ export const RoleManagementPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div data-page-main className="mx-auto max-w-7xl">
           <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-muted" role="status" aria-live="polite">
               Loading...
@@ -231,19 +232,20 @@ export const RoleManagementPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="split-row mb-6 gap-3 sm:items-center">
-          <div className="split-row-main">
-            <h2 className="text-theme-text-primary text-2xl font-bold">Role Management</h2>
-            <p className="text-theme-text-muted mt-1 text-sm">Create custom roles and choose what each role can do</p>
-          </div>
-          <button
-            onClick={handleCreate}
-            className="split-row-aside btn-info inline-flex shrink-0 items-center self-start rounded-md text-sm font-medium sm:self-auto"
-          >
-            Create Custom Role
-          </button>
-        </div>
+      <div data-page-main className="mx-auto max-w-7xl">
+        <AdminPageHeader
+          title="Role Management"
+          description="Create custom roles and choose what each role can do"
+          className="mb-6"
+          actions={
+            <button
+              onClick={handleCreate}
+              className="btn-primary inline-flex shrink-0 items-center rounded-md text-sm font-medium"
+            >
+              Create Custom Role
+            </button>
+          }
+        />
 
         {/* While the dialog is open its own copy of the error is the one the
             user can see; this one would sit behind the overlay. */}

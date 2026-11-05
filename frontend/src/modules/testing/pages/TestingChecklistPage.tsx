@@ -15,7 +15,6 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ClipboardCheck,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -47,6 +46,7 @@ import { SEE_ALL_TESTERS_PERMISSION, useTestingChecklist } from '../useTestingCh
 import type { TestStatus } from '../useTestingChecklist';
 import { TestPageCard } from '../components/TestPageCard';
 import { PromptDialog } from '../../../components/ux';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 import { buildPermissionMatrixCsv, buildRunCsv, runFileName } from '../exportRun';
 import { downloadCsv } from '../../../utils/csv';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -280,18 +280,17 @@ export const TestingChecklistPage: React.FC = () => {
   return (
     <div className="page-container page-stack px-4 py-6 sm:px-6 lg:px-8">
       <header className="page-stack">
-        <div className="flex items-start gap-3">
-          <ClipboardCheck className="text-theme-text-muted mt-1 h-7 w-7 shrink-0" aria-hidden="true" />
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Testing home</h1>
-            <p className="text-theme-text-secondary mt-1 text-sm">
+        <AdminPageHeader
+          title="Testing Home"
+          description={
+            <>
               Every page in the app, one box each. Open a box to test the page, then mark what you found. The run is
               saved for the department, so you can pick it up from another account, device or day.{' '}
               <span className="font-mono">TESTING_CHECKLIST.md</span> has the steps for each area; this page tracks
               which screens have been checked.
-            </p>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
           <div className="min-w-0">

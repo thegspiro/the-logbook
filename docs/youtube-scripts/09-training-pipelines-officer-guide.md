@@ -296,6 +296,25 @@ in error.]**
 > review** so you can re-decide. Reject it, or re-approve it with corrected hours.
 > Either way, the requirement math fixes itself."
 
+### WHEN THE PIPELINE CAN'T FINISH A MEMBER (about 0:30)
+
+**[SCREEN: The program's Enrollments tab; an Active enrollment with a "Mark
+pipeline complete" button. A reason is typed.]**
+
+> "Sometimes a pipeline can't complete someone by itself — the member earned the
+> credential somewhere else, or the pipeline has no active requirements. An
+> empty set of requirements isn't a passing set, so a pipeline like that reads
+> **No active requirements** and completes nobody. For these, an officer with
+> Manage training records can use **Mark pipeline complete**, with a reason. The
+> member gets the usual completion notice, and the reason is audited. Officers
+> see 'Completed by hand' with it; members don't see the reason."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 30 seconds; re-time Chapter 6.
+Only an Active or On hold enrollment can be completed this way. Deactivating a
+pipeline from its edit form withdraws the members still in it, after a
+confirmation naming how many; deleting an in-use requirement or pipeline now
+deactivates it instead of erasing progress.]**
+
 ### WHY THIS MATTERS (18:15 – 18:45)
 
 **[CALLOUT: "Every fix is one click and fully audited"]**
