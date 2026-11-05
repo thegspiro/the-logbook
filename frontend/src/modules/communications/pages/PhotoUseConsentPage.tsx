@@ -32,7 +32,7 @@ import {
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Avatar, Breadcrumbs, EmptyState, SkeletonPage, SortableHeader } from '../../../components/ux';
+import { Avatar, EmptyState, SkeletonPage, SortableHeader } from '../../../components/ux';
 import type { SortDirection } from '../../../components/ux';
 import { userService } from '../../../services/api';
 import type { ConsentRoster, ConsentRosterMember } from '../../../types/user';
@@ -43,6 +43,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatLegalName, formatMemberName, givenName } from '../../../utils/memberName';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 type StatusFilter = ConsentStatus | 'all';
 
@@ -334,35 +335,29 @@ const PhotoUseConsentPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <div>
-        <Breadcrumbs items={[{ label: 'Forms & Comms' }, { label: 'Photo Use Consent' }]} />
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-              <Camera className="h-6 w-6 shrink-0" aria-hidden="true" />
-              Photo Use Consent
-            </h1>
-            <p className="text-theme-text-secondary mt-1 max-w-3xl text-sm">
-              Who has agreed to their image being used in publications, social media, and other public material. Members
-              set this themselves under{' '}
-              <Link to="/account?tab=privacy" className="text-theme-text-primary underline hover:no-underline">
-                My Account &rarr; Privacy &rarr; Privacy Choices
-              </Link>
-              ; it cannot be changed on their behalf from here.
-            </p>
-          </div>
-          <div className="hscroll flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="btn-icon"
-              aria-label="Refresh photo use consents"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Photo Use Consent"
+        description={
+          <span className="block max-w-3xl">
+            Who has agreed to their image being used in publications, social media, and other public material. Members
+            set this themselves under{' '}
+            <Link to="/account?tab=privacy" className="text-theme-text-primary underline hover:no-underline">
+              My Account &rarr; Privacy &rarr; Privacy Choices
+            </Link>
+            ; it cannot be changed on their behalf from here.
+          </span>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="btn-icon"
+            aria-label="Refresh photo use consents"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+          </button>
+        }
+      />
 
       {error && (
         <div className="alert-danger flex items-start gap-2" role="alert">

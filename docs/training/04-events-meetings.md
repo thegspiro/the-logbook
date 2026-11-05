@@ -2133,7 +2133,7 @@ granted from the meeting.
 
 When a member has an active **leave of absence**, meetings during the leave
 are left out of their count automatically. Leaves are created on the
-**Waiver Management** page (see
+**Waivers** page (see
 [Membership → Leave of Absence](./01-membership.md#leave-of-absence)).
 
 - The member's percentage is not lowered by meetings they could not attend.

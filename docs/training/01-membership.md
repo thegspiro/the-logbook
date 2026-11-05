@@ -42,7 +42,7 @@ _member class_, _membership status_, _position_, _rank_ and _waiver_.
 10. [Rank and Qualification Are Different Things](#rank-and-qualification-are-different-things)
 11. [Member Status Management](#member-status-management)
 12. [Leave of Absence](#leave-of-absence)
-13. [Waiver Management](#waiver-management)
+13. [Waivers](#waivers)
 14. [Rank Validation](#rank-validation)
 15. [Membership Tiers](#membership-tiers)
 16. [Member Lifecycle Management](#member-lifecycle-management)
@@ -2052,8 +2052,8 @@ then show as open.
 
 ### Managing Leaves
 
-You create and list leaves on the **Waiver Management** page: **Members >
-Admin > Waivers** (see [Waiver Management](#waiver-management)). A leave of
+You create and list leaves on the **Waivers** page: **Members >
+Admin > Waivers** (see [Waivers](#waivers)). A leave of
 absence is one kind of waiver.
 
 1. Open the **Create Waiver** tab.
@@ -2085,7 +2085,7 @@ member is on leave for 3 months. They now need 9 hours (12 × 9 ÷ 12).
 
 ### Viewing Leaves
 
-- **Active Waivers** tab on Waiver Management: every leave in effect now.
+- **Active Waivers** tab on the Waivers page: every leave in effect now.
   The **Training Waivers** view in Training Admin lists them too.
 - **Member profile**: shows every leave that has not been deactivated, in the
   **Leave of Absence** card, each badged by its dates. You can't edit them
@@ -2120,7 +2120,7 @@ When you create a leave with **Training Requirements** ticked, The Logbook
 
 ---
 
-## Waiver Management
+## Waivers
 
 **Who can do this:** officers who can manage member profiles (the **Manage
 member profiles** permission).
@@ -2172,7 +2172,7 @@ Overview → Training Waivers**. This view has:
   Expired or Deactivated;
 - a **Source** column: **Auto (LOA)** for a waiver created by a leave of
   absence, **Manual** for one created on its own; and
-- a link to the full Waiver Management page, which also covers meetings and
+- a link to the full Waivers page, which also covers meetings and
   shifts.
 
 ---
@@ -2413,15 +2413,15 @@ count the **Needs attention** list is about. See
 | Task                                         | Where to do it                                                                                                              |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Change a member's status**                 | Member profile → status control. Archiving happens automatically; it is not a choice                                        |
-| **Create a leave of absence**                | [Waiver Management](#waiver-management)                                                                                     |
-| **See a leave of absence**                   | Member profile (read-only card), and on Waiver Management and Training Waivers                                              |
-| **Change a leave's dates or reason**         | Waiver Management → Active Waivers → **Edit**                                                                               |
-| **End a leave of absence**                   | Waiver Management → Active Waivers → **Deactivate**                                                                         |
+| **Create a leave of absence**                | [Waivers](#waivers)                                                                                                         |
+| **See a leave of absence**                   | Member profile (read-only card), and on the Waivers page and Training Waivers                                               |
+| **Change a leave's dates or reason**         | Waivers → Active Waivers → **Edit**                                                                                         |
+| **End a leave of absence**                   | Waivers → Active Waivers → **Deactivate**                                                                                   |
 | **Find and reactivate an archived member**   | Members list → status filter **Archived** → **Reactivate**, or the member's profile                                         |
 | **Chase property a former member still has** | Inventory → Member Equipment, or Members Admin → Member Management. Use **Send due reminders** to email everyone who is due |
 | **Set up membership tiers**                  | Members Admin → Settings → Membership Tiers (see [Membership Tiers](#membership-tiers))                                     |
 
-> **Tip.** A leave of absence lives on Waiver Management, not on the member's
+> **Tip.** A leave of absence lives on the Waivers page, not on the member's
 > profile. The profile only shows it.
 
 ---
@@ -2917,7 +2917,7 @@ list and submit the record again.
 | A dropped member still shows as active                         | The status change may not have saved. Check it on the member's profile.                                                                                                                                                                                                                                                                          |
 | No property return report is produced                          | The member must have equipment assigned. With none assigned, there is nothing to report.                                                                                                                                                                                                                                                         |
 | A member's tier did not go up                                  | Check that **Advance members automatically by years of service** is on; that the member is Active or Probationary; that their current membership status is one of your tiers; and that their hire date or Service History gives enough credited years. Advancement happens on the 1st of each month.                                             |
-| A leave of absence did not adjust training                     | On Waiver Management, look at the leave's **Applies to** column. **Meetings & Shifts** means training was left out. Create a separate training waiver on the same page.                                                                                                                                                                          |
+| A leave of absence did not adjust training                     | On the Waivers page, look at the leave's **Applies to** column. **Meetings & Shifts** means training was left out. Create a separate training waiver on the same page.                                                                                                                                                                           |
 | A rank shows as not recognised                                 | The member's rank must exactly match a rank your department has set up, including capitals and spaces. Edit the member's rank, or add it under **Members Admin → Settings → Operational Ranks**.                                                                                                                                                 |
 | A member's audit history is empty                              | The history only holds changes made since the feature was turned on. Older changes do not appear.                                                                                                                                                                                                                                                |
 | You cannot find the Admin Edit page                            | Open **Members Admin → Member Management** and select **Edit** beside the member.                                                                                                                                                                                                                                                                |
@@ -2950,7 +2950,7 @@ Training and Scheduling.
 
 Alex finds OFD's recruitment page and sends in an interest form.
 
-1. Lt. Morrison opens **Administration > Members > Prospective** and selects
+1. Lt. Morrison opens **Administration > Members > Prospective Members** and selects
    **Add Applicant**. She enters Alex's name, email and phone, and sets
    Membership Type to **Regular Member**.
 2. Alex's card appears on the board at **Stage 1: Interest Form**. This stage
@@ -3282,14 +3282,14 @@ One action in one place often fills in another:
 
 ### Cross-Module Edge Cases
 
-| What happened                                           | What it means / what to do                                                                                                                                              |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The membership vote fails                               | The package reads Not Elected and the applicant cannot be made a member. There is no built-in waiting period before applying again.                                     |
-| Gear is out of stock during onboarding                  | Items in stock are issued; the rest are skipped with a reason. The quartermaster raises purchase requests or draft purchase orders from the planner results.            |
-| The drug screen fails                                   | The record shows Failed and the requirement counts as not met. Nothing is flagged or sent automatically.                                                                |
-| A training phase needs a certification Alex already has | Alex uploads the certificate; an officer approves it; the requirement is credited automatically.                                                                        |
-| Alex goes on leave during probation                     | Record the leave on Waiver Management. While it lasts, the training, meeting and shift requirements it covers are adjusted, so Alex is not marked behind for time away. |
-| Dues are not paid by the due date                       | Unpaid dues are marked Overdue after the due date passes. Part-paid dues stay Partial. Late fees are not added automatically.                                           |
+| What happened                                           | What it means / what to do                                                                                                                                             |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The membership vote fails                               | The package reads Not Elected and the applicant cannot be made a member. There is no built-in waiting period before applying again.                                    |
+| Gear is out of stock during onboarding                  | Items in stock are issued; the rest are skipped with a reason. The quartermaster raises purchase requests or draft purchase orders from the planner results.           |
+| The drug screen fails                                   | The record shows Failed and the requirement counts as not met. Nothing is flagged or sent automatically.                                                               |
+| A training phase needs a certification Alex already has | Alex uploads the certificate; an officer approves it; the requirement is credited automatically.                                                                       |
+| Alex goes on leave during probation                     | Record the leave on the Waivers page. While it lasts, the training, meeting and shift requirements it covers are adjusted, so Alex is not marked behind for time away. |
+| Dues are not paid by the due date                       | Unpaid dues are marked Overdue after the due date passes. Part-paid dues stay Partial. Late fees are not added automatically.                                          |
 
 ---
 

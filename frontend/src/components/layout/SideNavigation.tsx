@@ -400,7 +400,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               ...(isModuleOn('prospective_members')
                 ? [
                     {
-                      label: 'Prospective',
+                      label: 'Prospective Members',
                       path: '/prospective-members',
                       icon: UserPlus,
                       permission: 'prospective_members.manage',
@@ -466,7 +466,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           } as NavItem,
           {
             label: 'Manage Events',
-            path: '/events',
+            path: '/events/admin',
             icon: Calendar,
             permission: 'events.manage',
           } as NavItem,
@@ -549,7 +549,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
               },
               {
-                label: 'Messages',
+                // Not "Messages": the member inbox above already carries that
+                // name, and two rows reading the same lead to different pages.
+                label: 'Department Messages',
                 path: '/communications/messages',
                 icon: Megaphone,
                 permission: 'notifications.manage',
@@ -596,9 +598,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'Organization Settings',
             path: '/settings',
             icon: Settings,
-            permission: 'settings.manage',
+            // No group-level gate: each row carries its own. Audit Log,
+            // Security Alerts, QR Code Analytics and Role Management open to
+            // grants other than settings.manage, and a gate here hid them from
+            // exactly those officers while the top layout listed them. The
+            // group still hides when none of its rows is visible.
             subItems: [
-              { label: 'Organization', path: '/settings', icon: Building2 },
+              { label: 'Organization', path: '/settings', icon: Building2, permission: 'settings.manage' },
               {
                 label: 'Role Management',
                 path: '/settings/roles',

@@ -74,6 +74,7 @@ import { getEventTypeLabel } from '../utils/eventHelpers';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 
 /** The events a Generic Webhook can be sent (backend WEBHOOK_EVENT_TYPES). */
 const WEBHOOK_EVENT_OPTIONS = [
@@ -2263,20 +2264,11 @@ const IntegrationsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-indigo-600 p-2">
-              <Plug className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">External Integrations</h1>
-              <p className="text-theme-text-muted text-sm">
-                Connect with external tools like Google Calendar, Slack, and more
-              </p>
-            </div>
-          </div>
-        </div>
+        <AdminPageHeader
+          title="Integrations"
+          description="Connect with external tools like Google Calendar, Slack, and more"
+          className="mb-8"
+        />
 
         {canImportHistory && (
           <div className="card split-row mb-8 gap-3 p-4 sm:items-center">

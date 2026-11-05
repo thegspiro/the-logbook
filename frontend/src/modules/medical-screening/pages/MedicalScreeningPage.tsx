@@ -15,6 +15,7 @@ import { ScreeningRecordForm } from '../components/ScreeningRecordForm';
 import { ComplianceDashboard } from '../components/ComplianceDashboard';
 import { SelfRecordedBadge } from '../components/SelfRecordedBadge';
 import { useCanViewNarrative } from '../hooks/useCanViewNarrative';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
@@ -159,42 +160,36 @@ export const MedicalScreeningPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="page-header mb-6 gap-3 sm:items-center">
-        <div className="page-header-title flex items-center gap-3">
-          <Stethoscope className="text-theme-text-muted h-6 w-6 shrink-0" />
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Medical Screening</h1>
-            <p className="text-theme-text-muted text-sm">
-              Set screening requirements, record screenings, and see which ones expire soon.
-            </p>
-          </div>
-        </div>
-        {activeTab === 'requirements' && (
-          <button
-            onClick={() => {
-              setEditingRequirement(null);
-              setShowRequirementForm(true);
-            }}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            Add Requirement
-          </button>
-        )}
-        {activeTab === 'records' && (
-          <button
-            onClick={() => {
-              setEditingRecord(null);
-              setShowRecordForm(true);
-            }}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            Add Record
-          </button>
-        )}
-      </div>
+      <AdminPageHeader
+        title="Medical Screening"
+        description="Set screening requirements, record screenings, and see which ones expire soon."
+        className="mb-6"
+        actions={
+          activeTab === 'requirements' ? (
+            <button
+              onClick={() => {
+                setEditingRequirement(null);
+                setShowRequirementForm(true);
+              }}
+              className="btn-primary flex shrink-0 items-center gap-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Requirement
+            </button>
+          ) : activeTab === 'records' ? (
+            <button
+              onClick={() => {
+                setEditingRecord(null);
+                setShowRecordForm(true);
+              }}
+              className="btn-primary flex shrink-0 items-center gap-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Record
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Expiring Soon Alert */}
       {expiringWithin30.length > 0 && (
