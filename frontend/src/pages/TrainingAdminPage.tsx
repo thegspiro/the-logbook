@@ -32,6 +32,7 @@ import {
   type TrainingAdminAreaId,
 } from '../components/training/trainingAdminAreas';
 import type { AdminHubSummary } from '../types/adminHub';
+import { useAuthStore } from '../stores/authStore';
 import { usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
@@ -47,6 +48,7 @@ const ShiftReportPage = lazyWithRetry(() => import('./ShiftReportPage'));
 const ManualEntrySettingsPanel = lazyWithRetry(() => import('./training/ManualEntrySettingsPanel'));
 const PracticalSkillsSettingsPanel = lazyWithRetry(() => import('./training/PracticalSkillsSettingsPanel'));
 const ShiftEvaluationSettingsPanel = lazyWithRetry(() => import('./training/ShiftEvaluationSettingsPanel'));
+const ComplianceSettingsPanel = lazyWithRetry(() => import('./training/ComplianceSettingsPanel'));
 const SkillEvaluationsTab = lazyWithRetry(() => import('./training/SkillEvaluationsTab'));
 const KnowledgeTestsTab = lazyWithRetry(() => import('./training/KnowledgeTestsTab'));
 
@@ -126,6 +128,8 @@ const TabContent: React.FC<{
       return <PracticalSkillsSettingsPanel />;
     case 'shift-evaluations':
       return <ShiftEvaluationSettingsPanel />;
+    case 'compliance-settings':
+      return <ComplianceSettingsPanel />;
     case 'integrations':
       return <ExternalTrainingPage />;
     case 'import':
@@ -158,7 +162,15 @@ export const TrainingAdminPage: React.FC = () => {
   // The practical-skills system the department does not run is left out, and
   // a link to one of its destinations lands on the area's first page instead.
   const practicalSkillsMethod = usePracticalSkillsMethod();
-  const areas = useMemo(() => trainingAdminAreasFor(practicalSkillsMethod), [practicalSkillsMethod]);
+  // A destination needing more than `training.manage` is offered only to a
+  // viewer who holds it. Reading `user` here is what recomputes the list when
+  // the signed-in user reloads; with no user loaded, nothing extra is granted.
+  const user = useAuthStore((s) => s.user);
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const areas = useMemo(
+    () => trainingAdminAreasFor(practicalSkillsMethod, user ? checkPermission : () => false),
+    [practicalSkillsMethod, checkPermission, user]
+  );
 
   // Derived from the URL on every render rather than mirrored into state, so
   // browser back/forward and in-app links can never leave the two disagreeing.

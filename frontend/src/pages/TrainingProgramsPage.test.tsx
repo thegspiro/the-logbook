@@ -326,6 +326,32 @@ describe('TrainingProgramsPage', () => {
     expect(await screen.findByText('FCVFD Duty Shifts')).toBeInTheDocument();
   });
 
+  it('lists the requirements before the registry import cards', async () => {
+    mockHasPermission = true;
+    mockGetRequirementsEnhanced.mockResolvedValue([
+      {
+        id: 'req-1',
+        name: 'FCVFD Hours',
+        requirement_type: 'shifts',
+        source: 'department',
+        required_shifts: 20,
+        frequency: 'one_time',
+        applies_to_all: true,
+        active: true,
+        due_date_type: 'calendar_period',
+        is_editable: true,
+      },
+    ]);
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+    const requirement = await screen.findByText('FCVFD Hours');
+    const registry = screen.getByRole('heading', { name: 'Import from Registry' });
+    expect(requirement.compareDocumentPosition(registry) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
   it('offers no edit control for a locked registry requirement', async () => {
     mockHasPermission = true;
     mockGetRequirementsEnhanced.mockResolvedValue([

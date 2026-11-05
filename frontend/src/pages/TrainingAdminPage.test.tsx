@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { AdminHubSummary } from '../types/adminHub';
+import type { CurrentUser } from '../types/auth';
 
 // Mock all lazy-loaded page imports before importing the component
 // Hoisted because AdminMetricsSettings is imported eagerly, so its mock factory
@@ -26,6 +27,7 @@ vi.mock('./TrainingProgramsPage', () => lazy('Programs List'));
 vi.mock('./training/SkillEvaluationsTab', () => lazy('Skill Evaluations'));
 vi.mock('./training/KnowledgeTestsTab', () => lazy('Knowledge Tests'));
 vi.mock('./training/ManualEntrySettingsPanel', () => lazy('Manual Entry'));
+vi.mock('./training/ComplianceSettingsPanel', () => lazy('Compliance Settings Panel'));
 vi.mock('./ExternalTrainingPage', () => lazy('External'));
 vi.mock('./HistoricalImportPage', () => lazy('Historical'));
 vi.mock('./SkillsTestingTemplatesTab', () => lazy('Templates'));
@@ -53,6 +55,25 @@ vi.mock('../services/adminHubService', () => ({
 }));
 
 import TrainingAdminPage from './TrainingAdminPage';
+import { useAuthStore } from '../stores/authStore';
+
+const signedInWith = (permissions: string[]): CurrentUser => ({
+  id: 'u-1',
+  username: 'officer',
+  email: 'officer@example.test',
+  organization_id: 'org-1',
+  timezone: 'UTC',
+  roles: [],
+  positions: [],
+  rank: null,
+  membership_type: null,
+  permissions,
+  is_active: true,
+  email_verified: true,
+  mfa_enabled: false,
+  password_expired: false,
+  must_change_password: false,
+});
 
 const summaryWithAttention: AdminHubSummary = {
   moduleKey: 'training',
@@ -82,6 +103,7 @@ describe('TrainingAdminPage', () => {
     mockGetSummary.mockReset();
     mockGetSummary.mockResolvedValue({ ...summaryWithAttention, attention: [] });
     window.history.replaceState({}, '', '/training/admin');
+    useAuthStore.setState({ user: signedInWith(['training.manage']) });
   });
 
   it('shows every area at once, with what each holds', () => {
@@ -277,5 +299,30 @@ describe('TrainingAdminPage', () => {
 
     await screen.findByRole('button', { name: 'Try again' });
     expect(areaTablist()).not.toHaveTextContent('need attention');
+  });
+
+  describe('Compliance Settings', () => {
+    beforeEach(() => {
+      useAuthStore.setState({ user: signedInWith(['training.manage', 'compliance.manage']) });
+    });
+
+    it('is listed under Settings & Data for a viewer who may change it', async () => {
+      window.history.replaceState({}, '', '/training/admin?page=settings&tab=compliance-settings');
+      renderWithRouter(<TrainingAdminPage />);
+
+      const pages = screen.getByRole('tablist', { name: 'Settings & Data pages' });
+      expect(within(pages).getByRole('tab', { name: 'Compliance Settings' })).toHaveAttribute('aria-selected', 'true');
+      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Compliance Settings Panel'));
+    });
+
+    it('is not listed for training.manage alone, and its link falls back to the area', async () => {
+      useAuthStore.setState({ user: signedInWith(['training.manage']) });
+      window.history.replaceState({}, '', '/training/admin?page=settings&tab=compliance-settings');
+      renderWithRouter(<TrainingAdminPage />);
+
+      const pages = screen.getByRole('tablist', { name: 'Settings & Data pages' });
+      expect(within(pages).queryByRole('tab', { name: 'Compliance Settings' })).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Manual Entry'));
+    });
   });
 });

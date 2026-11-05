@@ -325,6 +325,7 @@ const HUB_DESTINATIONS: CommandItem[] = [
       section: 'Training Admin',
       keywords: [area.label.toLowerCase()],
       permission: 'training.manage',
+      ...(destination.anyPermission ? { anyPermission: [...destination.anyPermission] } : {}),
       requiresModule: 'training',
       searchOnly: true,
       trainingDestination: destination.id,

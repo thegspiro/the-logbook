@@ -50,6 +50,7 @@ import {
   Route,
   SearchCheck,
   Shield,
+  ShieldCheck,
   SlidersHorizontal,
   Target,
   Telescope,
@@ -67,6 +68,12 @@ export interface TrainingAdminDestination {
   label: string;
   hint: string;
   icon: LucideIcon;
+  /**
+   * Permissions, any one of which the viewer needs on top of the hub's own
+   * `training.manage` to be offered this destination. Absent means the hub's
+   * gate is enough.
+   */
+  anyPermission?: readonly string[];
 }
 
 export interface TrainingAdminArea {
@@ -191,6 +198,16 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         hint: 'Evaluation forms for trainees and crews',
         icon: ClipboardList,
       },
+      {
+        // Thresholds and profiles decide who reads as compliant, so saving them
+        // takes `settings.manage` or `compliance.manage`, not `training.manage`
+        // (`PUT /compliance/config` and the page's own route both say so).
+        id: 'compliance-settings',
+        label: 'Compliance Settings',
+        hint: 'Thresholds, profiles and scheduled compliance reports',
+        icon: ShieldCheck,
+        anyPermission: ['settings.manage', 'compliance.manage'],
+      },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
       {
         id: 'import',
@@ -223,12 +240,24 @@ const EVALUATIONS_DESCRIPTION: Record<PracticalSkillsMethod, string> = {
   [PracticalSkillsMethod.SHIFT_SIGNOFFS]: 'Skill sign-offs and knowledge tests',
 };
 
-/** The hub as this department sees it. */
-export const trainingAdminAreasFor = (method: PracticalSkillsMethod | null): TrainingAdminArea[] =>
+/** Whether a viewer holding these permissions may be offered the destination. */
+export const isPermittedDestination = (
+  destination: TrainingAdminDestination,
+  checkPermission: (permission: string) => boolean
+): boolean => !destination.anyPermission || destination.anyPermission.some(checkPermission);
+
+/** The hub as this department and this viewer see it. */
+export const trainingAdminAreasFor = (
+  method: PracticalSkillsMethod | null,
+  checkPermission: (permission: string) => boolean
+): TrainingAdminArea[] =>
   TRAINING_ADMIN_AREAS.map((area) => ({
     ...area,
     description: area.id === 'evaluations' && method !== null ? EVALUATIONS_DESCRIPTION[method] : area.description,
-    destinations: area.destinations.filter((destination) => !isHiddenByPracticalSkills(destination.id, method)),
+    destinations: area.destinations.filter(
+      (destination) =>
+        !isHiddenByPracticalSkills(destination.id, method) && isPermittedDestination(destination, checkPermission)
+    ),
   }));
 
 /** Element ids shared by the nav's tabs and the panels the page renders for them. */
@@ -244,6 +273,9 @@ export const tabPanelId = (area: string, tab: string) => `training-admin-tabpane
  */
 export const PROGRAM_WIZARD_VIEW = 'new';
 export const NEW_PROGRAM_HREF = `/training/admin?page=curriculum&tab=pipelines&view=${PROGRAM_WIZARD_VIEW}`;
+
+/** The compliance configuration screen, a route of its own outside the hub. */
+export const COMPLIANCE_CONFIG_HREF = '/training/compliance-config';
 
 const DEFAULT_LOCATION = { area: 'dashboard', tab: 'overview' } as const;
 
