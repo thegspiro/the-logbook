@@ -85,7 +85,7 @@ frontend/src/modules/medical-screening/
 | `user_id`         | `String(36)`       | FK to users (nullable — NULL if prospect)            |
 | `prospect_id`     | `String(36)`       | FK to prospective_members (nullable — NULL if user)  |
 | `screening_type`  | `ScreeningType`    | Type of screening                                    |
-| `status`          | `ScreeningStatus`  | Current status                                       |
+| `status`          | `EncryptedEnum` 🔒 | Current status (`ScreeningStatus`)                   |
 | `scheduled_date`  | `DateTime`         | When screening is scheduled                          |
 | `completed_date`  | `DateTime`         | When screening was completed                         |
 | `expiration_date` | `DateTime`         | When this screening expires                          |
@@ -118,11 +118,23 @@ frontend/src/modules/medical-screening/
 > A value that _is_ marked as ciphertext and fails to decrypt **raises** rather
 > than being returned as ciphertext or as empty — it fails closed.
 >
-> The remaining columns are deliberately **not** encrypted: dates, status and the
-> foreign keys are what every query filters, sorts and joins on, and encrypting
-> them would make the module's compliance views unimplementable without buying
-> meaningful protection — the sensitive content is the result, not the fact that a
-> screening is on file. Cross-reference:
+> **`status` is encrypted too** _(2026-11-05, MS-15, owner decision)_. The
+> outcome is PHI in its own right: "failed" beside a member's name and a
+> psychological evaluation says what the encrypted notes would. It uses
+> `EncryptedEnum`, which reads back as `ScreeningStatus` and **refuses any SQL
+> comparison** (`TypeError`), because the same status encrypts differently on
+> every write and a forgotten `.where(status == …)` would otherwise match
+> nothing in silence. Every reader that filtered on it in SQL now loads the
+> rows and compares in Python: `list_records` (filters, then pages), the
+> expiring list (`deciding_records` picks the latest result per subject and
+> requirement, replacing the old `superseded_record_clause`), the Members
+> hub's missed-appointment item, and the pipeline's screening stage gate.
+> Migration `80fa2c83bf9d`.
+>
+> Still plaintext: the screening type, the dates and the member and
+> requirement links, which every query filters, sorts and joins on. The type
+> also leaks through the requirement a record is linked to and through older
+> audit-log entries; see `docs/KNOWN_LIMITATIONS.md` (MS-15). Cross-reference:
 > [wiki/Security-Encryption](../wiki/Security-Encryption.md#what-is-encrypted).
 
 > **Schema note.** [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) is the generated,

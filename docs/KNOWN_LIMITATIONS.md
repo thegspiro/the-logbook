@@ -1,5 +1,34 @@
 # Known Limitations & Open Decisions
 
+## Medical Screening — What Is Still Plaintext at Rest (MS-15, 2026-11-05)
+
+**Decided 2026-11-04: encrypt the status first.** `screening_records.status` is
+now AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
+dump no longer says which member _failed_ a screening. The provider, results
+and notes were already encrypted (MS-1). Searchable fingerprints were ruled
+out: with seven statuses and six types, a keyed hash puts every "failed"
+record under one value, and one known record reveals the rest.
+
+Still plaintext, and each waiting on its own decision:
+
+- **The screening type.** A dump still reads "this member — psychological
+  evaluation — 25 Oct 2026", without the outcome. Encrypting it is the same
+  shape of change as the status: the pipeline gate's lookup by type, the
+  Members hub's grouping by type and the records list's type filter move to
+  Python, and `screening_type` leaves `enum_normalization`.
+- **The requirement link reveals the type anyway.** `requirement_id` is a
+  plain foreign key to a requirement whose name and type are plaintext (for
+  example "Pre-membership Drug Screen"), and the record form links most
+  records. Encrypting the type without it protects only unlinked records.
+  Encrypting the link means giving up the database foreign key, so deleting a
+  requirement would clear its records' links in code instead.
+- **The audit log names the type.** Creating a record writes `screening_type`
+  into the audit entry, and the records-list filters are logged too. New
+  entries could stop doing that. Existing ones cannot be scrubbed: the audit
+  log is hash-chained, so rewriting a row breaks the chain.
+- **The dates and the member link** stay plaintext: grading, the expiring list
+  and every screen filter and join on them.
+
 ## Owner Decisions of 2026-11-01
 
 The owner answered every open question in this file on 2026-11-01, from a page
