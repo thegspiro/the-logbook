@@ -1,7 +1,7 @@
 """Keep training, meeting and request locations; make location names unique
 
 Revision ID: 2bb7c963f351
-Revises: 41ebaa6317e8
+Revises: 80fa2c83bf9d
 Create Date: 2026-11-05 18:00:00.000000
 
 Two owner decisions of 2026-11-01 about locations (KNOWN_LIMITATIONS,
@@ -63,7 +63,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "2bb7c963f351"
-down_revision: Union[str, None] = "41ebaa6317e8"
+down_revision: Union[str, None] = "80fa2c83bf9d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
