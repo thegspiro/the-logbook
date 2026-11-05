@@ -8,8 +8,13 @@ through localStorage round-trip through the API unchanged.
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
+
+from app.services.qualification_service import (
+    QUALIFICATIONS,
+    known_qualification_codes,
+)
 
 _camel_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
@@ -24,6 +29,28 @@ class CustomPositionSchema(BaseModel):
     # A seat that drives the apparatus gets the same EVOC check as the built-in
     # driver seat. Optional so a payload saved before the flag still validates.
     drives_apparatus: bool = False
+    # Certifications that clear a member for this seat, as qualification codes
+    # (``QUALIFICATIONS``). Optional for the same reason as the flag above; an
+    # entry without it is a seat no certification confers.
+    qualifications: List[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("qualifications")
+    @classmethod
+    def _known_qualifications(cls, codes: List[str]) -> List[str]:
+        """Refuse a code nobody defined, then settle the canonical shape.
+
+        The qualification vocabulary is the system's, not per department, so
+        "belongs to the organization" for a certification means "is one this
+        installation knows" — a code outside it would confer nothing and
+        save as a promise that never applies (Pitfall #19).
+        """
+        unknown = sorted({c.strip() for c in codes} - set(QUALIFICATIONS))
+        if unknown:
+            raise ValueError(
+                f"Unknown qualification: {', '.join(unknown)}. "
+                f"Known: {', '.join(sorted(QUALIFICATIONS))}."
+            )
+        return known_qualification_codes(codes)
 
 
 class ApparatusTypeDefaultsSchema(BaseModel):

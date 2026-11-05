@@ -775,6 +775,23 @@ async def update_shift_report(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+    restatement = getattr(report, "credit_restatement", None)
+    if restatement:
+        # Review is off, so the edit moved the trainee's credit with no
+        # reviewer in the loop; the audit trail is the only record of it.
+        await log_audit_event(
+            db=db,
+            event_type="shift_report_credit_restated",
+            event_category="training",
+            severity="info",
+            event_data={
+                "report_id": report_id,
+                "trainee_id": str(report.trainee_id),
+                **restatement,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
     return report
 
 

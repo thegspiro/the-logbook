@@ -336,6 +336,19 @@ export const CohortDetailPage: React.FC = () => {
         }
       />
 
+      {(cohort.description || (canManage && cohort.notes)) && (
+        <div className="card-secondary mb-6 space-y-2 p-4 text-sm">
+          {cohort.description && <p className="text-theme-text-secondary whitespace-pre-line">{cohort.description}</p>}
+          {/* Notes are the training officers' own; a member sees the description only. */}
+          {canManage && cohort.notes && (
+            <p className="text-theme-text-muted whitespace-pre-line">
+              <span className="text-theme-text-primary font-medium">Notes: </span>
+              {cohort.notes}
+            </p>
+          )}
+        </div>
+      )}
+
       {canManage && showShift && (
         <div className="card-secondary mb-6 flex flex-wrap items-end gap-3 p-4">
           <div>

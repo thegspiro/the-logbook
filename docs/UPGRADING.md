@@ -696,6 +696,77 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Scheduling: outside-shift approval, open-swap bell notices, close-out caps (2026-11-04)
+
+Nothing blocks a restart, and no figure moves on upgrade.
+
+- **Outside-department shifts can require approval** (`c4ee38cd931c`).
+  Scheduling Settings gains **Require approval for outside-department
+  shifts**, off by default, so every department keeps counting an entry as
+  soon as it is logged. The migration widens the `external_shift_hours`
+  status check to allow `pending`; no existing row changes, so everything
+  that counted before the upgrade still counts. Switched on, a new entry
+  counts once a scheduling officer approves it, and officers are emailed
+  under **Scheduling officer duties** when one is waiting.
+- **Open swaps put a bell entry in front of eligible members.** Posting an
+  open swap now gives every member cleared for its seat an in-app notice —
+  no email, text or push. The same migration adds `open_swap_notices`,
+  which keeps each member from being told about the same seat twice.
+- **Close-out payloads are capped.** A shift close-out takes at most 100
+  per-member call credits and 200 call-type entries; a larger API request is
+  refused with a 422. The app's own close-out stays under the cap.
+- Rollback: the downgrade drops `open_swap_notices` and restores the
+  two-state check, marking any entry still awaiting approval as rejected
+  with a reason saying it never counted — not as counted, which would credit
+  hours nobody approved. The previous version already leaves `pending`
+  entries out of every total, so restoring the previous image without
+  downgrading is also safe; it just cannot approve them.
+
+### Training: requirements match records by a stored key, and `POST /training/enrollments` is gone (2026-11-04)
+
+Nothing blocks a restart, but compliance figures a department already reads
+can move. Check certification, skills-evaluation, checklist and
+knowledge-test standings after the upgrade.
+
+- **Records carry a match key** (`bd8fc0c4a941`). Every training record gets
+  `match_key` (from its course name) and `certification_key` (from its
+  certification number): the text with case, spacing and punctuation removed,
+  so "CPR", "cpr" and "C.P.R." share a key and "CPR Refresher" does not. The
+  migration keys every existing record; one whose course name has no letter or
+  digit gets no key and can then match only by linked course or training type.
+  On a large records table the backfill adds time to the first start.
+- **Certification requirements match by key, not by text.** A record that
+  predates the requirement's name cut-off (`name_match_until`, set on
+  2026-10-05's upgrade) now counts by name only when its course name has the
+  **same key** as the requirement's name — a course name that merely
+  _contains_ it ("CPR Recertification" for "CPR") no longer counts, even
+  before the cut-off. A registry code now has to be **the start** of the
+  certification number ("NFPA 1001" matches "NFPA-1001-0042", not
+  "TX-NFPA-1001"). Linked courses and the training type are unchanged.
+- **Skills-evaluation, checklist and knowledge-test requirements stop matching
+  by name, as certifications did.** The migration sets `name_match_until` to
+  **the day it runs (UTC)** on every existing requirement of those types (and
+  of every other type graded the same way — evaluated shifts, transports,
+  refusals), so a record completed by then still counts by name, by key.
+  A record completed later needs the requirement's training type. Requirements
+  created after the upgrade never match by name.
+- **Members can lose credit.** A member whose only match for one of these
+  requirements was a course name containing the requirement's name, a later
+  record matched only by name, or a certification number with the code
+  elsewhere than at its start, reads not started (or in progress) on that
+  requirement, on every screen at once. Link the course on the requirement, or
+  set its training type, to credit them.
+- **`POST /api/v1/training/enrollments` is removed.** API clients must use
+  `POST /api/v1/training/programs/enrollments` with a JSON body
+  `{"user_id": ..., "program_id": ...}` (optional `target_completion_date`,
+  `notes`), `training.manage` as before. It answers 201 with the enrollment,
+  creates its progress rows, starting phase and recert deadline, notifies the
+  member, and refuses a second active enrollment under a lock. The old route,
+  which did none of that, now answers 404/405. No screen called it.
+- Rollback: the downgrade drops the two key columns and their indexes. It
+  leaves the fallback requirements' new `name_match_until`, which the previous
+  version does not read for those types.
+
 ### Tier names for every member, tier benefits by status, and plain applicant names (2026-11-04)
 
 Four owner decisions of 2026-11-01. Migration `67fac0bf1c09` carries the

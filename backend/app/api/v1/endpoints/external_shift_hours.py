@@ -4,8 +4,9 @@ External Shift Hours API
 Members log shifts they worked outside the department's own schedule — a
 neighbouring jurisdiction's apparatus under mutual aid or a staffing
 agreement — and the hours count toward scheduling hours and shift/hours
-compliance straight away. Officers can reject an entry, which removes it
-from every total, or restore one they rejected.
+compliance straight away, or, where the department requires approval, once an
+officer approves them. Officers can reject an entry, which removes it from
+every total, or restore one they rejected.
 
 The agency and apparatus are picked from a list scheduling officers
 maintain here too, so the apparatus summary counts one unit as one unit.
@@ -503,6 +504,31 @@ async def reject_external_shift(
         severity="WARNING",
         extra={"reason": payload.reason},
     )
+    return await _response(service, str(current_user.organization_id), entry.id)
+
+
+@router.post("/{entry_id}/approve", response_model=ExternalShiftHoursResponse)
+async def approve_external_shift(
+    entry_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Let an entry awaiting approval count. 400 unless it is pending.
+
+    Resolved in the caller's organization before anything changes, so the
+    permission check alone never reaches another department's entry.
+
+    **Permissions required:** scheduling.manage
+    """
+    service = ExternalShiftHoursService(db)
+    try:
+        approved = await service.approve(
+            str(current_user.organization_id), str(entry_id), str(current_user.id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    entry = ensure_found(approved, _ENTRY)
+    await _audit(db, "external_shift_hours_approved", current_user, entry)
     return await _response(service, str(current_user.organization_id), entry.id)
 
 

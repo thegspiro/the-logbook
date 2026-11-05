@@ -694,9 +694,11 @@ class ShiftHistoryImportService:
                 # A rejected entry counts as existing too. Matching only
                 # counted ones let a later file covering the same dates
                 # recreate an entry an officer had rejected, silently undoing
-                # the rejection.
+                # the rejection. A pending one likewise: importing over it
+                # would add a counted duplicate of a shift still under review.
                 ExternalShiftHours.status.in_(
                     [
+                        ExternalShiftHoursStatus.PENDING.value,
                         ExternalShiftHoursStatus.COUNTED.value,
                         ExternalShiftHoursStatus.REJECTED.value,
                     ]

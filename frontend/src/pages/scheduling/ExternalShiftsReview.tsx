@@ -1,15 +1,19 @@
 /**
  * Officer view of shifts members logged with other departments.
  *
- * Entries count as soon as a member saves them, so this is an after-the-fact
- * review rather than an approval queue: an officer rejects an entry that
- * should not count, which takes it out of every total, and can restore it.
- * The member sees the reason on their own screen.
+ * By default entries count as soon as a member saves them, so this is an
+ * after-the-fact review: an officer rejects an entry that should not count,
+ * which takes it out of every total, and can restore it. A department that
+ * requires approval (Scheduling Settings) also gets an approval queue here:
+ * entries "Awaiting approval" count toward nothing until an officer approves
+ * them, and the "Awaiting approval" filter lists every one regardless of the
+ * report period, because a queue that hides last month's entry is not a queue.
+ * The member sees the reason for a rejection on their own screen.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { AlertCircle, Loader2, RotateCcw, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ExternalShiftEntry, ExternalShiftStatus } from '../../modules/scheduling/services/api';
 import { PromptDialog } from '../../components/ux/PromptDialog';
@@ -24,9 +28,9 @@ interface ExternalShiftsReviewProps {
   /** YYYY-MM-DD, inclusive. */
   startDate: string;
   endDate: string;
-  /** Reject / restore need scheduling.manage; report-only viewers read. */
+  /** Approve / reject / restore need scheduling.manage; report-only viewers read. */
   canManage: boolean;
-  /** Called after a reject or restore, so the totals above refresh. */
+  /** Called after an approve, reject or restore, so the totals above refresh. */
   onChanged: () => void;
 }
 
@@ -52,8 +56,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
     setError(null);
     try {
       const data = await schedulingService.getExternalShifts({
-        start_date: startDate,
-        end_date: endDate,
+        ...(statusFilter === 'pending' ? {} : { start_date: startDate, end_date: endDate }),
         limit: 200,
         ...(statusFilter === 'all' ? {} : { status: statusFilter }),
       });
@@ -87,6 +90,20 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
     }
   };
 
+  const handleApprove = async (entry: ExternalShiftEntry) => {
+    setBusyId(entry.id);
+    try {
+      await schedulingService.approveExternalShift(entry.id);
+      toast.success('Shift approved; it counts now');
+      void load();
+      onChanged();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to approve the shift'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleRestore = async (entry: ExternalShiftEntry) => {
     setBusyId(entry.id);
     try {
@@ -109,8 +126,9 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
             Shifts with other departments
           </h2>
           <p className="text-theme-text-muted text-sm">
-            Logged by members for time on another jurisdiction&apos;s apparatus. They count as soon as they&apos;re
-            logged{canManage ? '; reject one to take it out of the totals.' : '.'}
+            Logged by members for time on another jurisdiction&apos;s apparatus. They count once logged, or once
+            approved where the department requires approval
+            {canManage ? '; reject one to take it out of the totals.' : '.'}
           </p>
         </div>
         <div className="split-row-aside">
@@ -124,6 +142,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           >
             <option value="all">All</option>
+            <option value="pending">Awaiting approval</option>
             <option value="counted">Counted</option>
             <option value="rejected">Not counted</option>
           </select>
@@ -141,7 +160,11 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
         </div>
       ) : entries.length === 0 ? (
         <div className="card-secondary py-6 text-center">
-          <p className="text-theme-text-muted text-sm">No shifts with other departments in this period.</p>
+          <p className="text-theme-text-muted text-sm">
+            {statusFilter === 'pending'
+              ? 'Nothing is waiting for approval.'
+              : 'No shifts with other departments in this period.'}
+          </p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -174,6 +197,7 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
             <tbody>
               {entries.map((entry) => {
                 const rejected = entry.status === 'rejected';
+                const pending = entry.status === 'pending';
                 const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
                 const times = externalShiftTimeRange(entry, tz);
                 return (
@@ -206,6 +230,10 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                             </p>
                           )}
                         </>
+                      ) : pending ? (
+                        <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
+                          Awaiting approval
+                        </span>
                       ) : (
                         <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                           Counted
@@ -215,6 +243,17 @@ export const ExternalShiftsReview: React.FC<ExternalShiftsReviewProps> = ({
                     </td>
                     {canManage && (
                       <td className="px-4 py-3 text-right" data-label="Actions">
+                        {pending && (
+                          <button
+                            type="button"
+                            className="mobile-touch-target inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-green-800 hover:bg-green-500/10 dark:text-green-400"
+                            disabled={busyId === entry.id}
+                            onClick={() => void handleApprove(entry)}
+                          >
+                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                            Approve
+                          </button>
+                        )}
                         {rejected ? (
                           <button
                             type="button"

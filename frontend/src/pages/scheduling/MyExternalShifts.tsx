@@ -3,9 +3,11 @@
  *
  * Covers time on a neighbouring jurisdiction's apparatus, which has no shift
  * on this department's schedule to check in to. An entry counts from the
- * moment it is saved. An officer can reject one, which takes it out of the
- * member's totals; the member then sees the reason here, and the entry is
- * locked so the claim that was reviewed stays as it was.
+ * moment it is saved — or, where the department requires approval, once a
+ * scheduling officer approves it, and it is marked here until then. An officer
+ * can reject one, which takes it out of the member's totals; the member then
+ * sees the reason here, and the entry is locked so the claim that was reviewed
+ * stays as it was.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -122,6 +124,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
         <ul className="divide-theme-surface-border divide-y">
           {entries.map((entry) => {
             const rejected = entry.status === 'rejected';
+            const pending = entry.status === 'pending';
             const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
             const times = externalShiftTimeRange(entry, tz);
             return (
@@ -134,6 +137,11 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                         Not counted
                       </span>
                     )}
+                    {pending && (
+                      <span className="ml-2 rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
+                        Awaiting approval
+                      </span>
+                    )}
                     <ExternalShiftEvaluationBadge status={entry.evaluation_status} className="ml-2" />
                   </p>
                   <p className="text-theme-text-secondary text-sm">
@@ -141,6 +149,11 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                     {times ? ` · ${times}` : ''} · {formatHours(entry.hours)} hrs
                     {detail ? ` · ${detail}` : ''}
                   </p>
+                  {pending && (
+                    <p className="text-theme-text-secondary mt-1 text-sm">
+                      Not in your totals yet: it counts once a scheduling officer approves it.
+                    </p>
+                  )}
                   {rejected && entry.rejection_reason && (
                     <p className="text-theme-text-secondary mt-1 text-sm">
                       <span className="font-medium">Reason:</span> {entry.rejection_reason}

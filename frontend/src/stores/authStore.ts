@@ -20,8 +20,8 @@ import { toAppError, getErrorMessage } from '../utils/errorHandling';
 import { clearCache } from '../utils/apiCache';
 import { clearInFlight } from '../utils/inFlight';
 import { releaseDevicePushSubscription, resyncDevicePushSubscription } from '../utils/devicePushSubscription';
-import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
-import type { PurgeResult } from '../utils/purgeLocalMemberData';
+import { purgeLocalMemberData, releaseHeldWorkFor } from '../utils/purgeLocalMemberData';
+import type { PurgeOptions, PurgeResult } from '../utils/purgeLocalMemberData';
 import { clearQueuedReports } from '../services/errorReporting';
 import { invalidateRanksCache } from '../hooks/ranksCache';
 // Safe to import here: the scheduling store reaches only the API services and
@@ -205,6 +205,9 @@ const claimDeviceForMember = async (userId: string | undefined): Promise<void> =
   // refetch when the member is unchanged, which is what a page load does
   // anyway.
   useSchedulingStore.getState().resetSettings();
+  // After the purge, which keeps each examiner's unsent skills evaluations:
+  // the member signing in gets their own back, and none of anyone else's.
+  await releaseHeldWorkFor(userId);
   writeDeviceMember(userId);
 };
 
@@ -244,7 +247,13 @@ interface AuthState {
   completeMfaLogin: (code?: string, recoveryCode?: string, passkeyCredential?: PasskeyAssertion) => Promise<void>;
   cancelMfa: () => void;
   register: (data: RegisterData) => Promise<void>;
-  logout: () => Promise<void>;
+  /**
+   * Sign out. `automatic` is for a sign-out nobody asked for (the idle
+   * timeout, the session cap): it keeps the member's unsent skills
+   * evaluations on the device for them, where an interactive Sign Out —
+   * which warned and asked first — deletes them.
+   */
+  logout: (options?: { automatic?: boolean }) => Promise<void>;
   /** Ask the server again to end a session it has not confirmed ending. */
   retrySignOut: () => Promise<void>;
   /**
@@ -254,7 +263,7 @@ interface AuthState {
    * and the refresh interceptor would answer that with a hard redirect that
    * drops whatever the caller wanted to say on the sign-in screen.
    */
-  endSessionLocally: () => Promise<void>;
+  endSessionLocally: (options?: PurgeOptions) => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
   clearLogoutPurgeNotice: () => void;
@@ -503,7 +512,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  logout: async () => {
+  logout: async (options) => {
+    // Read before the session is torn down: only an interactive sign-out names
+    // the examiner whose unsent evaluations the warning said would go.
+    const discardSkillsFor = options?.automatic ? null : (get().user?.id ?? null);
     // Disable draft autosave before waiting on either the logout request or
     // the asynchronous device purge. The form remains mounted during both.
     localStorage.removeItem('has_session');
@@ -512,7 +524,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // few times; if it still cannot be confirmed, the local session is torn
     // down anyway and the screen says so rather than pretending it is over.
     const confirmed = await confirmServerSignOut();
-    await get().endSessionLocally();
+    await get().endSessionLocally({ discardSkillsFor });
     setSignOutUnconfirmedFlag(!confirmed);
     set({ signOutUnconfirmed: !confirmed });
   },
@@ -524,7 +536,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  endSessionLocally: async () => {
+  endSessionLocally: async (options) => {
     localStorage.removeItem('has_session');
     // SEC: Clear session flag, temporary in-memory token, and any
     // legacy token remnants from localStorage
@@ -553,7 +565,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // otherwise be readable by whoever signs in next. Awaited so the purge
     // completes before the session is torn down, and non-throwing by
     // construction so it can never strand a member signed in.
-    const purge = await purgeLocalMemberData();
+    const purge = await purgeLocalMemberData(options);
     if (purge.unsyncedDiscarded > 0) {
       set({ lastLogoutPurge: purge });
     }

@@ -51,6 +51,7 @@ def _service(
     qual_codes=(),
     open_positions=(),
     excluded=(),
+    custom_seats=None,
 ):
     """``rank`` is what USER's rank code ("ff") grants; ``grants`` adds slugs.
 
@@ -68,6 +69,13 @@ def _service(
     service._get_slug_eligibility_map = AsyncMock(return_value=slug_map)
     service._get_held_position_slugs = AsyncMock(return_value=list(held))
     service._get_training_positions = AsyncMock(return_value=list(training))
+    # The department's certification -> custom seat mapping (Position Names),
+    # read once when the member holds any certification. Stubbed like the
+    # other department-side reads; ``_Session`` models only the two
+    # statements the bulk path issues itself.
+    service._get_custom_qualification_seats = AsyncMock(
+        return_value=dict(custom_seats or {})
+    )
     return service
 
 

@@ -2489,7 +2489,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 3. Falls back to any active training program with "probationary" in the name
 4. Creates an active `ProgramEnrollment` automatically
 
-**Manual Enrollment**: The training officer can enroll anyone into any program via `POST /api/v1/training/enrollments?user_id={id}&program_id={id}`.
+**Manual Enrollment**: The training officer can enroll anyone into any program via `POST /api/v1/training/programs/enrollments` with a JSON body of `{"user_id": ..., "program_id": ...}` (the older `POST /api/v1/training/enrollments?user_id=…&program_id=…` was removed on 2026-11-04).
 
 **Not working?** Check that:
 

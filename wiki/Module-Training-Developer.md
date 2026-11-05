@@ -139,7 +139,6 @@ PATCH  /api/v1/training/courses/{id}/classes/{class_id}    # Update one syllabus
 DELETE /api/v1/training/courses/{id}/classes/{class_id}    # Remove a class; generated cohorts keep their copy (training.manage)
 POST   /api/v1/training/courses/{id}/classes/reorder       # Set the syllabus order (order only, not the dates) (training.manage)
 POST   /api/v1/training/courses/{id}/classes/autofill      # Recompute every day offset from a meeting pattern (training.manage)
-POST   /api/v1/training/enrollments                        # Enroll a member into a training program (training.manage)
 GET    /api/v1/training/stats/user/{user_id}               # User training stats
 GET    /api/v1/training/reports/user/{user_id}             # User training report
 GET    /api/v1/training/requirements/progress/{user_id}    # User requirement progress
@@ -198,7 +197,7 @@ POST   /api/v1/training/programs/programs/{id}/requirements/reorder # Reorder pr
 POST   /api/v1/training/programs/programs/{id}/milestones  # Create milestone
 PATCH  /api/v1/training/programs/programs/{id}/milestones/{milestone_id}  # Update milestone
 DELETE /api/v1/training/programs/programs/{id}/milestones/{milestone_id}  # Delete milestone
-POST   /api/v1/training/programs/enrollments               # Enroll member
+POST   /api/v1/training/programs/enrollments               # Enroll member; body {user_id, program_id, target_completion_date?, notes?} (training.manage). The older POST /training/enrollments was removed 2026-11-04
 GET    /api/v1/training/programs/enrollments/me            # My enrollments
 GET    /api/v1/training/programs/enrollments/user/{user_id} # User enrollments (training.view_all)
 GET    /api/v1/training/programs/enrollments/{id}          # Enrollment detail (own; others need view_all/manage)

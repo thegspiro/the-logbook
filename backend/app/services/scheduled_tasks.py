@@ -161,6 +161,7 @@ from app.services.email_policy import (
     member_receives_email,
 )
 from app.services.email_service import _redact_email
+from app.services.scheduling_module_config_service import department_seat_labels
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
@@ -748,7 +749,7 @@ async def _stock_alert_audiences(
     result = await db_session.execute(
         select(User)
         .where(User.organization_id == organization_id)
-        .where(User.is_active == True)  # noqa: E712
+        .where(User.is_active.is_(True))
         .options(selectinload(User.roles))
     )
 
@@ -824,7 +825,7 @@ async def _stock_alert_recipients(
     result = await db_session.execute(
         select(User)
         .where(User.organization_id == organization_id)
-        .where(User.is_active == True)  # noqa: E712
+        .where(User.is_active.is_(True))
         .options(selectinload(User.roles))
     )
     recipients: list[User] = []
@@ -949,7 +950,7 @@ async def resolve_check_templates(
                 ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
                 EquipmentCheckTemplate.organization_id == str(organization_id),
                 EquipmentCheckTemplate.check_timing == check_timing,
-                EquipmentCheckTemplate.is_active == True,  # noqa: E712
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(ShiftTemplateEquipmentCheck.sort_order)
         )
@@ -979,7 +980,7 @@ async def resolve_check_templates(
         .where(EquipmentCheckTemplate.organization_id == str(organization_id))
         .where(EquipmentCheckTemplate.apparatus_id == str(apparatus_id))
         .where(EquipmentCheckTemplate.check_timing == check_timing)
-        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+        .where(EquipmentCheckTemplate.is_active.is_(True))
         .order_by(EquipmentCheckTemplate.sort_order)
     )
     templates = list(tmpl_result.scalars().all())
@@ -998,7 +999,7 @@ async def resolve_check_templates(
         .where(EquipmentCheckTemplate.organization_id == str(organization_id))
         .where(EquipmentCheckTemplate.apparatus_id.is_(None))
         .where(EquipmentCheckTemplate.check_timing == check_timing)
-        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+        .where(EquipmentCheckTemplate.is_active.is_(True))
     )
     if app_type_id:
         at_result = await db.execute(
@@ -1551,8 +1552,8 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     selectinload(Event.location_obj),
                 )
                 .where(Event.organization_id == str(org.id))
-                .where(Event.send_reminders == True)  # noqa: E712
-                .where(Event.is_cancelled == False)  # noqa: E712
+                .where(Event.send_reminders.is_(True))
+                .where(Event.is_cancelled.is_(False))
                 # A draft is unpublished: nobody has been told about it, so
                 # nobody is reminded of it.
                 .where(Event.is_draft.isnot(True))
@@ -1606,7 +1607,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     users_result = await db.execute(
                         select(User)
                         .where(User.organization_id == str(org.id))
-                        .where(User.is_active == True)  # noqa: E712
+                        .where(User.is_active.is_(True))
                     )
                     recipients = list(users_result.scalars().all())
                 elif reminder_target == "going":
@@ -1823,7 +1824,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 select(Event)
                 .options(selectinload(Event.rsvps))
                 .where(Event.organization_id == str(org.id))
-                .where(Event.is_cancelled == False)  # noqa: E712
+                .where(Event.is_cancelled.is_(False))
                 .where(Event.end_datetime <= now)
                 .where(Event.end_datetime >= lookback)
             )
@@ -2102,7 +2103,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 ores = await db.execute(
                     select(User).where(
                         User.id.in_(officer_ids),
-                        User.is_active == True,  # noqa: E712
+                        User.is_active.is_(True),
                     )
                 )
                 officer_map = {str(u.id): u for u in ores.scalars().all()}
@@ -2529,6 +2530,10 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
             # Shifts frequently share an apparatus; resolve each apparatus's
             # start-of-shift templates once instead of once per shift.
             sos_template_cache: dict[tuple[str, str], list] = {}
+            # The department's own seat names, read once per department: the
+            # reminder and the roster it carries name a custom seat as Position
+            # Names does, not by its stored value.
+            seat_labels = await department_seat_labels(db, org_id)
 
             for shift in shifts:
                 activities = shift.activities or {}
@@ -2572,7 +2577,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     user_rows = await db.execute(
                         select(User)
                         .where(User.id.in_(member_ids))
-                        .where(User.is_active == True)  # noqa: E712
+                        .where(User.is_active.is_(True))
                     )
                     user_map = {str(u.id): u for u in user_rows.scalars().all()}
                 for assignment in assignments:
@@ -2591,7 +2596,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             "first_name": user.preferred_name or user.first_name,
                             "email": user.email,
                             "position": pos_value,
-                            "position_label": position_label(pos_value),
+                            "position_label": position_label(pos_value, seat_labels),
                         }
                     )
 
@@ -3204,9 +3209,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                 .where(Shift.end_time >= lookback)
             )
             if require_finalized:
-                shifts_query = shifts_query.where(
-                    Shift.is_finalized == True  # noqa: E712
-                )
+                shifts_query = shifts_query.where(Shift.is_finalized.is_(True))
             shifts_result = await db.execute(shifts_query)
             shifts = list(shifts_result.scalars().all())
 
@@ -3718,7 +3721,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     .join(user_roles, User.id == user_roles.c.user_id)
                     .where(user_roles.c.position_id == t_role.id)
                     .where(User.organization_id == str(org.id))
-                    .where(User.is_active == True)  # noqa: E712
+                    .where(User.is_active.is_(True))
                 )
                 training_officers = list(t_users.scalars().all())
 
@@ -6462,8 +6465,8 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                 select(Event)
                 .options(selectinload(Event.recurrence_children))
                 .where(Event.organization_id == str(org.id))
-                .where(Event.is_recurring == True)  # noqa: E712
-                .where(Event.is_cancelled == False)  # noqa: E712
+                .where(Event.is_recurring.is_(True))
+                .where(Event.is_cancelled.is_(False))
                 .where(Event.recurrence_parent_id.is_(None))
                 .where(Event.recurrence_end_date.isnot(None))
                 .where(Event.recurrence_end_date > now)

@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { COURSE_QUALIFICATIONS } from '../../../constants/enums';
 import type { PositionOption, ShiftSettings } from '../types/shiftSettings';
 import { BUILTIN_POSITIONS } from '../types/shiftSettings';
 
@@ -55,6 +56,20 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
     }));
   };
 
+  const toggleQualification = (val: string, code: string) => {
+    onSettingsChange((prev) => ({
+      ...prev,
+      customPositions: prev.customPositions.map((p) => {
+        if (p.value !== val) return p;
+        const held = p.qualifications ?? [];
+        return {
+          ...p,
+          qualifications: held.includes(code) ? held.filter((c) => c !== code) : [...held, code],
+        };
+      }),
+    }));
+  };
+
   const removeCustomPosition = (val: string) => {
     onSettingsChange((prev) => ({
       ...prev,
@@ -69,7 +84,8 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
       <p className="text-theme-text-muted mb-4 text-xs">
         Add custom position types unique to your department. Custom positions appear everywhere built-in ones do. Tick{' '}
         <strong>Drives apparatus</strong> on a seat that drives the vehicle: members need the apparatus&rsquo;s EVOC
-        level to take it, the same as the Driver seat.
+        level to take it, the same as the Driver seat. Tick a certification under a seat to make every member holding it
+        eligible for that seat.
       </p>
       <p className="text-theme-text-muted mb-4 text-xs" role="note">
         Not in effect yet — the ticks below are saved, but templates and shifts offer the same fixed list of built-in
@@ -125,41 +141,67 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
             {settings.customPositions.map((cp) => (
               <div
                 key={cp.value}
-                className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center justify-between gap-2 rounded-lg border p-2.5"
+                className="bg-theme-surface-hover/50 border-theme-surface-border rounded-lg border p-2.5"
               >
-                <label className="mobile-touch-row min-w-0 cursor-pointer gap-2">
-                  <input
-                    type="checkbox"
-                    checked={settings.enabledPositions.includes(cp.value)}
-                    onChange={() => togglePosition(cp.value)}
-                    className="border-theme-input-border shrink-0 rounded-sm"
-                  />
-                  <span className="text-theme-text-primary truncate text-sm">{cp.label}</span>
-                  <span className="text-theme-text-muted bg-theme-surface-hover shrink-0 rounded-sm px-1.5 py-0.5 text-[10px]">
-                    {cp.value}
-                  </span>
-                </label>
-                {/* The server holds a ticked seat to the driver seat's EVOC
+                <div className="flex items-center justify-between gap-2">
+                  <label className="mobile-touch-row min-w-0 cursor-pointer gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.enabledPositions.includes(cp.value)}
+                      onChange={() => togglePosition(cp.value)}
+                      className="border-theme-input-border shrink-0 rounded-sm"
+                    />
+                    <span className="text-theme-text-primary truncate text-sm">{cp.label}</span>
+                    <span className="text-theme-text-muted bg-theme-surface-hover shrink-0 rounded-sm px-1.5 py-0.5 text-[10px]">
+                      {cp.value}
+                    </span>
+                  </label>
+                  {/* The server holds a ticked seat to the driver seat's EVOC
                     check, so a department that calls its wheel seat
                     "Engineer" is covered (2026-10-31). */}
-                <label className="mobile-touch-row text-theme-text-secondary shrink-0 cursor-pointer gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={cp.drivesApparatus === true}
-                    onChange={() => toggleDrivesApparatus(cp.value)}
-                    className="border-theme-input-border rounded-sm"
-                    aria-label={`${cp.label} drives apparatus`}
-                  />
-                  Drives apparatus
-                </label>
-                <button
-                  onClick={() => removeCustomPosition(cp.value)}
-                  className="mobile-touch-target shrink-0 rounded-sm text-red-500 hover:bg-red-500/10"
-                  title="Remove custom position"
-                  aria-label={`Remove ${cp.label}`}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                  <label className="mobile-touch-row text-theme-text-secondary shrink-0 cursor-pointer gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={cp.drivesApparatus === true}
+                      onChange={() => toggleDrivesApparatus(cp.value)}
+                      className="border-theme-input-border rounded-sm"
+                      aria-label={`${cp.label} drives apparatus`}
+                    />
+                    Drives apparatus
+                  </label>
+                  <button
+                    onClick={() => removeCustomPosition(cp.value)}
+                    className="mobile-touch-target shrink-0 rounded-sm text-red-500 hover:bg-red-500/10"
+                    title="Remove custom position"
+                    aria-label={`Remove ${cp.label}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {/* Certification -> seat mapping (SCHED-CUSTOM-SEAT owner
+                    decision, 2026-11-01). The server reads it in every
+                    eligibility answer as of the shift date, so a card that
+                    lapses before the shift clears nobody for it. */}
+                <fieldset className="mt-2">
+                  <legend className="text-theme-text-muted mb-1 text-[11px]">Certifications that qualify</legend>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    {COURSE_QUALIFICATIONS.map((q) => (
+                      <label
+                        key={q.value}
+                        className="touch-target-phone text-theme-text-secondary inline-flex cursor-pointer items-center gap-1.5 text-xs"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={(cp.qualifications ?? []).includes(q.value)}
+                          onChange={() => toggleQualification(cp.value, q.value)}
+                          className="border-theme-input-border rounded-sm"
+                          aria-label={`${q.label} qualifies for ${cp.label}`}
+                        />
+                        {q.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               </div>
             ))}
           </div>

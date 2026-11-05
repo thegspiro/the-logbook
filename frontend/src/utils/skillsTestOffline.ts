@@ -19,8 +19,11 @@
  *
  * Ownership follows FE3-34-5: every entry and cached copy is stamped with the
  * member who wrote it, the drain sends only the signed-in member's own, and a
- * cached copy is served only to its owner. Sign-in and logout purge the whole
- * store through `purgeLocalMemberData`; logout first asks (see AppLayout).
+ * cached copy is served only to its owner. Sign-in and logout purge the store
+ * through `purgeLocalMemberData`, except each examiner's unsent evaluations:
+ * an interactive Sign Out asks and then deletes the examiner's own (see
+ * AppLayout), and every automatic sign-out keeps them for that examiner alone,
+ * for a bounded time (`purgeSkillsStores` in skillsTestOfflineStore.ts).
  */
 
 import type { AxiosInstance } from 'axios';
@@ -31,7 +34,6 @@ import { flushSkillsEntry, type SkillsTransport } from './skillsTestFlush';
 import { requestBackgroundSync } from './backgroundSyncRegistration';
 import { withOfflineDrainLock } from '../sw/backgroundSyncProtocol';
 import {
-  ALL_STORES,
   SKILLS_QUEUE_MAX_RETRIES,
   STORE_CANDIDATES,
   STORE_PENDING,
@@ -41,9 +43,7 @@ import {
   deleteRow,
   getRow,
   mutatePendingAs,
-  openSkillsDb,
   putRow,
-  request,
   type CachedRow,
   type OfflineSkillTestCreate,
   type SkillsPendingEntry,
@@ -377,21 +377,4 @@ export async function listRecentCandidates(): Promise<{ id: string; name: string
   return (await listOwned<{ id: string; name: string }>(STORE_CANDIDATES))
     .sort((a, b) => b.cachedAt - a.cachedAt)
     .map((row) => row.value);
-}
-
-// ---------------------------------------------------------------- purge
-
-/**
- * Empty every store (FE-6/FE-7). Returns how many unsent evaluations were in
- * the queue, whoever they belonged to.
- */
-export async function clearAllSkillsOffline(): Promise<number> {
-  const db = await openSkillsDb();
-  const count = await request(db.transaction(STORE_PENDING, 'readonly').objectStore(STORE_PENDING).count()).catch(
-    () => 0
-  );
-  for (const store of ALL_STORES) {
-    await request(db.transaction(store, 'readwrite').objectStore(store).clear()).catch(() => undefined);
-  }
-  return count;
 }

@@ -185,8 +185,9 @@ caller's organization via `assert_all_in_org`, reporting only "invalid" so it
 cannot be used to probe another tenant. Changing a requirement's type away from
 courses/certification clears the links.
 
-**Certification name matching** is limited to legacy records
-(`name_match_until`); see
+**Name matching** (certifications, and since 2026-11-04 skills evaluation,
+checklist and knowledge test) is limited to legacy records
+(`name_match_until`) and compares stored match keys, not text; see
 [Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05).
 
 ### Freshness window
@@ -791,8 +792,9 @@ offline queue covers an evaluation run with **no connectivity at all** (see
   (no provisional score), a named toast when the server refuses one, and the
   pending count in the nav pill.
 - **Sign-out** — Sign Out sends what it can, then warns before the local purge
-  deletes unsent evaluations. The idle timeout and an expired session purge
-  without asking.
+  deletes unsent evaluations. The idle timeout, an expired session and
+  another member signing in keep them on the device for that examiner alone,
+  for seven days; only they see or send them when they sign back in.
 
 ### Edge Cases
 

@@ -288,6 +288,17 @@ class ManualHoursEntry(BaseModel):
     hours: float = Field(..., gt=0, le=48)
 
 
+# Close-out payload ceilings (SCH-19, owner decision 2026-11-01). Each entry
+# costs the server a per-member or per-type lookup, so an unbounded list is a
+# cost multiplier on one authenticated request. 100 matches
+# ``responding_members``; 200 matches the attach/detach id lists beside the
+# tally, and sits well above the 50 types a department may configure
+# (``MAX_CALL_TYPES``). Request-side only: no stored row is re-read through
+# these schemas, so a close-out saved before the cap still loads.
+MAX_MEMBER_CALL_CREDITS = 100
+MAX_REPORTED_CALL_TYPES = 200
+
+
 class MemberCallCredit(BaseModel):
     """One member's personal call credit for a shift.
 
@@ -327,9 +338,11 @@ class ShiftFinalizeRequest(BaseModel):
     # reported_call_count; the remainder is recorded as unclassified.
     reported_call_types: Optional[
         dict[str, Annotated[int, Field(ge=0, le=INT32_MAX)]]
-    ] = None
+    ] = Field(default=None, max_length=MAX_REPORTED_CALL_TYPES)
     # Per-member credit. Omitted members default to the shift's count.
-    member_call_counts: Optional[List[MemberCallCredit]] = None
+    member_call_counts: Optional[List[MemberCallCredit]] = Field(
+        default=None, max_length=MAX_MEMBER_CALL_CREDITS
+    )
     # Calls another unit already logged that this shift's apparatus was also
     # on. Attaching instead of re-reporting is what keeps one incident counted
     # once for the department when two units roll. Bounded to match the
@@ -489,7 +502,7 @@ class CloseoutCallsRequest(BaseModel):
     )
     reported_call_types: Optional[
         dict[str, Annotated[int, Field(ge=0, le=INT32_MAX)]]
-    ] = None
+    ] = Field(default=None, max_length=MAX_REPORTED_CALL_TYPES)
     # Bounded to match the picker's own ceiling
     # (CallTrackingService.MAX_ATTACHABLE_CALLS) — each id costs the server a
     # lookup, so an unbounded list is a free multiplier on a single
@@ -1225,6 +1238,12 @@ class ShiftAssignmentCreate(BaseModel):
     is_training: bool = False
     training_program_id: Optional[str] = None
     training_evaluator_id: Optional[str] = None
+    # Seat the member in a custom seat no rank, certification, program or open
+    # position grants (SCHED-CUSTOM-SEAT owner decision, 2026-11-01). Requires
+    # scheduling.manage; waives only the eligibility check for that seat, is
+    # noted on the assignment and audited with ``override_reason``.
+    override_seat_eligibility: bool = False
+    override_reason: Optional[str] = Field(None, max_length=500)
 
 
 class ShiftAssignmentUpdate(BaseModel):
@@ -1236,6 +1255,9 @@ class ShiftAssignmentUpdate(BaseModel):
     is_training: Optional[bool] = None
     training_program_id: Optional[str] = None
     training_evaluator_id: Optional[str] = None
+    # As on ShiftAssignmentCreate, for an edit that moves the member's seat.
+    override_seat_eligibility: bool = False
+    override_reason: Optional[str] = Field(None, max_length=500)
 
 
 class EmbeddedShiftInfo(BaseModel):
@@ -1709,6 +1731,10 @@ class SchedulingFeatureSettings(BaseModel):
     # sets required_evoc_level_id on an apparatus, so switching it on for
     # existing orgs changes nothing until they opt into the requirement.
     enforce_evoc: bool = True
+    # Outside-department shifts a member logs wait for an officer's approval
+    # before their hours count. Defaults off: an absent setting keeps today's
+    # behaviour, where an entry counts as soon as it is logged (pitfall #19).
+    external_shifts_require_approval: bool = False
     # Call-volume tracking mode and the department's own call-type list.
     call_tracking: Optional[CallTrackingSettings] = None
     # Calls on record per type slug, all dates. Server-computed and ignored on

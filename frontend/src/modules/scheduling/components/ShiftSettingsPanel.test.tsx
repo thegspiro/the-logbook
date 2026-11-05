@@ -208,6 +208,24 @@ describe('ShiftSettingsPanel', () => {
     await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ enforce_evoc: false }));
   });
 
+  it('shows outside-shift approval as off when the response omits it, matching the backend default', async () => {
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /require approval for outside-department shifts/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('turns outside-shift approval on through the backend', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /require approval for outside-department shifts/i });
+
+    await user.click(toggle);
+
+    await waitFor(() =>
+      expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ external_shifts_require_approval: true })
+    );
+  });
+
   it('shows pre-shift work as on when the response omits the field, matching the backend default', async () => {
     renderPanel('general');
     const toggle = await screen.findByRole('switch', { name: /allow pre-shift work/i });
@@ -291,6 +309,7 @@ describe('ShiftSettingsPanel switches with the flags absent from the response', 
     'Require end-of-shift equipment checks',
     'Enforce EVOC for drivers',
     'Restrict check-in to assigned members',
+    'Require approval for outside-department shifts',
   ];
 
   // `mockReset()` before each default, per CLAUDE.md: an unconsumed

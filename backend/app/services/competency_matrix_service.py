@@ -37,6 +37,7 @@ from app.services.training_compliance import (
     certification_record_matches,
     counts_shift_attendance,
     evaluate_member_requirement_detail,
+    fallback_record_matches,
     get_org_include_current_month,
     is_session_attendance,
     load_credited_shift_dates,
@@ -516,17 +517,9 @@ class CompetencyMatrixService:
             }
 
         # ---- Fallback: shifts, calls, skills_evaluation, checklist, knowledge_test ----
-        matching = []
-        if requirement.training_type:
-            matching = [
-                r for r in windowed if r.training_type == requirement.training_type
-            ]
-        if not matching and requirement.name:
-            matching = [
-                r
-                for r in windowed
-                if r.course_name and requirement.name.lower() in r.course_name.lower()
-            ]
+        # By training type, else by name under the legacy cut-off and the
+        # stored key — the compliance grader's own fallback rule.
+        matching = fallback_record_matches(requirement, windowed)
 
         if not matching:
             return not_started

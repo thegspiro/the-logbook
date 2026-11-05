@@ -420,6 +420,7 @@ from app.models.shift_history_import import (
     ShiftHistoryImportRow,
     ShiftHistoryImportStatus,
 )
+from app.models.shift_swap_notice import OpenSwapNotice
 from app.models.skills_testing import SkillTemplate, SkillTest
 from app.models.stored_file_scan import ScanVerdict, StoredFileScan
 from app.models.storefront import (
@@ -702,6 +703,8 @@ __all__ = [
     "ExternalApparatus",
     "ExternalShiftHours",
     "ExternalShiftHoursStatus",
+    # Open shift swap notices
+    "OpenSwapNotice",
     # Event request models
     "EventRequest",
     "EventRequestActivity",

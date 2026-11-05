@@ -34,6 +34,7 @@ import TraineeReportGate, { type TraineeReportGateState } from '../../modules/sc
 import type { CloseoutState, CloseoutAttendanceEntry, MemberCallCredit } from '../../modules/scheduling/types';
 import { formatCalendarDate, formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { boundMemberCallCredits } from './closeoutCallCredits';
 import {
   MAX_ATTENDANCE_HOURS,
   UNCATEGORISED,
@@ -373,10 +374,15 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   const finalize = async () => {
     setSaving(true);
     try {
-      const credits: MemberCallCredit[] = members.map((m) => ({
-        user_id: m.userId,
-        call_count: creditOf(m),
-      }));
+      const bounded = boundMemberCallCredits(
+        members.map((m) => ({ user_id: m.userId, call_count: creditOf(m) })),
+        totalOrZero
+      );
+      if (bounded.error) {
+        toast.error(bounded.error);
+        return;
+      }
+      const credits: MemberCallCredit[] = bounded.credits;
       const opts: {
         member_call_counts: MemberCallCredit[];
         pass_down_notes?: string;

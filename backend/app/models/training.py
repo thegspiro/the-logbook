@@ -23,6 +23,7 @@ from sqlalchemy import (
     Time,
     TypeDecorator,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -31,6 +32,7 @@ from sqlalchemy.sql import true as sa_true
 from app.core.database import Base
 from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
+from app.utils.training_match_key import MATCH_KEY_LENGTH, training_match_key
 
 if TYPE_CHECKING:
     from app.models.event import Event
@@ -396,6 +398,19 @@ class TrainingRecord(Base):
     certification_number: Mapped[Optional[str]] = mapped_column(String(100))
     issuing_agency: Mapped[Optional[str]] = mapped_column(String(255))
 
+    # The normalized keys certification and fallback requirements match by
+    # (app/utils/training_match_key.py), set from course_name and
+    # certification_number by the listeners below on every ORM write — never
+    # from a request. NULL when the text has no letters or digits, or for a row
+    # written around the ORM; such a record matches only by linked course or
+    # training type.
+    match_key: Mapped[Optional[str]] = mapped_column(
+        String(MATCH_KEY_LENGTH), nullable=True
+    )
+    certification_key: Mapped[Optional[str]] = mapped_column(
+        String(MATCH_KEY_LENGTH), nullable=True
+    )
+
     # Status and Scores
     status: Mapped[Optional[TrainingStatus]] = mapped_column(
         Enum(TrainingStatus, values_callable=lambda x: [e.value for e in x]),
@@ -522,6 +537,10 @@ class TrainingRecord(Base):
         Index("idx_record_location", "location_id"),
         Index("idx_record_category", "category_id"),
         Index("idx_record_external", "external_provider_id", "external_record_id"),
+        # A member's records by key: the department-wide grading load asks for
+        # user_id IN (...) AND a key, instead of every completed record.
+        Index("idx_record_user_match_key", "user_id", "match_key"),
+        Index("idx_record_user_certification_key", "user_id", "certification_key"),
         # One credit per member per event. Any number of NULL sources coexist
         # under a unique index on MySQL and MariaDB, so records that did not
         # come from event attendance are unconstrained.
@@ -535,6 +554,16 @@ class TrainingRecord(Base):
 
     def __repr__(self):
         return f"<TrainingRecord(user_id={self.user_id}, course={self.course_name}, status={self.status})>"
+
+
+@event.listens_for(TrainingRecord.course_name, "set")
+def _key_course_name(target, value, oldvalue, initiator):
+    target.match_key = training_match_key(value)
+
+
+@event.listens_for(TrainingRecord.certification_number, "set")
+def _key_certification_number(target, value, oldvalue, initiator):
+    target.certification_key = training_match_key(value)
 
 
 def _default_shift_credited(context) -> bool:
@@ -584,12 +613,16 @@ class TrainingRequirement(Base):
     registry_code: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # e.g., "NFPA 1001", "EMR"
-    # CERTIFICATION only: a record completed on or before this date may still
-    # satisfy the requirement because its course name contains the
-    # requirement's name; a later one needs a linked course, the training type
-    # or the registry code. Set by migration 60aaf273de27 to the day it ran,
-    # for the requirements that existed then; NULL (every requirement created
-    # since) means no name matching. See certification_record_matches.
+    # CERTIFICATION and the fallback types (skills evaluation, checklist,
+    # knowledge test and the rest the grader's last branch handles): a record
+    # dated on or before this may still satisfy the requirement by name — its
+    # match_key equal to the requirement name's key; a later one needs a
+    # linked course, the training type or (certifications) the registry code.
+    # Set to the day the rule changed for the requirements that existed then:
+    # by migration 60aaf273de27 for certifications, and again by the
+    # match-key migration for the fallback types, whose rule changed that day.
+    # NULL (every requirement created since) means no name matching. See
+    # record_name_matches.
     name_match_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     is_editable: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
@@ -2577,6 +2610,9 @@ class ShiftCompletionReport(Base):
         # mapped.
         shift_label: Optional[str]
         shift_start_time: Optional[datetime]
+        # Set by update_report when an edit restated the credit of an approved
+        # report (review off), for the endpoint's audit entry.
+        credit_restatement: Optional[dict[str, Any]]
 
     __table_args__ = (
         Index("idx_shift_report_trainee", "trainee_id", "shift_date"),

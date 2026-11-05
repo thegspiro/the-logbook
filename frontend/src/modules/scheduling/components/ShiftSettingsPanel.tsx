@@ -554,6 +554,37 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               </div>
               <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
                 <div>
+                  <p className="text-theme-text-primary text-sm font-medium">
+                    Require approval for outside-department shifts
+                  </p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    A shift a member logs with another department waits for a scheduling officer to approve it before
+                    its hours count toward totals and compliance. Officers are emailed when one is waiting. Off, an
+                    entry counts as soon as it is logged and officers can still reject it.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Require approval for outside-department shifts"
+                  aria-checked={!!feature.external_shifts_require_approval}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    void saveFeature({ external_shifts_require_approval: !feature.external_shifts_require_approval });
+                  }}
+                  className={`toggle-track-sm ${
+                    feature.external_shifts_require_approval ? 'bg-violet-600' : 'bg-theme-surface-border'
+                  }`}
+                >
+                  <span
+                    className={`toggle-knob-sm ${
+                      feature.external_shifts_require_approval ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
                   <p className="text-theme-text-primary text-sm font-medium">Restrict check-in to assigned members</p>
                   <p className="text-theme-text-muted mt-0.5 text-sm">
                     Only members rostered on a shift can check in (open shifts are exempt), so attendance matches the

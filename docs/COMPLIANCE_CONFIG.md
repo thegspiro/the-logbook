@@ -144,8 +144,10 @@ profile see no change.
 - **The attestation records the server's figure** (CS-8): the department's
   percentage as of the period's last day, not a typed one.
 - See [Training compliance calculations](./training-compliance-calculations.md)
-  for the per-requirement rules, including certification name matching, which
-  after 2026-10-05 applies only to legacy records (`name_match_until`).
+  for the per-requirement rules, including name matching, which after
+  2026-10-05 applies only to legacy records (`name_match_until`), after
+  2026-11-04 compares stored match keys rather than text, and now applies to
+  skills-evaluation, checklist and knowledge-test requirements too.
 
 ---
 

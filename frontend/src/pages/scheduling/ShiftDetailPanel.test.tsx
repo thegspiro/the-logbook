@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
-import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
+import { DRIVER_NOT_QUALIFIED_CODE, SEAT_NOT_GRANTED_CODE } from '../../constants/enums';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
@@ -43,6 +43,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     updateAssignment: vi.fn().mockResolvedValue({}),
     deleteShift: vi.fn().mockResolvedValue(undefined),
     withdrawSignup: vi.fn().mockResolvedValue({}),
+    createAssignment: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -1353,5 +1354,77 @@ describe('ShiftDetailPanel crew count while loading', () => {
 
     expect(await screen.findByText(/0 assigned/)).toBeInTheDocument();
     expect(screen.queryByText('Loading crew…')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel — officer override for an ungranted custom seat', () => {
+  // SCHED-CUSTOM-SEAT owner decision (2026-11-01): a scheduling manager may
+  // seat a member in a department seat nothing grants, with a reason the
+  // server notes and audits. The offer is keyed off LB-SCHED-004.
+  const ropeShift = {
+    ...shift,
+    shift_date: '2099-03-01',
+    start_time: '2099-03-01T08:00:00Z',
+    end_time: '2099-03-01T16:00:00Z',
+    apparatus_positions: [{ position: 'rope_team', required: true }],
+  };
+  const mockCreate = vi.mocked(schedulingService.createAssignment);
+  const refusal = {
+    response: {
+      status: 400,
+      statusText: 'Bad Request',
+      data: { code: SEAT_NOT_GRANTED_CODE, detail: 'No rank grants the Rope Team seat' },
+    },
+  };
+
+  beforeEach(() => {
+    mockCreate.mockReset();
+    mockCreate.mockResolvedValue({} as never);
+    vi.mocked(toast.error).mockClear();
+    schedulingStoreState.members = [{ id: 'member-9', label: 'Pat Doe' }] as never;
+  });
+
+  afterEach(() => {
+    schedulingStoreState.members = [];
+    grantedPermissions.current = null;
+  });
+
+  const assignPat = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderWithRouter(<ShiftDetailPanel shift={ropeShift as never} onClose={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /Assign someone/ }));
+    await user.selectOptions(screen.getByRole('listbox', { name: 'Select a member' }), 'member-9');
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+  };
+
+  it('asks a manager for a reason and retries with the override', async () => {
+    mockCreate.mockRejectedValueOnce(refusal);
+    const user = userEvent.setup();
+    await assignPat(user);
+
+    const reason = await screen.findByRole('textbox', { name: 'Reason' });
+    await user.type(reason, 'Only rope tech on tonight');
+    await user.click(screen.getByRole('button', { name: 'Assign anyway' }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(2));
+    expect(mockCreate.mock.calls[1]?.[1]).toMatchObject({
+      user_id: 'member-9',
+      position: 'rope_team',
+      override_seat_eligibility: true,
+      override_reason: 'Only rope tech on tonight',
+    });
+    expect(mockCreate.mock.calls[0]?.[1]).not.toHaveProperty('override_seat_eligibility');
+  });
+
+  it('shows the refusal, not the offer, to an assigner without manage', async () => {
+    grantedPermissions.current = ['scheduling.assign', 'scheduling.view'];
+    mockCreate.mockRejectedValueOnce(refusal);
+    const user = userEvent.setup();
+    await assignPat(user);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('No rank grants the Rope Team seat'))
+    );
+    expect(screen.queryByRole('button', { name: 'Assign anyway' })).not.toBeInTheDocument();
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });
